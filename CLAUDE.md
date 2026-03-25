@@ -58,7 +58,8 @@ Write plans to `docs/plans/{file_name}.md`. Archive completed plans to `docs/arc
 
 ## Skills
 
-Skills live in `core/skills/` (universal) and `presets/*/skills/` (preset-specific).
+Skills are provided by the `claude-tooling` plugin (enabled in `.claude/settings.json`).
+Source templates live in `core/skills/` (universal) and `presets/*/skills/` (preset-specific).
 See core CLAUDE.md for skill trigger conditions.
 
 ## Agents
