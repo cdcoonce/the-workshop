@@ -82,7 +82,7 @@ Matchers define which tools trigger a hook. They use pipe-separated tool names i
 | `Read` | File reading |
 | `Edit\|Write\|Read` | Multiple tools combined |
 
-Matchers appear in the `hooks.json` configuration file:
+Matchers appear in the `.claude/settings.json` configuration file:
 
 ```json
 {
@@ -93,7 +93,7 @@ Matchers appear in the `hooks.json` configuration file:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PLUGIN_ROOT\"/hooks/scripts/protect-files.py"
+            "command": "python3 .claude/hooks/protect-files.py"
           }
         ]
       }
@@ -119,12 +119,12 @@ Do not use stdout for messages — Claude Code reads stdout for structured data 
 
 | Variable | Value | Usage |
 |----------|-------|-------|
-| `$CLAUDE_PLUGIN_ROOT` | Absolute path to the plugin's root directory | Reference hook scripts in `hooks.json` commands |
+| `$CLAUDE_PLUGIN_ROOT` | Absolute path to the plugin's root directory | Reference hook scripts packaged inside a plugin |
 
-Example command using `$CLAUDE_PLUGIN_ROOT`:
+**Note:** `$CLAUDE_PLUGIN_ROOT` is used by plugin-packaged hooks (hooks shipped inside a `.claude-plugin/` distribution). For user-created hooks in `.claude/hooks/`, use project-relative paths instead:
 
 ```
-python3 "$CLAUDE_PLUGIN_ROOT"/hooks/scripts/protect-files.py
+python3 .claude/hooks/my-hook.py
 ```
 
 ## Annotated Examples

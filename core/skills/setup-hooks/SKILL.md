@@ -95,6 +95,8 @@ if not file_path:
 # {BEHAVIOR_LOGIC} — the user's described behavior translated to Python
 ```
 
+**For Bash-triggered hooks**: The template above extracts `file_path`, which is not present in Bash tool input. Instead, extract `data.get("tool_input", {}).get("command", "")` and adapt the early-exit guard to check `command` instead of `file_path`.
+
 Follow these rules when generating the script:
 
 - **PreToolUse hooks**: Call `sys.exit(2)` (or another non-zero code) to block the tool. Call `sys.exit(0)` to allow it.
