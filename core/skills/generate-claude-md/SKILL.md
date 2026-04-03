@@ -41,7 +41,7 @@ If the user selects (A), stop and inform them to run `/project-context` first.
 
 ## Step 3: Ask clarifying questions (standalone mode only)
 
-Skip this step entirely if pre-supplied context covers all sections.
+For each topic below, skip it if pre-supplied context or project.md already provides the answer. Ask only about gaps — do not re-ask questions that are already answered. If all topics are covered, skip this step entirely.
 
 For information not found in project.md and not pre-supplied, use `AskUserQuestion` to fill gaps. Ask about each missing topic separately — do not batch unrelated questions.
 
@@ -66,9 +66,10 @@ Check whether `CLAUDE.md` exists at the project root.
 If it exists, read it and present a brief summary of what sections will change. Use `AskUserQuestion` to confirm:
 
 - **(A) Overwrite** — Replace the existing file with the new version.
-- **(B) Cancel** — Stop without modifying the file.
+- **(B) Merge (Recommended)** — Update the standard sections (Architecture, Commands, Code Style, Methodology) but preserve any custom sections the user added manually.
+- **(C) Cancel** — Stop without modifying the file.
 
-If the user selects (B), stop and inform them that no changes were made.
+If the user selects (C), stop and inform them that no changes were made. If (B), identify sections in the existing file that are NOT in the standard template and preserve them at the end of the regenerated file.
 
 ## Step 5: Generate CLAUDE.md
 
@@ -118,3 +119,16 @@ After writing the file, confirm that:
 2. The generated file has no empty sections (headings with no content below them). Remove any that slipped through.
 
 Report to the user what was created and where: "Generated `CLAUDE.md` at the project root with sections: {list of sections included}."
+
+## Fallback (no AskUserQuestion available)
+
+If `AskUserQuestion` is not available in the runtime environment, present choices as formatted text:
+
+**[Header] — [Question]**
+
+**Recommended:** [Your recommendation and why]
+
+**Alternatives:**
+
+- (A) [Option] — [trade-off]
+- (B) [Option] — [trade-off]
