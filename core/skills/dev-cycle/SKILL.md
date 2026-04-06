@@ -96,14 +96,13 @@ Record each issue URL in the Issues table immediately after creation. See [refer
 3. **Push to origin:** `git push origin main` (or current default branch) so the planning commits are on remote before branching
 4. **Create feature branch:** `feat/{feature-slug}` from the updated HEAD (see branch handling in [references/phase-transitions.md](references/phase-transitions.md))
 
-Before dispatching, resolve agent identities using the Agent tool's `subagent_type` parameter:
+Before dispatching, resolve agent identities from **both** sources:
 
-1. **Check system prompt:** The available `subagent_type` values are listed in the Agent tool description (e.g., `data-pipeline:tdd-implementer:tdd-implementer`, `data-pipeline:code-reviewer:code-reviewer`)
-2. **Match implementers:** For each implementation issue, select the `subagent_type` whose name contains `tdd-implementer` or similar implementer role
-3. **Match reviewer:** Select the `subagent_type` whose name contains `code-reviewer` for code review between dispatches
-4. **Fall back:** When no matching `subagent_type` exists, use `general-purpose` as the subagent type
-
-> **Do NOT scan `.claude/agents/` directory.** Agents are registered as `subagent_type` values on the Agent tool, not as files on disk.
+1. **Plugin agents (primary):** Check the Agent tool's available `subagent_type` values listed in the system prompt (e.g., `data-pipeline:tdd-implementer:tdd-implementer`, `data-pipeline:code-reviewer:code-reviewer`). These are the authoritative source for plugin-provided agents.
+2. **Local agents:** Scan `.claude/agents/` for any locally-defined agent directories (each containing an `AGENT.md`). Read the YAML frontmatter to determine role (`implementer` or `reviewer`).
+3. **Match implementers:** For each implementation issue, prefer a `subagent_type` whose name contains `tdd-implementer` or similar implementer role. If none found, check local agents with `role: implementer`.
+4. **Match reviewer:** Prefer a `subagent_type` whose name contains `code-reviewer`. If none found, check local agents with `role: reviewer`.
+5. **Fall back:** When no matching agent exists in either source, use `general-purpose` as the subagent type.
 
 Dispatch one subagent per GitLab issue following `subagent-development` methodology:
 
