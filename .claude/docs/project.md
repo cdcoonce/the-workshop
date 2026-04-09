@@ -7,7 +7,7 @@ Template factory that produces self-contained Claude Code plugins (`.claude-plug
 - **Python >=3.12** — all scripts use stdlib only (no runtime dependencies)
 - **uv** — package manager and task runner
 - **hatchling** — build backend (packages only `scripts/`)
-- **pytest** — test framework (93 tests across 5 modules)
+- **pytest** — test framework (129 tests across 5 modules)
 
 ## Project Layout
 
@@ -62,7 +62,7 @@ presets/<name>/manifest.json ──┘        │                 ├── .cla
 
 ## Test Markers
 
-- `uv run pytest` — run all 93 tests
+- `uv run pytest` — run all 129 tests
 - `uv run pytest --cov=scripts --cov-report=term-missing` — run with coverage over `scripts/`
 - No custom pytest markers defined
 
