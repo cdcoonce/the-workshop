@@ -211,10 +211,13 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
 
     # 5. Validate intra-skill reference links in SKILL.md files
     link_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+    code_span_pattern = re.compile(r"`[^`]+`")
     if skills_dir.exists():
         for skill_md in skills_dir.rglob("SKILL.md"):
             skill_content = skill_md.read_text(encoding="utf-8")
-            for match in link_pattern.finditer(skill_content):
+            # Strip inline code spans to avoid matching example links
+            stripped_content = code_span_pattern.sub("", skill_content)
+            for match in link_pattern.finditer(stripped_content):
                 link_target = match.group(2)
                 # Skip external URLs, anchors, and project-root-relative paths
                 if link_target.startswith(("http://", "https://", "#", ".claude/")):

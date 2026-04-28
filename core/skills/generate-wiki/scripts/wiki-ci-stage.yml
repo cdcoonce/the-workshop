@@ -1,0 +1,34 @@
+# Wiki sync CI stage — insert into your .gitlab-ci.yml
+#
+# Prerequisites:
+#   1. Wiki enabled on the GitLab project (Settings > General > Visibility)
+#   2. WIKI_PUSH_TOKEN — GitLab PAT with api + write_repository scopes,
+#      stored as a masked CI/CD variable in project settings
+#   3. At least one wiki page created via the GitLab UI (so .wiki.git exists)
+#
+# Customize:
+#   - Script path in the `python` command
+#   - Trigger branch in `rules`
+#   - Trigger path in `changes` (match your wiki source folder name)
+#
+# Add `wiki` to your top-level `stages:` list.
+
+sync-wiki:
+  stage: wiki
+  image: python:3.11-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+  script:
+    - git clone https://oauth2:${WIKI_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.wiki.git /tmp/wiki-repo
+    - python scripts/sync_wiki.py --wiki-dir /tmp/wiki-repo
+    - cd /tmp/wiki-repo
+    - git add -A
+    - git diff --cached --quiet && echo "No wiki changes" && exit 0
+    - git config user.name "Wiki Bot"
+    - git config user.email "wiki-bot@noreply.gitlab.com"
+    - git commit -m "Sync docs from ${CI_COMMIT_SHORT_SHA}"
+    - git push
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - wiki/**/*

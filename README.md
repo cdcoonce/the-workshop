@@ -182,7 +182,7 @@ Key design decisions:
 ### Installation
 
 ```bash
-git clone https://gitlab.com/Charles.Coonce/claude-workflow.git
+git clone https://gitlab.com/clearwayenergy-group/data-architecture-and-analytics/ai-tools/claude-workflow
 cd claude-workflow
 uv sync
 ```

@@ -12,6 +12,7 @@ ETL/ELT pipelines, SQL transformations, scheduled data jobs
 - dev-cycle
 - dignified-python
 - generate-claude-md
+- generate-wiki
 - gitlab-cli
 - grill-me
 - improve-codebase-architecture
