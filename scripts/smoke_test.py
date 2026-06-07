@@ -5,7 +5,8 @@ Checks:
 - Every directory in skills/ has a SKILL.md
 - Every directory in agents/ has a valid AGENT.md (frontmatter with name, description, role)
 - Agent names match their directory names
-- Agent roles are 'implementer' or 'reviewer'
+- Agent roles are 'implementer', 'reviewer', 'analyst', 'qa-tester',
+  'skill-writer', or 'strategy'
 - Agent skills.add references resolve to existing skills in skills/
 - hooks/hooks.json references scripts that exist in hooks/scripts/
 - Every relative link in SKILL.md files resolves within the skill directory
@@ -19,6 +20,15 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+VALID_ROLES = (
+    "implementer",
+    "reviewer",
+    "analyst",
+    "qa-tester",
+    "skill-writer",
+    "strategy",
+)
 
 
 @dataclass
@@ -158,10 +168,11 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
 
             # Validate role
             role = frontmatter.get("role", "")
-            if role and role not in ("implementer", "reviewer"):
+            if role and role not in VALID_ROLES:
+                valid = ", ".join(repr(r) for r in VALID_ROLES)
                 result.errors.append(
                     f"Agent '{agent_dir.name}/AGENT.md' has invalid role "
-                    f"'{role}' (must be 'implementer' or 'reviewer')"
+                    f"'{role}' (must be one of {valid})"
                 )
 
             # Validate name matches directory
@@ -198,9 +209,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
                 for hook in entry.get("hooks", []):
                     command = hook.get("command", "")
                     # Extract script filename from $CLAUDE_PLUGIN_ROOT/hooks/scripts/<file>
-                    hook_match = re.search(
-                        r'hooks/scripts/([^\s"]+)', command
-                    )
+                    hook_match = re.search(r'hooks/scripts/([^\s"]+)', command)
                     if hook_match:
                         script_name = hook_match.group(1)
                         if not (hooks_scripts_dir / script_name).exists():

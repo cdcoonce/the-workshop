@@ -3,10 +3,9 @@
 import json
 from pathlib import Path
 
-import pytest
 
 from scripts.build_preset import build_preset
-from scripts.smoke_test import smoke_test, SmokeTestResult
+from scripts.smoke_test import smoke_test
 
 
 class TestSmokePluginJson:
@@ -116,22 +115,38 @@ class TestSmokeAgents:
         agent_md.write_text("# No frontmatter here\n")
         result = smoke_test(dist)
         assert not result.passed
-        assert any("frontmatter" in e.lower() or "required" in e.lower() for e in result.errors)
+        assert any(
+            "frontmatter" in e.lower() or "required" in e.lower() for e in result.errors
+        )
 
     def test_invalid_role_fails(self, tmp_repo: Path) -> None:
         build_preset("python-api", repo_root=tmp_repo)
         dist = tmp_repo / "dist" / "python-api"
         agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
-        agent_md.write_text("---\nname: tdd-implementer\ndescription: test\nrole: invalid\n---\n")
+        agent_md.write_text(
+            "---\nname: tdd-implementer\ndescription: test\nrole: invalid\n---\n"
+        )
         result = smoke_test(dist)
         assert not result.passed
         assert any("role" in e for e in result.errors)
+
+    def test_non_implementer_role_accepted(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(
+            "---\nname: tdd-implementer\ndescription: test\nrole: analyst\n---\n"
+        )
+        result = smoke_test(dist)
+        assert not any("role" in e for e in result.errors)
 
     def test_name_mismatch_fails(self, tmp_repo: Path) -> None:
         build_preset("python-api", repo_root=tmp_repo)
         dist = tmp_repo / "dist" / "python-api"
         agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
-        agent_md.write_text("---\nname: wrong-name\ndescription: test\nrole: implementer\n---\n")
+        agent_md.write_text(
+            "---\nname: wrong-name\ndescription: test\nrole: implementer\n---\n"
+        )
         result = smoke_test(dist)
         assert not result.passed
         assert any("name" in e and "match" in e for e in result.errors)
@@ -205,7 +220,9 @@ class TestSmokeIntraSkillLinks:
 
         result = smoke_test(dist)
         assert result.passed is False
-        assert any("test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors)
+        assert any(
+            "test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors
+        )
 
     def test_external_links_skipped(self, tmp_repo: Path) -> None:
         build_preset("python-api", repo_root=tmp_repo)
