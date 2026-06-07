@@ -252,19 +252,11 @@ def validate_directory(directory: Path) -> ValidationResult:
         file_result = validate_state_file(path)
         errors.extend(file_result.errors)
         warnings.extend(file_result.warnings)
-        if file_result.passed:
-            try:
-                state = parse_state_file(path)
-            except ValueError:
-                continue
+        try:
+            state = parse_state_file(path)
             slugs.setdefault(state.feature, []).append(path.name)
-        else:
-            # Still try to parse for slug collision detection
-            try:
-                state = parse_state_file(path)
-                slugs.setdefault(state.feature, []).append(path.name)
-            except ValueError:
-                pass
+        except ValueError:
+            pass
 
     for slug, filenames in slugs.items():
         if len(filenames) > 1:
