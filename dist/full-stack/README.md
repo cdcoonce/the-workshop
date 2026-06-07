@@ -33,6 +33,7 @@ React/Next.js frontend + Python backend
 - code-reviewer
 - frontend-builder
 - qa-tester
+- skill-analyst
 - skill-writer
 - strategy
 - tdd-implementer

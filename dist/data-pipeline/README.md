@@ -35,6 +35,7 @@ ETL/ELT pipelines, SQL transformations, scheduled data jobs
 - data-quality-reviewer
 - pipeline-builder
 - qa-tester
+- skill-analyst
 - skill-writer
 - strategy
 - tdd-implementer

@@ -3,9 +3,23 @@
 import json
 from pathlib import Path
 
+import pytest
 
 from scripts.build_preset import build_preset
 from scripts.smoke_test import smoke_test
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+REAL_PRESETS = sorted(p.name for p in (REPO_ROOT / "presets").iterdir() if p.is_dir())
+
+
+class TestSmokeRealPresets:
+    """Build and smoke-test every real preset against the actual core/+presets/ tree."""
+
+    @pytest.mark.parametrize("preset_name", REAL_PRESETS)
+    def test_real_preset_builds_and_passes_smoke_test(self, preset_name: str) -> None:
+        dist_path = build_preset(preset_name, repo_root=REPO_ROOT)
+        result = smoke_test(dist_path)
+        assert result.passed, f"{preset_name} smoke test failed: {result.errors}"
 
 
 class TestSmokePluginJson:

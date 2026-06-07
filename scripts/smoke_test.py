@@ -5,8 +5,7 @@ Checks:
 - Every directory in skills/ has a SKILL.md
 - Every directory in agents/ has a valid AGENT.md (frontmatter with name, description, role)
 - Agent names match their directory names
-- Agent roles are 'implementer', 'reviewer', 'analyst', 'qa-tester',
-  'skill-writer', or 'strategy'
+- Agent roles are one of the documented roles (see VALID_ROLES)
 - Agent skills.add references resolve to existing skills in skills/
 - hooks/hooks.json references scripts that exist in hooks/scripts/
 - Every relative link in SKILL.md files resolves within the skill directory
@@ -21,6 +20,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Valid agent roles, matching the documented vocabulary in CLAUDE.md.
 VALID_ROLES = (
     "implementer",
     "reviewer",

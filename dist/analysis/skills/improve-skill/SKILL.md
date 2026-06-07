@@ -12,88 +12,74 @@ description: >
 
 Run a benchmark-driven improvement loop on any skill: interview → baseline → iterate → PR.
 
-## Pipeline Overview
+**Self-check:** Before executing any phase, count the lines in this SKILL.md file. If it exceeds 100 lines, report the violation and halt execution immediately.
 
-| #   | Phase            | Summary                                                      |
-| --- | ---------------- | ------------------------------------------------------------ |
-| 1   | **Orchestrator** | Resolve slug, load or create state file (this phase)         |
-| 2   | **Grill**        | Interview user to build/extend `tests.md`                    |
-| 3   | **Baseline**     | QA Tester agent scores the original skill                    |
-| 4   | **Iterate**      | Skill Writer + QA Tester loop on `improve/{slug}` branch     |
-| 5   | **Finalize**     | Report + PR + score ledger + state archive                   |
-| 6   | **Agents**       | `qa-tester`, `skill-writer`, `strategy` AGENT.md definitions |
+**Reference path rule:** All `references/` paths in this skill are relative to this skill's own directory (`core/skills/improve-skill/`). Always resolve them as `core/skills/improve-skill/references/<file>` regardless of current working directory.
+
+**Sidecar path rule:** The `.best_skill.md` sidecar file is always written to the same directory as the resolved `skill_path` (i.e., the directory containing the target skill's SKILL.md), not hardcoded to `core/skills/`. This applies to Phase 4 Step G and Phase 5 Step 1.
 
 ## Phase 1: Orchestrator
 
-### Step 1 — Parse slug
+**Step 1 — Parse and validate slug:** Usage: `/improve-skill <slug>`. If no slug given, reply with usage and stop. Reject the slug if it contains path separators (`/`, `\`), traversal sequences (`..`), spaces, or git-unsafe characters (`~`, `^`, `:`). On rejection, reply: `Error: invalid slug "{slug}". Slugs must be alphanumeric with hyphens only.` and stop.
 
-Usage: `/improve-skill <slug>`. If no slug given, reply with usage and stop.
+**Step 2 — Resolve skill path:** Check `core/skills/{slug}/SKILL.md`, then `presets/*/skills/{slug}/SKILL.md`. If not found, abort: `Error: no skill found for slug "{slug}".` Record resolved path as `skill_path`. Derive `tests_path` as the directory of `skill_path` plus `/tests.md`.
 
-### Step 2 — Resolve skill path
+**Step 3 — Check state file:** Look for `docs/skill-improve/{slug}.state.md`.
 
-Check in order (first match wins):
-
-1. `core/skills/{slug}/SKILL.md`
-2. `presets/*/skills/{slug}/SKILL.md`
-
-If not found, abort:
-
-> Error: no skill found for slug "{slug}". Searched `core/skills/{slug}/SKILL.md` and `presets/*/skills/{slug}/SKILL.md`.
-
-Record the resolved path as `skill_path`. Also derive `tests_path` as the directory of `skill_path` plus `/tests.md`. Example: if `skill_path` is `presets/python-api/skills/tdd/SKILL.md`, then `tests_path` is `presets/python-api/skills/tdd/tests.md`.
-
-### Step 3 — Check for in-progress state file
-
-Look for `docs/skill-improve/{slug}.state.md`.
-
-- **Found, `status: in_progress`:** Read `skill_path`, `current_phase`, and `best_score` from state. Verify `skill_path` still exists on disk; if not, abort with an error. Report: "Resuming **{slug}** at phase **{current_phase}** (best score: {best_score}%)." Jump to that phase.
-- **Found, `status: completed` or `status: abandoned`:** Notify user, start a new run (suffix slug with `-2`, `-3` etc. to avoid collision).
+- **`status: in_progress`:** Read `skill_path`, `current_phase`, `best_score`. Verify `skill_path` exists on disk. Report: "Resuming **{slug}** at phase **{current_phase}** (best score: {best_score}%)." Jump to that phase.
+- **`status: completed` or `status: abandoned`:** Notify user, start new run (suffix slug with `-2`, `-3` etc.).
 - **Not found:** Proceed to Step 4.
 
-### Step 4 — Create state file
-
-Write `docs/skill-improve/{slug}.state.md` (see `state-schema.md` for template). Set `status: in_progress`, `current_phase: grill`. Append a log entry: `{YYYY-MM-DD} — State file created. Skill path: {skill_path}`. Confirm: "State file created at `docs/skill-improve/{slug}.state.md`." Then proceed to Phase 2.
+**Step 4 — Create state file:** Write `docs/skill-improve/{slug}.state.md`. Set `status: in_progress`, `current_phase: grill`. Log: `{YYYY-MM-DD} — State file created. Skill path: {skill_path}`. Proceed to Phase 2.
 
 ---
 
 ## Phase 2: Grill
 
-### Step 1 — Check for existing tests.md
+Read `core/skills/improve-skill/references/phase-2-grill.md` using the Read tool, then follow its instructions exactly. **Input validation override:** When asking for target pass rate, validate the input is an integer between 1 and 100. If invalid (non-numeric, out of range), explain the valid range and re-prompt. The target will be further validated against baseline in Phase 3.
 
-Check `{tests_path}`.
+After completion: test suite is written to `{tests_path}`; config (target pass rate, max iterations) is recorded in the state file; `current_phase` is advanced to `baseline`.
 
-**If found:** Count data rows (excluding header). Show: "Found {N} existing tests for {slug}: [one-line summary per scenario]." Ask: "What harder or missing cases should I add? (press Enter to keep existing suite.)" If user provides cases, append them as new rows (never remove existing rows; never add a T00 row if one already exists in the file). Write the updated table back to `{tests_path}`. If user skips, enters nothing, or enters 0, keep suite as-is. Jump to Step 3.
-
-**If not found:** Proceed to Step 2.
-
-### Step 2 — Interview (AskUserQuestion if available, else numbered text Q&A)
-
-Ask in sequence:
-
-1. What is this skill's primary purpose and when should it trigger?
-2. What are the 3 most critical behaviors it must always do correctly?
-3. What would misuse or incorrect triggering look like?
-4. What edge cases or unusual inputs must it handle?
-5. How many test cases do you want? (suggest 10–15)
-
-Write `{tests_path}` with columns: `| ID | Scenario | Expected Behavior | Result | Reason |` (followed by a separator row). T00 is always first: Scenario = "Skill SKILL.md must be ≤100 lines", Expected = "Claude counts lines; if >100, reports the violation and halts execution." If user answered 0 for test count, re-prompt once: "Suggest 10–15 tests." Number remaining cases T01, T02, etc.
-
-### Step 3 — Set config
-
-Ask: "Target pass rate? (default: 90%)" and "Max iterations? (default: 5)". Record both in state file. Advance `current_phase` to `baseline`. Append log entry: `{YYYY-MM-DD} — Grill complete. Suite total: {total} tests. Target: {rate}%. Max: {max} iterations.`
+---
 
 ## Phase 3: Baseline
 
-See `references/phase-3-baseline.md` for detailed instructions.
+Read `core/skills/improve-skill/references/phase-3-baseline.md` using the Read tool, then follow its instructions exactly.
+
+After completion: `baseline_score` is recorded in state; iteration 0 is added to the Scores table; `best_score` is initialized to `baseline_score`.
+
+---
 
 ## Phase 4: Iterate
 
-See `references/phase-4-iterate.md` for detailed instructions.
+Read `core/skills/improve-skill/references/phase-4-iterate.md` using the Read tool, then follow its instructions with these overrides:
+
+**Sidecar override:** Wherever the reference doc says `core/skills/{slug}/.best_skill.md`, use the directory of `{skill_path}` instead. The sidecar lives next to the target skill, not hardcoded to core.
+
+**Regression/stall override (this takes precedence over the reference doc):** After each iteration compare `new_score` to `best_score`:
+
+- **Improvement** (`new_score > best_score`): Update `best_score` and `best_iteration`; copy skill to sidecar; reset `stall_count` to 0.
+- **Regression** (`new_score < best_score`): Increment `stall_count` by 1; log the regression; revert `{skill_path}` to the sidecar content; preserve `best_score` and `best_iteration`.
+- **No change** (`new_score == best_score`): Increment `stall_count` by 1.
+
+When `stall_count` >= 2, invoke the strategy agent, then reset `stall_count` to 0. Loop continues until target pass rate is met or max iterations is reached.
+
+---
 
 ## Phase 5: Finalize
 
-See `references/phase-5-finalize.md` for detailed instructions.
+Read `core/skills/improve-skill/references/phase-5-finalize.md` using the Read tool, then follow its instructions with these overrides:
+
+**Sidecar override:** Read sidecar from the directory of `{skill_path}`, not hardcoded `core/skills/`.
+
+**Data preservation override:** Before clearing Result/Reason columns (Step 2), read and store the full annotated test table in memory so Step 3 can accurately report "Tests fixed" and "Tests still failing."
+
+**Merge conflict check:** Before opening the PR (Step 5), check for merge conflicts with the default branch. If conflicts exist, warn the user that manual resolution is needed and do not silently open an unmergeable PR.
+
+After completion: PR is filed using best iteration content; state archived to `docs/archive/skill-improve/`.
+
+---
 
 ## Phase 6: Agent Definitions
 
-Agents live in `core/agents/`: `qa-tester`, `skill-writer`, `strategy`.
+Agents live in `core/agents/`: `skill-analyst`, `qa-tester`, `skill-writer`, `strategy`.

@@ -34,6 +34,7 @@ Python backend services — Lambda, FastAPI, Flask
 - code-reviewer
 - qa-tester
 - security-reviewer
+- skill-analyst
 - skill-writer
 - strategy
 - tdd-implementer

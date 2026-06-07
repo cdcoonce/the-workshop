@@ -32,6 +32,7 @@ Notebooks, R/Python scripts, statistical analysis, exploratory work
 - analysis-builder
 - code-reviewer
 - qa-tester
+- skill-analyst
 - skill-writer
 - strategy
 - tdd-implementer
