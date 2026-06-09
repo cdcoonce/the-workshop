@@ -6,7 +6,7 @@
 
 **Architecture:** One agent-agnostic `Bundle` (a built `dist/<preset>/` plugin dir) + a pluggable `AgentAdapter` seam (place the bundle in the agent's world, report capability skips) + a thin `argparse` CLI. Project-scoped default, `--user` opt-in. Presets are bundled into the wheel so no runtime fetch.
 
-**Tech Stack:** Python 3.12, `scripts/` package (hatchling), pytest, `shutil`/`pathlib`, `argparse`. Imports are `from scripts.installer.<module> import …` (matching `from scripts.build_preset import build_preset`).
+**Tech Stack:** Python 3.12, `scripts/` package (hatchling), pytest, `shutil`/`pathlib`, `argparse`. Imports are `from scripts.installer.<module> import …` (matching `from scripts.build_preset import build_preset`). **Test command:** `uv run --with pytest python -m pytest` (pytest is not a project dep — it's added via `--with`).
 
 **Scope note:** This plan delivers the bundle + seam + **ClaudeCodeAdapter** + CLI — working, testable software (you can install a preset into a Claude Code repo). The **CortexCodeAdapter** is a follow-on (it needs a research spike into Cortex Code's extension mechanism first — see spec Open Items — so its concrete code can't be planned yet). The seam is built so it slots in without core changes.
 
@@ -54,7 +54,7 @@ def test_report_records_installed_and_skipped_with_reason():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_installer_report.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_report.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'scripts.installer'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -95,7 +95,7 @@ class InstallReport:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_installer_report.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_report.py -v`
 Expected: PASS (2 passed)
 
 - [ ] **Step 5: Commit**
@@ -154,7 +154,7 @@ def test_available_lists_only_valid_presets(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_installer_bundle.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_bundle.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'scripts.installer.bundle'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -201,7 +201,7 @@ class Bundle:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_installer_bundle.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_bundle.py -v`
 Expected: PASS (3 passed)
 
 - [ ] **Step 5: Commit**
@@ -240,7 +240,7 @@ def test_claude_code_is_registered():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_installer_claude_adapter.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_claude_adapter.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'scripts.installer.adapters'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -300,7 +300,7 @@ def detect_adapter(target: Path) -> AgentAdapter | None:
 
 - [ ] **Step 4: Run test to verify partial pass**
 
-Run: `uv run pytest tests/test_installer_claude_adapter.py::test_get_adapter_unknown_raises -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_claude_adapter.py::test_get_adapter_unknown_raises -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -399,7 +399,7 @@ def test_uninstall_removes_then_reports_skip_when_absent(tmp_path):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_installer_claude_adapter.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_claude_adapter.py -v`
 Expected: FAIL with `ImportError: cannot import name 'ClaudeCodeAdapter'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -453,7 +453,7 @@ register(ClaudeCodeAdapter())
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `uv run pytest tests/test_installer_claude_adapter.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_claude_adapter.py -v`
 Expected: PASS (all, including `test_claude_code_is_registered`)
 
 - [ ] **Step 5: Commit**
@@ -551,7 +551,7 @@ def test_list_shows_presets_and_detected_agent(tmp_path, monkeypatch, capsys):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_installer_cli.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_cli.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'scripts.installer.cli'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -645,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_installer_cli.py -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_cli.py -v`
 Expected: PASS (4 passed)
 
 - [ ] **Step 5: Commit**
@@ -679,7 +679,7 @@ def test_presets_root_default_is_under_the_package():
 
 - [ ] **Step 2: Run test to verify it fails (or passes trivially)**
 
-Run: `uv run pytest tests/test_installer_cli.py::test_presets_root_default_is_under_the_package -v`
+Run: `uv run --with pytest python -m pytest tests/test_installer_cli.py::test_presets_root_default_is_under_the_package -v`
 Expected: PASS (the path is already correct from Task 5) — this test pins the packaging contract so it can't regress. If it fails, fix `PRESETS_ROOT` in `cli.py`.
 
 - [ ] **Step 3: Add the entry point + preset bundling to `pyproject.toml`**
@@ -712,7 +712,7 @@ Add `scripts/installer/presets/` to `.gitignore`.
 Run: `uv run claude-workflow list` (after running the build step above so presets exist)
 Expected: prints presets + `detected here: ...`
 
-Run: `uv run pytest -q`
+Run: `uv run --with pytest python -m pytest -q`
 Expected: PASS (whole suite green)
 
 - [ ] **Step 5: Commit**
