@@ -7,7 +7,6 @@ index at .claude-plugin/marketplace.json in the repo root.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 
@@ -35,12 +34,20 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
         if not manifest_path.exists():
             continue
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        plugins.append({
-            "name": manifest["name"],
-            "version": manifest.get("version", "0.0.0"),
-            "description": manifest.get("description", ""),
-            "source": f"./dist/{manifest['name']}",
-        })
+        name = manifest.get("name")
+        if name is None:
+            raise ValueError(
+                f"Preset manifest missing required 'name' field: {preset_dir.name} "
+                f"({manifest_path})"
+            )
+        plugins.append(
+            {
+                "name": name,
+                "version": manifest.get("version", "0.0.0"),
+                "description": manifest.get("description", ""),
+                "source": f"./dist/{name}",
+            }
+        )
 
     plugins.sort(key=lambda p: p["name"])
 
