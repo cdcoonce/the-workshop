@@ -16,7 +16,9 @@ class TestBuildPluginStructure:
 
     def test_build_creates_plugin_json(self, tmp_repo: Path) -> None:
         build_preset("python-api", repo_root=tmp_repo)
-        plugin_json = tmp_repo / "dist" / "python-api" / ".claude-plugin" / "plugin.json"
+        plugin_json = (
+            tmp_repo / "dist" / "python-api" / ".claude-plugin" / "plugin.json"
+        )
         assert plugin_json.exists()
         data = json.loads(plugin_json.read_text())
         assert data["name"] == "python-api"
@@ -64,6 +66,19 @@ class TestBuildPluginSkills:
         build_preset("python-api", repo_root=tmp_repo)
         skills = tmp_repo / "dist" / "python-api" / "skills"
         assert (skills / "deploy" / "SKILL.md").exists()
+
+    def test_build_copies_specific_core_skills(self, tmp_repo: Path) -> None:
+        """core.skills as a list copies exactly the named core skills."""
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["skills"] = ["commit", "tdd"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        build_preset("python-api", repo_root=tmp_repo)
+        skills = tmp_repo / "dist" / "python-api" / "skills"
+        assert (skills / "commit" / "SKILL.md").exists()
+        assert (skills / "tdd" / "SKILL.md").exists()
+        assert not (skills / "daa-code-review").exists()
 
     def test_preset_skill_overrides_core(self, tmp_repo: Path) -> None:
         override = tmp_repo / "presets" / "python-api" / "skills" / "tdd"
@@ -118,7 +133,9 @@ class TestBuildPluginAgents:
         assert (agents / "api-builder" / "AGENT.md").exists()
 
     def test_preset_agent_overrides_core(self, tmp_repo: Path) -> None:
-        override_dir = tmp_repo / "presets" / "python-api" / "agents" / "tdd-implementer"
+        override_dir = (
+            tmp_repo / "presets" / "python-api" / "agents" / "tdd-implementer"
+        )
         override_dir.mkdir(parents=True, exist_ok=True)
         (override_dir / "AGENT.md").write_text(
             "---\nname: tdd-implementer\nrole: implementer\n---\n\n# OVERRIDDEN\n"
@@ -130,11 +147,14 @@ class TestBuildPluginAgents:
         manifest_path.write_text(json.dumps(manifest))
 
         build_preset("python-api", repo_root=tmp_repo)
-        agent_md = tmp_repo / "dist" / "python-api" / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md = (
+            tmp_repo / "dist" / "python-api" / "agents" / "tdd-implementer" / "AGENT.md"
+        )
         assert "OVERRIDDEN" in agent_md.read_text()
 
     def test_build_skips_agents_when_dir_missing(self, tmp_repo: Path) -> None:
         import shutil
+
         shutil.rmtree(tmp_repo / "core" / "agents")
         build_preset("python-api", repo_root=tmp_repo)
         agents = tmp_repo / "dist" / "python-api" / "agents"
@@ -273,7 +293,9 @@ class TestBuildPluginReadme:
         content = readme.read_text()
         assert "## CLAUDE.md Template" in content
 
-    def test_readme_claude_md_template_references_plugin_name(self, tmp_repo: Path) -> None:
+    def test_readme_claude_md_template_references_plugin_name(
+        self, tmp_repo: Path
+    ) -> None:
         build_preset("python-api", repo_root=tmp_repo)
         readme = tmp_repo / "dist" / "python-api" / "README.md"
         content = readme.read_text()
@@ -342,7 +364,9 @@ class TestBuildPresetAgentValidation:
         with pytest.raises(BuildValidationError, match="Preset agent not found"):
             build_preset("python-api", repo_root=tmp_repo)
 
-    def test_validation_catches_agent_in_both_preset_and_exclude(self, tmp_repo: Path) -> None:
+    def test_validation_catches_agent_in_both_preset_and_exclude(
+        self, tmp_repo: Path
+    ) -> None:
         import pytest
         from scripts.build_preset import BuildValidationError
 
@@ -362,14 +386,26 @@ class TestSettingsMerge:
     def test_duplicate_hook_type_appends_in_hooks_json(self, tmp_repo: Path) -> None:
         """When base and preset both define PreToolUse, hooks.json appends them."""
         preset_settings = tmp_repo / "presets" / "python-api" / "settings-preset.json"
-        preset_settings.write_text(json.dumps({
-            "hooks": {
-                "PreToolUse": [{"matcher": "Bash", "hooks": []}],
-                "PostToolUse": [{"matcher": "Edit|Write", "hooks": [
-                    {"type": "command", "command": 'python3 "$CLAUDE_PLUGIN_ROOT"/hooks/scripts/post-edit-lint.py'}
-                ]}],
-            }
-        }))
+        preset_settings.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "PreToolUse": [{"matcher": "Bash", "hooks": []}],
+                        "PostToolUse": [
+                            {
+                                "matcher": "Edit|Write",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": 'python3 "$CLAUDE_PLUGIN_ROOT"/hooks/scripts/post-edit-lint.py',
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
 
         build_preset("python-api", repo_root=tmp_repo)
         hooks_json = tmp_repo / "dist" / "python-api" / "hooks" / "hooks.json"

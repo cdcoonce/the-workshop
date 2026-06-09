@@ -38,6 +38,12 @@ def _validate_manifest(
         if not (core_path / "hooks" / hook_name).exists():
             errors.append(f"Core hook not found: {hook_name}")
 
+    core_skills = manifest["core"].get("skills", "all")
+    if isinstance(core_skills, list):
+        for skill_name in core_skills:
+            if not (core_path / "skills" / skill_name).exists():
+                errors.append(f"Core skill not found: {skill_name}")
+
     for skill_name in manifest.get("preset_skills", []):
         if not (preset_path / "skills" / skill_name).exists():
             errors.append(f"Preset skill not found: {skill_name}")
@@ -131,7 +137,9 @@ def _generate_readme(manifest: dict, skills: list[str], agents: list[str]) -> st
 
     lines.append("## CLAUDE.md Template")
     lines.append("")
-    lines.append("Copy the following into your project's `CLAUDE.md` to reference this plugin:")
+    lines.append(
+        "Copy the following into your project's `CLAUDE.md` to reference this plugin:"
+    )
     lines.append("")
     lines.append("```")
     lines.append("# Project Name")
@@ -142,7 +150,9 @@ def _generate_readme(manifest: dict, skills: list[str], agents: list[str]) -> st
     lines.append("")
     lines.append("## Methodology")
     lines.append("")
-    lines.append("See plugin documentation for TDD, root cause tracing, and subagent development processes.")
+    lines.append(
+        "See plugin documentation for TDD, root cause tracing, and subagent development processes."
+    )
     lines.append("```")
     lines.append("")
 
@@ -170,9 +180,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     dist_path = root / "dist" / preset_name
 
     if not preset_path.exists():
-        raise BuildValidationError(
-            f"Preset '{preset_name}' not found at {preset_path}"
-        )
+        raise BuildValidationError(f"Preset '{preset_name}' not found at {preset_path}")
 
     manifest = json.loads((preset_path / "manifest.json").read_text())
     _validate_manifest(manifest, core_path, preset_path)
@@ -182,15 +190,23 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     dist_path.mkdir(parents=True)
 
     # 1. Copy core skills -> skills/ (root level)
-    if manifest["core"].get("skills") == "all":
+    skills_setting = manifest["core"].get("skills", "all")
+    if skills_setting == "all":
         shutil.copytree(core_path / "skills", dist_path / "skills")
+    elif isinstance(skills_setting, list):
+        dest_skills = dist_path / "skills"
+        dest_skills.mkdir(parents=True, exist_ok=True)
+        for skill_name in skills_setting:
+            shutil.copytree(core_path / "skills" / skill_name, dest_skills / skill_name)
 
     # 2. Copy preset skills -> skills/ (override on collision)
     for skill_name in manifest.get("preset_skills", []):
         src = preset_path / "skills" / skill_name
         dest = dist_path / "skills" / skill_name
         if dest.exists():
-            print(f"WARNING: preset skill '{skill_name}' overrides core skill '{skill_name}'")
+            print(
+                f"WARNING: preset skill '{skill_name}' overrides core skill '{skill_name}'"
+            )
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
 
@@ -213,7 +229,9 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         src = preset_path / "agents" / agent_name
         dest = dist_path / "agents" / agent_name
         if dest.exists():
-            print(f"WARNING: preset agent '{agent_name}' overrides core agent '{agent_name}'")
+            print(
+                f"WARNING: preset agent '{agent_name}' overrides core agent '{agent_name}'"
+            )
             shutil.rmtree(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dest)
@@ -257,9 +275,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         "version": manifest.get("version", "0.0.0"),
         "description": manifest.get("description", ""),
     }
-    (plugin_dir / "plugin.json").write_text(
-        json.dumps(plugin_json, indent=2) + "\n"
-    )
+    (plugin_dir / "plugin.json").write_text(json.dumps(plugin_json, indent=2) + "\n")
 
     # 10. Generate README.md
     skill_names = []
@@ -270,14 +286,18 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     agents_dir = dist_path / "agents"
     if agents_dir.exists():
         agent_names = [d.name for d in agents_dir.iterdir() if d.is_dir()]
-    (dist_path / "README.md").write_text(_generate_readme(manifest, skill_names, agent_names))
+    (dist_path / "README.md").write_text(
+        _generate_readme(manifest, skill_names, agent_names)
+    )
 
     # 11. Apply exclusions (paths are now relative to dist_path, not .claude/)
     for exclusion in manifest.get("exclude", []):
         excluded_path = (dist_path / exclusion).resolve()
         # Path containment check: ensure resolved path is within dist_path
         if not str(excluded_path).startswith(str(dist_path.resolve())):
-            print(f"WARNING: exclusion '{exclusion}' resolves outside build directory, skipping")
+            print(
+                f"WARNING: exclusion '{exclusion}' resolves outside build directory, skipping"
+            )
             continue
         if excluded_path.exists():
             if excluded_path.is_dir():

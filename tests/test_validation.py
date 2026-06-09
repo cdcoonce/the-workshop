@@ -19,17 +19,30 @@ class TestValidation:
         with pytest.raises(BuildValidationError, match="nonexistent-skill"):
             build_preset("broken", repo_root=bad_manifest_repo)
 
+    def test_missing_core_skill_in_list_raises_error(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["skills"] = ["commit", "nonexistent-core-skill"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="nonexistent-core-skill"):
+            build_preset("python-api", repo_root=tmp_repo)
+
     def test_missing_preset_hook_raises_error(self, tmp_repo: Path) -> None:
         preset = tmp_repo / "presets" / "bad-hook"
         preset.mkdir()
-        (preset / "manifest.json").write_text(json.dumps({
-            "name": "bad-hook",
-            "description": "Bad hook reference",
-            "core": {"skills": "all", "hooks": ["protect-files.py"]},
-            "exclude": [],
-            "preset_skills": [],
-            "preset_hooks": ["missing-hook.py"],
-        }))
+        (preset / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "name": "bad-hook",
+                    "description": "Bad hook reference",
+                    "core": {"skills": "all", "hooks": ["protect-files.py"]},
+                    "exclude": [],
+                    "preset_skills": [],
+                    "preset_hooks": ["missing-hook.py"],
+                }
+            )
+        )
         (preset / "settings-preset.json").write_text(json.dumps({"hooks": {}}))
         preset_hooks = preset / "hooks"
         preset_hooks.mkdir()
@@ -50,18 +63,24 @@ class TestValidation:
     def test_exclude_conflicts_with_preset_skill(self, tmp_repo: Path) -> None:
         preset = tmp_repo / "presets" / "conflict"
         preset.mkdir()
-        (preset / "manifest.json").write_text(json.dumps({
-            "name": "conflict",
-            "description": "Conflict test",
-            "core": {"skills": "all", "hooks": ["protect-files.py"]},
-            "exclude": ["skills/deploy"],
-            "preset_skills": ["deploy"],
-            "preset_hooks": [],
-        }))
+        (preset / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "name": "conflict",
+                    "description": "Conflict test",
+                    "core": {"skills": "all", "hooks": ["protect-files.py"]},
+                    "exclude": ["skills/deploy"],
+                    "preset_skills": ["deploy"],
+                    "preset_hooks": [],
+                }
+            )
+        )
         (preset / "settings-preset.json").write_text(json.dumps({"hooks": {}}))
         preset_skills = preset / "skills" / "deploy"
         preset_skills.mkdir(parents=True)
         (preset_skills / "SKILL.md").write_text("# deploy")
 
-        with pytest.raises(BuildValidationError, match="both preset_skills and exclude"):
+        with pytest.raises(
+            BuildValidationError, match="both preset_skills and exclude"
+        ):
             build_preset("conflict", repo_root=tmp_repo)
