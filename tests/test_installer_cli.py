@@ -71,6 +71,23 @@ def test_list_shows_presets_and_detected_agent(tmp_path, monkeypatch, capsys):
     assert "claude-code" in out
 
 
+def test_argparse_facing_functions_are_annotated():
+    # CLAUDE.md mandates type hints on all function signatures; the argparse-facing
+    # handlers were the outliers. Annotations are strings here (PEP 563 / __future__).
+    assert cli.cmd_install.__annotations__ == {
+        "args": "argparse.Namespace",
+        "return": "int",
+    }
+    assert cli.cmd_list.__annotations__ == {
+        "args": "argparse.Namespace",
+        "return": "int",
+    }
+    assert cli._print_report.__annotations__ == {
+        "report": "InstallReport",
+        "return": "None",
+    }
+
+
 def test_presets_root_default_is_under_the_package():
     # The CLI's default PRESETS_ROOT must live inside the installed package so a
     # `uv tool install`'d copy can find bundled presets without a checkout.

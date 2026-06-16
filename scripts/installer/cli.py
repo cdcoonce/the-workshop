@@ -9,7 +9,7 @@ from scripts.installer.adapters import (
     get_adapter,
 )
 from scripts.installer.bundle import Bundle, BundleError
-from scripts.installer.report import Scope
+from scripts.installer.report import InstallReport, Scope
 
 # Built presets ship inside the wheel next to this module (see packaging task).
 PRESETS_ROOT = Path(__file__).resolve().parent / "presets"
@@ -19,14 +19,14 @@ def _resolve_target(scope: Scope) -> Path:
     return Path.home() if scope is Scope.USER else Path.cwd()
 
 
-def _print_report(report) -> None:
+def _print_report(report: InstallReport) -> None:
     for item in report.installed:
         print(f"  installed: {item}")
     for item, reason in report.skipped:
         print(f"  skipped {item}: {reason}")
 
 
-def cmd_install(args) -> int:
+def cmd_install(args: argparse.Namespace) -> int:
     scope = Scope.USER if args.user else Scope.PROJECT
     target = _resolve_target(scope)
 
@@ -53,7 +53,7 @@ def cmd_install(args) -> int:
     return 0
 
 
-def cmd_list(args) -> int:
+def cmd_list(args: argparse.Namespace) -> int:
     target = Path.cwd()
     detected = detect_adapter(target)
     print(f"presets: {Bundle.available(PRESETS_ROOT)}")
