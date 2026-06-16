@@ -1,4 +1,3 @@
-```skill
 ---
 name: github-cli
 description: >
@@ -10,7 +9,6 @@ description: >
   GitHub repositories without switching to a browser. Requires gh CLI installed
   and authenticated.
 ---
-```
 
 # GitHub CLI (gh) Skill
 

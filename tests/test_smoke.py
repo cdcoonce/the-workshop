@@ -102,6 +102,49 @@ class TestSmokeSkills:
         assert result.passed is False
         assert any("commit" in e and "SKILL.md" in e for e in result.errors)
 
+    def test_skill_missing_frontmatter_fails(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        skill_md = dist / "skills" / "commit" / "SKILL.md"
+
+        skill_md.write_text("# No frontmatter here\n")
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any("commit/SKILL.md" in e and "frontmatter" in e for e in result.errors)
+
+    def test_skill_missing_name_fails(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        skill_md = dist / "skills" / "commit" / "SKILL.md"
+
+        skill_md.write_text("---\ndescription: test\n---\n# Missing name\n")
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any("commit/SKILL.md" in e and "name" in e for e in result.errors)
+
+    def test_skill_missing_description_fails(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        skill_md = dist / "skills" / "commit" / "SKILL.md"
+
+        skill_md.write_text("---\nname: commit\n---\n# Missing description\n")
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any("commit/SKILL.md" in e and "description" in e for e in result.errors)
+
+    def test_skill_with_frontmatter_passes(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        skill_md = dist / "skills" / "commit" / "SKILL.md"
+
+        skill_md.write_text("---\nname: commit\ndescription: test\n---\n# Valid\n")
+
+        result = smoke_test(dist)
+        assert not any("commit/SKILL.md" in e for e in result.errors)
+
 
 class TestSmokeAgents:
     """Smoke test validates agent integrity."""

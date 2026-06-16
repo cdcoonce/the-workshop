@@ -81,8 +81,8 @@ def _validate_manifest(
 
 def _merge_settings(base_path: Path, preset_path: Path) -> dict:
     """Shallow-merge base + preset settings. Preset hook arrays append to base (D13)."""
-    base = json.loads(base_path.read_text())
-    preset = json.loads(preset_path.read_text())
+    base = json.loads(base_path.read_text(encoding="utf-8"))
+    preset = json.loads(preset_path.read_text(encoding="utf-8"))
 
     merged = json.loads(json.dumps(base))
 
@@ -182,7 +182,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     if not preset_path.exists():
         raise BuildValidationError(f"Preset '{preset_name}' not found at {preset_path}")
 
-    manifest = json.loads((preset_path / "manifest.json").read_text())
+    manifest = json.loads((preset_path / "manifest.json").read_text(encoding="utf-8"))
     _validate_manifest(manifest, core_path, preset_path)
 
     if dist_path.exists():
@@ -258,13 +258,15 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     )
     hooks_config = {"hooks": merged_settings.get("hooks", {})}
     (dist_path / "hooks" / "hooks.json").write_text(
-        json.dumps(hooks_config, indent=2) + "\n"
+        json.dumps(hooks_config, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # 8. Generate settings.json at root (hooks removed)
     settings_without_hooks = {k: v for k, v in merged_settings.items() if k != "hooks"}
     (dist_path / "settings.json").write_text(
-        json.dumps(settings_without_hooks, indent=2) + "\n"
+        json.dumps(settings_without_hooks, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # 9. Generate .claude-plugin/plugin.json
@@ -275,7 +277,10 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         "version": manifest.get("version", "0.0.0"),
         "description": manifest.get("description", ""),
     }
-    (plugin_dir / "plugin.json").write_text(json.dumps(plugin_json, indent=2) + "\n")
+    (plugin_dir / "plugin.json").write_text(
+        json.dumps(plugin_json, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     # 10. Generate README.md
     skill_names = []
@@ -287,7 +292,8 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     if agents_dir.exists():
         agent_names = [d.name for d in agents_dir.iterdir() if d.is_dir()]
     (dist_path / "README.md").write_text(
-        _generate_readme(manifest, skill_names, agent_names)
+        _generate_readme(manifest, skill_names, agent_names),
+        encoding="utf-8",
     )
 
     # 11. Apply exclusions (paths are now relative to dist_path, not .claude/)
