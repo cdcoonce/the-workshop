@@ -120,6 +120,41 @@ class TestBuildMarketplace:
         names = [p["name"] for p in data["plugins"]]
         assert "python-api" in names
 
+    def test_marketplace_source_uses_directory_name_not_manifest_name(
+        self, tmp_repo: Path
+    ) -> None:
+        """source is derived from the preset directory name, matching build_preset.
+
+        build_preset writes output to dist/<directory name>, so the marketplace
+        source must key off the directory name too -- never the manifest 'name',
+        which can diverge from its directory.
+        """
+        diverging = tmp_repo / "presets" / "dir-name"
+        diverging.mkdir()
+        (diverging / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "name": "manifest-name",
+                    "description": "Manifest name differs from directory name",
+                    "version": "1.0.0",
+                    "core": {"skills": "all", "hooks": ["protect-files.py"]},
+                    "exclude": [],
+                    "preset_skills": [],
+                    "preset_hooks": [],
+                }
+            )
+        )
+
+        build_marketplace(tmp_repo)
+        marketplace_path = tmp_repo / ".claude-plugin" / "marketplace.json"
+        data = json.loads(marketplace_path.read_text())
+        plugin = [p for p in data["plugins"] if p["name"] == "manifest-name"][0]
+        # source matches the dir build_preset builds into, not the manifest name.
+        assert plugin["source"] == "./dist/dir-name"
+        # name/version/description still come from the manifest.
+        assert plugin["version"] == "1.0.0"
+        assert plugin["description"] == "Manifest name differs from directory name"
+
     def test_marketplace_manifest_missing_name_raises_clear_error(
         self, tmp_repo: Path
     ) -> None:

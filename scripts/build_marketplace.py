@@ -45,7 +45,10 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
                 "name": name,
                 "version": manifest.get("version", "0.0.0"),
                 "description": manifest.get("description", ""),
-                "source": f"./dist/{name}",
+                # Derive source from the directory name -- build_preset writes
+                # output to dist/<directory name>, so keying off the manifest
+                # 'name' would let the advertised path drift from what is built.
+                "source": f"./dist/{preset_dir.name}",
             }
         )
 
