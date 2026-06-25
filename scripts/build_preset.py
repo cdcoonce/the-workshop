@@ -15,6 +15,7 @@ Build order (plugin format):
 
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 import sys
@@ -77,7 +78,7 @@ def _merge_settings(base_path: Path, preset_path: Path) -> dict:
     base = json.loads(base_path.read_text())
     preset = json.loads(preset_path.read_text())
 
-    merged = json.loads(json.dumps(base))
+    merged = copy.deepcopy(base)
 
     for hook_type, hook_list in preset.get("hooks", {}).items():
         if hook_type in merged.get("hooks", {}):

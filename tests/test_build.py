@@ -352,3 +352,18 @@ class TestSettingsMerge:
         assert len(data["hooks"]["PreToolUse"]) == 2
         assert data["hooks"]["PreToolUse"][0]["matcher"] == "Edit|Write"
         assert data["hooks"]["PreToolUse"][1]["matcher"] == "Bash"
+
+    def test_merge_settings_uses_deepcopy(self, tmp_repo: Path) -> None:
+        """_merge_settings must not mutate the base dict via shared references."""
+        from scripts.build_preset import _merge_settings
+
+        base_settings = tmp_repo / "core" / "settings-base.json"
+        preset_settings = tmp_repo / "presets" / "python-api" / "settings-preset.json"
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        # Read base hooks before and after a second build; they must not accumulate.
+        first = _merge_settings(base_settings, preset_settings)
+        second = _merge_settings(base_settings, preset_settings)
+
+        assert first == second
