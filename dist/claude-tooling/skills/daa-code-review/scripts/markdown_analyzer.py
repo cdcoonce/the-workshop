@@ -24,6 +24,7 @@ from models import (
 # Regex patterns for Markdown analysis
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 LINK_PATTERN = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\[([^\]]*)\]")
 REFERENCE_DEF_PATTERN = re.compile(r"^\[([^\]]+)\]:\s*(.+)$", re.MULTILINE)
@@ -444,7 +445,8 @@ class MarkdownAnalyzer:
             # Check for relative file links that might be broken
             if (
                 self.base_path
-                and not link_url.startswith(("http://", "https://", "#", "mailto:"))
+                and not URI_SCHEME_PATTERN.match(link_url)
+                and not link_url.startswith("#")
                 and not link_url.startswith("/")
             ):
                 # Remove anchor from URL for file check

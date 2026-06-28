@@ -114,6 +114,27 @@ class TestMarkdownAnalyzerLinks:
             assert len(md052_issues) == 1
             assert "not found" in md052_issues[0].message.lower()
 
+    def test_uri_scheme_links_are_not_broken_relative_links(self):
+        """Test that URI scheme links are not checked as local files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md_file = tmppath / "test.md"
+            md_file.write_text(
+                "# Title\n\n"
+                "[Phone](tel:+15551234)\n"
+                "[FTP](ftp://example.com/file.txt)\n"
+                "[Mail](mailto:test@example.com)\n"
+                "[Anchor](#section)\n"
+                "[Root](/docs/page.md)\n"
+                "[Missing](missing.md)\n"
+            )
+
+            result = analyze_markdown_file(md_file)
+
+            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+            assert len(md052_issues) == 1
+            assert "missing.md" in md052_issues[0].message
+
 
 class TestMarkdownAnalyzerImages:
     """Tests for image analysis."""
