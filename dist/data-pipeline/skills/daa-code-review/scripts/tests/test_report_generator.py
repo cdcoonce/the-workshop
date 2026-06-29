@@ -23,6 +23,8 @@ from report_generator import (
     Colors,
     ConsoleReporter,
     MarkdownReporter,
+    SeverityStyle,
+    _SEVERITY_STYLE,
     colorize,
     generate_console_report,
     generate_markdown_report,
@@ -84,6 +86,15 @@ class TestColorHelpers:
     def test_severity_emoji_info(self):
         """Test info severity emoji."""
         assert severity_emoji(Severity.INFO) == "🔵"
+
+    def test_severity_style_unified_mapping_exists(self):
+        """_SEVERITY_STYLE consolidates all three per-severity dicts."""
+        for sev in (Severity.ERROR, Severity.WARNING, Severity.INFO):
+            style = _SEVERITY_STYLE[sev]
+            assert isinstance(style, SeverityStyle)
+            assert style.color == severity_color(sev)
+            assert style.symbol == severity_symbol(sev)
+            assert style.emoji == severity_emoji(sev)
 
 
 class TestConsoleReporter:

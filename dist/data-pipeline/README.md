@@ -4,12 +4,15 @@ ETL/ELT pipelines, SQL transformations, scheduled data jobs
 
 ## Skills
 
+- clearway-glossary
 - commit
 - daa-code-review
 - dagster-expert
 - dbt-expert
+- deep-code-review
 - design-an-interface
 - dev-cycle
+- diagram
 - dignified-python
 - generate-claude-md
 - generate-wiki

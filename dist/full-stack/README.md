@@ -4,12 +4,16 @@ React/Next.js frontend + Python backend
 
 ## Skills
 
+- clearway-glossary
 - commit
 - daa-code-review
+- deep-code-review
 - design-an-interface
 - dev-cycle
+- diagram
 - dignified-python
 - generate-claude-md
+- generate-wiki
 - gitlab-cli
 - grill-me
 - improve-codebase-architecture

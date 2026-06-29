@@ -4,13 +4,17 @@ Python backend services — Lambda, FastAPI, Flask
 
 ## Skills
 
+- clearway-glossary
 - commit
 - daa-code-review
+- deep-code-review
 - deploy
 - design-an-interface
 - dev-cycle
+- diagram
 - dignified-python
 - generate-claude-md
+- generate-wiki
 - gitlab-cli
 - grill-me
 - improve-codebase-architecture

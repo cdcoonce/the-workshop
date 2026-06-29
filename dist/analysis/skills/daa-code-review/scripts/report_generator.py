@@ -6,7 +6,7 @@ from code review analysis results.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import NamedTuple, Optional, TextIO
 import sys
 
 from models import (
@@ -36,6 +36,21 @@ class Colors:
     BG_RED = "\033[41m"
     BG_YELLOW = "\033[43m"
     BG_BLUE = "\033[44m"
+
+
+class SeverityStyle(NamedTuple):
+    """Visual style attributes for a severity level."""
+
+    color: str
+    symbol: str
+    emoji: str
+
+
+_SEVERITY_STYLE: dict[Severity, SeverityStyle] = {
+    Severity.ERROR: SeverityStyle(color=Colors.RED, symbol="✗", emoji="🔴"),
+    Severity.WARNING: SeverityStyle(color=Colors.YELLOW, symbol="⚠", emoji="🟡"),
+    Severity.INFO: SeverityStyle(color=Colors.BLUE, symbol="ℹ", emoji="🔵"),
+}
 
 
 def supports_color() -> bool:
@@ -88,12 +103,7 @@ def severity_color(severity: Severity) -> str:
     str
         The ANSI color code.
     """
-    color_map = {
-        Severity.ERROR: Colors.RED,
-        Severity.WARNING: Colors.YELLOW,
-        Severity.INFO: Colors.BLUE,
-    }
-    return color_map.get(severity, Colors.RESET)
+    return _SEVERITY_STYLE[severity].color if severity in _SEVERITY_STYLE else Colors.RESET
 
 
 def severity_symbol(severity: Severity) -> str:
@@ -109,12 +119,7 @@ def severity_symbol(severity: Severity) -> str:
     str
         The symbol character.
     """
-    symbol_map = {
-        Severity.ERROR: "✗",
-        Severity.WARNING: "⚠",
-        Severity.INFO: "ℹ",
-    }
-    return symbol_map.get(severity, "•")
+    return _SEVERITY_STYLE[severity].symbol if severity in _SEVERITY_STYLE else "•"
 
 
 def severity_emoji(severity: Severity) -> str:
@@ -130,12 +135,7 @@ def severity_emoji(severity: Severity) -> str:
     str
         The emoji string.
     """
-    emoji_map = {
-        Severity.ERROR: "🔴",
-        Severity.WARNING: "🟡",
-        Severity.INFO: "🔵",
-    }
-    return emoji_map.get(severity, "⚪")
+    return _SEVERITY_STYLE[severity].emoji if severity in _SEVERITY_STYLE else "⚪"
 
 
 class ConsoleReporter:

@@ -737,25 +737,27 @@ class MarkdownAnalyzer:
             List of encoding corruption issues.
         """
         issues: list[Issue] = []
-        seen_lines: set[int] = set()  # Track lines already reported
+        seen_pairs: set[tuple[int, str]] = set()  # Track (line, corruption) already reported
 
         for match in ENCODING_CORRUPTION_PATTERN.finditer(content):
             corrupted = match.group(0)
             fixed = ENCODING_CORRUPTION_MAP.get(corrupted, "")
             line_num = self._find_line_number(content, match.start())
 
-            # Only report one issue per line to avoid spam
-            if line_num in seen_lines:
+            # Only report one issue per (line, corruption sequence) to avoid spam
+            pair = (line_num, corrupted)
+            if pair in seen_pairs:
                 continue
-            seen_lines.add(line_num)
+            seen_pairs.add(pair)
 
             # Get the full line for context
             line_content = lines[line_num - 1] if 0 < line_num <= len(lines) else ""
 
-            # Fix the entire line
-            fixed_line = line_content
-            for corr, fix in ENCODING_CORRUPTION_MAP.items():
-                fixed_line = fixed_line.replace(corr, fix)
+            # Fix the entire line with a single regex pass
+            fixed_line = ENCODING_CORRUPTION_PATTERN.sub(
+                lambda m: ENCODING_CORRUPTION_MAP.get(m.group(0), m.group(0)),
+                line_content,
+            )
 
             # Describe what was found
             if corrupted in ("\xc3\x97",):

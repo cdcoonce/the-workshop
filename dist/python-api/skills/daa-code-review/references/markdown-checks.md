@@ -246,25 +246,23 @@ flowchart TD
 ```
 ````
 
-````
-
 **Good:**
-```markdown
+
+````markdown
 ```mermaid
 flowchart TD
     A[Function - deprecated]
-````
-
+```
 ````
 
 Alternative: Use quotes to escape special characters:
-```markdown
+
+````markdown
 ```mermaid
 flowchart TD
     A["Function (deprecated)"]
-````
-
 ```
+````
 
 **Severity:** ERROR
 **Auto-fixable:** Yes (replace parentheses with dashes)

@@ -289,3 +289,16 @@ Swap Settlement = (Fixed \xe2\x80\x94 Index) \xc3\x97 Volume
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
         # Should detect box drawing corruption
         assert len(encoding_issues) >= 1
+
+
+class TestMultipleCorruptionsPerLine:
+    """Test that multiple distinct corruptions on a single line each produce an issue."""
+
+    def test_two_distinct_corruptions_produce_two_issues(self):
+        """A line with × and → corruptions should produce two separate issues."""
+        # \xc3\x97 = × corruption, \xe2\x86\x92 = → corruption
+        content = "# Math\n\nA \xc3\x97 B \xe2\x86\x92 C"
+        result = analyze_markdown(content)
+
+        encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
+        assert len(encoding_issues) == 2
