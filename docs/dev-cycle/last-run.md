@@ -1,0 +1,4 @@
+0 published slices, 0 merged slices, 3 quarantined slices
+- #18 quarantined (0 attempts) — build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-emqtgfpv', 'push', '-u', 'origin', 'afk/issue-18']' returned non-zero exit status 128.
+- #17 quarantined (0 attempts) — build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-pntskpph', 'push', '-u', 'origin', 'afk/issue-17']' returned non-zero exit status 128.
+- #16 quarantined (0 attempts) — build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-etlyyzar', 'push', '-u', 'origin', 'afk/issue-16']' returned non-zero exit status 128.

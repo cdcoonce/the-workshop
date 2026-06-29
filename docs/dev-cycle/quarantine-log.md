@@ -1,0 +1,11 @@
+# Quarantine Log
+
+| date | issue | category | attempts | reason | kind |
+| --- | --- | --- | --- | --- | --- |
+| 2026-06-25 | #5 | build-crash | 0 | build crashed: Command '['glab', 'mr', 'create', '--repo', 'clearwayenergy-group/data-architecture-and-analytics/ai-tools/claude-workflow', '--source-branch', 'afk/issue-5', '--target-branch', 'main', '--draft', '--title', 'AFK: afk/issue-5', '--description', 'Closes #5']' returned non-zero exit status 1. | environmental |
+| 2026-06-25 | #8 | build-crash | 0 | build crashed: Command '['glab', 'mr', 'create', '--repo', 'clearwayenergy-group/data-architecture-and-analytics/ai-tools/claude-workflow', '--source-branch', 'afk/issue-8', '--target-branch', 'main', '--draft', '--title', 'AFK: afk/issue-8', '--description', 'Closes #8']' returned non-zero exit status 1. | environmental |
+| 2026-06-25 | #7 | build-crash | 0 | build crashed: Command '['glab', 'mr', 'create', '--repo', 'clearwayenergy-group/data-architecture-and-analytics/ai-tools/claude-workflow', '--source-branch', 'afk/issue-7', '--target-branch', 'main', '--draft', '--title', 'AFK: afk/issue-7', '--description', 'Closes #7']' returned non-zero exit status 1. | environmental |
+| 2026-06-25 | #6 | build-crash | 0 | build crashed: Command '['glab', 'mr', 'create', '--repo', 'clearwayenergy-group/data-architecture-and-analytics/ai-tools/claude-workflow', '--source-branch', 'afk/issue-6', '--target-branch', 'main', '--draft', '--title', 'AFK: afk/issue-6', '--description', 'Closes #6']' returned non-zero exit status 1. | environmental |
+| 2026-06-25 | #18 | build-crash | 0 | build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-emqtgfpv', 'push', '-u', 'origin', 'afk/issue-18']' returned non-zero exit status 128. | environmental |
+| 2026-06-25 | #17 | build-crash | 0 | build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-pntskpph', 'push', '-u', 'origin', 'afk/issue-17']' returned non-zero exit status 128. | environmental |
+| 2026-06-25 | #16 | build-crash | 0 | build crashed: Command '['git', '-C', '/var/folders/jk/q8nlwv39743byd43v_1jwktc0000gq/T/afk-docker-etlyyzar', 'push', '-u', 'origin', 'afk/issue-16']' returned non-zero exit status 128. | environmental |
