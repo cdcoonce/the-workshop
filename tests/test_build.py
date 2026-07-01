@@ -23,6 +23,18 @@ class TestBuildPluginStructure:
         assert data["version"] == "1.0.0"
         assert data["description"] == "Python backend services"
 
+    def test_build_creates_codex_plugin_json(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        plugin_json = tmp_repo / "dist" / "python-api" / ".codex-plugin" / "plugin.json"
+        assert plugin_json.exists()
+        data = json.loads(plugin_json.read_text())
+        assert data["name"] == "python-api"
+        assert data["version"] == "1.0.0"
+        assert data["description"] == "Python backend services"
+        assert data["author"] == {"name": "Charles Coonce"}
+        assert data["skills"] == "./skills/"
+        assert data["interface"]["developerName"] == "Charles Coonce"
+
     def test_build_no_claude_subdir(self, tmp_repo: Path) -> None:
         """Plugin format must not contain a .claude/ subdirectory."""
         build_preset("python-api", repo_root=tmp_repo)

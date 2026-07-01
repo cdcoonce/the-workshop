@@ -1,0 +1,20 @@
+{
+  "name": "analysis",
+  "version": "1.0.0",
+  "description": "Notebooks, R/Python scripts, statistical analysis, exploratory work",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "analysis",
+    "shortDescription": "Notebooks, R/Python scripts, statistical analysis, exploratory work",
+    "longDescription": "Notebooks, R/Python scripts, statistical analysis, exploratory work",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}

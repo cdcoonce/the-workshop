@@ -1,7 +1,7 @@
-"""Generate .claude-plugin/marketplace.json from all preset manifests.
+"""Generate Claude and Codex marketplace indexes from preset manifests.
 
-Scans presets/ for manifest.json files and produces a single marketplace
-index at .claude-plugin/marketplace.json in the repo root.
+Scans presets/ for manifest.json files and produces marketplace indexes at
+.claude-plugin/marketplace.json and .agents/plugins/marketplace.json.
 """
 
 from __future__ import annotations
@@ -42,8 +42,24 @@ def _scan_presets(presets_dir: Path) -> list[dict[str, str]]:
     return plugins
 
 
+def _to_codex_plugin_entry(plugin: dict[str, str]) -> dict[str, object]:
+    """Convert a Claude marketplace plugin entry to Codex marketplace shape."""
+    return {
+        "name": plugin["name"],
+        "source": {
+            "source": "local",
+            "path": plugin["source"],
+        },
+        "policy": {
+            "installation": "AVAILABLE",
+            "authentication": "ON_INSTALL",
+        },
+        "category": "Productivity",
+    }
+
+
 def build_marketplace(repo_root: Path | None = None) -> Path:
-    """Generate marketplace.json listing all available plugins.
+    """Generate marketplace.json files listing all available plugins.
 
     Parameters
     ----------
@@ -61,22 +77,36 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
     plugins = _scan_presets(presets_dir)
     plugins.sort(key=lambda p: p["name"])
 
-    marketplace_dir = root / ".claude-plugin"
-    marketplace_dir.mkdir(parents=True, exist_ok=True)
+    claude_marketplace_dir = root / ".claude-plugin"
+    claude_marketplace_dir.mkdir(parents=True, exist_ok=True)
 
-    marketplace = {
+    claude_marketplace = {
         "name": "claude-workflow",
         "owner": {"name": "Charles Coonce"},
         "plugins": plugins,
     }
 
-    marketplace_path = marketplace_dir / "marketplace.json"
-    marketplace_path.write_text(
-        json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n",
+    claude_marketplace_path = claude_marketplace_dir / "marketplace.json"
+    claude_marketplace_path.write_text(
+        json.dumps(claude_marketplace, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
-    return marketplace_path
+    codex_marketplace_dir = root / ".agents" / "plugins"
+    codex_marketplace_dir.mkdir(parents=True, exist_ok=True)
+    codex_marketplace = {
+        "name": "claude-workflow",
+        "interface": {"displayName": "Claude Workflow"},
+        "plugins": [_to_codex_plugin_entry(plugin) for plugin in plugins],
+    }
+
+    codex_marketplace_path = codex_marketplace_dir / "marketplace.json"
+    codex_marketplace_path.write_text(
+        json.dumps(codex_marketplace, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    return claude_marketplace_path
 
 
 if __name__ == "__main__":

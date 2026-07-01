@@ -246,16 +246,37 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(settings_without_hooks, indent=2) + "\n"
     )
 
-    # 8. Generate .claude-plugin/plugin.json
-    plugin_dir = dist_path / ".claude-plugin"
-    plugin_dir.mkdir(parents=True)
+    # 8. Generate Claude and Codex plugin manifests
     plugin_json = {
         "name": manifest["name"],
         "version": manifest.get("version", "0.0.0"),
         "description": manifest.get("description", ""),
     }
-    (plugin_dir / "plugin.json").write_text(
+
+    claude_plugin_dir = dist_path / ".claude-plugin"
+    claude_plugin_dir.mkdir(parents=True)
+    (claude_plugin_dir / "plugin.json").write_text(
         json.dumps(plugin_json, indent=2) + "\n"
+    )
+
+    codex_plugin_json = {
+        **plugin_json,
+        "author": {"name": "Charles Coonce"},
+        "repository": "https://github.com/cdcoonce/claude-workflow",
+        "skills": "./skills/",
+        "interface": {
+            "displayName": manifest["name"],
+            "shortDescription": manifest.get("description", ""),
+            "longDescription": manifest.get("description", ""),
+            "developerName": "Charles Coonce",
+            "category": "Productivity",
+            "capabilities": ["Skills"],
+        },
+    }
+    codex_plugin_dir = dist_path / ".codex-plugin"
+    codex_plugin_dir.mkdir(parents=True)
+    (codex_plugin_dir / "plugin.json").write_text(
+        json.dumps(codex_plugin_json, indent=2) + "\n"
     )
 
     # 9. Generate README.md
@@ -294,6 +315,7 @@ if __name__ == "__main__":
     output = build_preset(preset)
     print(f"\nBuilt plugin '{preset}' -> {output}/")
     print(f"  {output}/.claude-plugin/plugin.json")
+    print(f"  {output}/.codex-plugin/plugin.json")
     print(f"  {output}/skills/")
     print(f"  {output}/agents/")
     print(f"  {output}/hooks/")

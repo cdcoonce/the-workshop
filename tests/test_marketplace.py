@@ -14,6 +14,26 @@ class TestBuildMarketplace:
         marketplace_path = tmp_repo / ".claude-plugin" / "marketplace.json"
         assert marketplace_path.exists()
 
+    def test_creates_codex_marketplace_json_file(self, tmp_repo: Path) -> None:
+        build_marketplace(tmp_repo)
+        marketplace_path = tmp_repo / ".agents" / "plugins" / "marketplace.json"
+        assert marketplace_path.exists()
+
+    def test_codex_marketplace_has_expected_shape(self, tmp_repo: Path) -> None:
+        build_marketplace(tmp_repo)
+        marketplace_path = tmp_repo / ".agents" / "plugins" / "marketplace.json"
+        data = json.loads(marketplace_path.read_text())
+        assert data["name"] == "claude-workflow"
+        assert data["interface"]["displayName"] == "Claude Workflow"
+        for plugin in data["plugins"]:
+            assert plugin["source"]["source"] == "local"
+            assert plugin["source"]["path"].startswith("./dist/")
+            assert plugin["policy"] == {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL",
+            }
+            assert plugin["category"] == "Productivity"
+
     def test_marketplace_json_is_valid_json(self, tmp_repo: Path) -> None:
         build_marketplace(tmp_repo)
         marketplace_path = tmp_repo / ".claude-plugin" / "marketplace.json"

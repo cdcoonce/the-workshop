@@ -1,0 +1,68 @@
+{
+  "name": "claude-workflow",
+  "interface": {
+    "displayName": "Claude Workflow"
+  },
+  "plugins": [
+    {
+      "name": "analysis",
+      "source": {
+        "source": "local",
+        "path": "./dist/analysis"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "claude-tooling",
+      "source": {
+        "source": "local",
+        "path": "./dist/claude-tooling"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "data-pipeline",
+      "source": {
+        "source": "local",
+        "path": "./dist/data-pipeline"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "full-stack",
+      "source": {
+        "source": "local",
+        "path": "./dist/full-stack"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "python-api",
+      "source": {
+        "source": "local",
+        "path": "./dist/python-api"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
