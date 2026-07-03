@@ -70,11 +70,13 @@ def _parse_frontmatter(text: str) -> dict | None:
         stripped = line.strip()
         if not stripped:
             continue
+        if stripped.startswith("#"):
+            continue
         is_indented = line != line.lstrip()
         if ":" in stripped and not stripped.startswith("-") and not is_indented:
             key, _, value = stripped.partition(":")
             key = key.strip()
-            value = value.strip()
+            value = re.sub(r"\s+#.*$", "", value.strip())
             if value.startswith("[") and value.endswith("]"):
                 result[key] = [v.strip() for v in value[1:-1].split(",") if v.strip()]
                 current_key = None

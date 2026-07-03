@@ -109,3 +109,15 @@ class TestParseFrontmatterCommentsAndSpacing:
     def test_blank_lines_within_frontmatter_are_skipped(self) -> None:
         text = "---\nname: foo\n\nrole: bar\n\n---\n"
         assert _parse_frontmatter(text) == {"name": "foo", "role": "bar"}
+
+    def test_inline_comment_is_stripped_from_scalar(self) -> None:
+        text = "---\nname: agent-name # Must match directory name\n---\n"
+        assert _parse_frontmatter(text) == {"name": "agent-name"}
+
+    def test_inline_comment_is_stripped_from_inline_list(self) -> None:
+        text = "---\nadd: [a, b] # note\n---\n"
+        assert _parse_frontmatter(text) == {"add": ["a", "b"]}
+
+    def test_full_line_comment_with_colon_is_ignored(self) -> None:
+        text = "---\nname: foo\n# TODO: revisit\nrole: bar\n---\n"
+        assert _parse_frontmatter(text) == {"name": "foo", "role": "bar"}
