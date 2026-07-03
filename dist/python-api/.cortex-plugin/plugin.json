@@ -1,0 +1,20 @@
+{
+  "name": "python-api",
+  "version": "1.0.0",
+  "description": "Python backend services \u2014 Lambda, FastAPI, Flask",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "python-api",
+    "shortDescription": "Python backend services \u2014 Lambda, FastAPI, Flask",
+    "longDescription": "Python backend services \u2014 Lambda, FastAPI, Flask",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}

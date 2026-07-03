@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-.}\"/hooks/run-hook.sh protect-files.py"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [

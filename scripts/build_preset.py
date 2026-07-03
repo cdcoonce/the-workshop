@@ -246,7 +246,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(settings_without_hooks, indent=2) + "\n"
     )
 
-    # 8. Generate Claude and Codex plugin manifests
+    # 8. Generate Claude, Codex, and Cortex plugin manifests
     plugin_json = {
         "name": manifest["name"],
         "version": manifest.get("version", "0.0.0"),
@@ -276,6 +276,13 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     codex_plugin_dir = dist_path / ".codex-plugin"
     codex_plugin_dir.mkdir(parents=True)
     (codex_plugin_dir / "plugin.json").write_text(
+        json.dumps(codex_plugin_json, indent=2) + "\n"
+    )
+
+    # Cortex Code (CoCo) uses the same extended manifest as Codex
+    cortex_plugin_dir = dist_path / ".cortex-plugin"
+    cortex_plugin_dir.mkdir(parents=True)
+    (cortex_plugin_dir / "plugin.json").write_text(
         json.dumps(codex_plugin_json, indent=2) + "\n"
     )
 
@@ -316,6 +323,7 @@ if __name__ == "__main__":
     print(f"\nBuilt plugin '{preset}' -> {output}/")
     print(f"  {output}/.claude-plugin/plugin.json")
     print(f"  {output}/.codex-plugin/plugin.json")
+    print(f"  {output}/.cortex-plugin/plugin.json")
     print(f"  {output}/skills/")
     print(f"  {output}/agents/")
     print(f"  {output}/hooks/")

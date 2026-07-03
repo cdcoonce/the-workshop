@@ -1,0 +1,20 @@
+{
+  "name": "persona-ship-it",
+  "version": "1.0.0",
+  "description": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "persona-ship-it",
+    "shortDescription": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
+    "longDescription": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "persona-thinking-partner",
+  "version": "1.0.0",
+  "description": "Socratic thinking partner \u2014 sharp questions and decision-sharpening over answers.",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "persona-thinking-partner",
+    "shortDescription": "Socratic thinking partner \u2014 sharp questions and decision-sharpening over answers.",
+    "longDescription": "Socratic thinking partner \u2014 sharp questions and decision-sharpening over answers.",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}
