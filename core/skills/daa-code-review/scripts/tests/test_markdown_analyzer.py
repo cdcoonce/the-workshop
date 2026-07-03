@@ -8,9 +8,8 @@ import tempfile
 
 import pytest
 
-from models import FileType, IssueCategory, Severity
+from models import FileType, Severity
 from markdown_analyzer import (
-    MarkdownAnalyzer,
     analyze_markdown,
     analyze_markdown_file,
 )
@@ -145,7 +144,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         md045_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(md045_issues) == 1
@@ -157,7 +157,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         alt_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(alt_issues) == 0
@@ -172,7 +173,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         md052_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(md052_issues) == 1
@@ -183,10 +185,40 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         ref_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(ref_issues) == 0
+
+    def test_code_subscript_in_fenced_block_is_not_reference_link(self):
+        """Test that double subscripts in fenced code blocks are not flagged."""
+        content = "# Title\n\n```py\nmatrix[0][1]\n```\n"
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 0
+
+    def test_code_subscript_in_inline_code_is_not_reference_link(self):
+        """Test that double subscripts in inline code spans are not flagged."""
+        content = "# Title\n\nUse `grid[i][j]` to access the cell."
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 0
+
+    def test_undefined_reference_link_outside_code_reports_correct_line(self):
+        """Test that a real undefined reference link outside code still reports the right line."""
+        content = "# Title\n\n```py\nmatrix[0][1]\n```\n\n[Link][undefined]\n"
+        result = analyze_markdown(content)
+
+        md052_issues = [
+            i
+            for i in result.issues
+            if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
+        ]
+        assert len(md052_issues) == 1
+        assert md052_issues[0].location.line_start == 7
 
 
 class TestMarkdownAnalyzerFormatting:
@@ -273,9 +305,7 @@ class TestMarkdownAnalyzeFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Markdown file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp:
             tmp.write("## No h1\n\nContent")
             tmp.flush()
             tmp_path = Path(tmp.name)

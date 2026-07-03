@@ -211,6 +211,31 @@ class MarkdownAnalyzer:
         """
         return content[:match_start].count("\n") + 1
 
+    def _mask_code_regions(self, content: str) -> str:
+        """Blank out fenced and inline code so it isn't mistaken for prose.
+
+        Replaces each matched span with spaces (newlines preserved) so
+        that character offsets and line numbers in the result still line
+        up with the original content.
+
+        Parameters
+        ----------
+        content : str
+            The Markdown content.
+
+        Returns
+        -------
+        str
+            The content with code regions replaced by whitespace.
+        """
+        masked = content
+        for pattern in (CODE_BLOCK_PATTERN, INLINE_CODE_PATTERN):
+            masked = pattern.sub(
+                lambda m: "".join(c if c == "\n" else " " for c in m.group(0)),
+                masked,
+            )
+        return masked
+
     def _check_heading_structure(
         self,
         content: str,
@@ -514,9 +539,8 @@ class MarkdownAnalyzer:
                 )
 
             # Check for broken image links
-            if (
-                self.base_path
-                and not image_url.startswith(("http://", "https://", "data:"))
+            if self.base_path and not image_url.startswith(
+                ("http://", "https://", "data:")
             ):
                 target_path = self.base_path / image_url
                 if not target_path.exists():
@@ -525,9 +549,7 @@ class MarkdownAnalyzer:
                             severity=Severity.ERROR,
                             category=IssueCategory.MARKDOWN,
                             message=f"Broken image: file '{image_url}' not found",
-                            location=Location(
-                                file_path=file_path, line_start=line_num
-                            ),
+                            location=Location(file_path=file_path, line_start=line_num),
                             rule_id="MD053",
                             source="markdown-analyzer",
                             context=match.group(0),
@@ -565,8 +587,12 @@ class MarkdownAnalyzer:
             m.group(1).lower() for m in REFERENCE_DEF_PATTERN.finditer(content)
         }
 
+        # Mask code regions so code subscripts like matrix[0][1] aren't
+        # mistaken for reference links, while preserving line numbers.
+        masked_content = self._mask_code_regions(content)
+
         # Check all reference links
-        for match in REFERENCE_LINK_PATTERN.finditer(content):
+        for match in REFERENCE_LINK_PATTERN.finditer(masked_content):
             ref_id = match.group(2) if match.group(2) else match.group(1)
             if ref_id.lower() not in defined_refs:
                 line_num = self._find_line_number(content, match.start())
