@@ -232,7 +232,9 @@ class ConsoleReporter:
 
         # Context
         if issue.context:
-            context_line = colorize(f"    │ {issue.context}", Colors.DIM, self.use_color)
+            context_line = colorize(
+                f"    │ {issue.context}", Colors.DIM, self.use_color
+            )
             self._print(context_line)
 
         # Suggested fix
@@ -281,15 +283,21 @@ class ConsoleReporter:
         self._print(f"  Total issues: {report.total_issues}")
 
         # Issue breakdown
-        error_str = colorize(f"{report.total_errors} errors", Colors.RED, self.use_color)
-        warn_str = colorize(f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color)
+        error_str = colorize(
+            f"{report.total_errors} errors", Colors.RED, self.use_color
+        )
+        warn_str = colorize(
+            f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color
+        )
         info_str = colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color)
         self._print(f"  Breakdown: {error_str}, {warn_str}, {info_str}")
 
         # Fixable issues
         fixable_count = len(report.get_all_fixable_issues())
         if fixable_count > 0:
-            fix_str = colorize(f"{fixable_count} auto-fixable", Colors.GREEN, self.use_color)
+            fix_str = colorize(
+                f"{fixable_count} auto-fixable", Colors.GREEN, self.use_color
+            )
             self._print(f"  {fix_str}")
 
         # Individual file results
@@ -301,7 +309,9 @@ class ConsoleReporter:
         if report.total_errors > 0:
             status = colorize("✗ Review failed", Colors.RED, self.use_color)
         elif report.total_warnings > 0:
-            status = colorize("⚠ Review passed with warnings", Colors.YELLOW, self.use_color)
+            status = colorize(
+                "⚠ Review passed with warnings", Colors.YELLOW, self.use_color
+            )
         else:
             status = colorize("✓ Review passed", Colors.GREEN, self.use_color)
         self._print(f"  {status}")
@@ -321,11 +331,23 @@ class ConsoleReporter:
         else:
             parts = []
             if report.total_errors:
-                parts.append(colorize(f"{report.total_errors} errors", Colors.RED, self.use_color))
+                parts.append(
+                    colorize(
+                        f"{report.total_errors} errors", Colors.RED, self.use_color
+                    )
+                )
             if report.total_warnings:
-                parts.append(colorize(f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color))
+                parts.append(
+                    colorize(
+                        f"{report.total_warnings} warnings",
+                        Colors.YELLOW,
+                        self.use_color,
+                    )
+                )
             if report.total_infos:
-                parts.append(colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color))
+                parts.append(
+                    colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color)
+                )
             self._print(f"Found {', '.join(parts)} in {report.total_files} file(s)")
 
 
@@ -357,25 +379,31 @@ class MarkdownReporter:
         self.include_context = include_context
         self.include_fixes = include_fixes
 
-    def generate_report(self, report: ReviewReport) -> str:
+    def generate_report(
+        self, report: ReviewReport, generated_at: Optional[datetime] = None
+    ) -> str:
         """Generate a complete Markdown report.
 
         Parameters
         ----------
         report : ReviewReport
             The review report to format.
+        generated_at : Optional[datetime]
+            Timestamp to embed as the generation time. Defaults to
+            ``datetime.now()`` when not supplied.
 
         Returns
         -------
         str
             The formatted Markdown report.
         """
+        generated_at = generated_at if generated_at is not None else datetime.now()
         lines: list[str] = []
 
         # Header
         lines.append(f"# {report.title}")
         lines.append("")
-        lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Generated: {generated_at.strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
 
         # Summary
@@ -589,6 +617,7 @@ def generate_markdown_report(
     report: ReviewReport,
     include_context: bool = True,
     include_fixes: bool = True,
+    generated_at: Optional[datetime] = None,
 ) -> str:
     """Generate a Markdown report string.
 
@@ -600,6 +629,9 @@ def generate_markdown_report(
         Whether to include code context.
     include_fixes : bool
         Whether to include suggested fixes.
+    generated_at : Optional[datetime]
+        Timestamp to embed as the generation time. Defaults to
+        ``datetime.now()`` when not supplied.
 
     Returns
     -------
@@ -610,7 +642,7 @@ def generate_markdown_report(
         include_context=include_context,
         include_fixes=include_fixes,
     )
-    return reporter.generate_report(report)
+    return reporter.generate_report(report, generated_at=generated_at)
 
 
 def save_markdown_report(
@@ -618,6 +650,7 @@ def save_markdown_report(
     output_path: Path,
     include_context: bool = True,
     include_fixes: bool = True,
+    generated_at: Optional[datetime] = None,
 ) -> None:
     """Generate and save a Markdown report to a file.
 
@@ -631,10 +664,14 @@ def save_markdown_report(
         Whether to include code context.
     include_fixes : bool
         Whether to include suggested fixes.
+    generated_at : Optional[datetime]
+        Timestamp to embed as the generation time. Defaults to
+        ``datetime.now()`` when not supplied.
     """
     markdown = generate_markdown_report(
         report,
         include_context=include_context,
         include_fixes=include_fixes,
+        generated_at=generated_at,
     )
     output_path.write_text(markdown, encoding="utf-8")

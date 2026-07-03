@@ -3,6 +3,7 @@
 This module contains pytest tests for the report generation functionality.
 """
 
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 import tempfile
@@ -22,7 +23,6 @@ from models import (
 from report_generator import (
     Colors,
     ConsoleReporter,
-    MarkdownReporter,
     colorize,
     generate_console_report,
     generate_markdown_report,
@@ -320,6 +320,12 @@ class TestMarkdownReporter:
         """Test that category summary is included."""
         markdown = generate_markdown_report(sample_report)
         assert "## Issues by Category" in markdown
+
+    def test_generate_report_uses_injected_timestamp(self, sample_report: ReviewReport):
+        """Test that a supplied generated_at timestamp appears verbatim."""
+        fixed_dt = datetime(2024, 1, 15, 9, 30, 0)
+        markdown = generate_markdown_report(sample_report, generated_at=fixed_dt)
+        assert "Generated: 2024-01-15 09:30:00" in markdown
 
 
 class TestSaveMarkdownReport:
