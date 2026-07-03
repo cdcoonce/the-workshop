@@ -517,6 +517,7 @@ class MarkdownAnalyzer:
             if (
                 self.base_path
                 and not image_url.startswith(("http://", "https://", "data:"))
+                and not image_url.startswith("/")
             ):
                 target_path = self.base_path / image_url
                 if not target_path.exists():
@@ -525,9 +526,7 @@ class MarkdownAnalyzer:
                             severity=Severity.ERROR,
                             category=IssueCategory.MARKDOWN,
                             message=f"Broken image: file '{image_url}' not found",
-                            location=Location(
-                                file_path=file_path, line_start=line_num
-                            ),
+                            location=Location(file_path=file_path, line_start=line_num),
                             rule_id="MD053",
                             source="markdown-analyzer",
                             context=match.group(0),
