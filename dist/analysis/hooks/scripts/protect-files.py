@@ -4,7 +4,11 @@
 import json
 import sys
 
-data = json.load(sys.stdin)
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    sys.exit(0)
+
 file_path = data.get("tool_input", {}).get("file_path", "")
 
 if not file_path:
@@ -14,5 +18,8 @@ PROTECTED_PATTERNS = [".env", "package-lock.json", "uv.lock", "node_modules/", "
 
 for pattern in PROTECTED_PATTERNS:
     if pattern in file_path:
-        print(f"Blocked: {file_path} matches protected pattern '{pattern}'", file=sys.stderr)
+        print(
+            f"Blocked: {file_path} matches protected pattern '{pattern}'",
+            file=sys.stderr,
+        )
         sys.exit(2)

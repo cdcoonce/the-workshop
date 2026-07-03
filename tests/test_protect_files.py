@@ -69,3 +69,15 @@ def test_missing_tool_input_allows() -> None:
     result = run_hook({})
 
     assert result.returncode == 0
+
+
+def test_malformed_json_stdin_allows() -> None:
+    result = subprocess.run(
+        [sys.executable, str(HOOK_PATH)],
+        input="not json",
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
