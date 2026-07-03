@@ -8,9 +8,8 @@ import tempfile
 
 import pytest
 
-from models import FileType, IssueCategory, Severity
+from models import FileType, Severity
 from markdown_analyzer import (
-    MarkdownAnalyzer,
     analyze_markdown,
     analyze_markdown_file,
 )
@@ -64,6 +63,15 @@ class TestMarkdownAnalyzerHeadings:
     def test_duplicate_headings(self):
         """Test detection of duplicate headings."""
         content = "# Title\n\n## Section\n\n## Section\n\nContent"
+        result = analyze_markdown(content)
+
+        md024_issues = [i for i in result.issues if i.rule_id == "MD024"]
+        assert len(md024_issues) == 1
+        assert md024_issues[0].severity == Severity.INFO
+
+    def test_duplicate_headings_across_levels(self):
+        """Test that duplicate heading text is flagged regardless of level."""
+        content = "# Title\n\n## Setup\n\n### Setup\n\nContent"
         result = analyze_markdown(content)
 
         md024_issues = [i for i in result.issues if i.rule_id == "MD024"]
@@ -145,7 +153,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         md045_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(md045_issues) == 1
@@ -157,7 +166,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         alt_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(alt_issues) == 0
@@ -172,7 +182,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         md052_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(md052_issues) == 1
@@ -183,7 +194,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         ref_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(ref_issues) == 0
@@ -273,9 +285,7 @@ class TestMarkdownAnalyzeFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Markdown file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp:
             tmp.write("## No h1\n\nContent")
             tmp.flush()
             tmp_path = Path(tmp.name)
