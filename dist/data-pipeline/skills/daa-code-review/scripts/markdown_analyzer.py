@@ -410,6 +410,12 @@ class MarkdownAnalyzer:
         issues: list[Issue] = []
 
         for match in LINK_PATTERN.finditer(content):
+            # Image syntax `![alt](url)` also matches LINK_PATTERN on its
+            # `[alt](url)` suffix; skip those so _check_images is the sole
+            # source of image findings.
+            if match.start() > 0 and content[match.start() - 1] == "!":
+                continue
+
             link_text = match.group(1)
             link_url = match.group(2)
             line_num = self._find_line_number(content, match.start())
@@ -514,9 +520,8 @@ class MarkdownAnalyzer:
                 )
 
             # Check for broken image links
-            if (
-                self.base_path
-                and not image_url.startswith(("http://", "https://", "data:"))
+            if self.base_path and not image_url.startswith(
+                ("http://", "https://", "data:")
             ):
                 target_path = self.base_path / image_url
                 if not target_path.exists():
@@ -525,9 +530,7 @@ class MarkdownAnalyzer:
                             severity=Severity.ERROR,
                             category=IssueCategory.MARKDOWN,
                             message=f"Broken image: file '{image_url}' not found",
-                            location=Location(
-                                file_path=file_path, line_start=line_num
-                            ),
+                            location=Location(file_path=file_path, line_start=line_num),
                             rule_id="MD053",
                             source="markdown-analyzer",
                             context=match.group(0),

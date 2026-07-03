@@ -8,9 +8,8 @@ import tempfile
 
 import pytest
 
-from models import FileType, IssueCategory, Severity
+from models import FileType, Severity
 from markdown_analyzer import (
-    MarkdownAnalyzer,
     analyze_markdown,
     analyze_markdown_file,
 )
@@ -145,7 +144,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         md045_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(md045_issues) == 1
@@ -157,10 +157,32 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         alt_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(alt_issues) == 0
+
+    def test_image_only_document_has_no_link_findings(self):
+        """Test that image syntax isn't re-flagged by the link checker."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md_file = tmppath / "test.md"
+            md_file.write_text("# Title\n\n![](missing.png)")
+
+            result = analyze_markdown_file(md_file)
+
+            link_issues = [i for i in result.issues if "link" in i.message.lower()]
+            assert link_issues == []
+
+            md045_issues = [i for i in result.issues if i.rule_id == "MD045"]
+            assert len(md045_issues) == 1
+
+            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+            assert len(md052_issues) == 0
+
+            md053_issues = [i for i in result.issues if i.rule_id == "MD053"]
+            assert len(md053_issues) == 1
 
 
 class TestMarkdownAnalyzerReferenceLinks:
@@ -172,7 +194,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         md052_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(md052_issues) == 1
@@ -183,7 +206,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         ref_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(ref_issues) == 0
@@ -273,9 +297,7 @@ class TestMarkdownAnalyzeFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Markdown file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp:
             tmp.write("## No h1\n\nContent")
             tmp.flush()
             tmp_path = Path(tmp.name)
