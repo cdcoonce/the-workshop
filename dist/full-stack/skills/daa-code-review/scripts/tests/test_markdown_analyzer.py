@@ -8,9 +8,8 @@ import tempfile
 
 import pytest
 
-from models import FileType, IssueCategory, Severity
+from models import FileType, Severity
 from markdown_analyzer import (
-    MarkdownAnalyzer,
     analyze_markdown,
     analyze_markdown_file,
 )
@@ -114,6 +113,32 @@ class TestMarkdownAnalyzerLinks:
             assert len(md052_issues) == 1
             assert "not found" in md052_issues[0].message.lower()
 
+    def test_titled_link_to_existing_file_is_not_broken(self):
+        """Test that a link with an optional title is resolved to the file, not the title."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "guide.md").write_text("# Guide")
+            md_file = tmppath / "test.md"
+            md_file.write_text('# Title\n\n[docs](guide.md "My Title")')
+
+            result = analyze_markdown_file(md_file)
+
+            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+            assert len(md052_issues) == 0
+
+    def test_query_string_link_to_existing_file_is_not_broken(self):
+        """Test that a link with a query string is resolved to the file, not the query."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "guide.md").write_text("# Guide")
+            md_file = tmppath / "test.md"
+            md_file.write_text("# Title\n\n[docs](guide.md?v=2)")
+
+            result = analyze_markdown_file(md_file)
+
+            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+            assert len(md052_issues) == 0
+
     def test_uri_scheme_links_are_not_broken_relative_links(self):
         """Test that URI scheme links are not checked as local files."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -145,7 +170,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         md045_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(md045_issues) == 1
@@ -157,7 +183,8 @@ class TestMarkdownAnalyzerImages:
         result = analyze_markdown(content)
 
         alt_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD045" and "alt text" in i.message.lower()
         ]
         assert len(alt_issues) == 0
@@ -172,7 +199,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         md052_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(md052_issues) == 1
@@ -183,7 +211,8 @@ class TestMarkdownAnalyzerReferenceLinks:
         result = analyze_markdown(content)
 
         ref_issues = [
-            i for i in result.issues
+            i
+            for i in result.issues
             if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
         ]
         assert len(ref_issues) == 0
@@ -273,9 +302,7 @@ class TestMarkdownAnalyzeFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Markdown file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp:
             tmp.write("## No h1\n\nContent")
             tmp.flush()
             tmp_path = Path(tmp.name)

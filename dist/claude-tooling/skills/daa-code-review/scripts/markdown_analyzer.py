@@ -24,6 +24,7 @@ from models import (
 # Regex patterns for Markdown analysis
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 LINK_PATTERN = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+LINK_TITLE_PATTERN = re.compile(r"""\s+(?:"[^"]*"|'[^']*')\s*$""")
 URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\[([^\]]*)\]")
@@ -449,8 +450,9 @@ class MarkdownAnalyzer:
                 and not link_url.startswith("#")
                 and not link_url.startswith("/")
             ):
-                # Remove anchor from URL for file check
-                file_url = link_url.split("#")[0]
+                # Strip optional title and anchor/query from URL for file check
+                file_url = LINK_TITLE_PATTERN.sub("", link_url)
+                file_url = file_url.split("#")[0].split("?")[0].strip()
                 if file_url:
                     target_path = self.base_path / file_url
                     if not target_path.exists():
@@ -514,9 +516,8 @@ class MarkdownAnalyzer:
                 )
 
             # Check for broken image links
-            if (
-                self.base_path
-                and not image_url.startswith(("http://", "https://", "data:"))
+            if self.base_path and not image_url.startswith(
+                ("http://", "https://", "data:")
             ):
                 target_path = self.base_path / image_url
                 if not target_path.exists():
@@ -525,9 +526,7 @@ class MarkdownAnalyzer:
                             severity=Severity.ERROR,
                             category=IssueCategory.MARKDOWN,
                             message=f"Broken image: file '{image_url}' not found",
-                            location=Location(
-                                file_path=file_path, line_start=line_num
-                            ),
+                            location=Location(file_path=file_path, line_start=line_num),
                             rule_id="MD053",
                             source="markdown-analyzer",
                             context=match.group(0),
