@@ -30,12 +30,6 @@ class Colors:
     YELLOW = "\033[93m"
     BLUE = "\033[94m"
     GREEN = "\033[92m"
-    CYAN = "\033[96m"
-    MAGENTA = "\033[95m"
-
-    BG_RED = "\033[41m"
-    BG_YELLOW = "\033[43m"
-    BG_BLUE = "\033[44m"
 
 
 def supports_color() -> bool:
@@ -232,7 +226,9 @@ class ConsoleReporter:
 
         # Context
         if issue.context:
-            context_line = colorize(f"    │ {issue.context}", Colors.DIM, self.use_color)
+            context_line = colorize(
+                f"    │ {issue.context}", Colors.DIM, self.use_color
+            )
             self._print(context_line)
 
         # Suggested fix
@@ -281,15 +277,21 @@ class ConsoleReporter:
         self._print(f"  Total issues: {report.total_issues}")
 
         # Issue breakdown
-        error_str = colorize(f"{report.total_errors} errors", Colors.RED, self.use_color)
-        warn_str = colorize(f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color)
+        error_str = colorize(
+            f"{report.total_errors} errors", Colors.RED, self.use_color
+        )
+        warn_str = colorize(
+            f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color
+        )
         info_str = colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color)
         self._print(f"  Breakdown: {error_str}, {warn_str}, {info_str}")
 
         # Fixable issues
         fixable_count = len(report.get_all_fixable_issues())
         if fixable_count > 0:
-            fix_str = colorize(f"{fixable_count} auto-fixable", Colors.GREEN, self.use_color)
+            fix_str = colorize(
+                f"{fixable_count} auto-fixable", Colors.GREEN, self.use_color
+            )
             self._print(f"  {fix_str}")
 
         # Individual file results
@@ -301,7 +303,9 @@ class ConsoleReporter:
         if report.total_errors > 0:
             status = colorize("✗ Review failed", Colors.RED, self.use_color)
         elif report.total_warnings > 0:
-            status = colorize("⚠ Review passed with warnings", Colors.YELLOW, self.use_color)
+            status = colorize(
+                "⚠ Review passed with warnings", Colors.YELLOW, self.use_color
+            )
         else:
             status = colorize("✓ Review passed", Colors.GREEN, self.use_color)
         self._print(f"  {status}")
@@ -321,11 +325,23 @@ class ConsoleReporter:
         else:
             parts = []
             if report.total_errors:
-                parts.append(colorize(f"{report.total_errors} errors", Colors.RED, self.use_color))
+                parts.append(
+                    colorize(
+                        f"{report.total_errors} errors", Colors.RED, self.use_color
+                    )
+                )
             if report.total_warnings:
-                parts.append(colorize(f"{report.total_warnings} warnings", Colors.YELLOW, self.use_color))
+                parts.append(
+                    colorize(
+                        f"{report.total_warnings} warnings",
+                        Colors.YELLOW,
+                        self.use_color,
+                    )
+                )
             if report.total_infos:
-                parts.append(colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color))
+                parts.append(
+                    colorize(f"{report.total_infos} info", Colors.BLUE, self.use_color)
+                )
             self._print(f"Found {', '.join(parts)} in {report.total_files} file(s)")
 
 
