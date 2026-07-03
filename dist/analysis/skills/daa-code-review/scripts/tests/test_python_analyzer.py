@@ -19,6 +19,7 @@ from python_analyzer import (
     check_ruff_available,
     get_category_for_rule,
     get_severity_for_rule,
+    parse_ruff_diagnostic,
     run_ruff_check,
 )
 
@@ -230,9 +231,7 @@ class TestAnalyzePythonFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Python file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
             tmp.write("import os\nx = 1\n")
             tmp.flush()
             tmp_path = Path(tmp.name)
@@ -282,3 +281,109 @@ class TestIssueProperties:
         # Should have at least one error
         errors = result.get_issues_by_severity(Severity.ERROR)
         assert len(errors) > 0
+
+
+class TestParseRuffDiagnostic:
+    """Tests for parse_ruff_diagnostic, exercised directly with hand-built diagnostics."""
+
+    def test_line_end_collapses_to_none_when_equal_to_line_start(self):
+        """Test that a single-line diagnostic gets line_end=None."""
+        diagnostic = {
+            "code": "F401",
+            "message": "'os' imported but unused",
+            "location": {"row": 3, "column": 1},
+            "end_location": {"row": 3, "column": 10},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.location.line_end is None
+
+    def test_line_end_set_when_different_from_line_start(self):
+        """Test that a multi-line diagnostic keeps its line_end."""
+        diagnostic = {
+            "code": "E501",
+            "message": "line too long",
+            "location": {"row": 3, "column": 1},
+            "end_location": {"row": 5, "column": 10},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.location.line_end == 5
+
+    def test_context_populated_for_in_range_line(self):
+        """Test that context is pulled from source_lines for a valid line_start."""
+        source_lines = ["a = 1\n", "b = 2  \n", "c = 3\n"]
+        diagnostic = {
+            "code": "E225",
+            "message": "missing whitespace",
+            "location": {"row": 2, "column": 1},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, source_lines)
+        assert issue.context == "b = 2"
+
+    def test_context_none_when_line_start_exceeds_source_length(self):
+        """Test that context is None when line_start is out of range."""
+        source_lines = ["a = 1\n"]
+        diagnostic = {
+            "code": "E225",
+            "message": "missing whitespace",
+            "location": {"row": 5, "column": 1},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, source_lines)
+        assert issue.context is None
+
+    def test_suggested_fix_created_with_safe_applicability(self):
+        """Test that a fix with edits and safe applicability yields an auto-fixable SuggestedFix."""
+        diagnostic = {
+            "code": "F401",
+            "message": "'os' imported but unused",
+            "location": {"row": 1, "column": 1},
+            "fix": {
+                "applicability": "safe",
+                "edits": [{"content": ""}],
+            },
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.suggested_fix is not None
+        assert issue.suggested_fix.auto_fixable is True
+
+    def test_suggested_fix_not_auto_fixable_when_not_safe(self):
+        """Test that a fix with non-safe applicability is not auto-fixable."""
+        diagnostic = {
+            "code": "F401",
+            "message": "'os' imported but unused",
+            "location": {"row": 1, "column": 1},
+            "fix": {
+                "applicability": "unsafe",
+                "edits": [{"content": ""}],
+            },
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.suggested_fix is not None
+        assert issue.suggested_fix.auto_fixable is False
+
+    def test_no_suggested_fix_when_no_edits(self):
+        """Test that suggested_fix is None when fix has no edits."""
+        diagnostic = {
+            "code": "F401",
+            "message": "'os' imported but unused",
+            "location": {"row": 1, "column": 1},
+            "fix": {"applicability": "safe", "edits": []},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.suggested_fix is None
+
+    def test_no_suggested_fix_when_no_fix_key(self):
+        """Test that suggested_fix is None when the diagnostic has no fix key."""
+        diagnostic = {
+            "code": "F401",
+            "message": "'os' imported but unused",
+            "location": {"row": 1, "column": 1},
+        }
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.suggested_fix is None
+
+    def test_missing_code_and_message_fall_back_to_defaults(self):
+        """Test that missing code/message keys fall back to UNKNOWN/Unknown issue."""
+        diagnostic = {"location": {"row": 1, "column": 1}}
+        issue = parse_ruff_diagnostic(diagnostic, None, [])
+        assert issue.rule_id == "UNKNOWN"
+        assert issue.message == "Unknown issue"
