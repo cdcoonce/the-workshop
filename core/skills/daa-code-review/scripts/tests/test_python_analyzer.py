@@ -83,6 +83,10 @@ class TestRuleMapping:
         assert get_category_for_rule("UNKNOWN123") == IssueCategory.PEP8
         assert get_severity_for_rule("UNKNOWN123") == Severity.WARNING
 
+    def test_complexity_severity(self):
+        """Test that C90 rules map to INFO severity."""
+        assert get_severity_for_rule("C901") == Severity.INFO
+
 
 class TestRuffIntegration:
     """Tests for ruff integration."""
@@ -230,9 +234,7 @@ class TestAnalyzePythonFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Python file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
             tmp.write("import os\nx = 1\n")
             tmp.flush()
             tmp_path = Path(tmp.name)

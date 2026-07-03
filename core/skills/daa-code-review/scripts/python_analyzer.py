@@ -146,11 +146,14 @@ def get_severity_for_rule(rule_id: str) -> Severity:
     if rule_id in ERROR_RULES:
         return Severity.ERROR
 
-    # Try progressively shorter prefixes
+    # Try progressively shorter prefixes (including digits for rules like C90)
     for prefix_len in range(len(rule_id), 0, -1):
         prefix = rule_id[:prefix_len]
+        if prefix in RUFF_SEVERITY_MAP:
+            return RUFF_SEVERITY_MAP[prefix]
+        # Also try without trailing digits for letter-only prefixes
         letter_prefix = "".join(c for c in prefix if not c.isdigit())
-        if letter_prefix in RUFF_SEVERITY_MAP:
+        if letter_prefix and letter_prefix in RUFF_SEVERITY_MAP:
             return RUFF_SEVERITY_MAP[letter_prefix]
 
     # Default to WARNING for unknown rules
