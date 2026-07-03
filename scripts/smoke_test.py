@@ -116,6 +116,39 @@ def _parse_frontmatter(text: str) -> dict | None:
     return result if result else None
 
 
+def _iter_links_outside_fences(content: str, link_pattern: re.Pattern[str]):
+    """Yield ``link_pattern`` matches that fall outside ``` fenced code blocks.
+
+    Links inside fenced code blocks are illustrative examples, not real
+    file references, so they must not be validated against the filesystem.
+
+    Parameters
+    ----------
+    content
+        Full markdown text to scan.
+    link_pattern
+        Compiled regex matching markdown links, e.g. ``[text](target)``.
+
+    Yields
+    ------
+    re.Match
+        Each link match found outside a fenced code block.
+    """
+    in_fence = False
+    fenced_lines: set[int] = set()
+    for line_num, line in enumerate(content.split("\n")):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            fenced_lines.add(line_num)
+
+    for match in link_pattern.finditer(content):
+        line_num = content.count("\n", 0, match.start())
+        if line_num not in fenced_lines:
+            yield match
+
+
 def smoke_test(dist_path: Path) -> SmokeTestResult:
     """Validate internal consistency of a built plugin.
 
@@ -261,7 +294,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
     if skills_dir.exists():
         for skill_md in skills_dir.rglob("SKILL.md"):
             skill_content = skill_md.read_text(encoding="utf-8")
-            for match in link_pattern.finditer(skill_content):
+            for match in _iter_links_outside_fences(skill_content, link_pattern):
                 link_target = match.group(2)
                 # Skip external URLs, anchors, and project-root-relative paths
                 if link_target.startswith(("http://", "https://", "#", ".claude/")):
@@ -278,7 +311,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
     if agents_dir.exists():
         for agent_md in agents_dir.rglob("AGENT.md"):
             agent_content = agent_md.read_text(encoding="utf-8")
-            for match in link_pattern.finditer(agent_content):
+            for match in _iter_links_outside_fences(agent_content, link_pattern):
                 link_target = match.group(2)
                 # Skip external URLs, anchors, and project-root-relative paths
                 if link_target.startswith(("http://", "https://", "#", ".claude/")):

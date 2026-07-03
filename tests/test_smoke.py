@@ -341,6 +341,41 @@ class TestSmokeIntraSkillLinks:
         result = smoke_test(dist)
         assert result.passed is True
 
+    def test_broken_link_inside_fenced_code_block_skipped(self, tmp_repo: Path) -> None:
+        """Illustrative example links inside ``` fences are not real references."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        skill_dir = dist / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test\ndescription: test\n---\n\n"
+            "```markdown\n"
+            "See [example](references/nonexistent.md) for details.\n"
+            "```\n"
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is True
+
+    def test_broken_link_outside_fenced_code_block_fails(self, tmp_repo: Path) -> None:
+        """The same link text outside a fence is still checked and still fails."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        skill_dir = dist / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test\ndescription: test\n---\n\n"
+            "See [example](references/nonexistent.md) for details.\n"
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any(
+            "test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors
+        )
+
 
 class TestSmokeIntraAgentLinks:
     """Smoke test validates intra-agent reference links."""
