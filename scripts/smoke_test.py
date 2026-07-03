@@ -42,6 +42,25 @@ class SmokeTestResult:
         return len(self.errors) == 0
 
 
+def _strip_quotes(value: str) -> str:
+    """Strip a single matching pair of surrounding quotes from a scalar.
+
+    Parameters
+    ----------
+    value
+        Raw scalar text, possibly wrapped in matching single or double quotes.
+
+    Returns
+    -------
+    str
+        ``value`` with one surrounding pair of ``'`` or ``"`` removed, or
+        ``value`` unchanged if it isn't quoted.
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
 def _parse_frontmatter(text: str) -> dict | None:
     """Parse YAML frontmatter from markdown text.
 
@@ -76,7 +95,11 @@ def _parse_frontmatter(text: str) -> dict | None:
             key = key.strip()
             value = value.strip()
             if value.startswith("[") and value.endswith("]"):
-                result[key] = [v.strip() for v in value[1:-1].split(",") if v.strip()]
+                result[key] = [
+                    _strip_quotes(v.strip())
+                    for v in value[1:-1].split(",")
+                    if v.strip()
+                ]
                 current_key = None
                 block_scalar = False
             elif value and value[0] in ("|", ">"):
@@ -86,7 +109,7 @@ def _parse_frontmatter(text: str) -> dict | None:
                 current_key = key
                 block_scalar = True
             elif value:
-                result[key] = value
+                result[key] = _strip_quotes(value)
                 current_key = None
                 block_scalar = False
             else:
@@ -105,10 +128,12 @@ def _parse_frontmatter(text: str) -> dict | None:
                 sub_value = sub_value.strip()
                 if sub_value.startswith("[") and sub_value.endswith("]"):
                     result[current_key][sub_key] = [
-                        v.strip() for v in sub_value[1:-1].split(",") if v.strip()
+                        _strip_quotes(v.strip())
+                        for v in sub_value[1:-1].split(",")
+                        if v.strip()
                     ]
                 else:
-                    result[current_key][sub_key] = sub_value
+                    result[current_key][sub_key] = _strip_quotes(sub_value)
             elif result[current_key] == {}:
                 result[current_key] = stripped
             elif isinstance(result[current_key], str):
