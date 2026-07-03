@@ -116,6 +116,20 @@ def _parse_frontmatter(text: str) -> dict | None:
     return result if result else None
 
 
+def _link_path(link_target: str) -> str:
+    """Strip an optional markdown link title, returning only the path portion.
+
+    A link may include a title after the path (e.g. ``./file.md "Some Title"``).
+    Titles are whitespace-delimited from the path, unless the path itself is
+    wrapped in angle brackets (e.g. ``<./file with spaces.md> "Title"``), in
+    which case the whole token is the path and must not be split.
+    """
+    stripped = link_target.strip()
+    if stripped.startswith("<"):
+        return stripped
+    return stripped.split(maxsplit=1)[0] if stripped else stripped
+
+
 def smoke_test(dist_path: Path) -> SmokeTestResult:
     """Validate internal consistency of a built plugin.
 
@@ -266,6 +280,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
                 # Skip external URLs, anchors, and project-root-relative paths
                 if link_target.startswith(("http://", "https://", "#", ".claude/")):
                     continue
+                link_target = _link_path(link_target)
                 resolved = (skill_md.parent / link_target).resolve()
                 if not resolved.exists():
                     skill_name = skill_md.parent.name
@@ -283,6 +298,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
                 # Skip external URLs, anchors, and project-root-relative paths
                 if link_target.startswith(("http://", "https://", "#", ".claude/")):
                     continue
+                link_target = _link_path(link_target)
                 resolved = (agent_md.parent / link_target).resolve()
                 if not resolved.exists():
                     agent_name = agent_md.parent.name

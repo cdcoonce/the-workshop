@@ -341,6 +341,47 @@ class TestSmokeIntraSkillLinks:
         result = smoke_test(dist)
         assert result.passed is True
 
+    def test_link_with_title_to_existing_file_passes(self, tmp_repo: Path) -> None:
+        """Optional markdown link titles must not be treated as part of the path."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        skill_dir = dist / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        refs_dir = skill_dir / "references"
+        refs_dir.mkdir()
+        (refs_dir / "guide.md").write_text("# Guide\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test\ndescription: test\n---\n\n"
+            'See [guide](references/guide.md "Guide Title") for details.\n'
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is True
+
+    def test_link_with_title_to_missing_file_fails_with_path_only(
+        self, tmp_repo: Path
+    ) -> None:
+        """Error message must report only the path, not the title, for missing files."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        skill_dir = dist / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test\ndescription: test\n---\n\n"
+            'See [missing](references/nonexistent.md "Missing Title") for details.\n'
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any(
+            "test-skill/SKILL.md" in e
+            and "references/nonexistent.md" in e
+            and "Missing Title" not in e
+            for e in result.errors
+        )
+
 
 class TestSmokeIntraAgentLinks:
     """Smoke test validates intra-agent reference links."""
@@ -423,6 +464,47 @@ class TestSmokeIntraAgentLinks:
 
         result = smoke_test(dist)
         assert result.passed is True
+
+    def test_link_with_title_to_existing_file_passes(self, tmp_repo: Path) -> None:
+        """Optional markdown link titles must not be treated as part of the path."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        agent_dir = dist / "agents" / "test-agent"
+        agent_dir.mkdir(parents=True)
+        refs_dir = agent_dir / "references"
+        refs_dir.mkdir()
+        (refs_dir / "spec.md").write_text("# Spec\n")
+        (agent_dir / "AGENT.md").write_text(
+            "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
+            'See [spec](references/spec.md "Spec Title") for details.\n'
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is True
+
+    def test_link_with_title_to_missing_file_fails_with_path_only(
+        self, tmp_repo: Path
+    ) -> None:
+        """Error message must report only the path, not the title, for missing files."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        agent_dir = dist / "agents" / "test-agent"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "AGENT.md").write_text(
+            "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
+            'See [missing](references/nonexistent.md "Missing Title") for details.\n'
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is False
+        assert any(
+            "test-agent/AGENT.md" in e
+            and "references/nonexistent.md" in e
+            and "Missing Title" not in e
+            for e in result.errors
+        )
 
 
 def _write_valid_plugin_json(dist: Path) -> None:
