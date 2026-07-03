@@ -5,12 +5,13 @@ Build order (plugin format):
 2. Copy preset skills -> dist/<preset>/skills/ (override on collision)
 3. Copy core agents -> dist/<preset>/agents/
 4. Copy preset agents -> dist/<preset>/agents/ (override on collision)
-5. Copy hook scripts to dist/<preset>/hooks/scripts/
-6. Generate hooks/hooks.json (merged hook config)
-7. Generate settings.json at root (hooks removed)
-8. Generate .claude-plugin/plugin.json
-9. Generate README.md
-10. Apply exclusions
+5. Copy agent-matching.md -> dist/<preset>/docs/ (when agents ship)
+6. Copy hook scripts to dist/<preset>/hooks/scripts/
+7. Generate hooks/hooks.json (merged hook config)
+8. Generate settings.json at root (hooks removed)
+9. Generate .claude-plugin/plugin.json
+10. Generate README.md
+11. Apply exclusions
 """
 
 from __future__ import annotations
@@ -37,6 +38,12 @@ def _validate_manifest(
     for hook_name in manifest["core"].get("hooks", []):
         if not (core_path / "hooks" / hook_name).exists():
             errors.append(f"Core hook not found: {hook_name}")
+
+    core_skills = manifest["core"].get("skills", "all")
+    if isinstance(core_skills, list):
+        for skill_name in core_skills:
+            if not (core_path / "skills" / skill_name).exists():
+                errors.append(f"Core skill not found: {skill_name}")
 
     for skill_name in manifest.get("preset_skills", []):
         if not (preset_path / "skills" / skill_name).exists():
@@ -182,8 +189,14 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     dist_path.mkdir(parents=True)
 
     # 1. Copy core skills -> skills/ (root level)
-    if manifest["core"].get("skills") == "all":
+    skills_setting = manifest["core"].get("skills", "all")
+    if skills_setting == "all":
         shutil.copytree(core_path / "skills", dist_path / "skills")
+    elif isinstance(skills_setting, list):
+        dest_skills = dist_path / "skills"
+        dest_skills.mkdir(parents=True, exist_ok=True)
+        for skill_name in skills_setting:
+            shutil.copytree(core_path / "skills" / skill_name, dest_skills / skill_name)
 
     # 2. Copy preset skills -> skills/ (override on collision)
     for skill_name in manifest.get("preset_skills", []):
@@ -218,7 +231,17 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dest)
 
-    # 5. Copy hook scripts to hooks/scripts/
+    # 5. Copy agent-matching.md -> docs/ (only when the plugin ships agents;
+    # an agent-less plugin -- e.g. a style-only persona -- has no use for it).
+    agent_matching_src = core_path / "docs" / "agent-matching.md"
+    built_agents = dist_path / "agents"
+    has_agents = built_agents.exists() and any(built_agents.iterdir())
+    if agent_matching_src.exists() and has_agents:
+        docs_dir = dist_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(agent_matching_src, docs_dir / "agent-matching.md")
+
+    # 6. Copy hook scripts to hooks/scripts/
     hooks_scripts_dir = dist_path / "hooks" / "scripts"
     hooks_scripts_dir.mkdir(parents=True, exist_ok=True)
     for hook_name in manifest["core"].get("hooks", []):
@@ -230,7 +253,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     if run_hook_src.exists():
         shutil.copy2(run_hook_src, dist_path / "hooks" / "run-hook.sh")
 
-    # 6. Generate hooks/hooks.json (merged hook config)
+    # 7. Generate hooks/hooks.json (merged hook config)
     merged_settings = _merge_settings(
         core_path / "settings-base.json",
         preset_path / "settings-preset.json",
@@ -240,13 +263,13 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(hooks_config, indent=2) + "\n"
     )
 
-    # 7. Generate settings.json at root (hooks removed)
+    # 8. Generate settings.json at root (hooks removed)
     settings_without_hooks = {k: v for k, v in merged_settings.items() if k != "hooks"}
     (dist_path / "settings.json").write_text(
         json.dumps(settings_without_hooks, indent=2) + "\n"
     )
 
-    # 8. Generate Claude, Codex, and Cortex plugin manifests
+    # 9. Generate Claude, Codex, and Cortex plugin manifests
     plugin_json = {
         "name": manifest["name"],
         "version": manifest.get("version", "0.0.0"),
@@ -286,7 +309,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(codex_plugin_json, indent=2) + "\n"
     )
 
-    # 9. Generate README.md
+    # 10. Generate README.md
     skill_names = []
     skills_dir = dist_path / "skills"
     if skills_dir.exists():
@@ -297,7 +320,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         agent_names = [d.name for d in agents_dir.iterdir() if d.is_dir()]
     (dist_path / "README.md").write_text(_generate_readme(manifest, skill_names, agent_names))
 
-    # 10. Apply exclusions (paths are now relative to dist_path, not .claude/)
+    # 11. Apply exclusions (paths are now relative to dist_path, not .claude/)
     for exclusion in manifest.get("exclude", []):
         excluded_path = (dist_path / exclusion).resolve()
         # Path containment check: ensure resolved path is within dist_path
