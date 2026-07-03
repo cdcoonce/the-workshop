@@ -28,6 +28,24 @@ class TestValidation:
         with pytest.raises(BuildValidationError, match="nonexistent-core-skill"):
             build_preset("python-api", repo_root=tmp_repo)
 
+    def test_core_skills_typo_scalar_raises_error(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["skills"] = "alll"
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="core.skills"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+    def test_core_agents_typo_scalar_raises_error(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["agents"] = "none"
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="core.agents"):
+            build_preset("python-api", repo_root=tmp_repo)
+
     def test_missing_preset_hook_raises_error(self, tmp_repo: Path) -> None:
         preset = tmp_repo / "presets" / "bad-hook"
         preset.mkdir()
