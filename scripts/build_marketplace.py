@@ -49,7 +49,13 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
         manifest_path = preset_dir / "manifest.json"
         if not manifest_path.exists():
             continue
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Preset manifest is not valid JSON: {preset_dir.name} "
+                f"({manifest_path}): {exc}"
+            ) from exc
         name = manifest.get("name")
         if name is None:
             raise ValueError(
