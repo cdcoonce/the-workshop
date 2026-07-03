@@ -8,9 +8,8 @@ import tempfile
 
 import pytest
 
-from models import FileType, IssueCategory, Severity
+from models import FileType, Severity
 from markdown_analyzer import (
-    MarkdownAnalyzer,
     analyze_markdown,
     analyze_markdown_file,
 )
@@ -79,8 +78,8 @@ class TestMarkdownAnalyzerLinks:
         content = "# Title\n\n[](https://example.com)"
         result = analyze_markdown(content)
 
-        md045_issues = [i for i in result.issues if i.rule_id == "MD045"]
-        assert len(md045_issues) >= 1
+        md054_issues = [i for i in result.issues if i.rule_id == "MD054"]
+        assert len(md054_issues) >= 1
 
     def test_empty_link_url(self):
         """Test detection of empty link URL."""
@@ -97,7 +96,7 @@ class TestMarkdownAnalyzerLinks:
         result = analyze_markdown(content)
 
         link_issues = [
-            i for i in result.issues if i.rule_id in ("MD042", "MD045", "MD052")
+            i for i in result.issues if i.rule_id in ("MD042", "MD054", "MD055")
         ]
         assert len(link_issues) == 0
 
@@ -110,9 +109,9 @@ class TestMarkdownAnalyzerLinks:
 
             result = analyze_markdown_file(md_file)
 
-            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
-            assert len(md052_issues) == 1
-            assert "not found" in md052_issues[0].message.lower()
+            md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
+            assert len(md055_issues) == 1
+            assert "not found" in md055_issues[0].message.lower()
 
     def test_uri_scheme_links_are_not_broken_relative_links(self):
         """Test that URI scheme links are not checked as local files."""
@@ -131,9 +130,9 @@ class TestMarkdownAnalyzerLinks:
 
             result = analyze_markdown_file(md_file)
 
-            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
-            assert len(md052_issues) == 1
-            assert "missing.md" in md052_issues[0].message
+            md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
+            assert len(md055_issues) == 1
+            assert "missing.md" in md055_issues[0].message
 
 
 class TestMarkdownAnalyzerImages:
@@ -144,10 +143,7 @@ class TestMarkdownAnalyzerImages:
         content = "# Title\n\n![](image.png)"
         result = analyze_markdown(content)
 
-        md045_issues = [
-            i for i in result.issues
-            if i.rule_id == "MD045" and "alt text" in i.message.lower()
-        ]
+        md045_issues = [i for i in result.issues if i.rule_id == "MD045"]
         assert len(md045_issues) == 1
         assert md045_issues[0].severity == Severity.WARNING
 
@@ -156,10 +152,7 @@ class TestMarkdownAnalyzerImages:
         content = "# Title\n\n![Alt description](image.png)"
         result = analyze_markdown(content)
 
-        alt_issues = [
-            i for i in result.issues
-            if i.rule_id == "MD045" and "alt text" in i.message.lower()
-        ]
+        alt_issues = [i for i in result.issues if i.rule_id == "MD045"]
         assert len(alt_issues) == 0
 
 
@@ -171,10 +164,7 @@ class TestMarkdownAnalyzerReferenceLinks:
         content = "# Title\n\n[Link][undefined]"
         result = analyze_markdown(content)
 
-        md052_issues = [
-            i for i in result.issues
-            if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
-        ]
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
         assert len(md052_issues) == 1
 
     def test_defined_reference_link(self):
@@ -182,10 +172,7 @@ class TestMarkdownAnalyzerReferenceLinks:
         content = "# Title\n\n[Link][ref]\n\n[ref]: https://example.com"
         result = analyze_markdown(content)
 
-        ref_issues = [
-            i for i in result.issues
-            if i.rule_id == "MD052" and "undefined reference" in i.message.lower()
-        ]
+        ref_issues = [i for i in result.issues if i.rule_id == "MD052"]
         assert len(ref_issues) == 0
 
 
@@ -273,9 +260,7 @@ class TestMarkdownAnalyzeFile:
 
     def test_analyze_existing_file(self):
         """Test analyzing an existing Markdown file."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp:
             tmp.write("## No h1\n\nContent")
             tmp.flush()
             tmp_path = Path(tmp.name)
