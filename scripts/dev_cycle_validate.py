@@ -3,6 +3,7 @@
 Parses YAML frontmatter from dev-cycle state files and validates
 schema integrity, phase transitions, and artifact completeness.
 """
+
 from __future__ import annotations
 
 import re
@@ -10,8 +11,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 VALID_PHASES = (
-    "brainstorm", "plan", "ceo_review", "issues",
-    "implement", "code_review", "pr",
+    "brainstorm",
+    "plan",
+    "ceo_review",
+    "issues",
+    "implement",
+    "code_review",
+    "pr",
 )
 VALID_STATUSES = ("not_started", "in_progress", "completed", "abandoned")
 VALID_ARTIFACT_STATUSES = ("pending", "in_progress", "completed", "blocked")
@@ -117,9 +123,7 @@ def parse_state_file(path: Path) -> StateFile:
 
     for req in REQUIRED_FIELDS:
         if req not in raw_fields:
-            raise ValueError(
-                f"Missing required field '{req}' in {path.name}"
-            )
+            raise ValueError(f"Missing required field '{req}' in {path.name}")
 
     if "schema_version" not in raw_fields:
         raw_fields["schema_version"] = "1"
@@ -192,10 +196,15 @@ def _validate_parsed_state(state: StateFile) -> list[str]:
         )
 
     for row in state.artifacts:
+        if row.status not in VALID_ARTIFACT_STATUSES:
+            errors.append(
+                f"Invalid artifact status '{row.status}' for phase "
+                f"'{row.phase}' in {name}. "
+                f"Valid values: {', '.join(VALID_ARTIFACT_STATUSES)}"
+            )
         if row.status == "completed" and row.artifact in ("—", "\u2014", "-", ""):
             errors.append(
-                f"Phase '{row.phase}' is completed but has no artifact "
-                f"in {name}"
+                f"Phase '{row.phase}' is completed but has no artifact in {name}"
             )
 
     return errors
@@ -223,9 +232,7 @@ def validate_state_file(path: Path) -> ValidationResult:
         return ValidationResult(errors=[str(exc)])
 
     if not had_schema_version:
-        warnings.append(
-            f"Missing 'schema_version' in {path.name} (defaulting to 1)"
-        )
+        warnings.append(f"Missing 'schema_version' in {path.name} (defaulting to 1)")
 
     return ValidationResult(errors=_validate_parsed_state(state), warnings=warnings)
 
@@ -272,7 +279,9 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: uv run python -m scripts.dev_cycle_validate <dev-cycle-directory>")
+        print(
+            "Usage: uv run python -m scripts.dev_cycle_validate <dev-cycle-directory>"
+        )
         print("  Validates all *.state.md files in the given directory.")
         sys.exit(1)
 
