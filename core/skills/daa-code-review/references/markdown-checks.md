@@ -61,19 +61,29 @@ Links should have non-empty URLs.
 **Severity:** ERROR  
 **Auto-fixable:** No
 
-### MD045 - Empty Link/Image Text
+### MD901 - Empty Link Text
 
-Links and images should have descriptive text.
+Links should have descriptive text.
 
 ```markdown
 [](https://example.com) <!-- Issue: empty text -->
+```
+
+**Severity:** WARNING  
+**Auto-fixable:** No
+
+### MD045 - Missing Image Alt Text
+
+Images should have alt text.
+
+```markdown
 ![](image.png) <!-- Issue: missing alt text -->
 ```
 
 **Severity:** WARNING  
 **Auto-fixable:** No
 
-### MD052 - Broken Links
+### MD902 - Broken Links
 
 Relative links should point to existing files.
 
@@ -84,7 +94,7 @@ Relative links should point to existing files.
 **Severity:** ERROR  
 **Auto-fixable:** No
 
-### MD053 - Broken Images
+### MD903 - Broken Images
 
 Image paths should point to existing files.
 
