@@ -175,3 +175,85 @@ def test_install_print_report_emits_installed_line(tmp_path, monkeypatch, capsys
 
     assert rc == 0
     assert "installed:" in capsys.readouterr().out
+
+
+def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(repo)
+    cli.main(["install", "--preset", "data-pipeline"])
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 0
+    assert not (repo / ".claude" / "plugins" / "data-pipeline").exists()
+    assert "removed" in capsys.readouterr().out
+
+
+def test_uninstall_already_absent_reports_skip(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(repo)
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 0
+    assert "skipped" in capsys.readouterr().out
+
+
+def test_uninstall_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    bare = tmp_path / "bare"  # no .claude dir, no CLAUDE.md -> nothing to detect
+    bare.mkdir()
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(bare)
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 2
+    assert "no supported agent detected" in capsys.readouterr().out
+
+
+def test_uninstall_agent_override_forces_adapter(tmp_path, monkeypatch):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    bare = tmp_path / "bare"  # undetectable, so only --agent can select an adapter
+    bare.mkdir()
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(bare)
+    cli.main(["install", "--preset", "data-pipeline", "--agent", "claude-code"])
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline", "--agent", "claude-code"])
+
+    assert rc == 0
+    assert not (bare / ".claude" / "plugins" / "data-pipeline").exists()
+
+
+def test_uninstall_user_scope_targets_home_seam(tmp_path, monkeypatch):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)  # so claude-code detects the home target
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)  # cwd would also detect -- must NOT be used
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.chdir(repo)
+    cli.main(["install", "--preset", "data-pipeline", "--user"])
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline", "--user"])
+
+    assert rc == 0
+    assert not (home / ".claude" / "plugins" / "data-pipeline").exists()
