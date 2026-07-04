@@ -350,6 +350,17 @@ class TestBuildExclusions:
         assert not (agents / "tdd-implementer").exists()
         assert (agents / "code-reviewer" / "AGENT.md").exists()
 
+    def test_exclude_removes_single_file(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["exclude"] = ["README.md"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        assert not (dist / "README.md").exists()
+        assert (dist / ".claude-plugin" / "plugin.json").exists()
+
     def test_exclusion_path_containment(self, tmp_repo: Path) -> None:
         """Exclusion paths that escape dist_path are rejected."""
         manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
