@@ -3,6 +3,7 @@
 This module contains pytest tests for the report generation functionality.
 """
 
+import contextlib
 from io import StringIO
 from pathlib import Path
 import tempfile
@@ -389,6 +390,21 @@ class TestGenerateConsoleReport:
         generate_console_report(report, use_color=False, output=output)
 
         assert len(output.getvalue()) > 0
+
+    def test_writes_to_redirected_stdout_when_output_omitted(self):
+        """Test that omitting output writes into a redirected stdout."""
+        result = AnalysisResult(
+            file_type=FileType.PYTHON,
+            source_path=Path("test.py"),
+            issues=[],
+        )
+        report = ReviewReport(results=[result])
+
+        buffer = StringIO()
+        with contextlib.redirect_stdout(buffer):
+            generate_console_report(report, use_color=False)
+
+        assert len(buffer.getvalue()) > 0
 
 
 class TestEmptyReport:

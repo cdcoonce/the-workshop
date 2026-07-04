@@ -146,7 +146,7 @@ class ConsoleReporter:
     def __init__(
         self,
         use_color: Optional[bool] = None,
-        output: TextIO = sys.stdout,
+        output: Optional[TextIO] = None,
     ) -> None:
         """Initialize the console reporter.
 
@@ -154,11 +154,12 @@ class ConsoleReporter:
         ----------
         use_color : Optional[bool]
             Whether to use colors. Auto-detected if None.
-        output : TextIO
-            Output stream to write to.
+        output : Optional[TextIO]
+            Output stream to write to. Defaults to `sys.stdout` at call
+            time if None.
         """
         self.use_color = use_color if use_color is not None else supports_color()
-        self.output = output
+        self.output = sys.stdout if output is None else output
 
     def _print(self, text: str = "") -> None:
         """Print text to the output stream.
@@ -562,7 +563,7 @@ class MarkdownReporter:
 def generate_console_report(
     report: ReviewReport,
     use_color: Optional[bool] = None,
-    output: TextIO = sys.stdout,
+    output: Optional[TextIO] = None,
 ) -> None:
     """Generate and print a console report.
 
@@ -572,8 +573,9 @@ def generate_console_report(
         The review report to print.
     use_color : Optional[bool]
         Whether to use colors. Auto-detected if None.
-    output : TextIO
-        Output stream to write to.
+    output : Optional[TextIO]
+        Output stream to write to. Defaults to `sys.stdout` at call time
+        if None.
     """
     reporter = ConsoleReporter(use_color=use_color, output=output)
     reporter.print_report(report)
