@@ -127,6 +127,14 @@ def _merge_settings(base_path: Path, preset_path: Path) -> dict:
         else:
             merged.setdefault("hooks", {})[hook_type] = hook_list
 
+    # Shallow-merge every non-hook top-level key so a preset can contribute
+    # env/permissions/model/etc.; preset wins on collision (#92). hooks are handled
+    # above (arrays append, D13), so skip them here.
+    for key, value in preset.items():
+        if key == "hooks":
+            continue
+        merged[key] = value
+
     return merged
 
 

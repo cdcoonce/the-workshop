@@ -4,6 +4,7 @@ This module provides functionality to analyze Python code using external tools
 like ruff, with results normalized into the common Issue format.
 """
 
+import functools
 import json
 import subprocess
 import tempfile
@@ -164,8 +165,12 @@ def get_severity_for_rule(rule_id: str) -> Severity:
     return Severity.WARNING
 
 
+@functools.lru_cache(maxsize=1)
 def check_ruff_available() -> bool:
     """Check if ruff is available on the system.
+
+    Cached (lru_cache) so the ``ruff --version`` probe runs at most once per
+    process — a multi-file review calls this once per file otherwise (#146).
 
     Returns
     -------

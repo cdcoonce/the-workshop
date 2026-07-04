@@ -5,7 +5,31 @@ from pathlib import Path
 
 import pytest
 
-from scripts.build_preset import BuildValidationError, build_preset
+from scripts.build_preset import BuildValidationError, _merge_settings, build_preset
+
+
+class TestMergeSettings:
+    """_merge_settings must honor its full contract, not just hooks (#92)."""
+
+    def test_carries_non_hook_keys_with_preset_override(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.json"
+        base.write_text(json.dumps({"hooks": {}, "model": "base", "keep": 1}))
+        preset = tmp_path / "preset.json"
+        preset.write_text(json.dumps({"env": {"X": "1"}, "model": "preset"}))
+
+        merged = _merge_settings(base, preset)
+        assert merged["env"] == {"X": "1"}  # non-hook key carried through
+        assert merged["model"] == "preset"  # preset wins on collision
+        assert merged["keep"] == 1  # base-only key preserved
+
+    def test_hook_arrays_still_append(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.json"
+        base.write_text(json.dumps({"hooks": {"PreToolUse": ["a"]}}))
+        preset = tmp_path / "preset.json"
+        preset.write_text(json.dumps({"hooks": {"PreToolUse": ["b"]}}))
+
+        merged = _merge_settings(base, preset)
+        assert merged["hooks"]["PreToolUse"] == ["a", "b"]  # D13 append unchanged
 
 
 class TestBuildPluginStructure:
