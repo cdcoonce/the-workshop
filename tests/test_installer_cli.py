@@ -193,3 +193,57 @@ def test_install_print_report_emits_installed_line(tmp_path, monkeypatch, capsys
 
     assert rc == 0
     assert "installed:" in capsys.readouterr().out
+
+
+def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(repo)
+    cli.main(["install", "--preset", "data-pipeline"])
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 0
+    assert not (repo / ".claude" / "plugins" / "data-pipeline").exists()
+    assert "installed:" in capsys.readouterr().out
+
+
+def test_uninstall_already_absent_reports_skip(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    monkeypatch.chdir(repo)
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 0
+    assert "skipped data-pipeline: not installed" in capsys.readouterr().out
+
+
+def test_uninstall_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys):
+    bare = tmp_path / "bare"  # no .claude dir, no CLAUDE.md -> nothing to detect
+    bare.mkdir()
+    monkeypatch.chdir(bare)
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline"])
+
+    assert rc == 2
+    assert "no supported agent detected" in capsys.readouterr().out
+
+
+def test_uninstall_user_scope_targets_home_seam(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".claude" / "plugins" / "data-pipeline").mkdir(parents=True)
+    repo = tmp_path / "repo"
+    (repo / ".claude" / "plugins" / "data-pipeline").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.chdir(repo)
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline", "--user"])
+
+    assert rc == 0
+    assert not (home / ".claude" / "plugins" / "data-pipeline").exists()
+    assert (repo / ".claude" / "plugins" / "data-pipeline").exists()
