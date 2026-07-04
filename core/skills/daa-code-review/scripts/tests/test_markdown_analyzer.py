@@ -162,6 +162,24 @@ class TestMarkdownAnalyzerImages:
         ]
         assert len(alt_issues) == 0
 
+    def test_image_only_document_has_no_link_findings(self):
+        """Test that image syntax isn't re-flagged by the link checker."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md_file = tmppath / "test.md"
+            md_file.write_text("# Title\n\n![](missing.png)")
+
+            result = analyze_markdown_file(md_file)
+
+            md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+            assert md052_issues == []
+
+            md045_issues = [i for i in result.issues if i.rule_id == "MD045"]
+            assert len(md045_issues) == 1
+
+            md053_issues = [i for i in result.issues if i.rule_id == "MD053"]
+            assert len(md053_issues) == 1
+
 
 class TestMarkdownAnalyzerReferenceLinks:
     """Tests for reference link analysis."""

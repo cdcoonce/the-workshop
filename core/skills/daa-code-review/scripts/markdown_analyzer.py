@@ -410,6 +410,12 @@ class MarkdownAnalyzer:
         issues: list[Issue] = []
 
         for match in LINK_PATTERN.finditer(content):
+            # Image syntax `![alt](url)` also matches LINK_PATTERN on its
+            # `[alt](url)` suffix; skip those so _check_images is the sole
+            # source of image findings.
+            if match.start() > 0 and content[match.start() - 1] == "!":
+                continue
+
             link_text = match.group(1)
             link_url = match.group(2)
             line_num = self._find_line_number(content, match.start())
