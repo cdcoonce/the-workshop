@@ -1,5 +1,0 @@
-{
-  "name": "data-pipeline",
-  "version": "1.0.0",
-  "description": "ETL/ELT pipelines, SQL transformations, scheduled data jobs"
-}

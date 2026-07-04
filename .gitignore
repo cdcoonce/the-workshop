@@ -12,5 +12,11 @@ __pycache__/
 * 2.*
 * 3.*
 
-# Generated preset bundles (populated by the pre-build step before uv build)
-scripts/installer/presets/
+# Generated preset bundles (populated by the pre-build step before uv build).
+# Keep the directory tracked via .gitkeep so fresh checkouts have the dir the
+# wheel force-include expects; ignore only its generated contents.
+scripts/installer/presets/*
+!scripts/installer/presets/.gitkeep
+
+# Build artifacts
+dist/
