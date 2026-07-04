@@ -151,6 +151,32 @@ def foo() -> None:
         assert len(f841_issues) > 0
 
 
+class TestRuffAvailabilityCaching:
+    """Tests for caching of the ruff availability probe."""
+
+    def test_check_ruff_available_only_probes_once_across_analyze_calls(
+        self, monkeypatch
+    ):
+        """Test that repeated analyze_python calls only invoke the probe once."""
+        check_ruff_available.cache_clear()
+        real_run = subprocess.run
+        version_probe_calls = 0
+
+        def fake_run(cmd, *args, **kwargs):
+            nonlocal version_probe_calls
+            if cmd[:2] == ["ruff", "--version"]:
+                version_probe_calls += 1
+            return real_run(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        analyze_python("x = 1\n")
+        analyze_python("y = 2\n")
+        analyze_python("z = 3\n")
+
+        assert version_probe_calls == 1
+
+
 class TestAnalyzePython:
     """Tests for the main analyze_python function."""
 
