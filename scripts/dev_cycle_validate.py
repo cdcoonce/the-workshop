@@ -25,6 +25,9 @@ _ARTIFACT_ROW_RE = re.compile(
 
 REQUIRED_FIELDS = ("feature", "status", "current_phase")
 
+# Values that mean "no artifact": em dash, hyphen, empty string.
+_EMPTY_ARTIFACT_MARKERS = ("—", "-", "")
+
 
 @dataclass
 class ArtifactRow:
@@ -192,7 +195,7 @@ def _validate_parsed_state(state: StateFile) -> list[str]:
         )
 
     for row in state.artifacts:
-        if row.status == "completed" and row.artifact in ("—", "\u2014", "-", ""):
+        if row.status == "completed" and row.artifact in _EMPTY_ARTIFACT_MARKERS:
             errors.append(
                 f"Phase '{row.phase}' is completed but has no artifact "
                 f"in {name}"
