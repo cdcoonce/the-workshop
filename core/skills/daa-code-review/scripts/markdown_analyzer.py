@@ -618,8 +618,8 @@ class MarkdownAnalyzer:
         # Check for trailing whitespace
         for match in TRAILING_WHITESPACE_PATTERN.finditer(content):
             line_num = self._find_line_number(content, match.start())
-            # Skip if it's an intentional line break (2 spaces)
-            if len(match.group(0)) != 2:
+            # Skip if it's an intentional line break (exactly 2 spaces, not tabs)
+            if match.group(0) != "  ":
                 issues.append(
                     Issue(
                         severity=Severity.INFO,

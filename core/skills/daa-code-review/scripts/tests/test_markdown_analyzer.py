@@ -215,6 +215,22 @@ class TestMarkdownAnalyzerFormatting:
         assert len(md009_issues) >= 1
         assert md009_issues[0].severity == Severity.INFO
 
+    def test_trailing_two_spaces_is_intentional_line_break(self):
+        """Test that exactly two trailing spaces are not flagged."""
+        content = "# Title\n\nSome text with a line break  \nMore text"
+        result = analyze_markdown(content)
+
+        md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
+        assert len(md009_issues) == 0
+
+    def test_trailing_tab_combination_is_flagged(self):
+        """Test that a tab-containing two-char trailing run is not treated as a line break."""
+        content = "# Title\n\nSome text with trailing\t\t\nMore text"
+        result = analyze_markdown(content)
+
+        md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
+        assert len(md009_issues) >= 1
+
     def test_multiple_blank_lines(self):
         """Test detection of multiple consecutive blank lines."""
         content = "# Title\n\n\n\nContent with too many blank lines"
