@@ -192,3 +192,16 @@ class TestBuildMarketplace:
 
         with pytest.raises(ValueError, match="nameless-preset"):
             build_marketplace(tmp_repo)
+
+    def test_marketplace_malformed_manifest_raises_clear_error(
+        self, tmp_repo: Path
+    ) -> None:
+        """A manifest with invalid JSON raises an error naming the offending preset."""
+        broken = tmp_repo / "presets" / "broken-json-preset"
+        broken.mkdir()
+        manifest_path = broken / "manifest.json"
+        manifest_path.write_text("{not valid json")
+
+        with pytest.raises(ValueError, match="broken-json-preset") as exc_info:
+            build_marketplace(tmp_repo)
+        assert str(manifest_path) in str(exc_info.value)
