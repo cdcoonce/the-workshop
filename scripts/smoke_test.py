@@ -57,7 +57,19 @@ def _validate_doc_links(docs_dir: Path, doc_filename: str, label: str) -> list[s
     errors: list[str] = []
     for doc_md in docs_dir.rglob(doc_filename):
         doc_content = doc_md.read_text(encoding="utf-8")
+        in_fence = False
+        fenced_lines: set[int] = set()
+        for line_num, line in enumerate(doc_content.split("\n")):
+            if line.strip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                fenced_lines.add(line_num)
+
         for match in _LINK_PATTERN.finditer(doc_content):
+            line_num = doc_content.count("\n", 0, match.start())
+            if line_num in fenced_lines:
+                continue
             link_target = match.group(2)
             if link_target.startswith(_LINK_SKIP_PREFIXES):
                 continue
