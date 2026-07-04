@@ -14,6 +14,7 @@ from models import (
     Severity,
 )
 from python_analyzer import (
+    _ruff_target,
     analyze_python,
     analyze_python_file,
     check_ruff_available,
@@ -22,6 +23,59 @@ from python_analyzer import (
     parse_ruff_diagnostic,
     run_ruff_check,
 )
+
+
+class TestRuffTarget:
+    """Tests for the _ruff_target temp-file management helper."""
+
+    def test_existing_file_passed_through(self):
+        """An existing file path is used directly, no temp file created."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+            tmp.write("x = 1\n")
+            tmp_path = Path(tmp.name)
+
+        try:
+            with _ruff_target("unused source", tmp_path) as target:
+                assert target == str(tmp_path)
+                assert tmp_path.exists()
+            # Existing file must survive the context exit.
+            assert tmp_path.exists()
+        finally:
+            tmp_path.unlink()
+
+    def test_missing_path_creates_temp_file(self):
+        """A None file path creates a temp .py file with the source."""
+        with _ruff_target("x = 1\n", None) as target:
+            target_path = Path(target)
+            assert target_path.exists()
+            assert target_path.suffix == ".py"
+            assert target_path.read_text() == "x = 1\n"
+
+        # Temp file must be cleaned up after the context exits.
+        assert not target_path.exists()
+
+    def test_nonexistent_file_path_creates_temp_file(self):
+        """A file_path that does not exist on disk falls back to a temp file."""
+        missing_path = Path("/nonexistent/definitely-not-here.py")
+
+        with _ruff_target("y = 2\n", missing_path) as target:
+            target_path = Path(target)
+            assert target_path != missing_path
+            assert target_path.exists()
+            assert target_path.read_text() == "y = 2\n"
+
+        assert not target_path.exists()
+
+    def test_cleans_up_temp_file_on_exception(self):
+        """The temp file is unlinked even if the caller raises inside the block."""
+        target_path = None
+        with pytest.raises(RuntimeError):
+            with _ruff_target("z = 3\n", None) as target:
+                target_path = Path(target)
+                raise RuntimeError("boom")
+
+        assert target_path is not None
+        assert not target_path.exists()
 
 
 class TestRuleMapping:

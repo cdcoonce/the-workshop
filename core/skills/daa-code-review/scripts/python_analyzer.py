@@ -8,6 +8,8 @@ import json
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -177,6 +179,43 @@ def check_ruff_available() -> bool:
         return False
 
 
+@contextmanager
+def _ruff_target(source: str, file_path: Optional[Path]) -> Iterator[str]:
+    """Yield a file path for ruff to analyze, cleaning up any temp file.
+
+    Parameters
+    ----------
+    source : str
+        The Python source code to analyze.
+    file_path : Optional[Path]
+        Path to the source file. If it exists on disk, it is used directly.
+        Otherwise a temporary `.py` file containing `source` is created and
+        removed once the context exits.
+
+    Yields
+    ------
+    str
+        The path to analyze.
+    """
+    if file_path and file_path.exists():
+        # Analyze the actual file
+        yield str(file_path)
+        return
+
+    # Create a temporary file for the source
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".py",
+        delete=False,
+    )
+    temp_file.write(source)
+    temp_file.close()
+    try:
+        yield temp_file.name
+    finally:
+        Path(temp_file.name).unlink(missing_ok=True)
+
+
 def run_ruff_check(
     source: str,
     file_path: Optional[Path] = None,
@@ -196,48 +235,31 @@ def run_ruff_check(
     list[dict]
         List of ruff diagnostic results in JSON format.
     """
-    if file_path and file_path.exists():
-        # Analyze the actual file
-        target = str(file_path)
-        temp_file = None
-    else:
-        # Create a temporary file for the source
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".py",
-            delete=False,
-        )
-        temp_file.write(source)
-        temp_file.close()
-        target = temp_file.name
+    with _ruff_target(source, file_path) as target:
+        try:
+            # Run ruff with comprehensive rules
+            result = subprocess.run(
+                [
+                    "ruff",
+                    "check",
+                    "--output-format=json",
+                    "--select=ALL",  # Enable all rules
+                    "--ignore=ANN101,ANN102,ANN401",  # Ignore self/cls annotations and Any
+                    target,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
 
-    try:
-        # Run ruff with comprehensive rules
-        result = subprocess.run(
-            [
-                "ruff",
-                "check",
-                "--output-format=json",
-                "--select=ALL",  # Enable all rules
-                "--ignore=ANN101,ANN102,ANN401",  # Ignore self/cls annotations and Any
-                target,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+            if result.stdout:
+                return json.loads(result.stdout)
+            return []
 
-        if result.stdout:
-            return json.loads(result.stdout)
-        return []
-
-    except subprocess.TimeoutExpired:
-        return []
-    except json.JSONDecodeError:
-        return []
-    finally:
-        if temp_file:
-            Path(temp_file.name).unlink(missing_ok=True)
+        except subprocess.TimeoutExpired:
+            return []
+        except json.JSONDecodeError:
+            return []
 
 
 def run_ruff_format_check(
@@ -258,46 +280,31 @@ def run_ruff_format_check(
     list[dict]
         List of formatting issues found.
     """
-    if file_path and file_path.exists():
-        target = str(file_path)
-        temp_file = None
-    else:
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".py",
-            delete=False,
-        )
-        temp_file.write(source)
-        temp_file.close()
-        target = temp_file.name
-
-    try:
-        # Check if formatting is needed
-        result = subprocess.run(
-            ["ruff", "format", "--check", "--diff", target],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-
-        issues = []
-        if result.returncode != 0 and result.stdout:
-            # Parse the diff to create formatting issues
-            issues.append(
-                {
-                    "code": "FORMAT",
-                    "message": "File needs formatting",
-                    "location": {"row": 1, "column": 1},
-                    "fix": {"edits": [{"content": result.stdout}]},
-                }
+    with _ruff_target(source, file_path) as target:
+        try:
+            # Check if formatting is needed
+            result = subprocess.run(
+                ["ruff", "format", "--check", "--diff", target],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
-        return issues
 
-    except subprocess.TimeoutExpired:
-        return []
-    finally:
-        if temp_file:
-            Path(temp_file.name).unlink(missing_ok=True)
+            issues = []
+            if result.returncode != 0 and result.stdout:
+                # Parse the diff to create formatting issues
+                issues.append(
+                    {
+                        "code": "FORMAT",
+                        "message": "File needs formatting",
+                        "location": {"row": 1, "column": 1},
+                        "fix": {"edits": [{"content": result.stdout}]},
+                    }
+                )
+            return issues
+
+        except subprocess.TimeoutExpired:
+            return []
 
 
 def parse_ruff_diagnostic(
