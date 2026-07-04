@@ -356,7 +356,9 @@ class MarkdownReporter:
         self.include_context = include_context
         self.include_fixes = include_fixes
 
-    def generate_report(self, report: ReviewReport) -> str:
+    def generate_report(
+        self, report: ReviewReport, generated_at: Optional[datetime] = None
+    ) -> str:
         """Generate a complete Markdown report.
 
         Parameters
@@ -374,7 +376,8 @@ class MarkdownReporter:
         # Header
         lines.append(f"# {report.title}")
         lines.append("")
-        lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        ts = generated_at if generated_at is not None else datetime.now()
+        lines.append(f"Generated: {ts.strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
 
         # Summary
@@ -589,6 +592,7 @@ def generate_markdown_report(
     report: ReviewReport,
     include_context: bool = True,
     include_fixes: bool = True,
+    generated_at: Optional[datetime] = None,
 ) -> str:
     """Generate a Markdown report string.
 
@@ -610,7 +614,7 @@ def generate_markdown_report(
         include_context=include_context,
         include_fixes=include_fixes,
     )
-    return reporter.generate_report(report)
+    return reporter.generate_report(report, generated_at=generated_at)
 
 
 def save_markdown_report(
@@ -618,6 +622,7 @@ def save_markdown_report(
     output_path: Path,
     include_context: bool = True,
     include_fixes: bool = True,
+    generated_at: Optional[datetime] = None,
 ) -> None:
     """Generate and save a Markdown report to a file.
 
@@ -636,5 +641,6 @@ def save_markdown_report(
         report,
         include_context=include_context,
         include_fixes=include_fixes,
+        generated_at=generated_at,
     )
     output_path.write_text(markdown, encoding="utf-8")

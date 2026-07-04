@@ -279,6 +279,14 @@ class TestMarkdownReporter:
         markdown = generate_markdown_report(sample_report)
         assert "# Test Report" in markdown
 
+    def test_markdown_uses_injected_timestamp(self, sample_report: ReviewReport):
+        """An injected generated_at renders verbatim for deterministic output (#148)."""
+        from datetime import datetime
+
+        fixed = datetime(2026, 1, 2, 3, 4, 5)
+        markdown = generate_markdown_report(sample_report, generated_at=fixed)
+        assert "Generated: 2026-01-02 03:04:05" in markdown
+
     def test_generate_report_has_summary(self, sample_report: ReviewReport):
         """Test that generated report has summary section."""
         markdown = generate_markdown_report(sample_report)
