@@ -341,6 +341,21 @@ class TestSmokeIntraSkillLinks:
         result = smoke_test(dist)
         assert result.passed is True
 
+    def test_mailto_links_skipped(self, tmp_repo: Path) -> None:
+        """mailto: links are a URI scheme, not a relative file path."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        skill_dir = dist / "skills" / "test-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: test\ndescription: test\n---\n\n"
+            "Contact [support](mailto:support@example.com) for help.\n"
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is True
+
     def test_broken_link_inside_fenced_code_block_skipped(self, tmp_repo: Path) -> None:
         """Illustrative example links inside ``` fences are not real references."""
         build_preset("python-api", repo_root=tmp_repo)
@@ -508,6 +523,21 @@ class TestSmokeIntraAgentLinks:
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "See [project.md](.claude/docs/project.md) for details.\n"
+        )
+
+        result = smoke_test(dist)
+        assert result.passed is True
+
+    def test_mailto_links_skipped(self, tmp_repo: Path) -> None:
+        """mailto: links are a URI scheme, not a relative file path."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        agent_dir = dist / "agents" / "test-agent"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "AGENT.md").write_text(
+            "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
+            "Contact [support](mailto:support@example.com) for help.\n"
         )
 
         result = smoke_test(dist)

@@ -31,8 +31,12 @@ VALID_ROLES = (
 )
 
 # Link prefixes that are not intra-doc relative paths and should be skipped
-# during link resolution (external URLs, anchors, project-root-relative paths).
-_LINK_SKIP_PREFIXES = ("http://", "https://", "#", ".claude/")
+# during link resolution (anchors, project-root-relative paths).
+_LINK_SKIP_PREFIXES = ("#", ".claude/")
+
+# Matches any URI scheme prefix (e.g. "http:", "mailto:", "tel:") so such
+# links aren't mistaken for relative file paths.
+_URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 _LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
@@ -71,7 +75,9 @@ def _validate_doc_links(docs_dir: Path, doc_filename: str, label: str) -> list[s
             if line_num in fenced_lines:
                 continue
             link_target = match.group(2)
-            if link_target.startswith(_LINK_SKIP_PREFIXES):
+            if link_target.startswith(_LINK_SKIP_PREFIXES) or _URI_SCHEME_PATTERN.match(
+                link_target
+            ):
                 continue
             file_part = re.split(r"[#?]", link_target, maxsplit=1)[0]
             if not file_part:
