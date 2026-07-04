@@ -146,6 +146,41 @@ class TestValidateStateFile:
         assert not result.passed
         assert any("current_phase" in e for e in result.errors)
 
+    def _write_state_with_artifact(
+        self, tmp_path: Path, *, status: str, artifact: str = "docs/x.md"
+    ) -> Path:
+        content = (
+            "---\n"
+            "schema_version: 1\n"
+            "feature: test-feature\n"
+            "status: in_progress\n"
+            "current_phase: plan\n"
+            "created: 2026-03-21\n"
+            "updated: 2026-03-21\n"
+            "---\n\n"
+            "## Artifacts\n\n"
+            "| Phase | Status | Artifact |\n"
+            "| ----- | ------ | -------- |\n"
+            f"| plan  | {status} | {artifact} |\n"
+            "\n## Log\n"
+        )
+        path = tmp_path / "test-feature.state.md"
+        path.write_text(content)
+        return path
+
+    def test_invalid_artifact_status_fails(self, tmp_path: Path) -> None:
+        # A typo'd artifact-row status must be flagged against
+        # VALID_ARTIFACT_STATUSES, naming the phase and the bad value (#101).
+        path = self._write_state_with_artifact(tmp_path, status="done")
+        result = validate_state_file(path)
+        assert not result.passed
+        assert any("done" in e and "plan" in e for e in result.errors)
+
+    def test_valid_artifact_status_passes(self, tmp_path: Path) -> None:
+        path = self._write_state_with_artifact(tmp_path, status="in_progress")
+        result = validate_state_file(path)
+        assert result.passed
+
     def test_unsupported_schema_version_fails(self, tmp_path: Path) -> None:
         path = self._write_state_file(tmp_path, schema_version="99")
         result = validate_state_file(path)

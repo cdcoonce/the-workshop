@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 
-from scripts.build_preset import build_preset
+import pytest
+
+from scripts.build_preset import BuildValidationError, build_preset
 
 
 class TestBuildPluginStructure:
@@ -133,6 +135,17 @@ class TestBuildPluginAgents:
         agents = tmp_repo / "dist" / "python-api" / "agents"
         assert (agents / "tdd-implementer" / "AGENT.md").exists()
         assert not (agents / "code-reviewer").exists()
+
+    def test_build_fails_on_missing_core_agent(self, tmp_repo: Path) -> None:
+        # A core.agents list naming a nonexistent agent must fail fast (D19), like
+        # the core.skills check already does — not silently drop it (#88).
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["agents"] = ["does-not-exist"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="Core agent not found: does-not-exist"):
+            build_preset("python-api", repo_root=tmp_repo)
 
     def test_build_copies_preset_agents(self, tmp_repo: Path) -> None:
         manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"

@@ -195,6 +195,11 @@ def _validate_parsed_state(state: StateFile) -> list[str]:
         )
 
     for row in state.artifacts:
+        if row.status not in VALID_ARTIFACT_STATUSES:
+            errors.append(
+                f"Invalid artifact status '{row.status}' for phase '{row.phase}' "
+                f"in {name}. Valid values: {', '.join(VALID_ARTIFACT_STATUSES)}"
+            )
         if row.status == "completed" and row.artifact in _EMPTY_ARTIFACT_MARKERS:
             errors.append(
                 f"Phase '{row.phase}' is completed but has no artifact "

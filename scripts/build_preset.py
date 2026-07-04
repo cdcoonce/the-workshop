@@ -70,7 +70,11 @@ def _validate_manifest(
         )
 
     core_agents = manifest["core"].get("agents", "all")
-    if not isinstance(core_agents, list) and core_agents != "all":
+    if isinstance(core_agents, list):
+        for agent_name in core_agents:
+            if not (core_path / "agents" / agent_name).exists():
+                errors.append(f"Core agent not found: {agent_name}")
+    elif core_agents != "all":
         errors.append(
             f"core.agents must be 'all' or a list of agent names, got: {core_agents!r}"
         )
