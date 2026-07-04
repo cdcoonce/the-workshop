@@ -69,6 +69,15 @@ class TestMarkdownAnalyzerHeadings:
         assert len(md024_issues) == 1
         assert md024_issues[0].severity == Severity.INFO
 
+    def test_duplicate_headings_across_levels(self):
+        """Test that duplicate heading text is flagged regardless of level."""
+        content = "# Title\n\n## Setup\n\n### Setup\n\nContent"
+        result = analyze_markdown(content)
+
+        md024_issues = [i for i in result.issues if i.rule_id == "MD024"]
+        assert len(md024_issues) == 1
+        assert md024_issues[0].severity == Severity.INFO
+
 
 class TestMarkdownAnalyzerLinks:
     """Tests for link analysis."""
