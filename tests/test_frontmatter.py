@@ -93,6 +93,40 @@ class TestParseFrontmatterNestedDict:
         assert _parse_frontmatter(text) == {"meta": {"author": "charles"}}
 
 
+class TestParseFrontmatterQuotedValues:
+    """Quoted scalars and list items have their surrounding quotes stripped."""
+
+    def test_double_quoted_scalar(self) -> None:
+        assert _parse_frontmatter('---\nname: "code-reviewer"\n---\n') == {
+            "name": "code-reviewer"
+        }
+
+    def test_single_quoted_scalar(self) -> None:
+        assert _parse_frontmatter("---\nrole: 'reviewer'\n---\n") == {
+            "role": "reviewer"
+        }
+
+    def test_quoted_inline_list_items(self) -> None:
+        assert _parse_frontmatter('---\nskills: ["tdd", "commit"]\n---\n') == {
+            "skills": ["tdd", "commit"]
+        }
+
+    def test_quoted_nested_sub_scalar(self) -> None:
+        text = "---\nmeta:\n  author: 'charles'\n---\n"
+        assert _parse_frontmatter(text) == {"meta": {"author": "charles"}}
+
+    def test_quoted_nested_list_items(self) -> None:
+        text = '---\nskills:\n  add: ["tdd", "commit"]\n  remove: []\n---\n'
+        assert _parse_frontmatter(text) == {
+            "skills": {"add": ["tdd", "commit"], "remove": []}
+        }
+
+    def test_unquoted_values_unaffected(self) -> None:
+        assert _parse_frontmatter("---\nname: code-reviewer\n---\n") == {
+            "name": "code-reviewer"
+        }
+
+
 class TestParseFrontmatterCommentsAndSpacing:
     """Lists alongside comment lines and extra spacing parse correctly."""
 
