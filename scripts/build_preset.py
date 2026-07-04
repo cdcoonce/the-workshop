@@ -343,6 +343,8 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
                 shutil.rmtree(excluded_path)
             else:
                 excluded_path.unlink()
+        else:
+            print(f"WARNING: exclusion '{exclusion}' did not match anything, skipping")
 
     return dist_path
 
