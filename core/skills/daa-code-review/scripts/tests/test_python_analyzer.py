@@ -155,6 +155,30 @@ class TestRuffIntegration:
         """Test that ruff is available on the system."""
         assert check_ruff_available() is True
 
+    def test_ruff_probe_is_cached(self, monkeypatch):
+        """check_ruff_available probes the subprocess at most once per process (#146)."""
+        import python_analyzer
+
+        python_analyzer.check_ruff_available.cache_clear()
+        calls = {"n": 0}
+
+        class _Result:
+            returncode = 0
+            stdout = "ruff 0.1.0"
+            stderr = ""
+
+        def _fake_run(*args, **kwargs):
+            calls["n"] += 1
+            return _Result()
+
+        monkeypatch.setattr(python_analyzer.subprocess, "run", _fake_run)
+        try:
+            assert python_analyzer.check_ruff_available() is True
+            assert python_analyzer.check_ruff_available() is True
+            assert calls["n"] == 1  # probed once; the second call is cached
+        finally:
+            python_analyzer.check_ruff_available.cache_clear()
+
     def test_run_ruff_on_clean_code(self):
         """Test ruff on code with minimal issues."""
         code = '''"""Module docstring."""
