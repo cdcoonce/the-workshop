@@ -121,6 +121,24 @@ def test_install_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys):
     assert not (bare / ".claude").exists()
 
 
+def test_install_unknown_agent_returns_2(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(bare)
+
+    rc = cli.main(["install", "--preset", "data-pipeline", "--agent", "bogus"])
+
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert "unknown agent 'bogus'" in out
+    assert "known:" in out
+    assert not (bare / ".claude").exists()
+
+
 def test_install_agent_override_forces_adapter(tmp_path, monkeypatch):
     presets = tmp_path / "presets"
     presets.mkdir()

@@ -31,17 +31,22 @@ def cmd_install(args: argparse.Namespace) -> int:
     target = _resolve_target(scope)
 
     if args.agent:
-        adapter = get_adapter(args.agent) if args.agent in adapter_names() else None
+        if args.agent not in adapter_names():
+            print(f"unknown agent {args.agent!r}. known: {adapter_names()}")
+            return 2
+        adapter = get_adapter(args.agent)
     else:
         adapter = detect_adapter(target)
-    if adapter is None:
-        print(f"no supported agent detected/selected. known: {adapter_names()}")
-        return 2
+        if adapter is None:
+            print(f"no supported agent detected/selected. known: {adapter_names()}")
+            return 2
 
     try:
         bundle = Bundle.load(PRESETS_ROOT, args.preset)
     except BundleError:
-        print(f"unknown preset {args.preset!r}. available: {Bundle.available(PRESETS_ROOT)}")
+        print(
+            f"unknown preset {args.preset!r}. available: {Bundle.available(PRESETS_ROOT)}"
+        )
         return 2
 
     if args.dry_run:
@@ -66,10 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="claude-workflow")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_install = sub.add_parser("install", help="install a preset into the detected agent")
+    p_install = sub.add_parser(
+        "install", help="install a preset into the detected agent"
+    )
     p_install.add_argument("--preset", required=True)
     p_install.add_argument("--agent", default=None, help="force an agent adapter")
-    p_install.add_argument("--user", action="store_true", help="install into ~ instead of the repo")
+    p_install.add_argument(
+        "--user", action="store_true", help="install into ~ instead of the repo"
+    )
     p_install.add_argument("--dry-run", action="store_true")
     p_install.set_defaults(func=cmd_install)
 
