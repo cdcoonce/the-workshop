@@ -29,6 +29,7 @@ IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\[([^\]]*)\]")
 REFERENCE_DEF_PATTERN = re.compile(r"^\[([^\]]+)\]:\s*(.+)$", re.MULTILINE)
 CODE_BLOCK_PATTERN = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
+INLINE_CODE_PATTERN = re.compile(r"`[^`\n]+`")
 TRAILING_WHITESPACE_PATTERN = re.compile(r"[ \t]+$", re.MULTILINE)
 MULTIPLE_BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 
@@ -208,6 +209,29 @@ class MarkdownAnalyzer:
             The 1-indexed line number.
         """
         return content[:match_start].count("\n") + 1
+
+    def _mask_code_regions(self, content: str) -> str:
+        """Blank out fenced and inline code spans, preserving offsets.
+
+        Parameters
+        ----------
+        content : str
+            The Markdown content.
+
+        Returns
+        -------
+        str
+            Content with code block/span characters replaced by spaces
+            (newlines preserved), so character offsets and line numbers
+            still resolve correctly against the masked copy.
+        """
+
+        def _blank(match: re.Match) -> str:
+            return "".join(c if c == "\n" else " " for c in match.group(0))
+
+        masked = CODE_BLOCK_PATTERN.sub(_blank, content)
+        masked = INLINE_CODE_PATTERN.sub(_blank, masked)
+        return masked
 
     def _check_heading_structure(
         self,
@@ -570,11 +594,15 @@ class MarkdownAnalyzer:
             m.group(1).lower() for m in REFERENCE_DEF_PATTERN.finditer(content)
         }
 
+        # Mask code blocks/spans so code like matrix[0][1] isn't parsed as a
+        # reference link.
+        masked_content = self._mask_code_regions(content)
+
         # Check all reference links
-        for match in REFERENCE_LINK_PATTERN.finditer(content):
+        for match in REFERENCE_LINK_PATTERN.finditer(masked_content):
             ref_id = match.group(2) if match.group(2) else match.group(1)
             if ref_id.lower() not in defined_refs:
-                line_num = self._find_line_number(content, match.start())
+                line_num = self._find_line_number(masked_content, match.start())
                 issues.append(
                     Issue(
                         severity=Severity.ERROR,

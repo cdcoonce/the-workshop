@@ -202,6 +202,31 @@ class TestMarkdownAnalyzerReferenceLinks:
         ref_issues = [i for i in result.issues if i.rule_id == "MD052"]
         assert len(ref_issues) == 0
 
+    def test_code_subscript_in_fenced_block_not_flagged(self):
+        """Test that double-subscript code in a fenced block isn't flagged."""
+        content = "# Title\n\n```py\nmatrix[0][1]\n```\n"
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 0
+
+    def test_code_subscript_in_inline_code_not_flagged(self):
+        """Test that double-subscript code in an inline code span isn't flagged."""
+        content = "# Title\n\nUse `grid[i][j]` to access the cell."
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 0
+
+    def test_undefined_reference_link_line_number_after_code_block(self):
+        """Test that line numbers stay correct when a code block precedes a real link."""
+        content = "# Title\n\n```py\nmatrix[0][1]\n```\n\n[Link][undefined]\n"
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 1
+        assert md052_issues[0].location.line_start == 7
+
 
 class TestMarkdownAnalyzerFormatting:
     """Tests for formatting analysis."""
