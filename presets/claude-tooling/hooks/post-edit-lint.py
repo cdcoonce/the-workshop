@@ -28,7 +28,7 @@ def run(cmd, label):
 
 # Prettier on Markdown and JSON files
 if file_path.endswith((".md", ".json")):
-    run(["npx", "prettier", "--write", file_path], "prettier")
+    run(["npx", "--no-install", "prettier", "--write", file_path], "prettier")
 
 # Ruff on Python files
 if file_path.endswith(".py") and shutil.which("ruff"):

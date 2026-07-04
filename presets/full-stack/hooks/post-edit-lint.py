@@ -28,15 +28,15 @@ def run(cmd, label):
 
 # Prettier on supported file types
 if file_path.endswith((".html", ".css", ".js", ".ts", ".jsx", ".tsx", ".md", ".json")):
-    run(["npx", "prettier", "--write", file_path], "prettier")
+    run(["npx", "--no-install", "prettier", "--write", file_path], "prettier")
 
 # ESLint on JS/TS files
 if file_path.endswith((".js", ".ts", ".jsx", ".tsx")):
-    run(["npx", "eslint", "--fix", file_path], "eslint")
+    run(["npx", "--no-install", "eslint", "--fix", file_path], "eslint")
 
 # Stylelint on CSS files
 if file_path.endswith(".css"):
-    run(["npx", "stylelint", "--fix", file_path], "stylelint")
+    run(["npx", "--no-install", "stylelint", "--fix", file_path], "stylelint")
 
 # Ruff on Python files
 if file_path.endswith(".py") and shutil.which("ruff"):
