@@ -27,6 +27,15 @@ class BuildValidationError(Exception):
     """Raised when manifest validation fails."""
 
 
+def _copy_with_override(src: Path, dest: Path, *, kind: str) -> None:
+    """Copy src to dest, warning and replacing dest if it already exists (D19)."""
+    if dest.exists():
+        print(f"WARNING: preset {kind} '{dest.name}' overrides core {kind} '{dest.name}'")
+        shutil.rmtree(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dest)
+
+
 def _validate_manifest(
     manifest: dict,
     core_path: Path,
@@ -202,10 +211,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     for skill_name in manifest.get("preset_skills", []):
         src = preset_path / "skills" / skill_name
         dest = dist_path / "skills" / skill_name
-        if dest.exists():
-            print(f"WARNING: preset skill '{skill_name}' overrides core skill '{skill_name}'")
-            shutil.rmtree(dest)
-        shutil.copytree(src, dest)
+        _copy_with_override(src, dest, kind="skill")
 
     # 3. Copy core agents -> agents/ (root level)
     core_agents_dir = core_path / "agents"
@@ -225,11 +231,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     for agent_name in manifest.get("preset_agents", []):
         src = preset_path / "agents" / agent_name
         dest = dist_path / "agents" / agent_name
-        if dest.exists():
-            print(f"WARNING: preset agent '{agent_name}' overrides core agent '{agent_name}'")
-            shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dest)
+        _copy_with_override(src, dest, kind="agent")
 
     # 5. Copy agent-matching.md -> docs/ (only when the plugin ships agents;
     # an agent-less plugin -- e.g. a style-only persona -- has no use for it).

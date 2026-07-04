@@ -278,6 +278,52 @@ class TestValidateDirectory:
         result = validate_directory(dev_cycle)
         assert result.passed
 
+    def test_parses_each_file_at_most_once(self, tmp_path: Path, monkeypatch) -> None:
+        """Each state file should be read/parsed a single time, not twice."""
+        import scripts.dev_cycle_validate as dcv
+
+        dev_cycle = tmp_path / "docs" / "dev-cycle"
+        dev_cycle.mkdir(parents=True)
+        for name in ("feature-a", "feature-b"):
+            (dev_cycle / f"{name}.state.md").write_text(
+                f"---\nschema_version: 1\nfeature: {name}\n"
+                f"status: in_progress\ncurrent_phase: brainstorm\n"
+                f"created: 2026-03-21\nupdated: 2026-03-21\n---\n\n"
+                f"## Artifacts\n\n## Log\n"
+            )
+
+        call_counts: dict[Path, int] = {}
+        original_parse = dcv.parse_state_file
+
+        def counting_parse(path: Path):
+            call_counts[path] = call_counts.get(path, 0) + 1
+            return original_parse(path)
+
+        monkeypatch.setattr(dcv, "parse_state_file", counting_parse)
+
+        result = dcv.validate_directory(dev_cycle)
+
+        assert result.passed
+        assert len(call_counts) == 2
+        assert all(count == 1 for count in call_counts.values())
+
+    def test_unparseable_file_skipped_for_slug_collection(self, tmp_path: Path) -> None:
+        """A file that fails to parse should not raise and should be excluded
+        from duplicate-slug detection."""
+        dev_cycle = tmp_path / "docs" / "dev-cycle"
+        dev_cycle.mkdir(parents=True)
+        (dev_cycle / "broken.state.md").write_text("not valid frontmatter at all")
+        (dev_cycle / "feature-a.state.md").write_text(
+            "---\nschema_version: 1\nfeature: feature-a\n"
+            "status: in_progress\ncurrent_phase: brainstorm\n"
+            "created: 2026-03-21\nupdated: 2026-03-21\n---\n\n"
+            "## Artifacts\n\n## Log\n"
+        )
+        result = validate_directory(dev_cycle)
+        assert not result.passed
+        assert any("frontmatter" in e.lower() for e in result.errors)
+        assert not any("duplicate" in e.lower() for e in result.errors)
+
 
 import subprocess
 
