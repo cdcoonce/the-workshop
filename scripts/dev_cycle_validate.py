@@ -94,7 +94,8 @@ def parse_state_file(path: Path) -> StateFile:
     Raises
     ------
     ValueError
-        If the file has no frontmatter or is missing required fields.
+        If the file has no frontmatter, is missing required fields, or has
+        a non-integer schema_version.
     """
     text = path.read_text()
     match = _FRONTMATTER_RE.search(text)
@@ -115,8 +116,16 @@ def parse_state_file(path: Path) -> StateFile:
     if not had_schema_version:
         raw_fields["schema_version"] = "1"
 
+    raw_schema_version = raw_fields["schema_version"]
+    try:
+        schema_version = int(raw_schema_version)
+    except ValueError:
+        raise ValueError(
+            f"{path.name} has a non-integer schema_version: '{raw_schema_version}'"
+        ) from None
+
     state = StateFile(
-        schema_version=int(raw_fields["schema_version"]),
+        schema_version=schema_version,
         feature=raw_fields["feature"],
         status=raw_fields["status"],
         current_phase=raw_fields["current_phase"],

@@ -89,6 +89,23 @@ updated: 2026-03-21
         result = parse_state_file(state_file)
         assert result.schema_version == 1
 
+    def test_parse_non_integer_schema_version_raises(self, tmp_path: Path) -> None:
+        content = """\
+---
+schema_version: draft
+feature: test-feature
+status: in_progress
+current_phase: plan
+created: 2026-03-21
+updated: 2026-03-21
+---
+"""
+        state_file = tmp_path / "test-feature.state.md"
+        state_file.write_text(content)
+
+        with pytest.raises(ValueError, match="test-feature.state.md.*draft"):
+            parse_state_file(state_file)
+
 
 class TestValidateStateFile:
     """Tests for field value validation."""
