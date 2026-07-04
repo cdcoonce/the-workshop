@@ -260,6 +260,33 @@ class TestMarkdownReporter:
         assert "| Severity | Line | Rule | Message |" in markdown
         assert "`F821`" in markdown
 
+    def test_generate_report_escapes_newlines_in_table(self):
+        """Test that a multi-line issue message doesn't break the table row."""
+        issue = Issue(
+            severity=Severity.ERROR,
+            category=IssueCategory.RUNTIME_ERROR,
+            message="Traceback:\nFile 'test.py', line 1\nValueError: bad",
+            location=Location(file_path=Path("test.py"), line_start=10),
+            rule_id="E001",
+            source="pyright",
+        )
+        result = AnalysisResult(
+            file_type=FileType.PYTHON,
+            source_path=Path("test.py"),
+            issues=[issue],
+        )
+        report = ReviewReport(results=[result], title="Test Report")
+
+        markdown = generate_markdown_report(report)
+
+        table_start = markdown.index("|----------|------|------|---------|")
+        table_block = markdown[table_start:].split("\n\n", 1)[0]
+        row_lines = [line for line in table_block.split("\n") if line.startswith("| ")]
+
+        assert len(row_lines) == 1
+        assert "Traceback:" in row_lines[0]
+        assert "ValueError: bad" in row_lines[0]
+
     def test_generate_report_has_status(self, sample_report: ReviewReport):
         """Test that generated report shows status."""
         markdown = generate_markdown_report(sample_report)

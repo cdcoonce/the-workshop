@@ -454,7 +454,7 @@ class MarkdownReporter:
             emoji = severity_emoji(issue.severity)
             line = issue.location.line_start
             rule = f"`{issue.rule_id}`"
-            message = issue.message.replace("|", "\\|")
+            message = issue.message.replace("|", "\\|").replace("\n", " ")
             lines.append(f"| {emoji} | {line} | {rule} | {message} |")
 
         lines.append("")
