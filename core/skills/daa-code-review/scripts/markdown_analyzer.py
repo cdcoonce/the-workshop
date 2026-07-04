@@ -343,7 +343,11 @@ class MarkdownAnalyzer:
         lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
-        """Check for duplicate headings at the same level.
+        """Check for duplicate heading text anywhere in the document.
+
+        Headings are compared by their normalized text alone, regardless of
+        heading level, matching markdownlint's MD024 default behavior. For
+        example, ``## Setup`` and ``### Setup`` are reported as duplicates.
 
         Parameters
         ----------

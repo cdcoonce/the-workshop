@@ -411,6 +411,34 @@ class TestBuildPresetAgentValidation:
             build_preset("python-api", repo_root=tmp_repo)
 
 
+class TestManifestRequiredFields:
+    """Validation for manifest.json required top-level fields."""
+
+    def test_validation_fails_missing_name(self, tmp_repo: Path) -> None:
+        import pytest
+        from scripts.build_preset import BuildValidationError
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        del manifest["name"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="'name'"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+    def test_validation_fails_missing_core(self, tmp_repo: Path) -> None:
+        import pytest
+        from scripts.build_preset import BuildValidationError
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        del manifest["core"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="'core'"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+
 class TestSettingsMerge:
     """Settings merge handles edge cases correctly."""
 

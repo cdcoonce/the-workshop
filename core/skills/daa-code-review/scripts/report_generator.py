@@ -30,12 +30,6 @@ class Colors:
     YELLOW = "\033[93m"
     BLUE = "\033[94m"
     GREEN = "\033[92m"
-    CYAN = "\033[96m"
-    MAGENTA = "\033[95m"
-
-    BG_RED = "\033[41m"
-    BG_YELLOW = "\033[43m"
-    BG_BLUE = "\033[44m"
 
 
 def supports_color() -> bool:

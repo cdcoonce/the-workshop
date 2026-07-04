@@ -44,6 +44,15 @@ def _validate_manifest(
     """Validate all manifest references exist. Fail fast if not (D19)."""
     errors: list[str] = []
 
+    for required_key in ("name", "core"):
+        if required_key not in manifest:
+            errors.append(f"Manifest missing required field: '{required_key}'")
+
+    if errors:
+        raise BuildValidationError(
+            "Manifest validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
+
     for hook_name in manifest["core"].get("hooks", []):
         if not (core_path / "hooks" / hook_name).exists():
             errors.append(f"Core hook not found: {hook_name}")
