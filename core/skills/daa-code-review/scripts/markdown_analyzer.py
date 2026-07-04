@@ -24,6 +24,7 @@ from models import (
 # Regex patterns for Markdown analysis
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 LINK_PATTERN = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+LINK_TITLE_PATTERN = re.compile(r"""\s+(?:"[^"]*"|'[^']*')\s*$""")
 URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\[([^\]]*)\]")
@@ -481,8 +482,9 @@ class MarkdownAnalyzer:
                 and not link_url.startswith("#")
                 and not link_url.startswith("/")
             ):
-                # Remove anchor from URL for file check
-                file_url = link_url.split("#")[0]
+                # Strip optional title, query string, and anchor for file check
+                file_url = LINK_TITLE_PATTERN.sub("", link_url)
+                file_url = file_url.split("#")[0].split("?")[0].strip()
                 if file_url:
                     target_path = self.base_path / file_url
                     if not target_path.exists():

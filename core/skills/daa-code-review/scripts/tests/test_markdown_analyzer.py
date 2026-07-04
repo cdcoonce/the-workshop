@@ -122,6 +122,32 @@ class TestMarkdownAnalyzerLinks:
             assert len(md055_issues) == 1
             assert "not found" in md055_issues[0].message.lower()
 
+    def test_titled_link_to_existing_file_is_not_broken(self):
+        """Test that a link title suffix doesn't cause a false-positive broken link."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "guide.md").write_text("# Guide")
+            md_file = tmppath / "test.md"
+            md_file.write_text('# Title\n\n[docs](guide.md "My Title")')
+
+            result = analyze_markdown_file(md_file)
+
+            md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
+            assert md055_issues == []
+
+    def test_query_string_link_to_existing_file_is_not_broken(self):
+        """Test that a query string suffix doesn't cause a false-positive broken link."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "guide.md").write_text("# Guide")
+            md_file = tmppath / "test.md"
+            md_file.write_text("# Title\n\n[docs](guide.md?v=2)")
+
+            result = analyze_markdown_file(md_file)
+
+            md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
+            assert md055_issues == []
+
     def test_uri_scheme_links_are_not_broken_relative_links(self):
         """Test that URI scheme links are not checked as local files."""
         with tempfile.TemporaryDirectory() as tmpdir:
