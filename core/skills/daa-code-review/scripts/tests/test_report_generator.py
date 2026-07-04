@@ -5,6 +5,7 @@ This module contains pytest tests for the report generation functionality.
 
 from io import StringIO
 from pathlib import Path
+import sys
 import tempfile
 
 import pytest
@@ -22,7 +23,6 @@ from models import (
 from report_generator import (
     Colors,
     ConsoleReporter,
-    MarkdownReporter,
     colorize,
     generate_console_report,
     generate_markdown_report,
@@ -30,7 +30,31 @@ from report_generator import (
     severity_color,
     severity_emoji,
     severity_symbol,
+    supports_color,
 )
+
+
+class TestSupportsColor:
+    """Tests for NO_COLOR environment variable handling in supports_color."""
+
+    def test_no_color_set_returns_false_on_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """NO_COLOR set should disable color even when stdout is a TTY."""
+        monkeypatch.setenv("NO_COLOR", "1")
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        assert supports_color() is False
+
+    def test_no_color_unset_preserves_isatty_behavior(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without NO_COLOR, result should follow sys.stdout.isatty()."""
+        monkeypatch.delenv("NO_COLOR", raising=False)
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        assert supports_color() is True
+
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+        assert supports_color() is False
 
 
 class TestColorHelpers:
