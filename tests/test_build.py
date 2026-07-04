@@ -376,6 +376,18 @@ class TestBuildPresetAgentValidation:
         with pytest.raises(BuildValidationError, match="Preset agent not found"):
             build_preset("python-api", repo_root=tmp_repo)
 
+    def test_validation_fails_missing_core_agent(self, tmp_repo: Path) -> None:
+        import pytest
+        from scripts.build_preset import BuildValidationError
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["core"]["agents"] = ["nonexistent-agent"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="Core agent not found"):
+            build_preset("python-api", repo_root=tmp_repo)
+
     def test_validation_catches_agent_in_both_preset_and_exclude(
         self, tmp_repo: Path
     ) -> None:
