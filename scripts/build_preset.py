@@ -373,7 +373,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     preset = sys.argv[1]
-    output = build_preset(preset)
+    try:
+        output = build_preset(preset)
+    except BuildValidationError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
     print(f"\nBuilt plugin '{preset}' -> {output}/")
     print(f"  {output}/.claude-plugin/plugin.json")
     print(f"  {output}/.codex-plugin/plugin.json")
