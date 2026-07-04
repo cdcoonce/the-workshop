@@ -350,6 +350,18 @@ class TestBuildExclusions:
         assert not (agents / "tdd-implementer").exists()
         assert (agents / "code-reviewer" / "AGENT.md").exists()
 
+    def test_excluded_skill_absent_from_readme(self, tmp_repo: Path) -> None:
+        """An excluded skill must not be listed in the generated README (#122)."""
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["exclude"] = ["skills/tdd"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        build_preset("python-api", repo_root=tmp_repo)
+        readme = (tmp_repo / "dist" / "python-api" / "README.md").read_text()
+        assert "- tdd\n" not in readme
+        assert "- commit\n" in readme
+
     def test_exclusion_path_containment(self, tmp_repo: Path) -> None:
         """Exclusion paths that escape dist_path are rejected."""
         manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
