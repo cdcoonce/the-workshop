@@ -79,6 +79,115 @@ class TestMarkdownAnalyzerHeadings:
         assert md024_issues[0].severity == Severity.INFO
 
 
+class TestMarkdownAnalyzerHeadingsInCodeBlocks:
+    """Heading checks must ignore '#' lines inside fenced code blocks."""
+
+    _HEADING_RULES = ("MD041", "MD025", "MD001", "MD024", "MD022")
+
+    def test_headings_only_inside_code_fence_produce_no_findings(self):
+        """A doc whose only '#' lines live in a ``` fence yields no heading findings."""
+        content = (
+            "Intro text with no real headings.\n"
+            "\n"
+            "```python\n"
+            "# config section\n"
+            "# another comment\n"
+            "## nested comment\n"
+            "```\n"
+            "\n"
+            "Outro text.\n"
+        )
+        result = analyze_markdown(content)
+
+        heading_issues = [
+            i for i in result.issues if i.rule_id in self._HEADING_RULES
+        ]
+        assert heading_issues == [], (
+            f"expected no heading findings, got "
+            f"{[(i.rule_id, i.message) for i in heading_issues]}"
+        )
+
+    def test_real_headings_still_detected_with_adjacent_code_fence(self):
+        """Real headings are still analyzed; an in-fence '#' does not add a phantom h1."""
+        content = (
+            "# Title\n"
+            "\n"
+            "```python\n"
+            "# a comment, not a heading\n"
+            "```\n"
+            "\n"
+            "### Skipped\n"
+            "\n"
+            "Body.\n"
+        )
+        result = analyze_markdown(content)
+
+        # The real h1->h3 jump is still flagged (real headings ARE processed)...
+        md001 = [i for i in result.issues if i.rule_id == "MD001"]
+        assert len(md001) == 1
+        # ...but the in-fence '# a comment' must not count as a second h1.
+        md025 = [i for i in result.issues if i.rule_id == "MD025"]
+        assert md025 == []
+
+    def test_missing_blank_line_after_heading_ignores_in_fence(self):
+        """MD022 fires for a real heading but not for a '#' line inside a fence."""
+        content = (
+            "# Title\n"
+            "\n"
+            "```python\n"
+            "# not a heading\n"
+            "x = 1\n"
+            "```\n"
+            "\n"
+            "## Real Heading\n"
+            "immediately followed text\n"
+        )
+        result = analyze_markdown(content)
+
+        md022 = [i for i in result.issues if i.rule_id == "MD022"]
+        # Exactly one: the real "## Real Heading" with no blank line after it.
+        assert len(md022) == 1
+        assert md022[0].location.line_start == 8
+
+    def test_heading_inline_code_is_preserved_not_masked(self):
+        """Inline code in a real heading must survive: distinct headings that
+        differ only inside `backticks` are not false MD024 duplicates."""
+        content = "# Use `foo()`\n\n## Use `bar()`\n\nBody.\n"
+        result = analyze_markdown(content)
+
+        # If inline code were blanked, both would normalize to "use" -> duplicate.
+        md024 = [i for i in result.issues if i.rule_id == "MD024"]
+        assert md024 == []
+
+    def test_crlf_fenced_code_is_masked(self):
+        """Fences in CRLF (Windows) files are masked too — '#' lines inside them
+        must not become phantom headings."""
+        content = (
+            "# Title\r\n"
+            "\r\n"
+            "```py\r\n"
+            "# comment\r\n"
+            "```\r\n"
+            "\r\n"
+            "## After\r\n"
+            "text\r\n"
+        )
+        result = analyze_markdown(content)
+
+        # '# comment' inside the fence must not register as a second h1.
+        md025 = [i for i in result.issues if i.rule_id == "MD025"]
+        assert md025 == []
+
+    def test_non_word_language_token_fence_is_masked(self):
+        """A fence whose language tag has non-word chars (c++, f#, objective-c)
+        is still masked."""
+        content = "# T\n\n```c++\n# not a heading\n```\n\n## After\ntext\n"
+        result = analyze_markdown(content)
+
+        md025 = [i for i in result.issues if i.rule_id == "MD025"]
+        assert md025 == []
+
+
 class TestMarkdownAnalyzerLinks:
     """Tests for link analysis."""
 

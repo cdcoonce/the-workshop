@@ -29,7 +29,9 @@ URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 REFERENCE_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\[([^\]]*)\]")
 REFERENCE_DEF_PATTERN = re.compile(r"^\[([^\]]+)\]:\s*(.+)$", re.MULTILINE)
-CODE_BLOCK_PATTERN = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
+# Language token allows any non-newline/non-backtick run (c++, f#, objective-c),
+# and \r?\n tolerates CRLF (Windows) files so those fences are matched/masked too.
+CODE_BLOCK_PATTERN = re.compile(r"```([^\r\n`]*)\r?\n(.*?)```", re.DOTALL)
 INLINE_CODE_PATTERN = re.compile(r"`[^`\n]+`")
 TRAILING_WHITESPACE_PATTERN = re.compile(r"[ \t]+$", re.MULTILINE)
 MULTIPLE_BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
@@ -122,6 +124,15 @@ ENCODING_CORRUPTION_PATTERN = re.compile(
 )
 
 
+def _blank_match(match: "re.Match") -> str:
+    """Replace a regex match with spaces, preserving newlines.
+
+    Keeps character offsets (and therefore line numbers) aligned with the
+    original content, so masked copies remain positionally faithful.
+    """
+    return "".join(c if c == "\n" else " " for c in match.group(0))
+
+
 class MarkdownAnalyzer:
     """Analyzer for Markdown documentation files.
 
@@ -211,6 +222,26 @@ class MarkdownAnalyzer:
         """
         return content[:match_start].count("\n") + 1
 
+    def _mask_fenced_code(self, content: str) -> str:
+        """Blank out fenced code blocks only, preserving offsets.
+
+        A ``#`` line inside a ``` fence must not be read as a heading. Blanking
+        the fenced region (newlines kept) removes it while keeping character
+        offsets and line numbers aligned with the original content. Inline code
+        is deliberately left intact — see ``_heading_matches``.
+
+        Parameters
+        ----------
+        content : str
+            The Markdown content.
+
+        Returns
+        -------
+        str
+            Content with fenced-code characters replaced by spaces.
+        """
+        return CODE_BLOCK_PATTERN.sub(_blank_match, content)
+
     def _mask_code_regions(self, content: str) -> str:
         """Blank out fenced and inline code spans, preserving offsets.
 
@@ -226,13 +257,30 @@ class MarkdownAnalyzer:
             (newlines preserved), so character offsets and line numbers
             still resolve correctly against the masked copy.
         """
+        return INLINE_CODE_PATTERN.sub(_blank_match, self._mask_fenced_code(content))
 
-        def _blank(match: re.Match) -> str:
-            return "".join(c if c == "\n" else " " for c in match.group(0))
+    def _heading_matches(self, content: str) -> list[re.Match]:
+        """Return heading matches that lie outside fenced code blocks.
 
-        masked = CODE_BLOCK_PATTERN.sub(_blank, content)
-        masked = INLINE_CODE_PATTERN.sub(_blank, masked)
-        return masked
+        Only *fenced* code is masked — never inline code. A heading starts with
+        ``#`` at the start of a line, which inline code (mid-line, backtick
+        delimited) never produces; and blanking inline code would corrupt the
+        text of a real heading that legitimately contains ``code`` (e.g. turning
+        distinct headings into false MD024 duplicates, or mangling suggested
+        fixes). Match offsets, ``group(1)`` and ``group(2)`` still resolve
+        correctly because fenced regions never contain real headings.
+
+        Parameters
+        ----------
+        content : str
+            The Markdown content.
+
+        Returns
+        -------
+        list[re.Match]
+            Heading matches outside fenced code, in document order.
+        """
+        return list(HEADING_PATTERN.finditer(self._mask_fenced_code(content)))
 
     def _check_heading_structure(
         self,
@@ -257,7 +305,7 @@ class MarkdownAnalyzer:
             List of heading structure issues.
         """
         issues: list[Issue] = []
-        headings = list(HEADING_PATTERN.finditer(content))
+        headings = self._heading_matches(content)
 
         if not headings:
             return issues
@@ -332,7 +380,7 @@ class MarkdownAnalyzer:
             List of heading level issues.
         """
         issues: list[Issue] = []
-        headings = list(HEADING_PATTERN.finditer(content))
+        headings = self._heading_matches(content)
 
         prev_level = 0
         for heading in headings:
@@ -387,7 +435,7 @@ class MarkdownAnalyzer:
             List of duplicate heading issues.
         """
         issues: list[Issue] = []
-        headings = list(HEADING_PATTERN.finditer(content))
+        headings = self._heading_matches(content)
 
         seen_headings: dict[str, int] = {}
         for heading in headings:
@@ -687,9 +735,12 @@ class MarkdownAnalyzer:
                 )
             )
 
-        # Check for missing blank line after heading
-        for i, line in enumerate(lines):
-            if HEADING_PATTERN.match(line):
+        # Check for missing blank line after heading. Match against masked lines
+        # so '#' lines inside fenced code blocks aren't treated as headings; the
+        # next-line-blank test and reported context use the original lines.
+        masked_lines = self._mask_fenced_code(content).splitlines()
+        for i, masked_line in enumerate(masked_lines):
+            if HEADING_PATTERN.match(masked_line):
                 if i + 1 < len(lines) and lines[i + 1].strip():
                     issues.append(
                         Issue(
@@ -699,7 +750,7 @@ class MarkdownAnalyzer:
                             location=Location(file_path=file_path, line_start=i + 1),
                             rule_id="MD022",
                             source="markdown-analyzer",
-                            context=line,
+                            context=lines[i] if i < len(lines) else masked_line,
                         )
                     )
 
