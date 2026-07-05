@@ -48,6 +48,20 @@ Before shelling out to `gh` (issue/PR lookup, comments, status checks) or chaini
 
 This convention exists because issue #259 found the executor had quarantined 7 slices as `capability` — agents repeatedly issued `gh`/piped Bash calls that require interactive approval unattended execution cannot grant, instead of working from the context already provided or a simpler command.
 
+## Escalating to .afk/question.md Only After Exhausting Available Context
+
+This file's conventions sometimes instruct the agent to stop and write to `.afk/question.md` when it hits a specific blocker — for example, the capability-blocked Bash rule above, when a task genuinely needs `gh`/network access or command chaining no single unpiped call can express. Each such instruction is a legitimate escape hatch — but only once the blocking fact is genuinely absent from the repository, not merely absent from what the agent has read so far.
+
+Before writing to `.afk/question.md` for any blocker:
+
+1. Grep this file for a section that already addresses the specific blocker in front of you — do not assume a precedent exists without checking, and do not assume one is missing just because it isn't the first thing you recall.
+2. Re-read the issue title, body, and labels already supplied in the task prompt; do not treat a detail restated there as missing.
+3. Check `git log`/`git show` on recent `AFK: implement issue #N` commits for a directly analogous prior change this issue is extending or correcting.
+
+Escalate only when, after this check, the blocking fact truly cannot be found anywhere in the repository — a credential, a URL not present in the issue or codebase, or a decision that trades off two valid approaches with no existing precedent to follow.
+
+This convention exists because issue #260 found the executor had quarantined 3 slices as `question` — recurrence at this level suggested agents were treating ambiguity as a hard blocker before checking whether it was already resolved by an existing CLAUDE.md convention or by the issue text already in context.
+
 ## Code Style
 
 - Descriptive variable names (`private_key_bytes` not `pkb`)
