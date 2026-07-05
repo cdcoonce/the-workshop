@@ -218,14 +218,6 @@ def hello() -> str:
 
     def test_run_ruff_detects_unused_variable(self):
         """Test that ruff detects unused variables."""
-        code = '''"""Module."""
-
-
-def foo() -> None:
-    """Do nothing."""
-    x = 1  # noqa: F841 - testing detection
-'''
-        # Run without noqa
         code_no_noqa = '''"""Module."""
 
 

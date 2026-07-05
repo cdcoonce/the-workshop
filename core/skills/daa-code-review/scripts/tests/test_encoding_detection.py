@@ -4,10 +4,8 @@ This module tests the detection and fixing of UTF-8 encoding issues
 where characters appear corrupted (e.g., Ã— instead of ×).
 """
 
-import pytest
-
 from markdown_analyzer import analyze_markdown
-from models import IssueCategory, Severity
+from models import Severity
 
 
 class TestEncodingCorruptionDetection:

@@ -23,7 +23,6 @@ from models import (
 from report_generator import (
     Colors,
     ConsoleReporter,
-    MarkdownReporter,
     colorize,
     generate_console_report,
     generate_markdown_report,
