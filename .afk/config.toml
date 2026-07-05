@@ -1,6 +1,9 @@
 # AFK config — read-only producers (F0) on claude-workflow (afk's dev-cycle foundation).
 # Executor stays OFF until a green gate is confirmed; scout is read-only.
-test_command = "uv run --with pytest python -m pytest -q"
+# `make test` runs BOTH the root suite and the daa-code-review analyzer suite
+# (the latter in its own rootdir, with ruff) — see the Makefile `test` target
+# and #141. Keep this as `make test` so a gate can't silently skip the analyzer.
+test_command = "make test"
 permission_mode = "acceptEdits"
 
 # Integration posture (2026-06-15): promoted to F2 — slices merge-queue onto a
