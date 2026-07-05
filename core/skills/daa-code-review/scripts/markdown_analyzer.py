@@ -32,6 +32,14 @@ REFERENCE_DEF_PATTERN = re.compile(r"^\[([^\]]+)\]:\s*(.+)$", re.MULTILINE)
 # Language token allows any non-newline/non-backtick run (c++, f#, objective-c),
 # and \r?\n tolerates CRLF (Windows) files so those fences are matched/masked too.
 CODE_BLOCK_PATTERN = re.compile(r"```([^\r\n`]*)\r?\n(.*?)```", re.DOTALL)
+# For MASKING (heading/reference checks): any fenced block, backtick OR tilde,
+# with matched delimiters — a ``` block closes on ```, a ~~~ block on ~~~. The
+# backreference makes nested mixed fences (e.g. a ``` block shown inside a ~~~
+# block) mask correctly. CODE_BLOCK_PATTERN stays the canonical backtick pattern
+# for MD040 language detection (group(1) = language).
+FENCED_BLOCK_PATTERN = re.compile(
+    r"(?P<fence>```|~~~)[^\r\n]*\r?\n.*?(?P=fence)", re.DOTALL
+)
 INLINE_CODE_PATTERN = re.compile(r"`[^`\n]+`")
 TRAILING_WHITESPACE_PATTERN = re.compile(r"[ \t]+$", re.MULTILINE)
 MULTIPLE_BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
@@ -223,12 +231,15 @@ class MarkdownAnalyzer:
         return content[:match_start].count("\n") + 1
 
     def _mask_fenced_code(self, content: str) -> str:
-        """Blank out fenced code blocks only, preserving offsets.
+        """Blank out fenced code blocks (``` or ~~~) only, preserving offsets.
 
-        A ``#`` line inside a ``` fence must not be read as a heading. Blanking
-        the fenced region (newlines kept) removes it while keeping character
-        offsets and line numbers aligned with the original content. Inline code
-        is deliberately left intact — see ``_heading_matches``.
+        A ``#`` line inside a fence must not be read as a heading. Blanking the
+        fenced region (newlines kept) removes it while keeping character offsets
+        and line numbers aligned with the original content. Both backtick and
+        tilde fences are covered, with matched delimiters (#248). Inline code is
+        deliberately left intact — see ``_heading_matches``. (Indented code
+        blocks need no masking here: a heading must start at column 0, so a
+        ``#`` indented four spaces is never matched as a heading.)
 
         Parameters
         ----------
@@ -240,7 +251,7 @@ class MarkdownAnalyzer:
         str
             Content with fenced-code characters replaced by spaces.
         """
-        return CODE_BLOCK_PATTERN.sub(_blank_match, content)
+        return FENCED_BLOCK_PATTERN.sub(_blank_match, content)
 
     def _mask_code_regions(self, content: str) -> str:
         """Blank out fenced and inline code spans, preserving offsets.
