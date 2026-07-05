@@ -36,6 +36,18 @@ Before considering such a change done:
 
 This convention exists because PR #142 fixed a bug in a shared file and had to keep all five `dist/` preset copies in sync with `core/`, verifying "every preset rebuilds byte-identically" before the fix was accepted. Skipping this step ships a fix to one copy while leaving the others silently stale.
 
+## Avoiding Capability-Blocked Bash Calls During Unattended Execution
+
+The `afk` executor runs slices unattended under `permission_mode = "acceptEdits"` (see `.afk/config.toml`): Edit and Write calls auto-approve, but Bash calls the harness flags as needing interactive approval — `gh`/network commands, and piped or chained (`|`, `&&`, `;`) commands — do not auto-approve, and fail immediately with no human present to grant them. A slice whose plan depends on the output of one of these calls cannot proceed once the call is rejected.
+
+Before shelling out to `gh` (issue/PR lookup, comments, status checks) or chaining Bash commands with `|`/`&&`/`;`/`2>&1`:
+
+1. Check whether the needed information is already in context — the issue title, body, and labels are already included in the task prompt; do not re-fetch them with `gh issue view`.
+2. Prefer a single, unpiped command (`git log`, `grep`, `find`) over a chained one; run separate commands instead of combining them with a pipe.
+3. If a task genuinely requires `gh`/network access or command chaining that no single unpiped Bash call can express, stop and record the gap in `.afk/question.md` rather than issuing the call and letting the slice fail.
+
+This convention exists because issue #259 found the executor had quarantined 7 slices as `capability` — agents repeatedly issued `gh`/piped Bash calls that require interactive approval unattended execution cannot grant, instead of working from the context already provided or a simpler command.
+
 ## Code Style
 
 - Descriptive variable names (`private_key_bytes` not `pkb`)
