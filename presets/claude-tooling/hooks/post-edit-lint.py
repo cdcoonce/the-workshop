@@ -7,7 +7,11 @@ import shutil
 import subprocess
 import sys
 
-data = json.load(sys.stdin)
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    # Fail open: a malformed/empty stdin payload should no-op, not traceback.
+    sys.exit(0)
 file_path = data.get("tool_input", {}).get("file_path", "")
 
 if not file_path:

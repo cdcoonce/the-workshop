@@ -30,6 +30,28 @@ HOOK_PATHS = {
     / "post-edit-lint.py",
 }
 
+# Every preset's post-edit-lint hook — all five must fail-open on bad stdin (#125).
+ALL_POST_EDIT_HOOKS = {
+    name: REPO_ROOT / "presets" / name / "hooks" / "post-edit-lint.py"
+    for name in (
+        "analysis",
+        "python-api",
+        "data-pipeline",
+        "claude-tooling",
+        "full-stack",
+    )
+}
+
+
+def _run_hook_stdin(hook_path: Path, raw_stdin: str) -> subprocess.CompletedProcess[str]:
+    """Invoke a hook as a subprocess, feeding raw (possibly non-JSON) stdin."""
+    return subprocess.run(
+        [sys.executable, str(hook_path)],
+        input=raw_stdin,
+        capture_output=True,
+        text=True,
+    )
+
 
 def _write_fake_npx(bin_dir: Path, record_path: Path, exit_code: int) -> None:
     """Install a fake `npx` on PATH that records its argv and exits with exit_code."""
@@ -101,3 +123,33 @@ def test_installed_tool_reports_action_on_stderr(tmp_path: Path) -> None:
 
     assert "prettier" in result.stderr
     assert "example.md" in result.stderr
+
+
+class TestPostEditLintFailOpen:
+    """A malformed/empty stdin payload must no-op (exit 0), not traceback (#125)."""
+
+    @pytest.mark.parametrize("preset", sorted(ALL_POST_EDIT_HOOKS))
+    @pytest.mark.parametrize(
+        "payload", ["", "   ", "\n", "not json", "{ broken", "[1, 2,"]
+    )
+    def test_malformed_stdin_fails_open(self, preset: str, payload: str) -> None:
+        result = _run_hook_stdin(ALL_POST_EDIT_HOOKS[preset], payload)
+
+        assert result.returncode == 0, (
+            f"{preset} hook must fail-open on malformed stdin, exited "
+            f"{result.returncode}: {result.stderr}"
+        )
+        assert "Traceback" not in result.stderr
+        assert "JSONDecodeError" not in result.stderr
+
+    @pytest.mark.parametrize("preset", sorted(ALL_POST_EDIT_HOOKS))
+    def test_well_formed_payload_still_exits_clean(self, preset: str) -> None:
+        # Valid JSON with an empty file_path takes the normal early-exit path;
+        # the guard must not disturb well-formed behavior.
+        result = _run_hook_stdin(
+            ALL_POST_EDIT_HOOKS[preset],
+            json.dumps({"tool_input": {"file_path": ""}}),
+        )
+
+        assert result.returncode == 0
+        assert "Traceback" not in result.stderr
