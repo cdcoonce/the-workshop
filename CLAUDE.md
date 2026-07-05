@@ -23,6 +23,19 @@ See [ROADMAP.md](ROADMAP.md) for the multi-platform goal and design principle, [
 - Run tests: `uv run pytest`
 - Run with coverage: `uv run pytest --cov=scripts --cov-report=term-missing`
 
+## Syncing Shared Files Across core/ and Preset Copies
+
+Some source files are duplicated between `core/` and one or more `presets/*/` directories (e.g. a skill or agent that every preset bundles a copy of). If you edit one of these shared/duplicated files, you must apply the same change to every copy — core and every preset that carries it — not just the copy you happened to open.
+
+Before considering such a change done:
+
+1. Edit the file identically in `core/` and in each preset copy.
+2. Rebuild every preset: `uv run python -m scripts.build_preset <preset_name>` for each preset under `presets/`.
+3. Run the smoke test on each rebuilt preset: `uv run python -m scripts.smoke_test <preset_name>`.
+4. Confirm the rebuilt `dist/` output is byte-identical across preset copies of the shared file (e.g. via `diff`) — a change applied to only one copy will show up here as a divergence.
+
+This convention exists because PR #142 fixed a bug in a shared file and had to keep all five `dist/` preset copies in sync with `core/`, verifying "every preset rebuilds byte-identically" before the fix was accepted. Skipping this step ships a fix to one copy while leaving the others silently stale.
+
 ## Code Style
 
 - Descriptive variable names (`private_key_bytes` not `pkb`)
