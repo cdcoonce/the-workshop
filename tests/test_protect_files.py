@@ -53,6 +53,24 @@ def test_non_protected_path_allows_silently() -> None:
     assert result.stderr == ""
 
 
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        "src/client.environment.ts",
+        "scripts/prevented.py",
+        "src/uv.locksmith.py",
+        "config/package-lock.json.bak",
+        "src/my_node_modules/file.js",
+        "project.git/repo_notes.py",
+    ],
+)
+def test_substring_embedded_pattern_allows(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
 def test_empty_file_path_allows() -> None:
     result = run_hook({"tool_input": {"file_path": ""}})
 
