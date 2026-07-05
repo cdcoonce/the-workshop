@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -430,9 +431,6 @@ class TestValidateDirectory:
         assert not any("duplicate" in e.lower() for e in result.errors)
         # The valid file must still be validated cleanly alongside the broken one.
         assert len(result.errors) == 1
-
-
-import subprocess
 
 
 class TestCLI:
