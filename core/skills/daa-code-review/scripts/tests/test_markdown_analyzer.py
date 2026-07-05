@@ -187,6 +187,69 @@ class TestMarkdownAnalyzerHeadingsInCodeBlocks:
         md025 = [i for i in result.issues if i.rule_id == "MD025"]
         assert md025 == []
 
+    def test_tilde_fence_is_masked(self):
+        """~~~ tilde fences are masked like ``` fences (#248)."""
+        content = (
+            "# Title\n"
+            "\n"
+            "~~~python\n"
+            "# not a heading\n"
+            "# another\n"
+            "~~~\n"
+            "\n"
+            "## After\n"
+            "text\n"
+        )
+        result = analyze_markdown(content)
+
+        md025 = [i for i in result.issues if i.rule_id == "MD025"]
+        assert md025 == []
+        # in-fence '#' lines must not trip MD022 either; only the real
+        # '## After' (line 8, followed by non-blank 'text') should fire.
+        md022 = [i for i in result.issues if i.rule_id == "MD022"]
+        assert len(md022) == 1
+        assert md022[0].location.line_start == 8
+
+    def test_tilde_fence_crlf_is_masked(self):
+        """~~~ fences are masked on CRLF files too (#248)."""
+        content = (
+            "# Title\r\n\r\n~~~py\r\n# not a heading\r\n~~~\r\n\r\n## After\r\ntext\r\n"
+        )
+        result = analyze_markdown(content)
+
+        assert [i for i in result.issues if i.rule_id == "MD025"] == []
+
+    def test_backtick_fence_inside_tilde_fence_is_masked(self):
+        """A ``` fence shown inside a ~~~ fence: the inner '#' is still masked
+        (matched-delimiter handling, not a naive alternation) (#248)."""
+        content = (
+            "# Title\n"
+            "\n"
+            "~~~markdown\n"
+            "```python\n"
+            "# inner comment\n"
+            "```\n"
+            "~~~\n"
+            "\n"
+            "## After\n"
+            "text\n"
+        )
+        result = analyze_markdown(content)
+
+        assert [i for i in result.issues if i.rule_id == "MD025"] == []
+
+    def test_indented_code_block_is_never_a_heading_source(self):
+        """Indented code ('#' at column >=4) is already never a heading —
+        HEADING_PATTERN requires column 0 — so no phantom-heading findings
+        arise. Regression lock documenting the non-issue (#248)."""
+        content = (
+            "# Title\n\nintro\n\n    # indented comment\n    # more\n\n## After\ntext\n"
+        )
+        result = analyze_markdown(content)
+
+        assert [i for i in result.issues if i.rule_id == "MD025"] == []
+        assert [i for i in result.issues if i.rule_id == "MD041"] == []
+
 
 class TestMarkdownAnalyzerLinks:
     """Tests for link analysis."""
