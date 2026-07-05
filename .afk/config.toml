@@ -17,7 +17,10 @@ auto_promote = false
 
 agent_prompt = """Implement the linked GitHub issue using test-driven development \
 (red-green-refactor). Keep changes minimal and scoped to the issue's acceptance \
-criteria. Match the surrounding code style."""
+criteria. Match the surrounding code style. If the root cause of a failing test \
+is unclear after targeted investigation, do not broaden the diff into unrelated \
+files chasing a green run you do not understand — record your analysis in .afk/question.md \
+and stop."""
 
 [caps]
 max_retries = 2
