@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from scripts.installer.adapters import (
+    AgentAdapter,
     adapter_names,
     detect_adapter,
     get_adapter,
@@ -26,7 +27,9 @@ def _print_report(report: InstallReport) -> None:
         print(f"  skipped {item}: {reason}")
 
 
-def cmd_install(args: argparse.Namespace) -> int:
+def _resolve_scope_target_adapter(
+    args: argparse.Namespace,
+) -> tuple[Scope, Path, AgentAdapter] | int:
     scope = Scope.USER if args.user else Scope.PROJECT
     target = _resolve_target(scope)
 
@@ -40,6 +43,15 @@ def cmd_install(args: argparse.Namespace) -> int:
         if adapter is None:
             print(f"no supported agent detected/selected. known: {adapter_names()}")
             return 2
+
+    return scope, target, adapter
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    resolved = _resolve_scope_target_adapter(args)
+    if isinstance(resolved, int):
+        return resolved
+    scope, target, adapter = resolved
 
     try:
         bundle = Bundle.load(PRESETS_ROOT, args.preset)
@@ -59,19 +71,10 @@ def cmd_install(args: argparse.Namespace) -> int:
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
-    scope = Scope.USER if args.user else Scope.PROJECT
-    target = _resolve_target(scope)
-
-    if args.agent:
-        if args.agent not in adapter_names():
-            print(f"unknown agent {args.agent!r}. known: {adapter_names()}")
-            return 2
-        adapter = get_adapter(args.agent)
-    else:
-        adapter = detect_adapter(target)
-        if adapter is None:
-            print(f"no supported agent detected/selected. known: {adapter_names()}")
-            return 2
+    resolved = _resolve_scope_target_adapter(args)
+    if isinstance(resolved, int):
+        return resolved
+    scope, target, adapter = resolved
 
     print(f"uninstalling {args.preset} from {adapter.name} ({scope.value}) at {target}")
     _print_report(adapter.uninstall(target, args.preset))
