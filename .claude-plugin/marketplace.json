@@ -69,6 +69,12 @@
       "version": "1.0.0",
       "description": "Python backend services — Lambda, FastAPI, Flask",
       "source": "./dist/python-api"
+    },
+    {
+      "name": "vault-ops",
+      "version": "1.0.0",
+      "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+      "source": "./dist/vault-ops"
     }
   ]
 }

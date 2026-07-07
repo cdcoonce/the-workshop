@@ -41,7 +41,7 @@ Every project that uses **Claude Code** needs skills, hooks, settings, and devel
 
 **Claude Workflow** is a Claude Code plugin that solves this. Paste the repo URL into Claude, pick a preset, and you get a fully configured environment with 20 skills, domain-specific agents, methodology docs, and hooks — installed automatically.
 
-The plugin is organized into five **presets** for different project types (`python-api`, `data-pipeline`, `full-stack`, `claude-tooling`, `analysis`). Each preset is listed in `.claude-plugin/marketplace.json` and maps to a self-contained plugin directory under `dist/`. Claude reads this marketplace index and can install any preset on demand.
+The plugin is organized into six **presets** for different project types (`python-api`, `data-pipeline`, `full-stack`, `claude-tooling`, `analysis`, `vault-ops`). Each preset is listed in `.claude-plugin/marketplace.json` and maps to a self-contained plugin directory under `dist/`. Claude reads this marketplace index and can install any preset on demand.
 
 For teams using non-Claude agents (OpenAI, Cursor, etc.), the `dist/` output can also be copied manually.
 
@@ -59,7 +59,7 @@ https://github.com/cdcoonce/claude-workflow
 
 Claude will read `.claude-plugin/marketplace.json`, find the available presets, and install the one you select into your project. No cloning or building required.
 
-**Available presets:** `python-api` | `data-pipeline` | `full-stack` | `claude-tooling` | `analysis`
+**Available presets:** `python-api` | `data-pipeline` | `full-stack` | `claude-tooling` | `analysis` | `vault-ops`
 
 See [Presets](#presets) for what each one includes.
 
@@ -87,8 +87,9 @@ The `dist/` directories are self-contained — each one is a complete Claude Cod
 | **`full-stack`**     | React/Next.js + Python backend          | —                              | `frontend-builder`, `backend-builder`, `ux-reviewer` | Dual test runners, fixture patterns        |
 | **`claude-tooling`** | Claude skills, hooks, agents            | —                              | `skill-builder`, `skill-reviewer`                    | Skill structure requirements               |
 | **`analysis`**       | Notebooks, R/Python scripts             | —                              | `analysis-builder`                                   | Reproducible seeds, documented assumptions |
+| **`vault-ops`**     | My Brain vault sessions                 | `vault-*`                      | —                                                    | Frontmatter, wikilinks, handoff, sync      |
 
-All presets inherit the full set of 20 core skills, 2 core agents, 4 methodology docs, and the file-protection hook.
+Project presets inherit the full set of 20 core skills, 2 core agents, 4 methodology docs, and the file-protection hook. Supplemental presets such as `vault-ops` can ship only their domain-specific skills.
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, and what preset-specific overrides to layer on top.
 
@@ -130,6 +131,7 @@ These ship with every preset:
 | `python-api`    | `/deploy`         | Lambda/service deployment                       |
 | `data-pipeline` | `/dagster-expert` | Expert guidance for Dagster and `dg` CLI        |
 | `data-pipeline` | `/dbt-expert`     | Expert guidance for dbt Core and SQL transforms |
+| `vault-ops`     | `/vault-*`        | My Brain vault command workflows                 |
 
 ---
 
@@ -307,7 +309,8 @@ claude-workflow/
 │   ├── data-pipeline/       # ETL/ELT pipelines (+ pipeline-builder, data-quality-reviewer)
 │   ├── full-stack/          # React/Next.js + Python (+ frontend/backend-builder, ux-reviewer)
 │   ├── claude-tooling/      # Claude skill/hook development (+ skill-builder, skill-reviewer)
-│   └── analysis/            # Notebooks, statistical analysis (+ analysis-builder)
+│   ├── analysis/            # Notebooks, statistical analysis (+ analysis-builder)
+│   └── vault-ops/           # My Brain vault lifecycle and graph workflows
 ├── scripts/                 # Build, marketplace, smoke-test, validation tooling
 ├── tests/                   # 93 pytest tests
 ├── dist/                    # Build output (gitignored)

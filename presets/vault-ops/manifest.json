@@ -1,0 +1,34 @@
+{
+  "name": "vault-ops",
+  "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+  "version": "1.0.0",
+  "core": {
+    "skills": [],
+    "agents": [],
+    "hooks": [
+      "protect-files.py"
+    ]
+  },
+  "exclude": [],
+  "preset_skills": [
+    "vault-budget",
+    "vault-connect",
+    "vault-dispatch",
+    "vault-dump",
+    "vault-find",
+    "vault-garden",
+    "vault-grill",
+    "vault-handoff",
+    "vault-link",
+    "vault-recall",
+    "vault-standup",
+    "vault-start",
+    "vault-sync",
+    "vault-teach",
+    "vault-audit",
+    "vault-wrap-up",
+    "vault-write"
+  ],
+  "preset_hooks": [],
+  "preset_agents": []
+}
