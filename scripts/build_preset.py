@@ -7,11 +7,12 @@ Build order (plugin format):
 4. Copy preset agents -> dist/<preset>/agents/ (override on collision)
 5. Copy agent-matching.md -> dist/<preset>/docs/ (when agents ship)
 6. Copy hook scripts to dist/<preset>/hooks/scripts/
-7. Generate hooks/hooks.json (merged hook config)
-8. Generate settings.json at root (hooks removed)
-9. Generate .claude-plugin/plugin.json
-10. Generate README.md
+7. Copy preset output styles -> dist/<preset>/output-styles/ (when present)
+8. Generate hooks/hooks.json (merged hook config)
+9. Generate settings.json at root (hooks removed)
+10. Generate .claude-plugin/plugin.json
 11. Apply exclusions
+12. Generate README.md
 """
 
 from __future__ import annotations
@@ -116,6 +117,14 @@ def _validate_manifest(
 
 def _merge_settings(base_path: Path, preset_path: Path) -> dict:
     """Shallow-merge base + preset settings. Preset hook arrays append to base (D13)."""
+    if not base_path.exists():
+        raise BuildValidationError(f"Base settings not found at {base_path}")
+    if not preset_path.exists():
+        raise BuildValidationError(
+            f"Preset settings not found at {preset_path}. "
+            "Every preset must have a settings-preset.json (an empty '{}' is fine "
+            "if the preset contributes no settings/hooks of its own)."
+        )
     base = json.loads(base_path.read_text())
     preset = json.loads(preset_path.read_text())
 
@@ -309,23 +318,40 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     if run_hook_src.exists():
         shutil.copy2(run_hook_src, dist_path / "hooks" / "run-hook.sh")
 
-    # 7. Generate hooks/hooks.json (merged hook config)
-    merged_settings = _merge_settings(
-        core_path / "settings-base.json",
-        preset_path / "settings-preset.json",
-    )
+    # 7. Copy optional preset output styles used by persona SessionStart hooks.
+    output_styles_src = preset_path / "output-styles"
+    if output_styles_src.exists():
+        shutil.copytree(output_styles_src, dist_path / "output-styles")
+
+    # 8. Generate hooks/hooks.json (merged hook config). Some presets are
+    # pure SessionStart/persona layers and opt out of base settings so they do
+    # not inherit core PreToolUse hooks without shipping the paired scripts.
+    preset_settings_path = preset_path / "settings-preset.json"
+    if manifest.get("base_settings", True):
+        merged_settings = _merge_settings(
+            core_path / "settings-base.json",
+            preset_settings_path,
+        )
+    else:
+        if not preset_settings_path.exists():
+            raise BuildValidationError(
+                f"Preset settings not found at {preset_settings_path}. "
+                "Every preset must have a settings-preset.json (an empty '{}' is "
+                "fine if the preset contributes no settings/hooks of its own)."
+            )
+        merged_settings = json.loads(preset_settings_path.read_text())
     hooks_config = {"hooks": merged_settings.get("hooks", {})}
     (dist_path / "hooks" / "hooks.json").write_text(
         json.dumps(hooks_config, indent=2) + "\n"
     )
 
-    # 8. Generate settings.json at root (hooks removed)
+    # 9. Generate settings.json at root (hooks removed)
     settings_without_hooks = {k: v for k, v in merged_settings.items() if k != "hooks"}
     (dist_path / "settings.json").write_text(
         json.dumps(settings_without_hooks, indent=2) + "\n"
     )
 
-    # 9. Generate Claude, Codex, and Cortex plugin manifests
+    # 10. Generate Claude, Codex, and Cortex plugin manifests
     plugin_json = {
         "name": manifest["name"],
         "version": manifest.get("version", "0.0.0"),
@@ -365,7 +391,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(codex_plugin_json, indent=2) + "\n"
     )
 
-    # 10. Apply exclusions BEFORE the README scan, so the skill/agent listings
+    # 11. Apply exclusions BEFORE the README scan, so the skill/agent listings
     # reflect the final built output — an excluded dir must not appear in the
     # generated README (#122). Paths are relative to dist_path, not .claude/.
     # Steps 7-9 (settings/hooks/plugin.json) read the manifest, not the dist tree,
@@ -386,7 +412,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         else:
             print(f"WARNING: exclusion '{exclusion}' did not match anything, skipping")
 
-    # 11. Generate README.md (scans the post-exclusion dist tree), unless README.md
+    # 12. Generate README.md (scans the post-exclusion dist tree), unless README.md
     # is itself excluded — exclusions already ran, so generating it here would undo
     # a README-targeting exclusion.
     excluded_paths = {

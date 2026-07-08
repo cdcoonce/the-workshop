@@ -8,6 +8,29 @@ import pytest
 from scripts.build_preset import BuildValidationError, _merge_settings, build_preset
 
 
+def write_persona_preset(tmp_repo: Path, settings: dict) -> Path:
+    """Create a minimal persona preset for build tests."""
+    preset = tmp_repo / "presets" / "persona"
+    preset.mkdir()
+    (preset / "manifest.json").write_text(
+        json.dumps(
+            {
+                "name": "persona",
+                "description": "Persona preset",
+                "version": "1.0.0",
+                "base_settings": False,
+                "core": {"skills": [], "agents": [], "hooks": []},
+                "exclude": [],
+                "preset_skills": [],
+                "preset_hooks": [],
+                "preset_agents": [],
+            }
+        )
+    )
+    (preset / "settings-preset.json").write_text(json.dumps(settings))
+    return preset
+
+
 class TestMergeSettings:
     """_merge_settings must honor its full contract, not just hooks (#92)."""
 
@@ -322,6 +345,39 @@ class TestBuildPluginHooks:
         assert len(post_hooks) >= 1
         cmd = post_hooks[0]["hooks"][0]["command"]
         assert "hooks/scripts/post-edit-lint.py" in cmd
+
+    def test_base_settings_false_omits_core_hooks(self, tmp_repo: Path) -> None:
+        """Persona-style presets can opt out of inherited base hooks."""
+        write_persona_preset(tmp_repo, {"hooks": {"SessionStart": [{"hooks": []}]}})
+
+        build_preset("persona", repo_root=tmp_repo)
+        hooks_json = tmp_repo / "dist" / "persona" / "hooks" / "hooks.json"
+        data = json.loads(hooks_json.read_text())
+
+        assert "SessionStart" in data["hooks"]
+        assert len(data["hooks"]["SessionStart"]) == 1
+        assert "PreToolUse" not in data["hooks"]
+        assert not (
+            tmp_repo
+            / "dist"
+            / "persona"
+            / "hooks"
+            / "scripts"
+            / "protect-files.py"
+        ).exists()
+
+    def test_build_copies_preset_output_styles(self, tmp_repo: Path) -> None:
+        """Persona presets ship their output-style payload with the hook."""
+        preset = write_persona_preset(tmp_repo, {"hooks": {}})
+        output_styles = preset / "output-styles"
+        output_styles.mkdir()
+        (output_styles / "persona.md").write_text("# Persona\n")
+
+        build_preset("persona", repo_root=tmp_repo)
+
+        assert (
+            tmp_repo / "dist" / "persona" / "output-styles" / "persona.md"
+        ).read_text() == "# Persona\n"
 
 
 class TestBuildPluginSettings:
