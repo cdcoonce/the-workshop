@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Python package archives; generated plugin bundles under dist/ are tracked.
+dist/*.tar.gz
+dist/*.whl
+
 # User-local Claude settings
 .claude/settings.local.json
 
