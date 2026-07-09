@@ -7,7 +7,9 @@
     "agents": [],
     "hooks": [
       "protect-files.py",
-      "verify-tests-before-stop.py"
+      "verify-tests-before-stop.py",
+      "snapshot-subagent-start.py",
+      "verify-subagent-evidence.py"
     ]
   },
   "exclude": [],
