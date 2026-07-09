@@ -20,6 +20,7 @@
     "vault-grill",
     "vault-handoff",
     "vault-link",
+    "vault-mr-review-packet",
     "vault-recall",
     "vault-standup",
     "vault-start",
