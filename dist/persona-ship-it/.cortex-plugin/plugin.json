@@ -6,15 +6,11 @@
     "name": "Charles Coonce"
   },
   "repository": "https://github.com/cdcoonce/claude-workflow",
-  "skills": "./skills/",
   "interface": {
     "displayName": "persona-ship-it",
     "shortDescription": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
     "longDescription": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
     "developerName": "Charles Coonce",
-    "category": "Productivity",
-    "capabilities": [
-      "Skills"
-    ]
+    "category": "Productivity"
   }
 }

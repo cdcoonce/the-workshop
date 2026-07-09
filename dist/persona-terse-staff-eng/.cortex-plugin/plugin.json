@@ -6,15 +6,11 @@
     "name": "Charles Coonce"
   },
   "repository": "https://github.com/cdcoonce/claude-workflow",
-  "skills": "./skills/",
   "interface": {
     "displayName": "persona-terse-staff-eng",
     "shortDescription": "Terse senior-staff-engineer voice \u2014 answer-first, minimal, expert assumptions. The least verbose persona.",
     "longDescription": "Terse senior-staff-engineer voice \u2014 answer-first, minimal, expert assumptions. The least verbose persona.",
     "developerName": "Charles Coonce",
-    "category": "Productivity",
-    "capabilities": [
-      "Skills"
-    ]
+    "category": "Productivity"
   }
 }

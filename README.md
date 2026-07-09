@@ -11,6 +11,7 @@ A **Claude Code plugin** that gives any project a fully configured AI developmen
 - [What Is This](#what-is-this)
 - [Installation](#installation)
   - [Claude (Primary)](#claude-primary)
+  - [Cortex Code (CoCo Desktop)](#cortex-code-coco-desktop)
   - [Other Agents (Manual Copy-Paste)](#other-agents-manual-copy-paste)
 - [Presets](#presets)
 - [Skills](#skills)
@@ -62,6 +63,28 @@ Claude will read `.claude-plugin/marketplace.json`, find the available presets, 
 **Available presets:** `python-api` | `data-pipeline` | `full-stack` | `claude-tooling` | `analysis` | `vault-ops`
 
 See [Presets](#presets) for what each one includes.
+
+### Cortex Code (CoCo Desktop)
+
+Use the GitHub Plugin Installer with a sub-path to install any preset directly:
+
+```
+/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/<preset-name>
+```
+
+For example, to install the `full-stack` preset:
+
+```
+/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/full-stack
+```
+
+The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
+
+**Available presets:** `python-api` | `data-pipeline` | `full-stack` | `claude-tooling` | `analysis` | `vault-ops`
+
+**Persona plugins** (output-style only — no skills): `persona-terse-staff-eng` | `persona-staff-eng-deep` | `persona-pair-programmer` | `persona-ship-it` | `persona-thinking-partner`
+
+> **Prerequisite:** Persona plugins require [`uv`](https://docs.astral.sh/uv/) on PATH for the SessionStart hook.
 
 ### Other Agents (Manual Copy-Paste)
 

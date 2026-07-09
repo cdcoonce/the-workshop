@@ -338,18 +338,22 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         json.dumps(plugin_json, indent=2) + "\n"
     )
 
+    # Determine capabilities based on what the plugin actually contains
+    has_skills = any((dist_path / "skills").glob("*/SKILL.md"))
+    capabilities = ["Skills"] if has_skills else []
+
     codex_plugin_json = {
         **plugin_json,
         "author": {"name": "Charles Coonce"},
         "repository": "https://github.com/cdcoonce/claude-workflow",
-        "skills": "./skills/",
+        **({"skills": "./skills/"} if has_skills else {}),
         "interface": {
             "displayName": manifest["name"],
             "shortDescription": manifest.get("description", ""),
             "longDescription": manifest.get("description", ""),
             "developerName": "Charles Coonce",
             "category": "Productivity",
-            "capabilities": ["Skills"],
+            **({"capabilities": capabilities} if capabilities else {}),
         },
     }
     codex_plugin_dir = dist_path / ".codex-plugin"

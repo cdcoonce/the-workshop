@@ -6,15 +6,11 @@
     "name": "Charles Coonce"
   },
   "repository": "https://github.com/cdcoonce/claude-workflow",
-  "skills": "./skills/",
   "interface": {
     "displayName": "persona-staff-eng-deep",
     "shortDescription": "Senior-staff-engineer voice at full depth \u2014 reasoning, tradeoffs, and edge cases spelled out.",
     "longDescription": "Senior-staff-engineer voice at full depth \u2014 reasoning, tradeoffs, and edge cases spelled out.",
     "developerName": "Charles Coonce",
-    "category": "Productivity",
-    "capabilities": [
-      "Skills"
-    ]
+    "category": "Productivity"
   }
 }
