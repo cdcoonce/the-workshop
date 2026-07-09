@@ -12,10 +12,12 @@
   "exclude": [],
   "preset_skills": [
     "vault-budget",
+    "vault-clickup-task-sync",
     "vault-connect",
     "vault-dispatch",
     "vault-dump",
     "vault-find",
+    "vault-fix-issue",
     "vault-garden",
     "vault-grill",
     "vault-handoff",
