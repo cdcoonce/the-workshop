@@ -4,10 +4,21 @@
   "version": "1.0.0",
   "core": {
     "skills": "all",
-    "hooks": ["protect-files.py"]
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py"
+    ]
   },
   "exclude": [],
-  "preset_skills": ["dagster-expert", "dbt-expert"],
-  "preset_hooks": ["post-edit-lint.py"],
-  "preset_agents": ["pipeline-builder", "data-quality-reviewer"]
+  "preset_skills": [
+    "dagster-expert",
+    "dbt-expert"
+  ],
+  "preset_hooks": [
+    "post-edit-lint.py"
+  ],
+  "preset_agents": [
+    "pipeline-builder",
+    "data-quality-reviewer"
+  ]
 }

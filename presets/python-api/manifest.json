@@ -1,13 +1,23 @@
 {
   "name": "python-api",
-  "description": "Python backend services — Lambda, FastAPI, Flask",
+  "description": "Python backend services \u2014 Lambda, FastAPI, Flask",
   "version": "1.0.0",
   "core": {
     "skills": "all",
-    "hooks": ["protect-files.py"]
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py"
+    ]
   },
   "exclude": [],
-  "preset_skills": ["deploy"],
-  "preset_hooks": ["post-edit-lint.py"],
-  "preset_agents": ["api-builder", "security-reviewer"]
+  "preset_skills": [
+    "deploy"
+  ],
+  "preset_hooks": [
+    "post-edit-lint.py"
+  ],
+  "preset_agents": [
+    "api-builder",
+    "security-reviewer"
+  ]
 }

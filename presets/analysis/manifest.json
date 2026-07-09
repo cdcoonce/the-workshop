@@ -4,10 +4,17 @@
   "version": "1.0.0",
   "core": {
     "skills": "all",
-    "hooks": ["protect-files.py"]
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py"
+    ]
   },
   "exclude": [],
   "preset_skills": [],
-  "preset_hooks": ["post-edit-lint.py"],
-  "preset_agents": ["analysis-builder"]
+  "preset_hooks": [
+    "post-edit-lint.py"
+  ],
+  "preset_agents": [
+    "analysis-builder"
+  ]
 }

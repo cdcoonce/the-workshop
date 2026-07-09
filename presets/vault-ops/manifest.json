@@ -6,7 +6,8 @@
     "skills": [],
     "agents": [],
     "hooks": [
-      "protect-files.py"
+      "protect-files.py",
+      "verify-tests-before-stop.py"
     ]
   },
   "exclude": [],

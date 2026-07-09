@@ -4,10 +4,21 @@
   "version": "1.0.0",
   "core": {
     "skills": "all",
-    "hooks": ["protect-files.py"]
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py"
+    ]
   },
   "exclude": [],
-  "preset_skills": ["react-ui-ux"],
-  "preset_hooks": ["post-edit-lint.py"],
-  "preset_agents": ["frontend-builder", "backend-builder", "ux-reviewer"]
+  "preset_skills": [
+    "react-ui-ux"
+  ],
+  "preset_hooks": [
+    "post-edit-lint.py"
+  ],
+  "preset_agents": [
+    "frontend-builder",
+    "backend-builder",
+    "ux-reviewer"
+  ]
 }
