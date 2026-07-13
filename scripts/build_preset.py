@@ -109,6 +109,16 @@ def _validate_manifest(
             f"A preset override cannot also be excluded."
         )
 
+    conventions = manifest.get("conventions", [])
+    if not isinstance(conventions, list) or not all(
+        isinstance(c, str) for c in conventions
+    ):
+        errors.append(
+            "conventions must be a list of strings (each a one-line convention "
+            "the preset enforces), got: "
+            f"{conventions!r}"
+        )
+
     if errors:
         raise BuildValidationError(
             "Manifest validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
@@ -147,68 +157,85 @@ def _merge_settings(base_path: Path, preset_path: Path) -> dict:
     return merged
 
 
-def _generate_readme(manifest: dict, skills: list[str], agents: list[str]) -> str:
-    """Generate a simple README.md for the plugin.
+def _skill_doc_from_dir(skill_dir: Path):
+    """Read a built skill dir into a SkillDoc, degrading to name-only on bad input.
+
+    The dist tree is the source of truth for what actually shipped (post-exclusion),
+    so the README reflects reality. Frontmatter here is already validated upstream
+    by smoke_test/build_docs; this stays tolerant so a README can still build.
+    """
+    from scripts.build_docs import SkillDoc
+    from scripts.smoke_test import _parse_frontmatter
+
+    frontmatter = _parse_frontmatter((skill_dir / "SKILL.md").read_text(encoding="utf-8"))
+    if not frontmatter:
+        return SkillDoc(name=skill_dir.name, description="", source="dist")
+    return SkillDoc(
+        name=str(frontmatter.get("name", skill_dir.name)),
+        description=str(frontmatter.get("description", "")).strip(),
+        source="dist",
+    )
+
+
+def _agent_doc_from_dir(agent_dir: Path):
+    """Read a built agent dir into an AgentDoc, degrading gracefully on bad input."""
+    from scripts.build_docs import AgentDoc
+    from scripts.smoke_test import _parse_frontmatter
+
+    frontmatter = _parse_frontmatter((agent_dir / "AGENT.md").read_text(encoding="utf-8"))
+    if not frontmatter:
+        return AgentDoc(
+            name=agent_dir.name, description="", role="", skills_add=(), source="dist"
+        )
+    return AgentDoc(
+        name=str(frontmatter.get("name", agent_dir.name)),
+        description=str(frontmatter.get("description", "")).strip(),
+        role=str(frontmatter.get("role", "")),
+        skills_add=(),
+        source="dist",
+    )
+
+
+def _generate_readme(manifest: dict, dist_path: Path) -> str:
+    """Generate a rich README for the built plugin from its shipped components.
 
     Parameters
     ----------
     manifest
         The preset manifest dict.
-    skills
-        List of skill directory names in the output.
-    agents
-        List of agent directory names in the output.
+    dist_path
+        The built plugin directory. Its (post-exclusion) skills/ and agents/ trees
+        are the source of what the README lists.
 
     Returns
     -------
     str
-        README content.
+        README content, using the shared renderers in build_docs so the dist
+        README shares the repo reference's shape.
     """
-    name = manifest["name"]
-    description = manifest.get("description", "")
-    lines = [
-        f"# {name}",
-        "",
-        description,
-        "",
-    ]
+    from scripts.build_docs import render_preset_readme
 
-    if skills:
-        lines.append("## Skills")
-        lines.append("")
-        for skill in sorted(skills):
-            lines.append(f"- {skill}")
-        lines.append("")
+    skills = []
+    skills_dir = dist_path / "skills"
+    if skills_dir.exists():
+        for skill_dir in sorted(d for d in skills_dir.iterdir() if d.is_dir()):
+            if (skill_dir / "SKILL.md").exists():
+                skills.append(_skill_doc_from_dir(skill_dir))
 
-    if agents:
-        lines.append("## Agents")
-        lines.append("")
-        for agent in sorted(agents):
-            lines.append(f"- {agent}")
-        lines.append("")
+    agents = []
+    agents_dir = dist_path / "agents"
+    if agents_dir.exists():
+        for agent_dir in sorted(d for d in agents_dir.iterdir() if d.is_dir()):
+            if (agent_dir / "AGENT.md").exists():
+                agents.append(_agent_doc_from_dir(agent_dir))
 
-    lines.append("## CLAUDE.md Template")
-    lines.append("")
-    lines.append(
-        "Copy the following into your project's `CLAUDE.md` to reference this plugin:"
+    return render_preset_readme(
+        name=manifest["name"],
+        description=manifest.get("description", ""),
+        skills=skills,
+        agents=agents,
+        conventions=tuple(manifest.get("conventions", [])),
     )
-    lines.append("")
-    lines.append("```")
-    lines.append("# Project Name")
-    lines.append("")
-    lines.append("## Plugins")
-    lines.append("")
-    lines.append(f"This project uses the {name} plugin for Claude Code configuration.")
-    lines.append("")
-    lines.append("## Methodology")
-    lines.append("")
-    lines.append(
-        "See plugin documentation for TDD, root cause tracing, and subagent development processes."
-    )
-    lines.append("```")
-    lines.append("")
-
-    return "\n".join(lines)
 
 
 def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
@@ -423,17 +450,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         (dist_path / exclusion).resolve() for exclusion in manifest.get("exclude", [])
     }
     if (dist_path / "README.md").resolve() not in excluded_paths:
-        skill_names = []
-        skills_dir = dist_path / "skills"
-        if skills_dir.exists():
-            skill_names = [d.name for d in skills_dir.iterdir() if d.is_dir()]
-        agent_names = []
-        agents_dir = dist_path / "agents"
-        if agents_dir.exists():
-            agent_names = [d.name for d in agents_dir.iterdir() if d.is_dir()]
-        (dist_path / "README.md").write_text(
-            _generate_readme(manifest, skill_names, agent_names)
-        )
+        (dist_path / "README.md").write_text(_generate_readme(manifest, dist_path))
 
     return dist_path
 

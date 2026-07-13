@@ -1,6 +1,11 @@
 {
   "name": "full-stack",
   "description": "React/Next.js frontend + Python backend",
+  "conventions": [
+    "Separate frontend and backend test runners",
+    "Shared fixture patterns across the stack",
+    "Typed API contracts between layers"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": "all",

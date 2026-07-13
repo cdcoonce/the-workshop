@@ -1,6 +1,11 @@
 {
   "name": "python-api",
   "description": "Python backend services \u2014 Lambda, FastAPI, Flask",
+  "conventions": [
+    "Ruff for linting and formatting",
+    "Structured logging over print",
+    "Type hints on public functions"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": "all",

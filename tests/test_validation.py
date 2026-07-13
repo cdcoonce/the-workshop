@@ -102,3 +102,21 @@ class TestValidation:
             BuildValidationError, match="both preset_skills and exclude"
         ):
             build_preset("conflict", repo_root=tmp_repo)
+
+    def test_conventions_must_be_list_of_strings(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["conventions"] = "not a list"
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="conventions must be a list"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+    def test_conventions_list_of_strings_accepted(self, tmp_repo: Path) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["conventions"] = ["Ruff linting", "Structured logging"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        dist = build_preset("python-api", repo_root=tmp_repo)
+        assert "Ruff linting" in (dist / "README.md").read_text()

@@ -1,6 +1,11 @@
 {
   "name": "data-pipeline",
   "description": "ETL/ELT pipelines, SQL transformations, scheduled data jobs",
+  "conventions": [
+    "SQL keywords lowercase",
+    "Idempotent, re-runnable pipeline stages",
+    "Data-quality checks on every stage"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": "all",

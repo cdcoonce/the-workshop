@@ -1,6 +1,11 @@
 {
   "name": "claude-tooling",
   "description": "Developing Claude skills, hooks, agents, and template configurations",
+  "conventions": [
+    "Skills follow the required SKILL.md structure",
+    "Progressive disclosure over monolithic instructions",
+    "Regenerate docs and dist after changing a component"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": "all",

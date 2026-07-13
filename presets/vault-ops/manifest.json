@@ -1,6 +1,11 @@
 {
   "name": "vault-ops",
   "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+  "conventions": [
+    "Frontmatter on every note",
+    "Wikilinks over bare references",
+    "Rebase-before-push git sync, refreshed handoff"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": [],

@@ -70,16 +70,20 @@ Add the hook entry to `core/settings-base.json` under the right event key,
 then register the script filename in **every** affected preset's
 `manifest.json` under `core.hooks` (skip persona-only presets unless the
 hook is persona-relevant — they opt out of `base_settings` entirely).
-Rebuild every touched preset (`uv run python -m scripts.build_preset
-<preset>`) and the marketplace (`uv run python -m scripts.build_marketplace`)
-before committing — `dist/` output is tracked, not gitignored, in this repo.
+Regenerate the living docs and rebuild every touched preset before committing:
+run `make docs` (rewrites `docs/reference/` and the README's generated hook
+tables from the new hook's docstring + wiring) and `make build` (rebuilds every
+preset into `dist/` and regenerates the marketplace). `dist/` and the reference
+docs are tracked, not gitignored, in this repo — commit the regenerated output
+alongside the hook or the drift gate (step 7) fails.
 
 ## 7. Run the full gate, not just the new test file
 
-`uv run --with pytest python -m pytest -q tests` AND the nested
-`core/skills/daa-code-review/scripts` sub-suite (`cd` into it, `uv run --with
-pytest --with ruff python -m pytest -q tests`) — both are part of this
-repo's real `make test` target. Then commit with a message that states the
+Run `make test` — it runs the root suite, the nested
+`core/skills/daa-code-review/scripts` sub-suite, AND the docs/dist drift gate
+(`build_docs --check` plus a `dist/` rebuild that fails on any uncommitted
+diff). If the gate reports stale output, you skipped `make docs`/`make build`
+in step 6 — regenerate and commit. Then commit with a message that states the
 *why* (the constraint from step 1, the design tradeoff from steps 3/4), and
 push to **both** `origin main` and `gitlab main:dev` — this repo mirrors to
 GitLab and the two can silently diverge if only one gets pushed.

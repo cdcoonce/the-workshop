@@ -1,6 +1,11 @@
 {
   "name": "analysis",
   "description": "Notebooks, R/Python scripts, statistical analysis, exploratory work",
+  "conventions": [
+    "Reproducible random seeds",
+    "Documented assumptions and data sources",
+    "Deterministic, re-runnable notebooks"
+  ],
   "version": "1.0.0",
   "core": {
     "skills": "all",
