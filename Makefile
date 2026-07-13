@@ -17,9 +17,19 @@ PRESETS := $(notdir $(wildcard presets/*))
 docs:
 	uv run python -m scripts.build_docs
 
+# Remove dist/<name> trees whose preset no longer exists, so a deleted preset
+# can't leave an installable orphan behind.
+.PHONY: prune-dist
+prune-dist:
+	@for d in dist/*/; do \
+		[ -d "$$d" ] || continue; \
+		b=$$(basename "$$d"); \
+		case " $(PRESETS) " in *" $$b "*) : ;; *) echo "pruning stale dist/$$b"; rm -rf "$$d";; esac; \
+	done
+
 # Regenerate the marketplace index and rebuild every preset into dist/.
 .PHONY: build
-build:
+build: prune-dist
 	uv run python -m scripts.build_marketplace
 	@for p in $(PRESETS); do uv run python -m scripts.build_preset $$p >/dev/null; done
 
@@ -27,11 +37,12 @@ build:
 # match a fresh rebuild. Fails if any generated output diverges from source, so
 # a component change that skips `make docs && make build` can't land green.
 .PHONY: verify-generated
-verify-generated:
+verify-generated: prune-dist
 	uv run python -m scripts.build_docs --check
 	uv run python -m scripts.build_marketplace
 	@for p in $(PRESETS); do uv run python -m scripts.build_preset $$p >/dev/null; done
-	@dirty="$$(git status --porcelain -- dist .claude-plugin/marketplace.json .agents/plugins/marketplace.json)"; \
+	@dirty="$$(git status --porcelain -- dist .claude-plugin/marketplace.json .agents/plugins/marketplace.json)" \
+		|| { echo "ERROR: git status failed"; exit 1; }; \
 	if [ -n "$$dirty" ]; then \
 		echo "ERROR: dist/ or marketplace is stale — run 'make build' and commit:"; \
 		echo "$$dirty"; \

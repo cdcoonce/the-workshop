@@ -165,11 +165,29 @@ class DocsModel:
 # --------------------------------------------------------------------------- #
 
 
+# Abbreviations whose internal period must not be treated as a sentence end.
+_ABBREVIATIONS = frozenset(
+    {"e.g", "i.e", "etc", "vs", "cf", "approx", "al", "no", "fig", "eq", "ca"}
+)
+
+
 def _first_sentence(text: str) -> str:
-    """Return the first sentence of a description for summary tables."""
+    """Return the first sentence of a description for summary tables.
+
+    A period ends the sentence only when the word before it isn't a known
+    abbreviation ("e.g.", "etc.") or a bare number/letter ("Python 3." /
+    "point A."), so summaries aren't truncated mid-clause.
+    """
     text = " ".join(text.split())
-    match = re.search(r"(.+?[.!?])(\s|$)", text)
-    return match.group(1).strip() if match else text
+    for match in re.finditer(r"[.!?](\s|$)", text):
+        end = match.start()
+        token = text[:end].rsplit(" ", 1)[-1].rstrip(".").lower()
+        if token in _ABBREVIATIONS:
+            continue
+        if len(token) <= 1 and token.isalnum():
+            continue
+        return text[: end + 1].strip()
+    return text
 
 
 def _escape_cell(text: str) -> str:
@@ -185,18 +203,29 @@ def _load_frontmatter(md_path: Path, label: str) -> dict:
     return frontmatter
 
 
+def _require_str(frontmatter: dict, field_name: str, label: str) -> str:
+    """Return a required string field, or raise DocsError naming the file.
+
+    Guards against the frontmatter parser returning a non-string (e.g. a dict
+    when a plain multiline value's continuation line contains a colon) — that
+    must fail loudly rather than ship a ``{...}`` repr in the docs.
+    """
+    value = frontmatter.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        raise DocsError(f"{label} missing or non-string field '{field_name}'")
+    return value.strip()
+
+
 def _parse_skill(skill_dir: Path, source: str) -> SkillDoc:
     """Parse one skill directory into a SkillDoc, failing fast on bad metadata."""
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         raise DocsError(f"Skill '{skill_dir.name}' has no SKILL.md at {skill_md}")
     frontmatter = _load_frontmatter(skill_md, "Skill")
-    for req in ("name", "description"):
-        if not frontmatter.get(req):
-            raise DocsError(f"Skill '{skill_dir.name}/SKILL.md' missing '{req}'")
+    label = f"Skill '{skill_dir.name}/SKILL.md'"
     return SkillDoc(
-        name=str(frontmatter["name"]),
-        description=str(frontmatter["description"]).strip(),
+        name=_require_str(frontmatter, "name", label),
+        description=_require_str(frontmatter, "description", label),
         source=source,
     )
 
@@ -207,9 +236,7 @@ def _parse_agent(agent_dir: Path, source: str) -> AgentDoc:
     if not agent_md.exists():
         raise DocsError(f"Agent '{agent_dir.name}' has no AGENT.md at {agent_md}")
     frontmatter = _load_frontmatter(agent_md, "Agent")
-    for req in ("name", "description", "role"):
-        if not frontmatter.get(req):
-            raise DocsError(f"Agent '{agent_dir.name}/AGENT.md' missing '{req}'")
+    label = f"Agent '{agent_dir.name}/AGENT.md'"
     skills_config = frontmatter.get("skills", {})
     skills_add: tuple[str, ...] = ()
     if isinstance(skills_config, dict):
@@ -217,9 +244,9 @@ def _parse_agent(agent_dir: Path, source: str) -> AgentDoc:
         if isinstance(add, list):
             skills_add = tuple(str(s) for s in add)
     return AgentDoc(
-        name=str(frontmatter["name"]),
-        description=str(frontmatter["description"]).strip(),
-        role=str(frontmatter["role"]),
+        name=_require_str(frontmatter, "name", label),
+        description=_require_str(frontmatter, "description", label),
+        role=_require_str(frontmatter, "role", label),
         skills_add=skills_add,
         source=source,
     )
@@ -230,7 +257,9 @@ def _parse_hook_summary(hook_path: Path) -> str:
     try:
         tree = ast.parse(hook_path.read_text(encoding="utf-8"))
     except SyntaxError as exc:
-        raise DocsError(f"Hook '{hook_path.name}' is not parseable Python: {exc}") from exc
+        raise DocsError(
+            f"Hook '{hook_path.name}' is not parseable Python: {exc}"
+        ) from exc
     docstring = ast.get_docstring(tree)
     if not docstring:
         raise DocsError(
@@ -323,7 +352,9 @@ def _parse_methodology(doc_path: Path) -> MethodologyDoc:
 
 def _preset_dirs(root: Path) -> list[Path]:
     return sorted(
-        d for d in (root / "presets").iterdir() if d.is_dir() and (d / "manifest.json").exists()
+        d
+        for d in (root / "presets").iterdir()
+        if d.is_dir() and (d / "manifest.json").exists()
     )
 
 
@@ -345,7 +376,11 @@ def _shipped_skills(manifest: dict, core_skills: list[str]) -> list[str]:
     setting = manifest.get("core", {}).get("skills", "all")
     shipped = list(core_skills) if setting == "all" else list(setting)
     shipped += [s for s in manifest.get("preset_skills", []) if s not in shipped]
-    excluded = {e.split("/", 1)[1] for e in manifest.get("exclude", []) if e.startswith("skills/")}
+    excluded = {
+        e.split("/", 1)[1]
+        for e in manifest.get("exclude", [])
+        if e.startswith("skills/")
+    }
     return sorted(s for s in shipped if s not in excluded)
 
 
@@ -353,7 +388,11 @@ def _shipped_agents(manifest: dict, core_agents: list[str]) -> list[str]:
     setting = manifest.get("core", {}).get("agents", "all")
     shipped = list(core_agents) if setting == "all" else list(setting)
     shipped += [a for a in manifest.get("preset_agents", []) if a not in shipped]
-    excluded = {e.split("/", 1)[1] for e in manifest.get("exclude", []) if e.startswith("agents/")}
+    excluded = {
+        e.split("/", 1)[1]
+        for e in manifest.get("exclude", [])
+        if e.startswith("agents/")
+    }
     return sorted(a for a in shipped if a not in excluded)
 
 
@@ -410,7 +449,9 @@ def build_model(root: Path) -> DocsModel:
                     name=skill.name,
                     description=skill.description,
                     source=preset_dir.name,
-                    presets=tuple(sorted(presets_with_skill.get(skill_dir.name, set()))),
+                    presets=tuple(
+                        sorted(presets_with_skill.get(skill_dir.name, set()))
+                    ),
                     overrides_core=skill_dir.name in seen_skill_names,
                 )
             )
@@ -444,7 +485,9 @@ def build_model(root: Path) -> DocsModel:
                     role=agent.role,
                     skills_add=agent.skills_add,
                     source=preset_dir.name,
-                    presets=tuple(sorted(presets_with_agent.get(agent_dir.name, set()))),
+                    presets=tuple(
+                        sorted(presets_with_agent.get(agent_dir.name, set()))
+                    ),
                     overrides_core=agent_dir.name in seen_agent_names,
                 )
             )
@@ -504,11 +547,21 @@ def build_model(root: Path) -> DocsModel:
                 continue
             summary = _script_summary(script_path)
             if summary:
-                model.scripts.append(ScriptDoc(filename=script_path.name, summary=summary))
+                model.scripts.append(
+                    ScriptDoc(filename=script_path.name, summary=summary)
+                )
 
     # Presets.
     for preset_dir in preset_dirs:
         manifest = manifests[preset_dir.name]
+        conventions = manifest.get("conventions", [])
+        if not isinstance(conventions, list) or not all(
+            isinstance(c, str) for c in conventions
+        ):
+            raise DocsError(
+                f"Preset '{preset_dir.name}' conventions must be a list of strings, "
+                f"got: {conventions!r}"
+            )
         model.presets.append(
             PresetDoc(
                 name=manifest.get("name", preset_dir.name),
@@ -519,7 +572,7 @@ def build_model(root: Path) -> DocsModel:
                 skills=tuple(_shipped_skills(manifest, core_skills)),
                 agents=tuple(_shipped_agents(manifest, core_agents)),
                 hooks=tuple(_shipped_hooks(manifest)),
-                conventions=tuple(str(c) for c in manifest.get("conventions", [])),
+                conventions=tuple(conventions),
             )
         )
     model.presets.sort(key=lambda p: (p.is_persona, p.name))
@@ -545,7 +598,13 @@ def _cross_validate_hook(name: str, summary: str, events: tuple[str, ...]) -> No
     claimed = _claimed_event(summary)
     if claimed is None or claimed not in KNOWN_EVENTS:
         return
-    if events and claimed not in events:
+    if not events:
+        raise DocsError(
+            f"Hook '{name}' docstring claims event '{claimed}' but the hook is not "
+            "wired to any event in the settings. Wire it, or drop the event name "
+            "from the docstring's first line."
+        )
+    if claimed not in events:
         raise DocsError(
             f"Hook '{name}' docstring claims event '{claimed}' but its wiring runs "
             f"it on {', '.join(events)}. Fix the docstring or the settings so they "
@@ -558,6 +617,10 @@ def _cross_validate_hook(name: str, summary: str, events: tuple[str, ...]) -> No
 # --------------------------------------------------------------------------- #
 
 
+_BEGIN_ANY_RE = re.compile(r"<!-- BEGIN GENERATED: ([A-Za-z0-9_-]+) -->")
+_END_ANY_RE = re.compile(r"<!-- END GENERATED: ([A-Za-z0-9_-]+) -->")
+
+
 def rewrite_markers(text: str, blocks: dict[str, str]) -> str:
     """Replace the content inside each GENERATED marker with blocks[id].
 
@@ -565,6 +628,11 @@ def rewrite_markers(text: str, blocks: dict[str, str]) -> str:
     marker). Registered blocks with no marker in this file are fine — a file uses
     whatever subset of ids it declares. Idempotent: the replacement content is
     stored without a trailing newline and wrapped identically each run.
+
+    Two integrity guards, since these markers gate the whole doc pipeline:
+    a block whose content contains its own END marker literal would truncate its
+    own region on the next run (unbounded growth), and a half-deleted or
+    id-mismatched marker pair would silently be skipped. Both raise DocsError.
     """
     seen: set[str] = set()
 
@@ -577,13 +645,31 @@ def rewrite_markers(text: str, blocks: dict[str, str]) -> str:
                 "remove the marker or add a block for it in build_docs.py."
             )
         body = blocks[marker_id].strip("\n")
+        if f"<!-- END GENERATED: {marker_id} -->" in body:
+            raise DocsError(
+                f"Generated block '{marker_id}' contains its own END marker "
+                "literal; block content cannot include the marker syntax."
+            )
         return (
             f"<!-- BEGIN GENERATED: {marker_id} -->\n"
             f"{body}\n"
             f"<!-- END GENERATED: {marker_id} -->"
         )
 
-    return _MARKER_RE.sub(_replace, text)
+    result = _MARKER_RE.sub(_replace, text)
+
+    # Any BEGIN/END marker left in the text that wasn't part of a matched pair is
+    # orphaned or id-mismatched (e.g. a deleted END, or BEGIN `x` / END `y`).
+    orphaned = (
+        set(_BEGIN_ANY_RE.findall(result)) | set(_END_ANY_RE.findall(result))
+    ) - seen
+    if orphaned:
+        raise DocsError(
+            "Unpaired or id-mismatched GENERATED marker(s): "
+            f"{', '.join(sorted(orphaned))}. Each needs a matching BEGIN/END pair "
+            "with an identical id."
+        )
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -712,7 +798,11 @@ def render_skills_page(model: DocsModel) -> str:
     lines += ["## Full descriptions", ""]
     for skill in model.skills:
         origin = "universal" if skill.source == "core" else f"`{skill.source}` preset"
-        override = " — overrides the core skill of the same name" if skill.overrides_core else ""
+        override = (
+            " — overrides the core skill of the same name"
+            if skill.overrides_core
+            else ""
+        )
         lines += [
             f"### `/{skill.name}`",
             "",
@@ -795,11 +885,23 @@ def render_presets_page(model: DocsModel) -> str:
             lines += [f"- {c}" for c in preset.conventions]
             lines += [""]
         if preset.skills:
-            lines += [f"**Skills ({len(preset.skills)}):** " + ", ".join(f"`{s}`" for s in preset.skills), ""]
+            lines += [
+                f"**Skills ({len(preset.skills)}):** "
+                + ", ".join(f"`{s}`" for s in preset.skills),
+                "",
+            ]
         if preset.agents:
-            lines += [f"**Agents ({len(preset.agents)}):** " + ", ".join(f"`{a}`" for a in preset.agents), ""]
+            lines += [
+                f"**Agents ({len(preset.agents)}):** "
+                + ", ".join(f"`{a}`" for a in preset.agents),
+                "",
+            ]
         if preset.hooks:
-            lines += [f"**Hooks ({len(preset.hooks)}):** " + ", ".join(f"`{h}`" for h in preset.hooks), ""]
+            lines += [
+                f"**Hooks ({len(preset.hooks)}):** "
+                + ", ".join(f"`{h}`" for h in preset.hooks),
+                "",
+            ]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -873,7 +975,8 @@ def render_preset_readme(
         lines += ["| Skill | Summary |", "| --- | --- |"]
         for skill in sorted(skills, key=lambda s: s.name):
             lines.append(
-                f"| `/{skill.name}` | {_escape_cell(_first_sentence(skill.description))} |"
+                f"| `/{_escape_cell(skill.name)}` "
+                f"| {_escape_cell(_first_sentence(skill.description))} |"
             )
         lines.append("")
     if agents:
@@ -881,7 +984,7 @@ def render_preset_readme(
         lines += ["| Agent | Role | Summary |", "| --- | --- | --- |"]
         for agent in sorted(agents, key=lambda a: a.name):
             lines.append(
-                f"| {agent.name} | `{agent.role}` "
+                f"| {_escape_cell(agent.name)} | `{_escape_cell(agent.role)}` "
                 f"| {_escape_cell(_first_sentence(agent.description))} |"
             )
         lines.append("")
@@ -963,7 +1066,9 @@ def main(argv: list[str] | None = None) -> int:
     if "--check" in argv:
         stale = check_docs(root)
         if stale:
-            print("Documentation is stale — run `make docs` and commit:", file=sys.stderr)
+            print(
+                "Documentation is stale — run `make docs` and commit:", file=sys.stderr
+            )
             for path in stale:
                 print(f"  - {path.relative_to(root)}", file=sys.stderr)
             return 1

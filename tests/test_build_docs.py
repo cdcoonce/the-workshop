@@ -14,6 +14,7 @@ import pytest
 
 from scripts.build_docs import (
     DocsError,
+    SkillDoc,
     build_model,
     check_docs,
     generate,
@@ -21,7 +22,6 @@ from scripts.build_docs import (
     rewrite_markers,
     write_docs,
 )
-from scripts.build_docs import SkillDoc
 
 
 def _write(path: Path, text: str) -> None:
@@ -107,7 +107,11 @@ def docs_repo(tmp_path: Path) -> Path:
                 "name": "demo",
                 "description": "Demo preset.",
                 "version": "1.0.0",
-                "core": {"skills": "all", "agents": "all", "hooks": ["guard.py", "formatter.py"]},
+                "core": {
+                    "skills": "all",
+                    "agents": "all",
+                    "hooks": ["guard.py", "formatter.py"],
+                },
                 "conventions": ["Lowercase SQL", "Idempotent stages"],
                 "exclude": [],
                 "preset_skills": ["gamma"],
@@ -188,7 +192,7 @@ class TestFailFast:
             docs_repo / "core" / "skills" / "alpha" / "SKILL.md",
             "---\nname: alpha\n---\n\n# alpha\n",
         )
-        with pytest.raises(DocsError, match="missing 'description'"):
+        with pytest.raises(DocsError, match="'description'"):
             build_model(docs_repo)
 
     def test_hook_missing_docstring_fails(self, docs_repo: Path) -> None:
@@ -196,13 +200,194 @@ class TestFailFast:
         with pytest.raises(DocsError, match="no module docstring"):
             build_model(docs_repo)
 
+    def test_hook_syntax_error_fails(self, docs_repo: Path) -> None:
+        _write(docs_repo / "core" / "hooks" / "guard.py", "def (:\n")
+        with pytest.raises(DocsError, match="not parseable Python"):
+            build_model(docs_repo)
+
     def test_agent_missing_role_fails(self, docs_repo: Path) -> None:
         _write(
             docs_repo / "core" / "agents" / "impl" / "AGENT.md",
             "---\nname: impl\ndescription: x\n---\n\n# impl\n",
         )
-        with pytest.raises(DocsError, match="missing 'role'"):
+        with pytest.raises(DocsError, match="'role'"):
             build_model(docs_repo)
+
+    def test_skill_no_frontmatter_fails(self, docs_repo: Path) -> None:
+        _write(
+            docs_repo / "core" / "skills" / "alpha" / "SKILL.md",
+            "# alpha\n\nNo frontmatter here.\n",
+        )
+        with pytest.raises(DocsError, match="no valid frontmatter"):
+            build_model(docs_repo)
+
+    def test_skill_missing_skill_md_fails(self, docs_repo: Path) -> None:
+        (docs_repo / "core" / "skills" / "alpha" / "SKILL.md").unlink()
+        with pytest.raises(DocsError, match="has no SKILL.md"):
+            build_model(docs_repo)
+
+    def test_agent_missing_agent_md_fails(self, docs_repo: Path) -> None:
+        (docs_repo / "core" / "agents" / "impl" / "AGENT.md").unlink()
+        with pytest.raises(DocsError, match="has no AGENT.md"):
+            build_model(docs_repo)
+
+    def test_non_string_description_fails(self, docs_repo: Path) -> None:
+        # A mapping value for description must fail loudly, not ship a dict repr.
+        _write(
+            docs_repo / "core" / "skills" / "alpha" / "SKILL.md",
+            "---\nname: alpha\ndescription:\n  add: [x]\n---\n\n# alpha\n",
+        )
+        with pytest.raises(DocsError, match="non-string field 'description'"):
+            build_model(docs_repo)
+
+    def test_invalid_manifest_json_fails(self, docs_repo: Path) -> None:
+        _write(
+            docs_repo / "presets" / "demo" / "manifest.json",
+            '{"name": "demo", "core": {"skills": "all"},}',  # trailing comma
+        )
+        with pytest.raises(DocsError, match="Invalid JSON"):
+            build_model(docs_repo)
+
+    def test_unwired_hook_claiming_event_fails(self, docs_repo: Path) -> None:
+        # A hook whose docstring claims a real event but is wired to nothing.
+        _write(
+            docs_repo / "core" / "hooks" / "loose.py",
+            '"""Stop hook: never wired anywhere."""\n',
+        )
+        with pytest.raises(DocsError, match="not wired to any event"):
+            build_model(docs_repo)
+
+    def test_conventions_non_list_fails(self, docs_repo: Path) -> None:
+        manifest = json.loads(
+            (docs_repo / "presets" / "demo" / "manifest.json").read_text()
+        )
+        manifest["conventions"] = "Lowercase SQL"  # string, not list
+        _write(docs_repo / "presets" / "demo" / "manifest.json", json.dumps(manifest))
+        with pytest.raises(DocsError, match="conventions must be a list"):
+            build_model(docs_repo)
+
+
+class TestOverrideSemantics:
+    def test_preset_shadowing_core_skill_marked_override(self, docs_repo: Path) -> None:
+        _write(
+            docs_repo / "presets" / "demo" / "skills" / "alpha" / "SKILL.md",
+            "---\nname: alpha\ndescription: Overriding alpha.\n---\n\n# alpha\n",
+        )
+        model = build_model(docs_repo)
+        override = next(
+            s for s in model.skills if s.name == "alpha" and s.source == "demo"
+        )
+        assert override.overrides_core is True
+        page = build_model_skills_page(docs_repo)
+        assert "*(override)*" in page
+        assert "overrides the core skill" in page
+
+
+def build_model_skills_page(root: Path) -> str:
+    from scripts.build_docs import render_skills_page
+
+    return render_skills_page(build_model(root))
+
+
+class TestPersonaAndUnwiredRendering:
+    def test_base_settings_false_preset_hooks_render(self, tmp_path: Path) -> None:
+        # A persona-style preset (base_settings false, preset-only settings) that
+        # wires its own hook exercises the _merged_settings_for preset-only branch.
+        root = tmp_path
+        _write(
+            root / "core" / "settings-base.json",
+            _base_settings({}),
+        )
+        _write(
+            root / "core" / "hooks" / "inject.py",
+            '"""SessionStart hook: inject a persona."""\n',
+        )
+        _write(
+            root / "core" / "skills" / "a" / "SKILL.md",
+            "---\nname: a\ndescription: A.\n---\n",
+        )
+        _write(
+            root / "presets" / "persona-x" / "manifest.json",
+            json.dumps(
+                {
+                    "name": "persona-x",
+                    "description": "Persona.",
+                    "version": "1.0.0",
+                    "base_settings": False,
+                    "core": {"skills": [], "agents": [], "hooks": ["inject.py"]},
+                    "preset_skills": [],
+                }
+            ),
+        )
+        _write(
+            root / "presets" / "persona-x" / "settings-preset.json",
+            _base_settings(
+                {
+                    "SessionStart": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": 'uv run "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/inject.py"',
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ),
+        )
+        model = build_model(root)
+        inject = next(h for h in model.hooks if h.name == "inject.py")
+        assert inject.events == ("SessionStart",)
+        persona = next(p for p in model.presets if p.name == "persona-x")
+        assert persona.is_persona is True
+
+
+class TestFirstSentenceAndEscaping:
+    def test_first_sentence_keeps_abbreviations(self) -> None:
+        from scripts.build_docs import _first_sentence
+
+        assert (
+            _first_sentence("Deploy the service, e.g. AWS Lambda. Use when shipping.")
+            == "Deploy the service, e.g. AWS Lambda."
+        )
+
+    def test_first_sentence_keeps_bare_number(self) -> None:
+        from scripts.build_docs import _first_sentence
+
+        assert _first_sentence("Targets Python 3. Modern syntax.").startswith(
+            "Targets Python 3."
+        )
+
+    def test_preset_readme_escapes_name_and_role(self) -> None:
+        from scripts.build_docs import AgentDoc
+
+        agents = [
+            AgentDoc(
+                name="a|b", description="x.", role="r|s", skills_add=(), source="dist"
+            )
+        ]
+        out = render_preset_readme(name="d", description="", skills=[], agents=agents)
+        assert "a\\|b" in out
+        assert "r\\|s" in out
+
+
+class TestMarkerIntegrity:
+    def test_block_containing_own_end_marker_raises(self) -> None:
+        text = "<!-- BEGIN GENERATED: x -->\n<!-- END GENERATED: x -->\n"
+        bad = "line1\n<!-- END GENERATED: x -->\nline2"
+        with pytest.raises(DocsError, match="its own END marker"):
+            rewrite_markers(text, {"x": bad})
+
+    def test_orphaned_begin_marker_raises(self) -> None:
+        text = "<!-- BEGIN GENERATED: x -->\nbody\n"  # no END
+        with pytest.raises(DocsError, match="Unpaired or id-mismatched"):
+            rewrite_markers(text, {"x": "C"})
+
+    def test_id_mismatched_markers_raise(self) -> None:
+        text = "<!-- BEGIN GENERATED: counts -->\n<!-- END GENERATED: countz -->\n"
+        with pytest.raises(DocsError, match="Unpaired or id-mismatched"):
+            rewrite_markers(text, {"counts": "C"})
 
 
 class TestRewriteMarkers:
@@ -265,7 +450,13 @@ class TestGenerateAndCheck:
     def test_generate_writes_reference_pages(self, docs_repo: Path) -> None:
         written = write_docs(docs_repo)
         names = {p.name for p in written}
-        assert {"skills.md", "agents.md", "hooks.md", "presets.md", "methodology.md"} <= names
+        assert {
+            "skills.md",
+            "agents.md",
+            "hooks.md",
+            "presets.md",
+            "methodology.md",
+        } <= names
         assert (docs_repo / "docs" / "reference" / "skills.md").exists()
 
     def test_check_clean_after_write(self, docs_repo: Path) -> None:

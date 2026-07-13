@@ -28,3 +28,4 @@ scripts/installer/presets/*
 .afk/worktrees/
 .afk/transcripts/
 .afk/conductor/
+.coverage
