@@ -48,6 +48,8 @@ For each accepted finding, convert its proposed test into a table row:
 
 Ask user to confirm the total test count. If the count would be 0 (excluding T00), re-prompt once.
 
+Record every ID assigned this session (append-mode additions, or all non-T00 IDs for a new suite) as a comma-separated list in the state file's `new_test_ids` field. Phase 3 consumes this list to know which rows need a no-skill RED baseline — do not include T00 or any pre-existing row that was not added in this Grill session.
+
 ## Step 4 — Set Config
 
 Ask target pass rate (default 90%) and max iterations (default 5). Record in state file. Advance `current_phase` to `baseline`. Log: `{YYYY-MM-DD} — Grill complete. Suite: {total} tests. Target: {rate}%. Max: {max} iterations.`

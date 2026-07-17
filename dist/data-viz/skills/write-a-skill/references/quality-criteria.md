@@ -40,6 +40,7 @@ The agent checks these automatically after implementation. All must pass before 
 - [ ] No time-sensitive information (dates, versions that will expire)
 - [ ] All reference files listed in SKILL.md actually exist
 - [ ] No duplicate content between SKILL.md and reference files
+- [ ] For discipline/process skills: at least one pressure scenario exists in `tests.md` with a recorded no-skill RED failure (see [pressure-testing.md](pressure-testing.md))
 
 ---
 

@@ -36,7 +36,7 @@ Read `{skill_path}`. On the first iteration (iteration 1), if `core/skills/{slug
 
 ### Step B — Read annotated failures
 
-Read `{tests_path}`. Extract all rows where Result = `fail`. These are the failure cases to address.
+Read `{tests_path}`. Extract all rows where Result = `fail`. These are the failure cases to address. If a `## RED Baseline (no-skill)` table is present, also extract it.
 
 ### Step C — Dispatch Skill Writer
 
@@ -44,6 +44,7 @@ Adopt the `skill-writer` agent identity. Provide:
 
 - Full skill content (from Step A)
 - Annotated failure rows (from Step B)
+- The `## RED Baseline (no-skill)` table, if present (from Step B) — the verbatim no-skill rationalizations tell the writer what loophole a failing test actually exploits, not just its Expected Behavior text
 - Strategy guidance (if available from Step H of a previous iteration)
 
 Receive: complete rewritten SKILL.md content (valid Markdown with YAML frontmatter, ≤100 lines).

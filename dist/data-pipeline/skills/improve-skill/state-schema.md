@@ -20,6 +20,7 @@ best_score:
 best_iteration: 0
 prd_issue:
 baseline_score:
+new_test_ids:
 stall_count: 0
 created: { YYYY-MM-DD }
 updated: { YYYY-MM-DD }
@@ -47,6 +48,7 @@ updated: { YYYY-MM-DD }
 - **best_iteration:** Iteration number that produced `best_score`.
 - **prd_issue:** Optional issue number that this improvement run is associated with. Omit if no issue is tracked. Populated during Phase 1 if the user provides an issue number.
 - **baseline_score:** Score from Phase 3 before any iteration. Set once; never updated.
+- **new_test_ids:** Comma-separated list of test IDs added during the current Grill session (Phase 2 Step 3). Consumed by Phase 3's no-skill RED baseline step to scope which rows need a fresh no-skill run; cleared once consumed.
 - **stall_count:** Number of consecutive iterations without improvement. Incremented on no-change, reset to `0` on improvement or after strategy dispatch. Read at loop start for resume support.
 - **created / updated:** ISO date (YYYY-MM-DD). `updated` refreshed on every state write.
 

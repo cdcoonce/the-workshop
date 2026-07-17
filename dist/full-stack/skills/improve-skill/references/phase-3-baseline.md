@@ -13,9 +13,29 @@ Read `{tests_path}`. This is the test table with columns:
 
 The Result and Reason columns are blank — either cleared after a previous run or freshly created. Do not modify them before dispatching the QA Tester.
 
-## Step 3 — Dispatch QA Tester
+## Step 3 — RED: No-Skill Baseline
 
-Dispatch a subagent using the `qa-tester` agent identity (defined in Phase 6).
+Read `new_test_ids` from the state file. If blank or missing, skip this step entirely and proceed to Step 4 (there is nothing new to RED-test this session).
+
+For each test ID in `new_test_ids`, look up its `Scenario` and `Expected Behavior` row in `{tests_path}`. For each such row:
+
+1. Dispatch a subagent using the `qa-tester` agent identity in **scenario-execution mode** (see `core/agents/qa-tester/AGENT.md`), with **no skill loaded** — do not paste any SKILL.md content into the dispatch.
+2. Instruct the subagent to act out the `Scenario` as if it were a real task and to record its verbatim behavior and any rationalization for deviating from the `Expected Behavior`.
+3. Compare the subagent's actual behavior to the `Expected Behavior`:
+   - **Fails to produce Expected Behavior:** Keep the row. Record the subagent's verbatim rationalization text.
+   - **Already produces Expected Behavior with no skill loaded:** Discard the row — this test measures nothing, since the behavior it wants already happens by default. Remove it from `{tests_path}` and from `new_test_ids`.
+
+**Discard rule:** Any test the no-skill baseline already passes must be discarded from the suite, not merely flagged. A test that a no-skill agent satisfies unprompted cannot tell you whether the skill is doing any work.
+
+**All-discarded guard:** If every test in `new_test_ids` is discarded, warn the user that this Grill session produced no tests capable of detecting an unskilled failure, and ask whether to re-run Step 2 of Phase 2 (Grill) with guidance to probe harder, or proceed with the existing suite unchanged.
+
+Append the surviving rows' verbatim rationalizations as a `## RED Baseline (no-skill)` table to `{tests_path}` (columns: `ID`, `No-Skill Behavior`, `Rationalization`). This table becomes input to Phase 4 Step C so rewrites close the actual observed loophole, not just the Expected Behavior text.
+
+Clear `new_test_ids` in the state file once this step completes (whether rows were kept, discarded, or the step was skipped).
+
+## Step 4 — Dispatch QA Tester
+
+Dispatch a subagent using the `qa-tester` agent identity (defined in Phase 6) in **static text-judge mode**.
 
 Provide the subagent with:
 
@@ -34,7 +54,7 @@ Wait for the QA Tester subagent to return before proceeding.
 
 If the returned output does not contain a line matching `Score: {N}/{total} = {pct}%`, or if any Result/Reason cells are empty, report the malformed response to the user and halt. Do not write any state.
 
-## Step 4 — Record baseline
+## Step 5 — Record baseline
 
 After the QA Tester returns:
 
@@ -49,7 +69,7 @@ After the QA Tester returns:
    {YYYY-MM-DD} — Baseline score: {pct}%. {N}/{total} tests passed.
    ```
 
-## Step 5 — Check baseline vs target
+## Step 6 — Check baseline vs target
 
 Compare `baseline_score` to `target_pass_rate` (both from state file).
 

@@ -44,9 +44,9 @@ After completion: test suite is written to `{tests_path}`; config (target pass r
 
 ## Phase 3: Baseline
 
-Read `core/skills/improve-skill/references/phase-3-baseline.md` using the Read tool, then follow its instructions exactly.
+Read `core/skills/improve-skill/references/phase-3-baseline.md` using the Read tool, then follow its instructions exactly. Before scoring the current skill, this phase runs a RED step: each test added in Phase 2 (tracked via `new_test_ids`) is first run against a no-skill subagent, and any test the no-skill baseline already passes is discarded — it measures nothing.
 
-After completion: `baseline_score` is recorded in state; iteration 0 is added to the Scores table; `best_score` is initialized to `baseline_score`.
+After completion: surviving tests have a recorded no-skill rationalization (`## RED Baseline (no-skill)` table in `{tests_path}`); `baseline_score` is recorded in state; iteration 0 is added to the Scores table; `best_score` is initialized to `baseline_score`.
 
 ---
 

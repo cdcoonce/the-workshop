@@ -33,7 +33,8 @@ Create all skill files following the approved blueprint. Fully automated — the
 Then run **Phase 4b: Review** using criteria from [quality-criteria.md](references/quality-criteria.md):
 
 1. **Auto-verify** — Check measurable criteria (line count, description length, triggers, reference depth). Fix any failures before proceeding.
-2. **Subjective review** — Present the checklist to the user via `AskUserQuestion`. If the user flags issues, revise and re-verify.
+2. **Behavioral gate (discipline/process skills only)** — If the skill's job is to make an agent choose correctly under pressure (not merely convey information), follow [pressure-testing.md](references/pressure-testing.md) to construct at least one pressure scenario, run its no-skill RED baseline, and record the result in the skill's `tests.md`. Do not ship without at least one recorded no-skill failure — a scenario the no-skill baseline already passes is discarded per the pressure-testing discard rule.
+3. **Subjective review** — Present the checklist to the user via `AskUserQuestion`. If the user flags issues, revise and re-verify.
 
 ## Skill Structure
 
