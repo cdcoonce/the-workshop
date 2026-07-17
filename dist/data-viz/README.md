@@ -20,6 +20,7 @@ Intuitive, context-forward chart design in React (Recharts/Nivo) — right chart
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
 | `/dev-cycle` | Orchestrate the full GitHub-issues-driven development lifecycle. |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). |
+| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. |
