@@ -35,11 +35,12 @@ See `.claude/docs/agent-matching.md` for the full scoring rubric, tiebreaking ru
 
 ### 3. Execute Task with Subagent
 
-For each task, dispatch fresh subagent with resolved agent identity:
+For each task, dispatch fresh subagent with resolved agent identity. **Model is required** — an omitted model silently inherits the orchestrator's own model, typically the most capable and most expensive tier. Select a tier using the rubric in `.claude/docs/agent-matching.md#model-selection` (implementer tasks default to `mid`; reserve `cheapest` for purely mechanical work).
 
 ```
 Task tool (general-purpose):
   description: "Implement Task N: [task name]"
+  model: {tier}  # required — cheapest | mid | frontier, see agent-matching.md#model-selection
   prompt: |
     # Agent Identity (injected from agent discovery, omit if generic)
     You are [{agent.name}]: {agent.description}
@@ -62,10 +63,11 @@ Task tool (general-purpose):
 
 ### 4. Review Subagent's Work
 
-Dispatch code-reviewer subagent:
+Dispatch code-reviewer subagent. **Model is required** — reviewer dispatches never go below `mid` tier (see `.claude/docs/agent-matching.md#model-selection`):
 
 ```
 Task tool (code-reviewer):
+  model: {tier}  # required — mid or frontier, never cheapest
   WHAT_WAS_IMPLEMENTED: [from subagent's report]
   PLAN_OR_REQUIREMENTS: Task N from [plan-file]
   BASE_SHA: [commit before task]

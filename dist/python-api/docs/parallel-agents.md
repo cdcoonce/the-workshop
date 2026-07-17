@@ -50,11 +50,13 @@ Each agent gets:
 
 ### 4. Dispatch in Parallel
 
+**Model is required for each dispatch** — an omitted model silently inherits the orchestrator's own model, typically the most capable and most expensive tier. Select a tier per task using the rubric in `.claude/docs/agent-matching.md#model-selection`.
+
 ```python
 # In Claude Code environment
-Task("Fix tests/test_validation.py failures")
-Task("Fix tests/test_api_responses.py failures")
-Task("Fix tests/test_db_pool.py failures")
+Task("Fix tests/test_validation.py failures", model={tier})   # required — cheapest | mid | frontier
+Task("Fix tests/test_api_responses.py failures", model={tier})
+Task("Fix tests/test_db_pool.py failures", model={tier})
 # All three run concurrently
 ```
 

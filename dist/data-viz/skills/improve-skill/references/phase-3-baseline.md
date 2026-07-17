@@ -15,7 +15,7 @@ The Result and Reason columns are blank — either cleared after a previous run 
 
 ## Step 3 — Dispatch QA Tester
 
-Dispatch a subagent using the `qa-tester` agent identity (defined in Phase 6).
+Dispatch a subagent using the `qa-tester` agent identity (defined in Phase 6). **Model is required** — set it per the rubric in `.claude/docs/agent-matching.md#model-selection` (QA Tester is a reviewer role: never below `mid` tier). An omitted model silently inherits the orchestrator's own model.
 
 Provide the subagent with:
 

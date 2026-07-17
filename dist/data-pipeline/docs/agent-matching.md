@@ -124,6 +124,32 @@ description: Reviews auth patterns, input validation, and OWASP top 10
 
 Good descriptions answer: **"What specific things do I build or review, and with what tools or patterns?"** Name the output artifacts and the technology stack, not just the abstract activity.
 
+## Model Selection
+
+Agent matching picks WHICH agent to dispatch. Model selection picks WHICH model tier that agent runs on. Every dispatch site requires both.
+
+### Why This Is Required
+
+A dispatch that omits a model silently inherits the orchestrator's own model — typically the most capable and most expensive tier — even for mechanical work that doesn't need it. Stating a model explicitly at every dispatch site is the only way to avoid this silent inheritance.
+
+### Role-to-Tier Rubric
+
+| Work                                                                                                                                                  | Tier     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Mechanical or transcription work where the plan already contains the content (applying a scripted edit, filling in a table, copying content verbatim) | cheapest |
+| Standard implementation and integration work (writing a feature per a plan task, wiring a call site, fixing a scoped bug)                             | mid      |
+| Architecture, design synthesis, and final review (system design, plan review, the final pass over a completed feature)                                | frontier |
+
+**Reviewer floor:** Reviewer dispatches never go below mid tier — reviewing requires the judgment to catch what an implementer missed, and a reviewer that shares the implementer's blind spots at a cheaper tier defeats the point of review.
+
+### Turn-Count Economics
+
+Turn count beats token price. The cheapest tier routinely takes 2-3x the turns to reach the same result, so a task that looks cheaper on paper can cost more in wall-clock time and total tokens once retries are counted. Don't push judgment work down-tier to save tokens — reserve the cheapest tier for work that is genuinely mechanical, not merely "simple-sounding."
+
+### Tier Vocabulary
+
+Use tier names (`cheapest` / `mid` / `frontier`), not specific model names, in dispatch templates — tier names survive model renames. Current mapping: `cheapest` = Haiku, `mid` = Sonnet, `frontier` = Opus.
+
 ## Reusable Prompt Fragment
 
 Include this block verbatim in orchestrator prompts when agent selection is required. Replace `{role}` with `implementer` or `reviewer`.

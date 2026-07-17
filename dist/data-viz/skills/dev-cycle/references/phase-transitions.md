@@ -39,6 +39,7 @@ See the 7-Phase Pipeline table in SKILL.md for delegation targets. This document
   - If branch already exists and belongs to this feature (per state file): check it out
   - If branch exists but is unrecognized: error, ask user to resolve
 - **Handoff:** Load plan file. Dispatch one subagent per issue following `subagent-development` methodology, each invoking `tdd`. Code review between each dispatch.
+- **Model (required):** Every dispatch — implementer and reviewer — must set `model` explicitly per the rubric in `.claude/docs/agent-matching.md#model-selection`. An omitted model silently inherits the orchestrator's own model. Implementer dispatches default to `mid`; reviewer dispatches never go below `mid`.
 - **State updates:** After each subagent completes:
   - Log dispatch and result: `"Subagent completed for issue #N: pass/fail"`
   - Log code review result: `"Code review after issue #N: clean/blocking"`
