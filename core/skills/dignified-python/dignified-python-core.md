@@ -83,7 +83,7 @@ Exceptions are ONLY acceptable at:
 **Default: Let exceptions bubble up**
 
 For detailed exception handling patterns including B904 chaining, third-party API examples, and
-anti-patterns, see `references/exception-handling.md`.
+anti-patterns, see `references/advanced/exception-handling.md`.
 
 ---
 
