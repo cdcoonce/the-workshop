@@ -31,6 +31,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/tdd` | Test-driven development with red-green-refactor loop. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/triage-issue` | Triage a bug or issue by exploring the codebase to find root cause, then create a GitHub issue with a TDD-based fix plan. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/write-a-prd` | Create a PRD through user interview, codebase exploration, and module design, then submit as a GitHub issue. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 
@@ -198,6 +199,12 @@ Test-driven development with red-green-refactor loop. Use when user wants to bui
 *universal*
 
 Triage a bug or issue by exploring the codebase to find root cause, then create a GitHub issue with a TDD-based fix plan. Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem.
+
+### `/using-workflow`
+
+*universal*
+
+Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action.
 
 ### `/write-a-prd`
 

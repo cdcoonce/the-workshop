@@ -34,6 +34,7 @@ Notebooks, R/Python scripts, statistical analysis, exploratory work
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
 | `/triage-issue` | Triage a bug or issue by exploring the codebase to find root cause, then create a GitHub issue with a TDD-based fix plan. |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/write-a-prd` | Create a PRD through user interview, codebase exploration, and module design, then submit as a GitHub issue. |
 | `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. |
 

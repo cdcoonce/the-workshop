@@ -9,12 +9,12 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`analysis`** | project | 24 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
-| **`claude-tooling`** | project | 24 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
-| **`data-pipeline`** | project | 26 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
-| **`data-viz`** | project | 25 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
-| **`full-stack`** | project | 25 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
-| **`python-api`** | project | 25 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
+| **`analysis`** | project | 25 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
+| **`claude-tooling`** | project | 25 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
+| **`data-pipeline`** | project | 27 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
+| **`data-viz`** | project | 26 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
+| **`full-stack`** | project | 26 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
+| **`python-api`** | project | 26 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
@@ -36,7 +36,7 @@ Notebooks, R/Python scripts, statistical analysis, exploratory work
 - Documented assumptions and data sources
 - Deterministic, re-runnable notebooks
 
-**Skills (24):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (7):** `analysis-builder`, `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
 
@@ -54,7 +54,7 @@ Developing Claude skills, hooks, agents, and template configurations
 - Progressive disclosure over monolithic instructions
 - Regenerate docs and dist after changing a component
 
-**Skills (24):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (8):** `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`, `tdd-implementer`
 
@@ -72,7 +72,7 @@ ETL/ELT pipelines, SQL transformations, scheduled data jobs
 - Idempotent, re-runnable pipeline stages
 - Data-quality checks on every stage
 
-**Skills (26):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (27):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (8):** `code-reviewer`, `data-quality-reviewer`, `pipeline-builder`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
 
@@ -90,7 +90,7 @@ Intuitive, context-forward chart design in React (Recharts/Nivo) — right chart
 - Restrained, accessible color palettes
 - Annotate for insight over decoration
 
-**Skills (25):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (26):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (6):** `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
 
@@ -108,7 +108,7 @@ React/Next.js frontend + Python backend
 - Shared fixture patterns across the stack
 - Typed API contracts between layers
 
-**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (26):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (9):** `backend-builder`, `code-reviewer`, `frontend-builder`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`, `ux-reviewer`
 
@@ -126,7 +126,7 @@ Python backend services — Lambda, FastAPI, Flask
 - Structured logging over print
 - Type hints on public functions
 
-**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `write-a-prd`, `write-a-skill`
+**Skills (26):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (8):** `api-builder`, `code-reviewer`, `qa-tester`, `security-reviewer`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
 
