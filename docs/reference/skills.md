@@ -16,6 +16,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/dev-cycle` | Orchestrate the full GitHub-issues-driven development lifecycle. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
@@ -107,6 +108,12 @@ Orchestrate the full GitHub-issues-driven development lifecycle. 7-phase pipelin
 *universal*
 
 Production Python coding standards with automatic version detection (3.10-3.13). Use when writing,
+
+### `/finish-branch`
+
+*universal*
+
+Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. Do not use mid-implementation or while the test suite is red.
 
 ### `/github-cli`
 

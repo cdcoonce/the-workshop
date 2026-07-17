@@ -5,7 +5,7 @@
 A **Claude Code plugin** that gives any project a fully configured AI development environment — skills, methodology docs, agents, and hooks — picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
-**23 universal skills · 6 core agents · 7 hooks · 7 project presets · 5 persona plugins**
+**24 universal skills · 6 core agents · 7 hooks · 7 project presets · 5 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -124,12 +124,12 @@ Each preset targets a project type and ships a curated set of skills, agents, ho
 <!-- BEGIN GENERATED: presets-table -->
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`analysis`** | project | 23 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
-| **`claude-tooling`** | project | 23 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
-| **`data-pipeline`** | project | 25 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
-| **`data-viz`** | project | 24 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
-| **`full-stack`** | project | 24 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
-| **`python-api`** | project | 24 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
+| **`analysis`** | project | 24 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
+| **`claude-tooling`** | project | 24 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
+| **`data-pipeline`** | project | 26 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
+| **`data-viz`** | project | 25 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
+| **`full-stack`** | project | 25 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
+| **`python-api`** | project | 25 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
@@ -158,6 +158,7 @@ These ship with every preset:
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/dev-cycle` | Orchestrate the full GitHub-issues-driven development lifecycle. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
