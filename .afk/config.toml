@@ -27,6 +27,14 @@ max_retries = 2
 timeout_seconds = 1800
 max_run_cost_usd = 15.0  # circuit-breaker: stop the drain if a run's cumulative cost exceeds this (unattended-F2 safety)
 
+# Required since the driver's model-alias validation: default_tier resolves to
+# 'cheap', so model.cheap must be set. Mirrors orbit-wars' convention; issue
+# Budget lines (tier: cheap|frontier) map onto these aliases.
+[model]
+cheap = "sonnet"
+frontier = "opus"
+default_tier = "cheap"
+
 # Scheduled --cycle: read-only producers only (no executor seeded here),
 # so each pass files scout proposals + harvests prompt-rules from merged-PR
 # review comments. Pure proposal/telemetry data; zero containment exposure.
