@@ -192,14 +192,14 @@ class MarkdownAnalyzer:
         lines = content.splitlines()
 
         # Run all checks
-        issues.extend(self._check_heading_structure(content, lines, file_path))
-        issues.extend(self._check_heading_levels(content, lines, file_path))
-        issues.extend(self._check_duplicate_headings(content, lines, file_path))
-        issues.extend(self._check_links(content, lines, file_path))
-        issues.extend(self._check_images(content, lines, file_path))
-        issues.extend(self._check_reference_links(content, lines, file_path))
+        issues.extend(self._check_heading_structure(content, file_path))
+        issues.extend(self._check_heading_levels(content, file_path))
+        issues.extend(self._check_duplicate_headings(content, file_path))
+        issues.extend(self._check_links(content, file_path))
+        issues.extend(self._check_images(content, file_path))
+        issues.extend(self._check_reference_links(content, file_path))
         issues.extend(self._check_formatting(content, lines, file_path))
-        issues.extend(self._check_code_blocks(content, lines, file_path))
+        issues.extend(self._check_code_blocks(content, file_path))
         issues.extend(self._check_encoding_corruption(content, lines, file_path))
 
         elapsed = time.time() - start_time
@@ -296,7 +296,6 @@ class MarkdownAnalyzer:
     def _check_heading_structure(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for proper heading structure.
@@ -305,8 +304,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -371,7 +368,6 @@ class MarkdownAnalyzer:
     def _check_heading_levels(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for skipped heading levels.
@@ -380,8 +376,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -422,7 +416,6 @@ class MarkdownAnalyzer:
     def _check_duplicate_headings(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for duplicate heading text anywhere in the document.
@@ -435,8 +428,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -474,7 +465,6 @@ class MarkdownAnalyzer:
     def _check_links(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for link issues.
@@ -483,8 +473,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -570,7 +558,6 @@ class MarkdownAnalyzer:
     def _check_images(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for image issues.
@@ -579,8 +566,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -639,7 +624,6 @@ class MarkdownAnalyzer:
     def _check_reference_links(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for undefined reference links.
@@ -648,8 +632,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
@@ -778,7 +760,6 @@ class MarkdownAnalyzer:
     def _check_code_blocks(
         self,
         content: str,
-        lines: list[str],
         file_path: Optional[Path],
     ) -> list[Issue]:
         """Check for code block issues.
@@ -787,8 +768,6 @@ class MarkdownAnalyzer:
         ----------
         content : str
             The Markdown content.
-        lines : list[str]
-            Lines of the content.
         file_path : Optional[Path]
             Path to the source file.
 
