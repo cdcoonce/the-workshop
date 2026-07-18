@@ -132,3 +132,29 @@ description: All decision checklists consolidated for final review before commit
 - [ ] Would tests need to mock this value?
 
 If any answer is "yes", wrap in a `@cache`-decorated function instead.
+
+---
+
+## Reference File Map
+
+Reference documents are organized across top-level files and subdirectories:
+
+### Core References (alongside SKILL.md)
+
+- **`dignified-python-core.md`** - Essential standards (always loaded)
+- **`cli-patterns.md`** - Command-line interface patterns (click, argparse)
+- **`subprocess.md`** - Subprocess operations
+
+### Version-Specific References (`versions/`)
+
+- **`versions/python-3.10.md`** - Features available in Python 3.10+
+- **`versions/python-3.11.md`** - Features available in Python 3.11+
+- **`versions/python-3.12.md`** - Features available in Python 3.12+
+- **`versions/python-3.13.md`** - Features available in Python 3.13+
+
+### Advanced Topics (`references/`)
+
+- **`exception-handling.md`** - LBYL patterns, error boundaries
+- **`interfaces.md`** - ABC and Protocol patterns
+- **`typing-advanced.md`** - Advanced typing patterns
+- **`api-design.md`** - API design principles

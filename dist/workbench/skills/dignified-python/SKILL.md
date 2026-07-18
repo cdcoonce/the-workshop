@@ -9,34 +9,19 @@ description: Production Python coding standards with automatic version detection
 # Dignified Python Coding Standards Skill
 
 Production-quality Python coding standards for writing clean, maintainable, modern Python code
-(versions 3.10-3.13).
+(versions 3.10-3.13). General Python standards, not Dagster-specific — use `/dagster-expert` for
+Dagster patterns.
 
 ## When to Use This Skill
 
 Auto-invoke when users ask about:
 
-- "make this pythonic" / "is this good python"
+- "make this pythonic" / "is this good python" / "code review" / "improve this code"
 - "type hints" / "type annotations" / "typing"
 - "LBYL vs EAFP" / "exception handling"
 - "pathlib vs os.path" / "path operations"
 - "CLI patterns" / "click usage"
-- "code review" / "improve this code"
 - Any Python code quality or standards question
-
-**Note**: This skill is **general Python standards**, not Dagster-specific. Use
-`/dagster-expert` for Dagster patterns.
-
-## When to Use This Skill vs. Others
-
-| User Need                   | Use This Skill              | Alternative Skill |
-| --------------------------- | --------------------------- | ----------------- |
-| "make this pythonic"        | ✅ Yes - Python standards   |                   |
-| "is this good python"       | ✅ Yes - code quality       |                   |
-| "type hints"                | ✅ Yes - typing guidance    |                   |
-| "LBYL vs EAFP"              | ✅ Yes - exception patterns |                   |
-| "pathlib vs os.path"        | ✅ Yes - path handling      |                   |
-| "Dagster-specific patterns" | ❌ No                       | `/dagster-expert` |
-| "CLI argument parsing"      | ✅ Yes - CLI patterns       |                   |
 
 ## Core Knowledge (ALWAYS Loaded)
 
@@ -51,107 +36,30 @@ Auto-invoke when users ask about:
 3. `.python-version` file - Contains version like `3.12` or `3.12.0`
 4. Default to Python 3.12 if no version specifier found
 
-**Once identified, load the appropriate version-specific file:**
+**Once identified, load the appropriate version-specific file:** `versions/python-3.10.md`,
+`versions/python-3.11.md`, `versions/python-3.12.md`, or `versions/python-3.13.md`.
 
-- Python 3.10: Load `versions/python-3.10.md`
-- Python 3.11: Load `versions/python-3.11.md`
-- Python 3.12: Load `versions/python-3.12.md`
-- Python 3.13: Load `versions/python-3.13.md`
+## Reference Routing
 
-## Conditional Loading (Load Based on Task Patterns)
+Core knowledge covers 80%+ of Python code patterns. Load additional references only when the
+task matches a trigger below. See `references/checklists.md` for the full reference file map
+(core, version-specific, and advanced-topic files).
 
-Core files above cover 80%+ of Python code patterns. Only load these additional files when you
-detect specific patterns:
-
-Pattern detection examples:
-
-- If task mentions "click" or "CLI" -> Load `cli-patterns.md`
-- If task mentions "subprocess" -> Load `subprocess.md`
-
-## Reference Documentation Structure
-
-Reference documents are organized across top-level files and subdirectories:
-
-### Core References (alongside SKILL.md)
-
-- **`dignified-python-core.md`** - Essential standards (always loaded)
-- **`cli-patterns.md`** - Command-line interface patterns (click, argparse)
-- **`subprocess.md`** - Subprocess operations
-
-### Version-Specific References (`versions/`)
-
-- **`versions/python-3.10.md`** - Features available in Python 3.10+
-- **`versions/python-3.11.md`** - Features available in Python 3.11+
-- **`versions/python-3.12.md`** - Features available in Python 3.12+
-- **`versions/python-3.13.md`** - Features available in Python 3.13+
-
-### Advanced Topics (`references/`)
-
-- **`exception-handling.md`** - LBYL patterns, error boundaries
-- **`interfaces.md`** - ABC and Protocol patterns
-- **`typing-advanced.md`** - Advanced typing patterns
-- **`api-design.md`** - API design principles
-
-## When to Read Each Reference Document
-
-### `references/exception-handling.md`
-
-**Read when**:
-
-- Writing try/except blocks
-- Wrapping third-party APIs that may raise
-- Seeing or writing `from e` or `from None`
-- Unsure if LBYL alternative exists
-
-### `references/interfaces.md`
-
-**Read when**:
-
-- Creating ABC or Protocol classes
-- Writing @abstractmethod decorators
-- Designing gateway layer interfaces
-- Choosing between ABC and Protocol
-
-### `references/typing-advanced.md`
-
-**Read when**:
-
-- Using typing.cast()
-- Creating Literal type aliases
-- Narrowing types in conditional blocks
-
-### `references/module-design.md`
-
-**Read when**:
-
-- Creating new Python modules
-- Adding module-level code (beyond simple constants)
-- Using @cache decorator at module level
-- Seeing Path() or computation at module level
-- Considering inline imports
-
-### `references/api-design.md`
-
-**Read when**:
-
-- Adding default parameter values to functions
-- Defining functions with 5 or more parameters
-- Using ThreadPoolExecutor.submit()
-- Reviewing function signatures
-
-### `references/checklists.md`
-
-**Read when**:
-
-- Final review before committing Python code
-- Unsure if you've followed all rules
-- Need a quick lookup of requirements
+| Trigger                                                                                                             | Load                               |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| "click" or "CLI" mentioned                                                                                          | `cli-patterns.md`                  |
+| "subprocess" mentioned                                                                                              | `subprocess.md`                    |
+| Writing try/except, wrapping third-party APIs, seeing `from e`/`from None`, unsure if LBYL exists                   | `references/exception-handling.md` |
+| Creating ABC/Protocol classes, `@abstractmethod`, gateway interfaces, choosing ABC vs Protocol                      | `references/interfaces.md`         |
+| Using `typing.cast()`, `Literal` aliases, narrowing types in conditionals                                           | `references/typing-advanced.md`    |
+| Creating modules, module-level code, `@cache` at module scope, `Path()`/computation at module level, inline imports | `references/module-design.md`      |
+| Adding default parameters, functions with 5+ params, `ThreadPoolExecutor.submit()`, signature review                | `references/api-design.md`         |
+| Final review before commit, unsure if all rules followed                                                            | `references/checklists.md`         |
 
 ## How to Use This Skill
 
 1. **Core knowledge** is loaded automatically (LBYL, pathlib, basic imports, anti-patterns)
-2. **Version detection** happens once - identify the minimum Python version and load the appropriate
-   version file
+2. **Version detection** happens once - identify the minimum Python version and load the
+   appropriate version file
 3. **Reference documents** are loaded on-demand based on the triggers above
-4. **Additional patterns** may require extra loading (CLI patterns, subprocess)
-5. **Each file is self-contained** with complete guidance for its domain
+4. **Each file is self-contained** with complete guidance for its domain
