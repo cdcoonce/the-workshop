@@ -5,6 +5,18 @@
   },
   "plugins": [
     {
+      "name": "advisor-product-design",
+      "source": {
+        "source": "local",
+        "path": "./dist/advisor-product-design"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
       "name": "persona-pair-programmer",
       "source": {
         "source": "local",

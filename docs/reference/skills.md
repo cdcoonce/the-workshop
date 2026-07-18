@@ -40,6 +40,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
+| `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
@@ -224,6 +225,12 @@ Use when user wants to write a PRD, create a product requirements document, or p
 *universal*
 
 Create new agent skills with proper structure, progressive disclosure, and bundled resources. Use when user wants to create, write, or build a new skill.
+
+### `/advisor-product-design`
+
+*`advisor-product-design` preset*
+
+Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. Artifact-first design reviews with severity-tagged findings and named principles. Use when the user shares a UI artifact for review, asks a design/UX question, or wants a sounding board on a product decision.
 
 ### `/chart-taste`
 

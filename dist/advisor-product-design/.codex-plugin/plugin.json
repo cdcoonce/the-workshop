@@ -1,0 +1,20 @@
+{
+  "name": "advisor-product-design",
+  "version": "0.1.0",
+  "description": "Product-design/UI-UX advisor persona \u2014 artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "advisor-product-design",
+    "shortDescription": "Product-design/UI-UX advisor persona \u2014 artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
+    "longDescription": "Product-design/UI-UX advisor persona \u2014 artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}
