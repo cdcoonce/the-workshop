@@ -14,6 +14,7 @@ if not file_path:
 PROTECTED_DIRS = ["node_modules", ".git"]
 PROTECTED_FILENAMES = ["package-lock.json", "uv.lock"]
 PROTECTED_BASENAME_PREFIXES = [".env"]
+ALLOWED_TEMPLATE_SUFFIXES = [".example", ".sample", ".template", ".dist"]
 
 path = PurePath(file_path)
 basename = path.name
@@ -36,6 +37,8 @@ for filename in PROTECTED_FILENAMES:
 
 for prefix in PROTECTED_BASENAME_PREFIXES:
     if basename.startswith(prefix):
+        if any(basename.endswith(suffix) for suffix in ALLOWED_TEMPLATE_SUFFIXES):
+            continue
         print(
             f"Blocked: {file_path} matches protected pattern '{prefix}'",
             file=sys.stderr,

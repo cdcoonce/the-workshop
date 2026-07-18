@@ -46,6 +46,38 @@ def test_protected_path_blocks_with_reason(file_path: str, pattern: str) -> None
     assert file_path in result.stderr
 
 
+@pytest.mark.parametrize(
+    "file_path, pattern",
+    [
+        (".env.staging", ".env"),
+        (".env.production", ".env"),
+    ],
+)
+def test_env_variant_blocks_with_reason(file_path: str, pattern: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 2
+    assert pattern in result.stderr
+    assert file_path in result.stderr
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        ".env.example",
+        ".env.sample",
+        ".env.template",
+        ".env.dist",
+        "project/.env.example",
+    ],
+)
+def test_env_template_suffix_allows(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
 def test_non_protected_path_allows_silently() -> None:
     result = run_hook({"tool_input": {"file_path": "scripts/build_preset.py"}})
 
