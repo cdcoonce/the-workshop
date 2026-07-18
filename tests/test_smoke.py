@@ -168,8 +168,8 @@ class TestSmokeSkillAuthoringBudgets:
     shape, and reference depth."""
 
     def test_skill_over_line_cap_fails(self, tmp_repo: Path) -> None:
-        # "commit" is grandfathered in SKILL_LINE_CAP_ALLOWLIST, so a new,
-        # non-allowlisted core skill is needed to exercise the cap itself.
+        # Use a fresh oversized skill (not a real core skill) to exercise the cap
+        # itself, independent of the shrink-only allowlist's current contents.
         skill_src = tmp_repo / "core" / "skills" / "oversized-skill"
         skill_src.mkdir(parents=True)
         body = "\n".join(f"line {i}" for i in range(150))
@@ -197,10 +197,17 @@ class TestSmokeSkillAuthoringBudgets:
         result = smoke_test(dist)
         assert not any("line" in e.lower() for e in result.errors)
 
-    def test_allowlisted_skill_over_line_cap_passes(self, tmp_repo: Path) -> None:
-        from scripts.smoke_test import SKILL_LINE_CAP_ALLOWLIST
+    def test_allowlisted_skill_over_line_cap_passes(
+        self, tmp_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The real allowlist is shrink-only and is now empty (every grandfathered
+        # skill has been slimmed), so inject a synthetic entry to exercise the
+        # allowlist mechanism without depending on real allowlist membership.
+        import scripts.smoke_test as smoke_mod
 
-        assert "commit" in SKILL_LINE_CAP_ALLOWLIST
+        monkeypatch.setattr(
+            smoke_mod, "SKILL_LINE_CAP_ALLOWLIST", frozenset({"commit"})
+        )
         build_preset("python-api", repo_root=tmp_repo)
         dist = tmp_repo / "dist" / "python-api"
         skill_md = dist / "skills" / "commit" / "SKILL.md"

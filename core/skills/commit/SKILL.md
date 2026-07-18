@@ -58,19 +58,7 @@ docs(contributing): add setup instructions
 7. **Commit** — Use a heredoc for the message to ensure clean formatting
 8. **Verify** — Run `git status` after to confirm the commit succeeded
 
-### Multi-line Commits
-
-For commits that need a body (rare — prefer concise single-line messages):
-
-```
-<type>(<scope>): <summary>
-
-<body explaining why, not what>
-```
-
-- Blank line between summary and body
-- Body wraps at 72 characters
-- Use body only when the summary alone can't convey the reasoning
+For multi-line commits (summary + body), see the _Commit Body Best Practices_ section of [references/conventional-commits.md](references/conventional-commits.md).
 
 ## Red Flags — Stop Before Committing
 
@@ -94,34 +82,6 @@ Any of these means the commit isn't ready yet:
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
-## Examples
-
-```bash
-# Feature — new capability
-feat: add webhook notification system
-
-# Feature with scope
-feat(api): add rate limiting middleware
-
-# Fix — bug correction
-fix: prevent crash on malformed JSON input
-
-# Style — formatting only
-style: apply consistent indentation across modules
-
-# Docs — documentation
-docs: add architecture decision records
-
-# Chore — tooling/config
-chore: broaden gitignore to cover build artifacts
-
-# Test with scope
-test(auth): add integration tests for token refresh
-
-# Refactor with scope
-refactor(db): replace raw queries with query builder
-```
-
 ## Reference Documentation
 
-- [conventional-commits.md](references/conventional-commits.md) — type selection guide, breaking changes, scope strategies, multi-file commit decisions, body formatting, trailers, and common mistakes
+- [conventional-commits.md](references/conventional-commits.md) — type selection guide, breaking changes, scope strategies, multi-file commit decisions, body formatting, trailers, worked examples, and common mistakes

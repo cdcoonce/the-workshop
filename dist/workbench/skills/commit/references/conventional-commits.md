@@ -180,3 +180,31 @@ Valid keywords: `Closes`, `Fixes`, `Resolves` (and lowercase variants).
 | `chore: fix bug in login`           | Wrong type                       | `fix(auth): prevent login with expired token` |
 | `WIP`                               | Not a meaningful commit message  | Use `git stash` or a draft branch instead     |
 | `git commit -m "..." --no-verify`   | Skipping hooks hides real issues | Fix the hook failure, then commit normally    |
+
+## Worked Examples
+
+```bash
+# Feature — new capability
+feat: add webhook notification system
+
+# Feature with scope
+feat(api): add rate limiting middleware
+
+# Fix — bug correction
+fix: prevent crash on malformed JSON input
+
+# Style — formatting only
+style: apply consistent indentation across modules
+
+# Docs — documentation
+docs: add architecture decision records
+
+# Chore — tooling/config
+chore: broaden gitignore to cover build artifacts
+
+# Test with scope
+test(auth): add integration tests for token refresh
+
+# Refactor with scope
+refactor(db): replace raw queries with query builder
+```

@@ -47,13 +47,9 @@ SKILL_LINE_CAP = 100
 # Frozen at #281: the skills that already exceeded SKILL_LINE_CAP when this
 # check was introduced. Shrink-only — remove an entry once its SKILL.md drops
 # under the cap; never add a new one (see SKILL_LINE_CAP_ALLOWLIST_BASELINE).
-SKILL_LINE_CAP_ALLOWLIST = frozenset(
-    {
-        "commit",
-        "github-cli",
-        "project-context",
-    }
-)
+# Fully burned down: every grandfathered skill has been slimmed under the cap,
+# so the cap now applies to every core skill with no exceptions.
+SKILL_LINE_CAP_ALLOWLIST: frozenset[str] = frozenset()
 
 # High-water mark for SKILL_LINE_CAP_ALLOWLIST, frozen independently of it so
 # an edit to the allowlist above can't silently drag this along. Never edit
