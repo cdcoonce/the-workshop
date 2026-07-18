@@ -212,6 +212,29 @@ def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys):
     assert "installed:" in capsys.readouterr().out
 
 
+def test_uninstall_dry_run_leaves_preset_intact(tmp_path, monkeypatch, capsys):
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    _make_preset(presets, "data-pipeline")
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
+    monkeypatch.chdir(repo)
+    cli.main(["install", "--preset", "data-pipeline"])
+
+    rc = cli.main(["uninstall", "--preset", "data-pipeline", "--dry-run"])
+
+    assert rc == 0
+    assert (
+        repo
+        / ".claude"
+        / "plugins"
+        / "data-pipeline"
+        / ".claude-plugin"
+        / "plugin.json"
+    ).is_file()
+
+
 def test_uninstall_already_absent_reports_skip(tmp_path, monkeypatch, capsys):
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
