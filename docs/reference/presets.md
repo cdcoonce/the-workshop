@@ -11,6 +11,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 31 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
+| **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -53,6 +54,20 @@ The complete claude-workflow toolkit — every skill, agent, methodology doc, an
 **Agents (16):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `qa-tester`, `security-reviewer`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`, `tdd-implementer`, `ux-reviewer`
 
 **Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+
+### `advisor-product-design`
+
+*persona plugin · v0.1.0*
+
+Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.
+
+**Conventions:**
+
+- Artifact-first: reviews anchor to who the user is and what they decide
+- Position first, cite the pack, yield only to user evidence
+- Base/tuning/private layering — local/ is the owner's, never the repo's
+
+**Skills (1):** `advisor-product-design`
 
 ### `persona-pair-programmer`
 

@@ -1,0 +1,20 @@
+{
+  "name": "advisor-product-design",
+  "description": "Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
+  "conventions": [
+    "Artifact-first: reviews anchor to who the user is and what they decide",
+    "Position first, cite the pack, yield only to user evidence",
+    "Base/tuning/private layering — local/ is the owner's, never the repo's"
+  ],
+  "version": "0.1.0",
+  "base_settings": false,
+  "core": {
+    "skills": [],
+    "agents": [],
+    "hooks": []
+  },
+  "exclude": [],
+  "preset_skills": ["advisor-product-design"],
+  "preset_hooks": [],
+  "preset_agents": []
+}
