@@ -59,7 +59,6 @@ SKILL_LINE_CAP_ALLOWLIST = frozenset(
         "plan-ceo-review",
         "prd-to-plan",
         "project-context",
-        "tdd",
         "triage-issue",
     }
 )
