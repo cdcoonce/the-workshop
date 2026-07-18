@@ -51,7 +51,6 @@ SKILL_LINE_CAP_ALLOWLIST = frozenset(
     {
         "add-claude-workflow-hook",
         "commit",
-        "daa-code-review",
         "dev-cycle",
         "dignified-python",
         "github-cli",

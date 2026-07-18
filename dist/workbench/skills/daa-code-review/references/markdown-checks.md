@@ -2,6 +2,17 @@
 
 This document details the Markdown documentation quality checks performed by the daa-code-review skill.
 
+## Category Overview
+
+| Check               | Description                            | Severity |
+| ------------------- | -------------------------------------- | -------- |
+| Heading Structure   | Proper h1→h2→h3 sequence               | WARNING  |
+| Broken Links        | File links that don't exist            | ERROR    |
+| Missing Alt Text    | Images without accessibility text      | WARNING  |
+| Formatting          | Trailing whitespace, blank lines       | INFO     |
+| Code Blocks         | Missing language identifier            | INFO     |
+| Encoding Corruption | UTF-8 chars appearing as Ã—, âœ", etc. | ERROR    |
+
 ## Heading Structure
 
 ### MD001 - Heading Level Increment
@@ -55,7 +66,7 @@ Multiple headings with the same content should be avoided for clarity.
 Links should have non-empty URLs.
 
 ```markdown
-[Click here]() <!-- Issue: empty URL -->
+[Click here](<>) <!-- Issue: empty URL -->
 ```
 
 **Severity:** ERROR  

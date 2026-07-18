@@ -5,9 +5,18 @@ scripts (`markdown_analyzer.py`, `python_analyzer.py`, `scripts/smoke_test.py`).
 These exist because the same class of bug keeps recurring as one-off patches; the
 convention is the fix that stops the recurrence.
 
+## Scripts
+
+| Script                 | Purpose                                           |
+| ---------------------- | ------------------------------------------------- |
+| `models.py`            | Data structures (Issue, Severity, AnalysisResult) |
+| `python_analyzer.py`   | Python analysis with ruff                         |
+| `markdown_analyzer.py` | Markdown quality checks                           |
+| `report_generator.py`  | Console and Markdown report generation            |
+
 ## URI / scheme detection
 
-Any validator that must decide *"is this an external, non-local URI?"* — link
+Any validator that must decide _"is this an external, non-local URI?"_ — link
 checkers, image checkers, reference-link resolvers — MUST make that decision by
 matching the RFC 3986 scheme grammar, never by enumerating known prefixes.
 
@@ -18,7 +27,7 @@ URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 ```
 
 A target is an external URI if `URI_SCHEME_PATTERN.match(target)` is truthy. A
-target is a *local/relative* candidate (and must still be resolved and flagged if
+target is a _local/relative_ candidate (and must still be resolved and flagged if
 broken) only when it has **no** scheme **and** is not one of the two remaining
 local forms:
 
@@ -40,7 +49,7 @@ current and future scheme (`tel:`, `ftp:`, `data:`, `slack:`, …) by constructi
 
 **Still flag, regardless of the above:** in-page anchors that point nowhere,
 root-relative paths, and genuinely broken relative links. The scheme test only
-decides *"skip as external"*; it must not suppress real local-link breakage.
+decides _"skip as external"_; it must not suppress real local-link breakage.
 
 **Affected surfaces — keep them consistent:**
 
@@ -59,7 +68,7 @@ broken-relative-link check with this scheme regex.
 ## Hand-rolled frontmatter parsers
 
 Prefer a real YAML parser (`yaml.safe_load`) when the environment allows it. A
-line-based, dependency-free parser is acceptable *only* as a deliberate fallback,
+line-based, dependency-free parser is acceptable _only_ as a deliberate fallback,
 and when you write one it MUST correctly handle all of the following — or it will
 validate malformed frontmatter as valid and pass the bug straight through the gate:
 
@@ -74,7 +83,7 @@ validate malformed frontmatter as valid and pass the bug straight through the ga
   comments — but not a `#` inside a quoted string or block-scalar body.
 
 A subtle failure mode to test for: inside a folded block scalar, a line that
-contains a colon (`a: b`) is scalar *content*, not a nested key — a naive
+contains a colon (`a: b`) is scalar _content_, not a nested key — a naive
 `"key: value".split(":")` will mis-parse it as a sub-key.
 
 **Required test whenever a frontmatter parser is added or modified:** at least one

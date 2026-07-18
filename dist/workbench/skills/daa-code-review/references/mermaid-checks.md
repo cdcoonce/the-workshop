@@ -2,6 +2,15 @@
 
 This document details Mermaid diagram validation performed by the daa-code-review skill.
 
+## Skill-Level Checklist
+
+Search web for latest Mermaid.js documentation before validating. Check:
+
+- Diagram type declaration
+- Node/edge syntax
+- Structural correctness
+- Relationship definitions
+
 ## Important
 
 For Mermaid validation, Claude must search the web for the latest Mermaid documentation to ensure syntax rules are current. Mermaid syntax evolves frequently, and validation must use up-to-date specifications.

@@ -2,6 +2,40 @@
 
 This document details the Python code quality checks performed by the daa-code-review skill.
 
+## Category Overview
+
+| Category       | Examples                                  | Severity     |
+| -------------- | ----------------------------------------- | ------------ |
+| PEP8           | Line length, indentation, whitespace      | WARNING/INFO |
+| Unused Code    | Unused imports, variables, arguments      | WARNING      |
+| Type Hints     | Missing annotations on functions          | INFO         |
+| Docstrings     | Missing/malformed numpy-style docstrings  | INFO         |
+| Complexity     | Functions with high cyclomatic complexity | INFO         |
+| Runtime Errors | Undefined names, syntax errors            | ERROR        |
+| Imports        | Unsorted imports, banned imports          | INFO         |
+
+## Naming
+
+Beyond linter categories above, flag non-descriptive variable names. Don't do this:
+
+```python
+pkb = p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+```
+
+Instead do this:
+
+```python
+private_key_bytes = p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+```
+
 ## External Tools
 
 The skill uses **ruff** as the primary linter. Ruff is a fast Python linter that implements rules from multiple tools including pycodestyle, pyflakes, isort, pydocstyle, and more.
