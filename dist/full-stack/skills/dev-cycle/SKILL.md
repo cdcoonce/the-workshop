@@ -27,6 +27,18 @@ Every phase is mandatory. No phase can be skipped.
 | 6   | **Code Review** | `daa-code-review`                                      | Clean review                      |
 | 7   | **PR**          | `commit` + `finish-branch`                             | PR URL recorded                   |
 
+### Excuse → Reality: Skipping a Phase
+
+Every one of these is a rationalization for skipping mandatory work, not a legitimate exception:
+
+| Excuse                                              | Reality                                                                                                     |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| "This feature is too small for a PRD"               | Small features are where unexamined assumptions cost most; the PRD can be 5 lines but it must exist.        |
+| "The plan is obvious, skip CEO Review"              | "Obvious" plans are exactly where a second pass catches scope creep or a missed edge case cheaply.          |
+| "I'll write the issue and implement it in one step" | Skipping Phase 4 means no acceptance criteria exist to implement against or verify later.                   |
+| "Code review can happen after the PR is open"       | Phase 6 exists to catch issues before they're public; deferring it just moves the fix into review comments. |
+| "This is a hotfix, the pipeline doesn't apply"      | Hotfixes still need a record of what changed and why — use the same phases, compressed, not skipped.        |
+
 ## Re-entry Logic
 
 On every invocation:
@@ -99,6 +111,8 @@ Log per-subagent events:
 - `"Subagent started for issue #N: {title}"`
 - `"Subagent completed for issue #N: {pass/fail}"`
 - `"Code review after issue #N: {clean/blocking issues found}"`
+
+**Escalation threshold:** After 3 failed fix attempts on the same issue, stop retrying. A 4th attempt at the same fix is not more diligence, it's a sign the architecture is wrong for the problem. Question the approach, then ask the human before continuing.
 
 ### Phase 6: Code Review
 

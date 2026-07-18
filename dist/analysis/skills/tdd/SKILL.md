@@ -5,6 +5,27 @@ description: Test-driven development with red-green-refactor loop. Use when user
 
 # Test-Driven Development
 
+## The Iron Law
+
+```
+NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+```
+
+Wrote code before the test existed and failed? **Delete it.** Not comment it out, not stash it "as reference", not keep it in a scratch file to peek at later — delete it, then write the test and let it fail before rewriting the implementation. No exceptions.
+
+Satisfying the letter of this law while missing its spirit is still a violation — a test that can't fail, a test written after the code but narrated as if it came first, or a test so loose it would pass against any implementation all count as **not having done TDD**, even if a test file technically exists.
+
+### Red Flags — Stop and Restart
+
+Any of these means the Iron Law has already been broken:
+
+- The test passed the first time you ran it — you never watched it fail
+- "I'll add tests after this works" / "tests can come once the feature is done"
+- Hedging language in your own reasoning — "this should work", "this will probably pass"
+- Keeping the untested code around "just in case" instead of deleting it
+
+See [discipline.md](discipline.md) for the excuse-to-reality table and the delete-means-delete loopholes it closes, and [core/docs/tdd.md](../../docs/tdd.md) for the full narrative walkthrough. This skill is the enforcement layer; that doc is the deep dive — they should never disagree.
+
 ## Philosophy
 
 **Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.

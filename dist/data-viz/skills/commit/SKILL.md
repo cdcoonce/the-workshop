@@ -72,6 +72,15 @@ For commits that need a body (rare — prefer concise single-line messages):
 - Body wraps at 72 characters
 - Use body only when the summary alone can't convey the reasoning
 
+## Red Flags — Stop Before Committing
+
+Any of these means the commit isn't ready yet:
+
+- Reaching for `git add .` or `git add -A` because staging files individually feels slow — it stages whatever else is sitting in the tree, tracked or not
+- Claiming "tests pass" without having just run them in this session — a claim from memory or from before the last edit is not verification
+- Reaching for `--no-verify` because a hook is inconvenient or slow — fix the hook failure, don't silence the hook
+- Writing the commit message before checking `git diff` — the message should describe the diff you read, not the change you intended to make
+
 ## Rules
 
 - **Atomic commits** — One logical change per commit. A feature and its tests can be one commit. An unrelated formatting fix should be a separate commit.
