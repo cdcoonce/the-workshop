@@ -101,4 +101,4 @@ See [State-Backed Components](./state-backed/creating.md) for full implementatio
 - [Template Variables](./template-variables.md)
 - [State-Backed Components](./state-backed/creating.md)
 - [`dg scaffold component`](../cli/scaffold/component.md)
-- [`dg list components`](../cli/list/components.md)
+- [`dg list components`](../cli/list-components.md)

@@ -85,7 +85,7 @@ Reference documents are organized across top-level files and subdirectories:
 - **`versions/python-3.12.md`** - Features available in Python 3.12+
 - **`versions/python-3.13.md`** - Features available in Python 3.13+
 
-### Advanced Topics (`references/advanced/`)
+### Advanced Topics (`references/`)
 
 - **`exception-handling.md`** - LBYL patterns, error boundaries
 - **`interfaces.md`** - ABC and Protocol patterns
@@ -94,7 +94,7 @@ Reference documents are organized across top-level files and subdirectories:
 
 ## When to Read Each Reference Document
 
-### `references/advanced/exception-handling.md`
+### `references/exception-handling.md`
 
 **Read when**:
 
@@ -103,7 +103,7 @@ Reference documents are organized across top-level files and subdirectories:
 - Seeing or writing `from e` or `from None`
 - Unsure if LBYL alternative exists
 
-### `references/advanced/interfaces.md`
+### `references/interfaces.md`
 
 **Read when**:
 
@@ -112,7 +112,7 @@ Reference documents are organized across top-level files and subdirectories:
 - Designing gateway layer interfaces
 - Choosing between ABC and Protocol
 
-### `references/advanced/typing-advanced.md`
+### `references/typing-advanced.md`
 
 **Read when**:
 
@@ -130,7 +130,7 @@ Reference documents are organized across top-level files and subdirectories:
 - Seeing Path() or computation at module level
 - Considering inline imports
 
-### `references/advanced/api-design.md`
+### `references/api-design.md`
 
 **Read when**:
 

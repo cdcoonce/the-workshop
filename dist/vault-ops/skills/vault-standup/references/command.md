@@ -54,7 +54,7 @@ If `rolled_over: True`, the function has already:
 
 **After a successful rollover, before continuing the standup:**
 
-1. Announce: `🔁 Rolled over to {new_week}. Archived last week to [work/tasks/{archived_week}-tasks.md](work/tasks/{archived_week}-tasks.md).`
+1. Announce: `🔁 Rolled over to {new_week}. Archived last week to work/tasks/{archived_week}-tasks.md.`
 2. If `done_items` is non-empty, surface it for Brag Doc triage:
 
    ```
