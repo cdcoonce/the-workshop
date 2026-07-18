@@ -33,6 +33,6 @@
     ]
   },
   "enabledPlugins": {
-    "claude-tooling@claude-workflow": true
+    "workbench@claude-workflow": true
   }
 }
