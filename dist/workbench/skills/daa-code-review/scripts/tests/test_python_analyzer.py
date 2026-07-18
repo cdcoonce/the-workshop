@@ -229,6 +229,23 @@ def foo() -> None:
         f841_issues = [r for r in results if r.get("code") == "F841"]
         assert len(f841_issues) > 0
 
+    def test_run_ruff_raises_on_broken_invocation(self, monkeypatch):
+        """A nonzero exit with empty stdout (e.g. an unknown rule selector)
+        must be surfaced, not treated as 'no issues found' (#268)."""
+        import python_analyzer
+
+        class _Result:
+            returncode = 2
+            stdout = ""
+            stderr = "ruff failed: Unknown rule selector: `ANN101`"
+
+        def _fake_run(*args, **kwargs):
+            return _Result()
+
+        monkeypatch.setattr(python_analyzer.subprocess, "run", _fake_run)
+        with pytest.raises(RuntimeError):
+            run_ruff_check("x = 1\n")
+
 
 class TestAnalyzePython:
     """Tests for the main analyze_python function."""

@@ -254,7 +254,7 @@ def run_ruff_check(
                     "check",
                     "--output-format=json",
                     "--select=ALL",  # Enable all rules
-                    "--ignore=ANN101,ANN102,ANN401",  # Ignore self/cls annotations and Any
+                    "--ignore=ANN401",  # Ignore Any annotations
                     target,
                 ],
                 capture_output=True,
@@ -264,6 +264,11 @@ def run_ruff_check(
 
             if result.stdout:
                 return json.loads(result.stdout)
+            if result.returncode not in (0, 1):
+                raise RuntimeError(
+                    f"ruff check exited {result.returncode} with no output: "
+                    f"{result.stderr.strip()}"
+                )
             return []
 
         except subprocess.TimeoutExpired:
