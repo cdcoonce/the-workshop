@@ -11,9 +11,7 @@ Investigate a reported problem, find its root cause, and create a GitHub issue w
 
 ### 1. Capture the problem
 
-Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?"
-
-Do NOT ask follow-up questions yet. Start investigating immediately.
+Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?" Do NOT ask follow-up questions yet. Start investigating immediately.
 
 ### 2. Explore and diagnose
 
@@ -24,13 +22,7 @@ Use the Agent tool with subagent_type=Explore to deeply investigate the codebase
 - **Why** it fails (the root cause, not just the symptom)
 - **What** related code exists (similar patterns, tests, adjacent modules)
 
-Look at:
-
-- Related source files and their dependencies
-- Existing tests (what's tested, what's missing)
-- Recent changes to affected files (`git log` on relevant files)
-- Error handling in the code path
-- Similar patterns elsewhere in the codebase that work correctly
+Look at related source files and their dependencies, existing tests (what's tested, what's missing), recent changes to affected files (`git log` on relevant files), error handling in the code path, and similar patterns elsewhere in the codebase that work correctly.
 
 ### 3. Identify the fix approach
 
