@@ -49,7 +49,6 @@ SKILL_LINE_CAP = 100
 # under the cap; never add a new one (see SKILL_LINE_CAP_ALLOWLIST_BASELINE).
 SKILL_LINE_CAP_ALLOWLIST = frozenset(
     {
-        "add-claude-workflow-hook",
         "commit",
         "github-cli",
         "project-context",

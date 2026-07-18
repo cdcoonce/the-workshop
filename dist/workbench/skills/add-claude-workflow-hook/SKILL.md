@@ -20,7 +20,7 @@ all followed this same recipe.
 
 Don't assume the input/output shape from memory or the general hooks guide —
 `WebFetch` `code.claude.com/docs/en/hooks` for the specific event (input
-fields, matcher values, decision/output format, caveats about what's *not*
+fields, matcher values, decision/output format, caveats about what's _not_
 available, e.g. `ConfigChange` gives no content diff, `SessionStart` cannot
 block). Design decisions should trace back to a real constraint the schema
 revealed, not an assumption.
@@ -84,18 +84,9 @@ Run `make test` — it runs the root suite, the nested
 (`build_docs --check` plus a `dist/` rebuild that fails on any uncommitted
 diff). If the gate reports stale output, you skipped `make docs`/`make build`
 in step 6 — regenerate and commit. Then commit with a message that states the
-*why* (the constraint from step 1, the design tradeoff from steps 3/4), and
+_why_ (the constraint from step 1, the design tradeoff from steps 3/4), and
 push to **both** `origin main` and `gitlab main:dev` — this repo mirrors to
 GitLab and the two can silently diverge if only one gets pushed.
 
-## Open questions
-
-- Worth extracting the duplicated `git_dir()`/`working_tree_signature()`/
-  `head_sha()` helpers (identical across `verify-tests-before-stop.py`,
-  `snapshot-subagent-start.py`, `verify-subagent-evidence.py`) into a shared
-  module once a 4th hook needs them? Currently duplicated on purpose to keep
-  each hook file self-contained per the repo's existing convention (step 2)
-  — revisit if that convention itself changes.
-- No CoCo/Codex test harness exists in this repo yet — portability is
-  currently an inference from a prior bug fix (`aaf2229`), not something
-  re-verified per new hook.
+Open design questions (shared-helper extraction, cross-tool test coverage
+gaps) are tracked in `references/reference.md`.
