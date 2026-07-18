@@ -1,0 +1,7 @@
+{
+  "conventions": [
+    "Artifact-first: reviews anchor to who the user is and what they decide",
+    "Position first, cite the pack, yield only to user evidence",
+    "Base/tuning/private layering \u2014 local/ is the owner's, never the repo's"
+  ]
+}

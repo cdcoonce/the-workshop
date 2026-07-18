@@ -5,6 +5,12 @@
   },
   "plugins": [
     {
+      "name": "advisor-product-design",
+      "version": "0.1.0",
+      "description": "Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
+      "source": "./dist/advisor-product-design"
+    },
+    {
       "name": "persona-pair-programmer",
       "version": "1.0.0",
       "description": "Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.",
