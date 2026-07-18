@@ -21,6 +21,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
 | `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workbench |
+| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
@@ -139,6 +140,12 @@ Explore a codebase to find opportunities for architectural improvement, focusing
 *universal*
 
 Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR.
+
+### `/persona-builder`
+
+*universal*
+
+Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
 
 ### `/plan-ceo-review`
 
