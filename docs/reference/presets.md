@@ -57,7 +57,7 @@ The complete claude-workflow toolkit — every skill, agent, methodology doc, an
 
 ### `advisor-product-design`
 
-*persona plugin · v0.1.0*
+*persona plugin · v0.1.1*
 
 Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.
 

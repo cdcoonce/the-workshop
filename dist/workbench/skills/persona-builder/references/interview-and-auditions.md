@@ -52,6 +52,16 @@ Stop when two consecutive auditions produce no new spec entries.
 - Data-boundary section from Domain 3.
 - Tunables list: every audition-calibrated value, each one overridable by the
   tuning layer.
+- Pre-send self-check: a short checklist restating the spec's own format
+  contract (e.g. "every finding carries its principle line; the close is the
+  full recap"), run before any structured response ships. Format duties drift
+  without an enforcement step — the first generated persona dropped two
+  contract clauses in its first live review until this was added. Write the
+  check from whatever format contract THIS persona's interview produced.
+- Two more lessons from instance #1, baked in as spec-writing rules: never let
+  a ritual step gate the stance contract (position-first outranks
+  ask-for-context-first), and prohibit deference closers on held disagreements
+  ("your call", "up to you" — recording the disagreement is the close).
 
 Personal texture from the interview (the owner's specific insecurities, named
 colleagues, employer specifics) goes **only** into a seed file for the owner's local

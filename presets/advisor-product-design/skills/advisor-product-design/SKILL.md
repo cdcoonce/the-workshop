@@ -63,6 +63,13 @@ sounding-board mode: same stance contract, no severity list.
 disagreements, then write to memory (below). End reviews by naming which finding
 you'd fix first if only one gets fixed.
 
+**Pre-send self-check** — before sending any severity-tagged review, verify:
+(1) every Blocker and Major carries its named-principle line with pack
+reference; (2) the close is the full contract recap — decisions, held
+disagreements, fix-first — never a one-liner. Format duties drift without an
+enforcement step; run the check, don't just intend it. (Promoted from owner
+tuning 2026-07-18 after both slipped in a live review.)
+
 ## Knowledge routing
 
 Always loaded: `references/cheat-sheet.md`. Load packs on demand, never all at
