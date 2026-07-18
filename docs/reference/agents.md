@@ -9,22 +9,22 @@ Specialized subagent roles, parsed from each agent's `AGENT.md` frontmatter. A p
 
 | Agent | Role | Skills | Presets |
 | --- | --- | --- | --- |
-| **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **qa-tester** | `qa-tester` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **skill-analyst** | `analyst` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **skill-writer** | `skill-writer` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **strategy** | `strategy` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **analysis-builder** | `implementer` | `tdd`, `commit` | analysis |
-| **api-builder** | `implementer` | `tdd`, `commit` | python-api |
-| **backend-builder** | `implementer` | `tdd`, `commit` | full-stack |
-| **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | data-pipeline |
-| **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | full-stack |
-| **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | data-pipeline |
-| **security-reviewer** | `reviewer` | `daa-code-review` | python-api |
-| **skill-builder** | `implementer` | `tdd`, `commit` | claude-tooling |
-| **skill-reviewer** | `reviewer` | `daa-code-review` | claude-tooling |
-| **ux-reviewer** | `reviewer` | `daa-code-review` | full-stack |
+| **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | workbench |
+| **qa-tester** | `qa-tester` | — | workbench |
+| **skill-analyst** | `analyst` | — | workbench |
+| **skill-writer** | `skill-writer` | — | workbench |
+| **strategy** | `strategy` | — | workbench |
+| **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | workbench |
+| **analysis-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **api-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **backend-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | workbench |
+| **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **security-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **skill-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **skill-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **ux-reviewer** | `reviewer` | `daa-code-review` | workbench |
 
 ## Details
 
@@ -66,60 +66,60 @@ Implements features using test-driven development
 
 ### analysis-builder
 
-*`analysis` preset · role `implementer` · skills: `tdd`, `commit`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`*
 
 Builds data analysis notebooks and scripts with pandas, SQL, and visualization
 
 ### api-builder
 
-*`python-api` preset · role `implementer` · skills: `tdd`, `commit`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`*
 
 Builds Python API endpoints with FastAPI, Flask, or Lambda
 
 ### backend-builder
 
-*`full-stack` preset · role `implementer` · skills: `tdd`, `commit`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`*
 
 Builds backend services with Node.js, databases, and APIs
 
 ### data-quality-reviewer
 
-*`data-pipeline` preset · role `reviewer` · skills: `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python`*
+*`workbench` preset · role `reviewer` · skills: `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python`*
 
 Reviews data pipelines for correctness, completeness, and reliability
 
 ### frontend-builder
 
-*`full-stack` preset · role `implementer` · skills: `tdd`, `commit`, `react-ui-ux`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`, `react-ui-ux`*
 
 Builds frontend components with React, TypeScript, and modern CSS
 
 ### pipeline-builder
 
-*`data-pipeline` preset · role `implementer` · skills: `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python`*
 
 Builds data pipelines with ETL/ELT patterns and orchestration
 
 ### security-reviewer
 
-*`python-api` preset · role `reviewer` · skills: `daa-code-review`*
+*`workbench` preset · role `reviewer` · skills: `daa-code-review`*
 
 Reviews Python APIs for security vulnerabilities and auth issues
 
 ### skill-builder
 
-*`claude-tooling` preset · role `implementer` · skills: `tdd`, `commit`*
+*`workbench` preset · role `implementer` · skills: `tdd`, `commit`*
 
 Builds Claude Code skills, hooks, and MCP server integrations
 
 ### skill-reviewer
 
-*`claude-tooling` preset · role `reviewer` · skills: `daa-code-review`*
+*`workbench` preset · role `reviewer` · skills: `daa-code-review`*
 
 Reviews Claude Code skills and hooks for correctness and best practices
 
 ### ux-reviewer
 
-*`full-stack` preset · role `reviewer` · skills: `daa-code-review`*
+*`workbench` preset · role `reviewer` · skills: `daa-code-review`*
 
 Reviews frontend code for UX quality, accessibility, and consistency

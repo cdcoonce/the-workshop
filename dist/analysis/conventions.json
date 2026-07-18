@@ -1,7 +1,0 @@
-{
-  "conventions": [
-    "Reproducible random seeds",
-    "Documented assumptions and data sources",
-    "Deterministic, re-runnable notebooks"
-  ]
-}

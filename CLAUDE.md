@@ -10,8 +10,8 @@ See [ROADMAP.md](ROADMAP.md) for the multi-platform goal and design principle, [
 
 ## Architecture
 
-- `core/` — Universal skills (17), methodology docs (4), file protection hook, agents (2)
-- `presets/` — Named project type configurations (python-api, data-pipeline, full-stack, claude-tooling, analysis)
+- `core/` — The shared source every package builds from: universal skills, methodology docs, safety hooks, and agents
+- `presets/` — Package manifests: `workbench` (the everything package — all core skills/agents/docs/hooks plus the general preset skills and agents), `vault-ops` (domain-specific), and five `persona-*` output-style layers
 - `scripts/` — Python build/smoke-test/marketplace tooling
 - `dist/` — Build output (gitignored)
 

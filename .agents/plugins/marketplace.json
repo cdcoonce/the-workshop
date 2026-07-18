@@ -5,66 +5,6 @@
   },
   "plugins": [
     {
-      "name": "analysis",
-      "source": {
-        "source": "local",
-        "path": "./dist/analysis"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "claude-tooling",
-      "source": {
-        "source": "local",
-        "path": "./dist/claude-tooling"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "data-pipeline",
-      "source": {
-        "source": "local",
-        "path": "./dist/data-pipeline"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "data-viz",
-      "source": {
-        "source": "local",
-        "path": "./dist/data-viz"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "full-stack",
-      "source": {
-        "source": "local",
-        "path": "./dist/full-stack"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "persona-pair-programmer",
       "source": {
         "source": "local",
@@ -125,10 +65,10 @@
       "category": "Productivity"
     },
     {
-      "name": "python-api",
+      "name": "vault-ops",
       "source": {
         "source": "local",
-        "path": "./dist/python-api"
+        "path": "./dist/vault-ops"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -137,10 +77,10 @@
       "category": "Productivity"
     },
     {
-      "name": "vault-ops",
+      "name": "workbench",
       "source": {
         "source": "local",
-        "path": "./dist/vault-ops"
+        "path": "./dist/workbench"
       },
       "policy": {
         "installation": "AVAILABLE",

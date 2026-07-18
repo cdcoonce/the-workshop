@@ -1,0 +1,20 @@
+{
+  "name": "workbench",
+  "version": "1.0.0",
+  "description": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "workbench",
+    "shortDescription": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+    "longDescription": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}

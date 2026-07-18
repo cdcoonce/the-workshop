@@ -9,13 +9,8 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`analysis`** | project | 25 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
-| **`claude-tooling`** | project | 25 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
-| **`data-pipeline`** | project | 27 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
-| **`data-viz`** | project | 26 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
-| **`full-stack`** | project | 26 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
-| **`python-api`** | project | 26 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
+| **`workbench`** | project | 30 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -23,114 +18,6 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 | **`persona-thinking-partner`** | persona | 0 | 0 | — |
 
 ## Details
-
-### `analysis`
-
-*project preset · v1.0.0*
-
-Notebooks, R/Python scripts, statistical analysis, exploratory work
-
-**Conventions:**
-
-- Reproducible random seeds
-- Documented assumptions and data sources
-- Deterministic, re-runnable notebooks
-
-**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (7):** `analysis-builder`, `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
-
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
-
-### `claude-tooling`
-
-*project preset · v1.0.0*
-
-Developing Claude skills, hooks, agents, and template configurations
-
-**Conventions:**
-
-- Skills follow the required SKILL.md structure
-- Progressive disclosure over monolithic instructions
-- Regenerate docs and dist after changing a component
-
-**Skills (25):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (8):** `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`, `tdd-implementer`
-
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
-
-### `data-pipeline`
-
-*project preset · v1.0.0*
-
-ETL/ELT pipelines, SQL transformations, scheduled data jobs
-
-**Conventions:**
-
-- SQL keywords lowercase
-- Idempotent, re-runnable pipeline stages
-- Data-quality checks on every stage
-
-**Skills (27):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (8):** `code-reviewer`, `data-quality-reviewer`, `pipeline-builder`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
-
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
-
-### `data-viz`
-
-*project preset · v1.0.0*
-
-Intuitive, context-forward chart design in React (Recharts/Nivo) — right chart type for the data, guided insight over decoration
-
-**Conventions:**
-
-- Chart type follows the data, not the default
-- Restrained, accessible color palettes
-- Annotate for insight over decoration
-
-**Skills (26):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (6):** `code-reviewer`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
-
-**Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
-
-### `full-stack`
-
-*project preset · v1.0.0*
-
-React/Next.js frontend + Python backend
-
-**Conventions:**
-
-- Separate frontend and backend test runners
-- Shared fixture patterns across the stack
-- Typed API contracts between layers
-
-**Skills (26):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (9):** `backend-builder`, `code-reviewer`, `frontend-builder`, `qa-tester`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`, `ux-reviewer`
-
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
-
-### `python-api`
-
-*project preset · v1.0.0*
-
-Python backend services — Lambda, FastAPI, Flask
-
-**Conventions:**
-
-- Ruff for linting and formatting
-- Structured logging over print
-- Type hints on public functions
-
-**Skills (26):** `add-claude-workflow-hook`, `commit`, `create-hook`, `daa-code-review`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
-
-**Agents (8):** `api-builder`, `code-reviewer`, `qa-tester`, `security-reviewer`, `skill-analyst`, `skill-writer`, `strategy`, `tdd-implementer`
-
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `vault-ops`
 
@@ -147,6 +34,25 @@ Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and wri
 **Skills (21):** `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-connect`, `vault-context-then-delegate`, `vault-dispatch`, `vault-dump`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-link`, `vault-mr-review-packet`, `vault-recall`, `vault-standup`, `vault-start`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`
 
 **Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+
+### `workbench`
+
+*project preset · v1.0.0*
+
+The complete claude-workflow toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.
+
+**Conventions:**
+
+- Test-driven development: write the failing test first
+- Regenerate docs and dist after changing any component
+- Progressive disclosure over monolithic instructions
+- Conventional commits; stage explicitly, never git add .
+
+**Skills (30):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
+
+**Agents (16):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `qa-tester`, `security-reviewer`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`, `tdd-implementer`, `ux-reviewer`
+
+**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `persona-pair-programmer`
 

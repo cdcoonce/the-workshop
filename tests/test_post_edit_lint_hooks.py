@@ -21,26 +21,14 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-HOOK_PATHS = {
-    "full-stack": REPO_ROOT / "presets" / "full-stack" / "hooks" / "post-edit-lint.py",
-    "claude-tooling": REPO_ROOT
-    / "presets"
-    / "claude-tooling"
-    / "hooks"
-    / "post-edit-lint.py",
-}
+# The consolidated `workbench` package ships one superset post-edit-lint hook
+# (Ruff + Prettier + ESLint + Stylelint), replacing the old per-preset variants.
+WORKBENCH_HOOK = REPO_ROOT / "presets" / "workbench" / "hooks" / "post-edit-lint.py"
 
-# Every preset's post-edit-lint hook — all five must fail-open on bad stdin (#125).
-ALL_POST_EDIT_HOOKS = {
-    name: REPO_ROOT / "presets" / name / "hooks" / "post-edit-lint.py"
-    for name in (
-        "analysis",
-        "python-api",
-        "data-pipeline",
-        "claude-tooling",
-        "full-stack",
-    )
-}
+HOOK_PATHS = {"workbench": WORKBENCH_HOOK}
+
+# The post-edit-lint hook must fail-open on bad stdin (#125).
+ALL_POST_EDIT_HOOKS = {"workbench": WORKBENCH_HOOK}
 
 
 def _run_hook_stdin(hook_path: Path, raw_stdin: str) -> subprocess.CompletedProcess[str]:
@@ -76,7 +64,7 @@ def run_hook(
     )
 
 
-@pytest.mark.parametrize("preset", ["full-stack", "claude-tooling"])
+@pytest.mark.parametrize("preset", ["workbench"])
 def test_npx_calls_include_no_install(tmp_path: Path, preset: str) -> None:
     record_path = tmp_path / "npx-calls.log"
     _write_fake_npx(tmp_path, record_path, exit_code=0)
@@ -90,12 +78,12 @@ def test_npx_calls_include_no_install(tmp_path: Path, preset: str) -> None:
         assert line.split()[0] == "--no-install"
 
 
-def test_full_stack_every_npx_tool_passes_no_install(tmp_path: Path) -> None:
+def test_workbench_every_npx_tool_passes_no_install(tmp_path: Path) -> None:
     record_path = tmp_path / "npx-calls.log"
     _write_fake_npx(tmp_path, record_path, exit_code=0)
 
-    run_hook(HOOK_PATHS["full-stack"], "example.css", tmp_path)  # prettier + stylelint
-    run_hook(HOOK_PATHS["full-stack"], "example.ts", tmp_path)  # prettier + eslint
+    run_hook(HOOK_PATHS["workbench"], "example.css", tmp_path)  # prettier + stylelint
+    run_hook(HOOK_PATHS["workbench"], "example.ts", tmp_path)  # prettier + eslint
 
     lines = record_path.read_text().splitlines()
     assert len(lines) == 4
@@ -109,7 +97,7 @@ def test_missing_tool_records_no_action(tmp_path: Path) -> None:
         tmp_path, record_path, exit_code=1
     )  # simulates --no-install failure
 
-    result = run_hook(HOOK_PATHS["full-stack"], "example.md", tmp_path)
+    result = run_hook(HOOK_PATHS["workbench"], "example.md", tmp_path)
 
     assert result.returncode == 0
     assert result.stderr == ""
@@ -119,7 +107,7 @@ def test_installed_tool_reports_action_on_stderr(tmp_path: Path) -> None:
     record_path = tmp_path / "npx-calls.log"
     _write_fake_npx(tmp_path, record_path, exit_code=0)
 
-    result = run_hook(HOOK_PATHS["full-stack"], "example.md", tmp_path)
+    result = run_hook(HOOK_PATHS["workbench"], "example.md", tmp_path)
 
     assert "prettier" in result.stderr
     assert "example.md" in result.stderr

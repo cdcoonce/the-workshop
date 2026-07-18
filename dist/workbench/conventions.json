@@ -1,0 +1,8 @@
+{
+  "conventions": [
+    "Test-driven development: write the failing test first",
+    "Regenerate docs and dist after changing any component",
+    "Progressive disclosure over monolithic instructions",
+    "Conventional commits; stage explicitly, never git add ."
+  ]
+}

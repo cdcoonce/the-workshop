@@ -1,7 +1,0 @@
-{
-  "conventions": [
-    "Ruff for linting and formatting",
-    "Structured logging over print",
-    "Type hints on public functions"
-  ]
-}

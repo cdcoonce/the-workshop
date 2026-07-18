@@ -1,7 +1,0 @@
-{
-  "conventions": [
-    "SQL keywords lowercase",
-    "Idempotent, re-runnable pipeline stages",
-    "Data-quality checks on every stage"
-  ]
-}

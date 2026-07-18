@@ -5,7 +5,7 @@
 A **Claude Code plugin** that gives any project a fully configured AI development environment — skills, methodology docs, agents, and hooks — picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
-**25 universal skills · 6 core agents · 8 hooks · 7 project presets · 5 persona plugins**
+**25 universal skills · 6 core agents · 8 hooks · 2 project presets · 5 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -49,9 +49,9 @@ A **Claude Code plugin** that gives any project a fully configured AI developmen
 
 Every project that uses **Claude Code** needs skills, hooks, settings, and development standards. Setting these up manually is repetitive and error-prone.
 
-**Claude Workflow** is a Claude Code plugin that solves this. Paste the repo URL into Claude, pick a preset, and you get a fully configured environment with a full skill set, domain-specific agents, methodology docs, and hooks — installed automatically.
+**Claude Workflow** is a Claude Code plugin that solves this. Paste the repo URL into Claude, install **`workbench`**, and you get a fully configured environment with the full skill set, every agent, methodology docs, and hooks — installed automatically.
 
-The plugin is organized into **presets** for different project types. Each preset is listed in `.claude-plugin/marketplace.json` and maps to a self-contained plugin directory under `dist/`. Claude reads this marketplace index and can install any preset on demand.
+The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each is listed in `.claude-plugin/marketplace.json` and maps to a self-contained plugin directory under `dist/`. Claude reads this marketplace index and can install any of them on demand.
 
 For teams using non-Claude agents (OpenAI, Cursor, etc.), the `dist/` output can also be copied manually.
 
@@ -76,15 +76,15 @@ Complete, always-current reference for every component — generated from source
 
 ### Claude (Primary)
 
-Paste the repo URL into Claude and tell it which preset you want:
+Paste the repo URL into Claude and ask for `workbench` (or a specific persona / `vault-ops`):
 
 ```
 https://github.com/cdcoonce/claude-workflow
 ```
 
-Claude will read `.claude-plugin/marketplace.json`, find the available presets, and install the one you select into your project. No cloning or building required.
+Claude will read `.claude-plugin/marketplace.json`, find the available packages, and install the one you select into your project. No cloning or building required. Most projects want `workbench`.
 
-See [Presets](#presets) for what each one includes, or the [presets reference](docs/reference/presets.md) for full detail.
+See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
 
 ### Cortex Code (CoCo Desktop)
 
@@ -94,10 +94,10 @@ Use the GitHub Plugin Installer with a sub-path to install any preset directly:
 /github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/<preset-name>
 ```
 
-For example, to install the `full-stack` preset:
+For example, to install `workbench`:
 
 ```
-/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/full-stack
+/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/workbench
 ```
 
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
@@ -109,8 +109,8 @@ The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and
 For non-Claude agents, copy the pre-built plugin directory directly into your project:
 
 ```bash
-# Replace python-api with your chosen preset
-cp -r dist/python-api/ /path/to/your-project/.claude/plugins/python-api/
+# workbench is the everything package; swap for a persona or vault-ops if preferred
+cp -r dist/workbench/ /path/to/your-project/.claude/plugins/workbench/
 ```
 
 The `dist/` directories are self-contained — each one is a complete Claude Code plugin with `.claude-plugin/plugin.json`, skills, agents, hooks, settings, and a README.
@@ -119,18 +119,13 @@ The `dist/` directories are self-contained — each one is a complete Claude Cod
 
 ## Presets
 
-Each preset targets a project type and ships a curated set of skills, agents, hooks, and conventions. Project presets inherit the full set of core skills, core agents, and methodology docs plus the base hooks; persona plugins are output-style-only (no skills). Supplemental presets such as `vault-ops` ship only their domain-specific skills.
+The marketplace ships one everything-package plus focused extras. **`workbench`** carries the complete set — every core skill, every core and preset agent, all methodology docs, and the base hooks plus the auto-format lint hook. **Persona** plugins are output-style-only (voice layers, no skills). **`vault-ops`** is a domain-specific package that ships only its own skills. The table below is generated from each package's manifest.
 
 <!-- BEGIN GENERATED: presets-table -->
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`analysis`** | project | 25 | 7 | Reproducible random seeds; Documented assumptions and data sources; Deterministic, re-runnable notebooks |
-| **`claude-tooling`** | project | 25 | 8 | Skills follow the required SKILL.md structure; Progressive disclosure over monolithic instructions; Regenerate docs and dist after changing a component |
-| **`data-pipeline`** | project | 27 | 8 | SQL keywords lowercase; Idempotent, re-runnable pipeline stages; Data-quality checks on every stage |
-| **`data-viz`** | project | 26 | 6 | Chart type follows the data, not the default; Restrained, accessible color palettes; Annotate for insight over decoration |
-| **`full-stack`** | project | 26 | 9 | Separate frontend and backend test runners; Shared fixture patterns across the stack; Typed API contracts between layers |
-| **`python-api`** | project | 26 | 8 | Ruff for linting and formatting; Structured logging over print; Type hints on public functions |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
+| **`workbench`** | project | 30 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -151,31 +146,31 @@ These ship with every preset:
 <!-- BEGIN GENERATED: skills-table -->
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/commit` | Git commit workflow with enforced conventional commit style. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/tdd` | Test-driven development with red-green-refactor loop. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
+| `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
+| `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
+| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
+| `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
+| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
+| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
+| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
+| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
+| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench |
+| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
+| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workbench |
+| `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
+| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
+| `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
+| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
+| `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | workbench |
+| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
+| `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
+| `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
+| `/tdd` | Test-driven development with red-green-refactor loop. | workbench |
+| `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench |
+| `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
+| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | workbench |
 <!-- END GENERATED: skills-table -->
 
 ### Preset-Specific Skills
@@ -185,11 +180,11 @@ These ship only with the presets that declare them:
 <!-- BEGIN GENERATED: preset-skills-table -->
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | data-viz |
-| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | data-pipeline |
-| `/dbt-expert` | Expert guidance for working with dbt Core. | data-pipeline |
-| `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | python-api |
-| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | full-stack |
+| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
+| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
+| `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
+| `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | workbench |
+| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -228,12 +223,12 @@ These ship with every preset:
 <!-- BEGIN GENERATED: agents-core-table -->
 | Agent | Role | Skills | Presets |
 | --- | --- | --- | --- |
-| **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **qa-tester** | `qa-tester` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **skill-analyst** | `analyst` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **skill-writer** | `skill-writer` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **strategy** | `strategy` | — | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | workbench |
+| **qa-tester** | `qa-tester` | — | workbench |
+| **skill-analyst** | `analyst` | — | workbench |
+| **skill-writer** | `skill-writer` | — | workbench |
+| **strategy** | `strategy` | — | workbench |
+| **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | workbench |
 <!-- END GENERATED: agents-core-table -->
 
 ### Preset Agents
@@ -243,16 +238,16 @@ Each preset adds domain-specific agents that override or extend the core set:
 <!-- BEGIN GENERATED: agents-preset-table -->
 | Agent | Role | Skills | Presets |
 | --- | --- | --- | --- |
-| **analysis-builder** | `implementer` | `tdd`, `commit` | analysis |
-| **api-builder** | `implementer` | `tdd`, `commit` | python-api |
-| **backend-builder** | `implementer` | `tdd`, `commit` | full-stack |
-| **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | data-pipeline |
-| **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | full-stack |
-| **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | data-pipeline |
-| **security-reviewer** | `reviewer` | `daa-code-review` | python-api |
-| **skill-builder** | `implementer` | `tdd`, `commit` | claude-tooling |
-| **skill-reviewer** | `reviewer` | `daa-code-review` | claude-tooling |
-| **ux-reviewer** | `reviewer` | `daa-code-review` | full-stack |
+| **analysis-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **api-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **backend-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | workbench |
+| **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **security-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **skill-builder** | `implementer` | `tdd`, `commit` | workbench |
+| **skill-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **ux-reviewer** | `reviewer` | `daa-code-review` | workbench |
 <!-- END GENERATED: agents-preset-table -->
 
 See the [agents reference](docs/reference/agents.md) for full descriptions.
@@ -269,7 +264,7 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | all |
 | `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | all |
 | `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
-| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint Python files with Ruff. | analysis, claude-tooling, data-pipeline, full-stack, python-api |
+| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |

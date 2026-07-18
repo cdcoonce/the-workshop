@@ -5,36 +5,6 @@
   },
   "plugins": [
     {
-      "name": "analysis",
-      "version": "1.0.0",
-      "description": "Notebooks, R/Python scripts, statistical analysis, exploratory work",
-      "source": "./dist/analysis"
-    },
-    {
-      "name": "claude-tooling",
-      "version": "1.0.0",
-      "description": "Developing Claude skills, hooks, agents, and template configurations",
-      "source": "./dist/claude-tooling"
-    },
-    {
-      "name": "data-pipeline",
-      "version": "1.0.0",
-      "description": "ETL/ELT pipelines, SQL transformations, scheduled data jobs",
-      "source": "./dist/data-pipeline"
-    },
-    {
-      "name": "data-viz",
-      "version": "1.0.0",
-      "description": "Intuitive, context-forward chart design in React (Recharts/Nivo) — right chart type for the data, guided insight over decoration",
-      "source": "./dist/data-viz"
-    },
-    {
-      "name": "full-stack",
-      "version": "1.0.0",
-      "description": "React/Next.js frontend + Python backend",
-      "source": "./dist/full-stack"
-    },
-    {
       "name": "persona-pair-programmer",
       "version": "1.0.0",
       "description": "Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.",
@@ -65,16 +35,16 @@
       "source": "./dist/persona-thinking-partner"
     },
     {
-      "name": "python-api",
-      "version": "1.0.0",
-      "description": "Python backend services — Lambda, FastAPI, Flask",
-      "source": "./dist/python-api"
-    },
-    {
       "name": "vault-ops",
       "version": "1.0.0",
       "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
       "source": "./dist/vault-ops"
+    },
+    {
+      "name": "workbench",
+      "version": "1.0.0",
+      "description": "The complete claude-workflow toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+      "source": "./dist/workbench"
     }
   ]
 }

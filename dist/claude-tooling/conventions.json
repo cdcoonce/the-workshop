@@ -1,7 +1,0 @@
-{
-  "conventions": [
-    "Skills follow the required SKILL.md structure",
-    "Progressive disclosure over monolithic instructions",
-    "Regenerate docs and dist after changing a component"
-  ]
-}

@@ -1,0 +1,38 @@
+{
+  "name": "workbench",
+  "description": "The complete claude-workflow toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+  "conventions": [
+    "Test-driven development: write the failing test first",
+    "Regenerate docs and dist after changing any component",
+    "Progressive disclosure over monolithic instructions",
+    "Conventional commits; stage explicitly, never git add ."
+  ],
+  "version": "1.0.0",
+  "core": {
+    "skills": "all",
+    "agents": "all",
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py",
+      "snapshot-subagent-start.py",
+      "verify-subagent-evidence.py",
+      "audit-config-change.py",
+      "inject-skill-router.py"
+    ]
+  },
+  "exclude": [],
+  "preset_skills": ["dagster-expert", "dbt-expert", "chart-taste", "react-ui-ux", "deploy"],
+  "preset_hooks": ["post-edit-lint.py"],
+  "preset_agents": [
+    "analysis-builder",
+    "skill-builder",
+    "skill-reviewer",
+    "pipeline-builder",
+    "data-quality-reviewer",
+    "frontend-builder",
+    "backend-builder",
+    "ux-reviewer",
+    "api-builder",
+    "security-reviewer"
+  ]
+}

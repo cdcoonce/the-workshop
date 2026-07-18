@@ -12,7 +12,7 @@ Lifecycle hooks and the events they run on. The event column is derived from the
 | `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | all |
 | `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | all |
 | `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
-| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint Python files with Ruff. | analysis, claude-tooling, data-pipeline, full-stack, python-api |
+| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
@@ -40,9 +40,9 @@ SessionStart hook: inject a persona output-style as additionalContext.
 
 ### `post-edit-lint.py`
 
-*`analysis` preset · events: `PostToolUse` · matcher: `edit|write|multi_edit|Edit|Write|MultiEdit`*
+*`workbench` preset · events: `PostToolUse` · matcher: `edit|write|multi_edit|Edit|Write|MultiEdit`*
 
-Post-edit hook: auto-format and lint Python files with Ruff.
+Post-edit hook: auto-format and lint edited files with whatever toolchain is
 
 ### `protect-files.py`
 

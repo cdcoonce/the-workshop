@@ -9,41 +9,41 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/commit` | Git commit workflow with enforced conventional commit style. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/tdd` | Test-driven development with red-green-refactor loop. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
-| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | analysis, claude-tooling, data-pipeline, data-viz, full-stack, python-api |
+| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
+| `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
+| `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
+| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
+| `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
+| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
+| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
+| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
+| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
+| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench |
+| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
+| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workbench |
+| `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
+| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
+| `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
+| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
+| `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | workbench |
+| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
+| `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
+| `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
+| `/tdd` | Test-driven development with red-green-refactor loop. | workbench |
+| `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench |
+| `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
+| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | workbench |
 
 ## Preset skills
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | data-viz |
-| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | data-pipeline |
-| `/dbt-expert` | Expert guidance for working with dbt Core. | data-pipeline |
-| `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | python-api |
-| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | full-stack |
+| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
+| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
+| `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
+| `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | workbench |
+| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -220,31 +220,31 @@ Create new agent skills with proper structure, progressive disclosure, and bundl
 
 ### `/chart-taste`
 
-*`data-viz` preset*
+*`workbench` preset*
 
 Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. Use when building charts or data visualizations with Recharts, Nivo, or similar React charting libraries.
 
 ### `/dagster-expert`
 
-*`data-pipeline` preset*
+*`workbench` preset*
 
 Expert guidance for working with Dagster and the dg CLI. ALWAYS use before doing any task that requires knowledge specific to Dagster, or that references assets, materialization, components, data tools or data pipelines. Common tasks may include creating a new project, adding new definitions, understanding the current project structure, answering general questions about the codebase (finding asset, schedule, sensor, component or job definitions), debugging issues, or providing deep information about a specific Dagster concept.
 
 ### `/dbt-expert`
 
-*`data-pipeline` preset*
+*`workbench` preset*
 
 Expert guidance for working with dbt Core. ALWAYS use before doing any task that requires knowledge specific to dbt, including building or modifying models, writing SQL transformations, configuring tests, running dbt CLI commands, or working with dbt project structure. Common triggers include references to dbt, models, ref(), source(), materializations, seeds, snapshots, dbt build/run/test, YAML schema files, or analytics engineering patterns.
 
 ### `/deploy`
 
-*`python-api` preset*
+*`workbench` preset*
 
 Deploy the portfolio chat agent Lambda function to AWS. Use when the user asks to deploy, redeploy, push to Lambda, update the chat agent, or after updating context files or lambda_function.py. Rebuilds the knowledge base, packages dependencies, and deploys to AWS Lambda.
 
 ### `/react-ui-ux`
 
-*`full-stack` preset*
+*`workbench` preset*
 
 Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. Use when building or editing React components, pages, or layouts (.tsx/.jsx), especially new UI generation in Tailwind/shadcn/Framer-Motion projects.
 
