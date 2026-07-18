@@ -10,7 +10,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 30 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
+| **`workbench`** | project | 31 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -48,7 +48,7 @@ The complete claude-workflow toolkit — every skill, agent, methodology doc, an
 - Progressive disclosure over monolithic instructions
 - Conventional commits; stage explicitly, never git add .
 
-**Skills (30):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
+**Skills (31):** `add-claude-workflow-hook`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `deploy`, `design-an-interface`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `grill-me`, `improve-codebase-architecture`, `improve-skill`, `persona-builder`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `readme-generator`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `tdd`, `triage-issue`, `using-workflow`, `write-a-prd`, `write-a-skill`
 
 **Agents (16):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `qa-tester`, `security-reviewer`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`, `tdd-implementer`, `ux-reviewer`
 
