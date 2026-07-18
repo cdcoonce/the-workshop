@@ -564,6 +564,21 @@ class TestBuildPresetAgentValidation:
         with pytest.raises(BuildValidationError, match="preset_agents and exclude"):
             build_preset("python-api", repo_root=tmp_repo)
 
+    def test_validation_catches_hook_in_both_preset_and_exclude(
+        self, tmp_repo: Path
+    ) -> None:
+        import pytest
+        from scripts.build_preset import BuildValidationError
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["preset_hooks"] = ["post-edit-lint.py"]
+        manifest["exclude"] = ["hooks/scripts/post-edit-lint.py"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(BuildValidationError, match="preset_hooks and exclude"):
+            build_preset("python-api", repo_root=tmp_repo)
+
 
 class TestManifestRequiredFields:
     """Validation for manifest.json required top-level fields."""

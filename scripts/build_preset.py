@@ -147,6 +147,14 @@ def _validate_manifest(
             f"A preset override cannot also be excluded."
         )
 
+    preset_hook_names = {f"hooks/scripts/{h}" for h in manifest.get("preset_hooks", [])}
+    hook_conflicts = preset_hook_names & excluded
+    if hook_conflicts:
+        errors.append(
+            f"Hooks in both preset_hooks and exclude: {', '.join(hook_conflicts)}. "
+            f"A preset override cannot also be excluded."
+        )
+
     conventions = manifest.get("conventions", [])
     if not isinstance(conventions, list) or not all(
         isinstance(c, str) for c in conventions
