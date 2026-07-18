@@ -14,7 +14,7 @@ Orchestrate the full development lifecycle: brainstorm → plan → review → i
 
 ## The 7-Phase Pipeline
 
-Every phase is mandatory. No phase can be skipped.
+Every phase is mandatory. No phase can be skipped. **Before treating any phase as optional**, read the Excuse → Reality table in [references/phase-transitions.md](references/phase-transitions.md#excuse-reality-skipping-a-phase) — every rationalization for skipping a phase is addressed there.
 
 | #   | Phase           | Delegates To                                           | Gate Condition                    |
 | --- | --------------- | ------------------------------------------------------ | --------------------------------- |
@@ -26,34 +26,15 @@ Every phase is mandatory. No phase can be skipped.
 | 6   | **Code Review** | `daa-code-review`                                      | Clean review                      |
 | 7   | **PR**          | `commit` + `finish-branch`                             | PR URL recorded                   |
 
-### Excuse → Reality: Skipping a Phase
-
-Every one of these is a rationalization for skipping mandatory work, not a legitimate exception:
-
-| Excuse                                              | Reality                                                                                                     |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| "This feature is too small for a PRD"               | Small features are where unexamined assumptions cost most; the PRD can be 5 lines but it must exist.        |
-| "The plan is obvious, skip CEO Review"              | "Obvious" plans are exactly where a second pass catches scope creep or a missed edge case cheaply.          |
-| "I'll write the issue and implement it in one step" | Skipping Phase 4 means no acceptance criteria exist to implement against or verify later.                   |
-| "Code review can happen after the PR is open"       | Phase 6 exists to catch issues before they're public; deferring it just moves the fix into review comments. |
-| "This is a hotfix, the pipeline doesn't apply"      | Hotfixes still need a record of what changed and why — use the same phases, compressed, not skipped.        |
-
 ## Re-entry Logic
-
-On every invocation:
 
 ### No arguments (`/dev-cycle`)
 
-1. Scan `docs/dev-cycle/` for `*.state.md` files with `status: in_progress`
-2. If one → ask: "Resume **{feature}** (`{branch}`)? Currently at **{phase}**."
-3. If multiple → list with branch names, ask which to resume
-4. If none → ask: "What feature are you working on?" → start Phase 1
+Scan `docs/dev-cycle/` for `*.state.md` with `status: in_progress`. One match → ask "Resume **{feature}** (`{branch}`)? Currently at **{phase}**." Multiple → list with branch names, ask which. None → ask what feature, start Phase 1.
 
 ### With argument (`/dev-cycle {slug}`)
 
-1. Look for `docs/dev-cycle/{slug}.state.md`
-2. Found → resume at `current_phase`
-3. Not found → create state file, start Phase 1
+Look for `docs/dev-cycle/{slug}.state.md`. Found → resume at `current_phase`. Not found → create state file, start Phase 1.
 
 ### Slug Collision
 
@@ -61,70 +42,29 @@ When creating a new state file, check `docs/dev-cycle/` for existing slugs. If t
 
 ### Context Loading on Resume
 
-Before continuing, load ALL referenced artifacts:
-
-- **Brainstorm:** `gh issue view` the PRD issue
-- **Plan:** Read plan file from disk
-- **CEO Review:** Read the plan file (includes review revisions)
-- **Issues:** `gh issue view` each implementation issue
-- **Implement:** Check git status on feature branch, review closed issues
-
-Present summary: "Resuming **{feature}** at **{phase}**. Here's where we left off: ..."
+Before continuing, load all referenced artifacts: PRD issue (`gh issue view`), plan file (from disk, includes CEO Review revisions), implementation issues (`gh issue view` each), and git status on the feature branch. Present: "Resuming **{feature}** at **{phase}**. Here's where we left off: ..."
 
 ## Phase Execution
 
-### Phase 1: Brainstorm
-
-Invoke `write-a-prd`. Trust the skill's internal flow (interview → PRD → GitHub issue). Record the issue URL in the state file.
-
-### Phase 2: Plan
-
-Pass the PRD issue URL to `prd-to-plan`. Record the plan file path (at `docs/plans/{feature}.md`).
-
-### Phase 3: CEO Review
-
-Pass plan file path to `plan-ceo-review`. Recommend HOLD SCOPE mode but let the skill's own mode selection (Step 0F) run. Record when review is complete and user approves.
+Phases 1–3 delegate directly per the table above; record each artifact (issue URL, plan path, review completion) in the state file as soon as it's produced. Full validate/handoff/record/failure detail for every transition lives in [references/phase-transitions.md](references/phase-transitions.md).
 
 ### Phase 4: Issues
 
-**Owned by the orchestrator.** Read the plan's vertical slices. For each slice, create a GitHub issue using `gh issue create` that:
-
-- References the PRD issue
-- Includes acceptance criteria from the plan
-- Is created in dependency order
-
-Record each issue URL in the Issues table immediately after creation. See [references/phase-transitions.md](references/phase-transitions.md) for partial-completion recovery.
+**Owned by the orchestrator.** For each of the plan's vertical slices, create a GitHub issue via `gh issue create` that references the PRD, includes acceptance criteria from the plan, and is created in dependency order. Record each issue URL immediately after creation. See [references/phase-transitions.md](references/phase-transitions.md) for partial-completion recovery.
 
 ### Phase 5: Implement
 
-**Owned by the orchestrator.** Create feature branch `feat/{feature-slug}` (see branch handling in [references/phase-transitions.md](references/phase-transitions.md)).
-
-Dispatch one subagent per GitHub issue following `subagent-development` methodology:
-
-- Each subagent invokes the `tdd` skill
-- Code review runs between each subagent dispatch
-- State file is updated after each subagent completes (not batched)
-
-Log per-subagent events:
-
-- `"Subagent started for issue #N: {title}"`
-- `"Subagent completed for issue #N: {pass/fail}"`
-- `"Code review after issue #N: {clean/blocking issues found}"`
+**Owned by the orchestrator.** Create feature branch `feat/{feature-slug}`, then dispatch one subagent per GitHub issue following `subagent-development` methodology (each invokes `tdd`; code review runs between dispatches; state file updates after each subagent, not batched). See [references/phase-transitions.md](references/phase-transitions.md) for branch handling, per-subagent logging, and model-selection requirements.
 
 **Escalation threshold:** After 3 failed fix attempts on the same issue, stop retrying. A 4th attempt at the same fix is not more diligence, it's a sign the architecture is wrong for the problem. Question the approach, then ask the human before continuing.
 
 ### Phase 6: Code Review
 
-Invoke `daa-code-review` against all changed files on the feature branch. If blocking issues found → fix, re-run. Loop until clean.
+Invoke `daa-code-review` against all changed files on the feature branch. If blocking issues found → fix, re-run. Loop until clean. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
 
-If architectural issues requiring plan rework → trigger backwards transition to Phase 2.
+### Phase 7: PR
 
-### Phase 7: MR
-
-Invoke `commit` for a conventional commit, then hand off to `finish-branch`, which presents its four-option menu (merge locally, push + open PR, keep as-is, discard) and owns its own test-gate around any rebase or merge it performs.
-
-- **Push + open PR:** `finish-branch` invokes `github-cli` to open the PR. Include `Closes #N` for the PRD issue and all implementation issues in the PR description so GitHub auto-closes them on merge. Record PR URL, set `status: completed`. Then run the archival step (see Archival below).
-- **Merge locally / keep / discard:** These paths do not produce a PR URL, so there is no PR URL to record. Set `status: completed` or `status: abandoned` as appropriate per the existing Archival section (merge locally and keep-as-is are `completed`; discard is `abandoned`), then run the archival step.
+Invoke `commit` for a conventional commit, then hand off to `finish-branch`, which presents its four-option menu (merge locally, push + open PR, keep as-is, discard) and owns its own test-gate around any rebase or merge it performs. See [references/phase-transitions.md](references/phase-transitions.md) for recording rules per option and the required post-rebase/merge re-test.
 
 ## State File
 
@@ -132,11 +72,7 @@ Each feature tracked at `docs/dev-cycle/{feature-slug}.state.md`. See [reference
 
 ## Failure & Recovery
 
-See [references/phase-transitions.md](references/phase-transitions.md) for:
-
-- Phase retry logic (blocked → retry on next invocation)
-- Backwards transitions (implement/code_review → plan)
-- Feature abandonment. Archived files are moved to `docs/archive/`.
+See [references/phase-transitions.md](references/phase-transitions.md) for phase retry logic, backwards transitions (implement/code_review → plan), and feature abandonment. Archived files are moved to `docs/archive/`.
 
 ## Branch Management
 
@@ -147,14 +83,4 @@ See [references/phase-transitions.md](references/phase-transitions.md) for:
 
 ## Archival
 
-When a feature reaches a terminal state (`completed` or `abandoned`), archive its artifacts:
-
-1. Create archive directories: `mkdir -p docs/archive/dev-cycle docs/archive/plans`
-2. Move the state file: `git mv docs/dev-cycle/{slug}.state.md docs/archive/dev-cycle/`
-3. Move the plan file: read the plan path from the artifacts table, then `git mv {plan_path} docs/archive/plans/`
-4. Commit the moves with message: `chore(dev-cycle): archive {slug}`
-
-Archival runs automatically:
-
-- At the end of Phase 7 (after PR URL is recorded and status is set to `completed`)
-- On feature abandonment (after status is set to `abandoned`)
+Runs automatically at the end of Phase 7 (after PR URL is recorded and status is set to `completed`) and on feature abandonment (after status is set to `abandoned`). See [references/phase-transitions.md](references/phase-transitions.md) for the exact archive steps (directory creation, `git mv`, commit message).

@@ -6,6 +6,20 @@ See the 7-Phase Pipeline table in SKILL.md for delegation targets. This document
 
 ---
 
+## Excuse → Reality: Skipping a Phase
+
+Every one of these is a rationalization for skipping mandatory work, not a legitimate exception:
+
+| Excuse                                              | Reality                                                                                                     |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| "This feature is too small for a PRD"               | Small features are where unexamined assumptions cost most; the PRD can be 5 lines but it must exist.        |
+| "The plan is obvious, skip CEO Review"              | "Obvious" plans are exactly where a second pass catches scope creep or a missed edge case cheaply.          |
+| "I'll write the issue and implement it in one step" | Skipping Phase 4 means no acceptance criteria exist to implement against or verify later.                   |
+| "Code review can happen after the PR is open"       | Phase 6 exists to catch issues before they're public; deferring it just moves the fix into review comments. |
+| "This is a hotfix, the pipeline doesn't apply"      | Hotfixes still need a record of what changed and why — use the same phases, compressed, not skipped.        |
+
+---
+
 ## Brainstorm → Plan
 
 - **Validate:** GitHub issue URL (PRD) is present and accessible via `gh issue view`
@@ -59,7 +73,7 @@ See the 7-Phase Pipeline table in SKILL.md for delegation targets. This document
 - **Validate:** Code review passed with no blocking issues
 - **Handoff:** Invoke `commit` for a conventional commit, then hand off to `finish-branch`. `finish-branch` owns the merge/PR/keep/discard decision, presents its own four-option menu, and runs its own test-gate around any rebase or merge it performs — the orchestrator does not check for conflicts or invoke `github-cli` directly.
 - **Post-rebase/merge re-test (required):** Whenever `finish-branch` performs a rebase or merge (its "merge locally" and "push + open PR" options), the full project test suite must be green on the resulting tree before this phase counts as complete. This is not optional bookkeeping: `core/hooks/verify-tests-before-stop.py` only fingerprints uncommitted working-tree changes (`git status --porcelain` plus file contents), so a rebase that already landed as a clean commit leaves no uncommitted diff for the stop hook to hash — it will not detect that the tree changed and cannot catch a stale or unverified rebase on its own. The orchestrator must confirm the re-test ran and passed rather than relying on the stop hook to catch a skipped one.
-- **Record (push + open PR):** PR URL in artifacts table, set feature `status: completed`
+- **Record (push + open PR):** `finish-branch` invokes `github-cli` to open the PR. Include `Closes #N` for the PRD issue and all implementation issues in the PR description so GitHub auto-closes them on merge. Record the PR URL in the artifacts table, set feature `status: completed`.
 - **Record (merge locally / keep / discard):** No PR URL is produced. Set `status: completed` (merge locally, keep-as-is) or `status: abandoned` (discard) per the existing Archival section.
 - **Archive:** Run archival step — `mkdir -p docs/archive/dev-cycle docs/archive/plans`, then `git mv` the state file to `docs/archive/dev-cycle/` and the plan file (read path from artifacts table) to `docs/archive/plans/`. Commit with `chore(dev-cycle): archive {slug}`.
 - **Failure:** If `finish-branch`'s post-rebase/merge re-test is red, treat the phase as `blocked` — do not record a PR URL or run archival. If PR creation fails (no remote, auth error), set phase to `blocked`.
