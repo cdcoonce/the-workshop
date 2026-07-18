@@ -350,3 +350,49 @@ If a dedicated `exceptions.py` or `errors.ts` exists, read it fully.
 | **Large** (20+ files)   | Phases 1-2 sequentially. Dispatch 4-6 parallel agents for Phase 3 grouped by directory. |
 
 When dispatching parallel agents, always include the import graph from Phase 2 in each agent's prompt.
+
+---
+
+## Output Structure
+
+This is the detailed reference for **Step 3 (project.md Generation)** of the project-context workflow. The generated `project.md` must follow this structure. Scale depth to match the project — small projects may skip sections, complex projects may add subsections.
+
+````markdown
+# {Project Name} — Project Context
+
+{One-sentence description: what it is, what it does, key technology.}
+
+## Tech Stack
+
+- **{Language/Runtime}** — {version constraint if known}
+- **{Framework}** — {what it's used for}
+- **{Key Library}** — {purpose}
+- ...bulleted list, bold the tool name, annotate purpose
+
+## Project Layout
+
+```text
+{annotated directory tree — one short phrase per entry}
+```
+
+## Data Flow
+
+```text
+{ASCII diagram showing source → transform → output pipeline}
+```
+
+## Data Sources
+
+- `{SOURCE_NAME}` — {what it provides}
+- ...for databases, APIs, local files, etc.
+
+## Test Markers
+
+- `{test command}` — {what it runs}
+- `{marker name}` — {what it gates}
+
+## Key Architecture Patterns
+
+- **{Pattern name}** (`{file}`): {one-sentence explanation}
+- ...only non-obvious patterns worth calling out
+````
