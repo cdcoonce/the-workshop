@@ -76,6 +76,12 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         return resolved
     scope, target, adapter = resolved
 
+    if args.dry_run:
+        print(
+            f"[dry-run] would uninstall {args.preset} from {adapter.name} at {target}"
+        )
+        return 0
+
     print(f"uninstalling {args.preset} from {adapter.name} ({scope.value}) at {target}")
     _print_report(adapter.uninstall(target, args.preset))
     return 0
@@ -113,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_uninstall.add_argument(
         "--user", action="store_true", help="uninstall from ~ instead of the repo"
     )
+    p_uninstall.add_argument("--dry-run", action="store_true")
     p_uninstall.set_defaults(func=cmd_uninstall)
 
     p_list = sub.add_parser("list", help="list presets + detected agent")
