@@ -10,7 +10,11 @@ description: >
 
 # Project Context Generator
 
-Create or update `.claude/docs/project.md` — the concise project reference `CLAUDE.md` auto-loads every conversation. Unlike a README (written for humans), project.md is written for Claude: dense, factual, no marketing prose. When it's missing or stale, Claude wastes turns re-discovering the tech stack, test commands, and architecture — this skill automates that discovery.
+Create or update `.claude/docs/project.md` — the concise project reference that Claude loads every conversation. Unlike a README (written for humans), project.md is written for Claude: dense, factual, no marketing prose.
+
+## Why this skill exists
+
+`.claude/docs/project.md` is auto-loaded into every Claude conversation via `CLAUDE.md`. When it's missing or stale, Claude wastes turns re-discovering the tech stack, test commands, and architecture. This skill automates that discovery and produces a tight, accurate reference file.
 
 ## Workflow
 
@@ -28,27 +32,33 @@ See [references/analysis-methodology.md](references/analysis-methodology.md) for
 
 ### Step 2: Ask clarifying questions
 
-After analysis, ask the user about `[inferred-low]` and `[unknown]` items. Keep it focused — don't ask about things you already know. Common gaps: project purpose (if not obvious from code), data sources (what feeds in, what receives output), deployment (local, scheduled, cloud). A straightforward codebase may need only 1-2 questions, or none.
+After analysis, ask the user about `[inferred-low]` and `[unknown]` items. Keep it focused — don't ask about things you already know. Common gaps:
+
+- **Project purpose**: What problem does this solve? (if not obvious from code)
+- **Data sources**: What systems feed data in? What receives output?
+- **Deployment**: How/where is this run? (local, scheduled, cloud)
+
+If the codebase is straightforward, you may only need 1-2 questions — or none.
 
 ### Step 3: Generate project.md
 
-Write the file following the structure in [references/analysis-methodology.md](references/analysis-methodology.md#output-structure) — scale depth to match the project; small projects may skip sections, complex projects may add subsections. If `.claude/docs/project.md` already exists, confirm with the user before overwriting.
+Write the file using the structure defined in [references/output-structure.md](references/output-structure.md) — tech stack, project layout, data flow, data sources, test markers, and key architecture patterns. If `.claude/docs/project.md` already exists, confirm with the user before overwriting.
 
 ## Writing Guidelines
 
-- **Dense over verbose.** Every line should earn its place — no motivation or context-setting, just facts.
+- **Dense over verbose.** Every line should earn its place. Claude doesn't need motivation or context-setting — just facts.
 - **Specific over generic.** "Run `uv run pytest -m 'not snowflake'`" beats "Run the tests excluding external dependencies."
 - **One sentence per pattern.** Architecture patterns should be one line each — name, file, explanation.
 - **Real commands.** Copy test commands from `pyproject.toml` or CI configs, not paraphrased versions.
 - **Annotate dependencies.** Don't just list `polars` — say `polars — high-performance DataFrames`.
-- **Data sources are critical.** List every database, API, and file source Claude needs to know about.
-- **Keep it under 100 lines.** If project.md exceeds ~100 lines, it's too detailed — move specifics to dedicated docs and link to them.
+- **Data sources are critical.** Claude needs to know what external systems exist. List every database, API, and file source.
+- **Keep it under 100 lines.** If project.md exceeds ~100 lines of content, it's too detailed — move specifics to dedicated docs and link to them.
 
 ## Output
 
-Save as `.claude/docs/project.md` (create the directory if needed). If the file already exists, show the user a diff summary before overwriting.
+Save the file as `.claude/docs/project.md` (create the directory if needed). If the file already exists, show the user a diff summary before overwriting.
 
-After generating, check if `CLAUDE.md` references it. If not, suggest adding:
+After generating project.md, check if `CLAUDE.md` references it. If not, suggest adding a line like:
 
 ```markdown
 See [.claude/docs/project.md](.claude/docs/project.md) for project-specific details (tech stack, architecture, test markers).
