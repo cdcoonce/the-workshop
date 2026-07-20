@@ -1,5 +1,5 @@
 {
-  "name": "claude-workflow",
+  "name": "the-workshop",
   "owner": {
     "name": "Charles Coonce"
   },
@@ -49,7 +49,7 @@
     {
       "name": "workbench",
       "version": "1.1.1",
-      "description": "The complete claude-workflow toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+      "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.",
       "source": "./dist/workbench"
     }
   ]

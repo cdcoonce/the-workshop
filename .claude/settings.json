@@ -33,6 +33,6 @@
     ]
   },
   "enabledPlugins": {
-    "workbench@claude-workflow": true
+    "workbench@the-workshop": true
   }
 }

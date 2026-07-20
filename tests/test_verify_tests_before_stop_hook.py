@@ -116,7 +116,7 @@ def test_passing_tests_exit_clean_and_write_state(tmp_path: Path) -> None:
     result = run_hook({"cwd": str(tmp_path), "session_id": "s2"})
 
     assert result.returncode == 0
-    state_file = tmp_path / ".git" / "claude-workflow-stop-gate" / "s2.txt"
+    state_file = tmp_path / ".git" / "the-workshop-stop-gate" / "s2.txt"
     assert state_file.exists()
 
 

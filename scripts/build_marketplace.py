@@ -87,7 +87,7 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
     claude_marketplace_dir.mkdir(parents=True, exist_ok=True)
 
     claude_marketplace = {
-        "name": "claude-workflow",
+        "name": "the-workshop",
         "owner": {"name": "Charles Coonce"},
         "plugins": plugins,
     }
@@ -101,8 +101,8 @@ def build_marketplace(repo_root: Path | None = None) -> Path:
     codex_marketplace_dir = root / ".agents" / "plugins"
     codex_marketplace_dir.mkdir(parents=True, exist_ok=True)
     codex_marketplace = {
-        "name": "claude-workflow",
-        "interface": {"displayName": "Claude Workflow"},
+        "name": "the-workshop",
+        "interface": {"displayName": "The Workshop"},
         "plugins": [_to_codex_plugin_entry(plugin) for plugin in plugins],
     }
 

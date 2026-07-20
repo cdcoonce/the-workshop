@@ -1,8 +1,8 @@
-# Claude Workflow
+# The Workshop
 
-![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white) ![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-6B4FBB?logo=anthropic&logoColor=white) ![pytest](https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white) ![uv](https://img.shields.io/badge/Package_Manager-uv-DE5FE9) ![Hatchling](https://img.shields.io/badge/Build-Hatchling-F5A623) ![GitHub](https://img.shields.io/badge/GitHub-gh_CLI-181717?logo=github&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white) ![Claude Code](https://img.shields.io/badge/Claude_Code-native-6B4FBB?logo=anthropic&logoColor=white) ![Codex](https://img.shields.io/badge/Codex-native-000000?logo=openai&logoColor=white) ![Cortex Code](https://img.shields.io/badge/Cortex_Code-native-29B5E8?logo=snowflake&logoColor=white) ![pytest](https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white) ![uv](https://img.shields.io/badge/Package_Manager-uv-DE5FE9)
 
-A **Claude Code plugin** that gives any project a fully configured AI development environment — skills, methodology docs, agents, and hooks — picked up in seconds by pasting a URL.
+A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
 **26 universal skills · 6 core agents · 8 hooks · 2 project presets · 6 persona plugins**
@@ -17,9 +17,10 @@ A **Claude Code plugin** that gives any project a fully configured AI developmen
 - [What Is This](#what-is-this)
 - [Reference](#reference)
 - [Installation](#installation)
-  - [Claude (Primary)](#claude-primary)
+  - [Claude Code](#claude-code)
+  - [Codex](#codex)
   - [Cortex Code (CoCo Desktop)](#cortex-code-coco-desktop)
-  - [Other Agents (Manual Copy-Paste)](#other-agents-manual-copy-paste)
+  - [Any Other Agent (Manual Copy)](#any-other-agent-manual-copy)
 - [Presets](#presets)
 - [Skills](#skills)
   - [Universal Skills](#universal-skills)
@@ -47,13 +48,13 @@ A **Claude Code plugin** that gives any project a fully configured AI developmen
 
 ## What Is This
 
-Every project that uses **Claude Code** needs skills, hooks, settings, and development standards. Setting these up manually is repetitive and error-prone.
+Every coding-agent project needs skills, hooks, settings, and development standards. Setting these up by hand — and keeping them in sync across agents and repos — is repetitive and error-prone.
 
-**Claude Workflow** is a Claude Code plugin that solves this. Paste the repo URL into Claude, install **`workbench`**, and you get a fully configured environment with the full skill set, every agent, methodology docs, and hooks — installed automatically.
+**The Workshop** solves this. It's a portable dev-environment toolkit that installs natively on **Claude Code**, **Codex**, and **Cortex Code**: the full skill set, every agent, methodology docs, and safety hooks, picked up by pasting a URL. Install **`workbench`** and you get the whole environment configured automatically.
 
-The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each is listed in `.claude-plugin/marketplace.json` and maps to a self-contained plugin directory under `dist/`. Claude reads this marketplace index and can install any of them on demand.
+**One shared source, three native outputs.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (Claude Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex Code) — from the same components, with no install-time transform. A preset built here installs and runs the same way on any of the three.
 
-For teams using non-Claude agents (OpenAI, Cursor, etc.), the `dist/` output can also be copied manually.
+The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each maps to a self-contained plugin directory under `dist/`, indexed for Claude Code in `.claude-plugin/marketplace.json` and for Codex in `.agents/plugins/marketplace.json`.
 
 ---
 
@@ -61,59 +62,63 @@ For teams using non-Claude agents (OpenAI, Cursor, etc.), the `dist/` output can
 
 Complete, always-current reference for every component — generated from source, so it can't drift:
 
-| Reference | What's in it |
-| --- | --- |
-| [Skills](docs/reference/skills.md) | Every universal and preset skill, with full descriptions |
-| [Agents](docs/reference/agents.md) | Subagent roles, their skill sets, and preset availability |
-| [Hooks](docs/reference/hooks.md) | Lifecycle hooks and the events they run on |
-| [Presets](docs/reference/presets.md) | What each preset ships, plus its conventions |
-| [Methodology](docs/reference/methodology.md) | The working-method docs bundled into every preset |
-| [Build & Wiring](docs/reference/build-and-wiring.md) | How the plugin is assembled and how hooks are wired |
+| Reference                                            | What's in it                                              |
+| ---------------------------------------------------- | --------------------------------------------------------- |
+| [Skills](docs/reference/skills.md)                   | Every universal and preset skill, with full descriptions  |
+| [Agents](docs/reference/agents.md)                   | Subagent roles, their skill sets, and preset availability |
+| [Hooks](docs/reference/hooks.md)                     | Lifecycle hooks and the events they run on                |
+| [Presets](docs/reference/presets.md)                 | What each preset ships, plus its conventions              |
+| [Methodology](docs/reference/methodology.md)         | The working-method docs bundled into every preset         |
+| [Build & Wiring](docs/reference/build-and-wiring.md) | How the plugin is assembled and how hooks are wired       |
 
 ---
 
 ## Installation
 
-### Claude (Primary)
+Every preset builds native plugin manifests for all three platforms from one shared source, so it installs natively wherever you work. Pick your platform below. Most projects want **`workbench`** (the everything package); swap in a persona or `vault-ops` if you prefer.
+
+### Claude Code
 
 Paste the repo URL into Claude and ask for `workbench` (or a specific persona / `vault-ops`):
 
 ```
-https://github.com/cdcoonce/claude-workflow
+https://github.com/cdcoonce/the-workshop
 ```
 
-Claude will read `.claude-plugin/marketplace.json`, find the available packages, and install the one you select into your project. No cloning or building required. Most projects want `workbench`.
+Claude reads `.claude-plugin/marketplace.json`, finds the available packages, and installs the one you select into your project. No cloning or building required.
 
 See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
+
+### Codex
+
+Codex discovers packages from the agents marketplace index at the repo root, `.agents/plugins/marketplace.json`. Every preset ships a native `.codex-plugin/plugin.json` under `dist/<preset-name>/`, so a selected package installs without any Claude-specific translation.
 
 ### Cortex Code (CoCo Desktop)
 
 Use the GitHub Plugin Installer with a sub-path to install any preset directly:
 
 ```
-/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/<preset-name>
+/github-plugin-installer https://github.com/cdcoonce/the-workshop/tree/main/dist/<preset-name>
 ```
 
 For example, to install `workbench`:
 
 ```
-/github-plugin-installer https://github.com/cdcoonce/claude-workflow/tree/main/dist/workbench
+/github-plugin-installer https://github.com/cdcoonce/the-workshop/tree/main/dist/workbench
 ```
 
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
 
 > **Prerequisite:** Persona plugins require [`uv`](https://docs.astral.sh/uv/) on PATH for the SessionStart hook.
 
-### Other Agents (Manual Copy-Paste)
+### Any Other Agent (Manual Copy)
 
-For non-Claude agents, copy the pre-built plugin directory directly into your project:
+Each `dist/<preset-name>/` is a complete, self-contained plugin — native manifests for all three platforms, plus skills, agents, hooks, settings, and a README. For any agent not listed above, copy the directory into your project:
 
 ```bash
 # workbench is the everything package; swap for a persona or vault-ops if preferred
 cp -r dist/workbench/ /path/to/your-project/.claude/plugins/workbench/
 ```
-
-The `dist/` directories are self-contained — each one is a complete Claude Code plugin with `.claude-plugin/plugin.json`, skills, agents, hooks, settings, and a README.
 
 ---
 
@@ -147,7 +152,7 @@ These ship with every preset:
 <!-- BEGIN GENERATED: skills-table -->
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
+| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
 | `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
@@ -340,8 +345,8 @@ This section is for contributors who want to build presets from source, add new 
 - **[uv](https://docs.astral.sh/uv/)** — Python package manager
 
 ```bash
-git clone https://github.com/cdcoonce/claude-workflow.git
-cd claude-workflow
+git clone https://github.com/cdcoonce/the-workshop.git
+cd the-workshop
 uv sync
 ```
 
@@ -374,7 +379,7 @@ graph TD
     end
 
     subgraph "dist/preset-name/ (plugin)"
-        OUT_PLUGIN[.claude-plugin/plugin.json]
+        OUT_PLUGIN[".claude-plugin/ + .codex-plugin/ + .cortex-plugin/"]
         OUT_SKILLS[skills/]
         OUT_AGENTS[agents/]
         OUT_HOOKS[hooks/]
@@ -385,7 +390,7 @@ graph TD
 
 Key design decisions:
 
-- **Plugin format** — Output is a self-contained Claude Code plugin with `.claude-plugin/plugin.json`
+- **Plugin format** — Output is a self-contained plugin that ships a native manifest for each platform (`.claude-plugin/`, `.codex-plugin/`, `.cortex-plugin/`)
 - **Override semantics** — A preset skill or agent with the same name as a core one **replaces** it entirely
 - **Settings merge** — Base and preset JSON are shallow-merged; hook arrays are appended, not replaced
 - **Fail-fast validation** — All manifest references are checked upfront before any files are copied
@@ -419,12 +424,12 @@ The reference docs and the README component tables are **generated from source**
 - `make build` regenerates the marketplace index and rebuilds every preset into `dist/`.
 - `make test` runs the suites **and** the drift gate: it runs `build_docs --check`, rebuilds `dist/`, and fails if any generated output differs from what's committed. The same gate runs in CI.
 
-When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`write-a-skill`, `create-hook`, `add-claude-workflow-hook`) end with this step.
+When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`write-a-skill`, `create-hook`, `add-the-workshop-hook`) end with this step.
 
 ### Folder Structure
 
 ```
-claude-workflow/
+the-workshop/
 ├── .claude-plugin/
 │   └── marketplace.json     # Plugin registry — lists all presets with dist/ sources
 ├── .github/workflows/       # CI — runs make test (suites + drift gate)
@@ -447,16 +452,16 @@ claude-workflow/
 
 ### Scripts Reference
 
-| Command                                                       | Description                                                     |
-| ------------------------------------------------------------- | --------------------------------------------------------------- |
-| `make docs`                                                   | Regenerate `docs/reference/` and the README's generated tables  |
-| `make build`                                                  | Regenerate the marketplace and rebuild every preset into `dist/`|
-| `make test`                                                   | Run the suites plus the docs+dist drift gate                    |
-| `uv run python -m scripts.build_docs [--check]`               | Generate docs, or check for staleness (`--check`)               |
-| `uv run python -m scripts.build_preset <preset>`              | Assemble core + preset into `dist/<preset>/`                    |
-| `uv run python -m scripts.build_marketplace`                  | Regenerate `.claude-plugin/marketplace.json`                    |
-| `uv run python -m scripts.smoke_test <preset>`                | Validate internal consistency of a built preset                 |
-| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions |
+| Command                                                       | Description                                                      |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `make docs`                                                   | Regenerate `docs/reference/` and the README's generated tables   |
+| `make build`                                                  | Regenerate the marketplace and rebuild every preset into `dist/` |
+| `make test`                                                   | Run the suites plus the docs+dist drift gate                     |
+| `uv run python -m scripts.build_docs [--check]`               | Generate docs, or check for staleness (`--check`)                |
+| `uv run python -m scripts.build_preset <preset>`              | Assemble core + preset into `dist/<preset>/`                     |
+| `uv run python -m scripts.build_marketplace`                  | Regenerate `.claude-plugin/marketplace.json`                     |
+| `uv run python -m scripts.smoke_test <preset>`                | Validate internal consistency of a built preset                  |
+| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions  |
 
 ### Running Tests
 
@@ -475,12 +480,12 @@ uv run pytest --cov=scripts --cov-report=term-missing
 
 ## Troubleshooting
 
-| Symptom                                        | Likely Cause                                                                            | Fix                                                                    |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `build_preset.py` fails with "skill not found" | Manifest references a skill that doesn't exist in `core/skills/` or `presets/*/skills/` | Check `manifest.json` `preset_skills` array against actual directories |
-| `make test` fails with "Documentation is stale" | A component changed but docs/dist weren't regenerated                                    | Run `make docs && make build` and commit the regenerated output        |
-| Smoke test reports missing hook                | Hook listed in `hooks.json` but script not in `hooks/scripts/`                          | Add the hook script or remove from settings                            |
-| Dev-cycle state file validation fails          | Frontmatter schema mismatch or phase transition error                                   | Check `schema_version: 1` and that phases follow strict order          |
+| Symptom                                         | Likely Cause                                                                            | Fix                                                                    |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `build_preset.py` fails with "skill not found"  | Manifest references a skill that doesn't exist in `core/skills/` or `presets/*/skills/` | Check `manifest.json` `preset_skills` array against actual directories |
+| `make test` fails with "Documentation is stale" | A component changed but docs/dist weren't regenerated                                   | Run `make docs && make build` and commit the regenerated output        |
+| Smoke test reports missing hook                 | Hook listed in `hooks.json` but script not in `hooks/scripts/`                          | Add the hook script or remove from settings                            |
+| Dev-cycle state file validation fails           | Frontmatter schema mismatch or phase transition error                                   | Check `schema_version: 1` and that phases follow strict order          |
 
 ---
 

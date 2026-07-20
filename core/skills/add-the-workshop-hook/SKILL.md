@@ -1,14 +1,14 @@
 ---
-name: add-claude-workflow-hook
+name: add-the-workshop-hook
 description: >
-  Design and ship a new core hook in this repo (claude-workflow) — fetch the
+  Design and ship a new core hook in this repo (the-workshop) — fetch the
   exact event schema, write a stdlib-only fail-open script, TDD it against
   real subprocess+git behavior, wire it into every affected preset, and push
   to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop,
   SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
 ---
 
-# Add Claude Workflow Hook
+# Add The Workshop Hook
 
 Maintainer skill for this repo. Follow these 7 steps in order — they were
 derived from building `verify-tests-before-stop` (Stop), the
@@ -51,7 +51,7 @@ A clean working tree at hook-fire time doesn't prove nothing happened — e.g.
 a subagent can legitimately commit its own work between start and stop,
 leaving the tree clean. If the check needs a "did X happen since Y" answer,
 pair a start-of-lifecycle snapshot hook (state file under
-`<git-dir>/claude-workflow-<name>-gate/`) with the stop-of-lifecycle
+`<git-dir>/the-workshop-<name>-gate/`) with the stop-of-lifecycle
 comparison hook, rather than trying to infer history from one snapshot.
 
 ## 5. TDD against real subprocess + real git, not mocks

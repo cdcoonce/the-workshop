@@ -1,16 +1,16 @@
 {
   "name": "workbench",
   "version": "1.1.1",
-  "description": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+  "description": "The complete Workshop toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.",
   "author": {
     "name": "Charles Coonce"
   },
-  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "repository": "https://github.com/cdcoonce/the-workshop",
   "skills": "./skills/",
   "interface": {
     "displayName": "workbench",
-    "shortDescription": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
-    "longDescription": "The complete claude-workflow toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow.",
+    "shortDescription": "The complete Workshop toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.",
+    "longDescription": "The complete Workshop toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.",
     "developerName": "Charles Coonce",
     "category": "Productivity",
     "capabilities": [

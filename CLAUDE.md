@@ -1,6 +1,6 @@
-# Claude Workflow Template System
+# The Workshop
 
-This file is auto-loaded every conversation. It defines how Claude should work in this repo.
+This file is auto-loaded every conversation. It defines how coding agents should work in this repo.
 
 ## What This Repo Is
 

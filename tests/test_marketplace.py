@@ -25,8 +25,8 @@ class TestBuildMarketplace:
         build_marketplace(tmp_repo)
         marketplace_path = tmp_repo / ".agents" / "plugins" / "marketplace.json"
         data = json.loads(marketplace_path.read_text())
-        assert data["name"] == "claude-workflow"
-        assert data["interface"]["displayName"] == "Claude Workflow"
+        assert data["name"] == "the-workshop"
+        assert data["interface"]["displayName"] == "The Workshop"
         for plugin in data["plugins"]:
             assert plugin["source"]["source"] == "local"
             assert plugin["source"]["path"].startswith("./dist/")
@@ -46,7 +46,7 @@ class TestBuildMarketplace:
         build_marketplace(tmp_repo)
         marketplace_path = tmp_repo / ".claude-plugin" / "marketplace.json"
         data = json.loads(marketplace_path.read_text())
-        assert data["name"] == "claude-workflow"
+        assert data["name"] == "the-workshop"
 
     def test_marketplace_has_owner(self, tmp_repo: Path) -> None:
         build_marketplace(tmp_repo)

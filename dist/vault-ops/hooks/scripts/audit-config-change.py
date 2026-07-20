@@ -54,7 +54,7 @@ def git_dir(project_dir: Path):
 
 repo_git_dir = git_dir(cwd)
 log_path = (
-    repo_git_dir / "claude-workflow-config-audit.log"
+    repo_git_dir / "the-workshop-config-audit.log"
     if repo_git_dir is not None
     else None
 )

@@ -1,11 +1,11 @@
 [project]
-name = "claude-workflow"
+name = "the-workshop"
 version = "0.1.0"
-description = "Template system for Claude Code configurations"
+description = "Portable AI dev-environment toolkit — skills, agents, hooks, and methodology that install natively on Claude Code, Codex, and Cortex Code"
 requires-python = ">=3.12"
 
 [project.scripts]
-claude-workflow = "scripts.installer.cli:main"
+the-workshop = "scripts.installer.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

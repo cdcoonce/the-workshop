@@ -5,7 +5,7 @@
   "author": {
     "name": "Charles Coonce"
   },
-  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "repository": "https://github.com/cdcoonce/the-workshop",
   "interface": {
     "displayName": "persona-staff-eng-deep",
     "shortDescription": "Senior-staff-engineer voice at full depth \u2014 reasoning, tradeoffs, and edge cases spelled out.",

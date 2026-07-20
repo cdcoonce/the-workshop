@@ -63,7 +63,7 @@ See [quality-criteria.md](references/quality-criteria.md) for description requir
 
 If the repo generates documentation from its components (look for a `make docs`
 target, a `scripts/build_docs.py`, or a `docs/reference/` tree), regenerate it
-and commit the output **with** your new skill. In the claude-workflow repo that
+and commit the output **with** your new skill. In the the-workshop repo that
 means running `make docs && make build && make test` — the last step gates on
 doc/dist staleness, so a new skill that skips it lands the build red. A skill
 that isn't in the reference is a skill the team can't discover.

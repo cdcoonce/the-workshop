@@ -13,8 +13,8 @@ or research sessions it does nothing, injects nothing, and costs nothing.
 ## Turning it off and on
 
 ```
-claude plugin disable advisor-product-design@claude-workflow
-claude plugin enable  advisor-product-design@claude-workflow
+claude plugin disable advisor-product-design@the-workshop
+claude plugin enable  advisor-product-design@the-workshop
 ```
 
 Disabling removes it from your sessions entirely. It never touches your

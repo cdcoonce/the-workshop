@@ -9,7 +9,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-claude-workflow-hook` | Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
+| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
 | `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
@@ -70,11 +70,11 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 ## Full descriptions
 
-### `/add-claude-workflow-hook`
+### `/add-the-workshop-hook`
 
 *universal*
 
-Design and ship a new core hook in this repo (claude-workflow) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
+Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
 
 ### `/commit`
 

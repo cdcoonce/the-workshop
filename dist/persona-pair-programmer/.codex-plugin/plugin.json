@@ -5,7 +5,7 @@
   "author": {
     "name": "Charles Coonce"
   },
-  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "repository": "https://github.com/cdcoonce/the-workshop",
   "interface": {
     "displayName": "persona-pair-programmer",
     "shortDescription": "Collaborative pair-programmer voice \u2014 brief think-aloud, checks in at decision points.",

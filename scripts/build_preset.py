@@ -465,7 +465,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     codex_plugin_json = {
         **plugin_json,
         "author": {"name": "Charles Coonce"},
-        "repository": "https://github.com/cdcoonce/claude-workflow",
+        "repository": "https://github.com/cdcoonce/the-workshop",
         **({"skills": "./skills/"} if has_skills else {}),
         "interface": {
             "displayName": manifest["name"],

@@ -80,5 +80,5 @@ If the repo generates docs from its components (a `make docs` target, a
 `scripts/build_docs.py`, or a `docs/reference/` tree), regenerate and commit
 that output with the new hook so the reference doesn't drift. Give the hook a
 module docstring whose first line names its event (e.g. `"Stop hook: ..."`) —
-generators read it. In the claude-workflow repo, run `make docs && make build
+generators read it. In the the-workshop repo, run `make docs && make build
 && make test`; the last step gates on staleness.

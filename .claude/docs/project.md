@@ -1,4 +1,4 @@
-# Claude Workflow — Project Context
+# The Workshop — Project Context
 
 Template factory that produces self-contained Claude Code plugins (`.claude-plugin/plugin.json`, skills, agents, hooks, settings) for new projects.
 

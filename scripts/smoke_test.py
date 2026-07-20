@@ -57,7 +57,7 @@ SKILL_LINE_CAP_ALLOWLIST: frozenset[str] = frozenset()
 # future addition to SKILL_LINE_CAP_ALLOWLIST.
 SKILL_LINE_CAP_ALLOWLIST_BASELINE = frozenset(
     {
-        "add-claude-workflow-hook",
+        "add-the-workshop-hook",
         "commit",
         "daa-code-review",
         "dev-cycle",

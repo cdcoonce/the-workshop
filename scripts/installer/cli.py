@@ -93,7 +93,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="claude-workflow")
+    parser = argparse.ArgumentParser(prog="the-workshop")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_install = sub.add_parser(

@@ -1,7 +1,7 @@
 {
-  "name": "claude-workflow",
+  "name": "the-workshop",
   "interface": {
-    "displayName": "Claude Workflow"
+    "displayName": "The Workshop"
   },
   "plugins": [
     {

@@ -1,4 +1,4 @@
-# Add Claude Workflow Hook — Open Questions
+# Add The Workshop Hook — Open Questions
 
 Deferred design questions from building the existing core hooks
 (`verify-tests-before-stop`, the `snapshot-subagent-start`/

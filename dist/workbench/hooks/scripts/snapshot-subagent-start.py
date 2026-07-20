@@ -82,7 +82,7 @@ repo_git_dir = git_dir(cwd)
 if repo_git_dir is None:
     sys.exit(0)
 
-state_file = repo_git_dir / "claude-workflow-subagent-gate" / f"{agent_id}.txt"
+state_file = repo_git_dir / "the-workshop-subagent-gate" / f"{agent_id}.txt"
 try:
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(f"{head_sha(cwd)}\n{working_tree_signature(cwd)}\n")

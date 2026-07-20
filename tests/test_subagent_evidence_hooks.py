@@ -160,7 +160,7 @@ def test_state_file_is_consumed_after_stop_check(tmp_path: Path) -> None:
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
 
     start(tmp_path, "agent-4")
-    state_file = tmp_path / ".git" / "claude-workflow-subagent-gate" / "agent-4.txt"
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-4.txt"
     assert state_file.exists()
 
     run(

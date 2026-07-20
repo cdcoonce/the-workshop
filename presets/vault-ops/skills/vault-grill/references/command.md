@@ -91,7 +91,7 @@ Charles's head but not yet (fully) in the vault.
 
 - **Stateful through the graph, not a workspace.** Resume by reading the existing note + backlinks;
   never restart from blank, never spin up a parallel coverage-tracking workspace.
-- **Self-contained.** No dependency on `claude-workflow/grill-me` — the vault must run identically on
+- **Self-contained.** No dependency on `the-workshop/grill-me` — the vault must run identically on
   a fresh machine ([[Constitution]]). Borrow its habits, don't import it.
 - **Conductor-aware.** The interview is judgment work — keep it on the conductor. Delegate any
   "what does the vault already know" sweep to a worker that returns a digest.

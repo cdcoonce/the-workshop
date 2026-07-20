@@ -136,7 +136,7 @@ if signature is None:
     sys.exit(0)
 
 session_id = data.get("session_id") or "default"
-state_file = repo_git_dir / "claude-workflow-stop-gate" / f"{session_id}.txt"
+state_file = repo_git_dir / "the-workshop-stop-gate" / f"{session_id}.txt"
 
 previous_signature = None
 if state_file.exists():

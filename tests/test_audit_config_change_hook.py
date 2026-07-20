@@ -85,7 +85,7 @@ def test_appends_audit_log_entry(tmp_path: Path) -> None:
         }
     )
 
-    log_file = tmp_path / ".git" / "claude-workflow-config-audit.log"
+    log_file = tmp_path / ".git" / "the-workshop-config-audit.log"
     assert log_file.exists()
     entry = json.loads(log_file.read_text().splitlines()[0])
     assert entry["source"] == "skills"
@@ -99,7 +99,7 @@ def test_multiple_changes_append_not_overwrite(tmp_path: Path) -> None:
     run({"cwd": str(tmp_path), "config_source": "project_settings", "file_path": "a.json"})
     run({"cwd": str(tmp_path), "config_source": "local_settings", "file_path": "b.json"})
 
-    log_file = tmp_path / ".git" / "claude-workflow-config-audit.log"
+    log_file = tmp_path / ".git" / "the-workshop-config-audit.log"
     lines = log_file.read_text().splitlines()
     assert len(lines) == 2
 

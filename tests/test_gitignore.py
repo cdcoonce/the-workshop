@@ -31,8 +31,8 @@ def test_dist_marketplace_payloads_are_not_ignored() -> None:
 def test_dist_python_package_archives_are_ignored() -> None:
     """Wheel/sdist outputs should stay local even though dist bundles are tracked."""
     archive_paths = [
-        "dist/claude_workflow-0.1.0-py3-none-any.whl",
-        "dist/claude_workflow-0.1.0.tar.gz",
+        "dist/the_workshop-0.1.0-py3-none-any.whl",
+        "dist/the_workshop-0.1.0.tar.gz",
     ]
 
     result = subprocess.run(

@@ -5,7 +5,7 @@
   "author": {
     "name": "Charles Coonce"
   },
-  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "repository": "https://github.com/cdcoonce/the-workshop",
   "interface": {
     "displayName": "persona-thinking-partner",
     "shortDescription": "Socratic thinking partner \u2014 sharp questions and decision-sharpening over answers.",
