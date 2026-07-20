@@ -1,7 +1,7 @@
 # /garden — Apply the Graph Gardener Queue
 
 Review and apply the Graph Gardener's proposals. The gardener (`graph_gardener.py`, Stop-triggered)
-*produces* `.brain/gardener-<context>.md`; `/garden` is the **apply side** — you review each
+_produces_ `.brain/gardener-<context>.md`; `/garden` is the **apply side** — you review each
 proposal, apply the ones you approve (reusing `/find` for orphans), and dismiss the rest so they
 don't come back. Closes the produce → review → apply loop. Design: `thinking/2026-06-23-garden-apply-skill-design.md`.
 
@@ -40,7 +40,7 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
      `org/people/<Name>.md` profile — a **distinct disposition, NOT** the generic "create or remove"
      broken-link flow above. No-op if the `### Unprofiled people` subsection is absent. Per person, offer:
      - **Profile** → dispatch the **`people-profiler`** agent (`.claude/agents/people-profiler.md`, cheap
-       tier) to *draft* `org/people/<Name>.md` from real vault evidence (org schema: `role`/`team`,
+       tier) to _draft_ `org/people/<Name>.md` from real vault evidence (org schema: `role`/`team`,
        wikilinks back to the index + mentions). **Review the draft before the write** (every-edit-confirmed);
        **no fabrication** — leave `role`/`team` blank if the vault doesn't state them.
      - **Dismiss** → append the verbatim `unprofiled|<name>` gsig token (read off the line) to
@@ -61,7 +61,7 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
    - **Index drift.** Show the note and the target index. On confirm → append the appropriate entry to
      that index file (follow the index's existing line format).
    - **Stranded branches.** A git branch holding net-new notes not on `main`. No-op if `### Stranded
-     branches` is absent. Per branch, show the net-new file(s) and offer:
+branches` is absent. Per branch, show the net-new file(s) and offer:
      - **Port** → `git checkout <branch> -- <files>`, then verify each file is truly absent from / not
        stale on `main`, add the relevant index entries, and stage (conductor judgment; review before
        committing).
@@ -74,16 +74,20 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
      `uv run --script .claude/scripts/semantic_index.py search "<note topic>"` — present the top link
      targets, Charles picks one or more, then `Edit` the note to add the `[[link]](s)` in a natural spot.
 
-3b. **Weak connections (live semantic pass).** A *pull* lane — generated now, not from the producer
-   queue. Run `uv run .claude/scripts/graph_cli.py --gaps --top 10` (graphmark's
-   similar-but-unlinked pairs, in the 0.6–0.92 band, transient task-logs + dismissed pairs already
-   filtered). **No-op** if it returns `[]` or the semantic index is absent. For each pair `{a, b, score, sig}`,
-   show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
-   - **Link** → pick the better-fit note, draft `- [[B]] — <one-line reason>` under its `## Related`
-     section (create the section if absent), drawing the reason from both notes. Show the exact edit;
-     apply on confirm. One direction suffices (Obsidian backlinks). Validate frontmatter + wikilinks.
-   - **Dismiss** → append the verbatim `sig` (`weaklink|<a>|<b>`) to `.claude/data/gardener-dismissed.json`.
-   - **Skip** → leave it (resurfaces next pass).
+3b. **Weak connections (live semantic pass).** A _pull_ lane — generated now, not from the producer
+queue. Run `uv run .claude/scripts/graph_cli.py --gaps --top 10` (graphmark's
+similar-but-unlinked pairs, in the 0.6–0.92 band, transient task-logs + dismissed pairs already
+filtered). **No-op** if it returns `[]` or the semantic index is absent. For each pair `{a, b, score, sig}`,
+show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
+
+- **Link** → pick the better-fit note, draft `- [[B]] — <one-line reason>` under its `## Related`
+  section (create the section if absent), drawing the reason from both notes. Show the exact edit;
+  apply on confirm. One direction suffices (Obsidian backlinks). Validate frontmatter + wikilinks.
+- **Dismiss** → run `uv run .claude/scripts/graph_cli.py --dismiss "<a>" "<b>"` (same store /connect
+  uses — graphmark's content-hash store in `.claude/data/connect-dismissed.json`, which is what
+  `--gaps` actually filters against; a sig appended to `gardener-dismissed.json` would never
+  suppress anything here).
+- **Skip** → leave it (resurfaces next pass).
 
 4. **Show every edit before writing.** Never apply without an explicit pick/confirm. Validate
    frontmatter + wikilinks on every write (the contract still holds).
