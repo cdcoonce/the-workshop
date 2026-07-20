@@ -5,7 +5,7 @@
 A **Claude Code plugin** that gives any project a fully configured AI development environment — skills, methodology docs, agents, and hooks — picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
-**26 universal skills · 6 core agents · 8 hooks · 2 project presets · 6 persona plugins**
+**26 universal skills · 6 core agents · 8 hooks · 2 project presets · 7 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -127,6 +127,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 31 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
+| **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -183,6 +184,7 @@ These ship only with the presets that declare them:
 | Skill | Summary | Presets |
 | --- | --- | --- |
 | `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
+| `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |

@@ -41,6 +41,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | Skill | Summary | Presets |
 | --- | --- | --- |
 | `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
+| `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
@@ -231,6 +232,12 @@ Create new agent skills with proper structure, progressive disclosure, and bundl
 *`advisor-product-design` preset*
 
 Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. Artifact-first design reviews with severity-tagged findings and named principles. Use when the user shares a UI artifact for review, asks a design/UX question, or wants a sounding board on a product decision.
+
+### `/advisor-product-strategy`
+
+*`advisor-product-strategy` preset*
+
+Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. Use when the user brings a product decision, a stakeholder situation, a prioritization call, or a design artifact to judge.
 
 ### `/chart-taste`
 

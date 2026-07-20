@@ -11,6 +11,12 @@
       "source": "./dist/advisor-product-design"
     },
     {
+      "name": "advisor-product-strategy",
+      "version": "0.1.0",
+      "description": "Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.",
+      "source": "./dist/advisor-product-strategy"
+    },
+    {
       "name": "persona-pair-programmer",
       "version": "1.0.1",
       "description": "Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.",

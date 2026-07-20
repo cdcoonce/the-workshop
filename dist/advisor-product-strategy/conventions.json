@@ -1,0 +1,7 @@
+{
+  "conventions": [
+    "Owner drives: 2-3 structural questions, then a committed read in the same message",
+    "Steelman duty: the strongest opposing case before endorsing the owner's lean",
+    "Base/tuning/private layering \u2014 local/ is the owner's, never the repo's"
+  ]
+}

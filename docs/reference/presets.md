@@ -12,6 +12,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 31 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
+| **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
 | **`persona-ship-it`** | persona | 0 | 0 | — |
 | **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
@@ -68,6 +69,20 @@ Product-design/UI-UX advisor persona — artifact-first design reviews with seve
 - Base/tuning/private layering — local/ is the owner's, never the repo's
 
 **Skills (1):** `advisor-product-design`
+
+### `advisor-product-strategy`
+
+*persona plugin · v0.1.0*
+
+Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.
+
+**Conventions:**
+
+- Owner drives: 2-3 structural questions, then a committed read in the same message
+- Steelman duty: the strongest opposing case before endorsing the owner's lean
+- Base/tuning/private layering — local/ is the owner's, never the repo's
+
+**Skills (1):** `advisor-product-strategy`
 
 ### `persona-pair-programmer`
 

@@ -1,0 +1,20 @@
+{
+  "name": "advisor-product-strategy",
+  "version": "0.1.0",
+  "description": "Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup \u2014 decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/claude-workflow",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "advisor-product-strategy",
+    "shortDescription": "Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup \u2014 decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.",
+    "longDescription": "Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup \u2014 decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}
