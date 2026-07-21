@@ -41,7 +41,7 @@ _URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 _LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
-# Authoring budget from core/skills/write-a-skill/references/quality-criteria.md.
+# Authoring budget from workshop-skill-creator/references/quality-criteria.md.
 SKILL_LINE_CAP = 100
 
 # Frozen at #281: the skills that already exceeded SKILL_LINE_CAP when this
@@ -73,7 +73,7 @@ SKILL_LINE_CAP_ALLOWLIST_BASELINE = frozenset(
     }
 )
 
-# Frontmatter keys a SKILL.md may declare (write-a-skill quality-criteria.md).
+# Frontmatter keys a SKILL.md may declare (workshop-skill-creator criteria).
 _SKILL_FRONTMATTER_ALLOWED_KEYS = frozenset({"name", "description"})
 
 

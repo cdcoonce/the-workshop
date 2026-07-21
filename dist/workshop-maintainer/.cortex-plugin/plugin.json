@@ -1,0 +1,20 @@
+{
+  "name": "workshop-maintainer",
+  "version": "1.0.0",
+  "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
+  "author": {
+    "name": "Charles Coonce"
+  },
+  "repository": "https://github.com/cdcoonce/the-workshop",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "workshop-maintainer",
+    "shortDescription": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
+    "longDescription": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
+    "developerName": "Charles Coonce",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ]
+  }
+}

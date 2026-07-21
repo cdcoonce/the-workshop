@@ -21,12 +21,10 @@
     ]
   },
   "exclude": [],
-  "preset_skills": ["dagster-expert", "dbt-expert", "chart-taste", "react-ui-ux", "deploy"],
+  "preset_skills": ["dagster-expert", "dbt-expert", "chart-taste", "react-ui-ux", "deploy", "gitlab-mr-create"],
   "preset_hooks": ["post-edit-lint.py"],
   "preset_agents": [
     "analysis-builder",
-    "skill-builder",
-    "skill-reviewer",
     "pipeline-builder",
     "data-quality-reviewer",
     "frontend-builder",

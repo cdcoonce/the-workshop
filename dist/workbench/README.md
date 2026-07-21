@@ -13,7 +13,6 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 | Skill | Summary |
 | --- | --- |
-| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
 | `/commit` | Git commit workflow with enforced conventional commit style. |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
@@ -26,10 +25,10 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
+| `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
-| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
+| `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. |
@@ -43,7 +42,6 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
-| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. |
 
 ## Agents
 
@@ -56,13 +54,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | data-quality-reviewer | `reviewer` | Reviews data pipelines for correctness, completeness, and reliability |
 | frontend-builder | `implementer` | Builds frontend components with React, TypeScript, and modern CSS |
 | pipeline-builder | `implementer` | Builds data pipelines with ETL/ELT patterns and orchestration |
-| qa-tester | `qa-tester` | Evaluates skill instructions against a test suite. |
 | security-reviewer | `reviewer` | Reviews Python APIs for security vulnerabilities and auth issues |
-| skill-analyst | `analyst` | Analyzes skill instructions for weaknesses across surface, behavioral, and adversarial tiers. |
-| skill-builder | `implementer` | Builds Claude Code skills, hooks, and MCP server integrations |
-| skill-reviewer | `reviewer` | Reviews Claude Code skills and hooks for correctness and best practices |
-| skill-writer | `skill-writer` | Rewrites Claude Code skills to fix failing test cases. |
-| strategy | `strategy` | Analyzes stalled skill improvement runs and proposes a concrete rewrite strategy. |
 | tdd-implementer | `implementer` | Implements features using test-driven development |
 | ux-reviewer | `reviewer` | Reviews frontend code for UX quality, accessibility, and consistency |
 

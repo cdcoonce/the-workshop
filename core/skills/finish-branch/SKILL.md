@@ -12,6 +12,13 @@ Terminal decision gate for completed development work. This skill runs after
 the `commit` skill has already committed all changes — it never stages files
 itself (no `git add`, `git add -A`, or `git add .`).
 
+## Resolve the integration branch
+
+Before presenting options, read the repository's project instructions and
+CI/CD configuration to identify its integration branch. Never infer the
+integration branch from the repository default branch. Honor an explicit
+branch policy even when it differs from the hosting provider's default.
+
 ## Entry Gate
 
 Run the project's full test suite before anything else.
@@ -26,7 +33,7 @@ Ask the user to choose one. Do not add, remove, or substitute options.
 
 ### 1. Merge locally
 
-1. Check out the default branch and pull the latest.
+1. Check out the repository's integration branch and pull the latest.
 2. Merge (or rebase) the feature branch into it.
 3. Re-run the full test suite on the resulting tree.
 4. Only if that run is green, declare the merge complete. If it's red, stop
@@ -37,7 +44,7 @@ Ask the user to choose one. Do not add, remove, or substitute options.
 Invoke the `github-cli` skill for this option only — it owns the push/PR
 mechanics; this skill does not run `git push` or `gh pr create` directly.
 
-1. Rebase onto the latest default branch if it has moved.
+1. Rebase onto the latest integration branch if it has moved.
 2. Re-run the full test suite after any rebase and confirm it's green before
    opening the PR.
 3. Use `github-cli` to push the branch and open the pull request.

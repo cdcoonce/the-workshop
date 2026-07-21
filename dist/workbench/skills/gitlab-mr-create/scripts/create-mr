@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() { printf 'Usage: %s DESCRIPTION.md [glab mr create options]\n' "${0##*/}" >&2; exit 64; }
+[[ $# -ge 1 ]] || usage
+description_file=$1
+shift
+[[ -f "$description_file" && -s "$description_file" ]] || { printf 'Description file must exist and be non-empty: %s\n' "$description_file" >&2; exit 66; }
+
+for command in glab git jq; do
+  command -v "$command" >/dev/null || { printf '%s is required.\n' "$command" >&2; exit 69; }
+done
+
+expected_title=$(git log -1 --format=%s)
+conventional_commit_pattern='^[a-z]+(\([^)]+\))?!?: .+'
+[[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf 'HEAD subject is not a conventional commit: %s\n' "$expected_title" >&2; exit 65; }
+for option in "$@"; do
+  case "$option" in
+    --title|--title=*|-t|-t*|--description|--description=*|-d|-d*) printf 'Do not supply %s; the guard owns title and description.\n' "$option" >&2; exit 64 ;;
+  esac
+done
+
+description=$(<"$description_file")
+output_file=$(mktemp)
+trap 'rm -f "$output_file"' EXIT
+glab mr create --title "$expected_title" --description "$description" "$@" | tee "$output_file"
+mr_url=$(grep -Eo 'https?://[^[:space:]]+/-/merge_requests/[0-9]+' "$output_file" | tail -n 1 || true)
+[[ -n "$mr_url" ]] || { printf 'MR was created, but glab did not report its URL; verification could not run.\n' >&2; exit 70; }
+
+mr_iid=${mr_url##*/}
+mr_json=$(glab api "projects/:id/merge_requests/$mr_iid")
+actual_title=$(jq -r '.title' <<<"$mr_json")
+actual_description=$(jq -r '.description // ""' <<<"$mr_json")
+[[ "$actual_title" == "$expected_title" ]] || { printf 'Verification failed: title differs.\n' >&2; exit 1; }
+[[ "$actual_description" == "$description" ]] || { printf 'Verification failed: description differs from %s.\n' "$description_file" >&2; exit 1; }
+printf 'Verified %s: title and Markdown description match.\n' "$mr_url"

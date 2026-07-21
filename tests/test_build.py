@@ -1,11 +1,132 @@
 """Tests for build_preset.py — verifies plugin-format output assembly."""
 
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
 from scripts.build_preset import BuildValidationError, _merge_settings, build_preset
+
+
+def test_workbench_manifest_includes_gitlab_mr_create() -> None:
+    """Workbench ships the GitLab MR creation guard."""
+    repository_root = Path(__file__).resolve().parents[1]
+    manifest_path = repository_root / "presets" / "workbench" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert "gitlab-mr-create" in manifest["preset_skills"]
+
+
+def test_workshop_maintainer_ships_only_maintenance_skills() -> None:
+    """Workshop maintenance tooling stays out of domain presets."""
+    repository_root = Path(__file__).resolve().parents[1]
+    maintainer = json.loads(
+        (repository_root / "presets/workshop-maintainer/manifest.json").read_text()
+    )
+    vault_ops = json.loads(
+        (repository_root / "presets/vault-ops/manifest.json").read_text()
+    )
+
+    assert maintainer["core"]["skills"] == [
+        "using-workflow",
+        "grill-me",
+        "tdd",
+        "commit",
+        "daa-code-review",
+    ]
+    assert maintainer["core"]["agents"] == []
+    assert maintainer["preset_skills"] == [
+        "skill-inventory",
+        "workshop-skill-creator",
+        "improve-skill",
+        "add-the-workshop-hook",
+        "persona-builder",
+    ]
+    assert maintainer["preset_agents"] == [
+        "skill-analyst",
+        "qa-tester",
+        "skill-writer",
+        "strategy",
+        "skill-builder",
+        "skill-reviewer",
+    ]
+    assert vault_ops["core"]["skills"] == []
+
+
+def test_maintenance_components_have_preset_only_ownership() -> None:
+    """Maintenance components must not leak into the universal core."""
+    repository_root = Path(__file__).resolve().parents[1]
+    maintainer = repository_root / "presets/workshop-maintainer"
+    workbench_manifest = json.loads(
+        (repository_root / "presets/workbench/manifest.json").read_text()
+    )
+
+    maintenance_skills = {
+        "workshop-skill-creator",
+        "improve-skill",
+        "add-the-workshop-hook",
+        "persona-builder",
+    }
+    maintenance_agents = {
+        "skill-analyst",
+        "qa-tester",
+        "skill-writer",
+        "strategy",
+        "skill-builder",
+        "skill-reviewer",
+    }
+
+    assert not (repository_root / "core/skills/write-a-skill").exists()
+    for skill_name in maintenance_skills:
+        assert (maintainer / "skills" / skill_name / "SKILL.md").exists()
+        assert not (repository_root / "core/skills" / skill_name).exists()
+    for agent_name in maintenance_agents:
+        assert (maintainer / "agents" / agent_name / "AGENT.md").exists()
+        assert not (repository_root / "core/agents" / agent_name).exists()
+        assert agent_name not in workbench_manifest["preset_agents"]
+
+
+def test_gitlab_mr_guard_preserves_markdown_and_verifies(tmp_path: Path) -> None:
+    """The guard owns MR metadata and checks GitLab's returned object."""
+    repository_root = Path(__file__).resolve().parents[1]
+    script_path = repository_root / "presets/workbench/skills/gitlab-mr-create/scripts/create-mr"
+    description_path = tmp_path / "description.md"
+    description_path.write_text("## Summary\n\n- Preserve Markdown line breaks\n")
+    bin_path = tmp_path / "bin"
+    bin_path.mkdir()
+    arguments_path = tmp_path / "glab-arguments"
+    (bin_path / "git").write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' 'fix(exports): sanitize standard template content'\n"
+    )
+    (bin_path / "glab").write_text(
+        "#!/usr/bin/env bash\n"
+        "if [[ $1 == mr && $2 == create ]]; then\n"
+        f"  printf '%s\\n' \"$@\" > {arguments_path}\n"
+        "  printf '%s\\n' 'https://gitlab.example/group/repo/-/merge_requests/83'\n"
+        "else\n"
+        "  printf '%s\\n' '{\"title\":\"fix(exports): sanitize standard template content\",\"description\":\"## Summary\\n\\n- Preserve Markdown line breaks\"}'\n"
+        "fi\n"
+    )
+    for command in (bin_path / "git", bin_path / "glab"):
+        command.chmod(0o755)
+
+    environment = os.environ | {"PATH": f"{bin_path}:{os.environ['PATH']}"}
+    result = subprocess.run(
+        ["bash", str(script_path), str(description_path), "--yes"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.endswith("title and Markdown description match.\n")
+    assert arguments_path.read_text().splitlines() == [
+        "mr", "create", "--title", "fix(exports): sanitize standard template content",
+        "--description", "## Summary", "", "- Preserve Markdown line breaks", "--yes",
+    ]
 
 
 def write_persona_preset(tmp_repo: Path, settings: dict) -> Path:
@@ -127,6 +248,7 @@ class TestBuildPluginSkills:
         build_preset("python-api", repo_root=tmp_repo)
         skills = tmp_repo / "dist" / "python-api" / "skills"
         assert (skills / "deploy" / "SKILL.md").exists()
+
 
     def test_build_copies_specific_core_skills(self, tmp_repo: Path) -> None:
         """core.skills as a list copies exactly the named core skills."""

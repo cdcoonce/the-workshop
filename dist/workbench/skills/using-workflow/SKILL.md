@@ -21,6 +21,27 @@ CLAUDE.md and other user instructions outrank skills. Skills outrank default
 behavior. If a skill's guidance conflicts with CLAUDE.md or a direct user
 request, follow CLAUDE.md or the user.
 
+## Resolve repository policy
+
+Resolve repository policy before selecting an integration workflow. Read the
+nearest project instructions and relevant CI/CD configuration for branch
+promotion, review, test, deployment, and unattended-execution constraints.
+Never infer an integration target from a hosting provider's default branch.
+
+## Choose execution mode
+
+- **Interactive:** Use the repository's normal workflow and request approval
+  only when the action needs it.
+- **AFK / unattended:** Treat local AFK configuration and project instructions
+  as an execution contract. Prefer available context, read-only inspection,
+  and single unpiped commands. Do not make progress depend on network,
+  approval-gated, or chained shell calls that the unattended executor cannot
+  approve. After exhausting repository context and safe alternatives, record a
+  genuine capability gap using the repository's AFK escalation mechanism.
+
+Apply the same repository policy in both modes; AFK changes *how* work is
+executed, not its integration target, quality gate, or authorization boundary.
+
 ## Trigger Floor
 
 If there is even a small chance a listed skill applies to what you're doing,

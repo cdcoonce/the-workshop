@@ -73,6 +73,16 @@ This convention exists because issue #260 found the executor had quarantined 3 s
 
 Write plans to `docs/plans/{file_name}.md`. Archive completed plans to `docs/archive/`.
 
+## Branch and Promotion Policy
+
+- **GitHub `dev` first.** Merge completed work into `dev`; GitHub CI validates
+  it and mirrors `dev` to GitLab.
+- **Never push directly to `main`.** `main` is promoted only through the
+  approved GitLab merge-request and CI/CD path.
+- Before any push or pull request, confirm the target branch from these project
+  instructions and `.github/workflows/`; do not infer it from the repository's
+  default branch.
+
 ## Skills
 
 Skills live in `core/skills/` (universal) and `presets/*/skills/` (preset-specific).

@@ -1,23 +1,27 @@
-# Mirror GitHub -> GitLab so both hosts stay in sync and GitLab's independent
-# CI always has current code to gate. Runs after a push lands on main or dev.
+# Mirror GitHub -> GitLab *for review*. On a push to `dev`, force-update a
+# mirror branch on GitLab and open (or reuse) a Merge Request into GitLab's
+# `dev`, so a human reviews before anything lands on the shared, protected
+# branch. Nothing is direct-pushed to protected `main`/`dev` — the mirror only
+# proposes; a reviewer merges. `dev` -> `main` promotion stays a human step on
+# GitLab.
 #
-# Best-effort by design: if the sync token/target aren't configured yet, the
-# job logs a notice and exits 0 so it never blocks the required `test` gate.
-# Non-force push: if GitLab has diverged (someone pushed there directly), the
-# push fails loudly rather than silently clobbering that work — the correct
-# signal for two independently-developed hosts.
+# Best-effort by design: if the token/target aren't configured yet, the job
+# logs a notice and exits 0 so it never blocks the required `test` gate.
 #
 # One-time setup:
-#   1. GitLab: create a Project Access Token on the mirror project with the
-#      `write_repository` scope (Settings -> Access Tokens; role Maintainer).
+#   1. GitLab: create a Project Access Token on the mirror project with role
+#      **Developer** and scopes **api + write_repository** (Settings -> Access
+#      Tokens). Developer cannot push to protected `main`/`dev`, so the mirror
+#      physically cannot bypass review — it can only push the mirror branch and
+#      open the MR.
 #   2. GitHub: repo Settings -> Secrets and variables -> Actions:
 #        - Secret    GITLAB_MIRROR_TOKEN = <the token value>
-#        - Variable  GITLAB_PATH         = Charles.Coonce/the-workshop
+#        - Variable  GITLAB_PATH         = clearwayenergy-group/data-architecture-and-analytics/ai-tools/the-workshop
 name: mirror-to-gitlab
 
 on:
   push:
-    branches: [main, dev]
+    branches: [dev]
 
 concurrency:
   group: mirror-${{ github.ref }}
@@ -32,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push branch and tags to GitLab
+      - name: Push mirror branch and open/reuse an MR into GitLab dev
         env:
           TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
           GITLAB_PATH: ${{ vars.GITLAB_PATH }}
@@ -41,8 +45,31 @@ jobs:
             echo "::notice::GITLAB_MIRROR_TOKEN secret or GITLAB_PATH variable not set — skipping mirror."
             exit 0
           fi
-          branch="${GITHUB_REF_NAME}"
-          remote="https://oauth2:${TOKEN}@gitlab.com/${GITLAB_PATH}.git"
-          echo "Mirroring ${branch} + tags to gitlab.com/${GITLAB_PATH}"
-          git push "$remote" "HEAD:refs/heads/${branch}"
-          git push "$remote" --tags
+          set -euo pipefail
+
+          host="gitlab.com"
+          mirror_branch="mirror/github-dev"
+          remote="https://oauth2:${TOKEN}@${host}/${GITLAB_PATH}.git"
+
+          echo "Force-updating ${mirror_branch} on ${host}/${GITLAB_PATH} to $(git rev-parse --short HEAD)"
+          git push --force "$remote" "HEAD:refs/heads/${mirror_branch}"
+          git push "$remote" --tags || true
+
+          proj="$(python3 -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["GITLAB_PATH"], safe=""))')"
+          api="https://${host}/api/v4/projects/${proj}"
+
+          open_count="$(curl -sf -H "PRIVATE-TOKEN: ${TOKEN}" \
+            "${api}/merge_requests?state=opened&source_branch=${mirror_branch}&target_branch=dev" \
+            | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+
+          if [ "$open_count" = "0" ]; then
+            curl -sf -X POST -H "PRIVATE-TOKEN: ${TOKEN}" \
+              --data-urlencode "source_branch=${mirror_branch}" \
+              --data-urlencode "target_branch=dev" \
+              --data-urlencode "title=Mirror: sync dev from GitHub" \
+              --data-urlencode "description=Automated sync from cdcoonce/the-workshop @ dev (${GITHUB_SHA}). Review and merge to update GitLab dev. Managed by .github/workflows/mirror.yml — do not push to ${mirror_branch} directly." \
+              "${api}/merge_requests" >/dev/null
+            echo "Opened MR: dev <- ${mirror_branch}"
+          else
+            echo "An MR for ${mirror_branch} -> dev is already open; it auto-tracks the updated branch."
+          fi

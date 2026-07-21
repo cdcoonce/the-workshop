@@ -1,0 +1,38 @@
+{
+  "name": "workshop-maintainer",
+  "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
+  "conventions": [
+    "Inventory before reorganizing",
+    "Keep source ownership distinct from distribution membership",
+    "Regenerate docs and dist after changing any component"
+  ],
+  "version": "1.0.0",
+  "core": {
+    "skills": [
+      "using-workflow",
+      "grill-me",
+      "tdd",
+      "commit",
+      "daa-code-review"
+    ],
+    "agents": [],
+    "hooks": []
+  },
+  "exclude": [],
+  "preset_skills": [
+    "skill-inventory",
+    "workshop-skill-creator",
+    "improve-skill",
+    "add-the-workshop-hook",
+    "persona-builder"
+  ],
+  "preset_hooks": [],
+  "preset_agents": [
+    "skill-analyst",
+    "qa-tester",
+    "skill-writer",
+    "strategy",
+    "skill-builder",
+    "skill-reviewer"
+  ]
+}

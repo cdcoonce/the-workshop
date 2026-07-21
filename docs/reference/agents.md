@@ -10,10 +10,6 @@ Specialized subagent roles, parsed from each agent's `AGENT.md` frontmatter. A p
 | Agent | Role | Skills | Presets |
 | --- | --- | --- | --- |
 | **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | workbench |
-| **qa-tester** | `qa-tester` | — | workbench |
-| **skill-analyst** | `analyst` | — | workbench |
-| **skill-writer** | `skill-writer` | — | workbench |
-| **strategy** | `strategy` | — | workbench |
 | **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | workbench |
 | **analysis-builder** | `implementer` | `tdd`, `commit` | workbench |
 | **api-builder** | `implementer` | `tdd`, `commit` | workbench |
@@ -21,9 +17,13 @@ Specialized subagent roles, parsed from each agent's `AGENT.md` frontmatter. A p
 | **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
 | **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | workbench |
 | **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **qa-tester** | `qa-tester` | — | workshop-maintainer |
 | **security-reviewer** | `reviewer` | `daa-code-review` | workbench |
-| **skill-builder** | `implementer` | `tdd`, `commit` | workbench |
-| **skill-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **skill-analyst** | `analyst` | — | workshop-maintainer |
+| **skill-builder** | `implementer` | `tdd`, `commit` | workshop-maintainer |
+| **skill-reviewer** | `reviewer` | `daa-code-review` | workshop-maintainer |
+| **skill-writer** | `skill-writer` | — | workshop-maintainer |
+| **strategy** | `strategy` | — | workshop-maintainer |
 | **ux-reviewer** | `reviewer` | `daa-code-review` | workbench |
 
 ## Details
@@ -33,30 +33,6 @@ Specialized subagent roles, parsed from each agent's `AGENT.md` frontmatter. A p
 *core · role `reviewer` · skills: `daa-code-review`, `dignified-python`*
 
 Reviews code for quality, structure, and correctness
-
-### qa-tester
-
-*core · role `qa-tester` · skills: none*
-
-Evaluates skill instructions against a test suite. Use when scoring a skill's compliance with its test cases, filling Result and Reason columns in a tests.md table.
-
-### skill-analyst
-
-*core · role `analyst` · skills: none*
-
-Analyzes skill instructions for weaknesses across surface, behavioral, and adversarial tiers. Use when building or improving a test suite for a skill.
-
-### skill-writer
-
-*core · role `skill-writer` · skills: none*
-
-Rewrites Claude Code skills to fix failing test cases. Use when improving a SKILL.md based on annotated failure analysis from a QA Tester.
-
-### strategy
-
-*core · role `strategy` · skills: none*
-
-Analyzes stalled skill improvement runs and proposes a concrete rewrite strategy. Use when a skill improvement loop has not improved for 2+ consecutive iterations.
 
 ### tdd-implementer
 
@@ -100,23 +76,47 @@ Builds frontend components with React, TypeScript, and modern CSS
 
 Builds data pipelines with ETL/ELT patterns and orchestration
 
+### qa-tester
+
+*`workshop-maintainer` preset · role `qa-tester` · skills: none*
+
+Evaluates skill instructions against a test suite. Use when scoring a skill's compliance with its test cases, filling Result and Reason columns in a tests.md table.
+
 ### security-reviewer
 
 *`workbench` preset · role `reviewer` · skills: `daa-code-review`*
 
 Reviews Python APIs for security vulnerabilities and auth issues
 
+### skill-analyst
+
+*`workshop-maintainer` preset · role `analyst` · skills: none*
+
+Analyzes skill instructions for weaknesses across surface, behavioral, and adversarial tiers. Use when building or improving a test suite for a skill.
+
 ### skill-builder
 
-*`workbench` preset · role `implementer` · skills: `tdd`, `commit`*
+*`workshop-maintainer` preset · role `implementer` · skills: `tdd`, `commit`*
 
 Builds Claude Code skills, hooks, and MCP server integrations
 
 ### skill-reviewer
 
-*`workbench` preset · role `reviewer` · skills: `daa-code-review`*
+*`workshop-maintainer` preset · role `reviewer` · skills: `daa-code-review`*
 
 Reviews Claude Code skills and hooks for correctness and best practices
+
+### skill-writer
+
+*`workshop-maintainer` preset · role `skill-writer` · skills: none*
+
+Rewrites Claude Code skills to fix failing test cases. Use when improving a SKILL.md based on annotated failure analysis from a QA Tester.
+
+### strategy
+
+*`workshop-maintainer` preset · role `strategy` · skills: none*
+
+Analyzes stalled skill improvement runs and proposes a concrete rewrite strategy. Use when a skill improvement loop has not improved for 2+ consecutive iterations.
 
 ### ux-reviewer
 

@@ -16,7 +16,7 @@ DISPATCH_SITES = [
     "core/docs/subagent-development.md",
     "core/docs/parallel-agents.md",
     "core/skills/dev-cycle/references/phase-transitions.md",
-    "core/skills/improve-skill/references/phase-3-baseline.md",
+    "presets/workshop-maintainer/skills/improve-skill/references/phase-3-baseline.md",
     "core/skills/design-an-interface/SKILL.md",
 ]
 

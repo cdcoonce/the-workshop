@@ -25,6 +25,14 @@ gh auth status
 
 If not authenticated, run `gh auth login` and follow the prompts.
 
+## Branch policy
+
+Before creating a pull request, merging, or pushing, read the repository's
+project instructions and CI/CD configuration to identify the integration
+branch. Never assume the GitHub default branch is the correct target. Do not
+push directly to a protected or promotion-only branch when the repository
+requires a staged integration branch.
+
 ## Core Workflows
 
 `gh` covers the full GitHub loop from the terminal. See [references/commands.md](references/commands.md) for the exact syntax, flags, and examples for every command family below.

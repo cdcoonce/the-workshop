@@ -25,9 +25,9 @@ test:
   stage: test
   image: python:3.12
   before_script:
-    # The full test target shells out to `make` (recursive) and `git`; install
-    # both, then uv for the Python toolchain.
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends make git
+    # The full test target shells out to `make` and `git`; the GitLab MR guard
+    # exercised by the suite also requires `jq`.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends make git jq
     - pip install --quiet uv
     - uv sync
   script:
