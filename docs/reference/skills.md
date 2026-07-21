@@ -9,19 +9,17 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
-| `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
+| `/commit` | Git commit workflow with enforced conventional commit style. | workbench, workshop-maintainer |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
+| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
-| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench |
+| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workbench |
-| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workbench |
+| `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
@@ -30,16 +28,16 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
-| `/tdd` | Test-driven development with red-green-refactor loop. | workbench |
+| `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
-| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench, workshop-maintainer |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
-| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | workbench |
 
 ## Preset skills
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
+| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workshop-maintainer |
 | `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
 | `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
@@ -47,7 +45,10 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
 | `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | workbench |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
+| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workshop-maintainer |
+| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
+| `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
 | `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -69,14 +70,9 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-teach` | Run Charles's My Brain /teach stateful learning workspace workflow for a topic. | vault-ops |
 | `/vault-wrap-up` | Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. | vault-ops |
+| `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
-
-### `/add-the-workshop-hook`
-
-*universal*
-
-Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
 
 ### `/commit`
 
@@ -138,17 +134,11 @@ Interview the user relentlessly about a plan or design until reaching shared und
 
 Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more AI-navigable.
 
-### `/improve-skill`
+### `/mr-review-fixes`
 
 *universal*
 
-Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR.
-
-### `/persona-builder`
-
-*universal*
-
-Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
+Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. Covers GitLab and GitHub review-followup work.
 
 ### `/plan-ceo-review`
 
@@ -222,11 +212,11 @@ Use when starting any conversation or task in this project — establishes prece
 
 Use when user wants to write a PRD, create a product requirements document, or plan a new feature. Produces a PRD via user interview, codebase exploration, and module design, submitted as a GitHub issue.
 
-### `/write-a-skill`
+### `/add-the-workshop-hook`
 
-*universal*
+*`workshop-maintainer` preset*
 
-Create new agent skills with proper structure, progressive disclosure, and bundled resources. Use when user wants to create, write, or build a new skill.
+Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
 
 ### `/advisor-product-design`
 
@@ -270,11 +260,29 @@ Deploy the portfolio chat agent Lambda function to AWS. Use when the user asks t
 
 Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. Use whenever creating a GitLab merge request.
 
+### `/improve-skill`
+
+*`workshop-maintainer` preset*
+
+Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR.
+
+### `/persona-builder`
+
+*`workshop-maintainer` preset*
+
+Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
+
 ### `/react-ui-ux`
 
 *`workbench` preset*
 
 Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. Use when building or editing React components, pages, or layouts (.tsx/.jsx), especially new UI generation in Tailwind/shadcn/Framer-Motion projects.
+
+### `/skill-inventory`
+
+*`workshop-maintainer` preset*
+
+Audits agent skills and their package boundaries. Use when the user asks to inventory skills, find duplicate or overlapping skills, consolidate skills, group capabilities, reorganize presets, or decide where a skill belongs.
 
 ### `/vault-audit`
 
@@ -401,3 +409,9 @@ Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync wor
 *`vault-ops` preset*
 
 Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+
+### `/workshop-skill-creator`
+
+*`workshop-maintainer` preset*
+
+Creates and revises skills owned by The Workshop repository. Use when the user asks to add, create, write, revise, or package a Workshop skill.

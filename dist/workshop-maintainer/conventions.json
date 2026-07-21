@@ -1,0 +1,7 @@
+{
+  "conventions": [
+    "Inventory before reorganizing",
+    "Keep source ownership distinct from distribution membership",
+    "Regenerate docs and dist after changing any component"
+  ]
+}

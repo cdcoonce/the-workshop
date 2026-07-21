@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
-**26 universal skills · 6 core agents · 8 hooks · 2 project presets · 7 persona plugins**
+**23 universal skills · 2 core agents · 8 hooks · 3 project presets · 7 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -130,7 +130,8 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 32 | 16 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
+| **`workbench`** | project | 29 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add . |
+| **`workshop-maintainer`** | project | 10 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
@@ -153,19 +154,17 @@ These ship with every preset:
 <!-- BEGIN GENERATED: skills-table -->
 | Skill | Summary | Presets |
 | --- | --- | --- |
-| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workbench |
-| `/commit` | Git commit workflow with enforced conventional commit style. | workbench |
+| `/commit` | Git commit workflow with enforced conventional commit style. | workbench, workshop-maintainer |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench |
+| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
-| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench |
+| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workbench |
-| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workbench |
+| `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
@@ -174,11 +173,10 @@ These ship with every preset:
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
-| `/tdd` | Test-driven development with red-green-refactor loop. | workbench |
+| `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
-| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench |
+| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench, workshop-maintainer |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
-| `/write-a-skill` | Create new agent skills with proper structure, progressive disclosure, and bundled resources. | workbench |
 <!-- END GENERATED: skills-table -->
 
 ### Preset-Specific Skills
@@ -188,6 +186,7 @@ These ship only with the presets that declare them:
 <!-- BEGIN GENERATED: preset-skills-table -->
 | Skill | Summary | Presets |
 | --- | --- | --- |
+| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workshop-maintainer |
 | `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
 | `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
@@ -195,7 +194,10 @@ These ship only with the presets that declare them:
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
 | `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | workbench |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
+| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workshop-maintainer |
+| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
+| `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
 | `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -217,6 +219,7 @@ These ship only with the presets that declare them:
 | `/vault-teach` | Run Charles's My Brain /teach stateful learning workspace workflow for a topic. | vault-ops |
 | `/vault-wrap-up` | Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. | vault-ops |
+| `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 <!-- END GENERATED: preset-skills-table -->
 
 Full descriptions for every skill live in the [skills reference](docs/reference/skills.md).
@@ -235,10 +238,6 @@ These ship with every preset:
 | Agent | Role | Skills | Presets |
 | --- | --- | --- | --- |
 | **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | workbench |
-| **qa-tester** | `qa-tester` | — | workbench |
-| **skill-analyst** | `analyst` | — | workbench |
-| **skill-writer** | `skill-writer` | — | workbench |
-| **strategy** | `strategy` | — | workbench |
 | **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | workbench |
 <!-- END GENERATED: agents-core-table -->
 
@@ -255,9 +254,13 @@ Each preset adds domain-specific agents that override or extend the core set:
 | **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
 | **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | workbench |
 | **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
+| **qa-tester** | `qa-tester` | — | workshop-maintainer |
 | **security-reviewer** | `reviewer` | `daa-code-review` | workbench |
-| **skill-builder** | `implementer` | `tdd`, `commit` | workbench |
-| **skill-reviewer** | `reviewer` | `daa-code-review` | workbench |
+| **skill-analyst** | `analyst` | — | workshop-maintainer |
+| **skill-builder** | `implementer` | `tdd`, `commit` | workshop-maintainer |
+| **skill-reviewer** | `reviewer` | `daa-code-review` | workshop-maintainer |
+| **skill-writer** | `skill-writer` | — | workshop-maintainer |
+| **strategy** | `strategy` | — | workshop-maintainer |
 | **ux-reviewer** | `reviewer` | `daa-code-review` | workbench |
 <!-- END GENERATED: agents-preset-table -->
 
@@ -272,14 +275,14 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 <!-- BEGIN GENERATED: hooks-table -->
 | Hook | Event | Summary | Presets |
 | --- | --- | --- | --- |
-| `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | all |
-| `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | all |
+| `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | vault-ops, workbench |
+| `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | vault-ops, workbench |
 | `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
-| `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
-| `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
-| `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
-| `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
+| `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | vault-ops, workbench |
+| `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | vault-ops, workbench |
+| `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | vault-ops, workbench |
+| `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | vault-ops, workbench |
 <!-- END GENERATED: hooks-table -->
 
 See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference](docs/reference/build-and-wiring.md) for details.
@@ -427,7 +430,7 @@ The reference docs and the README component tables are **generated from source**
 - `make build` regenerates the marketplace index and rebuilds every preset into `dist/`.
 - `make test` runs the suites **and** the drift gate: it runs `build_docs --check`, rebuilds `dist/`, and fails if any generated output differs from what's committed. The same gate runs in CI.
 
-When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`write-a-skill`, `create-hook`, `add-the-workshop-hook`) end with this step.
+When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`workshop-skill-creator`, `add-the-workshop-hook`) end with this step; `create-hook` remains the general-purpose hook workflow.
 
 ### Folder Structure
 

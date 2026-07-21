@@ -25,8 +25,6 @@
   "preset_hooks": ["post-edit-lint.py"],
   "preset_agents": [
     "analysis-builder",
-    "skill-builder",
-    "skill-reviewer",
     "pipeline-builder",
     "data-quality-reviewer",
     "frontend-builder",

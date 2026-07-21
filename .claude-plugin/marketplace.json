@@ -57,6 +57,12 @@
       "version": "1.1.1",
       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.",
       "source": "./dist/workbench"
+    },
+    {
+      "name": "workshop-maintainer",
+      "version": "1.0.0",
+      "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
+      "source": "./dist/workshop-maintainer"
     }
   ]
 }

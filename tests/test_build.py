@@ -19,6 +19,75 @@ def test_workbench_manifest_includes_gitlab_mr_create() -> None:
     assert "gitlab-mr-create" in manifest["preset_skills"]
 
 
+def test_workshop_maintainer_ships_only_maintenance_skills() -> None:
+    """Workshop maintenance tooling stays out of domain presets."""
+    repository_root = Path(__file__).resolve().parents[1]
+    maintainer = json.loads(
+        (repository_root / "presets/workshop-maintainer/manifest.json").read_text()
+    )
+    vault_ops = json.loads(
+        (repository_root / "presets/vault-ops/manifest.json").read_text()
+    )
+
+    assert maintainer["core"]["skills"] == [
+        "using-workflow",
+        "grill-me",
+        "tdd",
+        "commit",
+        "daa-code-review",
+    ]
+    assert maintainer["core"]["agents"] == []
+    assert maintainer["preset_skills"] == [
+        "skill-inventory",
+        "workshop-skill-creator",
+        "improve-skill",
+        "add-the-workshop-hook",
+        "persona-builder",
+    ]
+    assert maintainer["preset_agents"] == [
+        "skill-analyst",
+        "qa-tester",
+        "skill-writer",
+        "strategy",
+        "skill-builder",
+        "skill-reviewer",
+    ]
+    assert vault_ops["core"]["skills"] == []
+
+
+def test_maintenance_components_have_preset_only_ownership() -> None:
+    """Maintenance components must not leak into the universal core."""
+    repository_root = Path(__file__).resolve().parents[1]
+    maintainer = repository_root / "presets/workshop-maintainer"
+    workbench_manifest = json.loads(
+        (repository_root / "presets/workbench/manifest.json").read_text()
+    )
+
+    maintenance_skills = {
+        "workshop-skill-creator",
+        "improve-skill",
+        "add-the-workshop-hook",
+        "persona-builder",
+    }
+    maintenance_agents = {
+        "skill-analyst",
+        "qa-tester",
+        "skill-writer",
+        "strategy",
+        "skill-builder",
+        "skill-reviewer",
+    }
+
+    assert not (repository_root / "core/skills/write-a-skill").exists()
+    for skill_name in maintenance_skills:
+        assert (maintainer / "skills" / skill_name / "SKILL.md").exists()
+        assert not (repository_root / "core/skills" / skill_name).exists()
+    for agent_name in maintenance_agents:
+        assert (maintainer / "agents" / agent_name / "AGENT.md").exists()
+        assert not (repository_root / "core/agents" / agent_name).exists()
+        assert agent_name not in workbench_manifest["preset_agents"]
+
+
 def test_gitlab_mr_guard_preserves_markdown_and_verifies(tmp_path: Path) -> None:
     """The guard owns MR metadata and checks GitLab's returned object."""
     repository_root = Path(__file__).resolve().parents[1]
