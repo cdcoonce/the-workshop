@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.0.0*
+*project preset · v1.1.0*
 
 Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows
 
