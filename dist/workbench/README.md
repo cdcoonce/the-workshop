@@ -8,6 +8,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 - Regenerate docs and dist after changing any component
 - Progressive disclosure over monolithic instructions
 - Conventional commits; stage explicitly, never git add .
+- Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured
 
 ## Skills
 

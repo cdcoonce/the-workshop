@@ -5,9 +5,10 @@
     "Test-driven development: write the failing test first",
     "Regenerate docs and dist after changing any component",
     "Progressive disclosure over monolithic instructions",
-    "Conventional commits; stage explicitly, never git add ."
+    "Conventional commits; stage explicitly, never git add .",
+    "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
   ],
-  "version": "1.1.1",
+  "version": "1.1.2",
   "core": {
     "skills": "all",
     "agents": "all",
