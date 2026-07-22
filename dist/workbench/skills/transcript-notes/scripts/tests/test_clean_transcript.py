@@ -13,7 +13,18 @@ from clean_transcript import (
     TranscriptFormat,
     clean_transcript,
     detect_format,
+    is_anchor_line,
 )
+
+
+def _timestamped(cues: list[tuple[int, str]]) -> str:
+    """Build a ``[HH:MM:SS] text`` transcript from (start_seconds, text) cues."""
+    lines = []
+    for start, text in cues:
+        h, rem = divmod(start, 3600)
+        m, s = divmod(rem, 60)
+        lines.append(f"[{h:02d}:{m:02d}:{s:02d}] {text}")
+    return "\n".join(lines) + "\n"
 
 VTT_ROLLING = """WEBVTT
 Kind: captions
@@ -138,6 +149,56 @@ class TestSentenceAssembly:
 
     def test_no_orphaned_fragment_lines(self):
         # No output line should be a bare fragment with no terminal punctuation
-        # when a following fragment completes it.
-        lines = [ln for ln in clean_transcript(SRT_SIMPLE).text.splitlines() if ln.strip()]
+        # when a following fragment completes it. Anchor lines are ignored here.
+        lines = [
+            ln
+            for ln in clean_transcript(SRT_SIMPLE).text.splitlines()
+            if ln.strip() and not is_anchor_line(ln)
+        ]
         assert lines == ["Gradient descent is an optimization algorithm."]
+
+
+class TestAnchorTimestamps:
+    """Caption formats keep sparse [t=HH:MM:SS] anchors; plain prose has none."""
+
+    def test_caption_format_emits_leading_anchor(self):
+        text = clean_transcript(SRT_SIMPLE).text
+        anchors = [ln for ln in text.splitlines() if is_anchor_line(ln)]
+        assert anchors == ["[t=00:00:01]"]
+
+    def test_timestamped_format_emits_anchor(self):
+        text = clean_transcript(TIMESTAMPED_PLAIN).text
+        assert any(is_anchor_line(ln) for ln in text.splitlines())
+
+    def test_plain_prose_has_no_anchors(self):
+        text = clean_transcript(PLAIN_PROSE).text
+        assert not any(is_anchor_line(ln) for ln in text.splitlines())
+
+    def test_anchor_precedes_its_sentence(self):
+        lines = clean_transcript(SRT_SIMPLE).text.splitlines()
+        assert lines[0] == "[t=00:00:01]"
+        assert lines[1] == "Gradient descent is an optimization algorithm."
+
+    def test_anchor_interval_controls_density(self):
+        # Cues every 10s across 0..300s, each a distinct one-word sentence so
+        # rolling-overlap dedup keeps them all.
+        cues = [(t, f"seg{t // 10}.") for t in range(0, 301, 10)]
+        raw = _timestamped(cues)
+        coarse = clean_transcript(raw, anchor_interval_s=120).text
+        fine = clean_transcript(raw, anchor_interval_s=60).text
+        n_coarse = sum(is_anchor_line(ln) for ln in coarse.splitlines())
+        n_fine = sum(is_anchor_line(ln) for ln in fine.splitlines())
+        # 120s spacing over 300s → anchors at 0,120,240 (3); 60s → 0..300 (6).
+        assert n_coarse == 3
+        assert n_fine == 6
+        assert n_fine > n_coarse
+
+    def test_anchor_rolls_over_into_hours(self):
+        text = clean_transcript(_timestamped([(3661, "an hour in.")])).text
+        assert "[t=01:01:01]" in text
+
+    def test_word_count_excludes_anchor_lines(self):
+        # Two three-word sentences; the anchor must not inflate the count.
+        raw = _timestamped([(0, "alpha beta gamma."), (200, "delta epsilon zeta.")])
+        result = clean_transcript(raw)
+        assert result.word_count == 6

@@ -56,15 +56,15 @@ Save pasted text to `/tmp/transcript-notes-raw.txt` first, then run the cleaner:
 python3 "$SKILL_DIR/scripts/clean_transcript.py" /tmp/transcript-notes-raw.txt -o /tmp/transcript-notes-clean.txt
 ```
 
-It auto-detects the format, strips cue metadata and timestamps, collapses YouTube's rolling-overlap
-duplication, joins fragments into sentences, and prints word count and estimated minutes. Read the cleaned
-file for the words, but **keep the raw file** — timestamps for gaps, segments, and the map note come from
-it (operations.md).
+It auto-detects the format, strips cue metadata, collapses YouTube's rolling-overlap duplication, joins
+fragments into sentences, and prints word count and estimated minutes. It keeps sparse `[t=HH:MM:SS]`
+**anchor lines** in the output — read those for gap, segment, and map-note timing; no raw-file lookup
+needed (operations.md).
 
 ### Step 2 — Size the job
 
 Using the cleaner's estimate (~150 wpm): under ~45 min (~7,000 words) → one note. Longer → split at
-topic boundaries into ~20–30 min segments (wall-clock boundaries from the raw file), emit **every**
+topic boundaries into ~20–30 min segments (wall-clock positions from the `[t=…]` anchors), emit **every**
 segment as its own note in a single run (never wait for "next"), plus a **map note** linking all parts.
 **Idempotent resume:** if part files for this source exist, continue from the first missing part.
 
@@ -73,8 +73,8 @@ segment as its own note in a single run (never wait for "next"), plus a **map no
 Read the cleaned text and, in one pass: **classify** each block with a callout (flex the labels to the
 content — lecture vs interview vs demo); **rebuild** every spoken equation as `$$…$$` LaTeX with a
 one-line italic gloss, marking any uncertain reconstruction rather than inventing math; **flag** each
-visual reference ("as you can see here") with a `[!gap]` callout naming the likely visual, with its
-timestamp read from the raw file. Add a `[!ask]` reading prompt at each section start. Words stay the
+visual reference ("as you can see here") with a `[!gap]` callout naming the likely visual, timestamped
+from the nearest preceding `[t=…]` anchor. Add a `[!ask]` reading prompt at each section start. Words stay the
 speaker's argument, lightly repaired for grammar and ASR errors ("grade in descent" → "gradient
 descent") — never paraphrased or summarized. Rules: [callout-vocabulary.md](references/callout-vocabulary.md).
 

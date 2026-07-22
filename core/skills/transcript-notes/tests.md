@@ -98,15 +98,16 @@ Expected: the skill resolves the skill directory and invokes the bundled scripts
 by an absolute/skill-anchored path (e.g. `$SKILL_DIR/scripts/...`), not a bare
 `scripts/...` that would be "file not found" from the project cwd.
 
-## Scenario 12: Gap and segment timestamps survive cleaning
+## Scenario 12: Gap and segment timestamps come from cleaned-file anchors
 
-The cleaner strips all timestamps, yet a `[!gap]` needs "~mm:ss" and a 90-min
-lecture needs wall-clock segment boundaries.
+A `[!gap]` needs "~mm:ss" and a 90-min lecture needs wall-clock segment
+boundaries.
 
-Expected: the skill keeps the raw timestamped file and reads timestamps from it
-for gaps, segment boundaries, and the map note — it does not try to read them
-from the cleaned prose (which has none) or fabricate them. For plain pasted prose
-with no timestamps, it omits gap timestamps rather than inventing them.
+Expected: the skill reads the sparse `[t=HH:MM:SS]` anchor lines the cleaner
+emits in its output — using the nearest preceding anchor for a gap, and anchors
+near topic boundaries for segments and map-note ranges — rather than fabricating
+times. For plain pasted prose (no timing, so no anchors), it omits gap timestamps
+rather than inventing them.
 
 ## Scenario 13: Crashed segmented run resumes, not skipped
 

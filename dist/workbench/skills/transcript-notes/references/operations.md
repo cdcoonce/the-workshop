@@ -16,24 +16,25 @@ uv run "$SKILL_DIR/scripts/fetch_transcript.py" "<url-or-id>" -o /tmp/transcript
 python3 "$SKILL_DIR/scripts/clean_transcript.py" /tmp/transcript-notes-raw.txt -o /tmp/transcript-notes-clean.txt
 ```
 
-## Two files, two jobs — cleaned prose vs. raw timestamps
+## Timestamps — read the anchors in the cleaned file
 
-The cleaner **removes all timestamps** to produce readable prose. Timestamps are
-still needed for three things — `[!gap]` markers, segment boundaries, and the map
-note's time ranges — so **keep the raw timestamped file** and use it only for
-timing:
+The cleaner keeps **sparse anchor lines** in its output — `[t=HH:MM:SS]` on their
+own line, one at the start of the first sentence opening each ~120 s window (tune
+with `--anchor-interval`). These are the timestamp source; you do **not** need to
+re-read the raw file:
 
-- **Reconstruction (Step 3):** read the **cleaned** file for the words. When you
-  place a `[!gap]`, find the referenced phrase in the **raw** file and read its
-  `[HH:MM:SS]` (or VTT/SRT cue) timestamp for the "~mm:ss" annotation.
-- **Segmentation (Step 2):** the cleaner's word-count estimate sizes the job; the
-  **raw** file gives real wall-clock boundaries. Find the timestamp nearest each
-  topic boundary to place ~20–30 min splits and the map note's ranges.
-- **Plain pasted prose has no timestamps.** Then omit `[!gap]` timestamps (the
-  rule is "when inferable") and segment by topic and word count alone.
+- **`[!gap]` markers (Step 3):** use the nearest **preceding** `[t=…]` anchor as
+  the "~mm:ss" for the referenced visual — approximate is expected.
+- **Segmentation (Step 2):** the cleaner's word-count sizes the job; the anchors
+  give wall-clock positions. Put ~20–30 min splits and the map note's ranges at
+  the anchors nearest each topic boundary.
+- **Plain pasted prose carries no anchors** (it has no timing). Then omit `[!gap]`
+  timestamps (the rule is "when inferable") and segment by topic and word count.
 
-The raw file exists for every YouTube input (the fetched file) and every uploaded
-VTT/SRT/timestamped transcript. Only bare pasted prose lacks it.
+Anchors are emitted for YouTube (fetched), VTT, SRT, and timestamped inputs. If
+you need finer precision than the anchor spacing gives, the raw file is still on
+disk (fetched file or the uploaded VTT/SRT) and can be consulted, but the anchors
+cover the normal case.
 
 ## Duplicate check and idempotent resume (Step 0 ↔ Step 2)
 

@@ -40,7 +40,7 @@ Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and wri
 
 ### `workbench`
 
-*project preset · v1.2.0*
+*project preset · v1.2.1*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.
 
