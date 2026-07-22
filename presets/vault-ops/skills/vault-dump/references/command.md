@@ -47,8 +47,9 @@ Accept freeform content from the user and route it to the appropriate vault loca
 
 ## Naming Conventions
 
-- Work notes: `work/active/<descriptive-slug>.md`
-- Decision records: `work/active/<decision-slug>.md`
+- Work notes: update an existing project note first (`work/active/<cluster>/` or flat `work/active/`); otherwise `work/active/ad-hoc/<descriptive-slug>.md` (temporary inbox — see `work/AGENTS.md`)
+- Work decision records: `work/decisions/<decision-slug>.md`
+- Personal decision records: `personal/decisions/<decision-slug>.md`
 - 1:1 notes: `work/1-1/<Person Name> <YYYY-MM-DD>.md`
 - Incidents: `work/incidents/<incident-slug>.md`
 - Learning notes: `personal/learning/<topic-slug>.md`

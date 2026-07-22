@@ -37,6 +37,7 @@ Turn an intimidating, large MR into a navigable map a reviewer can walk on their
 
 - **Verify "dormant"/feature-flag claims against both gates in the code, not the one you remember.** A packet that reports a feature as dormant based on one flag when a second flag actually gates it will mislead the reviewer into approving something live.
 - **Mermaid renders in GitLab/GitHub markdown** but not in plain pandoc docx without extra tooling — pick the format to match where the packet will actually be read.
+- **GitLab clips Mermaid box text.** With the default `htmlLabels: true`, GitLab measures label width with a different font than it renders, so longer labels overflow and get cut off inside the box. Fix: prepend `%%{init: {"flowchart": {"htmlLabels": false}}}%%` (forces SVG-text measurement) and keep labels short — push detail into the prose beside the diagram, not the nodes. **`mermaid-cli` renders correctly and does _not_ reproduce this**, so a diagram that looks clean locally can still clip on GitLab — verify it on GitLab itself before handing off.
 - **On an SSH-blocked network, push via HTTPS through the platform's credential helper** (e.g. `glab`) rather than fighting SSH.
 
 ## Related

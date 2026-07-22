@@ -59,11 +59,18 @@ If a step genuinely needs deep judgment, do NOT escalate the model — leave a o
 
 ## Salience filter (Charles's dial — edit this section freely)
 
-Default rules until tuned:
+**Tuned 2026-07-10.** The original "every main-merge is stub-worthy" rule assumed main-merges were rare and aggregate. They aren't: afk merges per-slice and small integration drains straight to `main` at high volume — one month left **166** unstubbed main-merges (a ~17-run backlog at 10/run). Measured against that month, the vast majority are substantive-but-*maintenance* `fix(...)` PRs whose detail already lives in the issue they close and in the synthesized narrative in `personal/projects/afk-agent-system.md` (the resume note is the real digest; builds/ stubs are only durable per-*capability* graph nodes + brag evidence). So the bar is now **new capability + aggregate landmark, not every substantive merge.** Same tuning measured **45** stub-worthy (a ~5-run catch-up, then ~1–2 runs/week going forward). A skipped PR is not lost — its work lives in its closed issue, and brag-spotter still sees the full merged-PR stream, so a landmark `fix` can still become a Brag entry without a per-PR stub.
 
-- **Stub-worthy:** PRs merged to `main` or an epic branch (these are human-gated, therefore significant by construction).
-- **Skip:** slice PRs into `afk/staging` or epic branches — their epic MR aggregates them; a stub per slice is noise.
-- **Brag-candidate signal** (pass to brag-spotter as a hint, not a verdict): epic MRs, multi-slice PRs with 0 quarantined, and self-improvement PRs (afk building afk).
+Decide with the fields already gathered in step 2 (`title`, `baseRefName`, `closingIssuesReferences`) — no extra API calls.
+
+- **Stub-worthy — epic MRs:** a PR from an `afk/epic-*` branch to `main`, or whose title contains "epic". Large feature sets, human-gated by construction.
+- **Stub-worthy — substantial integration MRs:** a `staging → main` integration MR closing **≥ 4 issues** (`closingIssuesReferences | length >= 4`). A real batch worth one node; the per-slice detail lives in the closed issues.
+- **Stub-worthy — new-capability direct-to-main PRs:** a PR merged straight to `main` whose title is **`feat(...)` / `feat:`** — a new capability or subsystem (the genuine landmark: a new substrate, gate, conductor phase, mailbox, egress control, backend, module). These are the afk-building-afk milestones worth a durable graph node.
+- **Skip — per-slice churn:** individual `AFK: afk/issue-N` slice PRs (and `AFK recovery:` PRs) merged to `main` (F1), and every slice PR into `afk/staging` / an epic branch. Aggregated elsewhere or captured by the issue; a per-slice stub is noise.
+- **Skip — routine integration MRs:** a `staging → main` MR closing **< 4 issues**. Low marginal signal.
+- **Skip — maintenance direct-to-main PRs:** `fix` / `test` / `docs` / `chore` / `refactor` / `ci` / `build` / `style` / `perf`-prefixed (and unprefixed) direct merges. Substantive but not new-capability — their detail lives in the closed issue + the resume note. (If one is a genuine milestone, brag-spotter surfaces it from the PR stream, and you can hand-write a stub for it — the filter is the default, not a cage.)
+- **Brag-candidate signal** (pass to brag-spotter as a hint, not a verdict): epic MRs, multi-slice MRs with 0 quarantined, and self-improvement PRs (afk building afk).
+- **Backlog awareness:** after applying this filter, if **> 20** stub-worthy PRs still remain past the 10-cap, note the count and the oldest-unprocessed date in the run digest and recommend a short catch-up loop (repeat `/recall` runs) rather than silently trickling one batch and looking caught-up.
 
 ## Constraints
 
