@@ -129,7 +129,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 <!-- BEGIN GENERATED: presets-table -->
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
+| **`vault-ops`** | project | 22 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 30 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
 | **`workshop-maintainer`** | project | 10 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
@@ -206,6 +206,7 @@ These ship only with the presets that declare them:
 | `/vault-context-then-delegate` | Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
 | `/vault-dispatch` | Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
 | `/vault-dump` | Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
+| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. | vault-ops |
 | `/vault-find` | Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. | vault-ops |
 | `/vault-fix-issue` | Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
 | `/vault-garden` | Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |

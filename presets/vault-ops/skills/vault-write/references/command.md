@@ -14,6 +14,18 @@ Charles writes plainly and directly. Warm but not effusive, professional but not
 
 He writes in **complete, conversational sentences**, not clipped notes. He hedges out loud when he's genuinely unsure ("my guess is," "the thing that worries me is," "I suspect"), and a tentative point can end on a question mark ("Noreva probably hasn't moved our full entitlement over yet?"). Contractions are natural ("the data's running behind," "it's"). Plain everyday verbs over jargon: "moved over" not "ported" or "migrated," "running about two weeks behind" not "the feed is stale," "only shows two markets" not "exposes a subset." First person, doing the thing: "I was able to get the API working" reads more like him than "Got the API working."
 
+## Clarity
+
+These sit on top of the voice rules, and they are defaults rather than laws. Break any one of them when following it would make the message read worse (Orwell's own last rule).
+
+- **Cut every word that does no work.** Concision is the highest-leverage edit in short messages, since people skim and a tighter message gets read and acted on. Tighten without going clipped: full sentences still (rule 2), just no dead weight.
+- **Prefer the plain word, and keep the sentence simple.** Reach for the everyday word over the fancy one, and don't nest clauses inside clauses. Tangled structure loses a reader faster than a long word does. This is a preference, not syllable-counting: keep the precise word when it is the right one.
+- **Match jargon to the reader.** Cut jargon and internal shorthand for anyone outside the team (see rule 7). Keep the exact technical term when you're writing to fellow engineers and it's the clearest, shortest option. The test is the reader, not the word.
+
+## Never simplify these
+
+Preserve exactly, even while tightening everything around them: code, identifiers, commands, file paths, and product names; legal or license wording and any text quoted from elsewhere; and anyone's direct quote. Do not paraphrase a person's words to make them read cleaner.
+
 ## Hard rules
 
 1. **No em dashes. Ever.** Restructure with periods, commas, or parentheses. (Hyphens in compound words like "non-battery" are fine; the em dash `—` and en dash `–` are not.) This includes the greeting dash: write "Ethan, Alex," or just start talking, never "Ethan, Alex — ...".
@@ -26,6 +38,15 @@ He writes in **complete, conversational sentences**, not clipped notes. He hedge
 6. **Lead with the answer.** Get to the point in the first sentence of each topic. No long wind-up.
 7. **Match the audience's context.** Do not explain internal systems, tools, or project names to people outside the team (they have no idea what AMRT or someone's workbook is). Give outsiders just enough high-level "why" to make the ask make sense, then stop.
 8. **Hedge real uncertainty briefly, then move on.** "Based on what I've looked at" is enough. Do not bury the message in qualifiers, and do not oversell confidence either.
+
+## Cut the AI tells
+
+Drafts should read like Charles wrote them, not like a model did. The em dash (rule 1) and the "not just X" contrast framing (rule 3) are already banned above. Also cut these machine tells:
+
+- **Inflated LLM vocabulary.** Avoid the words models overuse far past normal human rates. Seed list, not exhaustive: delve, showcase, underscore, pivotal, intricate, meticulous, realm, plus puffery like tapestry, testament, boasts, vibrant, landscape. Use the plain word Charles would ("dig into" not "delve," "shows" not "showcases"). Flag a word only when it's filler, not when it's literally apt (an outage can genuinely "underscore" a gap; a vendor "landscape" is a real thing). Review this list from time to time, since these markers shift with each model generation.
+- **Reflexive enthusiasm openers and sign-offs.** Beyond the hype words rule 3 already cuts, drop "Certainly!", "Absolutely!", "Happy to help!". A short genuine acknowledgment still stays ("good catch," "thanks for flagging this").
+- **Empty hedge preambles.** Cut "it's important to note that," "it's worth noting," "one might argue." Keep the brief substantive hedge (rule 8); drop the ritual wind-up that adds no content.
+- **The rule-of-three reflex.** Don't pad with three parallel adjectives or phrases to sound thorough ("clear, concise, and compelling"). Say the one thing that's true. A real three-item list is fine; filler triples are not.
 
 ## When flagging a problem, blocker, or limitation
 
@@ -47,7 +68,7 @@ Apologies are where over-writing shows up hardest, because there's an instinct t
 
 1. Identify the audience and what they already know. Strip anything they don't need.
 2. Draft following the rules above.
-3. Re-read once specifically to: delete em dashes (including the greeting dash); rewrite any clipped fragment as a full sentence; delete any sentence that only performs enthusiasm, restates the reader's own words, or restates a fact the draft already stated; delete dramatic self-narration; check for a duplicated apology/acknowledgment (one is enough).
+3. Re-read once specifically to: delete em dashes (including the greeting dash); rewrite any clipped fragment as a full sentence; cut any word or clause that does no work (without going clipped); replace inflated LLM vocabulary with the plain word; delete empty hedge preambles, enthusiasm openers, and filler triples; delete any sentence that only performs enthusiasm, restates the reader's own words, or restates a fact the draft already stated; delete dramatic self-narration; check for a duplicated apology/acknowledgment (one is enough).
 4. Present the draft for review before anything is sent. Offer to save longer drafts to `thinking/`.
 
 ## Related

@@ -57,6 +57,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-context-then-delegate` | Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
 | `/vault-dispatch` | Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
 | `/vault-dump` | Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
+| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. | vault-ops |
 | `/vault-find` | Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. | vault-ops |
 | `/vault-fix-issue` | Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
 | `/vault-garden` | Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
@@ -332,6 +333,12 @@ Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-mana
 *`vault-ops` preset*
 
 Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
+
+### `/vault-essay`
+
+*`vault-ops` preset*
+
+Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
 
 ### `/vault-find`
 

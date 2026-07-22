@@ -27,6 +27,7 @@
     "vault-context-then-delegate",
     "vault-dispatch",
     "vault-dump",
+    "vault-essay",
     "vault-find",
     "vault-fix-issue",
     "vault-garden",

@@ -9,7 +9,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`vault-ops`** | project | 21 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
+| **`vault-ops`** | project | 22 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 30 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
 | **`workshop-maintainer`** | project | 10 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
@@ -34,7 +34,7 @@ Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and wri
 - Wikilinks over bare references
 - Rebase-before-push git sync, refreshed handoff
 
-**Skills (21):** `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-connect`, `vault-context-then-delegate`, `vault-dispatch`, `vault-dump`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-link`, `vault-mr-review-packet`, `vault-recall`, `vault-standup`, `vault-start`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`
+**Skills (22):** `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-connect`, `vault-context-then-delegate`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-link`, `vault-mr-review-packet`, `vault-recall`, `vault-standup`, `vault-start`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`
 
 **Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
