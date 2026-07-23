@@ -42,6 +42,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. |
 | `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
+| `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
 | `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
