@@ -15,12 +15,20 @@ def test_finish_branch_requires_explicit_integration_branch() -> None:
 
 
 def test_workshop_declares_dev_first_promotion_path() -> None:
-    """Workshop changes land on GitHub dev before GitLab promotion to main."""
-    repository_root = Path(__file__).resolve().parents[1]
-    instructions = (repository_root / "CLAUDE.md").read_text()
+    """Workshop integrates on GitHub: branch to dev, then promote dev to main.
 
-    assert "GitHub `dev` first" in instructions
-    assert "Never push directly to `main`" in instructions
+    GitLab is a one-way downstream mirror, never an integration path — the
+    policy must say so, because an agent that reads it otherwise will try to
+    promote through a GitLab merge request that no one reviews.
+    """
+    repository_root = Path(__file__).resolve().parents[1]
+    instructions = " ".join((repository_root / "CLAUDE.md").read_text().split())
+
+    assert "integrates on GitHub" in instructions
+    assert "never push or merge the-workshop on GitLab" in instructions
+    assert "Open a pull request into `dev`" in instructions
+    assert "Promote `dev` → `main`" in instructions
+    assert "never push to it directly" in instructions
 
 
 def test_router_requires_policy_resolution_and_afk_mode() -> None:
