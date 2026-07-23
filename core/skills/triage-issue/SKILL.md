@@ -11,7 +11,7 @@ Investigate a reported problem, find its root cause, and create a GitHub issue w
 
 ### 1. Capture the problem
 
-Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?" — no follow-ups; start investigating immediately.
+Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?" — no follow-ups; start investigating immediately. If the report comes from a recorded artifact rather than the user's live observation — an existing issue, a TODO, a note from a past session — reproduce it against current code first (`stale-artifact-sweep`); a report can be fixed, closed, or superseded between filing and now.
 
 ### 2. Explore and diagnose
 

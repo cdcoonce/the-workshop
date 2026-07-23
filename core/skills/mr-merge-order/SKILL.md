@@ -17,7 +17,9 @@ target cleanly and still conflict with **each other** — so a per-MR green chec
 about the queue. You have to simulate "A merged first" and re-test B.
 
 Assumed dependencies are usually backwards. Verify the direction; never take a remembered
-"X has to wait for Y" at face value.
+"X has to wait for Y" at face value. If an MR in the queue is blocked by a review finding or
+carries commits that may already be in the target, run `stale-artifact-sweep` first — ordering
+an MR that no longer needs to land wastes the whole analysis.
 
 ## Procedure
 
@@ -32,7 +34,7 @@ uv run python core/skills/mr-merge-order/scripts/merge_order.py --repo <path> --
 - Output is saved to `~/.workshop/mr-merge-order/<repo>.md` so a later session can resume
   without recomputing, and so you can diff how the queue changed.
 
-Then read the report to the user: recommended order, the *why* per pair, and the conflict matrix.
+Then read the report to the user: recommended order, the _why_ per pair, and the conflict matrix.
 
 ## The cost rule
 
@@ -62,15 +64,15 @@ flagged as arbitrary — say so rather than implying the order was derived.
 
 ## Watch for
 
-- **A conflict that is semantic, not textual.** A commit can merge cleanly and still be *wrong*
+- **A conflict that is semantic, not textual.** A commit can merge cleanly and still be _wrong_
   after the other lands — e.g. a doc correcting a CI stage table is accurate when written and
   stale once the other MR changes the stages. Textual cleanliness is not correctness; when the
   contested file documents something the other MR changes, read the content before recommending.
 - **Superseded commits.** If the second MR's change is already contained in the first, dropping
   the commit beats resolving it.
 - **A stale base.** The script resolves the target to `origin/<target>` and reports how far the
-  local branch has drifted, because analysing against a stale local `dev` *fabricates conflicts
-  that do not exist*. Still `git fetch` first — the remote-tracking ref is only as fresh as your
+  local branch has drifted, because analysing against a stale local `dev` _fabricates conflicts
+  that do not exist_. Still `git fetch` first — the remote-tracking ref is only as fresh as your
   last fetch. If the report's base note says the local branch is behind, that is information for
   the user, not an error to hide.
 - **git < 2.38** — `merge-tree --write-tree` is required; the script errors clearly.
