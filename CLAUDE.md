@@ -135,6 +135,38 @@ all pass, with the regenerated `docs/` and `dist/` included in the change.
 `make test` covers the root suite, every auto-discovered skill-script suite, and
 the generated-docs/dist drift gate.
 
+## Preset Versioning
+
+A preset's version is how an installed copy learns there is anything to take:
+`claude plugin update` compares it. **Change a preset's shipped content without
+bumping its version and the change reaches nobody** — it merges green, promotes
+green, and silently never arrives. `make test` fails on this
+(`scripts/check_version_bumps.py`).
+
+The consumer is an owner with the plugin installed, and what they depend on is
+the component surface: which skills, agents, and hooks exist, and what triggers
+them.
+
+- **Major** — something they rely on breaks. A skill, agent, or hook **removed**
+  or renamed (its trigger phrases go with it, so their invocations silently stop
+  matching); a hook that now blocks where it did not; owner data changing
+  location.
+- **Minor** — new capability, nothing existing changes. A skill, agent, or hook
+  **added**; new guidance inside an existing skill.
+- **Patch** — fixes that change neither the surface nor the triggers. A script
+  bug, corrected instructions, reworded docs.
+
+Below 1.0, the minor position is the breaking signal: `0.1.3 → 0.2.0`, not
+`1.0.0`.
+
+The gate enforces the part it can see — the shipped component inventory, so a
+removal demands major and an addition demands at least minor. It cannot see a
+behavioural break inside a component that kept its name. Judge those yourself;
+an unchanged inventory only means patch is the _floor_.
+
+One bump covers everything that lands on `dev` between promotions — the check
+compares against `main`, not against the PR base.
+
 ## Skills
 
 Skills live in `core/skills/` (universal) and `presets/*/skills/` (preset-specific).

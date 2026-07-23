@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_version_bumps import find_missing_bumps
+from scripts.check_version_bumps import find_level_violations, find_missing_bumps
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -147,3 +147,131 @@ class TestCiWiring:
         workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
         assert "fetch-depth: 0" in workflow
+
+
+class TestBumpLevel:
+    """The gate checks *which* part of the version moved, not just that it moved.
+
+    A removed skill and a corrected typo are not the same event to someone with
+    the plugin installed: removal changes the trigger surface, so invocations
+    silently stop matching. Only the mechanically visible part is enforced —
+    the component inventory. Behavioural breaks (a hook that now blocks where it
+    did not) still need judgement, and the policy says so rather than pretending.
+    """
+
+    def _release(self, repo: Path, version: str, skills: list[str]) -> None:
+        _write(
+            repo / "presets" / "advisor" / "manifest.json",
+            json.dumps({"name": "advisor", "version": version}),
+        )
+        for skill in skills:
+            _write(repo / "dist" / "advisor" / "skills" / skill / "SKILL.md", f"# {skill}\n")
+        _write(
+            repo / "dist" / "advisor" / ".claude-plugin" / "plugin.json",
+            json.dumps({"name": "advisor", "version": version}),
+        )
+
+    @pytest.fixture
+    def released(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        self._release(repo, "1.2.0", ["alpha", "beta"])
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+        return repo
+
+    def _drop_skill(self, repo: Path, skill: str) -> None:
+        subprocess.run(
+            ["rm", "-rf", str(repo / "dist" / "advisor" / "skills" / skill)], check=True
+        )
+
+    def test_removing_a_skill_demands_a_major_bump(self, released: Path) -> None:
+        self._drop_skill(released, "beta")
+        self._release(released, "1.2.1", ["alpha"])
+        commit(released, "drop beta, patch bump")
+
+        violations = find_level_violations(released, "main")
+
+        assert violations == [("advisor", "major", "patch")]
+
+    def test_removing_a_skill_with_a_major_bump_passes(self, released: Path) -> None:
+        self._drop_skill(released, "beta")
+        self._release(released, "2.0.0", ["alpha"])
+        commit(released, "drop beta, major bump")
+
+        assert find_level_violations(released, "main") == []
+
+    def test_adding_a_skill_demands_at_least_a_minor_bump(self, released: Path) -> None:
+        self._release(released, "1.2.1", ["alpha", "beta", "gamma"])
+        commit(released, "add gamma, patch bump")
+
+        assert find_level_violations(released, "main") == [("advisor", "minor", "patch")]
+
+    def test_adding_a_skill_with_a_minor_bump_passes(self, released: Path) -> None:
+        self._release(released, "1.3.0", ["alpha", "beta", "gamma"])
+        commit(released, "add gamma, minor bump")
+
+        assert find_level_violations(released, "main") == []
+
+    def test_a_larger_bump_than_required_is_fine(self, released: Path) -> None:
+        """Requirements are a floor, not an equality check."""
+        self._release(released, "2.0.0", ["alpha", "beta", "gamma"])
+        commit(released, "add gamma, major bump")
+
+        assert find_level_violations(released, "main") == []
+
+    def test_content_only_change_is_satisfied_by_a_patch(self, released: Path) -> None:
+        self._release(released, "1.2.1", ["alpha", "beta"])
+        _write(released / "dist" / "advisor" / "skills" / "alpha" / "SKILL.md", "# reworded\n")
+        commit(released, "reword alpha")
+
+        assert find_level_violations(released, "main") == []
+
+    def test_pre_1_0_treats_a_minor_bump_as_the_breaking_bump(
+        self, tmp_path: Path
+    ) -> None:
+        """In 0.x, 0.1.3 -> 0.2.0 is the break signal; demanding 1.0.0 would be wrong."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        self._release(repo, "0.1.3", ["alpha", "beta"])
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+
+        self._drop_skill(repo, "beta")
+        self._release(repo, "0.2.0", ["alpha"])
+        commit(repo, "drop beta on 0.x")
+
+        assert find_level_violations(repo, "main") == []
+
+    def test_pre_1_0_patch_bump_still_fails_a_removal(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        self._release(repo, "0.1.3", ["alpha", "beta"])
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+
+        self._drop_skill(repo, "beta")
+        self._release(repo, "0.1.4", ["alpha"])
+        commit(repo, "drop beta with a patch bump")
+
+        assert find_level_violations(repo, "main") == [("advisor", "major", "patch")]
+
+    def test_library_modules_are_not_components(self, released: Path) -> None:
+        """Adding a shared hook helper is not a new capability for the owner."""
+        _write(released / "dist" / "advisor" / "hooks" / "scripts" / "_shared.py", "x = 1\n")
+        self._release(released, "1.2.1", ["alpha", "beta"])
+        commit(released, "add a hook library module")
+
+        assert find_level_violations(released, "main") == []
