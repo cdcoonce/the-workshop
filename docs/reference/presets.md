@@ -40,7 +40,7 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 ### `workbench`
 
-*project preset · v1.2.1*
+*project preset · v1.2.2*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.
 

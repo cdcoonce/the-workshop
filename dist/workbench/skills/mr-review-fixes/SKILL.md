@@ -16,6 +16,11 @@ NO REVIEW-FEEDBACK REQUEST BECOMES A REVIEW PACKET UNLESS THE USER ASKS FOR A PA
 Default to acting:
 
 - Read the review feedback from the platform if possible.
+- **Check each blocking finding against the current head before fixing it.** A
+  review states what was true at the commit it cites; the fix may have landed
+  since, leaving the MR blocked on something that no longer reproduces. Run
+  `stale-artifact-sweep` when the branch has moved on since the review, and only
+  claim a finding is resolved on the strength of a re-run, never a guess.
 - Identify blocking findings first, then warnings that are cheap and relevant.
 - Patch the MR branch directly, preserving unrelated local changes.
 - Add or adjust tests for the reviewed behavior.
@@ -37,11 +42,11 @@ Do not create a reviewer walkthrough unless the user explicitly asks for a packe
 
 ## Pressure Checks
 
-| Excuse | Reality |
-| --- | --- |
+| Excuse                                                                  | Reality                                                                      |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | "The user mentioned MR review, so the MR packet skill is close enough." | A packet helps a reviewer read a large diff; review feedback asks for fixes. |
-| "I should inspect everything first and decide later." | The first routing decision determines whether you create docs or patch code. |
-| "The existing review text is long, so it needs a packet." | Long feedback is still feedback; extract findings and fix blockers. |
+| "I should inspect everything first and decide later."                   | The first routing decision determines whether you create docs or patch code. |
+| "The existing review text is long, so it needs a packet."               | Long feedback is still feedback; extract findings and fix blockers.          |
 
 Red flags:
 
