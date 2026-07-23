@@ -19,7 +19,6 @@ best-effort.
 """
 
 import json
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,20 +39,12 @@ cwd = Path(data.get("cwd") or ".").resolve()
 if not file_path:
     sys.exit(0)
 
-
-def git_dir(project_dir: Path):
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "--absolute-git-dir"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return Path(result.stdout.strip())
+try:
+    from _git_baseline import git_dir
+except ImportError:
+    # Fail open: the helper module ships alongside every hook, but a stale or
+    # partial install must no-op rather than crash the user's tool path.
+    sys.exit(0)
 
 
 repo_git_dir = git_dir(cwd)

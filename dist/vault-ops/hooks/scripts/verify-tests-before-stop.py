@@ -15,7 +15,6 @@ beyond ones that degrade safely when absent (`stop_hook_active`,
 `session_id`).
 """
 
-import hashlib
 import json
 import re
 import shutil
@@ -78,55 +77,12 @@ test_command = detect_test_command(cwd)
 if test_command is None:
     sys.exit(0)
 
-
-def git_dir(project_dir: Path):
-    """Return the repo's absolute .git dir, or None if not inside a git repo."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "--absolute-git-dir"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return Path(result.stdout.strip())
-
-
-def working_tree_signature(project_dir: Path):
-    """A content-aware fingerprint of what's changed.
-
-    `git status --porcelain` alone only reports per-path status flags (M/A/??),
-    not content — editing an already-modified file's content again produces the
-    identical porcelain line, which would wrongly look "unchanged." So this
-    hashes the status output plus the current bytes of every listed path.
-    """
-    try:
-        status = subprocess.run(
-            ["git", "-C", str(project_dir), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if status.returncode != 0:
-        return None
-
-    hasher = hashlib.sha256()
-    hasher.update(status.stdout.encode("utf-8", "surrogateescape"))
-    for line in status.stdout.splitlines():
-        path_part = line[3:]
-        if " -> " in path_part:
-            path_part = path_part.split(" -> ")[-1]
-        path_part = path_part.strip('"')
-        try:
-            hasher.update((project_dir / path_part).read_bytes())
-        except OSError:
-            pass
-    return hasher.hexdigest()
+try:
+    from _git_baseline import git_dir, working_tree_signature
+except ImportError:
+    # Fail open: the helper module ships alongside every hook, but a stale or
+    # partial install must no-op rather than crash the user's tool path.
+    sys.exit(0)
 
 
 repo_git_dir = git_dir(cwd)

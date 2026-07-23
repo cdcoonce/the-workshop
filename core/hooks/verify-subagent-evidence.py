@@ -13,10 +13,8 @@ Only blocks on a real contradiction; anything ambiguous (no snapshot, not a
 git repo, no completion-sounding claim in the message) fails open.
 """
 
-import hashlib
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -50,59 +48,12 @@ COMPLETION_CLAIM = re.compile(
 if not COMPLETION_CLAIM.search(message):
     sys.exit(0)
 
-
-def git_dir(project_dir: Path):
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "--absolute-git-dir"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return Path(result.stdout.strip())
-
-
-def head_sha(project_dir: Path):
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
-
-
-def working_tree_signature(project_dir: Path):
-    try:
-        status = subprocess.run(
-            ["git", "-C", str(project_dir), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    if status.returncode != 0:
-        return ""
-    hasher = hashlib.sha256()
-    hasher.update(status.stdout.encode("utf-8", "surrogateescape"))
-    for line in status.stdout.splitlines():
-        path_part = line[3:]
-        if " -> " in path_part:
-            path_part = path_part.split(" -> ")[-1]
-        path_part = path_part.strip('"')
-        try:
-            hasher.update((project_dir / path_part).read_bytes())
-        except OSError:
-            pass
-    return hasher.hexdigest()
+try:
+    from _git_baseline import git_dir, head_sha, working_tree_signature
+except ImportError:
+    # Fail open: the helper module ships alongside every hook, but a stale or
+    # partial install must no-op rather than crash the user's tool path.
+    sys.exit(0)
 
 
 repo_git_dir = git_dir(cwd)
@@ -125,8 +76,9 @@ try:
 except OSError:
     pass
 
-current_sha = head_sha(cwd)
-current_signature = working_tree_signature(cwd)
+# Normalized to match what the start hook serialized (None -> "").
+current_sha = head_sha(cwd) or ""
+current_signature = working_tree_signature(cwd) or ""
 
 if current_sha != baseline_sha or current_signature != baseline_signature:
     sys.exit(0)  # something actually changed — claim is consistent

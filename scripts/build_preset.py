@@ -438,6 +438,13 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     run_hook_src = core_path / "hooks" / "run-hook.sh"
     if run_hook_src.exists():
         shutil.copy2(run_hook_src, dist_path / "hooks" / "run-hook.sh")
+    # Shared hook library modules (leading underscore = not a hook). Hooks import
+    # these as siblings — run-hook.sh runs `python3 hooks/scripts/<name>`, so
+    # sys.path[0] is that directory. Shipped unconditionally, like run-hook.sh:
+    # a preset carrying a hook without its helper would crash on the user's
+    # tool path, and the manifests list hooks, not the libraries behind them.
+    for module in sorted((core_path / "hooks").glob("_*.py")):
+        shutil.copy2(module, hooks_scripts_dir / module.name)
 
     # 7. Copy optional preset output styles used by persona SessionStart hooks.
     output_styles_src = preset_path / "output-styles"

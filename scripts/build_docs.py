@@ -536,12 +536,16 @@ def build_model(root: Path) -> DocsModel:
     core_hooks_dir = root / "core" / "hooks"
     if core_hooks_dir.exists():
         for hook_path in sorted(core_hooks_dir.glob("*.py")):
+            if hook_path.name.startswith("_"):
+                continue  # shared library module, not a hook — it declares no event
             hook_paths[hook_path.name] = (hook_path, "core")
     for preset_dir in preset_dirs:
         hooks_dir = preset_dir / "hooks"
         if not hooks_dir.exists():
             continue
         for hook_path in sorted(hooks_dir.glob("*.py")):
+            if hook_path.name.startswith("_"):
+                continue
             hook_paths.setdefault(hook_path.name, (hook_path, preset_dir.name))
 
     for name, (hook_path, source) in sorted(hook_paths.items()):

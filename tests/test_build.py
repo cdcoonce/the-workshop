@@ -912,3 +912,32 @@ class TestJunkDirExclusion:
         assert (shipped / "analyzer.py").exists()
         assert not (shipped / ".ruff_cache").exists()
         assert not (shipped / "__pycache__").exists()
+
+
+class TestSharedHookModuleShipping:
+    """Hooks import a sibling helper module; the build must ship it.
+
+    `run-hook.sh` runs `python3 <hooks/scripts/name.py>`, so sys.path[0] is that
+    directory and a sibling import resolves — but only if the module is there.
+    A preset that ships a hook without its helper crashes on the user's tool
+    path, so this is shipped unconditionally, exactly like run-hook.sh.
+    """
+
+    def test_shared_helper_module_is_shipped(self, tmp_repo: Path) -> None:
+        (tmp_repo / "core" / "hooks" / "_git_baseline.py").write_text(
+            '"""Shared git helpers."""\n'
+        )
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        shipped = (
+            tmp_repo / "dist" / "python-api" / "hooks" / "scripts" / "_git_baseline.py"
+        )
+        assert shipped.exists()
+        assert "Shared git helpers" in shipped.read_text()
+
+    def test_absent_helper_module_is_not_an_error(self, tmp_repo: Path) -> None:
+        """The build must not require a module this repo may not have yet."""
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert (tmp_repo / "dist" / "python-api" / "hooks" / "scripts").is_dir()

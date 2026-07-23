@@ -554,3 +554,24 @@ class TestGenerateAndCheck:
         outputs = generate(docs_repo)
         readme = outputs[docs_repo / "README.md"]
         assert "universal skills" in readme
+
+
+class TestSharedHookModules:
+    """A private module under core/hooks/ is a library, not a hook."""
+
+    def test_underscore_module_is_not_documented_as_a_hook(
+        self, docs_repo: Path
+    ) -> None:
+        """Hook discovery globs *.py and demands an event-naming docstring.
+
+        A shared helper module has no event, so without this exclusion adding
+        one fails `make docs` outright.
+        """
+        _write(
+            docs_repo / "core" / "hooks" / "_git_baseline.py",
+            '"""Shared git helpers for hook scripts."""\n',
+        )
+
+        model = build_model(docs_repo)
+
+        assert "_git_baseline.py" not in {h.name for h in model.hooks}

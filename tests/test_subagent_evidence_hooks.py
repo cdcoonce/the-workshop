@@ -7,6 +7,7 @@ hook records a baseline, the stop hook compares against it.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -194,3 +195,40 @@ def test_mention_of_verb_without_first_person_claim_not_blocked(tmp_path: Path) 
 
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_snapshot_serializes_empty_strings_not_none(tmp_path: Path) -> None:
+    """The pair must agree on how a failed git read is written to disk.
+
+    The helpers return None on failure; the start hook writes those values into
+    a state file and the stop hook reads them back as strings and compares. If
+    None ever reached the file as the literal "None", the comparison could never
+    match and the evidence check would silently stop blocking.
+    """
+    _init_git_repo(tmp_path)
+    start(tmp_path, "agent-none")
+
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-none.txt"
+    assert "None" not in state_file.read_text()
+
+
+def test_hooks_fail_open_when_the_shared_helper_is_missing(tmp_path: Path) -> None:
+    """A stale or partial install must no-op, not crash the user's tool path.
+
+    The helper ships alongside every hook, so this should never happen — but a
+    hook that raises ImportError on a real event surfaces an error on unrelated
+    work, which is exactly what fail-open exists to prevent.
+    """
+    _init_git_repo(tmp_path)
+    isolated = tmp_path / "hooks"
+    isolated.mkdir()
+    for hook in (START_HOOK, STOP_HOOK):
+        shutil.copy2(hook, isolated / hook.name)  # deliberately without _git_baseline.py
+
+    result = run(
+        isolated / STOP_HOOK.name,
+        {"cwd": str(tmp_path), "agent_id": "a1", "message": "Done. I fixed it."},
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
