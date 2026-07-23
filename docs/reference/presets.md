@@ -74,6 +74,8 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 
 **Agents (6):** `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`
 
+**Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+
 ### `advisor-product-design`
 
 *persona plugin · v0.1.2*

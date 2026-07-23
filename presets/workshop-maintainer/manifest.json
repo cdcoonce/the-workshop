@@ -16,7 +16,14 @@
       "daa-code-review"
     ],
     "agents": [],
-    "hooks": []
+    "hooks": [
+      "protect-files.py",
+      "verify-tests-before-stop.py",
+      "snapshot-subagent-start.py",
+      "verify-subagent-evidence.py",
+      "audit-config-change.py",
+      "inject-skill-router.py"
+    ]
   },
   "exclude": [],
   "preset_skills": [

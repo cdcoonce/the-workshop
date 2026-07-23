@@ -31,6 +31,9 @@ from pathlib import Path
 # " N." infix Finder inserts before the extension.
 _CONFLICT_COPY_PATTERN = re.compile(r" \d+\.")
 
+# run-hook.sh resolves a bare script name against the preset's hooks/scripts/.
+_HOOK_SCRIPT_REFERENCE = re.compile(r"run-hook\.sh\s+(\S+\.py)")
+
 # Cache/junk dirs that live in source trees (test runs regenerate them) must
 # never ship into dist: a shipped .ruff_cache churns on every `make test` and
 # made the verify-generated drift digest nondeterministic. Applied to every
@@ -164,6 +167,27 @@ def _validate_manifest(
             "the preset enforces), got: "
             f"{conventions!r}"
         )
+
+    # Every hook the built hooks.json invokes must have a script behind it.
+    # A preset inheriting settings-base.json picks up the core PreToolUse hooks
+    # whether or not it declares them, and step 6 only copies what the manifest
+    # names. When the two disagree the plugin ships commands pointing at absent
+    # scripts, and PreToolUse failures block the matching tool outright.
+    if manifest.get("base_settings", True):
+        declared_hooks = set(manifest["core"].get("hooks", [])) | set(
+            manifest.get("preset_hooks", [])
+        )
+        base_settings = json.loads((core_path / "settings-base.json").read_text())
+        inherited_hooks = set(
+            _HOOK_SCRIPT_REFERENCE.findall(json.dumps(base_settings.get("hooks", {})))
+        )
+        for hook_name in sorted(inherited_hooks - declared_hooks):
+            errors.append(
+                f"Hook wired but not shipped: {hook_name}. settings-base.json "
+                f"invokes it, so it lands in hooks.json, but the manifest does "
+                f"not list it in core.hooks or preset_hooks and the build would "
+                f"omit the script. Declare it, or set base_settings to false."
+            )
 
     if errors:
         raise BuildValidationError(
