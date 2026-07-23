@@ -1,4 +1,3 @@
-import json
 
 import pytest
 
@@ -16,15 +15,6 @@ def test_claude_code_is_registered():
     assert "claude-code" in adapter_names()
 
 
-def _make_preset(root, name):
-    p = root / name / ".claude-plugin"
-    p.mkdir(parents=True)
-    (p / "plugin.json").write_text(json.dumps({"name": name, "version": "1.0.0"}))
-    (root / name / "skills").mkdir()
-    (root / name / "skills" / "s.md").write_text("# skill")
-    return root / name
-
-
 def test_detect_true_when_claude_dir_present(tmp_path):
     (tmp_path / ".claude").mkdir()
     assert ClaudeCodeAdapter().detect(tmp_path) is True
@@ -34,10 +24,10 @@ def test_detect_false_on_bare_dir(tmp_path):
     assert ClaudeCodeAdapter().detect(tmp_path) is False
 
 
-def test_install_places_plugin_and_reports(tmp_path):
+def test_install_places_plugin_and_reports(tmp_path, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skill_file="s.md")
     repo = tmp_path / "repo"
     repo.mkdir()
 
@@ -51,10 +41,10 @@ def test_install_places_plugin_and_reports(tmp_path):
     assert report.installed and not report.skipped
 
 
-def test_install_is_idempotent(tmp_path):
+def test_install_is_idempotent(tmp_path, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skill_file="s.md")
     repo = tmp_path / "repo"
     repo.mkdir()
     adapter = ClaudeCodeAdapter()
@@ -66,10 +56,10 @@ def test_install_is_idempotent(tmp_path):
     assert (repo / ".claude" / "plugins" / "data-pipeline" / "skills" / "s.md").is_file()
 
 
-def test_uninstall_removes_then_reports_skip_when_absent(tmp_path):
+def test_uninstall_removes_then_reports_skip_when_absent(tmp_path, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skill_file="s.md")
     repo = tmp_path / "repo"
     repo.mkdir()
     adapter = ClaudeCodeAdapter()

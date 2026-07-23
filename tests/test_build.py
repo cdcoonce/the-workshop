@@ -297,6 +297,33 @@ class TestBuildPluginSkills:
         skill_md = tmp_repo / "dist" / "python-api" / "skills" / "tdd" / "SKILL.md"
         assert "OVERRIDDEN" in skill_md.read_text()
 
+    def test_preset_hook_colliding_with_core_hook_warns(
+        self, tmp_repo: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """A silent hook overwrite ships the wrong script with no diagnostic."""
+        preset_hooks = tmp_repo / "presets" / "python-api" / "hooks"
+        (preset_hooks / "protect-files.py").write_text("# OVERRIDDEN protect hook")
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["preset_hooks"].append("protect-files.py")
+        manifest_path.write_text(json.dumps(manifest))
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert "WARNING" in capsys.readouterr().out
+        shipped = (
+            tmp_repo / "dist" / "python-api" / "hooks" / "scripts" / "protect-files.py"
+        )
+        assert "OVERRIDDEN" in shipped.read_text()
+
+    def test_non_colliding_hook_copy_is_silent(
+        self, tmp_repo: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert "overrides core hook" not in capsys.readouterr().out
+
 
 class TestBuildPluginAgents:
     """Agents are placed at root level in plugin format."""
@@ -720,6 +747,38 @@ class TestBuildPresetAgentValidation:
 
         with pytest.raises(BuildValidationError, match="preset_hooks and exclude"):
             build_preset("python-api", repo_root=tmp_repo)
+
+
+class TestConventionsValidation:
+    """`conventions` must be a list of strings — build_docs' copy of this check
+    was covered, build_preset's was not."""
+
+    def _with_conventions(self, tmp_repo: Path, value: object) -> None:
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["conventions"] = value
+        manifest_path.write_text(json.dumps(manifest))
+
+    def test_non_list_conventions_fails(self, tmp_repo: Path) -> None:
+        self._with_conventions(tmp_repo, "Lowercase SQL")
+
+        with pytest.raises(BuildValidationError, match="conventions must be a list"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+    def test_non_string_element_in_conventions_fails(self, tmp_repo: Path) -> None:
+        self._with_conventions(tmp_repo, ["Lowercase SQL", {"rule": "Idempotent"}])
+
+        with pytest.raises(BuildValidationError, match="conventions must be a list"):
+            build_preset("python-api", repo_root=tmp_repo)
+
+    def test_list_of_strings_is_accepted(self, tmp_repo: Path) -> None:
+        """The guard must not reject the valid shape it exists to protect."""
+        self._with_conventions(tmp_repo, ["Lowercase SQL", "Idempotent stages"])
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        conventions = tmp_repo / "dist" / "python-api" / "conventions.json"
+        assert "Lowercase SQL" in conventions.read_text()
 
 
 class TestManifestRequiredFields:

@@ -358,18 +358,45 @@ def _preset_dirs(root: Path) -> list[Path]:
     )
 
 
-def _core_skill_names(root: Path) -> list[str]:
-    skills_dir = root / "core" / "skills"
-    if not skills_dir.exists():
+_BUILD_ARTIFACT_DIRS = frozenset({"__pycache__", ".pytest_cache", ".ruff_cache"})
+
+
+def _is_build_artifact(path: Path, base: Path) -> bool:
+    relative = path.relative_to(base)
+    return bool(_BUILD_ARTIFACT_DIRS.intersection(relative.parts)) or path.suffix == ".pyc"
+
+
+def is_leftover_artifact_dir(component_dir: Path) -> bool:
+    """True when a directory's whole content is build artifacts git left behind.
+
+    Switching off a branch that added a component removes its tracked files but
+    keeps ignored ones — git will not delete ignored content. The empty shell
+    that remains is not a malformed component, it is debris, and reporting it as
+    a component names something that does not exist on the current branch.
+
+    An *empty* directory is deliberately not treated as debris: git never
+    creates one on checkout, so it can only be hand-made, and that is a real
+    mistake worth failing on.
+    """
+    files = [p for p in component_dir.rglob("*") if p.is_file()]
+    return bool(files) and all(_is_build_artifact(p, component_dir) for p in files)
+
+
+def _component_dirs(parent: Path) -> list[Path]:
+    """Component directories under `parent`, skipping build-artifact debris."""
+    if not parent.exists():
         return []
-    return sorted(d.name for d in skills_dir.iterdir() if d.is_dir())
+    return sorted(
+        d for d in parent.iterdir() if d.is_dir() and not is_leftover_artifact_dir(d)
+    )
+
+
+def _core_skill_names(root: Path) -> list[str]:
+    return [d.name for d in _component_dirs(root / "core" / "skills")]
 
 
 def _core_agent_names(root: Path) -> list[str]:
-    agents_dir = root / "core" / "agents"
-    if not agents_dir.exists():
-        return []
-    return sorted(d.name for d in agents_dir.iterdir() if d.is_dir())
+    return [d.name for d in _component_dirs(root / "core" / "agents")]
 
 
 def _shipped_skills(manifest: dict, core_skills: list[str]) -> list[str]:
@@ -399,7 +426,15 @@ def _shipped_agents(manifest: dict, core_agents: list[str]) -> list[str]:
 def _shipped_hooks(manifest: dict) -> list[str]:
     hooks = list(manifest.get("core", {}).get("hooks", []))
     hooks += [h for h in manifest.get("preset_hooks", []) if h not in hooks]
-    return sorted(hooks)
+    # Hooks are excluded as `hooks/scripts/<name>` — the form build_preset
+    # validates against. Without this filter the generated tables and the dist
+    # README claim a preset ships a hook the build never copies.
+    excluded = {
+        e.split("/")[-1]
+        for e in manifest.get("exclude", [])
+        if e.startswith("hooks/scripts/")
+    }
+    return sorted(h for h in hooks if h not in excluded)
 
 
 def build_model(root: Path) -> DocsModel:
@@ -439,10 +474,7 @@ def build_model(root: Path) -> DocsModel:
         )
         seen_skill_names.add(name)
     for preset_dir in preset_dirs:
-        skills_dir = preset_dir / "skills"
-        if not skills_dir.exists():
-            continue
-        for skill_dir in sorted(d for d in skills_dir.iterdir() if d.is_dir()):
+        for skill_dir in _component_dirs(preset_dir / "skills"):
             skill = _parse_skill(skill_dir, preset_dir.name)
             model.skills.append(
                 SkillDoc(
@@ -473,10 +505,7 @@ def build_model(root: Path) -> DocsModel:
         )
         seen_agent_names.add(name)
     for preset_dir in preset_dirs:
-        agents_dir = preset_dir / "agents"
-        if not agents_dir.exists():
-            continue
-        for agent_dir in sorted(d for d in agents_dir.iterdir() if d.is_dir()):
+        for agent_dir in _component_dirs(preset_dir / "agents"):
             agent = _parse_agent(agent_dir, preset_dir.name)
             model.agents.append(
                 AgentDoc(

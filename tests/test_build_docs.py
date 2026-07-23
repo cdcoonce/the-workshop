@@ -155,6 +155,25 @@ class TestBuildModel:
         formatter = next(h for h in model.hooks if h.name == "formatter.py")
         assert formatter.events == ("PostToolUse",)
 
+    def test_excluded_hook_is_not_documented_as_shipped(self, docs_repo: Path) -> None:
+        """`exclude` must bind for hooks as it already does for skills and agents.
+
+        Otherwise the generated hooks/presets tables and the dist README claim a
+        preset ships a hook the build never copies.
+        """
+        manifest_path = docs_repo / "presets" / "demo" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["exclude"] = ["hooks/scripts/formatter.py"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        model = build_model(docs_repo)
+
+        demo = next(p for p in model.presets if p.name == "demo")
+        assert "formatter.py" not in demo.hooks
+        assert "guard.py" in demo.hooks
+        formatter = next(h for h in model.hooks if h.name == "formatter.py")
+        assert "demo" not in formatter.presets
+
     def test_methodology_excludes_project_doc(self, docs_repo: Path) -> None:
         model = build_model(docs_repo)
         filenames = {d.filename for d in model.methodology}
@@ -229,6 +248,55 @@ class TestFailFast:
     def test_agent_missing_agent_md_fails(self, docs_repo: Path) -> None:
         (docs_repo / "core" / "agents" / "impl" / "AGENT.md").unlink()
         with pytest.raises(DocsError, match="has no AGENT.md"):
+            build_model(docs_repo)
+
+    def test_skill_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        """Git leaves ignored files behind on a branch switch; that is not a skill.
+
+        Switching off a branch that added a skill removes its tracked files but
+        keeps `__pycache__/`, because git will not delete ignored content. The
+        leftover directory used to fail `make docs` on a clean checkout, naming a
+        skill that does not exist on that branch.
+        """
+        _write(
+            docs_repo / "core" / "skills" / "gone" / "scripts" / "__pycache__" / "x.pyc",
+            "",
+        )
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {s.name for s in model.skills}
+
+    def test_preset_skill_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        _write(
+            docs_repo / "presets" / "demo" / "skills" / "gone" / "__pycache__" / "x.pyc",
+            "",
+        )
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {s.name for s in model.skills}
+
+    def test_agent_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        _write(docs_repo / "core" / "agents" / "gone" / "__pycache__" / "x.pyc", "")
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {a.name for a in model.agents}
+
+    def test_skill_dir_with_real_files_but_no_skill_md_still_fails(
+        self, docs_repo: Path
+    ) -> None:
+        """The genuinely malformed case must keep failing loudly."""
+        _write(docs_repo / "core" / "skills" / "broken" / "scripts" / "run.py", "x = 1\n")
+
+        with pytest.raises(DocsError, match="has no SKILL.md"):
             build_model(docs_repo)
 
     def test_non_string_description_fails(self, docs_repo: Path) -> None:

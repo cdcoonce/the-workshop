@@ -253,6 +253,33 @@ class MarkdownAnalyzer:
         """
         return FENCED_BLOCK_PATTERN.sub(_blank_match, content)
 
+    def _fenced_spans(self, content: str) -> list[tuple[int, int]]:
+        """Return (start, end) offsets of every fenced code block.
+
+        Whitespace checks cannot use ``_mask_fenced_code``: it replaces fenced
+        characters with **spaces**, so every non-empty code line would then match
+        ``[ \\t]+$`` (MD009) — masking manufactures the very finding it is meant
+        to suppress. Blank lines inside a fence survive masking untouched, so
+        ``\\n{3,}`` (MD012) is unaffected by it either way. For these two checks
+        the fence has to be excluded by position, not blanked.
+
+        Parameters
+        ----------
+        content : str
+            The Markdown content.
+
+        Returns
+        -------
+        list[tuple[int, int]]
+            Half-open character ranges covered by fenced code blocks.
+        """
+        return [m.span() for m in FENCED_BLOCK_PATTERN.finditer(content)]
+
+    @staticmethod
+    def _within_spans(offset: int, spans: list[tuple[int, int]]) -> bool:
+        """True when `offset` falls inside any of the given ranges."""
+        return any(start <= offset < end for start, end in spans)
+
     def _mask_code_regions(self, content: str) -> str:
         """Blank out fenced and inline code spans, preserving offsets.
 
@@ -694,8 +721,15 @@ class MarkdownAnalyzer:
         """
         issues: list[Issue] = []
 
+        # Content shown inside a fence is an example, not live prose — its
+        # trailing spaces and blank runs belong to the sample. Excluded by
+        # position rather than by masking; see _fenced_spans.
+        fenced_spans = self._fenced_spans(content)
+
         # Check for trailing whitespace
         for match in TRAILING_WHITESPACE_PATTERN.finditer(content):
+            if self._within_spans(match.start(), fenced_spans):
+                continue
             line_num = self._find_line_number(content, match.start())
             # Skip if it's an intentional line break (exactly 2 spaces, not tabs)
             if match.group(0) != "  ":
@@ -718,6 +752,8 @@ class MarkdownAnalyzer:
 
         # Check for multiple consecutive blank lines
         for match in MULTIPLE_BLANK_LINES_PATTERN.finditer(content):
+            if self._within_spans(match.start(), fenced_spans):
+                continue
             line_num = self._find_line_number(content, match.start())
             issues.append(
                 Issue(

@@ -7,6 +7,44 @@ import pytest
 
 
 @pytest.fixture
+def make_preset():
+    """Build a minimal installable preset bundle on disk.
+
+    The installer tests each grew their own copy of this, differing only in
+    whether a `skills/` directory and a skill file were created — so a new
+    required manifest field had to be found and fixed in three places.
+
+    Parameters
+    ----------
+    skills : bool
+        Create the `skills/` directory. The CLI tests rely on its absence.
+    skill_file : str | None
+        Name of a skill file to write inside `skills/`, when one is needed.
+
+    Returns
+    -------
+    Callable[..., Path]
+        Builder returning the preset directory.
+    """
+
+    def _make_preset(
+        root: Path, name: str, *, skills: bool = True, skill_file: str | None = None
+    ) -> Path:
+        plugin_dir = root / name / ".claude-plugin"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.json").write_text(
+            json.dumps({"name": name, "version": "1.0.0"})
+        )
+        if skills or skill_file:
+            (root / name / "skills").mkdir()
+        if skill_file:
+            (root / name / "skills" / skill_file).write_text("# skill")
+        return root / name
+
+    return _make_preset
+
+
+@pytest.fixture
 def tmp_repo(tmp_path: Path) -> Path:
     """Create a minimal template repo structure for testing."""
     core = tmp_path / "core"

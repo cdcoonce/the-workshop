@@ -540,6 +540,50 @@ class TestMarkdownAnalyzerFormatting:
         md022_issues = [i for i in result.issues if i.rule_id == "MD022"]
         assert len(md022_issues) >= 1
 
+    def test_trailing_whitespace_in_fenced_code_not_flagged(self):
+        """A pasted diff or transcript keeps its trailing spaces; that is the sample."""
+        content = "# Title\n\n```text\nsample line   \n```\n"
+        result = analyze_markdown(content)
+
+        md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
+        assert len(md009_issues) == 0
+
+    def test_ordinary_fenced_code_produces_no_trailing_whitespace_findings(self):
+        """Masking blanks a fence to spaces, which would match `[ \\t]+$` on every line.
+
+        Guards the fix itself: excluding fenced spans is correct, replacing them
+        with spaces turns every non-empty code line into an MD009 false positive.
+        """
+        content = "# Title\n\n```python\ndef f():\n    return 1\n```\n"
+        result = analyze_markdown(content)
+
+        md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
+        assert len(md009_issues) == 0
+
+    def test_multiple_blank_lines_in_fenced_code_not_flagged(self):
+        """Blank-line-separated sections inside a sample are the sample's business."""
+        content = "# Title\n\n```text\nfirst\n\n\n\nsecond\n```\n"
+        result = analyze_markdown(content)
+
+        md012_issues = [i for i in result.issues if i.rule_id == "MD012"]
+        assert len(md012_issues) == 0
+
+    def test_trailing_whitespace_outside_a_fence_still_flagged(self):
+        """Prose beside a fence is still live document content."""
+        content = "# Title\n\nprose with trailing   \n\n```text\nsample\n```\n"
+        result = analyze_markdown(content)
+
+        md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
+        assert len(md009_issues) >= 1
+        assert md009_issues[0].location.line_start == 3
+
+    def test_multiple_blank_lines_outside_a_fence_still_flagged(self):
+        content = "# Title\n\n```text\nsample\n```\n\n\n\nafter\n"
+        result = analyze_markdown(content)
+
+        md012_issues = [i for i in result.issues if i.rule_id == "MD012"]
+        assert len(md012_issues) >= 1
+
 
 class TestMarkdownAnalyzerCodeBlocks:
     """Tests for code block analysis."""

@@ -1,19 +1,12 @@
-import json
 from pathlib import Path
 
 from scripts.installer import cli
 
 
-def _make_preset(root, name):
-    p = root / name / ".claude-plugin"
-    p.mkdir(parents=True)
-    (p / "plugin.json").write_text(json.dumps({"name": name, "version": "1.0.0"}))
-
-
-def test_install_project_scope_places_plugin(tmp_path, monkeypatch):
+def test_install_project_scope_places_plugin(tmp_path, monkeypatch, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)  # so claude-code auto-detects
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -32,10 +25,10 @@ def test_install_project_scope_places_plugin(tmp_path, monkeypatch):
     ).is_file()
 
 
-def test_install_dry_run_writes_nothing(tmp_path, monkeypatch):
+def test_install_dry_run_writes_nothing(tmp_path, monkeypatch, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -47,10 +40,10 @@ def test_install_dry_run_writes_nothing(tmp_path, monkeypatch):
     assert not (repo / ".claude" / "plugins" / "data-pipeline").exists()
 
 
-def test_install_unknown_preset_errors(tmp_path, monkeypatch, capsys):
+def test_install_unknown_preset_errors(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -62,10 +55,10 @@ def test_install_unknown_preset_errors(tmp_path, monkeypatch, capsys):
     assert "data-pipeline" in capsys.readouterr().out  # lists valid presets
 
 
-def test_list_shows_presets_and_detected_agent(tmp_path, monkeypatch, capsys):
+def test_list_shows_presets_and_detected_agent(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "analysis")
+    make_preset(presets, "analysis", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -105,10 +98,10 @@ def test_presets_root_default_is_under_the_package():
     assert cli.PRESETS_ROOT.parent.name == "installer"
 
 
-def test_install_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys):
+def test_install_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     bare = tmp_path / "bare"  # no .claude dir, no CLAUDE.md -> nothing to detect
     bare.mkdir()
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -121,10 +114,10 @@ def test_install_no_agent_detected_returns_2(tmp_path, monkeypatch, capsys):
     assert not (bare / ".claude").exists()
 
 
-def test_install_unknown_agent_returns_2(tmp_path, monkeypatch, capsys):
+def test_install_unknown_agent_returns_2(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     bare = tmp_path / "bare"
     bare.mkdir()
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -139,10 +132,10 @@ def test_install_unknown_agent_returns_2(tmp_path, monkeypatch, capsys):
     assert not (bare / ".claude").exists()
 
 
-def test_install_agent_override_forces_adapter(tmp_path, monkeypatch):
+def test_install_agent_override_forces_adapter(tmp_path, monkeypatch, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     bare = tmp_path / "bare"  # undetectable, so only --agent can select an adapter
     bare.mkdir()
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -161,10 +154,10 @@ def test_install_agent_override_forces_adapter(tmp_path, monkeypatch):
     ).is_file()
 
 
-def test_install_user_scope_targets_home_seam(tmp_path, monkeypatch):
+def test_install_user_scope_targets_home_seam(tmp_path, monkeypatch, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)  # so claude-code detects the home target
     repo = tmp_path / "repo"
@@ -180,10 +173,10 @@ def test_install_user_scope_targets_home_seam(tmp_path, monkeypatch):
     assert not (repo / ".claude" / "plugins").exists()
 
 
-def test_install_print_report_emits_installed_line(tmp_path, monkeypatch, capsys):
+def test_install_print_report_emits_installed_line(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -195,10 +188,10 @@ def test_install_print_report_emits_installed_line(tmp_path, monkeypatch, capsys
     assert "installed:" in capsys.readouterr().out
 
 
-def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys):
+def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
@@ -212,10 +205,10 @@ def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys):
     assert "installed:" in capsys.readouterr().out
 
 
-def test_uninstall_dry_run_leaves_preset_intact(tmp_path, monkeypatch, capsys):
+def test_uninstall_dry_run_leaves_preset_intact(tmp_path, monkeypatch, capsys, make_preset):
     presets = tmp_path / "presets"
     presets.mkdir()
-    _make_preset(presets, "data-pipeline")
+    make_preset(presets, "data-pipeline", skills=False)
     repo = tmp_path / "repo"
     (repo / ".claude").mkdir(parents=True)
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
