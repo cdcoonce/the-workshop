@@ -106,13 +106,28 @@ before a second category of skill could diverge from it.
 
 ## Branch and Promotion Policy
 
-- **GitHub `dev` first.** Merge completed work into `dev`; GitHub CI validates
-  it and mirrors `dev` to GitLab.
-- **Never push directly to `main`.** `main` is promoted only through the
-  approved GitLab merge-request and CI/CD path.
+This repo **integrates on GitHub**. The GitLab remote is a one-way downstream
+mirror — never push or merge the-workshop on GitLab.
+
+- **Branch off `dev`**, one concern per branch, named `<type>/<kebab-slug>` using
+  Conventional Commit types (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`,
+  `chore/`, `ci/`, `perf/`, `style/`). No vendor or agent prefixes.
+- **Open a pull request into `dev`.** Never commit to `dev` directly.
+- **Promote `dev` → `main`** with a pull request once dev CI is green. `main` is
+  the release branch: never push to it directly, and never merge a feature
+  branch straight into it.
+- **Both branches are protected.** The `test` check must pass and the branch
+  must be up to date with its base before a merge is allowed.
+- Merging into `dev` triggers the GitLab mirror. The mirror is an output, not an
+  integration path.
 - Before any push or pull request, confirm the target branch from these project
   instructions and `.github/workflows/`; do not infer it from the repository's
   default branch.
+
+Before a pull request is ready, `make docs`, `make build`, and `make test` must
+all pass, with the regenerated `docs/` and `dist/` included in the change.
+`make test` covers the root suite, every auto-discovered skill-script suite, and
+the generated-docs/dist drift gate.
 
 ## Skills
 
