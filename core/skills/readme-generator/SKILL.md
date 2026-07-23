@@ -1,11 +1,13 @@
 ---
 name: readme-generator
-description: Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. Also trigger when the user says things like "document this project", "write docs for this repo", "this repo needs a README", "help me onboard developers to this codebase". Even if the user just says "README" or "readme" in the context of a codebase, use this skill.
+description: Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. Also triggers on "this repo needs a README" or just "README"/"readme" in a codebase context. This skill owns the single root README (the front door) and keeps it current. For a multi-file, in-depth reference set — architecture, module map, data flow, conventions — use repo-reference-docs instead.
 ---
 
 # README Generator
 
-Create polished, comprehensive README.md files for internal/company code repositories by analyzing the actual codebase and asking targeted clarifying questions. A good README is the front door to a codebase — a missing or thin one means every new team member burns hours figuring out what a project does, how to run it, and where to look. This skill reads the code, infers what it can, asks about what it can't, and produces a README that gets developers productive fast.
+Create and maintain the single root `README.md` for a code repository by analyzing the actual codebase and asking targeted clarifying questions. A good README is the front door to a codebase — a missing or thin one means every new team member burns hours figuring out what a project does, how to run it, and where to look. This skill reads the code, infers what it can, asks about what it can't, produces a README that gets developers productive fast, and keeps it from going stale.
+
+**Lane.** This skill owns only the root `README.md`. It does not produce the deep multi-file reference set — that is `repo-reference-docs` (`docs/reference/`). When `docs/reference/` exists, link to it from the README's overview rather than duplicating that depth here; keep the README the shallow, orienting front door.
 
 ## Workflow
 
@@ -65,4 +67,19 @@ Use mermaid diagrams generously — they make architecture, data flows, and proc
 
 ## Output
 
-Save the README as `README.md` in the root of the repository (or the current working directory if no repo root is identifiable). If a README.md already exists, confirm with the user before overwriting — they may want to keep parts of it.
+Save the README as `README.md` in the root of the repository (or the current working directory if no repo root is identifiable). End the file with the provenance footer below. When a `docs/reference/` set exists, add a short "Reference docs" pointer in the overview linking to it.
+
+## Provenance & maintenance
+
+The README carries a provenance footer so it can be kept current instead of silently rotting. As the last line of the file, write an HTML comment (invisible when rendered):
+
+```
+<!-- readme-generator: baseline=<commit-sha> covers=<comma,separated,paths> -->
+```
+
+- `baseline` — the commit the README was last synced to (`git rev-parse HEAD`).
+- `covers` — the README's **front-door anchors**: the dependency/manifest files, env templates, CI configs, and entry points its factual claims derive from. These are the things a README goes stale on.
+
+**Updating (existing README):** if a README already exists, do not blindly overwrite. Read its footer, then `git diff --name-only <baseline>..HEAD -- <covers...>`. If nothing in `covers` changed, leave it alone. If anchors changed, revise only the affected sections (dependencies, commands, env vars, badges), preserve hand-edits and prose, and re-stamp the footer. If there is no footer (older README), confirm with the user before overwriting — they may want to keep parts.
+
+**Checking (read-only):** run `scripts/check_readme.py --readme README.md --repo-root .` to report anchors that moved, disappeared, or changed since baseline. It writes nothing and exits non-zero on drift, so it can gate CI or a pre-promote check.
