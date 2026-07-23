@@ -19,6 +19,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
 | `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
+| `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. | workbench |
 | `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
@@ -135,6 +136,12 @@ Interview the user relentlessly about a plan or design until reaching shared und
 *universal*
 
 Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more AI-navigable.
+
+### `/mr-merge-order`
+
+*universal*
+
+Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. Computes a pairwise conflict matrix with git merge-tree and recommends an order by rebase cost. Read-only. Covers GitLab and GitHub.
 
 ### `/mr-review-fixes`
 

@@ -66,4 +66,5 @@ test:
 	uv run --with pytest python -m pytest -q tests
 	cd core/skills/daa-code-review/scripts && uv run --with pytest --with ruff python -m pytest -q tests
 	cd core/skills/transcript-notes/scripts && uv run --with pytest python -m pytest -q tests
+	cd core/skills/mr-merge-order/scripts && uv run --with pytest python -m pytest -q tests
 	$(MAKE) verify-generated
