@@ -483,3 +483,40 @@ class TestParseRuffDiagnostic:
         issue = parse_ruff_diagnostic(diagnostic, None, [])
         assert issue.rule_id == "UNKNOWN"
         assert issue.message == "Unknown issue"
+
+
+class TestFormatIssueSuggestedFix:
+    """A FORMAT issue must carry the before/after ruff already computed.
+
+    The diff was captured and then discarded, so `_format_issue_detail`'s
+    `if fix.original_code and fix.fixed_code:` never rendered a diff block for
+    a formatting issue — the fix was silently thrown away.
+    """
+
+    UNFORMATTED = "def f( a,b ):\n    return   a+b\n"
+
+    @pytest.mark.skipif(not check_ruff_available(), reason="ruff not installed")
+    def test_format_issue_carries_real_before_and_after(self):
+        result = analyze_python(self.UNFORMATTED)
+
+        format_issues = [i for i in result.issues if i.rule_id == "FORMAT"]
+        assert format_issues, "expected ruff to report the source as unformatted"
+        fix = format_issues[0].suggested_fix
+        assert fix is not None
+        assert fix.original_code == self.UNFORMATTED
+        assert fix.fixed_code.strip() != ""
+        assert fix.fixed_code != fix.original_code
+
+    @pytest.mark.skipif(not check_ruff_available(), reason="ruff not installed")
+    def test_fixed_code_is_actually_formatted(self):
+        """Not just non-empty — the after must be what ruff would write."""
+        result = analyze_python(self.UNFORMATTED)
+
+        fix = next(i for i in result.issues if i.rule_id == "FORMAT").suggested_fix
+        assert "def f(a, b):" in fix.fixed_code
+
+    @pytest.mark.skipif(not check_ruff_available(), reason="ruff not installed")
+    def test_already_formatted_source_reports_no_format_issue(self):
+        result = analyze_python("def f(a, b):\n    return a + b\n")
+
+        assert [i for i in result.issues if i.rule_id == "FORMAT"] == []

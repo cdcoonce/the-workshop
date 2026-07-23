@@ -307,13 +307,27 @@ def run_ruff_format_check(
 
             issues = []
             if result.returncode != 0 and result.stdout:
-                # Parse the diff to create formatting issues
+                # Carry the real before/after, not just the diff: the report
+                # renders a fix block only when both sides are present, so a
+                # diff-only issue showed nothing. `ruff format -` gives the
+                # formatted text directly.
+                formatted = subprocess.run(
+                    ["ruff", "format", "-"],
+                    input=source,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
                 issues.append(
                     {
                         "code": "FORMAT",
                         "message": "File needs formatting",
                         "location": {"row": 1, "column": 1},
                         "fix": {"edits": [{"content": result.stdout}]},
+                        "original_code": source,
+                        "fixed_code": (
+                            formatted.stdout if formatted.returncode == 0 else ""
+                        ),
                     }
                 )
             return issues
@@ -452,8 +466,8 @@ def analyze_python(
                     source="ruff",
                     suggested_fix=SuggestedFix(
                         description="Format code with ruff",
-                        original_code="",
-                        fixed_code="",
+                        original_code=fmt_issue.get("original_code", ""),
+                        fixed_code=fmt_issue.get("fixed_code", ""),
                         auto_fixable=True,
                     )
                     if fmt_issue.get("fix")
