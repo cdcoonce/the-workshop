@@ -27,6 +27,27 @@ def test_makefile_test_target_runs_discovered_skill_suites() -> None:
     )
 
 
+def test_gate_lints_the_repos_own_python() -> None:
+    """`make test` must lint, and the rule set must stay pinned explicitly.
+
+    Ruff's implicit defaults differ by version and pull in a broad stylistic
+    set when no config is present, so the selection lives in pyproject.toml.
+    """
+    repository_root = Path(__file__).resolve().parents[1]
+    makefile = (repository_root / "Makefile").read_text()
+    pyproject = (repository_root / "pyproject.toml").read_text()
+
+    assert re.search(r"^lint:", makefile, re.MULTILINE), (
+        "Makefile must define a `lint` target"
+    )
+    assert re.search(r"^test:\n\t\$\(MAKE\) lint", makefile, re.MULTILINE), (
+        "the `test` gate must run `lint` first, so CI gates on it"
+    )
+    assert "[tool.ruff.lint]" in pyproject, (
+        "the ruff rule set must be pinned in pyproject.toml, not left to defaults"
+    )
+
+
 def test_afk_gate_invokes_make_test() -> None:
     config = (REPO_ROOT / ".afk" / "config.toml").read_text()
     assert "make test" in config, (
