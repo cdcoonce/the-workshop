@@ -19,6 +19,26 @@ def test_workbench_manifest_includes_gitlab_mr_create() -> None:
     assert "gitlab-mr-create" in manifest["preset_skills"]
 
 
+def test_workbench_manifest_includes_gitlab_promotion_flow() -> None:
+    """Workbench ships the GitLab integration/promotion policy skill."""
+    repository_root = Path(__file__).resolve().parents[1]
+    manifest_path = repository_root / "presets" / "workbench" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert "gitlab-promotion-flow" in manifest["preset_skills"]
+
+
+def test_gitlab_promotion_flow_skill_source_exists() -> None:
+    """The promotion-flow skill has a canonical SKILL.md in the workbench preset."""
+    repository_root = Path(__file__).resolve().parents[1]
+    skill = (
+        repository_root
+        / "presets/workbench/skills/gitlab-promotion-flow/SKILL.md"
+    )
+
+    assert skill.is_file()
+
+
 def test_workshop_maintainer_ships_only_maintenance_skills() -> None:
     """Workshop maintenance tooling stays out of domain presets."""
     repository_root = Path(__file__).resolve().parents[1]

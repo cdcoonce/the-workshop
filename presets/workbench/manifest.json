@@ -27,7 +27,8 @@
     "dbt-expert",
     "chart-taste",
     "react-ui-ux",
-    "gitlab-mr-create"
+    "gitlab-mr-create",
+    "gitlab-promotion-flow"
   ],
   "preset_hooks": [
     "post-edit-lint.py"

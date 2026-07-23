@@ -48,6 +48,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
+| `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). | workbench |
 | `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workshop-maintainer |
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
@@ -280,6 +281,12 @@ Expert guidance for working with dbt Core. ALWAYS use before doing any task that
 *`workbench` preset*
 
 Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. Use whenever creating a GitLab merge request.
+
+### `/gitlab-promotion-flow`
+
+*`workbench` preset*
+
+Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening a merge request into dev, promoting dev to main, or releasing to production in one of these repos.
 
 ### `/improve-skill`
 
