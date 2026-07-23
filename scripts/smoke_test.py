@@ -387,6 +387,61 @@ def _lint_description_process_markers(description: str) -> list[str]:
     ]
 
 
+# Minimum word count for a quoted trigger phrase to count as distinctive enough
+# that two skills sharing it is a real retrieval collision rather than noise.
+_TRIGGER_MIN_WORDS = 3
+
+# Normalized quoted phrases intentionally shared by more than one skill.
+# Shrink-only: add an entry only with a comment justifying the shared trigger.
+_TRIGGER_OVERLAP_ALLOWLIST: frozenset[str] = frozenset()
+
+
+def _quoted_trigger_phrases(description: str) -> set[str]:
+    """Normalized quoted phrases in a description with >= _TRIGGER_MIN_WORDS words."""
+    phrases: set[str] = set()
+    for span in _QUOTED_SPAN_PATTERN.findall(description):
+        normalized = " ".join(span.strip('"').split()).casefold()
+        if len(normalized.split()) >= _TRIGGER_MIN_WORDS:
+            phrases.add(normalized)
+    return phrases
+
+
+def _lint_trigger_overlaps(descriptions: dict[str, str]) -> list[str]:
+    """Flag distinctive quoted trigger phrases shared across skills.
+
+    Two skills that quote the same multi-word trigger phrase compete for the
+    same retrieval, so the agent cannot tell which to load — the collision that
+    let README and reference-docs requests route to the wrong skill. Matching is
+    on normalized (case- and whitespace-folded) quoted phrases of at least
+    ``_TRIGGER_MIN_WORDS`` words; short generic tokens are ignored.
+
+    Parameters
+    ----------
+    descriptions
+        Mapping of skill name to its frontmatter ``description``.
+
+    Returns
+    -------
+    list[str]
+        One message per colliding phrase, empty if none.
+    """
+    owners: dict[str, list[str]] = {}
+    for skill_name, description in descriptions.items():
+        for phrase in _quoted_trigger_phrases(description):
+            if phrase in _TRIGGER_OVERLAP_ALLOWLIST:
+                continue
+            owners.setdefault(phrase, []).append(skill_name)
+
+    findings: list[str] = []
+    for phrase, skills in sorted(owners.items()):
+        if len(skills) > 1:
+            findings.append(
+                f'trigger phrase "{phrase}" is claimed by multiple skills: '
+                f"{', '.join(sorted(skills))}"
+            )
+    return findings
+
+
 def _core_skill_names(dist_path: Path) -> frozenset[str]:
     """Names of skills sourced from core/skills/, given a built plugin path.
 
@@ -455,6 +510,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
     # 2. Validate skills: every directory in skills/ has a valid SKILL.md
     skills_dir = dist_path / "skills"
     core_skill_names = _core_skill_names(dist_path)
+    skill_descriptions: dict[str, str] = {}
     if skills_dir.exists():
         for skill_dir in sorted(skills_dir.iterdir()):
             if not skill_dir.is_dir():
@@ -496,6 +552,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
 
             description = frontmatter.get("description")
             if isinstance(description, str):
+                skill_descriptions[skill_dir.name] = description
                 process_markers = _lint_description_process_markers(description)
                 if process_markers:
                     markers_str = ", ".join(process_markers)
@@ -522,6 +579,10 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
                                 f"nested directory '{entry.relative_to(skill_dir)}' "
                                 "— references must be one level deep"
                             )
+
+    # 2b. Cross-skill: no two skills may claim the same distinctive trigger.
+    for overlap in _lint_trigger_overlaps(skill_descriptions):
+        result.errors.append(f"Trigger collision — {overlap}")
 
     # 3. Validate agents: every directory in agents/ has a valid AGENT.md
     agents_dir = dist_path / "agents"
