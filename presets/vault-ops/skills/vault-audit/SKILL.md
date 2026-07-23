@@ -1,12 +1,12 @@
 ---
 name: vault-audit
 description: >
-  Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
 ---
 
 # Vault Vault Audit
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

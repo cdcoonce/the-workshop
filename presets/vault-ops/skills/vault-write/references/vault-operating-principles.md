@@ -1,10 +1,10 @@
 # Vault Operating Principles
 
-These skills implement Charles Coonce's My Brain vault slash commands when the slash-command registry is not available.
+These skills implement slash commands for Charles Coonce's vault, **The Vault** (formerly “My Brain”), when the slash-command registry is not available.
 
 ## Before Acting
 
-1. Confirm the active repository is the My Brain vault. Look for `AGENTS.md` with the My Brain operating manual and `.vault-context` with `work` or `personal`.
+1. Confirm the active repository is The Vault. Look for `AGENTS.md` with the vault operating manual and `.vault-context` with `work` or `personal`.
 2. Read the root `AGENTS.md`. If touching `work/`, `personal/`, or `perf/`, also read that folder's scoped `AGENTS.md` if it exists.
 3. Treat the vault as the source of truth. Do not rely on machine-local auto-memory for durable facts.
 4. Use existing vault scripts under `.claude/scripts/` whenever the command spec names them. Do not recreate script logic in the chat.

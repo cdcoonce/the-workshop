@@ -1,12 +1,12 @@
 ---
 name: vault-budget
 description: >
-  Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
 ---
 
 # Vault Budget
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

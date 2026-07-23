@@ -1,12 +1,12 @@
 ---
 name: vault-essay
 description: >
-  Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
+  Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
 ---
 
 # Vault Essay
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

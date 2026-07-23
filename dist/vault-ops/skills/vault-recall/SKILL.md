@@ -1,12 +1,12 @@
 ---
 name: vault-recall
 description: >
-  Run Charles's My Brain /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
 ---
 
 # Vault Recall
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

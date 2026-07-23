@@ -1,12 +1,12 @@
 ---
 name: vault-sync
 description: >
-  Run Charles's My Brain /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
 ---
 
 # Vault Sync
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

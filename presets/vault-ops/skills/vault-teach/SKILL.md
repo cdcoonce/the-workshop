@@ -1,12 +1,12 @@
 ---
 name: vault-teach
 description: >
-  Run Charles's My Brain /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
 ---
 
 # Vault Teach
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

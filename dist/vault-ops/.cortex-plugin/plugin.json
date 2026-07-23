@@ -1,7 +1,7 @@
 {
   "name": "vault-ops",
-  "version": "1.1.0",
-  "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+  "version": "1.2.0",
+  "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
   "author": {
     "name": "Charles Coonce"
   },
@@ -9,8 +9,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "vault-ops",
-    "shortDescription": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
-    "longDescription": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+    "shortDescription": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
+    "longDescription": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
     "developerName": "Charles Coonce",
     "category": "Productivity",
     "capabilities": [

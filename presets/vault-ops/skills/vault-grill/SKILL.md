@@ -1,12 +1,12 @@
 ---
 name: vault-grill
 description: >
-  Run Charles's My Brain /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
 ---
 
 # Vault Grill
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

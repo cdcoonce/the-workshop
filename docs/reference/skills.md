@@ -50,28 +50,27 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
-| `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
-| `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
-| `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
-| `/vault-connect` | Run Charles's My Brain /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
-| `/vault-context-then-delegate` | Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
-| `/vault-dispatch` | Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
-| `/vault-dump` | Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
-| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. | vault-ops |
-| `/vault-find` | Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. | vault-ops |
-| `/vault-fix-issue` | Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
-| `/vault-garden` | Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
-| `/vault-grill` | Run Charles's My Brain /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
-| `/vault-handoff` | Run Charles's My Brain /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
-| `/vault-link` | Run Charles's My Brain /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
-| `/vault-mr-review-packet` | Run Charles's My Brain /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
-| `/vault-recall` | Run Charles's My Brain /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
-| `/vault-standup` | Run Charles's My Brain /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
-| `/vault-start` | Run Charles's My Brain /start one-time productivity bootstrap for tasks, glossary, quick-reference, and term tracking. | vault-ops |
-| `/vault-sync` | Run Charles's My Brain /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
-| `/vault-teach` | Run Charles's My Brain /teach stateful learning workspace workflow for a topic. | vault-ops |
-| `/vault-wrap-up` | Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
-| `/vault-write` | Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. | vault-ops |
+| `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
+| `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
+| `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
+| `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
+| `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
+| `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
+| `/vault-dump` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
+| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. | vault-ops |
+| `/vault-find` | Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. | vault-ops |
+| `/vault-fix-issue` | Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
+| `/vault-garden` | Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
+| `/vault-grill` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
+| `/vault-handoff` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
+| `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
+| `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
+| `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
+| `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
+| `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
+| `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. | vault-ops |
+| `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
+| `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
@@ -296,133 +295,127 @@ Audits agent skills and their package boundaries. Use when the user asks to inve
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
 
 ### `/vault-budget`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
 
 ### `/vault-clickup-task-sync`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
+Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
 
 ### `/vault-connect`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
 
 ### `/vault-context-then-delegate`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
 
 ### `/vault-dispatch`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. Trigger when Charles invokes /dispatch, mentions /dispatch, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. Trigger when Charles invokes /dispatch, mentions /dispatch, or asks for this vault workflow by name.
 
 ### `/vault-dump`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
 
 ### `/vault-essay`
 
 *`vault-ops` preset*
 
-Draft long-form prose (essays and posts) in Charles's voice using the My Brain /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
+Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
 
 ### `/vault-find`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
 
 ### `/vault-fix-issue`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
+Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
 
 ### `/vault-garden`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
 
 ### `/vault-grill`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
 
 ### `/vault-handoff`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
 
 ### `/vault-link`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
 
 ### `/vault-mr-review-packet`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
 
 ### `/vault-recall`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
 
 ### `/vault-standup`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
-
-### `/vault-start`
-
-*`vault-ops` preset*
-
-Run Charles's My Brain /start one-time productivity bootstrap for tasks, glossary, quick-reference, and term tracking. Trigger when Charles invokes /start, mentions /start, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
 
 ### `/vault-sync`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
 
 ### `/vault-teach`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
 
 ### `/vault-wrap-up`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
 
 ### `/vault-write`
 
 *`vault-ops` preset*
 
-Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
 
 ### `/workshop-skill-creator`
 

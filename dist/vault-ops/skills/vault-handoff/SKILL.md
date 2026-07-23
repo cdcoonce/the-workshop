@@ -1,12 +1,12 @@
 ---
 name: vault-handoff
 description: >
-  Run Charles's My Brain /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
 ---
 
 # Vault Handoff
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 
