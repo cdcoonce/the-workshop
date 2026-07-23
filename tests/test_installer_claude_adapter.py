@@ -67,7 +67,8 @@ def test_uninstall_removes_then_reports_skip_when_absent(tmp_path, make_preset):
 
     r1 = adapter.uninstall(repo, "data-pipeline")
     assert not (repo / ".claude" / "plugins" / "data-pipeline").exists()
-    assert r1.installed  # recorded the removal
+    assert r1.removed == [str(repo / ".claude" / "plugins" / "data-pipeline")]
+    assert not r1.installed  # a removal is not an install
 
     r2 = adapter.uninstall(repo, "data-pipeline")  # already gone
     assert r2.skipped == [("data-pipeline", "not installed")]

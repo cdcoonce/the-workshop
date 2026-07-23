@@ -197,12 +197,18 @@ def test_uninstall_removes_installed_preset(tmp_path, monkeypatch, capsys, make_
     monkeypatch.setattr(cli, "PRESETS_ROOT", presets)
     monkeypatch.chdir(repo)
     cli.main(["install", "--preset", "data-pipeline"])
+    capsys.readouterr()  # drop the install's own output
 
     rc = cli.main(["uninstall", "--preset", "data-pipeline"])
 
     assert rc == 0
     assert not (repo / ".claude" / "plugins" / "data-pipeline").exists()
-    assert "installed:" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    # Exact wording, not substring presence: the bug was that a successful
+    # uninstall printed "installed: removed /path", which the old
+    # `"installed:" in output` assertion happily accepted.
+    assert f"  removed: {repo / '.claude' / 'plugins' / 'data-pipeline'}" in output
+    assert "installed:" not in output
 
 
 def test_uninstall_dry_run_leaves_preset_intact(tmp_path, monkeypatch, capsys, make_preset):

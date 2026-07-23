@@ -23,6 +23,8 @@ def _resolve_target(scope: Scope) -> Path:
 def _print_report(report: InstallReport) -> None:
     for item in report.installed:
         print(f"  installed: {item}")
+    for item in report.removed:
+        print(f"  removed: {item}")
     for item, reason in report.skipped:
         print(f"  skipped {item}: {reason}")
 

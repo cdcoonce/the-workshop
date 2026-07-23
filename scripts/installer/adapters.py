@@ -54,7 +54,7 @@ class ClaudeCodeAdapter(AgentAdapter):
         dest = self._plugins_dir(target) / preset
         if dest.exists():
             shutil.rmtree(dest)
-            report.add_installed(f"removed {dest}")
+            report.add_removed(str(dest))
         else:
             report.add_skipped(preset, "not installed")
         return report
