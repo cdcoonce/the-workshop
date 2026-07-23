@@ -3,7 +3,8 @@ name: dev-cycle
 description: >
   Use when user says "dev cycle", "development workflow", "full development
   pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from
-  brainstorm through a merged PR.
+  brainstorm through a merged PR. This is the interactive lane — for
+  greenfield work, skill-building, or changes too coupled to delegate.
 ---
 
 # Dev Cycle Orchestrator
@@ -11,6 +12,8 @@ description: >
 Orchestrate the full development lifecycle: brainstorm → plan → review → issues → implement → code review → PR.
 
 **Disambiguation:** If the user only wants a PRD, route to `/write-a-prd`. If they only want a plan, route to `/prd-to-plan`. This skill is for the full end-to-end lifecycle.
+
+**Lane boundary:** dev-cycle is the _interactive_ lane — greenfield features, work the user wants to build hands-on, or changes too coupled to hand off. Localized single-concern correctness work with clear acceptance criteria belongs in an autonomous pipeline instead when one is available: file it as an executor-ready issue (see `triage-issue` / `prd-to-issues` issue shapes) rather than running it through this ceremony.
 
 ## The 7-Phase Pipeline
 

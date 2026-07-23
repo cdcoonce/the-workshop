@@ -7,7 +7,9 @@ description: AI-powered code quality analysis for Python, Markdown, and Mermaid 
 
 Analyze Python code, Markdown documentation, and Mermaid diagrams for quality issues. Combines external linters (ruff) with Claude's analysis to provide comprehensive code review with suggested fixes.
 
-Go beyond running linters: also check for SOLID/DRY/YAGNI conformance, security vulnerabilities, and descriptive variable naming. See [python-checks.md#naming](references/python-checks.md#naming) for a worked example.
+Go beyond running linters: also check for SOLID/DRY/YAGNI conformance, obvious security issues spotted in passing, and descriptive variable naming. See [python-checks.md#naming](references/python-checks.md#naming) for a worked example.
+
+**Role boundary:** this skill is the _quality_ review. For a dedicated vulnerability audit (injection, auth, crypto, OWASP categories), defer to the `security-review` skill — flag anything suspicious you notice here, then recommend running `/security-review` rather than deepening the security analysis inline.
 
 ## Quick Start
 

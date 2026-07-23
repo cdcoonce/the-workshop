@@ -33,6 +33,13 @@ branch. Never assume the GitHub default branch is the correct target. Do not
 push directly to a protected or promotion-only branch when the repository
 requires a staged integration branch.
 
+**Branch creation:** always `git fetch origin` and cut new branches from
+`origin/<integration-branch>` — never a bare `git checkout -b` from whatever
+HEAD happens to be, which drags unmerged commits into the PR and can bypass
+merge gates.
+
+**After pushing a PR:** watch checks go green (`gh pr checks --watch`) before declaring the work done. Never walk away from a red PR.
+
 ## Core Workflows
 
 `gh` covers the full GitHub loop from the terminal. See [references/commands.md](references/commands.md) for the exact syntax, flags, and examples for every command family below.

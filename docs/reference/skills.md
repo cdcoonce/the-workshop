@@ -18,15 +18,14 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
-| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
 | `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. | workbench |
 | `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
-| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
+| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
 | `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
 | `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | workbench |
-| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
+| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
@@ -105,7 +104,7 @@ Generate multiple radically different interface designs for a module using paral
 
 *universal*
 
-Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR.
+Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. This is the interactive lane — for greenfield work, skill-building, or changes too coupled to delegate.
 
 ### `/dignified-python`
 
@@ -131,12 +130,6 @@ GitHub CLI (gh) integration for managing issues, pull requests, branches, commit
 
 Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
 
-### `/improve-codebase-architecture`
-
-*universal*
-
-Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more AI-navigable.
-
 ### `/mr-merge-order`
 
 *universal*
@@ -159,7 +152,7 @@ CEO/founder-mode review that rethinks a plan to find the 10-star product. Use wh
 
 *universal*
 
-Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. Use when user wants to convert a PRD to issues, create implementation tickets, or break down a PRD into work items.
+Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. Use when user wants to convert a PRD to issues, create implementation tickets, or break down a PRD into work items.
 
 ### `/prd-to-plan`
 
@@ -183,7 +176,7 @@ Use when the user asks to create, write, generate, update, or improve a README f
 
 *universal*
 
-Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. Produces a detailed refactor plan with tiny commits, filed as a GitHub issue.
+Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). Produces a detailed refactor plan with tiny commits, filed as a GitHub issue.
 
 ### `/security-review`
 

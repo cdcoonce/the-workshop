@@ -11,7 +11,7 @@ Investigate a reported problem, find its root cause, and create a GitHub issue w
 
 ### 1. Capture the problem
 
-Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?" Do NOT ask follow-up questions yet. Start investigating immediately.
+Get a brief description of the issue from the user. If they haven't provided one, ask ONE question: "What's the problem you're seeing?" — no follow-ups; start investigating immediately.
 
 ### 2. Explore and diagnose
 
@@ -56,11 +56,7 @@ Create a GitHub issue using `gh issue create` with the template below. Do NOT as
 
 ## Problem
 
-A clear description of the bug or issue, including:
-
-- What happens (actual behavior)
-- What should happen (expected behavior)
-- How to reproduce (if applicable)
+A clear description of the bug or issue: what happens (actual), what should happen (expected), and how to reproduce (if applicable).
 
 ## Root Cause Analysis
 
@@ -93,6 +89,11 @@ A numbered list of RED-GREEN cycles:
 - [ ] All new tests pass
 - [ ] Existing tests still pass
 
+## Budget
+
+~N units of work · one line of sizing rationale.
 </issue-template>
+
+The issue body must stand alone: an executor — human or autonomous agent — builds from the issue text, not from this conversation. No "as discussed" references. If the target repo has autonomous-agent labels (e.g. `proposed`, `afk-sized`), apply them to single-concern fixes; otherwise plain issues are fine.
 
 After creating the issue, print the issue URL and a one-line summary of the root cause.
