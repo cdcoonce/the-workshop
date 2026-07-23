@@ -371,6 +371,76 @@ class TestParseArtifactsSkipsHeaderAndSeparator:
         )
         assert _parse_artifacts(text) == []
 
+    def test_reworded_header_is_still_skipped(self) -> None:
+        """Archived state files use several header spellings and column counts.
+
+        Header detection keys on the separator row beneath it, not on expected
+        header text, so a re-worded header is not read as an artifact row.
+        """
+        text = (
+            "| Artifact    | Location    | Status    |\n"
+            "| ----------- | ----------- | --------- |\n"
+            "| plan        | completed   | docs/x.md |\n"
+        )
+
+        rows = _parse_artifacts(text)
+
+        assert [r.phase for r in rows] == ["plan"]
+
+    def test_unrecognized_phase_row_is_kept_for_validation(self) -> None:
+        """A typo'd phase must reach the validator, not vanish during parsing."""
+        text = (
+            "| Phase       | Status      | Artifact  |\n"
+            "| ----------- | ----------- | --------- |\n"
+            "| implmenet   | completed   | —         |\n"
+        )
+
+        rows = _parse_artifacts(text)
+
+        assert [r.phase for r in rows] == ["implmenet"]
+
+
+class TestUnrecognizedArtifactPhase:
+    """A row with a bad phase used to be dropped, taking its other defects with it."""
+
+    def _state_with_rows(self, tmp_path: Path, rows: str) -> Path:
+        content = (
+            "---\nschema_version: 1\nfeature: thing\nstatus: in_progress\n"
+            "current_phase: plan\ncreated: 2026-03-21\nupdated: 2026-03-21\n---\n\n"
+            "## Artifacts\n\n"
+            "| Phase       | Status      | Artifact  |\n"
+            "| ----------- | ----------- | --------- |\n"
+            f"{rows}\n## Log\n"
+        )
+        path = tmp_path / "thing.state.md"
+        path.write_text(content)
+        return path
+
+    def test_unrecognized_phase_is_an_error(self, tmp_path: Path) -> None:
+        path = self._state_with_rows(tmp_path, "| implmenet | completed | docs/x.md |\n")
+
+        result = validate_state_file(path)
+
+        assert not result.passed
+        assert any("implmenet" in e for e in result.errors)
+
+    def test_defects_under_a_bad_phase_are_no_longer_hidden(
+        self, tmp_path: Path
+    ) -> None:
+        """The reason this matters: the row was completed with no artifact."""
+        path = self._state_with_rows(tmp_path, "| implmenet | completed | — |\n")
+
+        result = validate_state_file(path)
+
+        assert any("no artifact" in e for e in result.errors)
+
+    def test_recognized_phases_still_pass(self, tmp_path: Path) -> None:
+        path = self._state_with_rows(tmp_path, "| implement | completed | docs/x.md |\n")
+
+        result = validate_state_file(path)
+
+        assert result.passed, result.errors
+
 
 class TestValidateDirectory:
     """Tests for scanning docs/dev-cycle/ for slug collisions."""

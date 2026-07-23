@@ -32,6 +32,12 @@ _ARTIFACT_ROW_RE = re.compile(
 
 REQUIRED_FIELDS = ("feature", "status", "current_phase")
 
+# A markdown table's header is the row directly above the separator. Matching
+# on that, rather than on expected header text, keeps re-worded or re-ordered
+# headers from being read as data — real archived state files use several
+# spellings and column counts.
+_SEPARATOR_ROW_RE = re.compile(r"^\|[\s:|-]+\|$")
+
 # Values that mean "no artifact": em dash, hyphen, empty string.
 _EMPTY_ARTIFACT_MARKERS = ("—", "-", "")
 
@@ -75,13 +81,24 @@ def _parse_artifacts(text: str) -> list[ArtifactRow]:
         Parsed artifact rows, excluding header and separator rows.
     """
     rows: list[ArtifactRow] = []
-    for match in _ARTIFACT_ROW_RE.finditer(text):
-        phase = match.group(1)
-        status = match.group(2)
-        artifact = match.group(3).strip()
-        if phase not in VALID_PHASES:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        match = _ARTIFACT_ROW_RE.match(line.rstrip())
+        if not match:
             continue
-        rows.append(ArtifactRow(phase=phase, status=status, artifact=artifact))
+        next_line = lines[index + 1].strip() if index + 1 < len(lines) else ""
+        if _SEPARATOR_ROW_RE.match(next_line):
+            continue  # header row; the separator row never matches on its own
+        # An unrecognized phase is kept so the validator can report it. Dropping
+        # the row took its other defects (completed with no artifact, invalid
+        # status) down with it, and the checker reported clean.
+        rows.append(
+            ArtifactRow(
+                phase=match.group(1),
+                status=match.group(2),
+                artifact=match.group(3).strip(),
+            )
+        )
     return rows
 
 
@@ -205,6 +222,11 @@ def _validate_parsed_state(state: StateFile) -> list[str]:
         )
 
     for row in state.artifacts:
+        if row.phase not in VALID_PHASES:
+            errors.append(
+                f"Unrecognized artifact phase '{row.phase}' in {name}. "
+                f"Valid values: {', '.join(VALID_PHASES)}"
+            )
         if row.status not in VALID_ARTIFACT_STATUSES:
             errors.append(
                 f"Invalid artifact status '{row.status}' for phase '{row.phase}' "

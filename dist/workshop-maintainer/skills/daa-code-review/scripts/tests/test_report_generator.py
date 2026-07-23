@@ -494,3 +494,24 @@ class TestEmptyReport:
         markdown = generate_markdown_report(report)
         assert "Files analyzed:** 0" in markdown
         assert "Total issues:** 0" in markdown
+
+
+class TestFormatIssueRendersDiff:
+    """End-to-end: a FORMAT issue must reach the report as a rendered diff.
+
+    `_format_issue_detail` emits the diff block only when both sides of the fix
+    are present, so this is the check that proves the analyzer's before/after
+    actually survives the trip into the report.
+    """
+
+    def test_unformatted_source_renders_a_diff_block(self):
+        from python_analyzer import analyze_python, check_ruff_available
+
+        if not check_ruff_available():
+            pytest.skip("ruff not installed")
+
+        result = analyze_python("def f( a,b ):\n    return   a+b\n")
+        markdown = generate_markdown_report(ReviewReport(results=[result]))
+
+        assert "```diff" in markdown
+        assert "+ def f(a, b):" in markdown
