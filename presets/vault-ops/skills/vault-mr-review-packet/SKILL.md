@@ -1,12 +1,12 @@
 ---
 name: vault-mr-review-packet
 description: >
-  Run Charles's My Brain /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+  Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
 ---
 
 # Vault MR Review Packet
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

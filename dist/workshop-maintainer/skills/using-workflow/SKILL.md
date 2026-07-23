@@ -28,6 +28,17 @@ nearest project instructions and relevant CI/CD configuration for branch
 promotion, review, test, deployment, and unattended-execution constraints.
 Never infer an integration target from a hosting provider's default branch.
 
+## Resolve development branch naming
+
+Resolve development branch naming separately from the integration target.
+Use this precedence: explicit user policy, then the nearest explicit repository
+policy, then the fallback `<type>/<kebab-case-slug>`.
+Use Conventional Commit type vocabulary for the fallback: `feat/`, `fix/`,
+`docs/`, `refactor/`, `test/`, `chore/`, `ci/`, `perf/`, and `style/`.
+Branch history may inform slug formatting only when it is consistent with the
+explicit policy. Historical vendor- or agent-prefixed branches do not count as
+policy. Branch history must never authorize vendor or agent prefixes.
+
 ## Choose execution mode
 
 - **Interactive:** Use the repository's normal workflow and request approval

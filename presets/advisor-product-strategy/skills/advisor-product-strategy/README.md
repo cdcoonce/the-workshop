@@ -14,8 +14,8 @@ nothing, and costs nothing.
 ## Turning it off and on
 
 ```
-claude plugin disable advisor-product-strategy@claude-workflow
-claude plugin enable  advisor-product-strategy@claude-workflow
+claude plugin disable advisor-product-strategy@the-workshop
+claude plugin enable  advisor-product-strategy@the-workshop
 ```
 
 Disabling removes it from your sessions entirely. It never touches your

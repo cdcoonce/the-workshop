@@ -1,12 +1,12 @@
 {
   "name": "vault-ops",
-  "description": "Charles Coonce's My Brain vault lifecycle, graph, capture, search, sync, and writing workflows",
+  "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
   "conventions": [
     "Frontmatter on every note",
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "1.0.0",
+  "version": "1.2.0",
   "core": {
     "skills": [],
     "agents": [],
@@ -27,6 +27,7 @@
     "vault-context-then-delegate",
     "vault-dispatch",
     "vault-dump",
+    "vault-essay",
     "vault-find",
     "vault-fix-issue",
     "vault-garden",
@@ -36,7 +37,6 @@
     "vault-mr-review-packet",
     "vault-recall",
     "vault-standup",
-    "vault-start",
     "vault-sync",
     "vault-teach",
     "vault-audit",

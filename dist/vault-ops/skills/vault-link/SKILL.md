@@ -1,12 +1,12 @@
 ---
 name: vault-link
 description: >
-  Run Charles's My Brain /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
 ---
 
 # Vault Link
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

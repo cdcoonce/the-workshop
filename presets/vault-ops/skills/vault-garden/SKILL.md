@@ -1,12 +1,12 @@
 ---
 name: vault-garden
 description: >
-  Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
 ---
 
 # Vault Garden
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

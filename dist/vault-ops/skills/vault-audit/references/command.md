@@ -4,6 +4,14 @@ Perform a full structural audit of the vault. This is a deeper check than /wrap-
 
 ## Process
 
+0. **Run the executable audit first**:
+
+   ```bash
+   uv run python .claude/scripts/vault_audit.py
+   ```
+
+   Use `--json` for machine-readable output or `--limit N` to control the number of Markdown rows per category. The script is read-only and uses the shared `vault_scope.py` policy.
+
 1. **Folder structure**: Verify all expected directories exist.
 
 2. **Frontmatter audit**: Check every note in brain/, work/, personal/, org/, perf/ for valid frontmatter (date, description, tags + type-specific fields).

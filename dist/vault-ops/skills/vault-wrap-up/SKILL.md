@@ -1,12 +1,12 @@
 ---
 name: vault-wrap-up
 description: >
-  Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
 ---
 
 # Vault Wrap Up
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

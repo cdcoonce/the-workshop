@@ -1,12 +1,12 @@
 ---
 name: vault-context-then-delegate
 description: >
-  Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+  Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
 ---
 
 # Vault Context Then Delegate
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

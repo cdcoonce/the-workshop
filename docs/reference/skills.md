@@ -17,19 +17,23 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
+| `/gitlab-cli` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. | workbench |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
-| `/improve-codebase-architecture` | Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. | workbench |
+| `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. | workbench |
 | `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
-| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. | workbench |
+| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
 | `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
 | `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | workbench |
-| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. | workbench |
+| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
+| `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. | workbench |
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
+| `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
+| `/triage-quarantine` | Diagnose why an autonomous agent run failed, quarantined, or was rejected before re-running anything. | workbench |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench, workshop-maintainer |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
 
@@ -43,34 +47,33 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
-| `/deploy` | Deploy the portfolio chat agent Lambda function to AWS. | workbench |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). | workbench |
 | `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workshop-maintainer |
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
-| `/vault-audit` | Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
-| `/vault-budget` | Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
-| `/vault-clickup-task-sync` | Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
-| `/vault-connect` | Run Charles's My Brain /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
-| `/vault-context-then-delegate` | Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
-| `/vault-dispatch` | Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
-| `/vault-dump` | Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
-| `/vault-find` | Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. | vault-ops |
-| `/vault-fix-issue` | Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
-| `/vault-garden` | Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
-| `/vault-grill` | Run Charles's My Brain /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
-| `/vault-handoff` | Run Charles's My Brain /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
-| `/vault-link` | Run Charles's My Brain /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
-| `/vault-mr-review-packet` | Run Charles's My Brain /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
-| `/vault-recall` | Run Charles's My Brain /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
-| `/vault-standup` | Run Charles's My Brain /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
-| `/vault-start` | Run Charles's My Brain /start one-time productivity bootstrap for tasks, glossary, quick-reference, and term tracking. | vault-ops |
-| `/vault-sync` | Run Charles's My Brain /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
-| `/vault-teach` | Run Charles's My Brain /teach stateful learning workspace workflow for a topic. | vault-ops |
-| `/vault-wrap-up` | Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
-| `/vault-write` | Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. | vault-ops |
+| `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
+| `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
+| `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
+| `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
+| `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
+| `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
+| `/vault-dump` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
+| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. | vault-ops |
+| `/vault-find` | Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. | vault-ops |
+| `/vault-fix-issue` | Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
+| `/vault-garden` | Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
+| `/vault-grill` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
+| `/vault-handoff` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
+| `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
+| `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
+| `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
+| `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
+| `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
+| `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. | vault-ops |
+| `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
+| `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
@@ -103,7 +106,7 @@ Generate multiple radically different interface designs for a module using paral
 
 *universal*
 
-Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR.
+Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. This is the interactive lane — for greenfield work, skill-building, or changes too coupled to delegate.
 
 ### `/dignified-python`
 
@@ -123,17 +126,23 @@ Use when implementation is complete, all tests pass, and you need to decide how 
 
 GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. Use when Claude needs to create, list, view, or update GitHub issues; create draft branches and pull requests; make commits and push changes; review pull request diffs and changes; approve or merge PRs; manage GitHub Actions workflows; or work with GitHub repositories without switching to a browser. Requires gh CLI installed and authenticated.
 
+### `/gitlab-cli`
+
+*universal*
+
+GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. Use when Claude needs to create, list, view, or update GitLab issues; push branches; review merge request diffs; approve or merge MRs; or inspect and retry pipelines and job logs. Requires the glab CLI installed and authenticated. For CREATING a merge request, use the gitlab-mr-create skill instead.
+
 ### `/grill-me`
 
 *universal*
 
 Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
 
-### `/improve-codebase-architecture`
+### `/mr-merge-order`
 
 *universal*
 
-Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more AI-navigable.
+Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. Computes a pairwise conflict matrix with git merge-tree and recommends an order by rebase cost. Read-only. Covers GitLab and GitHub.
 
 ### `/mr-review-fixes`
 
@@ -151,7 +160,7 @@ CEO/founder-mode review that rethinks a plan to find the 10-star product. Use wh
 
 *universal*
 
-Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices. Use when user wants to convert a PRD to issues, create implementation tickets, or break down a PRD into work items.
+Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. Use when user wants to convert a PRD to issues, create implementation tickets, or break down a PRD into work items.
 
 ### `/prd-to-plan`
 
@@ -175,7 +184,7 @@ Use when the user asks to create, write, generate, update, or improve a README f
 
 *universal*
 
-Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps. Produces a detailed refactor plan with tiny commits, filed as a GitHub issue.
+Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). Produces a detailed refactor plan with tiny commits, filed as a GitHub issue.
 
 ### `/security-review`
 
@@ -189,17 +198,35 @@ Security code review for vulnerabilities with confidence-based reporting. Use wh
 
 Set up pre-commit hooks for the current repo. Use when user wants to add pre-commit hooks, configure commit-time linting, formatting, type checking, or testing. Triggers on "pre-commit", "git hooks", "linting hooks", or /setup-pre-commit.
 
+### `/shared-tree-safety`
+
+*universal*
+
+Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
+
 ### `/tdd`
 
 *universal*
 
 Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
 
+### `/transcript-notes`
+
+*universal*
+
+Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. Trigger when the user gives a YouTube URL/video id to ingest, or uploads/pastes a transcript and wants it made readable ("ingest this talk", "clean up this transcript", "turn this lecture into notes"). Handles lectures, talks, webinars, interviews, and panels. Do NOT trigger to summarize (this skill never summarizes), to quiz/drill, or to typeset non-transcript prose.
+
 ### `/triage-issue`
 
 *universal*
 
 Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. Finds the root cause and files a GitHub issue with a TDD-based fix plan.
+
+### `/triage-quarantine`
+
+*universal*
+
+Diagnose why an autonomous agent run failed, quarantined, or was rejected before re-running anything. Use when an unattended agent slice quarantines, a nightly agent run exits nonzero, a background agent's work was rejected by a gate or reviewer, or the user asks why an automated run failed.
 
 ### `/using-workflow`
 
@@ -249,12 +276,6 @@ Expert guidance for working with Dagster and the dg CLI. ALWAYS use before doing
 
 Expert guidance for working with dbt Core. ALWAYS use before doing any task that requires knowledge specific to dbt, including building or modifying models, writing SQL transformations, configuring tests, running dbt CLI commands, or working with dbt project structure. Common triggers include references to dbt, models, ref(), source(), materializations, seeds, snapshots, dbt build/run/test, YAML schema files, or analytics engineering patterns.
 
-### `/deploy`
-
-*`workbench` preset*
-
-Deploy the portfolio chat agent Lambda function to AWS. Use when the user asks to deploy, redeploy, push to Lambda, update the chat agent, or after updating context files or lambda_function.py. Rebuilds the knowledge base, packages dependencies, and deploys to AWS Lambda.
-
 ### `/gitlab-mr-create`
 
 *`workbench` preset*
@@ -295,127 +316,127 @@ Audits agent skills and their package boundaries. Use when the user asks to inve
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
 
 ### `/vault-budget`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
 
 ### `/vault-clickup-task-sync`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
+Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
 
 ### `/vault-connect`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
 
 ### `/vault-context-then-delegate`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
 
 ### `/vault-dispatch`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. Trigger when Charles invokes /dispatch, mentions /dispatch, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. Trigger when Charles invokes /dispatch, mentions /dispatch, or asks for this vault workflow by name.
 
 ### `/vault-dump`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
+
+### `/vault-essay`
+
+*`vault-ops` preset*
+
+Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
 
 ### `/vault-find`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
 
 ### `/vault-fix-issue`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
+Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
 
 ### `/vault-garden`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
 
 ### `/vault-grill`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
 
 ### `/vault-handoff`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
 
 ### `/vault-link`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
 
 ### `/vault-mr-review-packet`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
 
 ### `/vault-recall`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
 
 ### `/vault-standup`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
-
-### `/vault-start`
-
-*`vault-ops` preset*
-
-Run Charles's My Brain /start one-time productivity bootstrap for tasks, glossary, quick-reference, and term tracking. Trigger when Charles invokes /start, mentions /start, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
 
 ### `/vault-sync`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. Trigger when Charles invokes /sync, mentions /sync, or asks for this vault workflow by name.
 
 ### `/vault-teach`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
 
 ### `/vault-wrap-up`
 
 *`vault-ops` preset*
 
-Run Charles's My Brain /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. Trigger when Charles invokes /wrap-up, mentions /wrap-up, or asks for this vault workflow by name.
 
 ### `/vault-write`
 
 *`vault-ops` preset*
 
-Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
 
 ### `/workshop-skill-creator`
 

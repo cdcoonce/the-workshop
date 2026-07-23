@@ -1,12 +1,12 @@
 ---
 name: vault-clickup-task-sync
 description: >
-  Run Charles's My Brain /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
+  Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
 ---
 
 # Vault ClickUp Task Sync
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

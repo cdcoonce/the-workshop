@@ -1,12 +1,12 @@
 ---
 name: vault-write
 description: >
-  Draft Outlook or Teams messages in Charles's voice using the My Brain /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+  Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
 ---
 
 # Vault Write
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

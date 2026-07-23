@@ -1,12 +1,12 @@
 ---
 name: vault-dump
 description: >
-  Run Charles's My Brain /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. Trigger when Charles invokes /dump, mentions /dump, or asks for this vault workflow by name.
 ---
 
 # Vault Dump
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

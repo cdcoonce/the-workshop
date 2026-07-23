@@ -1,12 +1,12 @@
 ---
 name: vault-find
 description: >
-  Run Charles's My Brain /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. Trigger when Charles invokes /find, mentions /find, or asks for this vault workflow by name.
 ---
 
 # Vault Find
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

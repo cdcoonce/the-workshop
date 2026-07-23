@@ -56,14 +56,15 @@ verify-generated:
 		exit 1; \
 	fi
 
-# Full gate: the root suite, the daa-code-review analyzer suite (#141), and the
-# generated-docs/dist drift gate. The analyzer tests live in an isolated subtree
-# with a sibling `scripts` package and bare imports, so they run in their OWN
-# rootdir (a second pytest invocation) — collecting them in the root process
-# collides on the `tests` package name. They also shell out to `ruff`, hence
-# `--with ruff`.
+# Full gate: the root suite, the daa-code-review analyzer suite (#141), the
+# transcript-notes script suite, and the generated-docs/dist drift gate. The
+# script suites live in isolated subtrees with a sibling `scripts` package and
+# bare imports, so they run in their OWN rootdir (a separate pytest invocation)
+# — collecting them in the root process collides on the `tests` package name.
 .PHONY: test
 test:
 	uv run --with pytest python -m pytest -q tests
 	cd core/skills/daa-code-review/scripts && uv run --with pytest --with ruff python -m pytest -q tests
+	cd core/skills/transcript-notes/scripts && uv run --with pytest python -m pytest -q tests
+	cd core/skills/mr-merge-order/scripts && uv run --with pytest python -m pytest -q tests
 	$(MAKE) verify-generated

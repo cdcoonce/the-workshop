@@ -1,12 +1,12 @@
 ---
 name: vault-standup
 description: >
-  Run Charles's My Brain /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
 ---
 
 # Vault Standup
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

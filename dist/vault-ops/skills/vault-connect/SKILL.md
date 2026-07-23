@@ -1,12 +1,12 @@
 ---
 name: vault-connect
 description: >
-  Run Charles's My Brain /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
 ---
 
 # Vault Connect
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 

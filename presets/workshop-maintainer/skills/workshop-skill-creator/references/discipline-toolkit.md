@@ -16,7 +16,7 @@ Pick the countermeasure that matches the failure you're actually trying to preve
 
 ## Never Add Nuance Clauses to an Iron Law
 
-An Iron Law ("NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST") must stay a single, unconditional sentence. Do not append "...unless it's a trivial one-liner" or "...except for prototypes" — the moment a law has an exception clause, every future rationalization routes through that clause instead of confronting the law directly. If a real exception exists, state it as a separate, clearly-bounded carve-out elsewhere in the skill (see the tdd skill's "Exceptions (ask first)" list in [core/docs/tdd.md](../../../docs/tdd.md)), never as a qualifier inside the law's own sentence.
+An Iron Law ("NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST") must stay a single, unconditional sentence. Do not append "...unless it's a trivial one-liner" or "...except for prototypes" — the moment a law has an exception clause, every future rationalization routes through that clause instead of confronting the law directly. If a real exception exists, state it as a separate, clearly-bounded carve-out elsewhere in the skill (the tdd skill's `discipline.md` models this with its Excuse → Reality table), never as a qualifier inside the law's own sentence.
 
 ## Building the Machinery
 

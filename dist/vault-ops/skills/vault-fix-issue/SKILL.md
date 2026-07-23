@@ -1,12 +1,12 @@
 ---
 name: vault-fix-issue
 description: >
-  Run Charles's My Brain /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
+  Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
 ---
 
 # Vault Fix Issue
 
-Use this skill only inside Charles Coonce's My Brain vault, or when helping install/test the vault plugin for that vault.
+Use this skill only inside Charles Coonce's The Vault, or when helping install/test the vault plugin for that vault.
 
 ## Required Reading
 
