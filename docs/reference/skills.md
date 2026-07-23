@@ -25,7 +25,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
 | `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
-| `/readme-generator` | Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. | workbench |
+| `/readme-generator` | Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. | workbench |
 | `/repo-reference-docs` | Create and maintain a thorough, human-readable Markdown reference-docs set for a repository under docs/reference/ — architecture overview, module/directory map, data and control flow, conventions and glossary, plus an index. | workbench |
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
@@ -179,7 +179,7 @@ Generate or update the `.claude/docs/project.md` file that gives Claude project-
 
 *universal*
 
-Use when the user asks to create, write, generate, update, or improve a README for any project or repository, or asks for project documentation in markdown. Also trigger when the user says things like "document this project", "write docs for this repo", "this repo needs a README", "help me onboard developers to this codebase". Even if the user just says "README" or "readme" in the context of a codebase, use this skill.
+Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. Also triggers on "this repo needs a README" or just "README"/"readme" in a codebase context. This skill owns the single root README (the front door) and keeps it current. For a multi-file, in-depth reference set — architecture, module map, data flow, conventions — use repo-reference-docs instead.
 
 ### `/repo-reference-docs`
 
