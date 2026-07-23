@@ -28,9 +28,11 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
+| `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. | workbench |
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
+| `/triage-quarantine` | Diagnose why an autonomous agent run failed, quarantined, or was rejected before re-running anything. | workbench |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench, workshop-maintainer |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
 
@@ -188,6 +190,12 @@ Security code review for vulnerabilities with confidence-based reporting. Use wh
 
 Set up pre-commit hooks for the current repo. Use when user wants to add pre-commit hooks, configure commit-time linting, formatting, type checking, or testing. Triggers on "pre-commit", "git hooks", "linting hooks", or /setup-pre-commit.
 
+### `/shared-tree-safety`
+
+*universal*
+
+Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
+
 ### `/tdd`
 
 *universal*
@@ -205,6 +213,12 @@ Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a
 *universal*
 
 Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. Finds the root cause and files a GitHub issue with a TDD-based fix plan.
+
+### `/triage-quarantine`
+
+*universal*
+
+Diagnose why an autonomous agent run failed, quarantined, or was rejected before re-running anything. Use when an unattended agent slice quarantines, a nightly agent run exits nonzero, a background agent's work was rejected by a gate or reviewer, or the user asks why an automated run failed.
 
 ### `/using-workflow`
 
