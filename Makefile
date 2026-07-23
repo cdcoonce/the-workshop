@@ -63,8 +63,16 @@ verify-generated:
 # the `tests` package name. They are DISCOVERED automatically
 # (scripts.discover_skill_test_suites), so a new skill's tests can never fall
 # out of the gate by a forgotten Makefile line.
+# Lint the repo's own Python (build tooling, tests, hook scripts) against the
+# high-signal rule set pinned in pyproject.toml. Scoped to real defects, so a
+# clean run means something; see the [tool.ruff.lint] comment for why E501 is out.
+.PHONY: lint
+lint:
+	uv run --with ruff ruff check scripts tests core presets
+
 .PHONY: test
 test:
+	$(MAKE) lint
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) verify-generated

@@ -17,5 +17,5 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
-      - name: Run gate (test suites + docs/dist drift check)
+      - name: Run gate (lint + test suites + docs/dist drift check)
         run: make test
