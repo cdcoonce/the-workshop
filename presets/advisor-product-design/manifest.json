@@ -6,7 +6,7 @@
     "Position first, cite the pack, yield only to user evidence",
     "Base/tuning/private layering \u2014 local/ is the owner's, never the repo's"
   ],
-  "version": "0.1.2",
+  "version": "0.1.3",
   "base_settings": false,
   "core": {
     "skills": [],

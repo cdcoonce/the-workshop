@@ -6,13 +6,13 @@
   "plugins": [
     {
       "name": "advisor-product-design",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
       "source": "./dist/advisor-product-design"
     },
     {
       "name": "advisor-product-strategy",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.",
       "source": "./dist/advisor-product-strategy"
     },

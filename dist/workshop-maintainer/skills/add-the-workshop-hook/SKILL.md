@@ -27,11 +27,19 @@ revealed, not an assumption.
 
 ## 2. Design for fail-open and cross-tool portability up front
 
-Every hook in this repo is stdlib-only Python (no cross-hook imports — each
-script is fully self-contained, matching `protect-files.py`/
-`post-edit-lint.py`/`inject_persona.py` convention) and must degrade safely:
+Every hook in this repo is stdlib-only Python and must degrade safely:
 malformed stdin, missing fields, no git repo, missing binaries — all exit 0
-rather than blocking on ambiguity. Portability across Claude Code, Cortex
+rather than blocking on ambiguity.
+
+Shared logic goes in an underscore-prefixed sibling under `core/hooks/` (e.g.
+`_git_baseline.py`): `run-hook.sh` runs `python3 hooks/scripts/<name>`, so a
+plain `import` resolves, `build_preset` ships `_*.py` unconditionally, and both
+hook discovery and the fail-open scan skip the prefix. Guard it with
+`except ImportError: sys.exit(0)` so a partial install no-ops rather than
+crashing the tool path. (#328 replaced the older "fully self-contained, no
+cross-hook imports" rule after three helpers had been copied into four hooks.)
+
+Portability across Claude Code, Cortex
 Code (CoCo), and Codex means: reuse the existing `run-hook.sh` shim
 (`$CLAUDE_PLUGIN_ROOT` fallback via `BASH_SOURCE` resolution), and avoid
 Claude-Code-only features (`type: "agent"` hooks, fields like
@@ -79,14 +87,20 @@ alongside the hook or the drift gate (step 7) fails.
 
 ## 7. Run the full gate, not just the new test file
 
-Run `make test` — it runs the root suite, the nested
-`core/skills/daa-code-review/scripts` sub-suite, AND the docs/dist drift gate
-(`build_docs --check` plus a `dist/` rebuild that fails on any uncommitted
-diff). If the gate reports stale output, you skipped `make docs`/`make build`
-in step 6 — regenerate and commit. Then commit with a message that states the
-_why_ (the constraint from step 1, the design tradeoff from steps 3/4), and
-push to **both** `origin main` and `gitlab main:dev` — this repo mirrors to
-GitLab and the two can silently diverge if only one gets pushed.
+Run `make test` — it runs the root suite, every auto-discovered skill-script
+suite, AND the docs/dist drift gate (`build_docs --check` plus a `dist/`
+rebuild that fails on any uncommitted diff). If the gate reports stale output,
+you skipped `make docs`/`make build` in step 6 — regenerate and commit.
+
+Then commit with a message stating the _why_ (the constraint from step 1, the
+tradeoff from steps 3/4) and follow CLAUDE.md's branch policy: **branch off
+`dev`, PR into `dev`.** Never push to `main`; never push or merge this repo on
+GitLab — `origin` is GitHub, GitLab is a one-way mirror fed by merges into
+`dev`. Confirm with `git remote -v` rather than assuming.
+
+If the hook ships in a preset someone already has installed, **bump that
+preset's version** — otherwise `claude plugin update` offers nothing and the
+hook never reaches them.
 
 Open design questions (shared-helper extraction, cross-tool test coverage
 gaps) are tracked in `references/reference.md`.
