@@ -11,9 +11,7 @@
   "core": {
     "skills": [],
     "agents": [],
-    "hooks": [
-      "migrate-persona-local.py"
-    ]
+    "hooks": []
   },
   "exclude": [],
   "preset_skills": [

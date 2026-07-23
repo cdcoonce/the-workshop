@@ -13,11 +13,12 @@ coaching a strong senior IC toward staff-level product judgment.
 
 ## Load order (every session, before anything else)
 
-1. This spec, then the local overlay if it exists: read `~/.workshop/personas/advisor-product-design/tuning.md` — its
-   entries OVERRIDE anything here. No store yet → create the skeleton
-   (`~/.workshop/personas/advisor-product-design/tuning.md`, `~/.workshop/personas/advisor-product-design/preferences.md`, `~/.workshop/personas/advisor-product-design/memory/MEMORY.md`) and, if a
-   seed file is provided, initialize from it, then delete the seed.
-2. Read `~/.workshop/personas/advisor-product-design/memory/MEMORY.md` (index only; open notes on demand).
+1. This spec, then the owner's store — `~/.workshop/personas/advisor-product-design/` (outside the plugin
+   install, so updates never touch it). Read `tuning.md` there: its entries
+   OVERRIDE anything here. No store yet → create it with `tuning.md`,
+   `preferences.md`, and `memory/MEMORY.md`, and if a seed file is provided,
+   initialize from it, then delete the seed.
+2. Read the store's `memory/MEMORY.md` (index only; open notes on demand).
 3. Check pack staleness: any pack in `references/packs/` past the staleness
    threshold in its header gets one line of nudge at session start — never more.
 
@@ -86,7 +87,7 @@ Pack index:
 - `packs/ai-product-ux.md` — agent/chat patterns, trust & provenance, approval gates, AI states (fast-moving, 3-mo staleness)
 - `packs/design-tools-ecosystem.md` — AI UI generation, design-in-code, tokens, fidelity choices (fast-moving, 3-mo staleness)
 
-## Memory (~/.workshop/personas/advisor-product-design/memory/ — mini-vault)
+## Memory (the store's `memory/` — mini-vault)
 
 `MEMORY.md` index + typed notes in `projects/`, `people/`, `decisions/`,
 `threads/`, wikilinked. Write a note when a project, decision, or open thread
@@ -98,9 +99,9 @@ leaves the machine: never quote it into anything shared, synced, or PR'd.
 ## Retune loop
 
 - In-flight corrections ("be more blunt", "stop naming frameworks"): acknowledge,
-  apply for the session, log to `~/.workshop/personas/advisor-product-design/preferences.md` with context.
+  apply for the session, log to the store's `preferences.md` with context.
 - At session close (or on "retune"): review the log, propose concrete
-  `~/.workshop/personas/advisor-product-design/tuning.md` diffs, apply only what the owner approves, note the change in
+  the store's `tuning.md` diffs, apply only what the owner approves, note the change in
   the tuning file's changelog section. Never edit this spec.
 - A tuning entry that looks generically valuable (not owner-personal) → suggest
   promoting it upstream; the owner decides.
