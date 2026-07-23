@@ -38,10 +38,17 @@ UNUSABLE_PAYLOADS = {
 
 
 def _hook_scripts() -> list[Path]:
-    """Every hook script shipped from core/ or a preset."""
+    """Every hook script shipped from core/ or a preset.
+
+    Underscore-prefixed files are shared library modules, not hooks (see
+    `core/hooks/_git_baseline.py`). They read no stdin, so they pass this suite
+    trivially — which is worse than being skipped: it reports a fail-open
+    guarantee for something that was never on the tool path, and quietly pads
+    the count that makes `test_hook_scripts_are_discovered` meaningful.
+    """
     scripts = sorted((REPO_ROOT / "core" / "hooks").glob("*.py"))
     scripts += sorted((REPO_ROOT / "presets").glob("*/hooks/*.py"))
-    return [s for s in scripts if s.name != "__init__.py"]
+    return [s for s in scripts if not s.name.startswith("_")]
 
 
 HOOKS = _hook_scripts()
@@ -50,6 +57,12 @@ HOOKS = _hook_scripts()
 def test_hook_scripts_are_discovered() -> None:
     """Guard the guard: discovery must actually find hooks."""
     assert HOOKS, "no hook scripts discovered"
+
+
+def test_library_modules_are_not_scanned_as_hooks() -> None:
+    """A helper module passing a hook contract is a false assurance, not coverage."""
+    assert not [h for h in HOOKS if h.name.startswith("_")]
+    assert "protect-files.py" in {h.name for h in HOOKS}
 
 
 @pytest.mark.parametrize("hook", HOOKS, ids=lambda p: p.name)
