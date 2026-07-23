@@ -56,15 +56,15 @@ verify-generated:
 		exit 1; \
 	fi
 
-# Full gate: the root suite, the daa-code-review analyzer suite (#141), the
-# transcript-notes script suite, and the generated-docs/dist drift gate. The
-# script suites live in isolated subtrees with a sibling `scripts` package and
-# bare imports, so they run in their OWN rootdir (a separate pytest invocation)
-# — collecting them in the root process collides on the `tests` package name.
+# Full gate: the root suite, every skill-script suite, and the generated-docs/
+# dist drift gate. Skill-script suites live in isolated subtrees with a sibling
+# `scripts` package and bare imports, so they run in their OWN rootdir (a
+# separate pytest invocation) — collecting them in the root process collides on
+# the `tests` package name. They are DISCOVERED automatically
+# (scripts.discover_skill_test_suites), so a new skill's tests can never fall
+# out of the gate by a forgotten Makefile line.
 .PHONY: test
 test:
 	uv run --with pytest python -m pytest -q tests
-	cd core/skills/daa-code-review/scripts && uv run --with pytest --with ruff python -m pytest -q tests
-	cd core/skills/transcript-notes/scripts && uv run --with pytest python -m pytest -q tests
-	cd core/skills/mr-merge-order/scripts && uv run --with pytest python -m pytest -q tests
+	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) verify-generated
