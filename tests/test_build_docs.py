@@ -231,6 +231,55 @@ class TestFailFast:
         with pytest.raises(DocsError, match="has no AGENT.md"):
             build_model(docs_repo)
 
+    def test_skill_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        """Git leaves ignored files behind on a branch switch; that is not a skill.
+
+        Switching off a branch that added a skill removes its tracked files but
+        keeps `__pycache__/`, because git will not delete ignored content. The
+        leftover directory used to fail `make docs` on a clean checkout, naming a
+        skill that does not exist on that branch.
+        """
+        _write(
+            docs_repo / "core" / "skills" / "gone" / "scripts" / "__pycache__" / "x.pyc",
+            "",
+        )
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {s.name for s in model.skills}
+
+    def test_preset_skill_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        _write(
+            docs_repo / "presets" / "demo" / "skills" / "gone" / "__pycache__" / "x.pyc",
+            "",
+        )
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {s.name for s in model.skills}
+
+    def test_agent_dir_holding_only_build_artifacts_is_skipped(
+        self, docs_repo: Path
+    ) -> None:
+        _write(docs_repo / "core" / "agents" / "gone" / "__pycache__" / "x.pyc", "")
+
+        model = build_model(docs_repo)
+
+        assert "gone" not in {a.name for a in model.agents}
+
+    def test_skill_dir_with_real_files_but_no_skill_md_still_fails(
+        self, docs_repo: Path
+    ) -> None:
+        """The genuinely malformed case must keep failing loudly."""
+        _write(docs_repo / "core" / "skills" / "broken" / "scripts" / "run.py", "x = 1\n")
+
+        with pytest.raises(DocsError, match="has no SKILL.md"):
+            build_model(docs_repo)
+
     def test_non_string_description_fails(self, docs_repo: Path) -> None:
         # A mapping value for description must fail loudly, not ship a dict repr.
         _write(
