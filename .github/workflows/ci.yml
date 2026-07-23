@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The version-bump gate diffs dist/ against the base branch, so the
+          # base ref must be resolvable. checkout defaults to depth 1.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5

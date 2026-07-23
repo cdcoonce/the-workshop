@@ -31,6 +31,7 @@ lets `make test` gate on staleness.
 | `scripts/build_docs.py` | Generate the repo's living reference documentation from component metadata. |
 | `scripts/build_marketplace.py` | Generate Claude and Codex marketplace indexes from preset manifests. |
 | `scripts/build_preset.py` | Assemble a Claude plugin from core + preset delta. |
+| `scripts/check_version_bumps.py` | Fail when a preset's shipped output changed without a version bump. |
 | `scripts/dev_cycle_validate.py` | Dev cycle state file parser and validator. |
 | `scripts/discover_skill_test_suites.py` | Discover and run every skill-script test suite in its own rootdir. |
 | `scripts/dist_digest.py` | Stable content digest of the generated output tree (dist/ + marketplaces). |

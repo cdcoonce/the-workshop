@@ -70,9 +70,20 @@ verify-generated:
 lint:
 	uv run --with ruff ruff check scripts tests core presets
 
+# Delivery gate: a preset whose shipped dist/ content changed must also declare
+# a new version, or `claude plugin update` offers nothing and the change reaches
+# nobody who has it installed. Compares against the release branch, so one bump
+# covers everything that lands on dev between promotions.
+.PHONY: verify-versions
+verify-versions:
+	uv run python -m scripts.check_version_bumps --base $(VERSION_BASE)
+
+VERSION_BASE ?= origin/main
+
 .PHONY: test
 test:
 	$(MAKE) lint
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) verify-generated
+	$(MAKE) verify-versions
