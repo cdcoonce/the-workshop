@@ -90,8 +90,6 @@ Product-design/UI-UX advisor persona — artifact-first design reviews with seve
 
 **Skills (1):** `advisor-product-design`
 
-**Hooks (1):** `migrate-persona-local.py`
-
 ### `advisor-product-strategy`
 
 *persona plugin · v0.1.1*
@@ -105,8 +103,6 @@ Product-strategy sounding board and coach persona for a design+PM hybrid at an e
 - Base/tuning/private layering — local/ is the owner's, never the repo's
 
 **Skills (1):** `advisor-product-strategy`
-
-**Hooks (1):** `migrate-persona-local.py`
 
 ### `persona-pair-programmer`
 
