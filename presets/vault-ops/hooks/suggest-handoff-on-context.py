@@ -31,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 DEFAULT_THRESHOLD = 300_000
-_MARKER_DIRNAME = "claude-workflow-handoff-gate"
+_MARKER_DIRNAME = "workshop-handoff-gate"
 
 
 def _threshold() -> int:
