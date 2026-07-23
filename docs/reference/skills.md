@@ -17,6 +17,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
+| `/gitlab-cli` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. | workbench |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
 | `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. | workbench |
 | `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed after review. | workbench |
@@ -123,6 +124,12 @@ Use when implementation is complete, all tests pass, and you need to decide how 
 *universal*
 
 GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. Use when Claude needs to create, list, view, or update GitHub issues; create draft branches and pull requests; make commits and push changes; review pull request diffs and changes; approve or merge PRs; manage GitHub Actions workflows; or work with GitHub repositories without switching to a browser. Requires gh CLI installed and authenticated.
+
+### `/gitlab-cli`
+
+*universal*
+
+GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. Use when Claude needs to create, list, view, or update GitLab issues; push branches; review merge request diffs; approve or merge MRs; or inspect and retry pipelines and job logs. Requires the glab CLI installed and authenticated. For CREATING a merge request, use the gitlab-mr-create skill instead.
 
 ### `/grill-me`
 
