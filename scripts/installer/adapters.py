@@ -1,10 +1,41 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from scripts.installer.bundle import Bundle
 from scripts.installer.report import InstallReport, Scope
+
+# A persona package's owner-owned layer: tuning, preferences, and memory. It
+# exists only on the owner's machine and a base update must never touch it
+# (see persona-builder's package-format.md). Install rebuilds the destination
+# wholesale, so this directory is carried across explicitly.
+LOCAL_OVERLAY = "local"
+
+
+@contextmanager
+def _preserved_overlay(dest: Path) -> Iterator[Path | None]:
+    """Move an existing `local/` out of `dest` for the duration of a reinstall.
+
+    Yields the staged path, or None when there is nothing to preserve. The
+    staging directory is removed on the way out, so a failed install cannot
+    leave the overlay stranded in a temp dir — it is either back in place or
+    still where it started.
+    """
+    overlay = dest / LOCAL_OVERLAY
+    if not overlay.is_dir():
+        yield None
+        return
+    staging = Path(tempfile.mkdtemp(prefix="workshop-overlay-"))
+    staged = staging / LOCAL_OVERLAY
+    shutil.move(str(overlay), str(staged))
+    try:
+        yield staged
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 class AgentAdapter:
@@ -42,10 +73,19 @@ class ClaudeCodeAdapter(AgentAdapter):
     def install(self, bundle: Bundle, target: Path, scope: Scope) -> InstallReport:
         report = InstallReport(agent=self.name, preset=bundle.name)
         dest = self._plugins_dir(target) / bundle.name
-        if dest.exists():
-            shutil.rmtree(dest)  # idempotent re-install
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(bundle.path, dest)
+        with _preserved_overlay(dest) as overlay:
+            if dest.exists():
+                shutil.rmtree(dest)  # idempotent re-install
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(bundle.path, dest)
+            if overlay is not None:
+                # The owner's overlay wins over one shipped in the base: `local/`
+                # is machine-only by construction, so a packaged copy is a
+                # default, never a replacement for what the owner has tuned.
+                shipped = dest / LOCAL_OVERLAY
+                if shipped.exists():
+                    shutil.rmtree(shipped)
+                shutil.move(str(overlay), str(shipped))
         report.add_installed(f"plugin -> {dest}")
         return report
 
