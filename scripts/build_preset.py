@@ -428,7 +428,12 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     for hook_name in manifest["core"].get("hooks", []):
         shutil.copy2(core_path / "hooks" / hook_name, hooks_scripts_dir / hook_name)
     for hook_name in manifest.get("preset_hooks", []):
-        shutil.copy2(preset_path / "hooks" / hook_name, hooks_scripts_dir / hook_name)
+        dest = hooks_scripts_dir / hook_name
+        if dest.exists():
+            print(
+                f"WARNING: preset hook '{hook_name}' overrides core hook '{hook_name}'"
+            )
+        shutil.copy2(preset_path / "hooks" / hook_name, dest)
     # Copy the portable run-hook.sh shim
     run_hook_src = core_path / "hooks" / "run-hook.sh"
     if run_hook_src.exists():

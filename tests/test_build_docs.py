@@ -155,6 +155,25 @@ class TestBuildModel:
         formatter = next(h for h in model.hooks if h.name == "formatter.py")
         assert formatter.events == ("PostToolUse",)
 
+    def test_excluded_hook_is_not_documented_as_shipped(self, docs_repo: Path) -> None:
+        """`exclude` must bind for hooks as it already does for skills and agents.
+
+        Otherwise the generated hooks/presets tables and the dist README claim a
+        preset ships a hook the build never copies.
+        """
+        manifest_path = docs_repo / "presets" / "demo" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["exclude"] = ["hooks/scripts/formatter.py"]
+        manifest_path.write_text(json.dumps(manifest))
+
+        model = build_model(docs_repo)
+
+        demo = next(p for p in model.presets if p.name == "demo")
+        assert "formatter.py" not in demo.hooks
+        assert "guard.py" in demo.hooks
+        formatter = next(h for h in model.hooks if h.name == "formatter.py")
+        assert "demo" not in formatter.presets
+
     def test_methodology_excludes_project_doc(self, docs_repo: Path) -> None:
         model = build_model(docs_repo)
         filenames = {d.filename for d in model.methodology}

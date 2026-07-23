@@ -297,6 +297,33 @@ class TestBuildPluginSkills:
         skill_md = tmp_repo / "dist" / "python-api" / "skills" / "tdd" / "SKILL.md"
         assert "OVERRIDDEN" in skill_md.read_text()
 
+    def test_preset_hook_colliding_with_core_hook_warns(
+        self, tmp_repo: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """A silent hook overwrite ships the wrong script with no diagnostic."""
+        preset_hooks = tmp_repo / "presets" / "python-api" / "hooks"
+        (preset_hooks / "protect-files.py").write_text("# OVERRIDDEN protect hook")
+
+        manifest_path = tmp_repo / "presets" / "python-api" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["preset_hooks"].append("protect-files.py")
+        manifest_path.write_text(json.dumps(manifest))
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert "WARNING" in capsys.readouterr().out
+        shipped = (
+            tmp_repo / "dist" / "python-api" / "hooks" / "scripts" / "protect-files.py"
+        )
+        assert "OVERRIDDEN" in shipped.read_text()
+
+    def test_non_colliding_hook_copy_is_silent(
+        self, tmp_repo: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert "overrides core hook" not in capsys.readouterr().out
+
 
 class TestBuildPluginAgents:
     """Agents are placed at root level in plugin format."""

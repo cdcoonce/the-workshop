@@ -426,7 +426,15 @@ def _shipped_agents(manifest: dict, core_agents: list[str]) -> list[str]:
 def _shipped_hooks(manifest: dict) -> list[str]:
     hooks = list(manifest.get("core", {}).get("hooks", []))
     hooks += [h for h in manifest.get("preset_hooks", []) if h not in hooks]
-    return sorted(hooks)
+    # Hooks are excluded as `hooks/scripts/<name>` — the form build_preset
+    # validates against. Without this filter the generated tables and the dist
+    # README claim a preset ships a hook the build never copies.
+    excluded = {
+        e.split("/")[-1]
+        for e in manifest.get("exclude", [])
+        if e.startswith("hooks/scripts/")
+    }
+    return sorted(h for h in hooks if h not in excluded)
 
 
 def build_model(root: Path) -> DocsModel:
