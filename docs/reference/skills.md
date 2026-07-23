@@ -31,6 +31,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
 | `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. | workbench |
+| `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. | workbench |
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
@@ -210,6 +211,12 @@ Set up pre-commit hooks for the current repo. Use when user wants to add pre-com
 *universal*
 
 Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
+
+### `/stale-artifact-sweep`
+
+*universal*
+
+Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. Re-verifies each against current reality and classifies it with evidence. Read-only.
 
 ### `/tdd`
 

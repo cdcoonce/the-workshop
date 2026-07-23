@@ -19,7 +19,7 @@ def _on_disk_suites() -> set[Path]:
 
 def test_discovers_known_suites() -> None:
     suites = {p.resolve() for p in find_suites(REPO_ROOT)}
-    for name in ("daa-code-review", "transcript-notes", "mr-merge-order"):
+    for name in ("daa-code-review", "transcript-notes", "mr-merge-order", "stale-artifact-sweep"):
         expected = (REPO_ROOT / "core/skills" / name / "scripts").resolve()
         assert expected in suites, f"{name} script suite not discovered"
 
