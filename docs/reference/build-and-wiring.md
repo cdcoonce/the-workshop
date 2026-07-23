@@ -60,6 +60,7 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
+| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
 <!-- END GENERATED: hooks-wiring-table -->

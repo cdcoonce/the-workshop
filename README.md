@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL.
 
 <!-- BEGIN GENERATED: counts -->
-**28 universal skills · 2 core agents · 8 hooks · 3 project presets · 7 persona plugins**
+**28 universal skills · 2 core agents · 9 hooks · 3 project presets · 7 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -286,6 +286,7 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
+| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
 <!-- END GENERATED: hooks-table -->

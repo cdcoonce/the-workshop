@@ -36,7 +36,7 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 **Skills (21):** `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-connect`, `vault-context-then-delegate`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-link`, `vault-mr-review-packet`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`
 
-**Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `workbench`
 

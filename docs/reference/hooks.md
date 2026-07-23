@@ -15,6 +15,7 @@ Lifecycle hooks and the events they run on. The event column is derived from the
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
+| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
 
@@ -55,6 +56,12 @@ Pre-edit hook: block edits to sensitive/generated files.
 *core · events: `SubagentStart` · matcher: —*
 
 SubagentStart hook: record a git baseline for the evidence check at stop.
+
+### `suggest-handoff-on-context.py`
+
+*`vault-ops` preset · events: `UserPromptSubmit` · matcher: —*
+
+UserPromptSubmit hook: suggest /handoff once the session's context grows large.
 
 ### `verify-subagent-evidence.py`
 

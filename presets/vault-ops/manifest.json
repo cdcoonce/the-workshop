@@ -43,6 +43,8 @@
     "vault-wrap-up",
     "vault-write"
   ],
-  "preset_hooks": [],
+  "preset_hooks": [
+    "suggest-handoff-on-context.py"
+  ],
   "preset_agents": []
 }
