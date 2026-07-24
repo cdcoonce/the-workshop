@@ -16,7 +16,8 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v9
+        # No floating v9 major tag is published yet; pin the exact release.
+        uses: astral-sh/setup-uv@v9.0.0
 
       - name: Sync dependencies
         run: uv sync
