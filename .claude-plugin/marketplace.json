@@ -60,7 +60,7 @@
     },
     {
       "name": "workshop-maintainer",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
       "source": "./dist/workshop-maintainer"
     }

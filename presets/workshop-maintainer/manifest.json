@@ -6,7 +6,7 @@
     "Keep source ownership distinct from distribution membership",
     "Regenerate docs and dist after changing any component"
   ],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "core": {
     "skills": [
       "using-workflow",
