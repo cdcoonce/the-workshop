@@ -60,7 +60,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*project preset · v1.0.0*
+*project preset · v1.0.1*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
