@@ -104,20 +104,94 @@ checked against a current spec.
 
 ### Plugin System
 
-- `.cortex-plugin/plugin.json` — **currently identical in shape to the Codex
-  manifest** (same `interface` block, same fields). Verified as of the CoCo
-  manifest commit; re-check when CoCo's own plugin spec is confirmed
-  independently rather than assumed to track Codex.
+- **Cortex reads `.claude-plugin/plugin.json`, not `.cortex-plugin/`.** Its own
+  bundled plugins (`bundled_plugins/airflow`, `bundled_plugins/review`) ship a
+  `.claude-plugin/` directory; no `.cortex-plugin` exists anywhere in the
+  install. The `.cortex-plugin/plugin.json` this repo emits appears to be read by
+  nothing — any preset that works on Cortex does so through the Claude manifest.
+- Plugins are supplied by the `--plugin-dir` flag (a directory, GitHub repo, or
+  URL, repeatable). There is no `plugin install` subcommand; `cortex skill`
+  manages skill directories separately.
+- Cortex's bundled plugin declares its hooks **inline in `plugin.json`**, not in
+  a plugin-level `hooks/hooks.json`.
+- **Cortex does not read plugin-level `hooks/hooks.json`. No Workshop hook runs
+  on Cortex.** Verified experimentally, not inferred — see below.
 
 ### Hooks
 
-- Shares the same widened tool-ID matcher pattern as Codex
-  (`edit|write|multi_edit|Edit|Write|MultiEdit`)
-- Payload shape and ordering semantics: **not yet verified**
+Supported events: `PreToolUse`, `PostToolUse`, `PermissionRequest`,
+`UserPromptSubmit`, `Stop`, `SubagentStop`, `Notification`, `SessionStart`,
+`SessionEnd`, `PreCompact`, `Setup`.
+
+- **`SubagentStart` and `ConfigChange` do not exist on Cortex.**
+- Hook types: `command` and `prompt` only — no `mcp_tool`, `http`, or `agent`.
+  This repo uses `command` throughout, so that constraint is satisfied.
+- Config location: `~/.snowflake/cortex/hooks.json`, or inline in a plugin
+  manifest.
+- Stdin payload carries the same common fields Claude Code sends (`session_id`,
+  `transcript_path`, `cwd`, `hook_event_name`, plus `permission_mode`), with
+  `tool_name`/`tool_input`/`tool_use_id` on tool events and `source` on
+  `SessionStart`.
+- Exit codes match: `0` continue, `2` block with stderr sent to the agent.
+  JSON output uses the same `decision` / `hookSpecificOutput` /
+  `permissionDecision` shape.
+
+What that means for the hooks this repo ships:
+
+| Hook                                                         | On Cortex                                                                                                                              |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `protect-files.py` (PreToolUse, exit 2)                      | works                                                                                                                                  |
+| `post-edit-lint.py` (PostToolUse)                            | works                                                                                                                                  |
+| `suggest-handoff-on-context.py` (UserPromptSubmit)           | event exists; `additionalContext` support unconfirmed                                                                                  |
+| `verify-tests-before-stop.py` (Stop, exit 2)                 | works                                                                                                                                  |
+| `inject-skill-router.py`, `inject_persona.py` (SessionStart) | event exists; `additionalContext` support unconfirmed                                                                                  |
+| `snapshot-subagent-start.py` (SubagentStart)                 | **never fires — no such event**                                                                                                        |
+| `verify-subagent-evidence.py` (SubagentStop)                 | event exists, but **silently inert**: its baseline comes from the SubagentStart hook, so it finds no snapshot and fails open by design |
+| `audit-config-change.py` (ConfigChange)                      | **never fires — no such event**                                                                                                        |
+
+That table is now moot in practice: **none of these hooks run on Cortex at all**,
+because Cortex never loads a plugin's `hooks/hooks.json`. The event-level gaps
+still matter for the day plugin hooks are supported, or if hooks are moved
+inline into `plugin.json`.
+
+#### How that was established
+
+Inference from the bundled example was not enough, so it was tested:
+
+1. `workbench` is installed and active in Cortex, and its installed copy
+   contains `hooks/hooks.json` wiring a `SessionStart` hook.
+2. Across the entire Cortex log history — every session on that machine, with
+   `workbench`, `vault-ops`, and `full-stack` active at various points — **no
+   plugin-declared hook has ever executed.** The only `Executing … hooks` lines
+   are `SessionEnd`.
+3. The obvious confound was that the probe ran headless (`cortex -p`), which
+   might skip `SessionStart` regardless of configuration. So an identical
+   `SessionStart` hook was placed in the **user-level** `~/.snowflake/cortex/
+hooks.json` and the same headless probe re-run. **It fired immediately.**
+
+Same event, same mode, same machine: user-level fires, plugin-level does not.
+The layout is the variable.
+
+Consequence: every protection this repo ships as a hook — file protection,
+test-before-stop, subagent evidence, config auditing — is **absent on Cortex**,
+silently. Skills are unaffected and work fully.
 
 ### Skills
 
-- Not yet verified whether auto-discovery matches Claude Code's convention
+- Auto-discovery **works**, from `.cortex/skills/`, `.claude/skills/`, and
+  `.snova/skills/`. `~/.claude/skills/` is treated as project-level "for
+  compatibility" — confirmed live: `cortex skill list` on this machine
+  discovers skills installed under `~/.claude/skills/`.
+- Skills can also arrive via `--plugin-dir`, or be added/published through
+  `cortex skill add|publish` (including from a Snowflake stage).
 
-**Last Verified:** 2026-07-02 — manifest shape and hook matcher names only
-(commit `4010d37`)
+**Last Verified:** 2026-07-23 — Cortex Code v1.1.8, against its bundled
+first-party reference (`bundled_skills/cortex-code-guide/HOOKS.md`, `SKILLS.md`)
+and its own bundled plugins, plus live runs on an install that already had
+`workbench` and `vault-ops` active: `cortex skill list`, headless `cortex -p`
+probes, and the user-level vs plugin-level hook comparison above.
+
+Skill discovery and hook non-execution are both confirmed by observation. The
+manifest claim (`.cortex-plugin/plugin.json` is read by nothing) rests on
+Cortex's own bundled plugins using `.claude-plugin/` and no `.cortex-plugin`
+existing in the install — strong, but not a direct experiment.
