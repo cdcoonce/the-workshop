@@ -28,10 +28,15 @@ Open questions (tracked here until resolved, not blocking):
 - **Cortex skill auto-discovery — ANSWERED 2026-07-23.** Works, from
   `.cortex/skills/`, `.claude/skills/`, and `.snova/skills/`; `~/.claude/skills/`
   is treated as project-level for compatibility.
-- Does Cortex read a plugin-level `hooks/hooks.json`, the layout this repo
-  builds? Its own bundled plugin declares hooks inline in `plugin.json` instead.
-  **This is the question that decides whether Workshop hooks run on Cortex at
-  all**, and it needs a live install to answer.
+- **Does Cortex read a plugin-level `hooks/hooks.json`? — ANSWERED 2026-07-23:
+  no.** Tested on a machine with `workbench` active: no plugin-declared hook has
+  ever executed, while an identical `SessionStart` hook in the user-level
+  `~/.snowflake/cortex/hooks.json` fired immediately under the same headless
+  probe. **No Workshop hook runs on Cortex.** Skills work fully.
+- Given that: should the build emit Cortex hooks inline in `plugin.json` (the
+  shape Cortex's own bundled plugins use), or should Cortex be documented as a
+  skills-only target? A real decision, not a defect — the hooks degrade silently
+  rather than erroring.
 - Do Codex's hook semantics match? Unverified — the same probe has not been run
   against Codex.
 - Is there a Codex/Cortex equivalent of `settings.json` (non-hook settings),

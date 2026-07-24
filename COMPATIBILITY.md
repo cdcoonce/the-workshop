@@ -113,8 +113,9 @@ checked against a current spec.
   URL, repeatable). There is no `plugin install` subcommand; `cortex skill`
   manages skill directories separately.
 - Cortex's bundled plugin declares its hooks **inline in `plugin.json`**, not in
-  a plugin-level `hooks/hooks.json`. Whether Cortex also reads the
-  `hooks/hooks.json` layout this repo builds is **unverified**.
+  a plugin-level `hooks/hooks.json`.
+- **Cortex does not read plugin-level `hooks/hooks.json`. No Workshop hook runs
+  on Cortex.** Verified experimentally, not inferred — see below.
 
 ### Hooks
 
@@ -148,9 +149,32 @@ What that means for the hooks this repo ships:
 | `verify-subagent-evidence.py` (SubagentStop)                 | event exists, but **silently inert**: its baseline comes from the SubagentStart hook, so it finds no snapshot and fails open by design |
 | `audit-config-change.py` (ConfigChange)                      | **never fires — no such event**                                                                                                        |
 
-The subagent evidence gate therefore does not function on Cortex. It degrades
-safely rather than erroring, which is the fail-open contract working, but the
-protection is absent.
+That table is now moot in practice: **none of these hooks run on Cortex at all**,
+because Cortex never loads a plugin's `hooks/hooks.json`. The event-level gaps
+still matter for the day plugin hooks are supported, or if hooks are moved
+inline into `plugin.json`.
+
+#### How that was established
+
+Inference from the bundled example was not enough, so it was tested:
+
+1. `workbench` is installed and active in Cortex, and its installed copy
+   contains `hooks/hooks.json` wiring a `SessionStart` hook.
+2. Across the entire Cortex log history — every session on that machine, with
+   `workbench`, `vault-ops`, and `full-stack` active at various points — **no
+   plugin-declared hook has ever executed.** The only `Executing … hooks` lines
+   are `SessionEnd`.
+3. The obvious confound was that the probe ran headless (`cortex -p`), which
+   might skip `SessionStart` regardless of configuration. So an identical
+   `SessionStart` hook was placed in the **user-level** `~/.snowflake/cortex/
+hooks.json` and the same headless probe re-run. **It fired immediately.**
+
+Same event, same mode, same machine: user-level fires, plugin-level does not.
+The layout is the variable.
+
+Consequence: every protection this repo ships as a hook — file protection,
+test-before-stop, subagent evidence, config auditing — is **absent on Cortex**,
+silently. Skills are unaffected and work fully.
 
 ### Skills
 
@@ -163,5 +187,11 @@ protection is absent.
 
 **Last Verified:** 2026-07-23 — Cortex Code v1.1.8, against its bundled
 first-party reference (`bundled_skills/cortex-code-guide/HOOKS.md`, `SKILLS.md`)
-and its own bundled plugins, plus a live `cortex skill list`. Not yet verified by
-installing a Workshop preset and observing hooks fire.
+and its own bundled plugins, plus live runs on an install that already had
+`workbench` and `vault-ops` active: `cortex skill list`, headless `cortex -p`
+probes, and the user-level vs plugin-level hook comparison above.
+
+Skill discovery and hook non-execution are both confirmed by observation. The
+manifest claim (`.cortex-plugin/plugin.json` is read by nothing) rests on
+Cortex's own bundled plugins using `.claude-plugin/` and no `.cortex-plugin`
+existing in the install — strong, but not a direct experiment.
