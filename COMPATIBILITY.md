@@ -14,11 +14,38 @@ the overall multi-platform goal and design principle.
 
 ### Hooks
 
-- `PreToolUse` hook type — used for file protection
-- `PostToolUse` hook type — used for auto-linting
+- `hooks/hooks.json` for plugin hook configuration — a supported location;
+  plugin hooks merge with user and project hooks when the plugin is enabled
+- `${CLAUDE_PLUGIN_ROOT}` placeholder in hook commands
+- `type: "command"` hooks — the only type this repo uses, and the only one
+  available on every event it wires (see SessionStart below)
+- Hook scripts receive the event payload as JSON on stdin
 - `Edit|Write` matcher syntax
-- `hooks/hooks.json` for plugin hook configuration
-- Hook scripts receive tool input as JSON on stdin
+
+Every event this repo ships a hook for, with the mechanism it depends on:
+
+| Event              | Hook                                          | Depends on                         |
+| ------------------ | --------------------------------------------- | ---------------------------------- |
+| `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                |
+| `PostToolUse`      | `post-edit-lint.py`                           | side effect only                   |
+| `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `additionalContext`                |
+| `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block               |
+| `SubagentStart`    | `snapshot-subagent-start.py`                  | side effect only; **cannot block** |
+| `SubagentStop`     | `verify-subagent-evidence.py`                 | top-level `decision: "block"`      |
+| `SessionStart`     | `inject-skill-router.py`, `inject_persona.py` | `additionalContext`                |
+| `ConfigChange`     | `audit-config-change.py`                      | `systemMessage`; side effect only  |
+
+Constraints that shape the hooks above, and would break them if they changed:
+
+- **`SessionStart` supports only `command` and `mcp_tool`** — not `prompt` or
+  `agent` — and cannot block. It also **re-runs on `--resume`/`--continue`** and
+  on `--fork-session`, so a SessionStart hook must be idempotent and fast.
+- **`SubagentStart` cannot block**, which is why the snapshot hook is
+  side-effect-only and always exits 0.
+- **`ConfigChange` cannot block `policy_settings`** (admin-controlled), and
+  provides no content diff — the audit hook records that a change happened, not
+  what changed.
+- **`PostToolUse` cannot prevent execution**; it only reacts to completion.
 
 ### Skills
 
@@ -37,7 +64,15 @@ the overall multi-platform goal and design principle.
 - `settings.json` at plugin root (non-hook settings)
 - Hook arrays in hooks.json with `matcher` and `hooks` fields
 
-**Last Verified:** 2026-03-21 — Claude Code with Opus 4.6
+**Last Verified:** 2026-07-23 — hook events, mechanisms, and constraints checked
+against the published hooks reference. The previous entry (2026-03-21) predated
+six of the eight events this repo now ships, so it documented `PreToolUse` and
+`PostToolUse` alone.
+
+Not re-verified in this pass, and still carried from the original entry: skill
+auto-discovery, `references/` loading, the agent-tool list, and plugin-root
+`settings.json`. They are in daily use and evidently work; they have not been
+checked against a current spec.
 
 ## Codex
 
