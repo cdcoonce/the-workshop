@@ -11,7 +11,44 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from context_paths_defaults import COMMON_NOTE_PATHS as DEFAULT_COMMON_NOTE_PATHS
+from context_paths_defaults import CONTEXT_NOTE_PATHS as DEFAULT_CONTEXT_NOTE_PATHS
 from vault_utils import read_vault_context
+
+try:  # Scaffold-owned config; absent in a vault vendored before it existed.
+    from context_paths import COMMON_NOTE_PATHS, CONTEXT_NOTE_PATHS
+except ImportError:
+    COMMON_NOTE_PATHS = DEFAULT_COMMON_NOTE_PATHS
+    CONTEXT_NOTE_PATHS = DEFAULT_CONTEXT_NOTE_PATHS
+
+# ---------------------------------------------------------------------------
+# Note paths
+# ---------------------------------------------------------------------------
+# Vault-relative paths for the digest-source notes, keyed by name. Sourced
+# from the scaffold-owned context_paths module (owner-editable per vault)
+# rather than hardcoded here — the loader mechanics stay fixed, only the
+# note locations they read are configurable. context_paths_defaults ships
+# the same names as the managed fallback, so a vault vendored before the
+# config existed keeps the digest it had.
+
+
+def _flatten_note_paths(
+    common: dict[str, str], per_context: dict[str, dict[str, str]]
+) -> dict[str, str]:
+    """Flatten a common section and the per-context sections into one lookup."""
+    paths = dict(common)
+    for section in per_context.values():
+        paths.update(section)
+    return paths
+
+
+# Configured paths win; a name the config drops keeps its shipped default, so
+# deleting a section degrades to a note that isn't there rather than a KeyError.
+NOTE_PATHS = {
+    **_flatten_note_paths(DEFAULT_COMMON_NOTE_PATHS, DEFAULT_CONTEXT_NOTE_PATHS),
+    **_flatten_note_paths(COMMON_NOTE_PATHS, CONTEXT_NOTE_PATHS),
+}
+
 
 # ---------------------------------------------------------------------------
 # SessionStart context budget
@@ -63,6 +100,19 @@ def _read_file_content(path: Path) -> str:
     except (OSError, UnicodeDecodeError):
         pass
     return ""
+
+
+def _note_path(name: str) -> str:
+    """Configured vault-relative path for a digest note ("" when unmapped)."""
+    return NOTE_PATHS.get(name, "")
+
+
+def _read_note(vault_path: Path, name: str) -> str:
+    """Read a configured digest note, empty when unmapped or unreadable."""
+    relative = _note_path(name)
+    if not relative:
+        return ""
+    return _read_file_content(vault_path / relative)
 
 
 def _extract_section_items(content: str, section_header: str) -> list[str]:
@@ -268,14 +318,14 @@ def load_context(vault_path: str | Path) -> SessionContext:
     machine = _read_vault_context(vault_path)
 
     # Load North Star
-    north_star = _read_file_content(vault_path / "brain" / "North Star.md")
+    north_star = _read_note(vault_path, "north_star")
 
     # Load Quick Reference for fast decoding
-    quick_reference = _read_file_content(vault_path / "brain" / "Quick-Reference.md")
+    quick_reference = _read_note(vault_path, "quick_reference")
 
     # Scan indexes for active items
-    work_index = _read_file_content(vault_path / "work" / "Index.md")
-    personal_index = _read_file_content(vault_path / "personal" / "Index.md")
+    work_index = _read_note(vault_path, "work_index")
+    personal_index = _read_note(vault_path, "personal_index")
 
     active_work = _extract_section_items(work_index, "Active Projects")
     active_personal = (
@@ -290,11 +340,16 @@ def load_context(vault_path: str | Path) -> SessionContext:
     # Build summary
     summary_lines = [f"Machine context: {machine}"]
 
-    _append_bucket(summary_lines, "Active work projects", active_work, "work/Index.md")
+    _append_bucket(
+        summary_lines, "Active work projects", active_work, _note_path("work_index")
+    )
 
     if machine in ("personal", "unknown"):
         _append_bucket(
-            summary_lines, "Active personal items", active_personal, "personal/Index.md"
+            summary_lines,
+            "Active personal items",
+            active_personal,
+            _note_path("personal_index"),
         )
 
     if recent_git:
