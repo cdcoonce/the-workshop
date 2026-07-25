@@ -8,6 +8,9 @@ _spec = importlib.util.spec_from_file_location(
 gg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gg)
 
+import vault_scope  # noqa: E402 — sys.path patched by exec_module above
+import vault_utils  # noqa: E402
+
 
 def _git(repo, *args):
     _sp.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
@@ -857,3 +860,47 @@ def test_write_queue_unprofiled_suppressed_when_dismissed(tmp_path):
                    unprofiled=["Jane Doe"], dismissed={"unprofiled|jane doe"})
     out = (repo / ".brain" / "gardener-personal.md").read_text(encoding="utf-8")
     assert "Jane Doe" not in out  # suppressed
+
+
+# ---------------------------------------------------------------------------
+# Lane B model sourcing — scaffold-owned vault_scope.BATCH_MODEL (#431)
+# ---------------------------------------------------------------------------
+
+_LANE_B_STDOUT = '{"missing_links": [], "orphans": [], "index_drift": []}'
+
+
+def _capture_claude_argv(monkeypatch, captured):
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        return _sp.CompletedProcess(argv, 0, stdout=_LANE_B_STDOUT, stderr="")
+
+    monkeypatch.setattr(gg.subprocess, "run", fake_run)
+
+
+def test_run_lane_b_headless_passes_model_to_claude_argv(monkeypatch):
+    captured = {}
+    _capture_claude_argv(monkeypatch, captured)
+    gg.run_lane_b_headless("prompt text", "claude-opus-5")
+    assert captured["argv"] == ["claude", "-p", "--model", "claude-opus-5"]
+
+
+def test_run_lane_b_uses_custom_scaffold_model(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    note = _src_note(repo, "some note content long enough to send")
+    monkeypatch.setattr(vault_scope, "BATCH_MODEL", "claude-opus-5")
+
+    captured = {}
+    _capture_claude_argv(monkeypatch, captured)
+    gg.run_lane_b([note], repo)
+    assert captured["argv"] == ["claude", "-p", "--model", "claude-opus-5"]
+
+
+def test_run_lane_b_falls_back_when_scaffold_value_absent(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    note = _src_note(repo, "some note content long enough to send")
+    monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+
+    captured = {}
+    _capture_claude_argv(monkeypatch, captured)
+    gg.run_lane_b([note], repo)
+    assert captured["argv"] == ["claude", "-p", "--model", vault_utils.DEFAULT_BATCH_MODEL]

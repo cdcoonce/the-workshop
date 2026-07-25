@@ -9,11 +9,14 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import vault_scope
 import vault_utils
 from vault_utils import (
+    DEFAULT_BATCH_MODEL,
     find_vault_root,
     find_vault_root_from_env,
     iso_week_string,
+    read_batch_model,
     read_vault_context,
 )
 
@@ -147,3 +150,31 @@ class TestReadVaultContext:
 
     def test_explicit_default_override(self, tmp_path):
         assert read_vault_context(tmp_path, default="personal") == "personal"
+
+
+# ---------------------------------------------------------------------------
+# read_batch_model — scaffold-owned vault_scope.BATCH_MODEL (#431)
+# ---------------------------------------------------------------------------
+class TestReadBatchModel:
+    def test_reads_scaffold_value(self):
+        assert read_batch_model() == vault_scope.BATCH_MODEL
+
+    def test_reads_custom_model(self, monkeypatch):
+        monkeypatch.setattr(vault_scope, "BATCH_MODEL", "claude-opus-5")
+        assert read_batch_model() == "claude-opus-5"
+
+    def test_absent_value_falls_back_to_default(self, monkeypatch):
+        monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+        assert read_batch_model() == DEFAULT_BATCH_MODEL
+
+    def test_non_string_value_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setattr(vault_scope, "BATCH_MODEL", 5)
+        assert read_batch_model() == DEFAULT_BATCH_MODEL
+
+    def test_empty_value_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setattr(vault_scope, "BATCH_MODEL", "")
+        assert read_batch_model() == DEFAULT_BATCH_MODEL
+
+    def test_explicit_default_override(self, monkeypatch):
+        monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+        assert read_batch_model(default="claude-sonnet-5") == "claude-sonnet-5"

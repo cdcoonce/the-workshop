@@ -3,7 +3,7 @@
 
 Spawned detached by ``notebook-update.py`` on every Stop event. Reads the
 latest turn from the session transcript, merges it into the live session
-notebook (``.brain/notebook-<context>.md``) via a cheap headless Haiku call,
+notebook (``.brain/notebook-<context>.md``) via a cheap headless batch-model call,
 and writes the result back.
 
 Design notes:
@@ -28,9 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from notebook_core import build_prompt, latest_turn
-from vault_utils import read_vault_context
+from vault_utils import read_batch_model, read_vault_context
 
-DISTILL_MODEL = "claude-haiku-4-5"
 MIN_TURN_CHARS = 200           # debounce: skip trivial turns
 CLAUDE_TIMEOUT = 90            # seconds for the headless call
 STALE_HOURS = 6               # reap per-session notebooks older than this
@@ -92,11 +91,11 @@ def read_context(vault_root: Path) -> str:
     return read_vault_context(vault_root)
 
 
-def distill(prompt: str) -> str | None:
-    """Run headless Haiku from a temp cwd; return its text output or None."""
+def distill(prompt: str, model: str) -> str | None:
+    """Run headless *model* from a temp cwd; return its text output or None."""
     try:
         result = subprocess.run(
-            ["claude", "-p", "--model", DISTILL_MODEL],
+            ["claude", "-p", "--model", model],
             input=prompt,
             capture_output=True,
             text=True,
@@ -140,7 +139,7 @@ def main() -> int:
         )
 
     prompt = build_prompt(current, user_text, assistant_text)
-    updated = distill(prompt)
+    updated = distill(prompt, read_batch_model())
     if not updated:
         log(vault_root, "distill produced no output; notebook left unchanged")
         return 0
@@ -151,7 +150,7 @@ def main() -> int:
         f"_Live session state · updated {stamp} · session {sid}_"
     )
     body = updated
-    # If Haiku echoed its own header, strip it so we control the stamp line.
+    # If the model echoed its own header, strip it so we control the stamp line.
     if body.lstrip().startswith("# Session Notebook"):
         lines = body.splitlines()
         # drop the model's title + its stamp line (first two non-empty lines)

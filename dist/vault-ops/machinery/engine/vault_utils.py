@@ -14,6 +14,10 @@ from pathlib import Path
 WIKILINK_RE = re.compile(r"\[\[.+?\]\]")
 WIKILINK_CAPTURE_RE = re.compile(r"\[\[(.+?)\]\]")
 
+# Fallback used only when the scaffold-owned config predates ``BATCH_MODEL``
+# (a vault rendered before #431 has no such attribute); see read_batch_model.
+DEFAULT_BATCH_MODEL = "claude-haiku-4-5"
+
 
 def iso_week_string(d: date) -> str:
     """Format a date as an ISO week string (``YYYY-W##``).
@@ -89,3 +93,25 @@ def read_vault_context(vault_root: Path, default: str = "unknown") -> str:
     except OSError:
         return default
     return val if val in ("work", "personal") else default
+
+
+def read_batch_model(default: str = DEFAULT_BATCH_MODEL) -> str:
+    """Read ``BATCH_MODEL`` from the scaffold-owned ``vault_scope`` config.
+
+    The canonical single reader for the headless batch model: notebook-distill
+    and graph_gardener Lane B both resolve their ``claude -p --model`` argument
+    here, so a deprecation or tiering change is a scaffold edit rather than an
+    engine release. ``vault_scope.py`` is scaffold-tier — init renders it once
+    and upgrade never touches it — which is why the id lives there and not in
+    the managed engine payload.
+
+    A vault whose ``vault_scope.py`` was rendered before the value existed (or
+    a context where the module is not importable) falls back to *default*, so
+    an absent config preserves the previous behaviour exactly.
+    """
+    try:
+        import vault_scope
+    except ImportError:
+        return default
+    value = getattr(vault_scope, "BATCH_MODEL", None)
+    return value if isinstance(value, str) and value else default
