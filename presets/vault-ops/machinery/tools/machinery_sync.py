@@ -41,11 +41,32 @@ built dist tree); ``ref`` is the workshop checkout's git sha when resolvable,
 else null — this tool may shell out to git for that one value but degrades
 gracefully without it.
 
-Scope: this is W3 of the vault-machinery consolidation — lockfile format
-plus adopt/check/dumb-upgrade. The scaffolding interview, an ``init`` verb
-for fresh vaults, and an ``upstream`` comparison verb are deliberately
-deferred to the later wiring-generator (W4) and vault-init/upgrade-skill
-(W5) chunks; this tool intentionally knows nothing about them.
+Vendor-map schemas
+------------------
+Schema 1 (W3): ``kind: "file"`` entries with machinery-relative sources.
+Schema 2 (W4) adds two constructs, and this reader accepts both schemas:
+
+- ``source_root: "preset"`` on a file entry resolves the source against the
+  machinery dir's PARENT (the preset root) — how the sibling ``skills/``
+  trees are vendored. Containment is enforced against that root.
+- ``kind: "json-key"`` vendors ONE key of a JSON file (the vault's
+  ``.claude/settings.json`` ``hooks`` key) instead of the whole file.
+  Comparison is semantic: the canonical JSON (sorted keys, no whitespace)
+  of the live key against the rendered source value. Adopt records the
+  canonical hash (plus ``kind``/``key``) in the lock entry; upgrade rewrites
+  only that key, preserving every sibling key, and reformats the file with
+  ``indent=2``. A target file that is not valid JSON refuses even under
+  ``--force`` — a key rewrite cannot preserve siblings it cannot parse.
+
+A stale schema-1 reader hard-errors on a schema-2 map ("schema 2 is not
+supported") — deliberate: a stale vendored tool must refuse a newer map
+loudly rather than half-apply it.
+
+Scope: W3 shipped lockfile format plus adopt/check/dumb-upgrade; W4 adds the
+schema-2 constructs above. The scaffolding interview, an ``init`` verb for
+fresh vaults, and an ``upstream`` comparison verb remain deliberately
+deferred to the vault-init/upgrade-skill (W5) chunk; this tool intentionally
+knows nothing about them.
 
 Exit codes: 0 = success (or an executable dry-run plan); 1 = refusal
 (adopt diff, upgrade over a local edit); 2 = environment/config error
@@ -87,6 +108,43 @@ def _sha256_file(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
 
 
+def canonical_json_sha256(value) -> str:
+    """Content hash of a JSON value, independent of formatting/key order."""
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return _sha256_bytes(canonical.encode("utf-8"))
+
+
+# Sentinel distinguishing "key absent / file unreadable" from any JSON value
+# (None is a legitimate JSON value).
+_ABSENT = object()
+
+
+def _read_json_key(path: Path, key: str):
+    """The value of ``key`` in the JSON file at ``path``.
+
+    Returns
+    -------
+    Any
+        The key's value; ``_ABSENT`` when the file is missing, the document
+        is not a JSON object, or the key is not present.
+
+    Raises
+    ------
+    ValueError
+        When the file exists but is not valid JSON — callers treat that as
+        an unresolvable local state, never as absence.
+    """
+    if not path.is_file():
+        return _ABSENT
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON: {exc}")
+    if not isinstance(document, dict) or key not in document:
+        return _ABSENT
+    return document[key]
+
+
 def _resolve_inside(root: Path, relative: str, *, label: str) -> Path:
     """Resolve ``relative`` against ``root`` and require containment.
 
@@ -121,24 +179,78 @@ def _resolve_inside(root: Path, relative: str, *, label: str) -> Path:
     return resolved
 
 
-class VendorMap:
-    """The validated managed set: (source relpath, target relpath) pairs."""
+class MapEntry:
+    """One validated vendor-map entry."""
 
-    def __init__(self, source_dir: Path, entries: list[dict]):
+    __slots__ = ("kind", "source", "target", "source_root", "key")
+
+    def __init__(
+        self,
+        kind: str,
+        source: str,
+        target: str,
+        source_root: str,
+        key: str | None,
+    ):
+        self.kind = kind
+        self.source = source
+        self.target = target
+        self.source_root = source_root
+        self.key = key
+
+
+class VendorMap:
+    """The validated managed set of map entries."""
+
+    def __init__(self, source_dir: Path, entries: list[dict], schema: int):
         self.source_dir = source_dir
-        self.entries: list[tuple[str, str]] = []
+        self.schema = schema
+        self.entries: list[MapEntry] = []
+        # Schema 1 readers only understood machinery-relative file entries;
+        # a schema-1 map smuggling schema-2 constructs is a hard error rather
+        # than a silent skip, so a mislabeled map is never half-applied.
+        allowed_kinds = ("file",) if schema == 1 else ("file", "json-key")
+        allowed_roots = ("machinery",) if schema == 1 else ("machinery", "preset")
+        seen_targets: set[str] = set()
         for entry in entries:
-            if entry.get("kind") != "file":
-                # Forward compatibility: schema 1 readers only understand
-                # "file" entries; anything else is a hard error rather than a
-                # silent skip, so a future-kind map is not half-applied.
+            kind = entry.get("kind")
+            if kind not in allowed_kinds:
                 raise VendorMapError(
-                    f"unsupported vendor-map entry kind: {entry.get('kind')!r}"
+                    f"unsupported vendor-map entry kind for schema "
+                    f"{schema}: {kind!r}"
+                )
+            source_root = entry.get("source_root", "machinery")
+            if source_root not in allowed_roots:
+                raise VendorMapError(
+                    f"unsupported vendor-map source_root for schema "
+                    f"{schema}: {source_root!r}"
+                )
+            key = entry.get("key")
+            if kind == "json-key" and not key:
+                raise VendorMapError(
+                    f"json-key vendor-map entry needs a 'key': {entry}"
                 )
             source_rel = entry.get("source", "")
             target_rel = entry.get("target", "")
-            _resolve_inside(source_dir, source_rel, label="source")
-            self.entries.append((source_rel, target_rel))
+            _resolve_inside(
+                self._root_dir(source_root), source_rel, label="source"
+            )
+            if target_rel in seen_targets:
+                raise VendorMapError(
+                    f"duplicate vendor-map target: {target_rel!r}"
+                )
+            seen_targets.add(target_rel)
+            self.entries.append(
+                MapEntry(kind, source_rel, target_rel, source_root, key)
+            )
+
+    def _root_dir(self, source_root: str) -> Path:
+        # "preset" sources live beside the machinery dir (the sibling
+        # skills/ tree) in both a source checkout and a built dist tree.
+        return self.source_dir.parent if source_root == "preset" else self.source_dir
+
+    def source_path(self, entry: MapEntry) -> Path:
+        return self._root_dir(entry.source_root) / entry.source
 
     @classmethod
     def load(cls, source_dir: Path) -> "VendorMap":
@@ -149,12 +261,13 @@ class VendorMap:
             data = json.loads(map_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise VendorMapError(f"vendor map at {map_path} is not valid JSON: {exc}")
-        if data.get("schema") != 1:
+        schema = data.get("schema")
+        if schema not in (1, 2):
             raise VendorMapError(
-                f"vendor map schema {data.get('schema')!r} is not supported "
-                "(this reader understands schema 1)"
+                f"vendor map schema {schema!r} is not supported "
+                "(this reader understands schemas 1 and 2)"
             )
-        return cls(source_dir, data.get("entries", []))
+        return cls(source_dir, data.get("entries", []), schema)
 
 
 class TargetWriter:
@@ -169,9 +282,9 @@ class TargetWriter:
     def __init__(self, target_root: Path, vendor_map: VendorMap):
         self._root = target_root
         self._allowed: dict[str, Path] = {}
-        for _, target_rel in vendor_map.entries:
-            self._allowed[target_rel] = _resolve_inside(
-                target_root, target_rel, label="target"
+        for entry in vendor_map.entries:
+            self._allowed[entry.target] = _resolve_inside(
+                target_root, entry.target, label="target"
             )
         self._allowed[LOCKFILE_RELPATH] = _resolve_inside(
             target_root, LOCKFILE_RELPATH, label="lockfile"
@@ -267,26 +380,59 @@ def _write_lock(writer: TargetWriter, lock: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _lock_entry_for_source(vendor_map: VendorMap, entry: MapEntry) -> dict:
+    """The lock record a target synced to ``entry``'s source would carry."""
+    if entry.kind == "json-key":
+        source_value = json.loads(
+            vendor_map.source_path(entry).read_text(encoding="utf-8")
+        )
+        return {
+            "tier": "managed",
+            "kind": "json-key",
+            "key": entry.key,
+            "sha256": canonical_json_sha256(source_value),
+        }
+    return {
+        "tier": "managed",
+        "sha256": _sha256_file(vendor_map.source_path(entry)),
+    }
+
+
+def _adopt_status(vendor_map: VendorMap, entry: MapEntry, target: Path) -> str:
+    candidate = target / entry.target
+    if entry.kind == "json-key":
+        source_value = json.loads(
+            vendor_map.source_path(entry).read_text(encoding="utf-8")
+        )
+        try:
+            live_value = _read_json_key(candidate, entry.key)
+        except ValueError:
+            return ADOPT_DIFFERS
+        if live_value is _ABSENT:
+            return ADOPT_MISSING
+        if canonical_json_sha256(live_value) == canonical_json_sha256(
+            source_value
+        ):
+            return ADOPT_IDENTICAL
+        return ADOPT_DIFFERS
+    if not candidate.is_file():
+        return ADOPT_MISSING
+    if candidate.read_bytes() == vendor_map.source_path(entry).read_bytes():
+        return ADOPT_IDENTICAL
+    return ADOPT_DIFFERS
+
+
 def run_adopt(target: Path, source_dir: Path, *, as_json: bool) -> int:
     vendor_map = VendorMap.load(source_dir)
     writer = TargetWriter(target, vendor_map)
 
     statuses: list[dict] = []
     lock_files: dict[str, dict] = {}
-    for source_rel, target_rel in vendor_map.entries:
-        source_bytes = (source_dir / source_rel).read_bytes()
-        candidate = target / target_rel
-        if not candidate.is_file():
-            status = ADOPT_MISSING
-        elif candidate.read_bytes() == source_bytes:
-            status = ADOPT_IDENTICAL
-            lock_files[target_rel] = {
-                "tier": "managed",
-                "sha256": _sha256_bytes(source_bytes),
-            }
-        else:
-            status = ADOPT_DIFFERS
-        statuses.append({"target": target_rel, "status": status})
+    for entry in vendor_map.entries:
+        status = _adopt_status(vendor_map, entry, target)
+        if status == ADOPT_IDENTICAL:
+            lock_files[entry.target] = _lock_entry_for_source(vendor_map, entry)
+        statuses.append({"target": entry.target, "status": status})
 
     ok = all(record["status"] == ADOPT_IDENTICAL for record in statuses)
     if ok:
@@ -326,6 +472,72 @@ def run_adopt(target: Path, source_dir: Path, *, as_json: bool) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _plan_file_entry(
+    vendor_map: VendorMap,
+    entry: MapEntry,
+    target: Path,
+    locked: dict | None,
+    wants_keep: bool,
+    force: bool,
+) -> tuple[str, str]:
+    source_bytes = vendor_map.source_path(entry).read_bytes()
+    candidate = target / entry.target
+    if candidate.is_file() and candidate.read_bytes() == source_bytes:
+        return ACTION_SKIP, "already matches source"
+    if not candidate.is_file():
+        return ACTION_COPY, "missing on disk; restoring"
+    if wants_keep:
+        # Checked before the lock-hash comparison: a kept file's lock
+        # entry records its LOCAL sha, so "unmodified since lock" would
+        # otherwise reclassify an intact kept edit as safely copyable.
+        return ACTION_KEEP_LOCAL, "local edit kept"
+    current_sha = _sha256_file(candidate)
+    locked_sha = locked.get("sha256") if locked else None
+    if current_sha == locked_sha:
+        return ACTION_COPY, "unmodified since lock"
+    if force:
+        return ACTION_COPY, "local edit overwritten (--force)"
+    if locked is None:
+        return ACTION_REFUSE, "exists but is not in the lock"
+    return ACTION_REFUSE, "hash differs from lock"
+
+
+def _plan_json_key_entry(
+    vendor_map: VendorMap,
+    entry: MapEntry,
+    target: Path,
+    locked: dict | None,
+    wants_keep: bool,
+    force: bool,
+) -> tuple[str, str]:
+    source_value = json.loads(
+        vendor_map.source_path(entry).read_text(encoding="utf-8")
+    )
+    try:
+        live_value = _read_json_key(target / entry.target, entry.key)
+    except ValueError:
+        # Not downgraded by --force: rewriting one key cannot preserve
+        # sibling keys the file no longer parses well enough to read.
+        return ACTION_REFUSE, "target is not valid JSON"
+    if live_value is not _ABSENT and canonical_json_sha256(
+        live_value
+    ) == canonical_json_sha256(source_value):
+        return ACTION_SKIP, "already matches source"
+    if live_value is _ABSENT:
+        return ACTION_COPY, "key missing on disk; restoring"
+    if wants_keep:
+        return ACTION_KEEP_LOCAL, "local edit kept"
+    current_sha = canonical_json_sha256(live_value)
+    locked_sha = locked.get("sha256") if locked else None
+    if current_sha == locked_sha:
+        return ACTION_COPY, "unmodified since lock"
+    if force:
+        return ACTION_COPY, "local edit overwritten (--force)"
+    if locked is None:
+        return ACTION_REFUSE, "exists but is not in the lock"
+    return ACTION_REFUSE, "hash differs from lock"
+
+
 def _plan_upgrade(
     vendor_map: VendorMap,
     target: Path,
@@ -335,49 +547,74 @@ def _plan_upgrade(
 ) -> list[dict]:
     """Per-file planned actions for a dumb re-vendor.
 
-    Decision order per managed file: identical to source -> skip; missing on
+    Decision order per managed entry: identical to source -> skip; missing on
     disk -> copy (restore); unmodified since lock -> copy; locally edited ->
     keep-local (flagged now or recorded in the lock) or REFUSE, with
-    ``--force`` downgrading every refusal to a copy.
+    ``--force`` downgrading every refusal to a copy — except a json-key
+    target that is no longer valid JSON, which always refuses.
     """
     locked_files: dict[str, dict] = lock["files"]
     plan: list[dict] = []
-    for source_rel, target_rel in vendor_map.entries:
-        source_bytes = (vendor_map.source_dir / source_rel).read_bytes()
-        candidate = target / target_rel
-        entry = locked_files.get(target_rel)
-        sticky_keep = bool(entry.get("keep_local")) if entry else False
-        wants_keep = target_rel in keep_local or sticky_keep
-
-        if candidate.is_file() and candidate.read_bytes() == source_bytes:
-            action, reason = ACTION_SKIP, "already matches source"
-        elif not candidate.is_file():
-            action, reason = ACTION_COPY, "missing on disk; restoring"
-        elif wants_keep:
-            # Checked before the lock-hash comparison: a kept file's lock
-            # entry records its LOCAL sha, so "unmodified since lock" would
-            # otherwise reclassify an intact kept edit as safely copyable.
-            action, reason = ACTION_KEEP_LOCAL, "local edit kept"
-        else:
-            current_sha = _sha256_file(candidate)
-            locked_sha = entry.get("sha256") if entry else None
-            if current_sha == locked_sha:
-                action, reason = ACTION_COPY, "unmodified since lock"
-            elif force:
-                action, reason = ACTION_COPY, "local edit overwritten (--force)"
-            elif entry is None:
-                action, reason = ACTION_REFUSE, "exists but is not in the lock"
-            else:
-                action, reason = ACTION_REFUSE, "hash differs from lock"
+    for entry in vendor_map.entries:
+        locked = locked_files.get(entry.target)
+        sticky_keep = bool(locked.get("keep_local")) if locked else False
+        wants_keep = entry.target in keep_local or sticky_keep
+        planner = (
+            _plan_json_key_entry if entry.kind == "json-key" else _plan_file_entry
+        )
+        action, reason = planner(
+            vendor_map, entry, target, locked, wants_keep, force
+        )
         plan.append(
             {
-                "target": target_rel,
-                "source": source_rel,
+                "target": entry.target,
+                "source": entry.source,
                 "action": action,
                 "reason": reason,
             }
         )
     return plan
+
+
+def _apply_json_key_copy(
+    vendor_map: VendorMap, entry: MapEntry, target: Path, writer: TargetWriter
+) -> None:
+    """Rewrite only ``entry.key`` in the target JSON file.
+
+    Sibling keys and their order are preserved; the file is reformatted with
+    ``indent=2`` and a trailing newline. A missing or non-object target
+    becomes ``{<key>: <value>}``.
+    """
+    source_value = json.loads(
+        vendor_map.source_path(entry).read_text(encoding="utf-8")
+    )
+    candidate = target / entry.target
+    document = {}
+    if candidate.is_file():
+        loaded = json.loads(candidate.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            document = loaded
+    document[entry.key] = source_value
+    payload = (json.dumps(document, indent=2) + "\n").encode("utf-8")
+    writer.write_bytes(entry.target, payload)
+
+
+def _keep_local_lock_entry(entry: MapEntry, target: Path) -> dict:
+    """Lock record for a kept local edit: its LOCAL content hash, sticky."""
+    if entry.kind == "json-key":
+        live_value = _read_json_key(target / entry.target, entry.key)
+        return {
+            "tier": "managed",
+            "kind": "json-key",
+            "key": entry.key,
+            "sha256": canonical_json_sha256(live_value),
+            "keep_local": True,
+        }
+    return {
+        "tier": "managed",
+        "sha256": _sha256_file(target / entry.target),
+        "keep_local": True,
+    }
 
 
 def run_upgrade(
@@ -409,23 +646,21 @@ def run_upgrade(
     applied = False
 
     if apply and not refusals:
+        entries_by_target = {entry.target: entry for entry in vendor_map.entries}
         lock_files: dict[str, dict] = {}
         for record in plan:
-            target_rel = record["target"]
+            entry = entries_by_target[record["target"]]
             if record["action"] == ACTION_KEEP_LOCAL:
-                lock_files[target_rel] = {
-                    "tier": "managed",
-                    "sha256": _sha256_file(target / target_rel),
-                    "keep_local": True,
-                }
+                lock_files[entry.target] = _keep_local_lock_entry(entry, target)
                 continue
-            source_bytes = (source_dir / record["source"]).read_bytes()
             if record["action"] == ACTION_COPY:
-                writer.write_bytes(target_rel, source_bytes)
-            lock_files[target_rel] = {
-                "tier": "managed",
-                "sha256": _sha256_bytes(source_bytes),
-            }
+                if entry.kind == "json-key":
+                    _apply_json_key_copy(vendor_map, entry, target, writer)
+                else:
+                    writer.write_bytes(
+                        entry.target, vendor_map.source_path(entry).read_bytes()
+                    )
+            lock_files[entry.target] = _lock_entry_for_source(vendor_map, entry)
         _write_lock(writer, _build_lockfile(source_dir, lock_files))
         applied = True
 

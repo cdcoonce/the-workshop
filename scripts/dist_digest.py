@@ -18,6 +18,12 @@ GENERATED_ROOTS = (
     Path("dist"),
     Path(".claude-plugin/marketplace.json"),
     Path(".agents/plugins/marketplace.json"),
+    # Committed-generated machinery output rebuilt in the SOURCE tree by
+    # build_preset (W4): the rendered wiring adapters and the vendor map.
+    # Digesting them here makes verify-generated catch a hand-edited or
+    # stale copy the same way it catches a stale dist/.
+    Path("presets/vault-ops/machinery/rendered"),
+    Path("presets/vault-ops/machinery/vendor-map.json"),
 )
 
 

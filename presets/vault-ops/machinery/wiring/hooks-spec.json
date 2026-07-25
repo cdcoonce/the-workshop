@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "event": "SessionStart",
+      "script": "session-start.py",
+      "args": [],
+      "timeout_ms": 30000
+    },
+    {
+      "event": "Stop",
+      "script": "notebook-update.py",
+      "args": [],
+      "timeout_ms": 10000
+    },
+    {
+      "event": "Stop",
+      "script": "graph_gardener.py",
+      "args": [],
+      "timeout_ms": 30000
+    },
+    {
+      "event": "Stop",
+      "script": "session-stop.py",
+      "args": ["--explicit-sync"],
+      "timeout_ms": 60000
+    },
+    {
+      "event": "UserPromptSubmit",
+      "script": "classify-message.py",
+      "args": [],
+      "timeout_ms": 10000
+    },
+    {
+      "event": "PreCompact",
+      "script": "pre-compact.py",
+      "args": [],
+      "timeout_ms": 30000
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "file-write",
+      "script": "validate-write.py",
+      "args": [],
+      "timeout_ms": 15000
+    }
+  ]
+}
