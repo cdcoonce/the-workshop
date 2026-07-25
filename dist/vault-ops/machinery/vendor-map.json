@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "kind": "file",
+      "source": "engine/budget_burn.py",
+      "target": ".claude/scripts/budget_burn.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/classify-message.py",
+      "target": ".claude/scripts/classify-message.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/content_classifier.py",
+      "target": ".claude/scripts/content_classifier.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/context_loader.py",
+      "target": ".claude/scripts/context_loader.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/frontmatter_engine.py",
+      "target": ".claude/scripts/frontmatter_engine.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/glossary_manager.py",
+      "target": ".claude/scripts/glossary_manager.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/graph_cli.py",
+      "target": ".claude/scripts/graph_cli.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/graph_gardener.py",
+      "target": ".claude/scripts/graph_gardener.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/note_lifecycle.py",
+      "target": ".claude/scripts/note_lifecycle.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/notebook-distill.py",
+      "target": ".claude/scripts/notebook-distill.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/notebook-update.py",
+      "target": ".claude/scripts/notebook-update.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/notebook_core.py",
+      "target": ".claude/scripts/notebook_core.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/pre-compact.py",
+      "target": ".claude/scripts/pre-compact.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/queries/vault_query.py",
+      "target": ".claude/scripts/queries/vault_query.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/run-hook.sh",
+      "target": ".claude/scripts/run-hook.sh"
+    },
+    {
+      "kind": "file",
+      "source": "engine/semantic_index.py",
+      "target": ".claude/scripts/semantic_index.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/session-start.py",
+      "target": ".claude/scripts/session-start.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/session-stop.py",
+      "target": ".claude/scripts/session-stop.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/session_terms.py",
+      "target": ".claude/scripts/session_terms.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/sync_manager.py",
+      "target": ".claude/scripts/sync_manager.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/task_manager.py",
+      "target": ".claude/scripts/task_manager.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/term_tracker.py",
+      "target": ".claude/scripts/term_tracker.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/transcript_backup.py",
+      "target": ".claude/scripts/transcript_backup.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/validate-write.py",
+      "target": ".claude/scripts/validate-write.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/vault_audit.py",
+      "target": ".claude/scripts/vault_audit.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/vault_scope.py",
+      "target": ".claude/scripts/vault_scope.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/vault_utils.py",
+      "target": ".claude/scripts/vault_utils.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/work_task_manager.py",
+      "target": ".claude/scripts/work_task_manager.py"
+    }
+  ]
+}
