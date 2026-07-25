@@ -63,11 +63,24 @@ Constraints that shape the hooks above, and would break them if they changed:
 
 - `settings.json` at plugin root (non-hook settings)
 - Hook arrays in hooks.json with `matcher` and `hooks` fields
+- `enabledPlugins` keys observed in the wild as `<plugin>@claude-workflow` —
+  the marketplace identity survived the repo's rebrand to the-workshop, so any
+  per-project disable must use the `@claude-workflow` suffix until the
+  marketplace is re-added under the new name
 
-**Last Verified:** 2026-07-23 — hook events, mechanisms, and constraints checked
-against the published hooks reference. The previous entry (2026-03-21) predated
-six of the eight events this repo now ships, so it documented `PreToolUse` and
-`PostToolUse` alone.
+### Headless (`claude -p`)
+
+Verified experimentally 2026-07-25 (scrubbed env + `CLAUDE_CODE_OAUTH_TOKEN`,
+the same invocation shape the vault's batch runs use):
+
+- Project-scope `.claude/skills/*/SKILL.md` **resolves** as a slash command
+  under `-p`.
+- Project-scope `.claude/commands/*.md` **resolves** under `-p`.
+- **Plugin skills do not load under `-p` at all.** Probed with a plugin-only
+  skill both outside and _inside_ a project where that plugin's skills are
+  active interactively; both return `Unknown command`. Consequence: any skill
+  a headless workflow invokes must exist project-scope in the target repo —
+  an installed plugin is not a carrier for headless automation.
 
 Not re-verified in this pass, and still carried from the original entry: skill
 auto-discovery, `references/` loading, the agent-tool list, and plugin-root
@@ -87,18 +100,44 @@ checked against a current spec.
 
 ### Hooks
 
+Verified experimentally 2026-07-25 on codex-cli 0.144.6 (`codex exec`, a
+scratch repo with an instrumented capture hook):
+
+- **Discovery: repo-level flat `.codex/hooks.json` in Claude-style schema is
+  read and executed.** `SessionStart`, `PostToolUse`, and `Stop` all fired.
+  (`.codex/hooks/hooks.json` was not observed to fire when the flat file was
+  absent from the run that tested it; the flat path is the proven one.)
+- **Trust gate: hooks are silently skipped unless trusted.** Codex persists
+  per-hook approval as a `trusted_hash` under `[hooks.state]` in
+  `~/.codex/config.toml`, keyed `<source>:hooks/hooks.json:<event>:<i>:<j>`.
+  With no persisted trust and no bypass, a repo's hooks produce no output, no
+  error, nothing — this, not matcher casing, is why repo hooks appear dead.
+  `codex exec --dangerously-bypass-hook-trust` runs them for automation that
+  has already vetted the hook source.
+- **Payload: none.** Hook processes receive no JSON on stdin, no
+  payload-bearing environment variables, and only the argv the command line
+  itself supplies. Hooks that parse a stdin payload (tool name, file path)
+  fire but learn nothing — on Codex a hook must derive its facts itself
+  (e.g. from `git status`). Exit-code blocking semantics are untestable
+  without a payload-driven decision and remain unverified.
+- **cwd = the workspace root**, so relative hook commands and the
+  `"${CLAUDE_PROJECT_DIR:-.}"` fallback pattern both resolve correctly.
 - Tool-ID matcher names differ from Claude Code's (`edit`, `write`,
-  `multi_edit` vs. `Edit`, `Write`, `MultiEdit`) — current hook matchers cover
-  both naming conventions in one pattern
-- Payload shape and ordering semantics beyond matcher syntax: **not yet
-  verified** (see ROADMAP.md open questions)
+  `multi_edit` vs. `Edit`, `Write`, `MultiEdit`) — the dual-convention
+  matcher `write|edit|multiedit|multi_edit|Write|Edit|MultiEdit` **fired on a
+  file-creating tool use**; a broader matcher that also names `shell` fired
+  one additional time. With no payload there is no way to log which ID
+  matched, so keep matchers dual-convention.
+- Headless `codex exec` runs hooks the same as above, subject to the same
+  trust gate.
 
 ### Skills
 
 - Not yet verified whether auto-discovery matches Claude Code's convention
 
-**Last Verified:** 2026-07-02 — manifest shape and hook matcher names only
-(commit `bde36ea`)
+**Last Verified:** 2026-07-25 — hooks verified live as described above.
+Manifest shape and matcher names carried from 2026-07-02 (commit `bde36ea`);
+skill auto-discovery still unverified.
 
 ## Cortex Code (CoCo)
 
