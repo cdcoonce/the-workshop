@@ -15,6 +15,12 @@ the file or reordering sibling keys stays ``OK`` while changing the key's
 value is a ``LOCAL-EDIT``. A file that no longer parses, or has lost the
 key, is a ``LOCAL-EDIT`` too.
 
+A lock entry with ``tier: "scaffold"`` (W5: init-scaffolded, owner-owned
+files under a managed scan root, e.g. the taxonomy-parameterized
+``vault_scope.py``) carries no hash: the owner may edit it freely, so it is
+``OK`` whenever it exists and ``MISSING`` only when deleted. Its lock
+record exists chiefly so the UNTRACKED scan does not flag it.
+
 The UNTRACKED scan covers every managed root — ``.claude/scripts``,
 ``.claude/agents``, ``.codex/agents``, ``.claude/skills``, and
 ``.codex/skills`` — with the usual runtime-junk exclusions.
@@ -25,11 +31,10 @@ exits 1 on any non-OK status. ``--target`` selects the repo (default: cwd).
 Exit codes: 0 = report produced (and clean, under ``--strict``);
 1 = ``--strict`` and at least one non-OK file; 2 = no usable lockfile.
 
-Scope: this is W3 of the vault-machinery consolidation — lockfile format
-plus adopt/check/dumb-upgrade. The scaffolding interview, an ``init`` verb,
-and an ``upstream`` comparison verb are deliberately deferred to the later
-wiring-generator (W4) and vault-init/upgrade-skill (W5) chunks; this tool
-intentionally knows nothing about them.
+Scope: W3 shipped the lockfile format plus adopt/check/dumb-upgrade; W4
+added the json-key entries; W5 added the scaffold tier (and machinery_sync
+grew the ``init`` verb). An ``upstream`` comparison verb remains
+deliberately deferred; this tool intentionally knows nothing about it.
 
 Hard constraints (kept on purpose, enforced by the workshop's test suite):
 Python stdlib only — this file is vendored into the vault and must run from
@@ -150,7 +155,11 @@ def collect_statuses(target: Path, lock: dict) -> list[dict]:
     records: list[dict] = []
     for relative, entry in lock["files"].items():
         candidate = target / relative
-        if entry.get("kind") == "json-key":
+        if entry.get("tier") == "scaffold":
+            # Scaffold files are owner-owned: no hash to drift from, only
+            # presence matters (and suppressing the UNTRACKED scan).
+            status = STATUS_OK if candidate.is_file() else STATUS_MISSING
+        elif entry.get("kind") == "json-key":
             status = _json_key_status(candidate, entry)
         elif not candidate.is_file():
             status = STATUS_MISSING

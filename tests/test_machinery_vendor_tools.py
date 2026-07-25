@@ -171,7 +171,12 @@ class TestVendorMap:
                 assert entry["key"]
 
     def test_covers_engine_tree_exactly(self) -> None:
-        """Every engine file is mapped; no stale engine entries linger."""
+        """Every engine file is mapped; no stale engine entries linger.
+
+        ``engine/vault_scope.py`` is the one deliberate exception (W5): it is
+        scaffold-owned — init renders it from the scaffold template and
+        upgrade never touches it — so it must NOT appear in the managed map.
+        """
         data = json.loads((MACHINERY_DIR / "vendor-map.json").read_text())
         mapped_sources = {
             entry["source"]
@@ -185,7 +190,7 @@ class TestVendorMap:
             and not path.name.endswith(".pyc")
             and not (_JUNK_NAMES & set(path.parts))
         }
-        assert mapped_sources == actual
+        assert mapped_sources == actual - {"engine/vault_scope.py"}
 
 
 # ---------------------------------------------------------------------------
@@ -1467,11 +1472,11 @@ class TestShippedPayload:
         ).is_file()
         assert (dist_machinery / "rendered" / "codex-hooks.json").is_file()
 
-    def test_deferred_verbs_are_documented(self) -> None:
-        """W3 ships adopt/check/upgrade only; init and upstream are deferred
-        deliberately, and the module docstring must say so."""
+    def test_verbs_are_documented(self) -> None:
+        """W5 ships adopt/upgrade/init; only the upstream comparison verb
+        remains deliberately deferred, and the module docstring must say so."""
         text = (TOOLS_DIR / "machinery_sync.py").read_text()
         module_doc = ast.get_docstring(ast.parse(text)) or ""
-        assert "init" in module_doc
+        assert "``init --target" in module_doc
         assert "upstream" in module_doc
         assert "deferred" in module_doc.lower()

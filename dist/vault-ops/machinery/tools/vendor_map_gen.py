@@ -7,16 +7,23 @@ change the trees it describes and rebuild.
 
 Sections, in emitted order:
 
-1. ``engine/**``                    -> ``.claude/scripts/**``   (v1 rule)
-2. ``agents/*.md``                  -> ``.claude/agents/*.md``  (canonical)
-3. ``rendered/codex-agents/*.toml`` -> ``.codex/agents/*.toml`` (generated twins)
-4. ``rendered/codex-hooks.json``    -> ``.codex/hooks.json``
-5. ``rendered/claude-settings-hooks.json``
+1. ``engine/**``                    -> ``.claude/scripts/**``   (v1 rule),
+   EXCEPT ``engine/vault_scope.py`` — scaffold-owned since W5: init renders
+   it from ``scaffold/vault_scope.py.tmpl`` with the owner's note-dir
+   taxonomy and upgrade never touches it, so it must stay out of the
+   managed map (machinery_sync errors on any scaffold/managed overlap).
+2. lifecycle tools                  -> ``.claude/scripts/`` (W5: the
+   ``machinery_check.py``/``machinery_sync.py`` pair, vendored so hooks and
+   afk Docker slices can run the drift check offline)
+3. ``agents/*.md``                  -> ``.claude/agents/*.md``  (canonical)
+4. ``rendered/codex-agents/*.toml`` -> ``.codex/agents/*.toml`` (generated twins)
+5. ``rendered/codex-hooks.json``    -> ``.codex/hooks.json``
+6. ``rendered/claude-settings-hooks.json``
                                     -> ``.claude/settings.json`` ``hooks`` key
    (``kind: "json-key"`` — a partial-file merge; settings.json carries
    unmanaged sibling keys a file copy would clobber)
-6. sibling ``skills/**``            -> ``.claude/skills/**``    (source_root
-7. sibling ``skills/**``            -> ``.codex/skills/**``      "preset")
+7. sibling ``skills/**``            -> ``.claude/skills/**``    (source_root
+8. sibling ``skills/**``            -> ``.codex/skills/**``      "preset")
 
 Schema 2 because the map now carries non-schema-1 constructs: the json-key
 kind and preset-root sources (skills live beside machinery/, not inside it).
@@ -38,6 +45,17 @@ _JUNK_DIR_NAMES = frozenset(
 )
 _JUNK_FILE_NAMES = frozenset({".DS_Store"})
 _JUNK_SUFFIXES = (".pyc",)
+
+# Engine files owned by the scaffold tier (init writes them once with the
+# owner's parameters; upgrade never touches them). They stay in engine/ so
+# the machinery test-suite and sibling imports keep working in this repo,
+# but they must never enter the managed map.
+_SCAFFOLD_OWNED_ENGINE_FILES = frozenset({"vault_scope.py"})
+
+# The lifecycle tool pair vendored into the vault so hooks and afk Docker
+# slices can run the drift check offline (.claude/scripts is already an
+# UNTRACKED scan root, so mapping them keeps the check clean).
+_VENDORED_TOOLS = ("machinery_check.py", "machinery_sync.py")
 
 
 def _tree_files(root: Path) -> list[str]:
@@ -71,11 +89,22 @@ def generate_map(machinery_dir: Path) -> dict:
     entries: list[dict] = []
 
     for relative in _tree_files(machinery_dir / "engine"):
+        if relative in _SCAFFOLD_OWNED_ENGINE_FILES:
+            continue
         entries.append(
             {
                 "kind": "file",
                 "source": f"engine/{relative}",
                 "target": f".claude/scripts/{relative}",
+            }
+        )
+
+    for tool_name in _VENDORED_TOOLS:
+        entries.append(
+            {
+                "kind": "file",
+                "source": f"tools/{tool_name}",
+                "target": f".claude/scripts/{tool_name}",
             }
         )
 
