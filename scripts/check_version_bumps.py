@@ -52,7 +52,26 @@ def shipped_presets(repo: Path) -> list[str]:
 
 
 def output_changed(repo: Path, base: str, preset: str) -> bool:
-    return run_git(repo, "diff", "--quiet", base, "--", f"dist/{preset}").returncode != 0
+    """True when the preset's owner-facing shipped output differs from `base`.
+
+    ``dist/<preset>/machinery`` is excluded from the comparison: machinery is
+    vendored engine payload (scripts + their tests, e.g. the vault's engine
+    under vault-ops), not a skill, agent, or hook an owner invokes. Its churn
+    is versioned by its upstream repo; requiring a preset bump for every
+    engine sync would turn routine consolidation into a release event.
+    """
+    return (
+        run_git(
+            repo,
+            "diff",
+            "--quiet",
+            base,
+            "--",
+            f"dist/{preset}",
+            f":(exclude)dist/{preset}/machinery",
+        ).returncode
+        != 0
+    )
 
 
 def manifest_version(repo: Path, preset: str, ref: str | None = None) -> str | None:

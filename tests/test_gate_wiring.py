@@ -48,6 +48,24 @@ def test_gate_lints_the_repos_own_python() -> None:
     )
 
 
+def test_makefile_test_target_runs_vault_machinery_suite() -> None:
+    """The vault machinery suite must not silently fall out of the gate.
+
+    presets/vault-ops/machinery/tests is not a ``scripts/tests`` subtree, so
+    the skill-suite discovery never finds it — it needs its own explicit step,
+    and this guard keeps that step wired into ``make test``.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    assert re.search(r"^test-machinery:", makefile, re.MULTILINE), (
+        "Makefile must define a `test-machinery` target running the vault "
+        "machinery suite in its own rootdir"
+    )
+    assert "$(MAKE) test-machinery" in makefile, (
+        "the `test` target must run `test-machinery`, or the vault engine "
+        "suite silently falls out of the gate"
+    )
+
+
 def test_afk_gate_invokes_make_test() -> None:
     config = (REPO_ROOT / ".afk" / "config.toml").read_text()
     assert "make test" in config, (

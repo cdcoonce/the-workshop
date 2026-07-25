@@ -127,6 +127,27 @@ class TestMissingBumps:
 
         assert find_missing_bumps(repo, "main") == []
 
+    def test_machinery_only_change_needs_no_bump(self, repo: Path) -> None:
+        """dist/<preset>/machinery is engine payload, not owner-facing surface."""
+        _write(
+            repo / "dist" / "advisor" / "machinery" / "engine" / "vault_utils.py",
+            "# synced engine module\n",
+        )
+        commit(repo, "sync machinery payload")
+
+        assert find_missing_bumps(repo, "main") == []
+
+    def test_machinery_change_does_not_mask_a_real_change(self, repo: Path) -> None:
+        """A skill edit alongside machinery churn still requires a bump."""
+        _write(
+            repo / "dist" / "advisor" / "machinery" / "engine" / "vault_utils.py",
+            "# synced engine module\n",
+        )
+        _preset(repo, "advisor", "0.1.0", "# v2 — real change\n")
+        commit(repo, "sync machinery and change a skill")
+
+        assert find_missing_bumps(repo, "main") == ["advisor"]
+
 
 class TestUnavailableBase:
     def test_missing_base_ref_raises_rather_than_passing_silently(
