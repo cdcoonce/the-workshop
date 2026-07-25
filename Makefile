@@ -86,10 +86,12 @@ VERSION_BASE ?= origin/main
 # in their OWN rootdir (a separate pytest invocation from machinery/). Deps
 # mirror the vault's dev group (pytest/hypothesis/numpy) plus its pyyaml
 # runtime dependency, wired with `uv run --with` exactly as the skill-script
-# runner does.
+# runner does. graphmark is graph_cli's own pinned dependency — without it
+# the alias-resolver suite importorskips itself and CI reports green on
+# tests it never ran.
 .PHONY: test-machinery
 test-machinery:
-	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml python -m pytest -q tests
+	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.3,<0.4' python -m pytest -q tests
 
 .PHONY: test
 test:

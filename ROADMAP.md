@@ -36,11 +36,25 @@ Open questions (tracked here until resolved, not blocking):
 - Given that: should the build emit Cortex hooks inline in `plugin.json` (the
   shape Cortex's own bundled plugins use), or should Cortex be documented as a
   skills-only target? A real decision, not a defect — the hooks degrade silently
-  rather than erroring.
-- Do Codex's hook semantics match? Unverified — the same probe has not been run
-  against Codex.
-- Is there a Codex/Cortex equivalent of `settings.json` (non-hook settings),
-  or does that concept not transfer?
+  rather than erroring. **The same decision now applies to Codex** (see next
+  item): as of 2026-07-25 presets are skills-only carriers on both non-Claude
+  platforms; on Codex, hooks ship via the vendored repo-level
+  `.codex/hooks.json` the vault-ops machinery already generates.
+- **Codex hook semantics — ANSWERED 2026-07-25.** Repo-level flat
+  `.codex/hooks.json` only (nested path proven unread by control); a
+  two-layer silent trust gate (project `trust_level` in `config.toml` +
+  per-hook `trusted_hash`, bypass flag covers only the latter); no stdin/env
+  payload; plugin-level hooks impossible — the `plugin_hooks` feature is
+  `removed`. Event inventory: `SubagentStart` exists (unlike Cortex);
+  `ConfigChange` and `SessionEnd` do not. Details in COMPATIBILITY.md.
+- **Codex skill auto-discovery — ANSWERED 2026-07-25.** Works, from
+  `.codex/skills/` and `.agents/skills/` (not `.claude/skills/`, not bare
+  `skills/`); plugin skills load namespaced `<plugin>:<skill>`, including
+  headless — unlike Claude Code's `-p`. Not trust-gated.
+- **Codex `settings.json` equivalent — ANSWERED 2026-07-25:**
+  `~/.codex/config.toml` plus `-c` dotted-path overrides; no consumer of a
+  plugin-root `settings.json` observed. The Cortex half of this question is
+  still open.
 
 Each answer, once verified, moves from here into `COMPATIBILITY.md`.
 
