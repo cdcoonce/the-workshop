@@ -512,3 +512,43 @@ class TestRolloverTasks:
         assert "- [ ] Buy milk" in target_content                 # dateless preserved
         assert "- [ ] 2026-03-30 Dated task" in target_content    # dated preserved
         assert f"- [ ] {date.today().isoformat()} Buy milk" not in target_content  # NOT re-stamped
+
+
+# ---------------------------------------------------------------------------
+# Custom task-file locations (issue #432) — the tasks/archive directories are
+# read from vault_scope, not hardcoded, so an owner can relocate them.
+# ---------------------------------------------------------------------------
+
+class TestCustomTaskLocations:
+    def test_get_or_create_weekly_file_uses_custom_tasks_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        monkeypatch.setattr("task_manager.TASKS_DIR", "custom/tasks-here")
+
+        path = get_or_create_weekly_file(tmp_path, "2026-W14")
+
+        assert path == tmp_path / "custom" / "tasks-here" / "2026-W14-tasks.md"
+        assert path.exists()
+        assert not (tmp_path / "personal" / "tasks").exists()
+
+    def test_rollover_uses_custom_tasks_and_archive_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        monkeypatch.setattr("task_manager.TASKS_DIR", "custom/tasks-here")
+        monkeypatch.setattr("task_manager.ARCHIVE_TASKS_DIR", "custom/archive-here")
+
+        path = get_or_create_weekly_file(tmp_path, "2026-W13")
+        with path.open("a", encoding="utf-8") as f:
+            f.write("\n- [ ] 2026-03-27 Task to roll")
+
+        count = rollover_tasks(tmp_path, "2026-W13", "2026-W14")
+        assert count == 1
+
+        target = tmp_path / "custom" / "tasks-here" / "2026-W14-tasks.md"
+        assert "Task to roll" in target.read_text(encoding="utf-8")
+
+        archived = tmp_path / "custom" / "archive-here" / "2026-W13-tasks.md"
+        assert archived.exists()
+        assert not (tmp_path / "personal").exists()

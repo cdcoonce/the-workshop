@@ -1,4 +1,4 @@
-"""Task Manager — manages weekly task files in personal/tasks/.
+"""Task Manager — manages weekly task files in the configured tasks directory.
 
 Public interface:
     get_or_create_weekly_file(vault_root, week?) → Path
@@ -21,6 +21,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import generate
+from vault_scope import ARCHIVE_TASKS_DIR, TASKS_DIR
 from vault_utils import WIKILINK_CAPTURE_RE, iso_week_string
 
 
@@ -44,8 +45,6 @@ class Task:
 # Constants
 # ---------------------------------------------------------------------------
 
-TASKS_DIR = "personal/tasks"
-ARCHIVE_TASKS_DIR = "personal/archive/tasks"
 TASK_RE = re.compile(
     r"^- \[(?P<status>[ x>])\] "
     r"(?:(?P<due>\d{4}-\d{2}-\d{2}) )?"

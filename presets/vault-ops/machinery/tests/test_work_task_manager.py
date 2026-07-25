@@ -394,3 +394,124 @@ class TestRolloverWorkTasks:
         assert "[[Project Y]]" in new       # subsection with an open task kept
         assert "**Still open**" in new
         assert "[[Project X]]" not in new   # all-complete subsection dropped
+
+
+# ---------------------------------------------------------------------------
+# Custom task-file locations (issue #432) — the work tasks directory/filename,
+# archive directory, and section names are read from vault_scope, not
+# hardcoded, so an owner can relocate them.
+# ---------------------------------------------------------------------------
+
+class TestCustomTaskLocations:
+    def test_ensure_work_tasks_file_uses_custom_dir_and_filename(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_DIR", "job")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_FILENAME", "Board.md")
+
+        path = ensure_work_tasks_file(tmp_path)
+
+        assert path == tmp_path / "job" / "Board.md"
+        assert path.exists()
+        assert not (tmp_path / "work").exists()
+
+    def test_add_and_complete_use_custom_dir_and_filename(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_DIR", "job")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_FILENAME", "Board.md")
+
+        add_work_task(tmp_path, "Ship it", "Active")
+        assert complete_work_task(tmp_path, "Ship it") is True
+
+        content = (tmp_path / "job" / "Board.md").read_text(encoding="utf-8")
+        assert "## Done" in content
+        assert "**Ship it**" in content
+
+    def test_rollover_uses_custom_dir_filename_and_archive_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_DIR", "job")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_FILENAME", "Board.md")
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_ARCHIVE_DIR", "job/history")
+
+        path = tmp_path / "job" / "Board.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "---\n"
+            "date: 2026-01-01\n"
+            'description: "Work tasks"\n'
+            "tags:\n  - tasks\n"
+            'week: "2026-04-13"\n'
+            "---\n\n"
+            "# Work Tasks\n\n"
+            "## Active\n- [ ] **Open A** wip\n\n"
+            "## Waiting On\n\n## Someday\n\n## Done\n",
+            encoding="utf-8",
+        )
+
+        result = rollover_work_tasks(tmp_path, today=date(2026, 4, 20))
+
+        assert result["rolled_over"] is True
+        archive = result["archive_path"]
+        assert archive.parent == tmp_path / "job" / "history"
+        assert archive.exists()
+        assert not (tmp_path / "work").exists()
+
+    def test_custom_section_names_used_for_parse_and_validation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        monkeypatch.setattr(
+            "work_task_manager.SECTIONS", ("Now", "Later", "Complete")
+        )
+
+        path = ensure_work_tasks_file(tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "## Now" in content
+        assert "## Later" in content
+        assert "## Complete" in content
+        assert "## Active" not in content
+
+        with pytest.raises(ValueError, match="Now, Later, Complete"):
+            add_work_task(tmp_path, "Bad section task", "Active")
+
+        add_work_task(tmp_path, "Good section task", "Now")
+        tasks = parse_work_tasks(path)
+        assert any(t.title == "Good section task" and t.section == "Now" for t in tasks)
+
+    def test_complete_work_task_uses_custom_done_section(
+        self, vault: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("work_task_manager.SECTIONS", ("Now", "Later", "Complete"))
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_DONE_SECTION", "Complete")
+
+        add_work_task(vault, "Ship it", "Now")
+        assert complete_work_task(vault, "Ship it") is True
+
+        content = (vault / "work" / "Tasks.md").read_text(encoding="utf-8")
+        assert "## Complete" in content
+        assert "**Ship it**" in content.split("## Complete")[1]
+
+    def test_rollover_uses_custom_done_section(
+        self, vault: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("work_task_manager.SECTIONS", ("Now", "Later", "Complete"))
+        monkeypatch.setattr("work_task_manager.WORK_TASKS_DONE_SECTION", "Complete")
+
+        body = (
+            "## Now\n- [ ] **Open A** wip\n\n"
+            "## Later\n\n"
+            "## Complete\n- [x] **Shipped thing** (completed: 2026-04-15)\n"
+        )
+        _write_work_tasks(vault, "2026-04-13", body)
+
+        result = rollover_work_tasks(vault, today=date(2026, 4, 20))
+
+        assert result["rolled_over"] is True
+        assert any("Shipped thing" in d for d in result["done_items"])
+        new = (vault / "work" / "Tasks.md").read_text(encoding="utf-8")
+        assert "**Open A**" in new
+        assert "**Shipped thing**" not in new

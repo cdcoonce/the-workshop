@@ -16,6 +16,11 @@ GOVERNED_NOTE_DIRS = (${governed_note_dirs})
 # candidates, but operating manuals and generated/session state are excluded.
 GRAPH_NOTE_DIRS = (*GOVERNED_NOTE_DIRS, "thinking")
 
+# Cheap headless model for batch work (notebook-distill, graph_gardener Lane B).
+# Constitution §4 makes "cheap models for batch work" the policy; the specific
+# id is an instance detail, so it lives here rather than in the engine.
+BATCH_MODEL = "claude-haiku-4-5"
+
 GRAPH_EXCLUDED_DIRS = {
     ".afk",
     ".brain",
@@ -58,6 +63,17 @@ TRANSIENT_PREFIXES = (
     "work/archive/tasks/",
     "work/archive/2026/tasks/",
 )
+
+# Task-file locations and section names — owner-configurable; task_manager and
+# work_task_manager read these rather than hardcoding paths.
+TASKS_DIR = "personal/tasks"
+ARCHIVE_TASKS_DIR = "personal/archive/tasks"
+
+WORK_TASKS_DIR = "work"
+WORK_TASKS_FILENAME = "Tasks.md"
+WORK_TASKS_ARCHIVE_DIR = "work/archive/tasks"
+WORK_TASK_SECTIONS: tuple[str, ...] = ("Active", "Waiting On", "Someday", "Done")
+WORK_TASKS_DONE_SECTION = "Done"
 
 
 def rel_posix(path: Path, vault_root: Path) -> str | None:
