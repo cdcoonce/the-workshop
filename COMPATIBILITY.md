@@ -95,25 +95,64 @@ checked against a current spec.
   `author`, `repository`, `skills` path, and an `interface` block
   (`displayName`, `shortDescription`, `longDescription`, `developerName`,
   `category`, `capabilities`)
+- **`.codex-plugin/plugin.json` is confirmed as the manifest Codex reads.**
+  Two independent lines of evidence (codex-cli 0.144.6): the CLI's embedded
+  plugin validator errors name it explicitly (`missing
+`.codex-plugin/plugin.json``), and an installed Workshop preset
+  (`vault-ops`) loads and namespaces its skills from the `skills` path that
+  manifest declares.
 - Marketplace listing via `.agents/plugins/marketplace.json`
-  (`scripts/build_marketplace.py`)
+  (`scripts/build_marketplace.py`) — this is also the path the CLI itself
+  defaults to (`<marketplace root>/.agents/plugins/marketplace.json`).
+- Install machinery: `codex plugin marketplace add` (local path or Git),
+  snapshots stored under `~/.codex/.tmp/marketplaces/<name>/`, registered as
+  `[marketplaces.<name>]` in `~/.codex/config.toml`, with installed plugins
+  as `[plugins."<plugin>@<marketplace>"]` entries. `codex plugin
+add|list|remove` manage them.
 
 ### Hooks
 
 Verified experimentally 2026-07-25 on codex-cli 0.144.6 (`codex exec`, a
-scratch repo with an instrumented capture hook):
+scratch repo with an instrumented capture hook; extended the same day with a
+flat-vs-nested in-session control and a trust-layer isolation):
 
 - **Discovery: repo-level flat `.codex/hooks.json` in Claude-style schema is
   read and executed.** `SessionStart`, `PostToolUse`, and `Stop` all fired.
-  (`.codex/hooks/hooks.json` was not observed to fire when the flat file was
-  absent from the run that tested it; the flat path is the proven one.)
-- **Trust gate: hooks are silently skipped unless trusted.** Codex persists
-  per-hook approval as a `trusted_hash` under `[hooks.state]` in
-  `~/.codex/config.toml`, keyed `<source>:hooks/hooks.json:<event>:<i>:<j>`.
-  With no persisted trust and no bypass, a repo's hooks produce no output, no
-  error, nothing — this, not matcher casing, is why repo hooks appear dead.
-  `codex exec --dangerously-bypass-hook-trust` runs them for automation that
-  has already vetted the hook source.
+  **`.codex/hooks/hooks.json` (nested) is not read — proven by control:**
+  both files present in the same trusted session, each wiring a SessionStart
+  marker; the flat file's marker appeared, the nested one's never did.
+- **Trust is two layers, and both gate silently.**
+  1. **Project trust:** the workspace must have `trust_level = "trusted"`
+     under `[projects."<abs path>"]` in `~/.codex/config.toml`. Without it,
+     repo-level hooks are skipped even with the bypass flag below — and a
+     `-c 'projects."<path>".trust_level="trusted"'` CLI override is **not
+     honored** for this. An identical probe fired in a file-trusted directory
+     and stayed silent in an untrusted one.
+  2. **Per-hook trust:** Codex persists per-hook approval as a
+     `trusted_hash` under `[hooks.state]`, keyed
+     `<source>:hooks/hooks.json:<event>:<i>:<j>` (event names snake_case).
+     `codex exec --dangerously-bypass-hook-trust` bypasses this layer only.
+     With either layer missing, hooks produce no output, no error, nothing —
+     this, not matcher casing, is why repo hooks appear dead.
+- **Trust keys are absolute-path-keyed, so renaming a repo directory orphans
+  its hook trust.** Observed live: `[hooks.state]` still carries entries for
+  `.../GitHub/my-brain/.codex/hooks.json` while that repo now lives at
+  `the-vault` — its vendored hooks are silently untrusted again until
+  re-approved.
+- **Plugin-level hooks cannot fire: the `plugin_hooks` feature is `removed`**
+  (`codex features list`). A preset's `hooks/hooks.json` is inert on Codex —
+  the same practical conclusion as Cortex, reached by a different mechanism
+  (legacy `[hooks.state]` entries for plugin sources remain from when the
+  feature existed, and no longer correspond to anything that runs). Hook
+  delivery to a Codex repo is the vendored repo-level flat `.codex/hooks.json`
+  the vault-ops machinery generates.
+- **Event inventory (binary-string evidence, not live-fired):** the CLI
+  embeds `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+  `Stop`, `SubagentStart`, `SubagentStop`, `PreCompact`, and
+  `PermissionRequest`. **`ConfigChange` and `SessionEnd` do not exist** —
+  so unlike Cortex, Codex has `SubagentStart`, but the config-audit hook has
+  no event on either platform. Live-fired confirmation still covers only
+  `SessionStart`, `PostToolUse`, and `Stop`.
 - **Payload: none.** Hook processes receive no JSON on stdin, no
   payload-bearing environment variables, and only the argv the command line
   itself supplies. Hooks that parse a stdin payload (tool name, file path)
@@ -129,15 +168,38 @@ scratch repo with an instrumented capture hook):
   one additional time. With no payload there is no way to log which ID
   matched, so keep matchers dual-convention.
 - Headless `codex exec` runs hooks the same as above, subject to the same
-  trust gate.
+  trust gates. A SessionStart entry fires with or without a `matcher`.
 
 ### Skills
 
-- Not yet verified whether auto-discovery matches Claude Code's convention
+Verified live 2026-07-25 (marker skills at four candidate roots in one scratch
+repo, listed by a headless `codex exec` session):
 
-**Last Verified:** 2026-07-25 — hooks verified live as described above.
-Manifest shape and matcher names carried from 2026-07-02 (commit `bde36ea`);
-skill auto-discovery still unverified.
+- **Repo-level auto-discovery works from `.codex/skills/` and
+  `.agents/skills/`.** Both markers were listed. **`.claude/skills/` and bare
+  `skills/` are not discovered.**
+- Skill discovery is **not** gated on project trust — the probe repo was
+  untrusted and its skills still listed (hooks in the same repo stayed
+  silent).
+- **Plugin skills load and trigger, namespaced `<plugin>:<skill>`** (e.g.
+  `vault-ops:vault-standup`), including under headless `codex exec` — the
+  opposite of Claude Code, where plugin skills don't load under `-p` at all.
+- A user-level root exists at `~/.codex/skills/` (directory observed; loading
+  not individually exercised).
+- `SKILL.md` frontmatter is validated — unexpected keys are rejected with an
+  allowed-properties list; `name` + `description` work.
+
+### Settings
+
+- The `settings.json` concept maps to **`~/.codex/config.toml`** (global):
+  `[projects]` trust, `[features]`, `[hooks.state]`, `[marketplaces]`,
+  `[plugins]`, `[mcp_servers]`, plus per-invocation dotted-path overrides via
+  `-c key=value` on any subcommand.
+- No consumer of a plugin-root `settings.json` was observed on Codex.
+
+**Last Verified:** 2026-07-25 — hooks, trust layers, skills, plugin install
+surface, and settings verified live as described above; event inventory from
+binary strings. Matcher names carried from 2026-07-02 (commit `bde36ea`).
 
 ## Cortex Code (CoCo)
 

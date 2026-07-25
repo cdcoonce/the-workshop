@@ -695,6 +695,45 @@ def test_detect_unprofiled_missing_index_is_empty(tmp_path):
     assert gg.detect_unprofiled_people(repo) == []
 
 
+def test_detect_unprofiled_skips_path_links(tmp_path):
+    # [[org/teams/DAA]] names a note, not a person. Proposing a profile for it
+    # yields the nonsense path org/people/org/teams/DAA.md.
+    repo = _init_repo(tmp_path)
+    _people_index(repo, ["org/teams/DAA", "Jane Doe"])
+    assert gg.detect_unprofiled_people(repo) == ["Jane Doe"]
+
+
+def test_detect_unprofiled_defers_to_graphmark_when_available(tmp_path):
+    # graphmark honors frontmatter aliases and path-suffix resolution, which the
+    # gardener's own catalog does not. A display graphmark resolved is not an
+    # unprofiled person, whatever this file's local matching would say.
+    repo = _init_repo(tmp_path)
+    _people_index(repo, ["Data Architecture & Analytics", "Jane Doe"])
+    broken = {"org/People & Context.md": {"Jane Doe"}}
+    assert gg.detect_unprofiled_people(repo, broken_by_note=broken) == ["Jane Doe"]
+
+
+def test_detect_unprofiled_compares_the_raw_display_like_lane_a(tmp_path):
+    repo = _init_repo(tmp_path)
+    _people_index(repo, ["Grant|Grant Kerkman"])
+    broken = {"org/People & Context.md": {"Grant|Grant Kerkman"}}
+    assert gg.detect_unprofiled_people(repo, broken_by_note=broken) == ["Grant"]
+
+
+def test_detect_unprofiled_falls_back_when_the_scan_is_unavailable(tmp_path):
+    # None means "scan failed", not "nothing is broken" — reading it as the
+    # latter would silence every proposal.
+    repo = _init_repo(tmp_path)
+    _people_index(repo, ["Jane Doe"])
+    assert gg.detect_unprofiled_people(repo, broken_by_note=None) == ["Jane Doe"]
+
+
+def test_detect_unprofiled_is_empty_when_the_index_note_has_no_breaks(tmp_path):
+    repo = _init_repo(tmp_path)
+    _people_index(repo, ["Jane Doe"])
+    assert gg.detect_unprofiled_people(repo, broken_by_note={}) == []
+
+
 # --- #62: direct coverage for normalize / scope / catalog / settle / rollback ---
 
 def test_normalize_lowercases_and_collapses():

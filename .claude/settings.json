@@ -1,11 +1,27 @@
 {
   "permissions": {
+    "deny": [
+      "Edit(./.claude/settings.json)",
+      "Write(./.claude/settings.json)",
+      "Edit(./.git/**)",
+      "Write(./.git/**)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.claude/.credentials.json)"
+    ],
     "allow": [
-      "Bash(uv run:*)",
       "Bash(make test)",
+      "Bash(make lint)",
       "Bash(make docs)",
       "Bash(make build)",
-      "Bash(make verify-generated)"
+      "Bash(make verify-generated)",
+      "Bash(make verify-versions)",
+      "Bash(uv run python -m scripts.build_preset:*)",
+      "Bash(uv run python -m scripts.build_marketplace:*)",
+      "Bash(uv run python -m scripts.build_docs:*)",
+      "Bash(uv run python -m scripts.smoke_test:*)"
     ]
   },
   "hooks": {
