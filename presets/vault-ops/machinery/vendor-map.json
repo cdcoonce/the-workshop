@@ -8,6 +8,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/budget_burn_defaults.py",
+      "target": ".claude/scripts/budget_burn_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/classify-message.py",
       "target": ".claude/scripts/classify-message.py"
     },

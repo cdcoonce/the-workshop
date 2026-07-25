@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """budget_burn — compute Claude Code API spend across all local projects.
 
-The $350/month limit is *total* API spend, so this sums token usage across
+The monthly budget is *total* API spend, so this sums token usage across
 every project transcript under ``~/.claude/projects/*/``, not just this vault.
 Cost is computed deterministically from the per-message ``usage`` blocks
 (input / output / cache-read / cache-write) times the published per-model
@@ -10,6 +10,12 @@ rates, so it needs no cost API and works headless on both machines.
 Surfaces the feedback loop the Conductor + Workers operating model was missing
 (see brain/Key Decisions.md 2026-06-16): a per-model breakdown shows whether
 judgment is staying on Opus while bulk work runs on the cheap tier.
+
+Project aliases, the price table, and the monthly budget are instance config
+(scaffold-owned ``budget_burn_config.py``, see ``_from_config``) — they change
+with prices, budgets, and renamed project dirs, and shouldn't require an engine
+release. ``budget_burn_defaults.py`` ships today's values as the managed-tier
+fallback, so a vault vendored before the config existed still reports its burn.
 
 Usage:
     python3 budget_burn.py            # current month, human report
@@ -24,15 +30,63 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-# Per-1M-token USD rates (input, output). Cache read = 0.1x input; cache write
-# (5-min TTL) = 1.25x input. Source: claude-api pricing 2026-06-16.
-RATES = {
-    "fable": (10.0, 50.0),
-    "opus": (5.0, 25.0),
-    "sonnet": (3.0, 15.0),
-    "haiku": (1.0, 5.0),
+from budget_burn_defaults import MONTHLY_BUDGET as DEFAULT_MONTHLY_BUDGET
+from budget_burn_defaults import PROJECT_ALIASES as DEFAULT_PROJECT_ALIASES
+from budget_burn_defaults import RATES as DEFAULT_RATES
+
+try:  # Scaffold-owned config; absent in a vault vendored before it existed.
+    import budget_burn_config as _config
+except ImportError:
+    _config = None
+
+
+class BudgetBurnConfigError(RuntimeError):
+    """Raised when the scaffold-owned budget_burn config defines a bad value."""
+
+
+# What each configurable name has to be for the scan arithmetic to hold.
+_CONFIG_TYPES: dict[str, type | tuple[type, ...]] = {
+    "PROJECT_ALIASES": dict,
+    "RATES": dict,
+    "MONTHLY_BUDGET": (int, float),
 }
-MONTHLY_BUDGET = 350.0
+
+
+def _from_config(name: str, default: object) -> object:
+    """Value for ``name`` from the scaffold config, else the shipped default.
+
+    A config that never defines ``name`` — or a vault vendored before the
+    config existed at all — falls back to ``budget_burn_defaults``: that is
+    the scaffold contract, and the default is today's shipped value, not a
+    zero. A config that *does* define it as something unusable raises
+    ``BudgetBurnConfigError`` naming the config file, so a mistyped price
+    table surfaces as a diagnostic instead of a silently wrong burn.
+    """
+    if _config is None:
+        return default
+    value = getattr(_config, name, None)
+    if value is None:
+        return default
+    expected = _CONFIG_TYPES[name]
+    if not isinstance(value, expected):
+        allowed = expected if isinstance(expected, tuple) else (expected,)
+        wanted = " or ".join(t.__name__ for t in allowed)
+        config_path = getattr(_config, "__file__", None)
+        if config_path is None:
+            config_path = "budget_burn_config.py"
+        raise BudgetBurnConfigError(
+            f"budget_burn: {name} in {config_path} must be {wanted}, "
+            f"got {type(value).__name__} — fix it there, or delete the name to "
+            "fall back to the shipped default."
+        )
+    return value
+
+
+_PROJECT_ALIASES: dict[str, str] = _from_config(
+    "PROJECT_ALIASES", DEFAULT_PROJECT_ALIASES
+)
+RATES: dict[str, tuple[float, float]] = _from_config("RATES", DEFAULT_RATES)
+MONTHLY_BUDGET: float = _from_config("MONTHLY_BUDGET", DEFAULT_MONTHLY_BUDGET)
 
 
 def _tier(model: str) -> str | None:
@@ -72,20 +126,6 @@ def _month_of(record: dict, fallback: str) -> str:
     if isinstance(ts, str) and len(ts) >= 7:
         return ts[:7]
     return fallback
-
-
-# Renamed project dirs re-key their ~/.claude/projects/ transcript folder,
-# splitting one real project across two keys. Map legacy keys to current so
-# by_project attribution stays whole (totals are already rename-safe via the
-# global requestId dedup).
-_PROJECT_ALIASES = {
-    "-Users-cdcoonce-Developer-GitHub-my-brain": (
-        "-Users-cdcoonce-Developer-GitHub-the-vault"
-    ),
-    "-Users-cdcoonce-Developer-GitHub-claude-workflow": (
-        "-Users-cdcoonce-Developer-GitHub-the-workshop"
-    ),
-}
 
 
 def scan(projects_root: Path, target_month: str) -> dict:
