@@ -385,6 +385,15 @@ def _src_note(repo, body):
     return p
 
 
+def _scan(*displays, reason="missing", candidates=(), note="personal/src.md"):
+    """A graphmark scan result for ``note``, as ``broken_links_by_note`` returns it.
+
+    Lane A no longer decides brokenness for itself — with no scan it proposes nothing — so a test
+    that expects a proposal has to say what graphmark reported, exactly as production does.
+    """
+    return {note: {d: {"reason": reason, "candidates": list(candidates)} for d in displays}}
+
+
 def test_path_link_full_path_resolves(tmp_path):
     repo = _init_repo(tmp_path)
     (repo / "personal" / "tasks").mkdir(parents=True)
@@ -419,7 +428,9 @@ def test_path_link_no_match_is_broken(tmp_path):
     repo = _init_repo(tmp_path)
     (repo / "personal" / "tasks").mkdir(parents=True)
     note = _src_note(repo, "See [[personal/tasks/nope]].")
-    res = gg.run_lane_a([note], repo, dry_run=True)
+    res = gg.run_lane_a(
+        [note], repo, dry_run=True, broken_by_note=_scan("personal/tasks/nope")
+    )
     assert len(res.proposals) == 1
     assert "no matching note" in res.proposals[0]
     assert "nope" in res.proposals[0]
@@ -432,7 +443,16 @@ def test_path_link_suffix_ambiguous_is_flagged(tmp_path):
     (repo / "personal" / "a" / "x" / "note.md").write_text("x")
     (repo / "personal" / "b" / "x" / "note.md").write_text("x")
     note = _src_note(repo, "See [[x/note]].")
-    res = gg.run_lane_a([note], repo, dry_run=True)
+    res = gg.run_lane_a(
+        [note],
+        repo,
+        dry_run=True,
+        broken_by_note=_scan(
+            "x/note",
+            reason="ambiguous",
+            candidates=["personal/a/x/note.md", "personal/b/x/note.md"],
+        ),
+    )
     assert len(res.proposals) == 1
     assert "ambiguous" in res.proposals[0]
 
@@ -522,7 +542,7 @@ def test_code_span_fenced_link_not_flagged(tmp_path):
 def test_code_span_real_broken_link_still_flagged(tmp_path):
     repo = _init_repo(tmp_path)
     note = _src_note(repo, "See [[Nonexistent Real]] here.")
-    res = gg.run_lane_a([note], repo, dry_run=True)
+    res = gg.run_lane_a([note], repo, dry_run=True, broken_by_note=_scan("Nonexistent Real"))
     assert len(res.proposals) == 1
     assert "Nonexistent Real" in res.proposals[0]
 
@@ -538,7 +558,10 @@ def test_code_span_valid_link_outside_code_still_ok(tmp_path):
 def test_code_span_mixed_only_real_flagged(tmp_path):
     repo = _init_repo(tmp_path)
     note = _src_note(repo, "Syntax `[[Example Doc]]`, but [[Actually Broken]] is real.")
-    res = gg.run_lane_a([note], repo, dry_run=True)
+    # Both displays are in the scan; only the one outside the code span may be proposed.
+    res = gg.run_lane_a(
+        [note], repo, dry_run=True, broken_by_note=_scan("Example Doc", "Actually Broken")
+    )
     assert len(res.proposals) == 1
     assert "Actually Broken" in res.proposals[0]
     assert "Example Doc" not in res.proposals[0]
@@ -795,7 +818,12 @@ def test_short_substring_link_not_auto_repaired(tmp_path):
     (repo / "personal" / "Brain Dump.md").write_text("x")  # normalizes to "brain dump" (contains "ai")
     note = _src_note(repo, "Topic: [[AI]] research.")
     before = note.read_text()
-    res = gg.run_lane_a([note], repo, dry_run=False)
+    res = gg.run_lane_a(
+        [note],
+        repo,
+        dry_run=False,
+        broken_by_note=_scan("AI", candidates=["personal/Brain Dump.md"]),
+    )
     assert note.read_text() == before  # file untouched — no substring auto-repair
     assert res.applied == []
     assert any("AI" in p for p in res.proposals)  # surfaced as a hint/proposal instead
@@ -826,7 +854,7 @@ def test_genuinely_broken_link_still_flagged_with_excluded_set(tmp_path):
     (repo / "templates").mkdir()
     (repo / "templates" / "Request Form.md").write_text("x", encoding="utf-8")
     note = _src_note(repo, "See [[Totally Missing Note]].")
-    res = gg.run_lane_a([note], repo, dry_run=True)
+    res = gg.run_lane_a([note], repo, dry_run=True, broken_by_note=_scan("Totally Missing Note"))
     assert len(res.proposals) == 1
     assert "Totally Missing Note" in res.proposals[0]
 
