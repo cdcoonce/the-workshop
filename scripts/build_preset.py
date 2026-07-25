@@ -8,6 +8,7 @@ Build order (plugin format):
 5. Copy agent-matching.md -> dist/<preset>/docs/ (when agents ship)
 6. Copy hook scripts to dist/<preset>/hooks/scripts/
 7. Copy preset output styles -> dist/<preset>/output-styles/ (when present)
+7b. Copy preset machinery payload -> dist/<preset>/machinery/ (when present)
 8. Generate hooks/hooks.json (merged hook config)
 9. Generate settings.json at root (hooks removed)
 10. Generate .claude-plugin/plugin.json
@@ -452,6 +453,15 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         shutil.copytree(
             output_styles_src, dist_path / "output-styles", ignore=_JUNK_IGNORE
         )
+
+    # 7b. Copy the optional preset machinery payload (engine scripts + their
+    # test suite), junk-stripped like every other copytree. Machinery is not
+    # owner-invocable surface — no skills, agents, or hooks live in it — it is
+    # engine code the preset carries (e.g. vault-ops ships the vault's engine)
+    # so the same dist drift gate and smoke checks cover it.
+    machinery_src = preset_path / "machinery"
+    if machinery_src.exists():
+        shutil.copytree(machinery_src, dist_path / "machinery", ignore=_JUNK_IGNORE)
 
     # 8. Generate hooks/hooks.json (merged hook config). Some presets are
     # pure SessionStart/persona layers and opt out of base settings so they do

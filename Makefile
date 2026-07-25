@@ -80,10 +80,22 @@ verify-versions:
 
 VERSION_BASE ?= origin/main
 
+# Vault machinery suite: the vault's engine scripts and their tests ship as a
+# preset payload (presets/vault-ops/machinery/). Like the skill-script suites,
+# the tests live in an isolated subtree beside the code they exercise and run
+# in their OWN rootdir (a separate pytest invocation from machinery/). Deps
+# mirror the vault's dev group (pytest/hypothesis/numpy) plus its pyyaml
+# runtime dependency, wired with `uv run --with` exactly as the skill-script
+# runner does.
+.PHONY: test-machinery
+test-machinery:
+	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml python -m pytest -q tests
+
 .PHONY: test
 test:
 	$(MAKE) lint
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
+	$(MAKE) test-machinery
 	$(MAKE) verify-generated
 	$(MAKE) verify-versions
