@@ -54,6 +54,17 @@ TRANSIENT_PREFIXES = (
     "work/archive/2026/tasks/",
 )
 
+# Task-file locations and section names — owner-configurable; task_manager and
+# work_task_manager read these rather than hardcoding paths.
+TASKS_DIR = "personal/tasks"
+ARCHIVE_TASKS_DIR = "personal/archive/tasks"
+
+WORK_TASKS_DIR = "work"
+WORK_TASKS_FILENAME = "Tasks.md"
+WORK_TASKS_ARCHIVE_DIR = "work/archive/tasks"
+WORK_TASK_SECTIONS: tuple[str, ...] = ("Active", "Waiting On", "Someday", "Done")
+WORK_TASKS_DONE_SECTION = "Done"
+
 
 def rel_posix(path: Path, vault_root: Path) -> str | None:
     """Return a vault-relative POSIX path, or None when outside the vault."""

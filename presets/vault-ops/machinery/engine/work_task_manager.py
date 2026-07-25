@@ -1,4 +1,4 @@
-"""Work Task Manager — CRUD for work/Tasks.md with section-based organization.
+"""Work Task Manager — CRUD for the configured work tasks file with section-based organization.
 
 Public interface:
     ensure_work_tasks_file(vault_root) -> Path
@@ -26,13 +26,18 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import generate
+from vault_scope import (
+    WORK_TASK_SECTIONS as SECTIONS,
+    WORK_TASKS_ARCHIVE_DIR,
+    WORK_TASKS_DIR,
+    WORK_TASKS_DONE_SECTION,
+    WORK_TASKS_FILENAME,
+)
 from vault_utils import WIKILINK_CAPTURE_RE, iso_week_string
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-SECTIONS: tuple[str, ...] = ("Active", "Waiting On", "Someday", "Done")
 
 TASK_RE = re.compile(
     r"^- \[(?P<status>[ x])\] "
@@ -61,6 +66,18 @@ class WorkTask:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _work_tasks_dir(vault_root: Path) -> Path:
+    """Return the work tasks directory path, creating it if needed."""
+    d = vault_root / WORK_TASKS_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _work_tasks_path(vault_root: Path) -> Path:
+    """Return the path to the work tasks file (may not exist)."""
+    return vault_root / WORK_TASKS_DIR / WORK_TASKS_FILENAME
+
+
 def _find_section_end(lines: list[str], header_idx: int) -> int:
     """Return the index where new content should be inserted after a section header.
 
@@ -86,9 +103,8 @@ def ensure_work_tasks_file(vault_root: Path) -> Path:
     Returns the path to the file.
     """
     vault_root = Path(vault_root)
-    tasks_dir = vault_root / "work"
-    tasks_dir.mkdir(parents=True, exist_ok=True)
-    tasks_path = tasks_dir / "Tasks.md"
+    tasks_dir = _work_tasks_dir(vault_root)
+    tasks_path = tasks_dir / WORK_TASKS_FILENAME
 
     if tasks_path.exists():
         return tasks_path
@@ -212,7 +228,7 @@ def complete_work_task(vault_root: Path, title: str) -> bool:
     Returns True if the task was found and completed, False otherwise.
     """
     vault_root = Path(vault_root)
-    tasks_path = vault_root / "work" / "Tasks.md"
+    tasks_path = _work_tasks_path(vault_root)
     if not tasks_path.exists():
         return False
 
@@ -244,8 +260,8 @@ def complete_work_task(vault_root: Path, title: str) -> bool:
     # Remove from current position
     lines.pop(task_line_idx)
 
-    # Find the Done section and insert there
-    done_header = "## Done"
+    # Find the done section and insert there
+    done_header = f"## {WORK_TASKS_DONE_SECTION}"
     inserted = False
     for i, line in enumerate(lines):
         if line.strip() == done_header:
@@ -312,10 +328,10 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
     """
     today = today or date.today()
     vault_root = Path(vault_root)
-    tasks_path = vault_root / "work" / "Tasks.md"
+    tasks_path = _work_tasks_path(vault_root)
 
     if not tasks_path.exists():
-        return {"rolled_over": False, "reason": "work/Tasks.md not found"}
+        return {"rolled_over": False, "reason": f"{WORK_TASKS_DIR}/{WORK_TASKS_FILENAME} not found"}
 
     content = tasks_path.read_text(encoding="utf-8")
 
@@ -341,7 +357,7 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
     # Archive the current file, stripping non-schema status/project fields so
     # archived weeks aren't miscategorized as live projects (the tasks-type
     # frontmatter is date/description/tags/week only). See _strip_task_fields.
-    archive_dir = vault_root / "work" / "archive" / "tasks"
+    archive_dir = vault_root / WORK_TASKS_ARCHIVE_DIR
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive_path = archive_dir / f"{fm_iso}-tasks.md"
     archive_path.write_text(_strip_task_fields(content), encoding="utf-8")
@@ -377,9 +393,9 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
             continue
         sections[current_section].append(line)
 
-    # Capture Done items for the Brag Doc scan before discarding
+    # Capture done items for the Brag Doc scan before discarding
     done_items: list[str] = []
-    for line in sections.get("Done", []):
+    for line in sections.get(WORK_TASKS_DONE_SECTION, []):
         if re.match(r"^\s*- \[x\]", line):
             done_items.append(line.strip())
 
@@ -420,7 +436,7 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
     for section in SECTIONS:
         new_lines.append(f"## {section}")
         new_lines.append("")
-        if section == "Done":
+        if section == WORK_TASKS_DONE_SECTION:
             continue
         filtered = _filter_carry_forward(sections.get(section, []))
         if filtered:
@@ -444,7 +460,7 @@ def has_duplicate(vault_root: Path, title: str) -> bool:
     Ignores completed tasks.
     """
     vault_root = Path(vault_root)
-    tasks_path = vault_root / "work" / "Tasks.md"
+    tasks_path = _work_tasks_path(vault_root)
     if not tasks_path.exists():
         return False
 
