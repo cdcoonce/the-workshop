@@ -33,6 +33,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/frontmatter_schema_defaults.py",
+      "target": ".claude/scripts/frontmatter_schema_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/glossary_manager.py",
       "target": ".claude/scripts/glossary_manager.py"
     },

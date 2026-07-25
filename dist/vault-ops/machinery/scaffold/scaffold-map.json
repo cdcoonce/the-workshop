@@ -32,6 +32,10 @@
     {
       "template": "context_paths.py.tmpl",
       "target": ".claude/scripts/context_paths.py"
+    },
+    {
+      "template": "frontmatter_schema.json.tmpl",
+      "target": ".claude/scripts/frontmatter_schema.json"
     }
   ],
   "trees": [
