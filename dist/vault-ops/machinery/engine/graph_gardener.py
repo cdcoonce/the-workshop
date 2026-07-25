@@ -70,6 +70,8 @@ LANE_B_MODEL = "claude-haiku-4-5"
 LANE_B_TIMEOUT = 90          # seconds for the headless claude call
 RACE_SAFETY_SECS = 120       # skip notes modified in the last N seconds
 SWEEP_BATCH = 8              # old backlog notes gardened per run (trickle sweep)
+BROKEN_BATCH = 8             # notes with known broken links gardened per run (targeted)
+BROKEN_SCAN_TIMEOUT = 30     # seconds; the graphmark scan is ~0.2s, this is a hang guard
 MAX_NOTES_LANE_B = 20        # cap: don't send 200 notes in one prompt
 
 ORPHAN_MIN_CHARS = 300       # notes this long with no [[link]] → orphan flag
@@ -475,6 +477,64 @@ def filter_unchanged(
     return [rel for rel, cur in candidates if gardened.get(rel) != cur]
 
 
+def broken_links_by_note(vault_root: Path) -> dict[str, set[str]] | None:
+    """rel_path → the set of raw link displays graphmark reports as broken.
+
+    ``None`` means the scan was unavailable, which callers treat as "fall back to the
+    older self-contained logic" rather than "nothing is broken" — the distinction
+    matters, since an empty dict would silence every proposal.
+    """
+    raw = _graphmark_unresolved(vault_root)
+    if raw is None:
+        return None
+    return {
+        note: {d for d in displays if isinstance(d, str)}
+        for note, displays in raw.items()
+        if isinstance(displays, list)
+    }
+
+
+def notes_with_broken_links(vault_root: Path) -> list[str]:
+    """Rel-paths of notes graphmark reports as containing broken wikilinks, sorted.
+
+    Delegates to ``graph_cli.py --unresolved`` — the vault's graphmark seam — rather than
+    re-deriving brokenness here, so the answer honors graphmark's resolution rules
+    (same-note ``[[#anchor]]`` links, non-markdown targets like ``.base``, and a trailing
+    ``.md``) instead of this file's older approximations.
+
+    Fail-soft by design: this runs inside a session hook, so any failure (missing uv,
+    resolver error, malformed output) returns ``[]`` and the gardener proceeds with its
+    ordinary round-robin sweep.
+    """
+    raw = _graphmark_unresolved(vault_root)
+    return sorted(raw) if raw else []
+
+
+def _graphmark_unresolved(vault_root: Path) -> dict | None:
+    """Raw ``graph_cli.py --unresolved`` payload, or ``None`` if the scan failed.
+
+    One code path for both consumers, so the targeted sweep and Lane A can never
+    disagree about what is broken.
+    """
+    script = vault_root / ".claude" / "scripts" / "graph_cli.py"
+    if not script.exists():
+        return None
+    try:
+        proc = subprocess.run(
+            ["uv", "run", str(script), "--vault-root", str(vault_root), "--unresolved"],
+            capture_output=True,
+            text=True,
+            timeout=BROKEN_SCAN_TIMEOUT,
+            cwd=str(vault_root),
+        )
+        if proc.returncode != 0:
+            return None
+        data = json.loads(proc.stdout or "{}")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def collect_touched_notes(
     vault_root: Path,
     state: dict,
@@ -484,8 +544,16 @@ def collect_touched_notes(
 
     Source 1 (recency): notes committed since state['last_gardened_commit'].
     Source 2 (backlog trickle): up to SWEEP_BATCH old notes after the sweep cursor.
-    Both are settle-filtered and de-duplicated against the gardened-hash map, so a
-    note never re-proposes until its content changes.
+    Source 3 (targeted): up to BROKEN_BATCH notes graphmark says have broken links.
+
+    Sources 2 and 3 are complementary on purpose. The round-robin trickle gives every
+    lane (index drift, orphans, people profiles) eventual vault-wide coverage, so it must
+    not be narrowed; the targeted source just stops Lane A from waiting for the cursor to
+    reach the ~15% of notes that actually have a broken link.
+
+    All sources are settle-filtered and de-duplicated against the gardened-hash map, so a
+    note never re-proposes until its content changes — which is also what drains the
+    targeted source, no separate cursor required.
     """
     if override is not None:
         notes = [p for p in override if p.exists() and _is_in_scope(p, vault_root)]
@@ -502,8 +570,11 @@ def collect_touched_notes(
     )
     backlog = [vault_root / r for r in batch_rel]
 
+    # Source 3 — targeted: notes that actually have broken links right now.
+    targeted = [vault_root / r for r in notes_with_broken_links(vault_root)[:BROKEN_BATCH]]
+
     # Merge + settle
-    merged = settled_notes(recency + backlog, vault_root)
+    merged = settled_notes(recency + backlog + targeted, vault_root)
 
     # De-duplicate by resolved path
     seen: set[Path] = set()
@@ -706,6 +777,7 @@ def run_lane_a(
     vault_root: Path,
     dry_run: bool = False,
     dismissed: set[str] = frozenset(),
+    broken_by_note: dict[str, set[str]] | None = None,
 ) -> LaneAResult:
     """Parse [[links]] in each note; repair exactly-one-match broken links.
 
@@ -714,6 +786,14 @@ def run_lane_a(
         vault_root: Vault root (for relative path display).
         dry_run: If True, log repairs but do NOT write the file.
         dismissed: Set of proposal signatures to suppress (from suppress-list).
+        broken_by_note: rel_path → the raw link displays graphmark reports as broken.
+            When supplied, graphmark is the authority on brokenness and a display it
+            does NOT list is never proposed — it either resolves or is out of scope
+            (``[[Chart.base]]``, ``[[#Heading]]``, a trailing ``.md``). Cosmetic
+            auto-repair is unaffected: it fires on links that already resolve but whose
+            display text differs from the note's title, which is not a brokenness
+            question. ``None`` (a failed or skipped scan) keeps the previous
+            self-contained behavior.
 
     Returns:
         LaneAResult with applied repairs and unresolved proposals.
@@ -749,6 +829,16 @@ def run_lane_a(
             # Also strip heading anchors from cross-note links: [[Note#Section]] → "Note"
             display = raw_target.split("|")[0].split("#")[0].strip()
 
+            # graphmark owns the definition of "broken". When its scan is available, a
+            # display it does not report is resolvable or deliberately out of scope, so
+            # it must never become a proposal — that is what stopped Lane A telling us to
+            # "create or remove" working [[Chart.base]] links. Auto-repair below is not
+            # gated: it acts on links that already resolve.
+            graphmark_says_fine = (
+                broken_by_note is not None
+                and raw_target not in broken_by_note.get(str(rel), set())
+            )
+
             # Path-qualified link ([[folder/note]]): resolve by matching the link's
             # path against note paths using unique-suffix semantics (like Obsidian).
             # The title match below is path-blind, so these MUST be handled first.
@@ -768,7 +858,7 @@ def run_lane_a(
                 if not matches and base_key in excluded_stems:
                     continue  # points at a graph-excluded note (templates/ etc.) — suppress
                 sig = proposal_signature("broken", str(rel), display)
-                if sig not in dismissed:
+                if sig not in dismissed and not graphmark_says_fine:
                     if len(matches) >= 2:
                         result.proposals.append(
                             f"`{rel}`: broken `[[{display}]]` — ambiguous path "
@@ -835,7 +925,7 @@ def run_lane_a(
                     # Key maps to 2+ notes — normalization collision, ambiguous.
                     collision_names = [p.stem for p in paths_for_key]
                     sig = proposal_signature("broken", str(rel), display)
-                    if sig not in dismissed:
+                    if sig not in dismissed and not graphmark_says_fine:
                         result.proposals.append(
                             f"`{rel}`: broken `[[{display}]]` — ambiguous "
                             f"({len(paths_for_key)} notes share normalized key): "
@@ -864,7 +954,7 @@ def run_lane_a(
                 hint_str = ", ".join(f"`{h}`" for h in hints[:5])
                 hint_str += " …" if len(hints) > 5 else ""
                 sig = proposal_signature("broken", str(rel), display)
-                if sig not in dismissed:
+                if sig not in dismissed and not graphmark_says_fine:
                     result.proposals.append(
                         f"`{rel}`: broken `[[{display}]]` — no exact match; "
                         f"did you mean {hint_str}?"
@@ -872,7 +962,7 @@ def run_lane_a(
                     )
             else:
                 sig = proposal_signature("broken", str(rel), display)
-                if sig not in dismissed:
+                if sig not in dismissed and not graphmark_says_fine:
                     result.proposals.append(
                         f"`{rel}`: broken `[[{display}]]` — no matching note "
                         f"(consider creating or removing)"
@@ -1372,7 +1462,13 @@ def run_gardener(
     dismissed = load_dismissed(vault_root)
 
     # --- Lane A ---
-    lane_a = run_lane_a(notes, vault_root, dry_run=dry_run, dismissed=dismissed)
+    lane_a = run_lane_a(
+        notes,
+        vault_root,
+        dry_run=dry_run,
+        dismissed=dismissed,
+        broken_by_note=broken_links_by_note(vault_root),
+    )
 
     # --- Lane B ---
     lane_b = run_lane_b(notes, vault_root, skip=skip_lane_b)
