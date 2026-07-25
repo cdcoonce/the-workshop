@@ -1,6 +1,7 @@
 """Tests for smoke_test.py -- validates internal consistency of built plugins."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -1082,3 +1083,95 @@ class TestSmokeDescriptionProcessMarkers:
         assert not any(
             "commit/SKILL.md" in e and "trigger-only" in e for e in result.errors
         )
+
+
+class TestSmokeMachinery:
+    """Every engine file the machinery tests reference must have shipped."""
+
+    def _dist_with_machinery(self, tmp_repo: Path) -> Path:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        engine = dist / "machinery" / "engine"
+        engine.mkdir(parents=True)
+        (engine / "vault_utils.py").write_text("# engine module\n")
+        (engine / "session-stop.py").write_text("# hook script\n")
+        (engine / "queries").mkdir()
+        (engine / "queries" / "vault_query.py").write_text("# query module\n")
+        tests_dir = dist / "machinery" / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_vault_utils.py").write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "\n"
+            "import pytest\n"
+            "\n"
+            'SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"\n'
+            "sys.path.insert(0, str(SCRIPTS_DIR))\n"
+            "\n"
+            "from vault_utils import parse\n"
+            "import vault_query\n"
+            'HOOK = SCRIPTS_DIR / "session-stop.py"\n'
+        )
+        return dist
+
+    def test_consistent_machinery_passes(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_machinery(tmp_repo)
+
+        result = smoke_test(dist)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_import_of_unshipped_engine_module_fails(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_machinery(tmp_repo)
+        (dist / "machinery" / "engine" / "vault_utils.py").unlink()
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any(
+            "machinery/engine/vault_utils.py" in e and "not in the build output" in e
+            for e in result.errors
+        )
+
+    def test_path_reference_to_unshipped_engine_file_fails(
+        self, tmp_repo: Path
+    ) -> None:
+        dist = self._dist_with_machinery(tmp_repo)
+        (dist / "machinery" / "engine" / "session-stop.py").unlink()
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any(
+            "machinery/engine/session-stop.py" in e and "not in the build output" in e
+            for e in result.errors
+        )
+
+    def test_stdlib_and_test_dep_imports_are_not_engine_references(
+        self, tmp_repo: Path
+    ) -> None:
+        """json/sys/pathlib/pytest imports must not demand engine modules."""
+        dist = self._dist_with_machinery(tmp_repo)
+
+        result = smoke_test(dist)
+
+        for name in ("json", "sys", "pathlib", "pytest"):
+            assert not any(f"'{name}'" in e for e in result.errors)
+
+    def test_tests_without_engine_dir_fails(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_machinery(tmp_repo)
+        shutil.rmtree(dist / "machinery" / "engine")
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any("no engine/ directory" in e for e in result.errors)
+
+    def test_plugin_without_machinery_is_unaffected(self, tmp_repo: Path) -> None:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        result = smoke_test(dist)
+
+        assert result.passed is True

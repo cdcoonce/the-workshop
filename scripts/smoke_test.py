@@ -11,6 +11,8 @@ Checks:
 - Every relative link or backtick-quoted path in bundled skill/agent docs
   resolves within that skill/agent directory
 - settings.json at root is valid JSON
+- Every machinery/engine/ file referenced by machinery/tests/ (imports and
+  SCRIPTS_DIR path literals) exists in the build output
 """
 
 from __future__ import annotations
@@ -468,6 +470,81 @@ def _core_skill_names(dist_path: Path) -> frozenset[str]:
     return frozenset(d.name for d in core_skills_dir.iterdir() if d.is_dir())
 
 
+# Third-party modules the machinery test runner provides at gate time (see the
+# Makefile's test-machinery step); imports of these are not engine references.
+_MACHINERY_EXTERNAL_MODULES = frozenset({"pytest", "hypothesis", "numpy", "yaml"})
+
+# Top-level (column-0) import statements in a machinery test module.
+_MACHINERY_IMPORT_PATTERN = re.compile(
+    r"^(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE
+)
+
+# Engine file references built from the tests' SCRIPTS_DIR anchor, e.g.
+# `SCRIPTS_DIR / "session-stop.py"` or `SCRIPTS_DIR / "queries" / "x.py"`.
+_MACHINERY_PATH_REFERENCE = re.compile(
+    r'SCRIPTS_DIR\s*/\s*"([^"\n]+)"(?:\s*/\s*"([^"\n]+)")?'
+)
+
+
+def _validate_machinery(machinery_dir: Path) -> list[str]:
+    """Every engine file the machinery tests reference must have shipped.
+
+    The machinery analogue of the wired-but-not-shipped hook guard: a test
+    module that imports an engine module, or points its SCRIPTS_DIR anchor at
+    an engine file, which the build did not ship would only fail later at
+    machinery-test runtime — catch the inconsistency at smoke time instead.
+
+    Parameters
+    ----------
+    machinery_dir
+        The built ``machinery/`` directory inside a dist plugin tree,
+        expected to hold ``engine/`` and ``tests/`` subtrees.
+
+    Returns
+    -------
+    list[str]
+        Error strings for unresolved engine references.
+    """
+    errors: list[str] = []
+    engine_dir = machinery_dir / "engine"
+    tests_dir = machinery_dir / "tests"
+    if not tests_dir.is_dir():
+        return errors
+    if not engine_dir.is_dir():
+        return ["machinery/ ships tests/ but no engine/ directory"]
+
+    for test_file in sorted(tests_dir.glob("*.py")):
+        text = test_file.read_text(encoding="utf-8")
+
+        for module_name in _MACHINERY_IMPORT_PATTERN.findall(text):
+            if module_name in sys.stdlib_module_names:
+                continue
+            if module_name in _MACHINERY_EXTERNAL_MODULES:
+                continue
+            if module_name.startswith("test_") or module_name == "conftest":
+                continue
+            if (engine_dir / f"{module_name}.py").is_file():
+                continue
+            if (engine_dir / "queries" / f"{module_name}.py").is_file():
+                continue
+            errors.append(
+                f"machinery test '{test_file.name}' imports '{module_name}' "
+                f"but machinery/engine/{module_name}.py is not in the build "
+                f"output"
+            )
+
+        for parts in _MACHINERY_PATH_REFERENCE.findall(text):
+            relative = "/".join(p for p in parts if p)
+            if not (engine_dir / relative).exists():
+                errors.append(
+                    f"machinery test '{test_file.name}' references "
+                    f"machinery/engine/{relative} but it is not in the build "
+                    f"output"
+                )
+
+    return errors
+
+
 def smoke_test(dist_path: Path) -> SmokeTestResult:
     """Validate internal consistency of a built plugin.
 
@@ -679,6 +756,13 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
             json.loads(settings_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             result.errors.append("settings.json is not valid JSON")
+
+    # 7. Validate the machinery payload: every engine file its tests reference
+    # must exist in the build output (the wired-but-not-shipped guard of
+    # check 4, applied to machinery).
+    machinery_dir = dist_path / "machinery"
+    if machinery_dir.exists():
+        result.errors.extend(_validate_machinery(machinery_dir))
 
     return result
 
