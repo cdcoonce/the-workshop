@@ -26,7 +26,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import generate
-from vault_scope import (
+from vault_scope_resolved import (
     WORK_TASK_SECTIONS as SECTIONS,
     WORK_TASKS_ARCHIVE_DIR,
     WORK_TASKS_DIR,

@@ -35,7 +35,7 @@ from typing import Any
 
 import numpy as np
 
-from vault_scope import is_graph_markdown_note, iter_graph_markdown_notes
+from vault_scope_resolved import is_graph_markdown_note, iter_graph_markdown_notes
 
 # ---------------------------------------------------------------------------
 # Paths — vault root is two levels above .claude/scripts/
