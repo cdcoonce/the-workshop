@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.5,<0.6", "fastembed", "numpy"]
+# dependencies = ["graphmark>=0.6,<0.7", "fastembed", "numpy"]
 # ///
 """Vault graph CLI — the reintegration seam.
 
@@ -10,9 +10,9 @@ file's inline script dependencies. Running it through plain ``python`` or
 
 Delegates the graph algorithm to the published **graphmark** package (extracted and hardened
 from the former `.claude/scripts/brain_map.py`), while keeping the vault-specific pieces here:
-the scope (`vault_scope.py`), the embedding-backed `similar_fn` (from semantic_index), and
-alias resolution (``AliasResolver``). graphmark owns the deterministic algorithm; the vault
-injects its own naming and similarity policy.
+the scope (`vault_scope.py`) and the embedding-backed `similar_fn` (from semantic_index).
+graphmark owns the deterministic algorithm — including frontmatter ``aliases:`` resolution as
+of 0.6 — and the vault injects its own scope and similarity policy.
 
 Surface used by /connect and /garden: `--gaps [--near-bridges] [--top N] [...]` and `--dismiss A B`.
 Structural queries (--stats/--orphans/...) are also supported for parity with the old CLI.
@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -38,11 +37,8 @@ from graphmark import (
     GAPS_DEFAULT_K,
     GAPS_DEFAULT_MAX_SCORE,
     GAPS_DEFAULT_THRESHOLD,
-    Document,
-    NormalizeResolver,
     VaultConfig,
     VaultGraph,
-    build_catalog,
     active_dismissed_sigs,
     bridges,
     clusters,
@@ -79,115 +75,6 @@ def find_vault_root() -> Path | None:
     return None
 
 
-_ALIAS_LIST_HEADER = re.compile(r"^aliases:\s*$")
-_ALIAS_INLINE = re.compile(r"^aliases:\s*\[(.*)\]\s*$")
-_ALIAS_ITEM = re.compile(r"^\s+-\s*(.+?)\s*$")
-
-
-def frontmatter_aliases(path: Path) -> list[str]:
-    """Aliases declared in a note's frontmatter, block or inline form.
-
-    Deliberately a targeted scan rather than a YAML parse: this runs inside a
-    session hook over every note in the vault, and a note someone is mid-edit
-    must not take the graph down. Anything unparseable yields no aliases.
-    """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return []
-    if not text.startswith("---"):
-        return []
-    end = text.find("\n---", 3)
-    block = text[3:end] if end != -1 else text[3:]
-
-    found: list[str] = []
-    in_list = False
-    for line in block.splitlines():
-        inline = _ALIAS_INLINE.match(line)
-        if inline:
-            found += [s.strip().strip("\"'") for s in inline.group(1).split(",")]
-            in_list = False
-            continue
-        if _ALIAS_LIST_HEADER.match(line):
-            in_list = True
-            continue
-        if in_list:
-            item = _ALIAS_ITEM.match(line)
-            if item:
-                found.append(item.group(1).strip("\"'"))
-            else:
-                in_list = False
-    return [a for a in found if a]
-
-
-def _strip_display(display: str) -> str:
-    """`Note|shown`, `Note#Anchor` and `Note.md` all name the same note."""
-    display = display.split("|", 1)[0].split("#", 1)[0].strip()
-    return display[:-3] if display.lower().endswith(".md") else display
-
-
-def _catalog_key(name: str) -> str | None:
-    """The catalog key graphmark would compute for a note named ``name``.
-
-    Derived by handing graphmark its own ``build_catalog`` a synthetic document
-    rather than restating its normalization here, so alias keys and note keys
-    can never drift apart.
-    """
-    if not name or "/" in name:
-        return None
-    keys = list(build_catalog([Document(rel_path=f"{name}.md", text="", frontmatter={})]))
-    return keys[0] if keys else None
-
-
-class AliasResolver:
-    """graphmark's resolver, plus the vault's frontmatter ``aliases:`` convention.
-
-    graphmark resolves a wikilink by normalized basename with a path-suffix
-    fallback; it never reads frontmatter. The vault, meanwhile, treats
-    ``aliases:`` as a real name for a note — so a correct ``[[Mood Tracker]]``
-    pointing at a note that declares exactly that alias was reported broken,
-    and the convention was write-only. Naming policy belongs to the seam, so
-    the fallback lives here rather than in the graph algorithm.
-
-    Two rules keep this conservative:
-
-    - the base resolver runs first, so an actual note named X always beats an
-      alias X — otherwise renaming a note could silently hijack live links;
-    - an alias claimed by two notes, or one that collides with any real note
-      name, resolves to nothing. That is the same refusal graphmark applies to
-      colliding basenames: ambiguity stays ambiguous.
-    """
-
-    def __init__(self, vault_root: Path) -> None:
-        self._root = vault_root
-        self._base = NormalizeResolver()
-        self._indexed_catalog: int | None = None
-        self._aliases: dict[str, str] = {}
-
-    def _index(self, catalog: dict[str, list[str]]) -> None:
-        # The catalog is invariant for one build() and already names exactly the
-        # documents graphmark scanned, so it is also the note list — no second
-        # walk to drift from the first.
-        if self._indexed_catalog == id(catalog):
-            return
-        self._indexed_catalog = id(catalog)
-        claims: dict[str, set[str]] = {}
-        for rel_path in (p for paths in catalog.values() for p in paths):
-            for alias in frontmatter_aliases(self._root / rel_path):
-                key = _catalog_key(alias)
-                if key is not None and key not in catalog:
-                    claims.setdefault(key, set()).add(rel_path)
-        self._aliases = {k: v.pop() for k, v in claims.items() if len(v) == 1}
-
-    def resolve(self, display: str, catalog: dict[str, list[str]]) -> str | None:
-        resolved = self._base.resolve(display, catalog)
-        if resolved is not None:
-            return resolved
-        self._index(catalog)
-        key = _catalog_key(_strip_display(display))
-        return self._aliases.get(key) if key is not None else None
-
-
 def build(vault_root: Path) -> tuple[VaultGraph, VaultConfig]:
     cfg = VaultConfig(
         root=vault_root,
@@ -196,9 +83,9 @@ def build(vault_root: Path) -> tuple[VaultGraph, VaultConfig]:
         rules_files=list(OPERATING_FILENAMES),
         transient_prefixes=TRANSIENT_PREFIXES,
     )
-    # graphmark.build() defaults the wikilink extractor; the resolver is the
-    # vault's, so frontmatter aliases resolve like the names they are.
-    return graphmark.build(cfg, resolver=AliasResolver(vault_root)), cfg
+    # No extractor or resolver injected: graphmark.build() defaults both, and its
+    # resolver reads frontmatter ``aliases:`` natively as of 0.6.
+    return graphmark.build(cfg), cfg
 
 
 def vector_similar_fn(vault_root: Path):
