@@ -54,7 +54,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from vault_utils import find_vault_root_from_env, read_batch_model, read_vault_context, WIKILINK_CAPTURE_RE  # noqa: E402
-from vault_scope import (  # noqa: E402
+from vault_scope_resolved import (  # noqa: E402
     GRAPH_EXCLUDED_DIRS,
     GRAPH_NOTE_DIRS,
     is_graph_excluded,

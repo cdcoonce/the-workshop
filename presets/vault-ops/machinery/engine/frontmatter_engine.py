@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 from vault_utils import WIKILINK_RE
-from vault_scope import is_governed_markdown_note, is_transient_note
+from vault_scope_resolved import is_governed_markdown_note, is_transient_note
 
 
 # ---------------------------------------------------------------------------

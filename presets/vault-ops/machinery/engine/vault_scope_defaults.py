@@ -1,11 +1,10 @@
-"""Canonical vault scope rules shared by validation, graph, and search tools.
+"""Shipped defaults for the vault scope surface — canonical rules and values.
 
-Scaffold-owned (tier: "scaffold"): machinery_sync init rendered this file
-once from the workshop scaffold template with this vault's note-dir
-taxonomy, and upgrade never touches it. Edit it freely — it is yours. Engine code reads these names through
-``vault_scope_resolved`` with shipped defaults as fallback, so removing a
-name here is safe — and engine code must never hard-require a name that
-only exists in this file.
+Managed tier: upgrade owns this file. The vault's ``vault_scope.py`` is the
+scaffold-rendered, owner-editable copy of this surface; engine code reads
+names through ``vault_scope_resolved``, which prefers the scaffold's value
+and falls back here for any name the scaffold predates. Every public name
+engine code imports from the scope surface must exist in this module.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 # Governed notes must carry frontmatter and obey the wikilink rule.
-GOVERNED_NOTE_DIRS = (${governed_note_dirs})
+GOVERNED_NOTE_DIRS = ("brain", "work", "personal", "org", "perf", "reference")
 
 # Graph/search notes include working drafts so backlinks can surface promotion
 # candidates, but operating manuals and generated/session state are excluded.

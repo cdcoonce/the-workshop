@@ -58,7 +58,7 @@ from graphmark import (
 )
 
 # Vault scope — shared with validation, semantic search, and graph gardener.
-from vault_scope import (  # noqa: E402
+from vault_scope_resolved import (  # noqa: E402
     GRAPH_EXCLUDED_DIRS,
     GRAPH_NOTE_DIRS,
     OPERATING_FILENAMES,

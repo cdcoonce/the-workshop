@@ -175,6 +175,14 @@ class TestReadBatchModel:
         monkeypatch.setattr(vault_scope, "BATCH_MODEL", "")
         assert read_batch_model() == DEFAULT_BATCH_MODEL
 
-    def test_explicit_default_override(self, monkeypatch):
+    def test_explicit_default_is_the_last_resort(self, monkeypatch):
+        # #464 layering: scaffold value → shipped default → caller's default.
+        # The shipped surface (vault_scope_defaults) interposes before the
+        # param, so the param only applies when the name is unknown to both.
+        import vault_scope_defaults
+
         monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+        assert read_batch_model(default="claude-sonnet-5") == DEFAULT_BATCH_MODEL
+
+        monkeypatch.delattr(vault_scope_defaults, "BATCH_MODEL")
         assert read_batch_model(default="claude-sonnet-5") == "claude-sonnet-5"
