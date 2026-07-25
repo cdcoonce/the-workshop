@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch
 
 import pytest
@@ -11,6 +13,8 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import context_loader
+import context_paths_defaults
 from context_loader import (
     HANDOFF_MAX_BYTES,
     HANDOFF_RESUME_ENTRIES,
@@ -127,6 +131,116 @@ class TestContextAssembly:
         (vault / ".vault-context").write_text("work")
         ctx = load_context(vault)
         assert "2" in ctx.summary  # 2 active projects
+
+
+# ---------------------------------------------------------------------------
+# Configurable note paths
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def scaffolded_config():
+    """Reload context_loader against a stand-in scaffolded context_paths module.
+
+    The real config is scaffold-rendered into the vault's script dir, so the
+    seam under test is the module-level import — not the flattened lookup it
+    produces. Each call re-executes context_loader with the given sections;
+    teardown restores the shipped defaults.
+    """
+
+    def _configure(
+        common: dict[str, str], per_context: dict[str, dict[str, str]]
+    ) -> ModuleType:
+        module = ModuleType("context_paths")
+        module.COMMON_NOTE_PATHS = common
+        module.CONTEXT_NOTE_PATHS = per_context
+        sys.modules["context_paths"] = module
+        return importlib.reload(context_loader)
+
+    yield _configure
+
+    sys.modules.pop("context_paths", None)
+    importlib.reload(context_loader)
+
+
+class TestConfigurableNotePaths:
+    """Digest-source paths come from config, not literals in the loader."""
+
+    def test_configured_paths_are_read(self, vault: Path, scaffolded_config) -> None:
+        (vault / "brain" / "Goals.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: goals\ntags:\n  - north-star\n---\n\n"
+            "# Goals\n\nCustom north star location.\n"
+        )
+        (vault / "projects").mkdir()
+        (vault / "projects" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Projects\n\n## Active Projects\n\n- [[Warehouse Cutover]]\n"
+        )
+        loader = scaffolded_config(
+            {"north_star": "brain/Goals.md"},
+            {"work": {"work_index": "projects/Index.md"}},
+        )
+
+        ctx = loader.load_context(vault)
+
+        assert "Custom north star location" in ctx.north_star
+        assert ctx.active_work == ["[[Warehouse Cutover]]"]
+
+    def test_configured_pointer_names_the_configured_path(
+        self, vault: Path, scaffolded_config
+    ) -> None:
+        (vault / "projects").mkdir()
+        (vault / "projects" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Projects\n\n## Active Projects\n\n"
+            + "".join(f"- [[Project {n}]]\n" for n in range(SUMMARY_PREVIEW + 2))
+        )
+        loader = scaffolded_config({}, {"work": {"work_index": "projects/Index.md"}})
+
+        ctx = loader.load_context(vault)
+
+        assert "projects/Index.md" in ctx.summary
+
+    def test_missing_configured_note_degrades_to_empty(
+        self, vault: Path, scaffolded_config
+    ) -> None:
+        loader = scaffolded_config({"north_star": "brain/Does-Not-Exist.md"}, {})
+
+        ctx = loader.load_context(vault)
+
+        assert ctx.north_star == ""
+
+    def test_dropped_config_name_falls_back_to_shipped_default(
+        self, vault: Path, scaffolded_config
+    ) -> None:
+        """An owner deleting a section they have no notes for must not crash."""
+        loader = scaffolded_config({"north_star": "brain/North Star.md"}, {})
+
+        ctx = loader.load_context(vault)
+
+        assert loader.NOTE_PATHS["personal_index"] == "personal/Index.md"
+        assert "[[Advanced SQL]]" in ctx.active_personal
+
+    def test_unmapped_name_degrades_to_empty(self, vault: Path, monkeypatch) -> None:
+        """A name absent from both config and defaults reads as a missing note."""
+        monkeypatch.setattr(context_loader, "NOTE_PATHS", {})
+
+        ctx = load_context(vault)
+
+        assert ctx.north_star == ""
+        assert ctx.active_work == []
+
+    def test_absent_config_module_uses_shipped_defaults(self, vault: Path) -> None:
+        """A vault vendored before the scaffold config exists still digests."""
+        assert "context_paths" not in sys.modules
+        assert context_loader.NOTE_PATHS == {
+            **context_paths_defaults.COMMON_NOTE_PATHS,
+            **context_paths_defaults.CONTEXT_NOTE_PATHS["work"],
+            **context_paths_defaults.CONTEXT_NOTE_PATHS["personal"],
+        }
+
+        ctx = load_context(vault)
+
+        assert "data warehouse" in ctx.north_star
 
 
 # ---------------------------------------------------------------------------

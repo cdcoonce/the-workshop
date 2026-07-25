@@ -23,6 +23,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/context_paths_defaults.py",
+      "target": ".claude/scripts/context_paths_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },

@@ -28,6 +28,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -746,6 +747,57 @@ class TestShippedScaffold:
             "is_transient_note",
         ):
             assert callable(getattr(module, name))
+
+    def test_scaffolded_context_paths_drive_the_vendored_loader(
+        self, sync_mod, tmp_path: Path
+    ) -> None:
+        """The rendered context_paths.py supplies the loader's note paths, and
+        a vault that never got one (vendored before it existed) still imports
+        on the managed defaults."""
+        target = tmp_path / "fresh-vault"
+        assert (
+            sync_mod.main(
+                [
+                    "init",
+                    "--target",
+                    str(target),
+                    "--source",
+                    str(MACHINERY_DIR),
+                    "--vault-name",
+                    "Fresh Vault",
+                ]
+            )
+            == 0
+        )
+
+        scripts = target / ".claude/scripts"
+        config_path = scripts / "context_paths.py"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace(
+                '"north_star": "brain/North Star.md"',
+                '"north_star": "brain/Goals.md"',
+            ),
+            encoding="utf-8",
+        )
+        vendored = ("context_loader", "context_paths", "context_paths_defaults")
+
+        sys.path.insert(0, str(scripts))
+        try:
+            for name in vendored:
+                sys.modules.pop(name, None)
+            loader = importlib.import_module("context_loader")
+            assert loader.NOTE_PATHS["north_star"] == "brain/Goals.md"
+
+            config_path.unlink()
+            for name in vendored:
+                sys.modules.pop(name, None)
+            fallback = importlib.import_module("context_loader")
+            assert fallback.NOTE_PATHS["north_star"] == "brain/North Star.md"
+            assert fallback.load_context(target).north_star == ""
+        finally:
+            sys.path.remove(str(scripts))
+            for name in vendored:
+                sys.modules.pop(name, None)
 
     def test_dist_ships_the_scaffold_payload(self) -> None:
         dist_scaffold = (

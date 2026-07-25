@@ -28,6 +28,10 @@
     {
       "template": "vault_scope.py.tmpl",
       "target": ".claude/scripts/vault_scope.py"
+    },
+    {
+      "template": "context_paths.py.tmpl",
+      "target": ".claude/scripts/context_paths.py"
     }
   ],
   "trees": [
