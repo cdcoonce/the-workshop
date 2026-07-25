@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "entries": [
     {
       "kind": "file",
@@ -140,6 +140,803 @@
       "kind": "file",
       "source": "engine/work_task_manager.py",
       "target": ".claude/scripts/work_task_manager.py"
+    },
+    {
+      "kind": "file",
+      "source": "agents/brag-spotter.md",
+      "target": ".claude/agents/brag-spotter.md"
+    },
+    {
+      "kind": "file",
+      "source": "agents/cross-linker.md",
+      "target": ".claude/agents/cross-linker.md"
+    },
+    {
+      "kind": "file",
+      "source": "agents/people-profiler.md",
+      "target": ".claude/agents/people-profiler.md"
+    },
+    {
+      "kind": "file",
+      "source": "rendered/codex-agents/brag-spotter.toml",
+      "target": ".codex/agents/brag-spotter.toml"
+    },
+    {
+      "kind": "file",
+      "source": "rendered/codex-agents/cross-linker.toml",
+      "target": ".codex/agents/cross-linker.toml"
+    },
+    {
+      "kind": "file",
+      "source": "rendered/codex-agents/people-profiler.toml",
+      "target": ".codex/agents/people-profiler.toml"
+    },
+    {
+      "kind": "file",
+      "source": "rendered/codex-hooks.json",
+      "target": ".codex/hooks.json"
+    },
+    {
+      "kind": "json-key",
+      "source": "rendered/claude-settings-hooks.json",
+      "target": ".claude/settings.json",
+      "key": "hooks"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-audit/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-audit/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-audit/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-budget/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-budget/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-budget/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-clickup-task-sync/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-clickup-task-sync/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-clickup-task-sync/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-connect/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-connect/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-connect/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-context-then-delegate/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-context-then-delegate/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-context-then-delegate/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dispatch/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dispatch/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dispatch/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dump/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dump/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-dump/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-essay/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-essay/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-essay/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-find/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-find/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-find/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-fix-issue/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-fix-issue/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-fix-issue/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-garden/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-garden/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-garden/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-grill/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-grill/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-grill/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-handoff/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-handoff/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-handoff/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-link/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-link/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-link/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-mr-review-packet/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-mr-review-packet/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-mr-review-packet/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-recall/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-recall/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-recall/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-standup/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-standup/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-standup/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-sync/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-sync/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-sync/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-teach/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-teach/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-teach/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-wrap-up/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-wrap-up/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-wrap-up/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-write/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-write/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-write/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-audit/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-audit/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-audit/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-audit/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-budget/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-budget/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-budget/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-budget/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-clickup-task-sync/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-clickup-task-sync/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-clickup-task-sync/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-clickup-task-sync/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-connect/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-connect/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-connect/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-connect/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-context-then-delegate/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-context-then-delegate/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-context-then-delegate/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-context-then-delegate/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dispatch/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dispatch/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dispatch/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dispatch/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dump/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dump/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-dump/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-dump/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-essay/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-essay/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-essay/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-essay/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-find/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-find/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-find/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-find/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-fix-issue/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-fix-issue/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-fix-issue/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-fix-issue/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-garden/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-garden/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-garden/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-garden/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-grill/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-grill/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-grill/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-grill/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-handoff/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-handoff/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-handoff/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-handoff/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-link/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-link/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-link/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-link/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-mr-review-packet/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-mr-review-packet/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-mr-review-packet/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-mr-review-packet/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-recall/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-recall/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-recall/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-recall/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-standup/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-standup/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-standup/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-standup/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-sync/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-sync/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-sync/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-sync/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-teach/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-teach/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-teach/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-teach/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-wrap-up/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-wrap-up/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-wrap-up/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-wrap-up/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-write/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-write/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-write/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-write/references/vault-operating-principles.md"
     }
   ]
 }

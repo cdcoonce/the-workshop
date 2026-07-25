@@ -6,7 +6,18 @@ and reports, per managed file:
 - ``OK``         — the file's sha256 matches its lock entry
 - ``LOCAL-EDIT`` — the file exists but its hash differs from the lock
 - ``MISSING``    — the file is in the lock but not on disk
-- ``UNTRACKED``  — a file under ``.claude/scripts/`` that is not in the lock
+- ``UNTRACKED``  — a file under a managed scan root that is not in the lock
+
+A lock entry with ``kind: "json-key"`` (W4: the vault's settings.json
+``hooks`` key) is verified semantically: its sha256 is the canonical-JSON
+hash (sorted keys, no whitespace) of that ONE key's value, so reformatting
+the file or reordering sibling keys stays ``OK`` while changing the key's
+value is a ``LOCAL-EDIT``. A file that no longer parses, or has lost the
+key, is a ``LOCAL-EDIT`` too.
+
+The UNTRACKED scan covers every managed root — ``.claude/scripts``,
+``.claude/agents``, ``.codex/agents``, ``.claude/skills``, and
+``.codex/skills`` — with the usual runtime-junk exclusions.
 
 Human-readable report by default; ``--json`` for machines; ``--strict``
 exits 1 on any non-OK status. ``--target`` selects the repo (default: cwd).
@@ -35,7 +46,13 @@ import sys
 from pathlib import Path
 
 LOCKFILE_RELPATH = ".vault/machinery.lock.json"
-MANAGED_SCAN_ROOT = ".claude/scripts"
+MANAGED_SCAN_ROOTS = (
+    ".claude/scripts",
+    ".claude/agents",
+    ".codex/agents",
+    ".claude/skills",
+    ".codex/skills",
+)
 
 STATUS_OK = "OK"
 STATUS_LOCAL_EDIT = "LOCAL-EDIT"
@@ -53,6 +70,26 @@ _JUNK_SUFFIXES = (".pyc",)
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _json_key_status(candidate: Path, entry: dict) -> str:
+    """Drift status of a ``kind: "json-key"`` lock entry.
+
+    The lock's sha256 is the canonical-JSON hash of one key's value, so the
+    comparison survives file reformatting and sibling-key changes.
+    """
+    if not candidate.is_file():
+        return STATUS_MISSING
+    try:
+        document = json.loads(candidate.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return STATUS_LOCAL_EDIT
+    key = entry.get("key")
+    if not isinstance(document, dict) or key not in document:
+        return STATUS_LOCAL_EDIT
+    canonical = json.dumps(document[key], sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return STATUS_OK if digest == entry.get("sha256") else STATUS_LOCAL_EDIT
 
 
 def _is_junk(relative_parts: tuple[str, ...]) -> bool:
@@ -113,7 +150,9 @@ def collect_statuses(target: Path, lock: dict) -> list[dict]:
     records: list[dict] = []
     for relative, entry in lock["files"].items():
         candidate = target / relative
-        if not candidate.is_file():
+        if entry.get("kind") == "json-key":
+            status = _json_key_status(candidate, entry)
+        elif not candidate.is_file():
             status = STATUS_MISSING
         elif _sha256(candidate) == entry.get("sha256"):
             status = STATUS_OK
@@ -128,8 +167,10 @@ def collect_statuses(target: Path, lock: dict) -> list[dict]:
         )
 
     locked_paths = set(lock["files"])
-    scan_root = target / MANAGED_SCAN_ROOT
-    if scan_root.is_dir():
+    for scan_relative in MANAGED_SCAN_ROOTS:
+        scan_root = target / scan_relative
+        if not scan_root.is_dir():
+            continue
         for candidate in sorted(scan_root.rglob("*")):
             if not candidate.is_file():
                 continue

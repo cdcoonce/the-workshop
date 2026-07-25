@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -545,6 +546,71 @@ def _validate_machinery(machinery_dir: Path) -> list[str]:
     return errors
 
 
+def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
+    """W4 consistency checks on the shipped wiring spec + generated output.
+
+    - Every wiring-spec entry's script must exist in ``engine/`` (the
+      rendered hook commands would otherwise invoke absent scripts).
+    - Every rendered adapter must parse (JSON for the hook surfaces, TOML
+      for the Codex agent twins) — a build that shipped an unparseable
+      adapter would only fail later inside a vault.
+    - The vendor map must parse and keep unique targets: a duplicated
+      target would silently overwrite one managed file with another.
+    """
+    errors: list[str] = []
+    engine_dir = machinery_dir / "engine"
+
+    spec_path = machinery_dir / "wiring" / "hooks-spec.json"
+    if spec_path.is_file():
+        try:
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            errors.append("machinery wiring/hooks-spec.json is not valid JSON")
+            spec = {"entries": []}
+        for entry in spec.get("entries", []):
+            script = entry.get("script", "")
+            if not (engine_dir / script).is_file():
+                errors.append(
+                    f"machinery wiring spec names '{script}' but "
+                    f"machinery/engine/{script} is not in the build output"
+                )
+
+    rendered_dir = machinery_dir / "rendered"
+    if rendered_dir.is_dir():
+        for rendered in sorted(rendered_dir.rglob("*")):
+            if not rendered.is_file():
+                continue
+            relative = rendered.relative_to(machinery_dir).as_posix()
+            if rendered.suffix == ".json":
+                try:
+                    json.loads(rendered.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    errors.append(f"machinery {relative} is not valid JSON")
+            elif rendered.suffix == ".toml":
+                try:
+                    tomllib.loads(rendered.read_text(encoding="utf-8"))
+                except tomllib.TOMLDecodeError:
+                    errors.append(f"machinery {relative} is not valid TOML")
+
+    map_path = machinery_dir / "vendor-map.json"
+    if map_path.is_file():
+        try:
+            vendor_map = json.loads(map_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            errors.append("machinery vendor-map.json is not valid JSON")
+            vendor_map = {"entries": []}
+        seen: set[str] = set()
+        for entry in vendor_map.get("entries", []):
+            target = entry.get("target", "")
+            if target in seen:
+                errors.append(
+                    f"machinery vendor-map.json has duplicate target '{target}'"
+                )
+            seen.add(target)
+
+    return errors
+
+
 def smoke_test(dist_path: Path) -> SmokeTestResult:
     """Validate internal consistency of a built plugin.
 
@@ -763,6 +829,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
     machinery_dir = dist_path / "machinery"
     if machinery_dir.exists():
         result.errors.extend(_validate_machinery(machinery_dir))
+        result.errors.extend(_validate_machinery_wiring(machinery_dir))
 
     return result
 

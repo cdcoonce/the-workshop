@@ -154,18 +154,30 @@ def _adopted(sync_mod, machinery: Path, target: Path) -> None:
 
 class TestVendorMap:
     def test_versioned_envelope(self) -> None:
+        """Schema 2 (W4): file entries plus the settings-hooks json-key merge.
+
+        The shipped map's per-section content pins (engine v1 rule, agents,
+        rendered surfaces, skills trees) live in tests/test_machinery_wiring.py
+        beside the generator that produces them.
+        """
         data = json.loads((MACHINERY_DIR / "vendor-map.json").read_text())
-        assert data["schema"] == 1
+        assert data["schema"] == 2
         assert isinstance(data["entries"], list)
         for entry in data["entries"]:
-            assert entry["kind"] == "file"
-            assert entry["source"].startswith("engine/")
-            assert entry["target"].startswith(".claude/scripts/")
+            assert entry["kind"] in ("file", "json-key")
+            assert entry["source"]
+            assert entry["target"]
+            if entry["kind"] == "json-key":
+                assert entry["key"]
 
     def test_covers_engine_tree_exactly(self) -> None:
-        """Every engine file is mapped; no stale entries linger."""
+        """Every engine file is mapped; no stale engine entries linger."""
         data = json.loads((MACHINERY_DIR / "vendor-map.json").read_text())
-        mapped_sources = {entry["source"] for entry in data["entries"]}
+        mapped_sources = {
+            entry["source"]
+            for entry in data["entries"]
+            if entry["source"].startswith("engine/")
+        }
         actual = {
             path.relative_to(MACHINERY_DIR).as_posix()
             for path in (MACHINERY_DIR / "engine").rglob("*")
@@ -174,13 +186,6 @@ class TestVendorMap:
             and not (_JUNK_NAMES & set(path.parts))
         }
         assert mapped_sources == actual
-
-    def test_targets_follow_v1_rule(self) -> None:
-        """v1 rule: engine/<relpath> -> .claude/scripts/<relpath>."""
-        data = json.loads((MACHINERY_DIR / "vendor-map.json").read_text())
-        for entry in data["entries"]:
-            relative = entry["source"].removeprefix("engine/")
-            assert entry["target"] == f".claude/scripts/{relative}"
 
 
 # ---------------------------------------------------------------------------
@@ -794,6 +799,591 @@ class TestWritePathAllowlist:
 
 
 # ---------------------------------------------------------------------------
+# Schema 2: preset-root sources and json-key entries (W4)
+# ---------------------------------------------------------------------------
+
+HOOKS_VALUE = {
+    "Stop": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash run-hook.sh stop.py",
+                    "timeout": 10000,
+                }
+            ]
+        }
+    ]
+}
+
+MAP2_ENTRIES = [
+    {
+        "kind": "file",
+        "source": "engine/alpha.py",
+        "target": ".claude/scripts/alpha.py",
+    },
+    {
+        "kind": "file",
+        "source": "skills/my-skill/SKILL.md",
+        "source_root": "preset",
+        "target": ".claude/skills/my-skill/SKILL.md",
+    },
+    {
+        "kind": "json-key",
+        "source": "rendered/claude-settings-hooks.json",
+        "target": ".claude/settings.json",
+        "key": "hooks",
+    },
+]
+
+
+def _canonical_sha(value) -> str:
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+@pytest.fixture
+def source_machinery2(tmp_path: Path) -> Path:
+    """A schema-2 workshop machinery dir: engine + rendered + sibling skills."""
+    preset = tmp_path / "workshop" / "presets" / "vault-ops"
+    machinery = preset / "machinery"
+    (machinery / "engine").mkdir(parents=True)
+    (machinery / "engine" / "alpha.py").write_text("print('alpha v1')\n")
+    (machinery / "rendered").mkdir()
+    (machinery / "rendered" / "claude-settings-hooks.json").write_text(
+        json.dumps(HOOKS_VALUE, indent=2) + "\n"
+    )
+    (preset / "skills" / "my-skill").mkdir(parents=True)
+    (preset / "skills" / "my-skill" / "SKILL.md").write_text("# my skill\n")
+    (machinery / "vendor-map.json").write_text(
+        json.dumps({"schema": 2, "entries": MAP2_ENTRIES}, indent=2) + "\n"
+    )
+    (preset / "manifest.json").write_text(
+        json.dumps({"name": "vault-ops", "version": "9.9.9"}) + "\n"
+    )
+    return machinery
+
+
+def _seed_identical_target2(machinery: Path, target: Path) -> None:
+    """Target state a schema-2 adopt must accept as a provable no-op."""
+    preset = machinery.parent
+    for relative, source in (
+        (".claude/scripts/alpha.py", machinery / "engine" / "alpha.py"),
+        (
+            ".claude/skills/my-skill/SKILL.md",
+            preset / "skills" / "my-skill" / "SKILL.md",
+        ),
+    ):
+        dest = target / relative
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+    # Same hooks VALUE, different formatting, extra sibling keys: json-key
+    # adoption is semantic (canonical JSON), not byte comparison.
+    settings = target / ".claude" / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {"permissions": {"allow": ["Write"]}, "hooks": HOOKS_VALUE},
+            indent=4,
+        )
+    )
+
+
+class TestSchema2Map:
+    def test_adopt_accepts_schema2_and_locks_every_kind(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _seed_identical_target2(source_machinery2, vault_target)
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 0
+        lock = _read_lock(vault_target)
+        assert set(lock["files"]) == {
+            ".claude/scripts/alpha.py",
+            ".claude/skills/my-skill/SKILL.md",
+            ".claude/settings.json",
+        }
+        settings_entry = lock["files"][".claude/settings.json"]
+        assert settings_entry["kind"] == "json-key"
+        assert settings_entry["key"] == "hooks"
+        assert settings_entry["sha256"] == _canonical_sha(HOOKS_VALUE)
+        skill_entry = lock["files"][".claude/skills/my-skill/SKILL.md"]
+        assert "kind" not in skill_entry
+
+    def test_rejects_unknown_schema(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        (source_machinery2 / "vendor-map.json").write_text(
+            json.dumps({"schema": 3, "entries": []}) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 2
+
+    def test_schema1_rejects_json_key_kind(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        """A schema-1 map may not smuggle in schema-2 constructs."""
+        (source_machinery2 / "vendor-map.json").write_text(
+            json.dumps({"schema": 1, "entries": [MAP2_ENTRIES[2]]}) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 2
+
+    def test_schema1_rejects_preset_source_root(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        (source_machinery2 / "vendor-map.json").write_text(
+            json.dumps({"schema": 1, "entries": [MAP2_ENTRIES[1]]}) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 2
+
+    def test_rejects_preset_source_escape(
+        self, sync_mod, source_machinery2: Path, vault_target: Path, tmp_path: Path
+    ) -> None:
+        secret = tmp_path / "secret.txt"
+        secret.write_text("s3cret\n")
+        entries = [
+            {
+                "kind": "file",
+                "source": "../../../secret.txt",
+                "source_root": "preset",
+                "target": ".claude/skills/x.md",
+            }
+        ]
+        (source_machinery2 / "vendor-map.json").write_text(
+            json.dumps({"schema": 2, "entries": entries}) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 2
+
+    def test_rejects_duplicate_targets(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        entries = [MAP2_ENTRIES[0], dict(MAP2_ENTRIES[0])]
+        (source_machinery2 / "vendor-map.json").write_text(
+            json.dumps({"schema": 2, "entries": entries}) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 2
+
+
+class TestAdoptJsonKey:
+    def test_refuses_when_key_value_differs(
+        self, sync_mod, source_machinery2: Path, vault_target: Path, capsys
+    ) -> None:
+        _seed_identical_target2(source_machinery2, vault_target)
+        settings = vault_target / ".claude" / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"Stop": []}}, indent=2))
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 1
+        assert not (vault_target / LOCKFILE_RELPATH).exists()
+        assert ".claude/settings.json" in capsys.readouterr().out
+
+    def test_refuses_when_key_is_absent(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _seed_identical_target2(source_machinery2, vault_target)
+        settings = vault_target / ".claude" / "settings.json"
+        settings.write_text(json.dumps({"permissions": {}}, indent=2))
+
+        rc = sync_mod.main(
+            [
+                "adopt",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+            ]
+        )
+
+        assert rc == 1
+
+
+def _adopted2(sync_mod, machinery: Path, target: Path) -> None:
+    _seed_identical_target2(machinery, target)
+    rc = sync_mod.main(
+        ["adopt", "--target", str(target), "--source", str(machinery)]
+    )
+    assert rc == 0, "fixture adopt must succeed"
+
+
+NEW_HOOKS_VALUE = {
+    "Stop": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash run-hook.sh stop.py --v2",
+                    "timeout": 20000,
+                }
+            ]
+        }
+    ]
+}
+
+
+class TestUpgradeJsonKey:
+    def _publish_new_hooks(self, machinery: Path) -> None:
+        (machinery / "rendered" / "claude-settings-hooks.json").write_text(
+            json.dumps(NEW_HOOKS_VALUE, indent=2) + "\n"
+        )
+
+    def test_apply_rewrites_only_the_key(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        self._publish_new_hooks(source_machinery2)
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+
+        assert rc == 0
+        settings_path = vault_target / ".claude" / "settings.json"
+        text = settings_path.read_text()
+        settings = json.loads(text)
+        assert settings["hooks"] == NEW_HOOKS_VALUE
+        assert settings["permissions"] == {"allow": ["Write"]}
+        assert list(settings) == ["permissions", "hooks"]
+        assert text == json.dumps(settings, indent=2) + "\n"
+        lock = _read_lock(vault_target)
+        record = lock["files"][".claude/settings.json"]
+        assert record["sha256"] == _canonical_sha(NEW_HOOKS_VALUE)
+        assert record["kind"] == "json-key"
+        assert record["key"] == "hooks"
+
+    def test_refuses_over_local_key_edit(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        self._publish_new_hooks(source_machinery2)
+        settings_path = vault_target / ".claude" / "settings.json"
+        local = json.loads(settings_path.read_text())
+        local["hooks"] = {"Stop": [], "SessionStart": []}
+        settings_path.write_text(json.dumps(local, indent=2) + "\n")
+        before = settings_path.read_bytes()
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+
+        assert rc == 1
+        assert settings_path.read_bytes() == before
+
+    def test_keep_local_records_canonical_hash_and_sticks(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        self._publish_new_hooks(source_machinery2)
+        settings_path = vault_target / ".claude" / "settings.json"
+        local = json.loads(settings_path.read_text())
+        local_hooks = {"Stop": [], "SessionStart": []}
+        local["hooks"] = local_hooks
+        settings_path.write_text(json.dumps(local, indent=2) + "\n")
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+                "--keep-local",
+                ".claude/settings.json",
+            ]
+        )
+
+        assert rc == 0
+        record = _read_lock(vault_target)["files"][".claude/settings.json"]
+        assert record["keep_local"] is True
+        assert record["sha256"] == _canonical_sha(local_hooks)
+        assert record["kind"] == "json-key"
+
+        # Sticky: the next upgrade keeps the local key without re-flagging.
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+        assert rc == 0
+        assert json.loads(settings_path.read_text())["hooks"] == local_hooks
+
+    def test_restores_missing_file_with_key_only(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        settings_path.unlink()
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+
+        assert rc == 0
+        assert json.loads(settings_path.read_text()) == {"hooks": HOOKS_VALUE}
+
+    def test_restores_missing_key_preserving_siblings(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        settings_path.write_text(
+            json.dumps({"permissions": {"allow": ["Write"]}}, indent=2) + "\n"
+        )
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+
+        assert rc == 0
+        settings = json.loads(settings_path.read_text())
+        assert settings["hooks"] == HOOKS_VALUE
+        assert settings["permissions"] == {"allow": ["Write"]}
+
+    def test_unparseable_target_refuses_even_with_force(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        """--force may overwrite a local edit, but a json-key rewrite cannot
+        preserve sibling keys it cannot parse — refuse rather than destroy."""
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        settings_path.write_text("{not json")
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+                "--force",
+            ]
+        )
+
+        assert rc == 1
+        assert settings_path.read_text() == "{not json"
+
+    def test_newly_managed_identical_json_key_locks_without_refusal(
+        self, sync_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        """A live settings.json whose hooks key already matches the rendered
+        value plans as skip-identical and enters the lock — the vault-side
+        W4 pickup path."""
+        _seed_identical_target2(source_machinery2, vault_target)
+        _write_lock(
+            vault_target,
+            {
+                ".claude/scripts/alpha.py": {
+                    "tier": "managed",
+                    "sha256": _sha256(
+                        vault_target / ".claude/scripts/alpha.py"
+                    ),
+                }
+            },
+        )
+
+        rc = sync_mod.main(
+            [
+                "upgrade",
+                "--target",
+                str(vault_target),
+                "--source",
+                str(source_machinery2),
+                "--apply",
+            ]
+        )
+
+        assert rc == 0
+        record = _read_lock(vault_target)["files"][".claude/settings.json"]
+        assert record["sha256"] == _canonical_sha(HOOKS_VALUE)
+
+
+class TestCheckJsonKeyAndScanRoots:
+    def _locked_target(self, sync_mod, machinery: Path, target: Path) -> None:
+        _adopted2(sync_mod, machinery, target)
+
+    def test_ok_survives_reformatting_of_the_file(
+        self, sync_mod, check_mod, source_machinery2: Path, vault_target: Path
+    ) -> None:
+        self._locked_target(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        reordered = {"hooks": HOOKS_VALUE, "permissions": {"allow": ["Write"]}}
+        settings_path.write_text(json.dumps(reordered, sort_keys=True))
+
+        rc = check_mod.main(["--target", str(vault_target), "--strict"])
+
+        assert rc == 0
+
+    def test_local_edit_when_key_value_changes(
+        self, sync_mod, check_mod, source_machinery2: Path, vault_target: Path, capsys
+    ) -> None:
+        self._locked_target(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        settings["hooks"] = {"Stop": []}
+        settings_path.write_text(json.dumps(settings, indent=2))
+        capsys.readouterr()
+
+        rc = check_mod.main(["--target", str(vault_target), "--json"])
+
+        assert rc == 0
+        report = json.loads(capsys.readouterr().out)
+        statuses = {f["path"]: f["status"] for f in report["files"]}
+        assert statuses[".claude/settings.json"] == "LOCAL-EDIT"
+
+    def test_missing_when_file_deleted(
+        self, sync_mod, check_mod, source_machinery2: Path, vault_target: Path, capsys
+    ) -> None:
+        self._locked_target(sync_mod, source_machinery2, vault_target)
+        (vault_target / ".claude" / "settings.json").unlink()
+        capsys.readouterr()
+
+        rc = check_mod.main(["--target", str(vault_target), "--json"])
+
+        assert rc == 0
+        report = json.loads(capsys.readouterr().out)
+        statuses = {f["path"]: f["status"] for f in report["files"]}
+        assert statuses[".claude/settings.json"] == "MISSING"
+
+    def test_untracked_scan_covers_new_managed_roots(
+        self, sync_mod, check_mod, source_machinery2: Path, vault_target: Path, capsys
+    ) -> None:
+        self._locked_target(sync_mod, source_machinery2, vault_target)
+        for rogue in (
+            ".claude/agents/rogue.md",
+            ".codex/agents/rogue.toml",
+            ".claude/skills/rogue/SKILL.md",
+            ".codex/skills/rogue/SKILL.md",
+        ):
+            path = vault_target / rogue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("rogue\n")
+        junk = vault_target / ".claude" / "skills" / "rogue" / "__pycache__"
+        junk.mkdir(parents=True)
+        (junk / "x.cpython-312.pyc").write_bytes(b"junk")
+        (vault_target / ".codex" / "agents" / ".DS_Store").write_bytes(b"junk")
+        capsys.readouterr()
+
+        rc = check_mod.main(["--target", str(vault_target), "--json"])
+
+        assert rc == 0
+        report = json.loads(capsys.readouterr().out)
+        untracked = {
+            f["path"] for f in report["files"] if f["status"] == "UNTRACKED"
+        }
+        assert untracked == {
+            ".claude/agents/rogue.md",
+            ".codex/agents/rogue.toml",
+            ".claude/skills/rogue/SKILL.md",
+            ".codex/skills/rogue/SKILL.md",
+        }
+
+
+# ---------------------------------------------------------------------------
 # CLI entry points run standalone (the vendored/hook execution mode)
 # ---------------------------------------------------------------------------
 
@@ -859,6 +1449,23 @@ class TestShippedPayload:
         assert (dist_machinery / "vendor-map.json").is_file()
         assert (dist_machinery / "tools" / "machinery_check.py").is_file()
         assert (dist_machinery / "tools" / "machinery_sync.py").is_file()
+
+    def test_dist_ships_wiring_agents_and_rendered_surfaces(self) -> None:
+        """W4: the wiring spec, canonical agents, and rendered adapters all
+        ride the same machinery copytree into dist (covered by the digest)."""
+        dist_machinery = REPO_ROOT / "dist" / "vault-ops" / "machinery"
+        assert (dist_machinery / "wiring" / "hooks-spec.json").is_file()
+        assert (dist_machinery / "tools" / "wiring_gen.py").is_file()
+        assert (dist_machinery / "tools" / "vendor_map_gen.py").is_file()
+        for name in ("brag-spotter", "cross-linker", "people-profiler"):
+            assert (dist_machinery / "agents" / f"{name}.md").is_file()
+            assert (
+                dist_machinery / "rendered" / "codex-agents" / f"{name}.toml"
+            ).is_file()
+        assert (
+            dist_machinery / "rendered" / "claude-settings-hooks.json"
+        ).is_file()
+        assert (dist_machinery / "rendered" / "codex-hooks.json").is_file()
 
     def test_deferred_verbs_are_documented(self) -> None:
         """W3 ships adopt/check/upgrade only; init and upstream are deferred

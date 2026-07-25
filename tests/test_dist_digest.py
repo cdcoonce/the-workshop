@@ -4,9 +4,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.dist_digest import tree_digest
+from scripts.dist_digest import GENERATED_ROOTS, tree_digest
 
 ROOTS = (Path("dist"), Path("marketplace.json"))
+
+
+class TestGeneratedRoots:
+    def test_machinery_generated_sources_are_covered(self) -> None:
+        """verify-generated must catch stale source-side machinery output:
+        rendered/ and vendor-map.json are committed-generated (like dist/),
+        rebuilt by build_preset, so they belong in the drift digest."""
+        assert Path("presets/vault-ops/machinery/rendered") in GENERATED_ROOTS
+        assert (
+            Path("presets/vault-ops/machinery/vendor-map.json")
+            in GENERATED_ROOTS
+        )
 
 
 def _seed(root: Path) -> None:
