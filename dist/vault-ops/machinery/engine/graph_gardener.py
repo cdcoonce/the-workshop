@@ -381,17 +381,34 @@ def detect_auto_memory_drift(vault_root: Path, _mem_base: Path | None = None) ->
         return {}
 
 
-def detect_unprofiled_people(vault_root: Path) -> list[str]:
+PEOPLE_INDEX_RELPATH = "org/People & Context.md"
+
+
+def detect_unprofiled_people(
+    vault_root: Path,
+    broken_by_note: dict[str, set[str]] | None = None,
+) -> list[str]:
     """Names wikilinked in ``org/People & Context.md`` lacking an ``org/people/<Name>.md`` profile.
 
     A distinct category from generic broken links: an indexed person without a profile note is a
-    people-profiler candidate, not a "create or remove the link" decision. Matching uses ``_normalize``
-    so it agrees with the link catalog. Fail-soft: ``[]`` if the index is missing or on any error.
+    people-profiler candidate, not a "create or remove the link" decision. Fail-soft: ``[]`` if the
+    index is missing or on any error.
+
+    Args:
+        broken_by_note: rel_path → the raw link displays graphmark reports as broken, as passed to
+            ``run_lane_a``. When supplied, graphmark decides what resolved, so a display it does not
+            list is never proposed. That matters because graphmark honors things this file's own
+            catalog does not — frontmatter aliases and path-suffix resolution — and each of those
+            gaps produced a permanent false positive: ``[[Data Architecture & Analytics]]`` is a
+            declared alias, and ``[[org/teams/DAA]]`` resolves by path. ``None`` (a failed or
+            skipped scan) keeps the previous self-contained behavior; it is deliberately distinct
+            from ``{}`` (scan succeeded, this note has no broken links → nothing to propose).
     """
     try:
         text = (vault_root / "org" / "People & Context.md").read_text(encoding="utf-8")
     except OSError:
         return []
+    unresolved = None if broken_by_note is None else broken_by_note.get(PEOPLE_INDEX_RELPATH, set())
     # Resolve against the full catalog, not just org/people/: a name that resolves to ANY existing
     # note is either already profiled or simply not a person (e.g. [[North Star]] → brain/), so it's
     # not an unprofiled person. (org/people/ is under the scoped org/ dir, so profiles are included.)
@@ -399,7 +416,14 @@ def detect_unprofiled_people(vault_root: Path) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for m in WIKILINK_CAPTURE_RE.finditer(text):
-        name = m.group(1).split("|")[0].split("#")[0].strip()
+        raw_target = m.group(1)
+        if unresolved is not None and raw_target not in unresolved:
+            continue
+        name = raw_target.split("|")[0].split("#")[0].strip()
+        # A path-qualified link names a note, never a person. Proposing a profile for
+        # [[org/teams/DAA]] asks for org/people/org/teams/DAA.md, which is nonsense.
+        if "/" in name:
+            continue
         norm = _normalize(name)
         if not norm or norm in catalog or norm in seen:
             continue
@@ -1479,13 +1503,17 @@ def run_gardener(
     # --- Suppress-list ---
     dismissed = load_dismissed(vault_root)
 
+    # One graphmark scan feeds every consumer that needs to know what resolved:
+    # Lane A's proposal gate and the unprofiled-people boundary below.
+    broken_by_note = broken_links_by_note(vault_root)
+
     # --- Lane A ---
     lane_a = run_lane_a(
         notes,
         vault_root,
         dry_run=dry_run,
         dismissed=dismissed,
-        broken_by_note=broken_links_by_note(vault_root),
+        broken_by_note=broken_by_note,
     )
 
     # --- Lane B ---
@@ -1498,7 +1526,7 @@ def run_gardener(
     memdrift = detect_auto_memory_drift(vault_root)
 
     # --- Unprofiled-people detection (org index vs org/people/ boundary) ---
-    unprofiled = detect_unprofiled_people(vault_root)
+    unprofiled = detect_unprofiled_people(vault_root, broken_by_note=broken_by_note)
 
     # --- Write queue ---
     write_queue(
