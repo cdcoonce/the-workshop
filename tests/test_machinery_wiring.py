@@ -440,6 +440,8 @@ class TestVendorMapGeneration:
             assert entry["target"].endswith(f"/skills/{relative}")
 
     def test_engine_entries_still_follow_v1_rule(self) -> None:
+        """Every engine file is mapped — except the scaffold-owned
+        vault_scope.py, which init writes once and upgrade never touches."""
         engine_entries = [
             e
             for e in self._map()["entries"]
@@ -450,10 +452,25 @@ class TestVendorMapGeneration:
             for p in (MACHINERY_DIR / "engine").rglob("*")
             if p.is_file() and not p.name.endswith(".pyc")
         }
-        assert {e["source"] for e in engine_entries} == engine_tree
+        assert {e["source"] for e in engine_entries} == engine_tree - {
+            "engine/vault_scope.py"
+        }
         for entry in engine_entries:
             relative = entry["source"].removeprefix("engine/")
             assert entry["target"] == f".claude/scripts/{relative}"
+
+    def test_lifecycle_tools_are_vendored_into_scripts(self) -> None:
+        """W5: the sync/check pair lands in the vault so hooks and afk Docker
+        slices can run the drift check offline."""
+        tools_entries = {
+            e["source"]: e["target"]
+            for e in self._map()["entries"]
+            if e["source"].startswith("tools/")
+        }
+        assert tools_entries == {
+            "tools/machinery_check.py": ".claude/scripts/machinery_check.py",
+            "tools/machinery_sync.py": ".claude/scripts/machinery_sync.py",
+        }
 
     def test_map_targets_are_unique(self) -> None:
         targets = [e["target"] for e in self._map()["entries"]]
@@ -462,13 +479,15 @@ class TestVendorMapGeneration:
     def test_total_entry_count_accounts_for_every_section(self) -> None:
         entries = self._map()["entries"]
         engine = sum(1 for e in entries if e["source"].startswith("engine/"))
+        tools = sum(1 for e in entries if e["source"].startswith("tools/"))
         skills = sum(1 for e in entries if e["source"].startswith("skills/"))
         agents = sum(1 for e in entries if e["source"].startswith("agents/"))
         rendered = sum(
             1 for e in entries if e["source"].startswith("rendered/")
         )
-        assert engine >= 28
+        assert engine >= 27
+        assert tools == 2  # machinery_check + machinery_sync
         assert agents == 3
         assert rendered == 5  # 3 agent TOMLs + codex hooks + settings key
         assert skills % 2 == 0 and skills > 0
-        assert len(entries) == engine + skills + agents + rendered
+        assert len(entries) == engine + tools + skills + agents + rendered

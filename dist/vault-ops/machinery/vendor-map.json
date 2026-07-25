@@ -128,11 +128,6 @@
     },
     {
       "kind": "file",
-      "source": "engine/vault_scope.py",
-      "target": ".claude/scripts/vault_scope.py"
-    },
-    {
-      "kind": "file",
       "source": "engine/vault_utils.py",
       "target": ".claude/scripts/vault_utils.py"
     },
@@ -140,6 +135,16 @@
       "kind": "file",
       "source": "engine/work_task_manager.py",
       "target": ".claude/scripts/work_task_manager.py"
+    },
+    {
+      "kind": "file",
+      "source": "tools/machinery_check.py",
+      "target": ".claude/scripts/machinery_check.py"
+    },
+    {
+      "kind": "file",
+      "source": "tools/machinery_sync.py",
+      "target": ".claude/scripts/machinery_sync.py"
     },
     {
       "kind": "file",
@@ -418,6 +423,24 @@
     },
     {
       "kind": "file",
+      "source": "skills/vault-init/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-init/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-init/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-init/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-init/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-init/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
       "source": "skills/vault-link/SKILL.md",
       "source_root": "preset",
       "target": ".claude/skills/vault-link/SKILL.md"
@@ -523,6 +546,24 @@
       "source": "skills/vault-teach/references/vault-operating-principles.md",
       "source_root": "preset",
       "target": ".claude/skills/vault-teach/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-upgrade/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-upgrade/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-upgrade/references/vault-operating-principles.md"
     },
     {
       "kind": "file",
@@ -796,6 +837,24 @@
     },
     {
       "kind": "file",
+      "source": "skills/vault-init/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-init/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-init/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-init/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-init/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-init/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
       "source": "skills/vault-link/SKILL.md",
       "source_root": "preset",
       "target": ".codex/skills/vault-link/SKILL.md"
@@ -901,6 +960,24 @@
       "source": "skills/vault-teach/references/vault-operating-principles.md",
       "source_root": "preset",
       "target": ".codex/skills/vault-teach/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-upgrade/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-upgrade/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-upgrade/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-upgrade/references/vault-operating-principles.md"
     },
     {
       "kind": "file",

@@ -1,0 +1,64 @@
+# ${vault_name} — Setup Guide
+
+New-machine checklist for the managed-hybrid era: the vault's engine scripts, agents, skills, and hook wiring are **vendored** from the-workshop's `vault-ops` preset and tracked by `.vault/machinery.lock.json`. Setup is cloning plus a few one-time wires — never hand-copying scripts.
+
+## Prerequisites
+
+- Git installed and configured
+- Python 3.10+ on PATH
+- An agent runtime (Claude Code and/or Codex)
+- Access to this vault's private git remote
+
+## New Machine Checklist
+
+### 1. Clone the vault
+
+```bash
+git clone <this-vault-remote>
+cd ${vault_slug}
+```
+
+### 2. Write `.vault-context`
+
+Tells agents which machine context this is. Gitignored — one per machine, never synced.
+
+```bash
+echo "${primary_context}" > .vault-context
+```
+
+Valid values: ${context_values}.
+
+### 3. Wire git conventions
+
+The versioned `.gitconfig` (fetch.prune etc.) applies via a local include:
+
+```bash
+git config --local --add include.path '../.gitconfig'
+```
+
+### 4. Verify the vendored machinery
+
+```bash
+python3 .claude/scripts/machinery_check.py --strict
+```
+
+Every file should report `OK`. Any `LOCAL-EDIT`, `MISSING`, or `UNTRACKED` means the clone drifted from the lockfile — resolve before working (the `/vault-upgrade` skill covers upgrades and refusals).
+
+### 5. Open a session
+
+Start an agent session in the vault root. The session-start hook should inject context with no Python errors. You're done.
+
+## Optional: Marketplace Plugin
+
+To use the vault skills from **other** repos on this machine, install the `vault-ops` plugin from the-workshop marketplace. Inside the vault itself the vendored copies under `.claude/skills/` already cover everything — the plugin is for cross-repo use.
+
+## Required Once Per Machine (Codex Only): Hook Trust
+
+Codex requires an interactive, per-machine trust approval before it will run this vault's hooks — until trusted, hooks are **silently skipped** (no error, no context injection). Open an interactive Codex session in the vault and approve the hook-trust prompt once. Automation that cannot answer the prompt may use `codex exec --dangerously-bypass-hook-trust`.
+
+## Troubleshooting
+
+- **"Python not found" errors** — hooks require Python 3.10+ on PATH for your shell.
+- **Merge conflict on session start** — the auto-pull hit a conflict; resolve manually, never auto-resolve.
+- **`.vault-context` missing** — agents will ask which machine this is; write the file to stop being asked.
+- **Machinery drift** — rerun `python3 .claude/scripts/machinery_check.py --strict` and use the `/vault-upgrade` workflow to reconcile.
