@@ -585,10 +585,28 @@ def collect_touched_notes(
             seen.add(rp)
             unique.append(p)
 
-    # Drop notes unchanged since last gardened
+    # Drop notes unchanged since last gardened — EXCEPT the targeted ones.
+    #
+    # The unchanged filter is a cost control: don't re-scan a note whose content has not
+    # moved. That is right for the trickle, but it silently neutralizes the targeted
+    # source, because a note whose link broke long ago has been gardened once and will
+    # never change again on its own. Measured on the source vault: only 6 of the 80 notes
+    # holding a live broken link survived the filter, so 75 were suppressed permanently —
+    # which is why link rot persisted despite the gardener "already reporting it".
+    #
+    # A currently-broken link is a verified, persistent defect rather than a stale
+    # suggestion, and re-checking it costs nothing (graphmark already told us). Proposal
+    # noise stays bounded by BROKEN_BATCH and by the gsig dismissal list, which is the
+    # channel actually meant for "stop telling me about this one".
+    targeted_rel = {str(p.relative_to(vault_root)) for p in targeted}
     cand = [(str(p.relative_to(vault_root)), content_hash(p)) for p in unique]
     keep = set(filter_unchanged(cand, gardened))
-    final = [p for p in unique if str(p.relative_to(vault_root)) in keep]
+    final = [
+        p
+        for p in unique
+        if str(p.relative_to(vault_root)) in keep
+        or str(p.relative_to(vault_root)) in targeted_rel
+    ]
 
     return final, new_cursor
 
