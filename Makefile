@@ -91,7 +91,7 @@ VERSION_BASE ?= origin/main
 # tests it never ran.
 .PHONY: test-machinery
 test-machinery:
-	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.5,<0.6' python -m pytest -q tests
+	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.6,<0.7' python -m pytest -q tests
 
 .PHONY: test
 test:
