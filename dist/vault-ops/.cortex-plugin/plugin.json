@@ -1,6 +1,6 @@
 {
   "name": "vault-ops",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
   "author": {
     "name": "Charles Coonce"

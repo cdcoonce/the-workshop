@@ -1,11 +1,17 @@
 """Frontmatter `aliases:` are part of how the vault names notes, so the graph
 has to resolve them.
 
-graphmark resolves a wikilink by normalized basename with a path-suffix
-fallback. It never looks at frontmatter, so a note that deliberately declares
-`aliases: [Mood Tracker]` was still reported as a broken link everywhere the
-vault used that name — the convention was write-only. The seam owns vault
-policy, so alias resolution lives here rather than in the graph algorithm.
+The seam used to implement that itself: graphmark resolved a wikilink by
+normalized basename with a path-suffix fallback and never looked at
+frontmatter, so `graph_cli` carried an `AliasResolver` to close the gap.
+graphmark 0.6 resolves `aliases:` natively — derived from that resolver as its
+oracle — so the seam now injects no resolver at all and lets `graphmark.build()`
+default the extractor/resolver pair.
+
+These tests are the regression guard for that swap. They assert the *behavior*
+still holds through the seam, not that this file implements it; the last test
+holds the seam to the delegation, so a reintroduced local resolver fails loudly
+rather than silently forking from the package again.
 """
 
 from __future__ import annotations
@@ -16,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("graphmark")
+graphmark = pytest.importorskip("graphmark")
 
 ENGINE = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE))
@@ -104,6 +110,21 @@ class TestAliasResolution:
 
         graph, _ = gc.build(root)
         assert graph.unresolved == {"personal/journal.md": ["Nothing Here"]}
+
+    def test_alias_resolution_comes_from_graphmark_not_from_this_file(self, tmp_path):
+        # The behavior above is the package's now. Keeping a local copy of it is
+        # exactly the drift this deletion closed, so name the removed symbols:
+        # reintroducing one should fail here, not go unnoticed for a release.
+        for symbol in ("AliasResolver", "frontmatter_aliases", "_strip_display", "_catalog_key"):
+            assert not hasattr(gc, symbol), f"graph_cli should not reimplement {symbol}"
+
+        root = vault(tmp_path)
+        note(root, "thinking/tracker.md", aliases=["Mood Tracker"])
+        note(root, "personal/journal.md", body="see [[Mood Tracker]]\n")
+
+        # No resolver injected: stock graphmark.build() defaults still resolve the alias.
+        graph = graphmark.build(gc.build(root)[1])
+        assert graph.unresolved == {}
 
     def test_a_malformed_frontmatter_block_does_not_break_the_build(self, tmp_path):
         # This runs inside a session hook. A note someone is mid-edit must not

@@ -21,7 +21,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import _parse_frontmatter, validate  # noqa: E402
-from vault_scope import (  # noqa: E402
+from vault_scope_resolved import (  # noqa: E402
     TRANSIENT_PREFIXES,
     is_operating_file,
     is_root_excluded_file,
