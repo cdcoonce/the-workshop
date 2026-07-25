@@ -12,7 +12,7 @@ notes touched this session only (never a full-vault sweep):
         mean?" hints in proposals — never auto-repairs.
 
     Lane B — headless cheap-model propose pass.
-        Over the same touched notes, ask claude-haiku to suggest new links,
+        Over the same touched notes, ask the batch model to suggest new links,
         flag orphans (>300 chars, no [[link]]), and note index drift.
         Follows the notebook-distill.py headless pattern exactly.
 
@@ -53,7 +53,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from vault_utils import find_vault_root_from_env, read_vault_context, WIKILINK_CAPTURE_RE  # noqa: E402
+from vault_utils import find_vault_root_from_env, read_batch_model, read_vault_context, WIKILINK_CAPTURE_RE  # noqa: E402
 from vault_scope import (  # noqa: E402
     GRAPH_EXCLUDED_DIRS,
     GRAPH_NOTE_DIRS,
@@ -66,7 +66,6 @@ from vault_scope import (  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 
-LANE_B_MODEL = "claude-haiku-4-5"
 LANE_B_TIMEOUT = 90          # seconds for the headless claude call
 RACE_SAFETY_SECS = 120       # skip notes modified in the last N seconds
 SWEEP_BATCH = 8              # old backlog notes gardened per run (trickle sweep)
@@ -950,11 +949,11 @@ Keep rationales brief (under 20 words each).
 """
 
 
-def run_lane_b_headless(prompt: str) -> dict | None:
-    """Call claude-haiku headless in a temp cwd; return parsed JSON or None."""
+def run_lane_b_headless(prompt: str, model: str) -> dict | None:
+    """Call the headless *model* in a temp cwd; return parsed JSON or None."""
     try:
         result = subprocess.run(
-            ["claude", "-p", "--model", LANE_B_MODEL],
+            ["claude", "-p", "--model", model],
             input=prompt,
             capture_output=True,
             text=True,
@@ -1013,7 +1012,7 @@ def run_lane_b(
         return empty
 
     prompt = build_lane_b_prompt(notes_content)
-    data = run_lane_b_headless(prompt)
+    data = run_lane_b_headless(prompt, read_batch_model())
     if data is None:
         return empty
     return data
