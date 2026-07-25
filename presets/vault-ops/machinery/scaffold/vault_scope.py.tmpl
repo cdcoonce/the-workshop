@@ -2,7 +2,10 @@
 
 Scaffold-owned (tier: "scaffold"): machinery_sync init rendered this file
 once from the workshop scaffold template with this vault's note-dir
-taxonomy, and upgrade never touches it. Edit it freely — it is yours.
+taxonomy, and upgrade never touches it. Edit it freely — it is yours. Engine code reads these names through
+``vault_scope_resolved`` with shipped defaults as fallback, so removing a
+name here is safe — and engine code must never hard-require a name that
+only exists in this file.
 """
 
 from __future__ import annotations

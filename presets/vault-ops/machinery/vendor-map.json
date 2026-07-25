@@ -133,6 +133,16 @@
     },
     {
       "kind": "file",
+      "source": "engine/vault_scope_defaults.py",
+      "target": ".claude/scripts/vault_scope_defaults.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/vault_scope_resolved.py",
+      "target": ".claude/scripts/vault_scope_resolved.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/vault_utils.py",
       "target": ".claude/scripts/vault_utils.py"
     },
