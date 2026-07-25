@@ -9,14 +9,20 @@ soft — a broken scan degrades to the ordinary sweep, never to a broken hook.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "scripts"))
-
-import graph_gardener as gg
+# Load the engine by path, the way every other module in this suite does. The
+# vault-side shim this file arrived with (sys.path + ".claude/scripts") only
+# resolves in the vendored layout, so running this file on its own failed to
+# import; in a full run it happened to work off another module's sys.path edit.
+_spec = importlib.util.spec_from_file_location(
+    "graph_gardener", Path(__file__).resolve().parent.parent / "engine" / "graph_gardener.py"
+)
+gg = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(gg)
 
 
 class TestNotesWithBrokenLinks:
@@ -233,3 +239,52 @@ class TestBrokenLinksByNote:
     def test_failed_scan_returns_none_not_empty(self, tmp_path, monkeypatch):
         monkeypatch.setattr(gg, "_graphmark_unresolved", lambda vr: None)
         assert gg.broken_links_by_note(tmp_path) is None
+
+
+class TestTargetedSourceSurvivesTheUnchangedFilter:
+    """A note whose link broke long ago never changes again, so the
+    unchanged-since-gardened filter would suppress it forever."""
+
+    def _note(self, tmp_path, rel, body="# n\n\nbody\n"):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_targeted_note_is_kept_even_when_unchanged(self, tmp_path, monkeypatch):
+        p = self._note(tmp_path, "thinking/rotted.md")
+        gardened = {"thinking/rotted.md": gg.content_hash(p)}  # gardened, never changed
+
+        monkeypatch.setattr(gg, "commit_range_changed_notes", lambda *a, **k: [])
+        monkeypatch.setattr(gg, "all_in_scope_notes", lambda vr: [])
+        monkeypatch.setattr(gg, "notes_with_broken_links", lambda vr: ["thinking/rotted.md"])
+        monkeypatch.setattr(gg, "settled_notes", lambda notes, vr: list(notes))
+
+        notes, _ = gg.collect_touched_notes(tmp_path, {"gardened": gardened})
+        assert [str(x.relative_to(tmp_path)) for x in notes] == ["thinking/rotted.md"]
+
+    def test_trickle_notes_are_still_filtered_when_unchanged(self, tmp_path, monkeypatch):
+        # The exemption must be scoped to the targeted source; the cost control that
+        # keeps the round-robin sweep cheap has to stay in force.
+        p = self._note(tmp_path, "brain/settled.md")
+        gardened = {"brain/settled.md": gg.content_hash(p)}
+
+        monkeypatch.setattr(gg, "commit_range_changed_notes", lambda *a, **k: [])
+        monkeypatch.setattr(gg, "all_in_scope_notes", lambda vr: ["brain/settled.md"])
+        monkeypatch.setattr(gg, "notes_with_broken_links", lambda vr: [])
+        monkeypatch.setattr(gg, "settled_notes", lambda notes, vr: list(notes))
+
+        notes, _ = gg.collect_touched_notes(tmp_path, {"gardened": gardened})
+        assert notes == []
+
+    def test_targeted_notes_are_still_settle_filtered(self, tmp_path, monkeypatch):
+        # Exempt from the unchanged filter, NOT from the race guard — a note being
+        # edited right now must still be left alone.
+        self._note(tmp_path, "thinking/rotted.md")
+        monkeypatch.setattr(gg, "commit_range_changed_notes", lambda *a, **k: [])
+        monkeypatch.setattr(gg, "all_in_scope_notes", lambda vr: [])
+        monkeypatch.setattr(gg, "notes_with_broken_links", lambda vr: ["thinking/rotted.md"])
+        monkeypatch.setattr(gg, "settled_notes", lambda notes, vr: [])  # too fresh
+
+        notes, _ = gg.collect_touched_notes(tmp_path, {})
+        assert notes == []
