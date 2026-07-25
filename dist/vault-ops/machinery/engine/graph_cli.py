@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.3,<0.4", "fastembed", "numpy"]
+# dependencies = ["graphmark>=0.5,<0.6", "fastembed", "numpy"]
 # ///
 """Vault graph CLI — the reintegration seam.
 
@@ -46,6 +46,7 @@ from graphmark import (
     active_dismissed_sigs,
     bridges,
     clusters,
+    diagnose,
     gaps,
     hubs,
     neighborhood,
@@ -239,6 +240,18 @@ def vector_similar_fn(vault_root: Path):
     return fn
 
 
+def _broken_entry(graph, display: str, suggest: int) -> dict:
+    """One broken link, described well enough for a consumer to act without re-resolving.
+
+    graphmark separates the two failures the old ``--unresolved`` list conflated: an *ambiguous*
+    link names several notes and needs disambiguating against them, a *missing* one names none and
+    needs its target created — opposite repairs. ``candidates`` carries the notes in play for the
+    first and the near-miss suggestions for the second.
+    """
+    d = diagnose(graph, display, suggest=suggest)
+    return {"display": display, "reason": d.reason, "candidates": list(d.candidates)}
+
+
 def _emit(obj) -> None:
     print(json.dumps(obj, ensure_ascii=False))
 
@@ -255,6 +268,22 @@ def main(argv: list[str] | None = None) -> int:
         "--unresolved",
         action="store_true",
         help="Broken wikilinks: {note: [displays]}. Same-note [[#anchor]] links are not broken.",
+    )
+    p.add_argument(
+        "--diagnose-broken",
+        action="store_true",
+        dest="diagnose_broken",
+        help=(
+            "Broken wikilinks WITH the reason each one failed and the notes in play: "
+            "{note: [{display, reason, candidates}]}. reason is 'ambiguous' (candidates are the "
+            "colliding notes) or 'missing' (candidates are near-miss suggestions)."
+        ),
+    )
+    p.add_argument(
+        "--suggest",
+        type=int,
+        default=5,
+        help="Max near-miss suggestions per missing link (--diagnose-broken only); 0 disables.",
     )
     p.add_argument("--neighborhood", metavar="NOTE")
     p.add_argument("--depth", type=int, default=1)
@@ -293,6 +322,13 @@ def main(argv: list[str] | None = None) -> int:
         _emit(bridges(graph))
     elif args.unresolved:
         _emit(dict(sorted(graph.unresolved.items())))
+    elif args.diagnose_broken:
+        _emit(
+            {
+                note: [_broken_entry(graph, display, args.suggest) for display in displays]
+                for note, displays in sorted(graph.unresolved.items())
+            }
+        )
     elif args.neighborhood:
         _emit(neighborhood(graph, args.neighborhood, args.depth))
     elif args.gaps:

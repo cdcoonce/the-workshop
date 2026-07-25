@@ -29,7 +29,12 @@ class TestNotesWithBrokenLinks:
     def test_returns_sorted_rel_paths_from_the_seam(self, tmp_path, monkeypatch):
         (tmp_path / ".claude" / "scripts").mkdir(parents=True)
         (tmp_path / ".claude" / "scripts" / "graph_cli.py").write_text("#\n")
-        payload = json.dumps({"z/late.md": ["[[X]]"], "a/early.md": ["[[Y]]"]})
+        payload = json.dumps(
+            {
+                "z/late.md": [{"display": "X", "reason": "missing", "candidates": []}],
+                "a/early.md": [{"display": "Y", "reason": "missing", "candidates": []}],
+            }
+        )
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout=payload, stderr="")
@@ -192,26 +197,75 @@ class TestLaneAConsultsGraphmark:
         note.write_text("See [[Nowhere At All]].\n", encoding="utf-8")
         res = gg.run_lane_a(
             [note], v, dry_run=True,
-            broken_by_note={"brain/index.md": {"Nowhere At All"}},
+            broken_by_note={
+                "brain/index.md": {
+                    "Nowhere At All": {"reason": "missing", "candidates": []}
+                }
+            },
         )
         assert any("Nowhere At All" in p for p in res.proposals)
 
-    def test_a_failed_scan_falls_back_to_self_contained_behavior(self, tmp_path):
+    def test_an_ambiguous_link_is_worded_as_ambiguous(self, tmp_path):
+        # The distinction the old surface could not draw: this link matched THREE notes, so
+        # "consider creating or removing" would be wrong advice.
         v = self._vault(tmp_path)
         note = v / "brain" / "index.md"
-        note.write_text("See [[Nowhere At All]].\n", encoding="utf-8")
-        # None means "scan unavailable" — must NOT be read as "nothing is broken".
-        res = gg.run_lane_a([note], v, dry_run=True, broken_by_note=None)
-        assert any("Nowhere At All" in p for p in res.proposals)
+        note.write_text("See [[Tasks]].\n", encoding="utf-8")
+        res = gg.run_lane_a(
+            [note], v, dry_run=True,
+            broken_by_note={
+                "brain/index.md": {
+                    "Tasks": {
+                        "reason": "ambiguous",
+                        "candidates": ["work/Tasks.md", "personal/Tasks.md"],
+                    }
+                }
+            },
+        )
+        assert len(res.proposals) == 1
+        assert "ambiguous" in res.proposals[0]
+        assert "work/Tasks.md" in res.proposals[0]
+        assert "creating or removing" not in res.proposals[0]
 
-    def test_empty_map_is_not_the_same_as_a_failed_scan(self, tmp_path):
+    def test_suggestions_are_shown_as_paths(self, tmp_path):
+        # Paths, not stems: four different Index.md files render identically as stems, which is
+        # what made the old "did you mean Index, Index, Index, Index?" unactionable.
+        v = self._vault(tmp_path)
+        note = v / "brain" / "index.md"
+        note.write_text("See [[Personal Index]].\n", encoding="utf-8")
+        res = gg.run_lane_a(
+            [note], v, dry_run=True,
+            broken_by_note={
+                "brain/index.md": {
+                    "Personal Index": {
+                        "reason": "missing",
+                        "candidates": ["personal/Index.md"],
+                    }
+                }
+            },
+        )
+        assert "did you mean" in res.proposals[0]
+        assert "personal/Index.md" in res.proposals[0]
+
+    def test_a_failed_scan_proposes_nothing(self, tmp_path):
+        # None means "scan unavailable". Lane A's own catalog has a different scope than
+        # graphmark's graph, so deciding for itself here answered a different question and
+        # produced false proposals. Silence beats confident wrong advice; repair still runs.
         v = self._vault(tmp_path)
         note = v / "brain" / "index.md"
         note.write_text("See [[Nowhere At All]].\n", encoding="utf-8")
-        silent = gg.run_lane_a([note], v, dry_run=True, broken_by_note={})
-        fallback = gg.run_lane_a([note], v, dry_run=True, broken_by_note=None)
-        assert silent.proposals == []
-        assert fallback.proposals != []
+        res = gg.run_lane_a([note], v, dry_run=True, broken_by_note=None)
+        assert res.proposals == []
+
+    def test_auto_repair_still_runs_without_a_scan(self, tmp_path):
+        # Skipping proposals must not skip the lane: a cosmetic repair is not a brokenness call.
+        v = self._vault(tmp_path)
+        (v / "brain" / "North Star.md").write_text("# n\n", encoding="utf-8")
+        note = v / "brain" / "index.md"
+        note.write_text("See [[north star]].\n", encoding="utf-8")
+        res = gg.run_lane_a([note], v, dry_run=False, broken_by_note=None)
+        assert res.applied
+        assert "[[North Star]]" in note.read_text(encoding="utf-8")
 
     def test_cosmetic_auto_repair_still_fires_when_graphmark_says_fine(self, tmp_path):
         # THE regression guard: [[ethan courtman]] resolves fine, so graphmark never
@@ -227,17 +281,41 @@ class TestLaneAConsultsGraphmark:
 
 
 class TestBrokenLinksByNote:
-    def test_shapes_the_payload_into_sets(self, tmp_path, monkeypatch):
+    def test_shapes_the_payload_by_display(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            gg, "_graphmark_unresolved",
-            lambda vr: {"a.md": ["[[X]]", "[[Y]]"], "b.md": ["[[Z]]"]},
+            gg, "_graphmark_broken",
+            lambda vr: {
+                "a.md": [
+                    {"display": "X", "reason": "missing", "candidates": ["c.md"]},
+                    {"display": "Y", "reason": "ambiguous", "candidates": ["d.md", "e.md"]},
+                ],
+                "b.md": [{"display": "Z", "reason": "missing", "candidates": []}],
+            },
         )
         assert gg.broken_links_by_note(tmp_path) == {
-            "a.md": {"[[X]]", "[[Y]]"}, "b.md": {"[[Z]]"}
+            "a.md": {
+                "X": {"reason": "missing", "candidates": ["c.md"]},
+                "Y": {"reason": "ambiguous", "candidates": ["d.md", "e.md"]},
+            },
+            "b.md": {"Z": {"reason": "missing", "candidates": []}},
+        }
+
+    def test_malformed_entries_are_dropped_not_fatal(self, tmp_path, monkeypatch):
+        # The payload crosses a subprocess boundary inside a session hook; a shape surprise
+        # must degrade, never raise.
+        monkeypatch.setattr(
+            gg, "_graphmark_broken",
+            lambda vr: {
+                "a.md": ["not a dict", {"no_display": 1}, {"display": "X"}],
+                "b.md": "not a list",
+            },
+        )
+        assert gg.broken_links_by_note(tmp_path) == {
+            "a.md": {"X": {"reason": "missing", "candidates": []}}
         }
 
     def test_failed_scan_returns_none_not_empty(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(gg, "_graphmark_unresolved", lambda vr: None)
+        monkeypatch.setattr(gg, "_graphmark_broken", lambda vr: None)
         assert gg.broken_links_by_note(tmp_path) is None
 
 

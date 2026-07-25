@@ -500,51 +500,78 @@ def filter_unchanged(
     return [rel for rel, cur in candidates if gardened.get(rel) != cur]
 
 
-def broken_links_by_note(vault_root: Path) -> dict[str, set[str]] | None:
-    """rel_path → the set of raw link displays graphmark reports as broken.
+def broken_links_by_note(vault_root: Path) -> dict[str, dict[str, dict]] | None:
+    """rel_path → {raw display: diagnosis} for every link graphmark reports broken.
 
-    ``None`` means the scan was unavailable, which callers treat as "fall back to the
-    older self-contained logic" rather than "nothing is broken" — the distinction
-    matters, since an empty dict would silence every proposal.
+    Each diagnosis carries ``reason`` — ``"ambiguous"`` (the display names several notes) or
+    ``"missing"`` (it names none) — and ``candidates``, the rel_paths in play: the colliding
+    notes for the first, near-miss suggestions for the second. Those are opposite repairs, so
+    Lane A formats them differently instead of calling both "no matching note".
+
+    ``None`` means the scan was unavailable, which callers treat as "fall back to the older
+    self-contained logic" rather than "nothing is broken" — the distinction matters, since an
+    empty dict would silence every proposal.
     """
-    raw = _graphmark_unresolved(vault_root)
+    raw = _graphmark_broken(vault_root)
     if raw is None:
         return None
-    return {
-        note: {d for d in displays if isinstance(d, str)}
-        for note, displays in raw.items()
-        if isinstance(displays, list)
-    }
+    out: dict[str, dict[str, dict]] = {}
+    for note, entries in raw.items():
+        if not isinstance(entries, list):
+            continue
+        by_display: dict[str, dict] = {}
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            display = entry.get("display")
+            if not isinstance(display, str):
+                continue
+            candidates = entry.get("candidates")
+            by_display[display] = {
+                "reason": entry.get("reason") or "missing",
+                "candidates": [c for c in candidates if isinstance(c, str)]
+                if isinstance(candidates, list)
+                else [],
+            }
+        out[note] = by_display
+    return out
 
 
 def notes_with_broken_links(vault_root: Path) -> list[str]:
     """Rel-paths of notes graphmark reports as containing broken wikilinks, sorted.
 
-    Delegates to ``graph_cli.py --unresolved`` — the vault's graphmark seam — rather than
-    re-deriving brokenness here, so the answer honors graphmark's resolution rules
-    (same-note ``[[#anchor]]`` links, non-markdown targets like ``.base``, and a trailing
-    ``.md``) instead of this file's older approximations.
+    Delegates to ``graph_cli.py`` — the vault's graphmark seam — rather than re-deriving
+    brokenness here, so the answer honors graphmark's resolution rules (same-note ``[[#anchor]]``
+    links, non-markdown targets like ``.base``, a trailing ``.md``, and links to real notes that
+    sit outside graph scope) instead of this file's older approximations.
 
-    Fail-soft by design: this runs inside a session hook, so any failure (missing uv,
-    resolver error, malformed output) returns ``[]`` and the gardener proceeds with its
-    ordinary round-robin sweep.
+    Fail-soft by design: this runs inside a session hook, so any failure (missing uv, resolver
+    error, malformed output) returns ``[]`` and the gardener proceeds with its ordinary
+    round-robin sweep.
     """
-    raw = _graphmark_unresolved(vault_root)
+    raw = _graphmark_broken(vault_root)
     return sorted(raw) if raw else []
 
 
-def _graphmark_unresolved(vault_root: Path) -> dict | None:
-    """Raw ``graph_cli.py --unresolved`` payload, or ``None`` if the scan failed.
+def _graphmark_broken(vault_root: Path) -> dict | None:
+    """Raw ``graph_cli.py --diagnose-broken`` payload, or ``None`` if the scan failed.
 
-    One code path for both consumers, so the targeted sweep and Lane A can never
-    disagree about what is broken.
+    One code path for both consumers, so the targeted sweep and Lane A can never disagree about
+    what is broken.
     """
     script = vault_root / ".claude" / "scripts" / "graph_cli.py"
     if not script.exists():
         return None
     try:
         proc = subprocess.run(
-            ["uv", "run", str(script), "--vault-root", str(vault_root), "--unresolved"],
+            [
+                "uv",
+                "run",
+                str(script),
+                "--vault-root",
+                str(vault_root),
+                "--diagnose-broken",
+            ],
             capture_output=True,
             text=True,
             timeout=BROKEN_SCAN_TIMEOUT,
@@ -711,29 +738,6 @@ def _code_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _excluded_note_stems(vault_root: Path) -> set[str]:
-    """Normalized stems of ``*.md`` files that exist but are OUT of graph scope.
-
-    A link to one of these (e.g. a build-asset under ``templates/``, a root doc, a ``.claude/`` file)
-    can never resolve in-graph — but it's not a real broken link, it points at an intentionally
-    graph-excluded note. The resolver suppresses these instead of flagging them. Fail-soft: ``set()``.
-    """
-    out: set[str] = set()
-    try:
-        for p in vault_root.rglob("*.md"):
-            if ".git" in p.parts:
-                continue
-            if not _is_in_scope(p, vault_root):
-                out.add(_normalize(p.stem))
-    except OSError:
-        pass
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Dismissal suppression — stable signatures + suppress-list
-# ---------------------------------------------------------------------------
-
 def proposal_signature(kind: str, note_rel: str, key: str = "") -> str:
     """Return a stable, deterministic signature for a proposal.
 
@@ -802,6 +806,61 @@ def load_dismissed(vault_root: Path) -> set[str]:
 # Lane A — deterministic broken-link repair
 # ---------------------------------------------------------------------------
 
+def _broken_proposal(
+    rel,
+    display: str,
+    sig: str,
+    diagnosis: dict | None,
+    local_matches: list,
+    vault_root: Path,
+) -> str:
+    """One proposal line for a broken link, worded by WHY it broke.
+
+    graphmark separates two failures the old wording ran together. An *ambiguous* link named
+    several notes and needs disambiguating against them; a *missing* one named none and needs its
+    target created or the link removed. "Consider creating or removing" is actively wrong advice
+    for the first case, and Lane A gave it for every ambiguous link until this seam existed.
+
+    ``local_matches`` are paths this file already found (the exact-key collision set, or the
+    path-suffix matches); they are used only when graphmark supplied no diagnosis, i.e. the scan
+    failed and Lane A is running self-contained.
+    """
+    reason = (diagnosis or {}).get("reason")
+    candidates = list((diagnosis or {}).get("candidates") or [])
+    if not candidates and local_matches:
+        candidates = [str(_rel_to(p, vault_root)) for p in local_matches]
+
+    if reason == "ambiguous" or (reason is None and len(local_matches) >= 2):
+        shown = ", ".join(f"`{c}`" for c in candidates[:5])
+        more = " …" if len(candidates) > 5 else ""
+        return (
+            f"`{rel}`: broken `[[{display}]]` — ambiguous, names {len(candidates)} notes: "
+            f"{shown}{more} (disambiguate with a path or a unique title)"
+            f" <!-- gsig: {sig} -->"
+        )
+    if candidates:
+        shown = ", ".join(f"`{c}`" for c in candidates[:5])
+        more = " …" if len(candidates) > 5 else ""
+        return (
+            f"`{rel}`: broken `[[{display}]]` — no matching note; "
+            f"did you mean {shown}{more}?"
+            f" <!-- gsig: {sig} -->"
+        )
+    return (
+        f"`{rel}`: broken `[[{display}]]` — no matching note "
+        f"(consider creating or removing)"
+        f" <!-- gsig: {sig} -->"
+    )
+
+
+def _rel_to(path, vault_root: Path):
+    """``path`` relative to the vault root when possible, else unchanged."""
+    try:
+        return path.relative_to(vault_root)
+    except (AttributeError, ValueError):
+        return path
+
+
 class LaneAResult:
     """Accumulator for Lane A repairs and proposals."""
 
@@ -818,7 +877,7 @@ def run_lane_a(
     vault_root: Path,
     dry_run: bool = False,
     dismissed: set[str] = frozenset(),
-    broken_by_note: dict[str, set[str]] | None = None,
+    broken_by_note: dict[str, dict[str, dict]] | None = None,
 ) -> LaneAResult:
     """Parse [[links]] in each note; repair exactly-one-match broken links.
 
@@ -827,20 +886,30 @@ def run_lane_a(
         vault_root: Vault root (for relative path display).
         dry_run: If True, log repairs but do NOT write the file.
         dismissed: Set of proposal signatures to suppress (from suppress-list).
-        broken_by_note: rel_path → the raw link displays graphmark reports as broken.
-            When supplied, graphmark is the authority on brokenness and a display it
-            does NOT list is never proposed — it either resolves or is out of scope
-            (``[[Chart.base]]``, ``[[#Heading]]``, a trailing ``.md``). Cosmetic
-            auto-repair is unaffected: it fires on links that already resolve but whose
-            display text differs from the note's title, which is not a brokenness
-            question. ``None`` (a failed or skipped scan) keeps the previous
-            self-contained behavior.
+        broken_by_note: rel_path → {raw display: diagnosis}, from ``broken_links_by_note``.
+            graphmark is the authority on brokenness, so a display it does NOT list is never
+            proposed — it either resolves or is deliberately out of scope (``[[Chart.base]]``,
+            ``[[#Heading]]``, a trailing ``.md``, a real note outside graph scope). Its
+            ``reason`` also decides the wording: an *ambiguous* link names several notes and
+            needs disambiguating against them, a *missing* one names none and needs its target
+            created. Telling a human to "create or remove" a link that actually matched three
+            notes is wrong advice, and Lane A gave it for every ambiguous link until now.
+
+            Cosmetic auto-repair is unaffected: it fires on links that already resolve but whose
+            display text differs from the note's title, which is not a brokenness question.
+
+            ``None`` means the scan was unavailable, and Lane A then proposes **nothing** about
+            broken links. It used to fall back to deciding for itself, but this file's catalog and
+            graphmark's graph do not have the same scope — ``personal/tasks/`` is a transient
+            prefix that graphmark indexes and this catalog skips — so the fallback answered a
+            different question and needed a suppression list to hide the difference. Staying quiet
+            when we cannot ask is better than confidently proposing repairs for links that are
+            fine; auto-repair still runs.
 
     Returns:
         LaneAResult with applied repairs and unresolved proposals.
     """
     catalog = build_note_catalog(vault_root)
-    excluded_stems = _excluded_note_stems(vault_root)
     result = LaneAResult()
 
     for note_path in notes:
@@ -875,10 +944,11 @@ def run_lane_a(
             # it must never become a proposal — that is what stopped Lane A telling us to
             # "create or remove" working [[Chart.base]] links. Auto-repair below is not
             # gated: it acts on links that already resolve.
-            graphmark_says_fine = (
-                broken_by_note is not None
-                and raw_target not in broken_by_note.get(str(rel), set())
-            )
+            note_diagnoses = {} if broken_by_note is None else broken_by_note.get(str(rel), {})
+            diagnosis = note_diagnoses.get(raw_target)
+            # No scan → propose nothing (see the broken_by_note docstring); scan present → a
+            # display it did not report is resolvable or deliberately out of scope.
+            graphmark_says_fine = broken_by_note is None or diagnosis is None
 
             # Path-qualified link ([[folder/note]]): resolve by matching the link's
             # path against note paths using unique-suffix semantics (like Obsidian).
@@ -896,24 +966,11 @@ def run_lane_a(
                 ]
                 if len(matches) == 1:
                     continue  # resolved — valid path-qualified link, no action
-                if not matches and base_key in excluded_stems:
-                    continue  # points at a graph-excluded note (templates/ etc.) — suppress
                 sig = proposal_signature("broken", str(rel), display)
                 if sig not in dismissed and not graphmark_says_fine:
-                    if len(matches) >= 2:
-                        result.proposals.append(
-                            f"`{rel}`: broken `[[{display}]]` — ambiguous path "
-                            f"({len(matches)} notes match suffix): "
-                            + ", ".join(f"`{p.relative_to(vault_root)}`" for p in matches[:5])
-                            + (" …" if len(matches) > 5 else "")
-                            + f" <!-- gsig: {sig} -->"
-                        )
-                    else:
-                        result.proposals.append(
-                            f"`{rel}`: broken `[[{display}]]` — no matching note "
-                            f"(consider creating or removing)"
-                            + f" <!-- gsig: {sig} -->"
-                        )
+                    result.proposals.append(
+                        _broken_proposal(rel, display, sig, diagnosis, matches, vault_root)
+                    )
                 continue
 
             display_norm = _normalize(display)
@@ -964,51 +1021,23 @@ def run_lane_a(
                     log(vault_root, msg)
                 else:
                     # Key maps to 2+ notes — normalization collision, ambiguous.
-                    collision_names = [p.stem for p in paths_for_key]
                     sig = proposal_signature("broken", str(rel), display)
                     if sig not in dismissed and not graphmark_says_fine:
                         result.proposals.append(
-                            f"`{rel}`: broken `[[{display}]]` — ambiguous "
-                            f"({len(paths_for_key)} notes share normalized key): "
-                            + ", ".join(f"`{n}`" for n in collision_names[:5])
-                            + (" …" if len(collision_names) > 5 else "")
-                            + f" <!-- gsig: {sig} -->"
+                            _broken_proposal(
+                                rel, display, sig, diagnosis, paths_for_key, vault_root
+                            )
                         )
-                continue  # handled above — don't fall through to hint search
+                continue  # handled above — don't fall through to the proposal below
 
-            # Suppress links to intentionally graph-excluded notes (templates/, root docs, .claude/…).
-            if display_norm in excluded_stems:
-                continue
-
-            # 2. No exact normalized match — search for substring hints only.
-            #    These NEVER trigger auto-repair; they only enrich the proposal.
-            hints = [
-                p.stem
-                for norm_key, paths in catalog.items()
-                for p in paths
-                if display_norm and (
-                    display_norm in norm_key or norm_key in display_norm
+            # 2. No exact normalized match. graphmark supplies both the reason and the near-miss
+            #    candidates; this file no longer runs its own hint search, and never auto-repairs
+            #    on a suggestion.
+            sig = proposal_signature("broken", str(rel), display)
+            if sig not in dismissed and not graphmark_says_fine:
+                result.proposals.append(
+                    _broken_proposal(rel, display, sig, diagnosis, [], vault_root)
                 )
-            ]
-
-            if hints:
-                hint_str = ", ".join(f"`{h}`" for h in hints[:5])
-                hint_str += " …" if len(hints) > 5 else ""
-                sig = proposal_signature("broken", str(rel), display)
-                if sig not in dismissed and not graphmark_says_fine:
-                    result.proposals.append(
-                        f"`{rel}`: broken `[[{display}]]` — no exact match; "
-                        f"did you mean {hint_str}?"
-                        + f" <!-- gsig: {sig} -->"
-                    )
-            else:
-                sig = proposal_signature("broken", str(rel), display)
-                if sig not in dismissed and not graphmark_says_fine:
-                    result.proposals.append(
-                        f"`{rel}`: broken `[[{display}]]` — no matching note "
-                        f"(consider creating or removing)"
-                        + f" <!-- gsig: {sig} -->"
-                    )
 
         if changed and not dry_run:
             try:
