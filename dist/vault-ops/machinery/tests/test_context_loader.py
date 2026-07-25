@@ -11,7 +11,15 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from context_loader import SessionContext, load_context
+from context_loader import (
+    HANDOFF_MAX_BYTES,
+    HANDOFF_RESUME_ENTRIES,
+    SUMMARY_ITEM_CHARS,
+    SUMMARY_PREVIEW,
+    SessionContext,
+    condense_digest,
+    load_context,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -197,3 +205,100 @@ class TestQuickReferenceLoading:
     def test_empty_without_file(self, vault: Path) -> None:
         ctx = load_context(vault)
         assert ctx.quick_reference == ""
+
+
+# ---------------------------------------------------------------------------
+# SessionStart context budget
+# ---------------------------------------------------------------------------
+
+def _index(title: str, items: list[str]) -> str:
+    body = "\n".join(f"- [[{item}]]" for item in items)
+    return (
+        f"---\ndate: 2026-04-04\ndescription: idx\ntags:\n  - index\n---\n\n"
+        f"# {title}\n\n## Active Projects\n\n{body}\n"
+    )
+
+
+class TestSummaryBudget:
+    """The summary is resident all session, so it pays for orientation only."""
+
+    def test_caps_bullets_and_points_at_the_index(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            _index("Work Index", [f"Project {n}" for n in range(12)]), encoding="utf-8"
+        )
+        (vault / ".vault-context").write_text("work")
+
+        summary = load_context(vault).summary
+
+        assert "Active work projects: 12" in summary
+        assert summary.count("  • ") == SUMMARY_PREVIEW
+        assert f"+{12 - SUMMARY_PREVIEW} more" in summary
+        assert "work/Index.md" in summary
+
+    def test_clips_a_long_item(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            _index("Work Index", ["X" * 400]), encoding="utf-8"
+        )
+        (vault / ".vault-context").write_text("work")
+
+        bullet = next(
+            line for line in load_context(vault).summary.splitlines()
+            if line.startswith("  • ")
+        )
+
+        assert len(bullet) <= SUMMARY_ITEM_CHARS + 8
+        assert bullet.endswith("…")
+
+    def test_full_lists_stay_uncapped_on_the_context_object(self, vault: Path) -> None:
+        """Only the rendered summary is budgeted — consumers still get everything."""
+        (vault / "work" / "Index.md").write_text(
+            _index("Work Index", [f"Project {n}" for n in range(12)]), encoding="utf-8"
+        )
+        (vault / ".vault-context").write_text("work")
+
+        assert len(load_context(vault).active_work) == 12
+
+
+class TestCondenseDigest:
+    """The handoff digest is injected verbatim today; budget its entry stack."""
+
+    @staticmethod
+    def _handoff(entry_count: int, body_chars: int = 200) -> str:
+        entries = "\n\n".join(
+            f"**▶ 2026-07-{20 - n:02d} SESSION RESULT**\n\n{'detail. ' * (body_chars // 8)}"
+            for n in range(entry_count)
+        )
+        return (
+            "# Handoff\n\n## Where we are\n\nMid-flight.\n\n"
+            f"## Resume from here\n\n{entries}\n\n## Mode\n\nAutonomous.\n"
+        )
+
+    def test_keeps_newest_entry_and_counts_the_rest(self) -> None:
+        out = condense_digest(self._handoff(4), ".brain/handoff-personal.md")
+
+        assert "2026-07-20" in out
+        assert "2026-07-17" not in out
+        assert f"+{4 - HANDOFF_RESUME_ENTRIES} older session entries elided" in out
+        assert ".brain/handoff-personal.md" in out
+
+    def test_preserves_the_other_sections(self) -> None:
+        out = condense_digest(self._handoff(4), ".brain/handoff-personal.md")
+
+        assert "## Where we are" in out
+        assert "Mid-flight." in out
+
+    def test_small_digest_round_trips(self) -> None:
+        """handoff-work.md has no '▶' entries and must not regress."""
+        small = "# Handoff\n\n## Where we are\n\n- **Thing** — done.\n"
+
+        assert condense_digest(small, ".brain/handoff-work.md").strip() == small.strip()
+
+    def test_respects_the_byte_ceiling(self) -> None:
+        out = condense_digest(self._handoff(8, body_chars=4000), ".brain/h.md")
+
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES + 400
+
+    def test_is_idempotent(self) -> None:
+        once = condense_digest(self._handoff(4), ".brain/h.md")
+
+        assert condense_digest(once, ".brain/h.md") == once

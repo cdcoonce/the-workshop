@@ -28,7 +28,7 @@ NOTEBOOK_FRESH_HOURS = 6
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from context_loader import load_context
+from context_loader import condense_digest, load_context
 from sync_manager import pull
 from vault_utils import find_vault_root, read_vault_context
 
@@ -156,7 +156,7 @@ def main() -> int:
         if best_content is not None:
             lines.append("")
             lines.append(f"## 📓 Session notebook ({context}) — recent session state")
-            lines.append(best_content.strip())
+            lines.append(condense_digest(best_content, f".brain/{best_name}"))
             injected_notebook = True
             try:
                 data_dir = vault_root / ".claude" / "data"
@@ -170,7 +170,10 @@ def main() -> int:
             if handoff_path.exists():
                 lines.append("")
                 lines.append(f"## 🧠 Orchestrator handoff ({context}) — resume from here")
-                lines.append(handoff_path.read_text(encoding="utf-8").strip())
+                lines.append(condense_digest(
+                    handoff_path.read_text(encoding="utf-8"),
+                    handoff_path.relative_to(vault_root).as_posix(),
+                ))
             try:
                 data_dir = vault_root / ".claude" / "data"
                 stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
