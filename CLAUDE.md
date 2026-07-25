@@ -8,33 +8,13 @@ A template system for coding-agent plugin configurations, targeting Claude Code,
 
 See [ROADMAP.md](ROADMAP.md) for the multi-platform goal and design principle, [COMPATIBILITY.md](COMPATIBILITY.md) for per-platform requirements, and [.claude/docs/project.md](.claude/docs/project.md) for detailed project context (tech stack, data flow, architecture patterns).
 
-## Architecture
-
-- `core/` — The shared source every package builds from: universal skills, methodology docs, safety hooks, and agents
-- `presets/` — Package manifests: `workbench` (the everything package — all core skills/agents/docs/hooks plus the general preset skills and agents), `vault-ops` (domain-specific), and five `persona-*` output-style layers
-- `scripts/` — Python build/smoke-test/marketplace tooling
-- `dist/` — Build output (gitignored)
+Working under `core/` loads an additional scoped [core/CLAUDE.md](core/CLAUDE.md); read it before editing there, and before editing a preset copy of anything shared. (`presets/` has no scoped `CLAUDE.md` of its own — `scripts/build_marketplace.py` treats every entry under `presets/` as a preset directory, so a stray file there fails the build.)
 
 ## Commands
 
 - Build a preset: `uv run python -m scripts.build_preset <preset_name>`
 - Build marketplace index: `uv run python -m scripts.build_marketplace`
 - Smoke test: `uv run python -m scripts.smoke_test <preset_name>`
-- Run tests: `uv run pytest`
-- Run with coverage: `uv run pytest --cov=scripts --cov-report=term-missing`
-
-## Syncing Shared Files Across core/ and Preset Copies
-
-Some source files are duplicated between `core/` and one or more `presets/*/` directories (e.g. a skill or agent that every preset bundles a copy of). If you edit one of these shared/duplicated files, you must apply the same change to every copy — core and every preset that carries it — not just the copy you happened to open.
-
-Before considering such a change done:
-
-1. Edit the file identically in `core/` and in each preset copy.
-2. Rebuild every preset: `uv run python -m scripts.build_preset <preset_name>` for each preset under `presets/`.
-3. Run the smoke test on each rebuilt preset: `uv run python -m scripts.smoke_test <preset_name>`.
-4. Confirm the rebuilt `dist/` output is byte-identical across preset copies of the shared file (e.g. via `diff`) — a change applied to only one copy will show up here as a divergence.
-
-This convention exists because PR #142 fixed a bug in a shared file and had to keep all five `dist/` preset copies in sync with `core/`, verifying "every preset rebuilds byte-identically" before the fix was accepted. Skipping this step ships a fix to one copy while leaving the others silently stale.
 
 ## Avoiding Capability-Blocked Bash Calls During Unattended Execution
 
@@ -64,45 +44,12 @@ This convention exists because issue #260 found the executor had quarantined 3 s
 
 ## Code Style
 
-- Descriptive variable names (`private_key_bytes` not `pkb`)
-- SOLID, DRY, YAGNI — simplicity over complexity
 - Type hints on all function signatures
 - Numpy-style docstrings for public functions
 
 ## Planning
 
 Write plans to `docs/plans/{file_name}.md`. Archive completed plans to `docs/archive/`.
-
-## Output and Metadata Locations
-
-Skills produce two kinds of output, and they go to two different places. Choosing
-wrong either buries a repo artifact in a home directory or litters a target repo
-with machine-local files.
-
-1. **Repo-scoped artifacts** — output that describes, plans, or configures the
-   target repository and is meant to be committed and reviewed alongside its code.
-   These stay **inside the target repo** at their conventional paths:
-   `docs/plans/` (plans), `docs/dev-cycle/*.state.md` and `docs/archive/`
-   (dev-cycle state), `.claude/docs/project.md` (project context). Never relocate
-   these to a home directory — a plan belongs to the repo it plans.
-
-2. **Machine-local outputs and metadata** — output that belongs to the user or the
-   machine rather than to any one repository: study documents, ingested notes,
-   caches, personal indexes, and skill run-state that no target repo should carry.
-   These default to **`~/.workshop/`** unless the invoking skill was given an
-   explicit destination (a setting, env var, or argument). A skill in this
-   category writes under a named subdirectory, e.g. `~/.workshop/transcript-notes/`,
-   and treats a configured destination as authoritative when one is provided.
-
-When adding a skill that writes output, classify it against these two categories
-first. If the output is not a repo artifact, it defaults to `~/.workshop/<skill>/`;
-do not invent a new home-directory location per skill.
-
-This convention exists because an audit ahead of the first machine-local skill
-(`transcript-notes`) found every existing output-writing skill correctly wrote
-repo-scoped artifacts into the target repo, and no skill wrote scattered
-machine-local output — so the rule codifies the split that was already implicit
-before a second category of skill could diverge from it.
 
 ## Branch and Promotion Policy
 
@@ -167,30 +114,18 @@ an unchanged inventory only means patch is the _floor_.
 One bump covers everything that lands on `dev` between promotions — the check
 compares against `main`, not against the PR base.
 
-## Skills
-
-Skills live in `core/skills/` (universal) and `presets/*/skills/` (preset-specific).
-See core CLAUDE.md for skill trigger conditions.
-
 ## Agents
 
 Agents are specialized role definitions (`AGENT.md` with YAML frontmatter) that give subagents domain expertise. Each agent is self-contained -- skills are declared directly in the agent's frontmatter via `skills.add`/`skills.remove`.
 
-- `core/agents/` — Universal agents: `tdd-implementer` (implementer), `code-reviewer` (reviewer), `skill-analyst` (analyst), `qa-tester` (qa-tester), `skill-writer` (skill-writer), `strategy` (strategy)
-- `presets/*/agents/` — Preset-specific agents (e.g., `api-builder`, `security-reviewer`)
+An agent's `role` must be one of `implementer`, `reviewer`, `analyst`,
+`qa-tester`, `skill-writer`, or `strategy`. This vocabulary is enforced for every
+agent — core and preset — by `VALID_ROLES` in `scripts/smoke_test.py`; keep the
+two in sync.
 
-### Agent file format
-
-```yaml
----
-name: agent-name # Must match directory name
-description: one-liner # Used for convention-based matching
-role: implementer # implementer | reviewer | analyst | qa-tester | skill-writer | strategy
-skills:
-  add: [tdd, commit]
-  remove: []
----
-```
+For the current roster — every agent, its role, its skills, and which presets
+ship it — see the generated [docs/reference/agents.md](docs/reference/agents.md);
+regenerate it with `make docs`.
 
 ### Manifest fields
 
