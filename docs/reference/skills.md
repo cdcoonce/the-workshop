@@ -68,12 +68,14 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-garden` | Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
 | `/vault-grill` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
 | `/vault-handoff` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
+| `/vault-init` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. | vault-ops |
 | `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
 | `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
 | `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
 | `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
 | `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
 | `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. | vault-ops |
+| `/vault-upgrade` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. | vault-ops |
 | `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
@@ -404,6 +406,12 @@ Run Charles's vault (The Vault) /grill active knowledge-extraction interview and
 
 Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. Trigger when Charles invokes /handoff, mentions /handoff, or asks for this vault workflow by name.
 
+### `/vault-init`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. Trigger when Charles invokes /vault-init, mentions /vault-init, or asks to create, bootstrap, or stand up a new vault for himself or someone else.
+
 ### `/vault-link`
 
 *`vault-ops` preset*
@@ -439,6 +447,12 @@ Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-b
 *`vault-ops` preset*
 
 Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
+
+### `/vault-upgrade`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. Trigger when Charles invokes /vault-upgrade, mentions /vault-upgrade, or asks to upgrade the vault's vendored machinery.
 
 ### `/vault-wrap-up`
 

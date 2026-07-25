@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "template": "AGENTS.md.tmpl",
+      "target": "AGENTS.md"
+    },
+    {
+      "template": "CLAUDE.md.tmpl",
+      "target": "CLAUDE.md"
+    },
+    {
+      "template": "SETUP.md.tmpl",
+      "target": "SETUP.md"
+    },
+    {
+      "template": "gitconfig.tmpl",
+      "target": ".gitconfig"
+    },
+    {
+      "template": "gitignore.tmpl",
+      "target": ".gitignore"
+    },
+    {
+      "template": "pyproject.toml.tmpl",
+      "target": "pyproject.toml"
+    },
+    {
+      "template": "vault_scope.py.tmpl",
+      "target": ".claude/scripts/vault_scope.py"
+    }
+  ],
+  "trees": [
+    {
+      "source": "templates",
+      "target": "templates"
+    }
+  ]
+}

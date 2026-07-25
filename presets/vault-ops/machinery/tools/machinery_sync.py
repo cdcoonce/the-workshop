@@ -1,4 +1,4 @@
-"""Vendor CLI for the vault machinery payload (W3): adopt + dumb upgrade.
+"""Vendor CLI for the vault machinery payload (W3/W5): adopt, upgrade, init.
 
 Verbs
 -----
@@ -18,13 +18,38 @@ Verbs
     applies NOTHING (atomic): resolve each refusal, then re-run. After a
     successful apply the lockfile is rewritten.
 
+``init --target <dir> [--vault-name <name>] [--note-dirs a,b,c]
+[--contexts x,y]``
+    Scaffold a brand-new vault, non-interactively parameterized (W5).
+    Refuses a non-empty target (``.git`` alone does not count; pass
+    ``--force-empty-check`` to skip the check), renders every scaffold
+    template from ``<machinery>/scaffold/`` with the parameters, vendors the
+    full managed tier through the same copy path upgrade uses, writes the
+    lockfile, runs ``git init`` + an initial commit when the target is not
+    already a git repo, and prints the post-init checklist
+    (``.vault-context``, ``include.path``, optional plugin install, the
+    Codex hook-trust approval note).
+
+Scaffold tier
+-------------
+Scaffold outputs are written ONCE by init and never touched by upgrade —
+they are the owner's files (``AGENTS.md``, ``.gitconfig``, the note
+``templates/`` tree, and the taxonomy-parameterized
+``.claude/scripts/vault_scope.py``). The two tiers can never overlap: a
+scaffold target that collides with a managed vendor-map target aborts at
+map-validation time, before any write. Scaffold outputs that live under a
+managed scan root are recorded in the lockfile as ``tier: "scaffold"`` (no
+hash — local edits are the owner's business) so the drift check's UNTRACKED
+scan stays clean; upgrade re-records them on every lock rewrite.
+
 Structural safety
 -----------------
 The only paths this tool may ever write inside the target are (a) exact
-vendor-map target paths and (b) ``.vault/machinery.lock.json``. That is
-enforced in code by a write gate built from the validated vendor map — a
-map entry whose target escapes the target root (``../..``, absolute paths)
-or whose source escapes the machinery dir aborts the run before any write.
+vendor-map target paths, (b) declared scaffold output paths (init only),
+and (c) ``.vault/machinery.lock.json``. That is enforced in code by a write
+gate built from the validated maps — a map entry whose target escapes the
+target root (``../..``, absolute paths) or whose source escapes the
+machinery dir aborts the run before any write.
 
 Lockfile schema (``schema: 1``)::
 
@@ -62,15 +87,16 @@ A stale schema-1 reader hard-errors on a schema-2 map ("schema 2 is not
 supported") — deliberate: a stale vendored tool must refuse a newer map
 loudly rather than half-apply it.
 
-Scope: W3 shipped lockfile format plus adopt/check/dumb-upgrade; W4 adds the
-schema-2 constructs above. The scaffolding interview, an ``init`` verb for
-fresh vaults, and an ``upstream`` comparison verb remain deliberately
-deferred to the vault-init/upgrade-skill (W5) chunk; this tool intentionally
-knows nothing about them.
+Scope: W3 shipped lockfile format plus adopt/check/dumb-upgrade; W4 added
+the schema-2 constructs above; W5 adds ``init`` and the scaffold tier. The
+scaffolding interview lives in the vault-init skill (it interviews, then
+calls this verb), and an ``upstream`` comparison verb remains deliberately
+deferred; this tool intentionally knows nothing about it.
 
 Exit codes: 0 = success (or an executable dry-run plan); 1 = refusal
-(adopt diff, upgrade over a local edit); 2 = environment/config error
-(missing lockfile for upgrade, unreadable vendor map, hostile map path).
+(adopt diff, upgrade over a local edit, init on a non-empty target);
+2 = environment/config error (missing lockfile for upgrade, unreadable
+vendor or scaffold map, hostile map path, tier collision).
 """
 
 from __future__ import annotations
@@ -78,6 +104,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
+import string
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -85,6 +113,24 @@ from pathlib import Path
 
 LOCKFILE_RELPATH = ".vault/machinery.lock.json"
 SOURCE_REPO_NAME = "the-workshop"
+
+# Mirror of machinery_check.MANAGED_SCAN_ROOTS (the two tools are vendored
+# together; tests pin them equal). Scaffold outputs under one of these roots
+# are lock-recorded as tier "scaffold" so the UNTRACKED scan stays clean.
+MANAGED_SCAN_ROOTS = (
+    ".claude/scripts",
+    ".claude/agents",
+    ".codex/agents",
+    ".claude/skills",
+    ".codex/skills",
+)
+
+DEFAULT_NOTE_DIRS = "brain,work,personal,org,perf,reference"
+DEFAULT_CONTEXTS = "personal,work"
+
+# note-dir / context tokens become directory names and Python tuple items;
+# anything fancier than this is hostile input, not a taxonomy.
+_TAXONOMY_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 
 ACTION_COPY = "copy"
 ACTION_SKIP = "skip-identical"
@@ -270,21 +316,160 @@ class VendorMap:
         return cls(source_dir, data.get("entries", []), schema)
 
 
+class ScaffoldMap:
+    """The validated scaffold payload: templates init renders exactly once.
+
+    Loaded from ``<machinery>/scaffold/scaffold-map.json`` (schema 1):
+    ``entries`` are ``{"template": <path>.tmpl, "target": <vault path>}``
+    pairs rendered with :class:`string.Template`; ``trees`` are
+    ``{"source": <dir>, "target": <dir>}`` pairs copied verbatim (the note
+    ``templates/`` defaults). Template paths are containment-checked against
+    the scaffold dir the same way vendor-map sources are.
+    """
+
+    def __init__(self, scaffold_dir: Path, data: dict):
+        schema = data.get("schema")
+        if schema != 1:
+            raise VendorMapError(
+                f"scaffold map schema {schema!r} is not supported "
+                "(this reader understands schema 1)"
+            )
+        self.scaffold_dir = scaffold_dir
+        self.entries: list[dict] = []
+        self.trees: list[dict] = []
+        seen_targets: set[str] = set()
+        for entry in data.get("entries", []):
+            template = entry.get("template", "")
+            target = entry.get("target", "")
+            _resolve_inside(scaffold_dir, template, label="scaffold template")
+            if not target or Path(target).is_absolute():
+                raise VendorMapError(
+                    f"scaffold target path {target!r} must be relative"
+                )
+            if target in seen_targets:
+                raise VendorMapError(f"duplicate scaffold target: {target!r}")
+            seen_targets.add(target)
+            self.entries.append({"template": template, "target": target})
+        for tree in data.get("trees", []):
+            source = tree.get("source", "")
+            target = tree.get("target", "")
+            _resolve_inside(scaffold_dir, source, label="scaffold tree")
+            if not target or Path(target).is_absolute():
+                raise VendorMapError(
+                    f"scaffold tree target path {target!r} must be relative"
+                )
+            self.trees.append({"source": source, "target": target})
+
+    def tree_files(self) -> list[tuple[Path, str]]:
+        """(source file, target relpath) pairs for every verbatim tree file."""
+        pairs: list[tuple[Path, str]] = []
+        for tree in self.trees:
+            root = self.scaffold_dir / tree["source"]
+            if not root.is_dir():
+                continue
+            for path in sorted(root.rglob("*")):
+                if not path.is_file():
+                    continue
+                relative = path.relative_to(root).as_posix()
+                pairs.append((path, f"{tree['target']}/{relative}"))
+        return pairs
+
+    def output_targets(self) -> list[str]:
+        """Every vault-relative path the scaffold tier owns."""
+        return [entry["target"] for entry in self.entries] + [
+            target for _, target in self.tree_files()
+        ]
+
+    @classmethod
+    def load(cls, source_dir: Path) -> "ScaffoldMap | None":
+        """The machinery dir's scaffold map, or None when it ships none."""
+        map_path = source_dir / "scaffold" / "scaffold-map.json"
+        if not map_path.is_file():
+            return None
+        try:
+            data = json.loads(map_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise VendorMapError(
+                f"scaffold map at {map_path} is not valid JSON: {exc}"
+            )
+        return cls(source_dir / "scaffold", data)
+
+
+def _ensure_tiers_disjoint(
+    vendor_map: VendorMap, scaffold_map: ScaffoldMap | None
+) -> None:
+    """Abort when a scaffold output collides with a managed target.
+
+    The scaffold tier is written once by init and never upgraded; the
+    managed tier is owned by upgrade. A path claimed by both would flip
+    between owners depending on which verb ran last, so the overlap is a
+    hard map-validation error rather than a runtime surprise.
+    """
+    if scaffold_map is None:
+        return
+    managed_targets = {entry.target for entry in vendor_map.entries}
+    colliding = sorted(
+        set(scaffold_map.output_targets()) & managed_targets
+    )
+    if colliding:
+        raise VendorMapError(
+            "scaffold outputs collide with managed vendor-map targets: "
+            + ", ".join(colliding)
+        )
+
+
+def _scaffold_lock_entries(
+    scaffold_map: ScaffoldMap | None,
+    target: Path,
+    previous_files: dict[str, dict] | None,
+) -> dict[str, dict]:
+    """Lock records for scaffold outputs under the managed scan roots.
+
+    Only scan-root scaffold outputs are recorded (as ``tier: "scaffold"``,
+    hashless — the owner may edit them freely): the record exists to keep
+    the drift check's UNTRACKED scan clean, and to keep MISSING loud for a
+    load-bearing file like ``vault_scope.py``. A path is recorded when the
+    file exists, or when the previous lock knew it under any tier — which is
+    also how upgrade migrates a formerly managed scaffold-owned file.
+    """
+    if scaffold_map is None:
+        return {}
+    prefixes = tuple(f"{root}/" for root in MANAGED_SCAN_ROOTS)
+    entries: dict[str, dict] = {}
+    for relative in scaffold_map.output_targets():
+        if not relative.startswith(prefixes):
+            continue
+        known_before = bool(previous_files) and relative in previous_files
+        if (target / relative).is_file() or known_before:
+            entries[relative] = {"tier": "scaffold"}
+    return entries
+
+
 class TargetWriter:
     """Write gate: the ONLY component allowed to mutate the target repo.
 
     Built from the validated vendor map, its allowlist is exactly the map's
-    target paths plus the lockfile. Every write resolves through
-    :func:`_resolve_inside`, so a hostile map path fails at construction
-    time — before any write — rather than being caught by convention.
+    target paths, any declared scaffold output paths (init), plus the
+    lockfile. Every write resolves through :func:`_resolve_inside`, so a
+    hostile map path fails at construction time — before any write — rather
+    than being caught by convention.
     """
 
-    def __init__(self, target_root: Path, vendor_map: VendorMap):
+    def __init__(
+        self,
+        target_root: Path,
+        vendor_map: VendorMap,
+        extra_targets: list[str] | None = None,
+    ):
         self._root = target_root
         self._allowed: dict[str, Path] = {}
         for entry in vendor_map.entries:
             self._allowed[entry.target] = _resolve_inside(
                 target_root, entry.target, label="target"
+            )
+        for relative in extra_targets or []:
+            self._allowed[relative] = _resolve_inside(
+                target_root, relative, label="scaffold target"
             )
         self._allowed[LOCKFILE_RELPATH] = _resolve_inside(
             target_root, LOCKFILE_RELPATH, label="lockfile"
@@ -424,6 +609,8 @@ def _adopt_status(vendor_map: VendorMap, entry: MapEntry, target: Path) -> str:
 
 def run_adopt(target: Path, source_dir: Path, *, as_json: bool) -> int:
     vendor_map = VendorMap.load(source_dir)
+    scaffold_map = ScaffoldMap.load(source_dir)
+    _ensure_tiers_disjoint(vendor_map, scaffold_map)
     writer = TargetWriter(target, vendor_map)
 
     statuses: list[dict] = []
@@ -436,6 +623,12 @@ def run_adopt(target: Path, source_dir: Path, *, as_json: bool) -> int:
 
     ok = all(record["status"] == ADOPT_IDENTICAL for record in statuses)
     if ok:
+        previous = _load_lock(target)
+        lock_files.update(
+            _scaffold_lock_entries(
+                scaffold_map, target, previous["files"] if previous else None
+            )
+        )
         _write_lock(writer, _build_lockfile(source_dir, lock_files))
 
     if as_json:
@@ -627,6 +820,8 @@ def run_upgrade(
     as_json: bool,
 ) -> int:
     vendor_map = VendorMap.load(source_dir)
+    scaffold_map = ScaffoldMap.load(source_dir)
+    _ensure_tiers_disjoint(vendor_map, scaffold_map)
     writer = TargetWriter(target, vendor_map)
 
     lock = _load_lock(target)
@@ -661,6 +856,9 @@ def run_upgrade(
                         entry.target, vendor_map.source_path(entry).read_bytes()
                     )
             lock_files[entry.target] = _lock_entry_for_source(vendor_map, entry)
+        lock_files.update(
+            _scaffold_lock_entries(scaffold_map, target, lock["files"])
+        )
         _write_lock(writer, _build_lockfile(source_dir, lock_files))
         applied = True
 
@@ -699,6 +897,230 @@ def run_upgrade(
             print(f"applied; rewrote {LOCKFILE_RELPATH}")
 
     return 1 if refusals else 0
+
+
+# ---------------------------------------------------------------------------
+# init
+# ---------------------------------------------------------------------------
+
+
+def _parse_taxonomy(raw: str, *, label: str) -> list[str]:
+    """Validated, de-blanked comma-separated taxonomy tokens.
+
+    Raises
+    ------
+    VendorMapError
+        When no token survives, or a token is not a plain directory-safe
+        name (tokens become directory names and Python tuple items).
+    """
+    tokens = [token.strip() for token in raw.split(",") if token.strip()]
+    if not tokens:
+        raise VendorMapError(f"--{label} needs at least one name")
+    for token in tokens:
+        if not _TAXONOMY_TOKEN.match(token):
+            raise VendorMapError(
+                f"--{label} token {token!r} is not a plain directory name"
+            )
+    return tokens
+
+
+def build_scaffold_params(
+    vault_name: str, note_dirs: list[str], contexts: list[str]
+) -> dict[str, str]:
+    """The substitution dict every scaffold template is rendered with."""
+    slug = re.sub(r"[^a-z0-9]+", "-", vault_name.lower()).strip("-") or "vault"
+    return {
+        "vault_name": vault_name,
+        "vault_slug": slug,
+        "note_dirs_csv": ", ".join(note_dirs),
+        "note_dirs_bullets": "\n".join(
+            f"- `{name}/` — describe what lives here" for name in note_dirs
+        ),
+        "governed_note_dirs": "".join(f'"{name}", ' for name in note_dirs).rstrip(" "),
+        "contexts_csv": ", ".join(contexts),
+        "context_values": " or ".join(f"`{name}`" for name in contexts),
+        "primary_context": contexts[0],
+    }
+
+
+def _post_init_checklist(contexts: list[str]) -> list[str]:
+    context_values = " or ".join(f"`{name}`" for name in contexts)
+    return [
+        f'Write .vault-context (gitignored, one per machine): echo "{contexts[0]}" '
+        f"> .vault-context — valid values: {context_values}",
+        "Wire git conventions: git config --local --add include.path "
+        "'../.gitconfig'",
+        "Verify the vendored machinery: python3 "
+        ".claude/scripts/machinery_check.py --strict",
+        "Optional: install the vault-ops plugin from the-workshop marketplace "
+        "for cross-repo use of the vault skills",
+        "Codex only, once per machine: approve hook trust interactively "
+        "(hooks are silently skipped until trusted; automation may use "
+        "codex exec --dangerously-bypass-hook-trust)",
+        "Open an agent session in the new vault and confirm the hooks fire",
+    ]
+
+
+def _git_init_and_commit(target: Path, message: str) -> tuple[bool, str | None]:
+    """``git init`` + stage everything + initial commit. Fail-soft.
+
+    Returns
+    -------
+    tuple[bool, str | None]
+        (committed, error). A missing git binary or unconfigured identity
+        degrades to a warning — the vault is fully scaffolded either way.
+    """
+    for step in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", message]):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(target), *step],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, str(exc)
+        if result.returncode != 0:
+            return False, result.stderr.strip() or f"git {step[0]} failed"
+    return True, None
+
+
+def run_init(
+    target: Path,
+    source_dir: Path,
+    *,
+    vault_name: str | None,
+    note_dirs_raw: str,
+    contexts_raw: str,
+    force_empty_check: bool,
+    as_json: bool,
+) -> int:
+    vendor_map = VendorMap.load(source_dir)
+    scaffold_map = ScaffoldMap.load(source_dir)
+    if scaffold_map is None:
+        raise VendorMapError(
+            f"no scaffold payload at {source_dir / 'scaffold'}; "
+            "init needs scaffold/scaffold-map.json"
+        )
+    _ensure_tiers_disjoint(vendor_map, scaffold_map)
+    note_dirs = _parse_taxonomy(note_dirs_raw, label="note-dirs")
+    contexts = _parse_taxonomy(contexts_raw, label="contexts")
+
+    resolved_name = vault_name or target.resolve().name
+    params = build_scaffold_params(resolved_name, note_dirs, contexts)
+
+    if target.exists():
+        # A bare `git init`'d dir still counts as empty: only real content
+        # is worth refusing over.
+        occupied = [p.name for p in target.iterdir() if p.name != ".git"]
+        if occupied and not force_empty_check:
+            message = (
+                f"target {target} is not empty ({len(occupied)} entries, e.g. "
+                f"{sorted(occupied)[0]!r}); init scaffolds NEW vaults only. "
+                "Pass --force-empty-check to proceed anyway."
+            )
+            if as_json:
+                print(json.dumps({"verb": "init", "ok": False, "error": message}, indent=2))
+            else:
+                print(f"REFUSED: {message}", file=sys.stderr)
+            return 1
+    else:
+        target.mkdir(parents=True)
+
+    scaffold_targets = scaffold_map.output_targets()
+    writer = TargetWriter(target, vendor_map, extra_targets=scaffold_targets)
+
+    # 1. Render every scaffold template.
+    written_scaffold: list[str] = []
+    for entry in scaffold_map.entries:
+        template_text = (scaffold_map.scaffold_dir / entry["template"]).read_text(
+            encoding="utf-8"
+        )
+        try:
+            rendered = string.Template(template_text).substitute(params)
+        except (KeyError, ValueError) as exc:
+            raise VendorMapError(
+                f"scaffold template {entry['template']} references an unknown "
+                f"placeholder: {exc}"
+            )
+        writer.write_bytes(entry["target"], rendered.encode("utf-8"))
+        written_scaffold.append(entry["target"])
+
+    # 2. Copy the verbatim scaffold trees (note templates).
+    for source_path, target_rel in scaffold_map.tree_files():
+        writer.write_bytes(target_rel, source_path.read_bytes())
+        written_scaffold.append(target_rel)
+
+    # 3. Vendor the full managed tier — the same copy path upgrade applies.
+    lock_files: dict[str, dict] = {}
+    written_managed: list[str] = []
+    for entry in vendor_map.entries:
+        if entry.kind == "json-key":
+            _apply_json_key_copy(vendor_map, entry, target, writer)
+        else:
+            writer.write_bytes(
+                entry.target, vendor_map.source_path(entry).read_bytes()
+            )
+        lock_files[entry.target] = _lock_entry_for_source(vendor_map, entry)
+        written_managed.append(entry.target)
+
+    # 4. Lock: managed hashes plus hashless scaffold records for scan roots.
+    lock_files.update(_scaffold_lock_entries(scaffold_map, target, None))
+    _write_lock(writer, _build_lockfile(source_dir, lock_files))
+
+    # 5. git init + initial commit, unless the target is already a repo.
+    _, version = resolve_source_meta(source_dir)
+    git_initialized = False
+    git_error: str | None = None
+    if not (target / ".git").exists():
+        git_initialized, git_error = _git_init_and_commit(
+            target,
+            f"chore: initialize {resolved_name} vault "
+            f"(the-workshop vault-ops {version or 'unknown'})",
+        )
+
+    checklist = _post_init_checklist(contexts)
+
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "verb": "init",
+                    "target": str(target),
+                    "source": str(source_dir),
+                    "vault_name": resolved_name,
+                    "note_dirs": note_dirs,
+                    "contexts": contexts,
+                    "scaffold": written_scaffold,
+                    "managed": written_managed,
+                    "lockfile_written": True,
+                    "git_initialized": git_initialized,
+                    "git_error": git_error,
+                    "checklist": checklist,
+                    "ok": True,
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"init: {source_dir} -> {target}")
+        print(
+            f"  scaffolded {len(written_scaffold)} file(s), vendored "
+            f"{len(written_managed)} managed file(s), wrote {LOCKFILE_RELPATH}"
+        )
+        if git_initialized:
+            print("  initialized git repo with an initial commit")
+        elif git_error:
+            print(
+                f"  WARNING: git initialization skipped ({git_error}); "
+                "run git init + commit manually"
+            )
+        else:
+            print("  target is already a git repo; left git alone")
+        print("Post-init checklist:")
+        for number, step in enumerate(checklist, start=1):
+            print(f"  {number}. {step}")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -758,6 +1180,33 @@ def main(argv: list[str] | None = None) -> int:
         help="overwrite local edits instead of refusing",
     )
 
+    init = subparsers.add_parser(
+        "init", help="scaffold a brand-new vault into an empty target"
+    )
+    _add_common_arguments(init)
+    init.add_argument(
+        "--vault-name",
+        default=None,
+        help="human name for the vault (default: the target directory name)",
+    )
+    init.add_argument(
+        "--note-dirs",
+        default=DEFAULT_NOTE_DIRS,
+        metavar="A,B,C",
+        help=f"governed note directories (default: {DEFAULT_NOTE_DIRS})",
+    )
+    init.add_argument(
+        "--contexts",
+        default=DEFAULT_CONTEXTS,
+        metavar="X,Y",
+        help=f"machine contexts for .vault-context (default: {DEFAULT_CONTEXTS})",
+    )
+    init.add_argument(
+        "--force-empty-check",
+        action="store_true",
+        help="scaffold into a non-empty target instead of refusing",
+    )
+
     args = parser.parse_args(argv)
     target = Path(args.target)
     source_dir = Path(args.source)
@@ -765,6 +1214,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.verb == "adopt":
             return run_adopt(target, source_dir, as_json=args.json)
+        if args.verb == "init":
+            return run_init(
+                target,
+                source_dir,
+                vault_name=args.vault_name,
+                note_dirs_raw=args.note_dirs,
+                contexts_raw=args.contexts,
+                force_empty_check=args.force_empty_check,
+                as_json=args.json,
+            )
         return run_upgrade(
             target,
             source_dir,
