@@ -78,7 +78,7 @@ if test_command is None:
     sys.exit(0)
 
 try:
-    from _git_baseline import git_dir, working_tree_signature
+    from _git_baseline import git_dir, head_sha, working_tree_signature
 except ImportError:
     # Fail open: the helper module ships alongside every hook, but a stale or
     # partial install must no-op rather than crash the user's tool path.
@@ -94,6 +94,7 @@ if repo_git_dir is None:
 signature = working_tree_signature(cwd)
 if signature is None:
     sys.exit(0)
+signature = f"{head_sha(cwd) or ''}\n{signature}"
 
 session_id = data.get("session_id") or "default"
 state_file = repo_git_dir / "the-workshop-stop-gate" / f"{session_id}.txt"

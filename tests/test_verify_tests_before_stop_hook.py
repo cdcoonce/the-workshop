@@ -142,6 +142,33 @@ def test_unchanged_signature_skips_rerun_after_green_pass(tmp_path: Path) -> Non
     assert not marker.exists(), "test command was re-invoked despite an unchanged signature"
 
 
+def test_clean_tree_at_different_commit_reruns_tests(tmp_path: Path) -> None:
+    # A clean working tree hashes identically regardless of which commit HEAD
+    # points to, so `git status --porcelain` alone can't tell "still commit A"
+    # from "now commit B, also clean." The signature must include HEAD so
+    # switching commits on a clean tree is treated as changed.
+    _init_git_repo(tmp_path)
+    marker = tmp_path / "ran.marker"
+    (tmp_path / "Makefile").write_text(f"test:\n\t@touch {marker}\n\t@exit 0\n")
+    (tmp_path / "committed.txt").write_text("v1")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "commit a"], cwd=tmp_path, check=True)
+
+    first = run_hook({"cwd": str(tmp_path), "session_id": "s5"})
+    assert first.returncode == 0
+    assert marker.exists()
+    marker.unlink()
+
+    (tmp_path / "committed.txt").write_text("v2")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "commit b"], cwd=tmp_path, check=True)
+
+    second = run_hook({"cwd": str(tmp_path), "session_id": "s5"})
+
+    assert second.returncode == 0
+    assert marker.exists(), "clean tree at a new commit was wrongly treated as unchanged"
+
+
 def test_changed_signature_after_green_pass_reruns_tests(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     _write_makefile(tmp_path, exit_code=0)
