@@ -4,6 +4,21 @@ This document lists the features each supported agent platform depends on.
 Update when a breaking change is discovered. See [ROADMAP.md](ROADMAP.md) for
 the overall multi-platform goal and design principle.
 
+### Evidence standard
+
+Any entry asserting a platform behavior — a mechanism works or doesn't, an
+event fires or doesn't — must carry a one-line note on how that was verified
+(e.g. "confirmed via log inspection across N sessions" or "confirmed via
+controlled probe at path X vs path Y"), not just the conclusion. **Presence of
+a bundled example or a doc mention is not sufficient evidence on its own** —
+see [How that was established](#how-that-was-established) under Cortex Code
+below: the bundled `workbench` example shipping `hooks/hooks.json` implied
+plugin-level hooks worked on Cortex, and that inference was wrong until a
+log-history scan and a controlled plugin-level-vs-user-level probe proved
+otherwise. This applies prospectively to new and edited entries; existing
+unverified claims may still be marked the way the Claude Code section does
+(see "Not re-verified in this pass" below) rather than rewritten.
+
 ## Claude Code
 
 ### Plugin System
