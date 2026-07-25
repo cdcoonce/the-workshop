@@ -16,6 +16,11 @@ GOVERNED_NOTE_DIRS = (${governed_note_dirs})
 # candidates, but operating manuals and generated/session state are excluded.
 GRAPH_NOTE_DIRS = (*GOVERNED_NOTE_DIRS, "thinking")
 
+# Cheap headless model for batch work (notebook-distill, graph_gardener Lane B).
+# Constitution §4 makes "cheap models for batch work" the policy; the specific
+# id is an instance detail, so it lives here rather than in the engine.
+BATCH_MODEL = "claude-haiku-4-5"
+
 GRAPH_EXCLUDED_DIRS = {
     ".afk",
     ".brain",
