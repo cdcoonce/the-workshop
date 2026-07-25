@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 
@@ -594,6 +595,104 @@ class TestBuildMachinery:
         build_preset("python-api", repo_root=tmp_repo)
 
         assert not (tmp_repo / "dist" / "python-api" / "machinery").exists()
+
+
+class TestBuildMachineryWiring:
+    """A machinery payload with a wiring spec regenerates rendered/ and the
+    vendor map at build time, so both are always fresh in source and dist."""
+
+    def _write_wired_machinery(self, tmp_repo: Path) -> Path:
+        repo_tools = (
+            Path(__file__).resolve().parent.parent
+            / "presets"
+            / "vault-ops"
+            / "machinery"
+            / "tools"
+        )
+        preset = tmp_repo / "presets" / "python-api"
+        machinery = preset / "machinery"
+        engine = machinery / "engine"
+        engine.mkdir(parents=True)
+        (engine / "session-stop.py").write_text("# hook script\n")
+        agents = machinery / "agents"
+        agents.mkdir()
+        (agents / "helper.md").write_text(
+            "---\nname: helper\ndescription: A helper agent\n---\n\n# Helper\n\nDo helpful things.\n"
+        )
+        (machinery / "wiring").mkdir()
+        (machinery / "wiring" / "hooks-spec.json").write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "entries": [
+                        {
+                            "event": "Stop",
+                            "script": "session-stop.py",
+                            "args": ["--explicit-sync"],
+                            "timeout_ms": 60000,
+                        }
+                    ],
+                }
+            )
+        )
+        tools = machinery / "tools"
+        tools.mkdir()
+        for tool in ("wiring_gen.py", "vendor_map_gen.py"):
+            shutil.copy2(repo_tools / tool, tools / tool)
+        skills = preset / "skills" / "deploy"
+        assert skills.is_dir(), "tmp_repo fixture ships the deploy skill"
+        return machinery
+
+    def test_build_renders_wiring_and_regenerates_map(
+        self, tmp_repo: Path
+    ) -> None:
+        machinery = self._write_wired_machinery(tmp_repo)
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        # Rendered into the source tree (committed-generated, like dist/)...
+        rendered = machinery / "rendered"
+        hooks_value = json.loads(
+            (rendered / "claude-settings-hooks.json").read_text()
+        )
+        command = hooks_value["Stop"][0]["hooks"][0]["command"]
+        assert command.endswith("run-hook.sh session-stop.py --explicit-sync")
+        assert (rendered / "codex-agents" / "helper.toml").is_file()
+        vendor_map = json.loads((machinery / "vendor-map.json").read_text())
+        assert vendor_map["schema"] == 2
+        targets = {e["target"] for e in vendor_map["entries"]}
+        assert ".claude/agents/helper.md" in targets
+        assert ".codex/agents/helper.toml" in targets
+        assert ".claude/skills/deploy/SKILL.md" in targets
+        assert ".codex/skills/deploy/SKILL.md" in targets
+
+        # ...and shipped wholesale into dist by the machinery copytree.
+        dist_machinery = tmp_repo / "dist" / "python-api" / "machinery"
+        assert (dist_machinery / "rendered" / "codex-hooks.json").is_file()
+        assert (dist_machinery / "vendor-map.json").read_text() == (
+            machinery / "vendor-map.json"
+        ).read_text()
+
+    def test_build_removes_stale_rendered_files(self, tmp_repo: Path) -> None:
+        machinery = self._write_wired_machinery(tmp_repo)
+        stale = machinery / "rendered" / "codex-agents" / "ghost.toml"
+        stale.parent.mkdir(parents=True)
+        stale.write_text('name = "ghost"\n')
+
+        build_preset("python-api", repo_root=tmp_repo)
+
+        assert not stale.exists()
+        dist_machinery = tmp_repo / "dist" / "python-api" / "machinery"
+        assert not (
+            dist_machinery / "rendered" / "codex-agents" / "ghost.toml"
+        ).exists()
+
+    def test_wiring_without_tools_fails_the_build(self, tmp_repo: Path) -> None:
+        machinery = self._write_wired_machinery(tmp_repo)
+        shutil.rmtree(machinery / "tools")
+
+        with pytest.raises(BuildValidationError, match="wiring"):
+            build_preset("python-api", repo_root=tmp_repo)
 
 
 class TestBuildPluginSettings:

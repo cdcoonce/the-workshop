@@ -1175,3 +1175,112 @@ class TestSmokeMachinery:
         result = smoke_test(dist)
 
         assert result.passed is True
+
+
+class TestSmokeMachineryWiring:
+    """W4 checks: wiring-spec scripts exist, rendered files parse, and the
+    vendor map keeps unique targets."""
+
+    def _dist_with_wiring(self, tmp_repo: Path) -> Path:
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+        machinery = dist / "machinery"
+        engine = machinery / "engine"
+        engine.mkdir(parents=True)
+        (engine / "session-stop.py").write_text("# hook script\n")
+        (machinery / "wiring").mkdir()
+        (machinery / "wiring" / "hooks-spec.json").write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "entries": [
+                        {
+                            "event": "Stop",
+                            "script": "session-stop.py",
+                            "args": [],
+                            "timeout_ms": 60000,
+                        }
+                    ],
+                }
+            )
+        )
+        rendered = machinery / "rendered"
+        (rendered / "codex-agents").mkdir(parents=True)
+        (rendered / "claude-settings-hooks.json").write_text('{"Stop": []}\n')
+        (rendered / "codex-hooks.json").write_text('{"hooks": {}}\n')
+        (rendered / "codex-agents" / "helper.toml").write_text(
+            'name = "helper"\n'
+        )
+        (machinery / "vendor-map.json").write_text(
+            json.dumps(
+                {
+                    "schema": 2,
+                    "entries": [
+                        {
+                            "kind": "file",
+                            "source": "engine/session-stop.py",
+                            "target": ".claude/scripts/session-stop.py",
+                        }
+                    ],
+                }
+            )
+        )
+        return dist
+
+    def test_consistent_wiring_passes(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_wiring(tmp_repo)
+
+        result = smoke_test(dist)
+
+        assert not any("wiring" in e or "rendered" in e for e in result.errors)
+
+    def test_spec_script_missing_from_engine_fails(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_wiring(tmp_repo)
+        (dist / "machinery" / "engine" / "session-stop.py").unlink()
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any(
+            "session-stop.py" in e and "wiring" in e for e in result.errors
+        )
+
+    def test_unparseable_rendered_json_fails(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_wiring(tmp_repo)
+        (
+            dist / "machinery" / "rendered" / "claude-settings-hooks.json"
+        ).write_text("{not json")
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any("claude-settings-hooks.json" in e for e in result.errors)
+
+    def test_unparseable_rendered_toml_fails(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_wiring(tmp_repo)
+        (
+            dist / "machinery" / "rendered" / "codex-agents" / "helper.toml"
+        ).write_text('name = unclosed "')
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any("helper.toml" in e for e in result.errors)
+
+    def test_duplicate_vendor_map_targets_fail(self, tmp_repo: Path) -> None:
+        dist = self._dist_with_wiring(tmp_repo)
+        entry = {
+            "kind": "file",
+            "source": "engine/session-stop.py",
+            "target": ".claude/scripts/session-stop.py",
+        }
+        (dist / "machinery" / "vendor-map.json").write_text(
+            json.dumps({"schema": 2, "entries": [entry, dict(entry)]})
+        )
+
+        result = smoke_test(dist)
+
+        assert result.passed is False
+        assert any(
+            "vendor-map" in e and "duplicate" in e for e in result.errors
+        )

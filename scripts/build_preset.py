@@ -21,6 +21,7 @@ Build order (plugin format):
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import re
 import shutil
@@ -68,6 +69,41 @@ def _find_conflict_copies(skills_path: Path) -> list[str]:
         for path in skills_path.rglob("*")
         if _CONFLICT_COPY_PATTERN.search(path.name)
     )
+
+
+def _load_machinery_tool(machinery_src: Path, name: str):
+    """Import a machinery build tool straight from its shipped file path.
+
+    Machinery is a vendored payload, not a package of this repo, so its
+    tools are loaded the same way the test suite loads them.
+    """
+    path = machinery_src / "tools" / f"{name}.py"
+    if not path.is_file():
+        raise BuildValidationError(
+            f"machinery wiring requires {path.relative_to(machinery_src.parent)} "
+            "but it does not exist"
+        )
+    spec = importlib.util.spec_from_file_location(f"_machinery_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _regenerate_machinery_wiring(machinery_src: Path) -> None:
+    """Render wiring adapters and regenerate the vendor map in-place.
+
+    Both outputs are committed-generated, like ``dist/``: this build step
+    refreshes them in the SOURCE tree, the machinery copytree ships them,
+    and ``make verify-generated`` (whose digest covers these paths) fails
+    when a committed copy is stale.
+    """
+    wiring_gen = _load_machinery_tool(machinery_src, "wiring_gen")
+    map_gen = _load_machinery_tool(machinery_src, "vendor_map_gen")
+    try:
+        wiring_gen.generate(machinery_src)
+    except wiring_gen.WiringSpecError as exc:
+        raise BuildValidationError(f"machinery wiring: {exc}") from exc
+    map_gen.generate(machinery_src)
 
 
 def _copy_with_override(src: Path, dest: Path, *, kind: str) -> None:
@@ -461,6 +497,10 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     # so the same dist drift gate and smoke checks cover it.
     machinery_src = preset_path / "machinery"
     if machinery_src.exists():
+        # A machinery payload carrying a wiring spec regenerates its rendered
+        # adapters and vendor map first, so the shipped copy is always fresh.
+        if (machinery_src / "wiring" / "hooks-spec.json").exists():
+            _regenerate_machinery_wiring(machinery_src)
         shutil.copytree(machinery_src, dist_path / "machinery", ignore=_JUNK_IGNORE)
 
     # 8. Generate hooks/hooks.json (merged hook config). Some presets are

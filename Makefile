@@ -52,7 +52,7 @@ verify-generated:
 		echo "digest before rebuild: $$before"; \
 		echo "digest after rebuild:  $$after"; \
 		echo "Run 'make build' and include the regenerated files in your change:"; \
-		git status --porcelain -- dist .claude-plugin/marketplace.json .agents/plugins/marketplace.json; \
+		git status --porcelain -- dist .claude-plugin/marketplace.json .agents/plugins/marketplace.json "presets/*/machinery/rendered" "presets/*/machinery/vendor-map.json"; \
 		exit 1; \
 	fi
 

@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.1.1,<0.2", "fastembed", "numpy"]
+# dependencies = ["graphmark>=0.3,<0.4", "fastembed", "numpy"]
 # ///
 """Vault graph CLI — the reintegration seam.
 
@@ -17,6 +17,10 @@ Surface used by /connect and /garden: `--gaps [--near-bridges] [--top N] [...]` 
 Structural queries (--stats/--orphans/...) are also supported for parity with the old CLI.
 
 Config mirrors brain_map exactly, so output is byte-identical (verified by a live-vault diff).
+
+The gaps banding policy (threshold / max-score / k / hub-degree) is sourced from graphmark's
+published ``GAPS_DEFAULT_*`` constants rather than restated here, so the validated band has a
+single definition.
 """
 
 from __future__ import annotations
@@ -26,20 +30,26 @@ import json
 import sys
 from pathlib import Path
 
-from graphmark.config import VaultConfig
-from graphmark.dismiss import active_dismissed_sigs, record_dismissal, weaklink_sig
-from graphmark.graph import NormalizeResolver, VaultGraph
-from graphmark.metrics import (
+import graphmark
+from graphmark import (
+    GAPS_DEFAULT_HUB_DEGREE,
+    GAPS_DEFAULT_K,
+    GAPS_DEFAULT_MAX_SCORE,
+    GAPS_DEFAULT_THRESHOLD,
+    VaultConfig,
+    VaultGraph,
+    active_dismissed_sigs,
     bridges,
     clusters,
     gaps,
     hubs,
     neighborhood,
     orphans,
+    record_dismissal,
     siloed_notes,
     stats,
+    weaklink_sig,
 )
-from graphmark.parse import WikilinkExtractor
 
 # Vault scope — shared with validation, semantic search, and graph gardener.
 from vault_scope import (  # noqa: E402
@@ -63,7 +73,7 @@ def find_vault_root() -> Path | None:
     return None
 
 
-def build(vault_root: Path) -> VaultGraph:
+def build(vault_root: Path) -> tuple[VaultGraph, VaultConfig]:
     cfg = VaultConfig(
         root=vault_root,
         scoped_folders=list(GRAPH_NOTE_DIRS),
@@ -71,7 +81,9 @@ def build(vault_root: Path) -> VaultGraph:
         rules_files=list(OPERATING_FILENAMES),
         transient_prefixes=TRANSIENT_PREFIXES,
     )
-    return VaultGraph.build(cfg, WikilinkExtractor(), NormalizeResolver()), cfg
+    # graphmark.build() defaults the wikilink/normalize pair, so the vault no longer
+    # restates that pairing.
+    return graphmark.build(cfg), cfg
 
 
 def vector_similar_fn(vault_root: Path):
@@ -125,17 +137,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hubs", type=int, nargs="?", const=10, metavar="N")
     p.add_argument("--clusters", action="store_true")
     p.add_argument("--bridges", action="store_true")
+    p.add_argument(
+        "--unresolved",
+        action="store_true",
+        help="Broken wikilinks: {note: [displays]}. Same-note [[#anchor]] links are not broken.",
+    )
     p.add_argument("--neighborhood", metavar="NOTE")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--gaps", action="store_true")
     p.add_argument("--note")
     p.add_argument("--near-bridges", action="store_true", dest="near_bridges")
     p.add_argument("--dismiss", nargs=2, metavar=("A", "B"))
-    p.add_argument("--threshold", type=float, default=0.6)
-    p.add_argument("--max", type=float, default=0.92, dest="max_score")
-    p.add_argument("-k", type=int, default=8)
+    # The gaps band comes from graphmark's published constants, so the validated policy has
+    # one definition instead of literals copied into this argparse block.
+    p.add_argument("--threshold", type=float, default=GAPS_DEFAULT_THRESHOLD)
+    p.add_argument("--max", type=float, default=GAPS_DEFAULT_MAX_SCORE, dest="max_score")
+    p.add_argument("-k", type=int, default=GAPS_DEFAULT_K)
     p.add_argument("--top", type=int, default=10)
-    p.add_argument("--hub-degree", type=int, default=40, dest="hub_degree")
+    p.add_argument("--hub-degree", type=int, default=GAPS_DEFAULT_HUB_DEGREE, dest="hub_degree")
     args = p.parse_args(argv)
 
     vault_root = Path(args.vault_root).resolve() if args.vault_root else find_vault_root()
@@ -158,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         _emit(clusters(graph))
     elif args.bridges:
         _emit(bridges(graph))
+    elif args.unresolved:
+        _emit(dict(sorted(graph.unresolved.items())))
     elif args.neighborhood:
         _emit(neighborhood(graph, args.neighborhood, args.depth))
     elif args.gaps:
