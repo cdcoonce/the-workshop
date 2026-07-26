@@ -78,10 +78,13 @@ Constraints that shape the hooks above, and would break them if they changed:
 
 - `settings.json` at plugin root (non-hook settings)
 - Hook arrays in hooks.json with `matcher` and `hooks` fields
-- `enabledPlugins` keys observed in the wild as `<plugin>@claude-workflow` —
-  the marketplace identity survived the repo's rebrand to the-workshop, so any
-  per-project disable must use the `@claude-workflow` suffix until the
-  marketplace is re-added under the new name
+- `enabledPlugins` keys: the marketplace has since been re-registered under the
+  new name — `known_marketplaces.json` on the reference machine carries
+  marketplace `the-workshop` (observed 2026-07-26), and installed plugins now
+  key as `<plugin>@the-workshop`. Legacy `<plugin>@claude-workflow` keys left
+  checked into repos are **orphaned no-ops**: they match nothing, so a
+  `@claude-workflow` disable no longer disables anything. Update such keys to
+  `@the-workshop`.
 
 ### Headless (`claude -p`)
 
@@ -225,6 +228,15 @@ binary strings. Matcher names carried from 2026-07-02 (commit `bde36ea`).
   `.claude-plugin/` directory; no `.cortex-plugin` exists anywhere in the
   install. The `.cortex-plugin/plugin.json` this repo emits appears to be read by
   nothing — any preset that works on Cortex does so through the Claude manifest.
+- **Version note (2026-07-25, doc-level evidence only):** Cortex Code desktop
+  v1.18.0 bundles a first-party plugin spec (`plugin-creator/reference.md` in
+  the app bundle) that names `.cortex-plugin/plugin.json` the primary
+  CoCo-convention manifest, with `.claude-plugin/plugin.json` "also
+  recognized", and documents hooks declared **inline in the manifest** as read.
+  Per the evidence standard above this is a bundled spec, not a controlled
+  probe — it reopens, but does not overturn, the read-by-nothing conclusion
+  probed on v1.1.8. The hook conclusion below (no plugin `hooks/hooks.json`
+  has ever executed) is unaffected either way.
 - Plugins are supplied by the `--plugin-dir` flag (a directory, GitHub repo, or
   URL, repeatable). There is no `plugin install` subcommand; `cortex skill`
   manages skill directories separately.

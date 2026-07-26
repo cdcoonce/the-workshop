@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white) ![Claude Code](https://img.shields.io/badge/Claude_Code-native-6B4FBB?logo=anthropic&logoColor=white) ![Codex](https://img.shields.io/badge/Codex-native-000000?logo=openai&logoColor=white) ![Cortex Code](https://img.shields.io/badge/Cortex_Code-native-29B5E8?logo=snowflake&logoColor=white) ![pytest](https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white) ![uv](https://img.shields.io/badge/Package_Manager-uv-DE5FE9)
 
-A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL.
+A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; hooks and personas execute on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
 **30 universal skills · 2 core agents · 9 hooks · 3 project presets · 7 persona plugins**
@@ -16,6 +16,7 @@ A **portable AI development environment** — skills, methodology docs, agents, 
 
 - [What Is This](#what-is-this)
 - [Reference](#reference)
+- [Platform Support](#platform-support)
 - [Installation](#installation)
   - [Claude Code](#claude-code)
   - [Codex](#codex)
@@ -52,7 +53,7 @@ Every coding-agent project needs skills, hooks, settings, and development standa
 
 **The Workshop** solves this. It's a portable dev-environment toolkit that installs natively on **Claude Code**, **Codex**, and **Cortex Code**: the full skill set, every agent, methodology docs, and safety hooks, picked up by pasting a URL. Install **`workbench`** and you get the whole environment configured automatically.
 
-**One shared source, three native outputs.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (Claude Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex Code) — from the same components, with no install-time transform. A preset built here installs and runs the same way on any of the three.
+**One shared source, three native outputs — with honest platform limits.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (read by Claude Code and Cortex Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex's documented convention; see [COMPATIBILITY.md](COMPATIBILITY.md)) — from the same components, with no install-time transform. Skills install and run on all three platforms. Hooks and personas currently execute on Claude Code only: Codex removed plugin-level hooks outright, and Cortex has never executed a plugin's `hooks/hooks.json`. The [Platform Support](#platform-support) matrix below is the per-component truth table.
 
 The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each maps to a self-contained plugin directory under `dist/`, indexed for Claude Code in `.claude-plugin/marketplace.json` and for Codex in `.agents/plugins/marketplace.json`.
 
@@ -62,20 +63,41 @@ The marketplace ships one main package plus focused extras. **`workbench`** is t
 
 Complete, always-current reference for every component — generated from source, so it can't drift:
 
-| Reference                                            | What's in it                                              |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| [Skills](docs/reference/skills.md)                   | Every universal and preset skill, with full descriptions  |
-| [Agents](docs/reference/agents.md)                   | Subagent roles, their skill sets, and preset availability |
-| [Hooks](docs/reference/hooks.md)                     | Lifecycle hooks and the events they run on                |
-| [Presets](docs/reference/presets.md)                 | What each preset ships, plus its conventions              |
-| [Methodology](docs/reference/methodology.md)         | The working-method docs bundled into every preset         |
-| [Build & Wiring](docs/reference/build-and-wiring.md) | How the plugin is assembled and how hooks are wired       |
+| Reference                                              | What's in it                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------------- |
+| [Skills](docs/reference/skills.md)                     | Every universal and preset skill, with full descriptions       |
+| [Agents](docs/reference/agents.md)                     | Subagent roles, their skill sets, and preset availability      |
+| [Hooks](docs/reference/hooks.md)                       | Lifecycle hooks and the events they run on                     |
+| [Presets](docs/reference/presets.md)                   | What each preset ships, plus its conventions                   |
+| [Methodology](docs/reference/methodology.md)           | The working-method docs bundled into every preset              |
+| [Build & Wiring](docs/reference/build-and-wiring.md)   | How the plugin is assembled and how hooks are wired            |
+| [Platform Support](docs/reference/platform-support.md) | What each component class does on each platform, with evidence |
+| [COMPATIBILITY.md](COMPATIBILITY.md)                   | Per-platform ground truth and how each claim was verified      |
+
+---
+
+## Platform Support
+
+The per-component truth table — what actually runs where. Skills are the portable layer; hooks and personas are Claude-Code-only today, and cells marked _Unverified_ mean no probe has been recorded, not "probably fine".
+
+<!-- BEGIN GENERATED: platform-matrix -->
+| Component | Claude Code | Codex | Cortex Code |
+| --- | --- | --- | --- |
+| Skills | Partial | Works | Works |
+| Agents | Works | Unverified | Unverified |
+| Hooks (plugin-level) | Works | Inert | Inert |
+| Personas (output styles) | Works | Inert | Inert |
+| Settings (plugin-root settings.json) | Works | Inert | Unverified |
+| Methodology docs | Works | Works | Works |
+
+Per-cell notes and evidence: [platform support reference](docs/reference/platform-support.md); how each verdict was verified: [COMPATIBILITY.md](COMPATIBILITY.md).
+<!-- END GENERATED: platform-matrix -->
 
 ---
 
 ## Installation
 
-Every preset builds native plugin manifests for all three platforms from one shared source, so it installs natively wherever you work. Pick your platform below. Most projects want **`workbench`** (the everything package); swap in a persona or `vault-ops` if you prefer.
+Every preset builds native plugin manifests for all three platforms from one shared source. Pick your platform below — and check [Platform Support](#platform-support) for what activates there. Most projects want **`workbench`** (the everything package); swap in a persona or `vault-ops` if you prefer.
 
 ### Claude Code
 
@@ -87,11 +109,27 @@ https://github.com/cdcoonce/the-workshop
 
 Claude reads `.claude-plugin/marketplace.json`, finds the available packages, and installs the one you select into your project. No cloning or building required.
 
+> **Prerequisites:** `bash` and `python3` on PATH — every project-preset hook runs through them. Persona plugins additionally need [`uv`](https://docs.astral.sh/uv/) for their SessionStart hook.
+
+> **Headless caveat:** plugin skills load in interactive sessions only. Under `claude -p` they do not load at all — for scripted automation, copy the skills you need into the target repo's `.claude/skills/` (see [COMPATIBILITY.md](COMPATIBILITY.md) → Claude Code → Headless).
+
 See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
 
 ### Codex
 
-Codex discovers packages from the agents marketplace index at the repo root, `.agents/plugins/marketplace.json`. Every preset ships a native `.codex-plugin/plugin.json` under `dist/<preset-name>/`, so a selected package installs without any Claude-specific translation.
+Register the marketplace, then install a package:
+
+```bash
+codex plugin marketplace add https://github.com/cdcoonce/the-workshop.git
+```
+
+```bash
+codex plugin add workbench@the-workshop
+```
+
+Verify with `codex plugin list`. Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
+
+> **What you get on Codex is skills (and bundled docs) only.** Plugin-level hooks never run — Codex removed its `plugin_hooks` feature outright. Hooks can reach a Codex repo only as a hand-vendored repo-level `.codex/hooks.json`, and those sit behind a **two-layer silent trust gate** (project `trust_level = "trusted"` in `~/.codex/config.toml`, plus per-hook approval): with either layer missing, hooks produce no output and no error. Don't rely on hook protections on Codex without reading [COMPATIBILITY.md](COMPATIBILITY.md) → Codex → Hooks. Persona plugins, whose only mechanism is a hook, install as no-ops here.
 
 ### Cortex Code (CoCo Desktop)
 
@@ -109,16 +147,23 @@ For example, to install `workbench`:
 
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
 
-> **Prerequisite:** Persona plugins require [`uv`](https://docs.astral.sh/uv/) on PATH for the SessionStart hook.
+> **Skills work fully on Cortex. No Workshop hook runs there today** — Cortex has never executed a plugin's `hooks/hooks.json` (probe-verified; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). File protection, test-before-stop, and the other hook protections are silently absent, and persona plugins (whose only mechanism is a SessionStart hook) install as no-ops on Cortex.
 
 ### Any Other Agent (Manual Copy)
 
-Each `dist/<preset-name>/` is a complete, self-contained plugin — native manifests for all three platforms, plus skills, agents, hooks, settings, and a README. For any agent not listed above, copy the directory into your project:
+Each `dist/<preset-name>/` is a complete, self-contained plugin. The portable layer is `skills/` — copy it into your agent's verified skill root (a whole-plugin copy into `.claude/plugins/` is discovered by nothing):
 
 ```bash
-# workbench is the everything package; swap for a persona or vault-ops if preferred
-cp -r dist/workbench/ /path/to/your-project/.claude/plugins/workbench/
+# Claude Code project scope (also what headless `claude -p` needs):
+cp -r dist/workbench/skills/. /path/to/your-project/.claude/skills/
 ```
+
+```bash
+# Codex repo scope:
+cp -r dist/workbench/skills/. /path/to/your-repo/.codex/skills/
+```
+
+Hooks and settings don't survive a manual copy — they need the platform's own plugin install (Claude Code) or a vendored repo-level wiring (Codex; see [COMPATIBILITY.md](COMPATIBILITY.md)).
 
 ---
 
@@ -279,7 +324,7 @@ See the [agents reference](docs/reference/agents.md) for full descriptions.
 
 ## Hooks
 
-Hooks are scripts wired to Claude Code lifecycle events. The base set ships with every project preset; personas wire only their SessionStart injector. The event column is derived from the settings wiring, not the hook's name.
+Hooks are scripts wired to Claude Code lifecycle events. The base set ships with every project preset; personas wire only their SessionStart injector. The event column is derived from the settings wiring, not the hook's name. **Plugin-level hooks execute on Claude Code only today** — Codex removed plugin hooks and Cortex never reads them (see [Platform Support](#platform-support)).
 
 <!-- BEGIN GENERATED: hooks-table -->
 | Hook | Event | Summary | Presets |
@@ -406,7 +451,7 @@ graph TD
 
 Key design decisions:
 
-- **Plugin format** — Output is a self-contained plugin that ships a native manifest for each platform (`.claude-plugin/`, `.codex-plugin/`, `.cortex-plugin/`)
+- **Plugin format** — Output is a self-contained plugin that ships a manifest per platform convention (`.claude-plugin/`, `.codex-plugin/`, `.cortex-plugin/`); note Cortex also reads `.claude-plugin/`, and which manifest each platform actually consumes is recorded in [COMPATIBILITY.md](COMPATIBILITY.md)
 - **Override semantics** — A preset skill or agent with the same name as a core one **replaces** it entirely
 - **Settings merge** — Base and preset JSON are shallow-merged; hook arrays are appended, not replaced
 - **Fail-fast validation** — All manifest references are checked upfront before any files are copied

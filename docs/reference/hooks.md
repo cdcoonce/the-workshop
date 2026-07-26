@@ -3,7 +3,7 @@
 
 # Hooks Reference
 
-Lifecycle hooks and the events they run on. The event column is derived from the settings wiring (the authoritative source); the summary is each hook module's docstring.
+Lifecycle hooks and the events they run on. The event column is derived from the settings wiring (the authoritative source); the summary is each hook module's docstring. Plugin-level hooks currently execute on Claude Code only — see [platform-support.md](platform-support.md) for the per-platform truth table.
 
 ## All hooks
 

@@ -1,0 +1,125 @@
+{
+  "platforms": ["Claude Code", "Codex", "Cortex Code"],
+  "components": [
+    {
+      "name": "Skills",
+      "cells": {
+        "Claude Code": {
+          "status": "partial",
+          "note": "Interactive plugin skills work; plugin skills do not load at all under headless `claude -p` — headless automation needs project-scope `.claude/skills/` copies",
+          "compat": "Claude Code → Headless (`claude -p`)"
+        },
+        "Codex": {
+          "status": "works",
+          "note": "Plugin skills load and trigger namespaced `<plugin>:<skill>`, including under headless `codex exec`; not trust-gated",
+          "compat": "Codex → Skills"
+        },
+        "Cortex Code": {
+          "status": "works",
+          "note": "Auto-discovered from `.cortex/skills/`, `.claude/skills/`, and `.snova/skills/`; also installable via `--plugin-dir` or `cortex skill add`",
+          "compat": "Cortex Code → Skills"
+        }
+      }
+    },
+    {
+      "name": "Agents",
+      "cells": {
+        "Claude Code": {
+          "status": "works",
+          "note": "Subagent dispatch via the `Agent` tool with `subagent_type`",
+          "compat": "Claude Code → Agent Features"
+        },
+        "Codex": {
+          "status": "unverified",
+          "note": "No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Codex",
+          "compat": "Codex (no Agents section yet)"
+        },
+        "Cortex Code": {
+          "status": "unverified",
+          "note": "No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Cortex",
+          "compat": "Cortex Code (no Agents section yet)"
+        }
+      }
+    },
+    {
+      "name": "Hooks (plugin-level)",
+      "cells": {
+        "Claude Code": {
+          "status": "works",
+          "note": "`hooks/hooks.json` merges with user and project hooks while the plugin is enabled; requires `bash` and `python3` on PATH",
+          "compat": "Claude Code → Hooks"
+        },
+        "Codex": {
+          "status": "inert",
+          "note": "The `plugin_hooks` feature is removed — a preset's `hooks/hooks.json` never runs. Hook delivery on Codex is a vendored repo-level flat `.codex/hooks.json` behind a two-layer silent trust gate",
+          "compat": "Codex → Hooks"
+        },
+        "Cortex Code": {
+          "status": "inert",
+          "note": "Plugin-level `hooks/hooks.json` is never read (probe-verified: an identical user-level hook fired, the plugin-level one never has). Inline-manifest hook delivery is documented by Cortex but unprobed",
+          "compat": "Cortex Code → Hooks"
+        }
+      }
+    },
+    {
+      "name": "Personas (output styles)",
+      "cells": {
+        "Claude Code": {
+          "status": "works",
+          "note": "Injected by a SessionStart plugin hook; requires `uv` on PATH",
+          "compat": "Claude Code → Hooks"
+        },
+        "Codex": {
+          "status": "inert",
+          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Codex does nothing",
+          "compat": "Codex → Hooks"
+        },
+        "Cortex Code": {
+          "status": "inert",
+          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Cortex does nothing",
+          "compat": "Cortex Code → Hooks"
+        }
+      }
+    },
+    {
+      "name": "Settings (plugin-root settings.json)",
+      "cells": {
+        "Claude Code": {
+          "status": "works",
+          "note": "In daily use; not re-verified against a current spec",
+          "compat": "Claude Code → Settings"
+        },
+        "Codex": {
+          "status": "inert",
+          "note": "No consumer of a plugin-root `settings.json` observed; the settings surface on Codex is `~/.codex/config.toml` plus `-c` overrides",
+          "compat": "Codex → Settings"
+        },
+        "Cortex Code": {
+          "status": "unverified",
+          "note": "No probe recorded — whether Cortex reads a plugin-root `settings.json` is an open question",
+          "compat": "Cortex Code (settings unprobed)"
+        }
+      }
+    },
+    {
+      "name": "Methodology docs",
+      "cells": {
+        "Claude Code": {
+          "status": "works",
+          "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
+          "compat": "—"
+        },
+        "Codex": {
+          "status": "works",
+          "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
+          "compat": "—"
+        },
+        "Cortex Code": {
+          "status": "works",
+          "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
+          "compat": "—"
+        }
+      }
+    }
+  ]
+}
