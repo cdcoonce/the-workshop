@@ -181,7 +181,7 @@ These ship with every preset:
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
-| `/triage-quarantine` | Diagnose why an autonomous agent run failed, quarantined, or was rejected before re-running anything. | workbench |
+| `/triage-quarantine` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. | workbench |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | workbench, workshop-maintainer |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
 <!-- END GENERATED: skills-table -->
