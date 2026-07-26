@@ -88,6 +88,16 @@
     },
     {
       "kind": "file",
+      "source": "engine/pulse.py",
+      "target": ".claude/scripts/pulse.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/pulse_defaults.py",
+      "target": ".claude/scripts/pulse_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/queries/vault_query.py",
       "target": ".claude/scripts/queries/vault_query.py"
     },
@@ -512,6 +522,24 @@
     },
     {
       "kind": "file",
+      "source": "skills/vault-pulse/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-pulse/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-pulse/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-pulse/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-pulse/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-pulse/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
       "source": "skills/vault-recall/SKILL.md",
       "source_root": "preset",
       "target": ".claude/skills/vault-recall/SKILL.md"
@@ -923,6 +951,24 @@
       "source": "skills/vault-mr-review-packet/references/vault-operating-principles.md",
       "source_root": "preset",
       "target": ".codex/skills/vault-mr-review-packet/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-pulse/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-pulse/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-pulse/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-pulse/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-pulse/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-pulse/references/vault-operating-principles.md"
     },
     {
       "kind": "file",
