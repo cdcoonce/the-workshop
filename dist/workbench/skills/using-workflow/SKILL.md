@@ -50,7 +50,7 @@ policy. Branch history must never authorize vendor or agent prefixes.
   approve. After exhausting repository context and safe alternatives, record a
   genuine capability gap using the repository's AFK escalation mechanism.
 
-Apply the same repository policy in both modes; AFK changes *how* work is
+Apply the same repository policy in both modes; AFK changes _how_ work is
 executed, not its integration target, quality gate, or authorization boundary.
 
 ## Trigger Floor
@@ -66,8 +66,8 @@ you "already know" what it says.
 When multiple skills apply, process skills run first and implementation
 skills run after:
 
-- Process skills set the approach — e.g. `grill-me`, `write-a-prd`,
-  `plan-ceo-review`.
+- Process skills set the approach — e.g. `brainstorm`, `grill-me`,
+  `write-a-prd`, `plan-ceo-review`.
 - Implementation skills carry it out — e.g. `tdd`, `commit`, `github-cli`.
 
 Example: "write a PRD for X" → `write-a-prd` first, then `commit` once the
