@@ -51,6 +51,7 @@ from pulse import (
     collect_afk,
     collect_claude,
     collect_codex,
+    collect_cortex,
     collect_tasks,
     collect_wins,
     upsert_ledger,
@@ -691,6 +692,119 @@ def _codex_rollout(
     path.write_text("\n".join(json.dumps(r) for r in records) + "\n")
 
 
+def _cortex_history(root: Path, resource: str, stamps_ms: list[int]) -> None:
+    """One User/History/<hash>/entries.json, in Cortex's real shape."""
+    d = root / "User" / "History" / f"h{len(list((root / 'User' / 'History').glob('*'))) if (root / 'User' / 'History').is_dir() else 0}"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "entries.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "resource": resource,
+                "entries": [
+                    {
+                        "id": f"a{i}.json",
+                        # Real records carry the operator's literal prompt here.
+                        "source": "Chat Edit: 'refactor the loader and drop the "
+                        "ACME Corp customer id from the fixture'",
+                        "timestamp": ts,
+                    }
+                    for i, ts in enumerate(stamps_ms)
+                ],
+            }
+        )
+    )
+
+
+class TestCollectCortex:
+    """Cortex Code is a VS Code fork: edits land in User/History with epoch-ms
+    timestamps and a file URI, and each app launch leaves a logs/<stamp> dir
+    named in LOCAL time (verified against telemetry.firstSessionDate)."""
+
+    REPOS = Path("/Users/x/Developer/GitHub")
+
+    def test_edits_become_attention_events_attributed_by_path(
+        self, tmp_path: Path
+    ) -> None:
+        # 2026-07-22 12:00:00 local Denver == 18:00:00Z
+        base = int(datetime(2026, 7, 22, 12, 0, tzinfo=TZ).timestamp() * 1000)
+        _cortex_history(
+            tmp_path,
+            "file:///Users/x/Developer/GitHub/graphmark/src/parser.py",
+            [base, base + 10 * 60_000],
+        )
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+
+        assert [(e[0].isoformat(), e[1]) for e in got["events"]] == [
+            ("2026-07-22T18:00:00+00:00", "graphmark/src"),
+            ("2026-07-22T18:10:00+00:00", "graphmark/src"),
+        ]
+        assert got["weeks_seen"] == {"2026-W30"}
+
+    def test_prompt_text_never_leaves_the_collector(self, tmp_path: Path) -> None:
+        """`source` holds literal prompts — on a work machine that is customer
+        and ticket detail. It must not reach the ledger."""
+        base = int(datetime(2026, 7, 22, 12, 0, tzinfo=TZ).timestamp() * 1000)
+        _cortex_history(
+            tmp_path, "file:///Users/x/Developer/GitHub/graphmark/a.py", [base]
+        )
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+
+        assert "ACME" not in json.dumps(got, default=str)
+        assert "Chat Edit" not in json.dumps(got, default=str)
+
+    def test_log_dirs_count_sessions_and_are_local_time(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "logs" / "20260722T090000").mkdir(parents=True)
+        (tmp_path / "logs" / "20260722T140000").mkdir(parents=True)
+        # 2026-07-19 is a Sunday in Denver -> W29, proving local parsing: read
+        # as UTC this 21:00 stamp would roll into Monday and land in W30.
+        (tmp_path / "logs" / "20260719T210000").mkdir(parents=True)
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+
+        assert got["sessions_by_week"] == {"2026-W30": 2, "2026-W29": 1}
+        assert {"2026-W29", "2026-W30"} <= got["weeks_seen"]
+
+    def test_session_start_is_itself_activity(self, tmp_path: Path) -> None:
+        (tmp_path / "logs" / "20260722T090000").mkdir(parents=True)
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+
+        assert [e[0].isoformat() for e in got["events"]] == [
+            "2026-07-22T15:00:00+00:00"
+        ]
+        assert got["events"][0][1] == "_cortex"
+
+    def test_file_outside_the_repos_root_never_becomes_a_filename_scope(
+        self, tmp_path: Path
+    ) -> None:
+        """Found on real data: plugin paths under ~/.snowflake produced the
+        scopes 'plugin.json' and 'hooks.json' — one fake project per filename."""
+        base = int(datetime(2026, 7, 22, 12, 0, tzinfo=TZ).timestamp() * 1000)
+        _cortex_history(
+            tmp_path,
+            "file:///Users/x/.snowflake/cortex/plugins/persona/.cortex-plugin/plugin.json",
+            [base],
+        )
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+
+        assert [e[1] for e in got["events"]] == ["_cortex"]
+
+    def test_missing_root(self, tmp_path: Path) -> None:
+        got = collect_cortex(tmp_path / "nope", TZ, repos_root=self.REPOS)
+        assert got["events"] == []
+        assert got["sessions_by_week"] == {}
+        assert got["weeks_seen"] == set()
+
+    def test_garbage_entries_are_skipped(self, tmp_path: Path) -> None:
+        d = tmp_path / "User" / "History" / "bad"
+        d.mkdir(parents=True)
+        (d / "entries.json").write_text("{not json")
+        (tmp_path / "logs" / "not-a-stamp").mkdir(parents=True)
+        got = collect_cortex(tmp_path, TZ, repos_root=self.REPOS)
+        assert got["events"] == []
+
+
 class TestCollectCodex:
     def test_desktop_counts_exec_does_not(self, tmp_path: Path) -> None:
         _codex_rollout(
@@ -1227,6 +1341,7 @@ class TestCli:
                 "--vault-root", str(tmp_path),
                 "--projects-root", str(tmp_path / "none"),
                 "--codex-root", str(tmp_path / "none2"),
+                "--cortex-root", str(tmp_path / "none4"),
                 "--repos-root", str(tmp_path / "none3"),
                 *extra,
             ],

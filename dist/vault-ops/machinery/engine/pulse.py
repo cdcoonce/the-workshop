@@ -126,6 +126,7 @@ LEDGER_COLUMNS = [
     "attn_other_h",
     "claude_sessions",
     "codex_sessions",
+    "cortex_sessions",
     "tokens_m",
     "spend_usd",
     "vault_sessions_personal",
@@ -149,6 +150,11 @@ MANUAL_COLUMNS = ("energy", "satisfaction")
 # session scratchpads). They get one STABLE bucket rather than a clever guess:
 # a consistent bucket trends; a flaky mapping lies.
 _TEMP_PREFIXES = ("/private/var/folders", "/var/folders", "/private/tmp", "/tmp")
+
+# Cortex Code is a VS Code fork; this is its macOS Application Support tree.
+CORTEX_ROOT_DEFAULT = str(
+    Path.home() / "Library" / "Application Support" / "Cortex Code"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +587,85 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
 # ---------------------------------------------------------------------------
 # Collector: afk telemetry across enrolled repos
 # ---------------------------------------------------------------------------
+_CORTEX_LOG_DIR_RE = re.compile(r"^(\d{8})T(\d{6})$")
+
+
+def collect_cortex(
+    cortex_root: Path, tz: ZoneInfo, repos_root: Path | None = None
+) -> dict:
+    """Cortex Code activity — a third tool, and the one the work machine runs.
+
+    Cortex Code is a VS Code fork, so it leaves two usable traces:
+
+    - ``User/History/*/entries.json`` — local edit history. Each record has a
+      ``resource`` file URI and epoch-millisecond ``timestamp`` per entry, so
+      an edit is an attention event attributed by the path it touched, which
+      is strictly better than a session-level cwd.
+    - ``logs/<YYYYMMDDTHHMMSS>/`` — one directory per app launch, named in
+      LOCAL time (verified against ``telemetry.firstSessionDate``: a
+      ``20260702T185606`` directory corresponds to 01:56:06 GMT the next day).
+      Launches count as sessions and as activity in their own right, since a
+      session spent only chatting writes no files.
+
+    The ``source`` field on each entry holds the operator's literal prompt.
+    On a work machine that is customer, ticket and project detail, so it is
+    read past and never returned — this collector emits timestamps and paths
+    only. Cortex exposes no token accounting, so there is nothing to bill.
+    """
+    events: list[tuple[datetime, str]] = []
+    session_weeks: dict[str, set[str]] = {}
+    weeks_seen: set[str] = set()
+    pattern = _repo_pattern(repos_root) if repos_root else None
+
+    for entries in sorted((cortex_root / "User" / "History").glob("*/entries.json")):
+        try:
+            record = json.loads(entries.read_text(errors="ignore"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        resource = record.get("resource")
+        path = ""
+        if isinstance(resource, str):
+            path = resource[len("file://") :] if resource.startswith("file://") else resource
+        scope = None
+        if pattern is not None and path:
+            scope = _touched_scope(path, pattern)
+        if scope is None:
+            # A file OUTSIDE the repos root gets one stable bucket, never a
+            # derived name: `_normalize_project` expects a directory, so a
+            # file path would yield the FILENAME ("plugin.json") as a scope —
+            # meaningless, and one fake project per filename.
+            scope = "_cortex"
+        for entry in record.get("entries") or []:
+            stamp = entry.get("timestamp") if isinstance(entry, dict) else None
+            if not isinstance(stamp, (int, float)):
+                continue
+            dt = datetime.fromtimestamp(stamp / 1000.0, tz=timezone.utc)
+            events.append((dt, scope))
+            weeks_seen.add(_week_of_date(dt.astimezone(tz).date()))
+
+    logs = cortex_root / "logs"
+    if logs.is_dir():
+        for entry in sorted(logs.iterdir()):
+            m = _CORTEX_LOG_DIR_RE.match(entry.name)
+            if not m or not entry.is_dir():
+                continue
+            try:
+                local = datetime.strptime(entry.name, "%Y%m%dT%H%M%S")
+            except ValueError:
+                continue
+            started = local.replace(tzinfo=tz)
+            week = _week_of_date(started.date())
+            session_weeks.setdefault(week, set()).add(entry.name)
+            weeks_seen.add(week)
+            events.append((started.astimezone(timezone.utc), "_cortex"))
+
+    return {
+        "events": events,
+        "sessions_by_week": {k: len(v) for k, v in session_weeks.items()},
+        "weeks_seen": weeks_seen,
+    }
+
+
 def collect_afk(repos_root: Path, tz: ZoneInfo) -> dict:
     """Weekly pipeline-output metrics from every repo's telemetry.jsonl.
 
@@ -871,6 +956,7 @@ def scan(
     projects_root: Path,
     codex_root: Path,
     repos_root: Path,
+    cortex_root: Path | None = None,
     vault_root: Path,
     week_keys: list[str],
     tz: ZoneInfo,
@@ -881,6 +967,13 @@ def scan(
     wanted = set(week_keys)
     claude = collect_claude(projects_root, tz, repos_root=repos_root)
     codex = collect_codex(codex_root, tz)
+    # None means "this caller has no Cortex root", NOT "go find the real one":
+    # scan must never reach into $HOME on its own or tests stop being hermetic.
+    cortex = (
+        collect_cortex(cortex_root, tz, repos_root=repos_root)
+        if cortex_root is not None
+        else {"events": [], "sessions_by_week": {}, "weeks_seen": set()}
+    )
     afk = collect_afk(repos_root, tz)
     wins = collect_wins(vault_root / "perf" / "Brag Doc.md", tz)
     tasks = collect_tasks(vault_root)
@@ -897,7 +990,7 @@ def scan(
     # ends one block and starts another — which is what keeps school hours
     # out of the vault column.
     by_bucket: dict[tuple[str, str, str], list[datetime]] = {}
-    for tool, data in (("claude", claude), ("codex", codex)):
+    for tool, data in (("claude", claude), ("codex", codex), ("cortex", cortex)):
         for dt, scope in data["events"]:
             week = _week_of_date(dt.astimezone(tz).date())
             if week in wanted:
@@ -915,7 +1008,7 @@ def scan(
     # transcript would otherwise declare a year of pruned weeks "covered".
     # Git history, Brag Doc, and task snapshots are never pruned — no gating.
     attn_weeks = _covered_weeks(
-        claude["weeks_seen"] | codex["weeks_seen"], week_keys
+        claude["weeks_seen"] | codex["weeks_seen"] | cortex["weeks_seen"], week_keys
     )
     afk_weeks = _covered_weeks(set(afk), week_keys)
 
@@ -931,6 +1024,7 @@ def scan(
                 row[f"attn_{dom}_h"] = f"{_union_hours(blocks):.2f}"
             row["claude_sessions"] = str(claude["sessions_by_week"].get(week, 0))
             row["codex_sessions"] = str(codex["sessions_by_week"].get(week, 0))
+            row["cortex_sessions"] = str(cortex["sessions_by_week"].get(week, 0))
             tokens = claude["tokens_by_week"].get(week, 0) + codex[
                 "tokens_by_week"
             ].get(week, 0)
@@ -1081,6 +1175,7 @@ def main() -> int:
         "--projects-root", default=str(Path.home() / ".claude" / "projects")
     )
     ap.add_argument("--codex-root", default=str(Path.home() / ".codex" / "sessions"))
+    ap.add_argument("--cortex-root", default=CORTEX_ROOT_DEFAULT)
     ap.add_argument(
         "--repos-root", default=str(Path.home() / "Developer" / "GitHub")
     )
@@ -1132,6 +1227,7 @@ def main() -> int:
     rows = scan(
         projects_root=Path(args.projects_root),
         codex_root=Path(args.codex_root),
+        cortex_root=Path(args.cortex_root),
         repos_root=Path(args.repos_root),
         vault_root=vault_root,
         week_keys=week_keys,
