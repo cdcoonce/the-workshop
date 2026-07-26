@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -11,7 +12,13 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from frontmatter_engine import ValidationError, generate, validate
+from frontmatter_engine import (
+    FrontmatterSchemaError,
+    ValidationError,
+    generate,
+    load_note_type_schemas,
+    validate,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -500,3 +507,62 @@ class TestTasksType:
         assert "tasks" in result
         assert "week:" in result
         assert "2026-W14" in result
+
+
+# ---------------------------------------------------------------------------
+# Scaffolded note-type schema config (frontmatter_schema.json)
+# ---------------------------------------------------------------------------
+
+class TestLoadNoteTypeSchemas:
+    def test_missing_config_falls_back_to_defaults(self, tmp_path: Path) -> None:
+        from frontmatter_schema_defaults import NOTE_TYPE_SCHEMAS as DEFAULTS
+        schemas = load_note_type_schemas(config_dir=tmp_path)
+        assert schemas == DEFAULTS
+
+    def test_custom_schema_set_is_loaded(self, tmp_path: Path) -> None:
+        (tmp_path / "frontmatter_schema.json").write_text(
+            json.dumps({"recipe": ["cuisine", "servings"]}), encoding="utf-8"
+        )
+        schemas = load_note_type_schemas(config_dir=tmp_path)
+        assert schemas == {"recipe": ["cuisine", "servings"]}
+
+    def test_custom_schema_set_is_used_by_validate(self, vault: Path, monkeypatch) -> None:
+        import frontmatter_engine
+        (vault / "frontmatter_schema.json").write_text(
+            json.dumps({"recipe": ["cuisine", "servings"]}), encoding="utf-8"
+        )
+        monkeypatch.setattr(
+            frontmatter_engine,
+            "TYPE_FIELDS",
+            frontmatter_engine.load_note_type_schemas(config_dir=vault),
+        )
+        p = _write_note(vault, "brain/dinner.md", (
+            "---\n"
+            "date: 2026-04-04\n"
+            "description: \"A recipe note\"\n"
+            "tags:\n  - recipe\n"
+            "---\n\nContent.\n"
+        ))
+        errors = validate(p, vault)
+        field_names = [e.field for e in errors]
+        assert "cuisine" in field_names
+        assert "servings" in field_names
+
+    def test_malformed_json_fails_closed_with_clear_error(self, tmp_path: Path) -> None:
+        (tmp_path / "frontmatter_schema.json").write_text("{not valid json", encoding="utf-8")
+        with pytest.raises(FrontmatterSchemaError, match="frontmatter_schema.json"):
+            load_note_type_schemas(config_dir=tmp_path)
+
+    def test_wrong_shape_fails_closed_with_clear_error(self, tmp_path: Path) -> None:
+        (tmp_path / "frontmatter_schema.json").write_text(
+            json.dumps(["not", "a", "mapping"]), encoding="utf-8"
+        )
+        with pytest.raises(FrontmatterSchemaError, match="frontmatter_schema.json"):
+            load_note_type_schemas(config_dir=tmp_path)
+
+    def test_non_list_field_value_fails_closed_with_clear_error(self, tmp_path: Path) -> None:
+        (tmp_path / "frontmatter_schema.json").write_text(
+            json.dumps({"recipe": "cuisine"}), encoding="utf-8"
+        )
+        with pytest.raises(FrontmatterSchemaError, match="recipe"):
+            load_note_type_schemas(config_dir=tmp_path)

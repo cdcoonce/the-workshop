@@ -9,6 +9,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
+| `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. | workbench |
 | `/commit` | Git commit workflow with enforced conventional commit style. | workbench, workshop-maintainer |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
@@ -81,6 +82,12 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
+
+### `/brainstorm`
+
+*universal*
+
+Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. Use when the user wants to brainstorm, explore approaches to a problem, kick around a half-formed idea, or has a goal but no committed solution yet.
 
 ### `/commit`
 

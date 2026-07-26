@@ -11,7 +11,7 @@ description: >
 
 Orchestrate the full development lifecycle: brainstorm → plan → review → issues → implement → code review → PR.
 
-**Disambiguation:** If the user only wants a PRD, route to `/write-a-prd`. If they only want a plan, route to `/prd-to-plan`. This skill is for the full end-to-end lifecycle.
+**Disambiguation:** If the user only wants a PRD, route to `/write-a-prd`. If they only want a plan, route to `/prd-to-plan`. If the idea is still fuzzy — no committed solution yet — run `brainstorm` first; its brief seeds Phase 1. This skill is for the full end-to-end lifecycle.
 
 **Lane boundary:** dev-cycle is the _interactive_ lane — greenfield features, work the user wants to build hands-on, or changes too coupled to hand off. Localized single-concern correctness work with clear acceptance criteria belongs in an autonomous pipeline instead when one is available: file it as an executor-ready issue (see `triage-issue` / `prd-to-issues` issue shapes) rather than running it through this ceremony.
 

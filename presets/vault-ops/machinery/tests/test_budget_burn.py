@@ -4,14 +4,24 @@ Covers the tier/price lookup, per-record cost arithmetic (exact numbers
 computed by hand from RATES), scan's dedup-by-requestId behavior (a duplicated
 transcript record for one API call must be counted once), and the _pace helper
 (normal/over-pace pacing, non-leap February day count, and day-1 projection).
+
+Also covers sourcing project aliases, the price table, and the monthly budget
+out of the scaffold-owned ``budget_burn_config.py`` (issue #429): a vault
+without that config falls back to the shipped ``budget_burn_defaults`` rather
+than to empty aliases or a zero budget, a config that defines an unusable
+value raises a clear error naming the config path, and a project not covered
+by any configured alias keeps its own key rather than being silently folded
+into another project.
 """
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from datetime import date
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -19,6 +29,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import budget_burn
+import budget_burn_defaults
 from budget_burn import RATES, _pace, _record_cost, _tier, scan
 
 
@@ -303,3 +314,151 @@ class TestPace:
         result = _pace(10.0, date(2026, 6, 1), 300.0)
         assert result["days_elapsed"] == 1
         assert result["projected_eom"] == 300.0
+
+
+# ---------------------------------------------------------------------------
+# Scaffold-owned aliases / prices / budget (issue #429)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def scaffolded_config(tmp_path: Path):
+    """Reload budget_burn against a stand-in scaffolded budget_burn_config.
+
+    The real config is scaffold-rendered into the vault's script dir, so the
+    seam under test is the module-level import — not the values it resolves
+    to. Each call re-executes budget_burn with the given names; teardown
+    restores the shipped defaults.
+    """
+
+    def _configure(**names: object) -> ModuleType:
+        module = ModuleType("budget_burn_config")
+        module.__file__ = str(tmp_path / "budget_burn_config.py")
+        for name, value in names.items():
+            setattr(module, name, value)
+        sys.modules["budget_burn_config"] = module
+        return importlib.reload(budget_burn)
+
+    yield _configure
+
+    sys.modules.pop("budget_burn_config", None)
+    importlib.reload(budget_burn)
+
+
+class TestShippedDefaults:
+    def test_absent_config_uses_shipped_defaults(self) -> None:
+        """A vault vendored before the scaffold config exists still bills."""
+        assert "budget_burn_config" not in sys.modules
+        assert budget_burn.RATES == budget_burn_defaults.RATES
+        assert budget_burn.MONTHLY_BUDGET == budget_burn_defaults.MONTHLY_BUDGET
+        assert budget_burn._PROJECT_ALIASES == budget_burn_defaults.PROJECT_ALIASES
+
+    def test_defaults_reproduce_the_previously_hardcoded_values(self) -> None:
+        # "Default ships today's values": the literals budget_burn carried
+        # before they moved out of the engine.
+        assert budget_burn_defaults.RATES == {
+            "fable": (10.0, 50.0),
+            "opus": (5.0, 25.0),
+            "sonnet": (3.0, 15.0),
+            "haiku": (1.0, 5.0),
+        }
+        assert budget_burn_defaults.MONTHLY_BUDGET == 350.0
+        assert budget_burn_defaults.PROJECT_ALIASES == {
+            "-Users-cdcoonce-Developer-GitHub-my-brain": (
+                "-Users-cdcoonce-Developer-GitHub-the-vault"
+            ),
+            "-Users-cdcoonce-Developer-GitHub-claude-workflow": (
+                "-Users-cdcoonce-Developer-GitHub-the-workshop"
+            ),
+        }
+
+    def test_scaffold_template_matches_the_shipped_defaults(self) -> None:
+        """A newly scaffolded vault starts from the same values a bare one uses.
+
+        The template and the defaults are hand-maintained separately, so
+        without this an update to one alone would leave new vaults billing
+        against different prices than existing ones.
+        """
+        template = SCRIPTS_DIR.parent / "scaffold" / "budget_burn_config.py.tmpl"
+        rendered: dict[str, object] = {}
+        exec(
+            compile(template.read_text(encoding="utf-8"), str(template), "exec"),
+            rendered,
+        )
+        assert rendered["PROJECT_ALIASES"] == budget_burn_defaults.PROJECT_ALIASES
+        assert rendered["RATES"] == budget_burn_defaults.RATES
+        assert rendered["MONTHLY_BUDGET"] == budget_burn_defaults.MONTHLY_BUDGET
+
+
+class TestScaffoldedConfig:
+    def test_configured_alias_merges_projects(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        module = scaffolded_config(PROJECT_ALIASES={"legacy-proj": "current-proj"})
+        project = tmp_path / "legacy-proj"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
+        result = module.scan(tmp_path, "2026-06")
+        assert result["by_project"] == {"current-proj": 5.0}
+
+    def test_configured_price_entry_changes_cost(self, scaffolded_config) -> None:
+        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
+        assert module._record_cost({"input_tokens": 1_000_000}, "opus") == 100.0
+
+    def test_configured_budget_reaches_the_report(
+        self,
+        tmp_path: Path,
+        scaffolded_config,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """The budget is only useful if it lands in the pace main() prints."""
+        module = scaffolded_config(MONTHLY_BUDGET=42.0)
+        assert module.MONTHLY_BUDGET == 42.0
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "budget_burn.py",
+                "--json",
+                "--context",
+                "work",
+                "--projects-root",
+                str(tmp_path),
+            ],
+        )
+
+        assert module.main() == 0
+
+        pace = json.loads(capsys.readouterr().out)["pace"]
+        assert pace == module._pace(0.0, date.today(), 42.0)
+
+    def test_name_omitted_from_the_config_falls_back_to_the_default(
+        self, scaffolded_config
+    ) -> None:
+        """An owner who only cares about the budget keeps the shipped prices."""
+        module = scaffolded_config(MONTHLY_BUDGET=42.0)
+        assert module.RATES == budget_burn_defaults.RATES
+        assert module._PROJECT_ALIASES == budget_burn_defaults.PROJECT_ALIASES
+
+    def test_unusable_value_raises_an_error_naming_the_config(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        # BudgetBurnConfigError (a RuntimeError) is rebound by the reload, so
+        # match the base class and the name rather than the stale class object.
+        with pytest.raises(RuntimeError) as exc_info:
+            scaffolded_config(RATES="5 dollars per million")
+        assert type(exc_info.value).__name__ == "BudgetBurnConfigError"
+        message = str(exc_info.value)
+        assert str(tmp_path / "budget_burn_config.py") in message
+        assert "RATES" in message
+
+    def test_project_without_a_configured_alias_keeps_its_own_key(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        # A project directory absent from PROJECT_ALIASES must never be
+        # folded into an unrelated project's totals.
+        module = scaffolded_config(PROJECT_ALIASES={"legacy-proj": "current-proj"})
+        project = tmp_path / "unaliased-proj"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
+        result = module.scan(tmp_path, "2026-06")
+        assert result["by_project"] == {"unaliased-proj": 5.0}
