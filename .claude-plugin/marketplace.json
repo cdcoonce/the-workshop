@@ -48,7 +48,7 @@
     },
     {
       "name": "vault-ops",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
       "source": "./dist/vault-ops"
     },
@@ -60,7 +60,7 @@
     },
     {
       "name": "workshop-maintainer",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
       "source": "./dist/workshop-maintainer"
     }
