@@ -30,10 +30,11 @@ import and to test.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from vault_scope_resolved import is_graph_markdown_note
+from vault_utils import read_vault_context
 
 # One call must not be able to haul the whole index across the wire. The cap is
 # on the server side because the caller is the untrusted party here.
@@ -41,14 +42,70 @@ MAX_RESULTS = 25
 
 DEFAULT_RESULTS = 8
 
+# Top-level directory -> the machine context that owns it. Everything not listed
+# (brain/, org/, perf/, reference/, thinking/) is shared by both machines.
+CONTEXT_DIRS = {"work": "work", "personal": "personal"}
+
+# Which owned scopes each machine context may see. Deliberately ASYMMETRIC.
+#
+# The vault is one repo synced to both machines, so work/ notes are already on
+# the personal machine's disk — hiding them from search costs reach and
+# protects nothing. The exposure that actually matters runs the other way:
+# personal material surfacing inside an agent session on an employer-managed
+# machine. So the work context is the restricted one, and a context absent
+# from this map (notably "unknown") sees shared notes only.
+VISIBLE_SCOPES = {
+    "personal": frozenset({"personal", "work"}),
+    "work": frozenset({"work"}),
+}
+
+# Context filtering happens after the index returns its ranked hits, so asking
+# for exactly k would under-deliver whenever the top k are out of context.
+# Over-fetch, filter, then truncate.
+OVERFETCH = 4
+
 
 class VaultAccessError(Exception):
     """Raised when a requested path is not a readable vault note.
 
     Deliberately does not distinguish "outside the vault" from "not a note"
-    from "missing": a caller probing the boundary learns only that the path
-    is unavailable, not the shape of the filesystem behind it.
+    from "missing" from "out of context": a caller probing the boundary learns
+    only that the path is unavailable, not the shape of the filesystem behind
+    it — nor whether a note it may not see exists at all.
     """
+
+
+def note_context(rel_path: str) -> str | None:
+    """Return the machine context owning *rel_path*, or None when shared."""
+    parts = PurePosixPath(str(rel_path)).parts
+    return CONTEXT_DIRS.get(parts[0]) if parts else None
+
+
+def visible_in_context(rel_path: str, context: str) -> bool:
+    """True when a note in *rel_path* may be surfaced on a *context* machine.
+
+    Shared notes are visible everywhere. Owned notes follow `VISIBLE_SCOPES`:
+    the personal machine sees both scopes, the work machine sees only work.
+
+    An ``unknown`` context — what ``read_vault_context`` returns when the
+    marker is missing — is absent from the map and so sees shared notes only.
+    That is the fail-closed direction: the moment we are least sure where we
+    are running is the moment to reveal least.
+    """
+    owner = note_context(rel_path)
+    if owner is None:
+        return True
+    return owner in VISIBLE_SCOPES.get(context, frozenset())
+
+
+def active_context(vault_root: Path) -> str:
+    """Read the machine context from the vault this server is rooted at.
+
+    Server-side by construction. The context is never a parameter the caller
+    supplies, because the caller is the untrusted party — a work machine that
+    could ask for "personal" would defeat the whole boundary.
+    """
+    return read_vault_context(Path(vault_root))
 
 
 def resolve_note(rel_path: str, vault_root: Path) -> Path:
@@ -71,6 +128,10 @@ def resolve_note(rel_path: str, vault_root: Path) -> Path:
     if not resolved.is_file():
         raise VaultAccessError(f"path is not available: {rel_path}")
     if not is_graph_markdown_note(resolved, root):
+        raise VaultAccessError(f"path is not available: {rel_path}")
+    if not visible_in_context(
+        resolved.relative_to(root).as_posix(), active_context(root)
+    ):
         raise VaultAccessError(f"path is not available: {rel_path}")
     return resolved
 
@@ -99,20 +160,31 @@ def search_notes(
     query: str,
     k: int = DEFAULT_RESULTS,
     *,
+    vault_root: Path,
     search_fn: Callable[[str, int], list[dict]] | None = None,
 ) -> list[dict]:
-    """Semantic search across the vault, returning note-level hits.
+    """Semantic search across the vault, returning context-visible hits.
 
-    `search_fn` is injectable so the policy here (validation, clamping) is
-    testable without building an index or downloading an embedding model.
+    `vault_root` is required rather than optional: it is what the machine
+    context is read from, and an optional scoping argument would default to
+    returning everything — fail-open, in the one place that must fail closed.
+
+    `search_fn` is injectable so the policy here (validation, clamping,
+    context filtering) is testable without building an index or downloading
+    an embedding model.
     """
     if not query.strip():
         raise ValueError("query must not be blank")
     if k <= 0:
         raise ValueError("k must be positive")
 
+    k = min(k, MAX_RESULTS)
     fn = _default_search if search_fn is None else search_fn
-    return fn(query, min(k, MAX_RESULTS))
+    hits = fn(query, k * OVERFETCH)
+
+    context = active_context(vault_root)
+    visible = [h for h in hits if visible_in_context(h.get("note_path", ""), context)]
+    return visible[:k]
 
 
 def build_server(vault_root: Path) -> Any:
@@ -128,7 +200,7 @@ def build_server(vault_root: Path) -> Any:
     @mcp.tool()
     def vault_search(query: str, k: int = DEFAULT_RESULTS) -> list[dict]:
         """Search the vault semantically. Returns note paths, scores, snippets."""
-        return search_notes(query, k)
+        return search_notes(query, k, vault_root=vault_root)
 
     @mcp.tool()
     def vault_read(path: str) -> str:
