@@ -148,6 +148,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/vault_mcp.py",
+      "target": ".claude/scripts/vault_mcp.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/vault_scope_defaults.py",
       "target": ".claude/scripts/vault_scope_defaults.py"
     },
