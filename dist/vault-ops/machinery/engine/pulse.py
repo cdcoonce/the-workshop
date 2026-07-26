@@ -198,6 +198,53 @@ def _week_key(ts: object, tz: ZoneInfo) -> str | None:
     return None
 
 
+_WEEK_KEY_RE = re.compile(r"^(\d{4})-W(\d{2})$")
+
+
+def _week_ordinal(week_key: str) -> int | None:
+    """A week key as a monotonic week count, for comparing across years."""
+    m = _WEEK_KEY_RE.match(week_key)
+    if not m:
+        return None
+    try:
+        monday = date.fromisocalendar(int(m.group(1)), int(m.group(2)), 1)
+    except ValueError:
+        return None
+    return monday.toordinal() // 7
+
+
+def _covered_weeks(weeks_seen: set[str], window: list[str], max_gap: int = 2) -> set[str]:
+    """Which window weeks a collector can actually speak to.
+
+    Distinguishes two things a bare zero conflates: a week whose sources were
+    pruned (no data — the column must stay blank) and a week where the sources
+    exist and the human simply did nothing (a real, and very interesting,
+    zero). Walks back from the newest week with records and keeps going across
+    gaps of up to ``max_gap`` weeks, since a fortnight off is a plausible
+    quiet spell while retention pruning leaves a long unbroken emptiness.
+    A lone ancient transcript therefore cannot declare a year of pruned weeks
+    covered, and a two-week holiday still reads as measured zeros.
+    """
+    if not weeks_seen or not window:
+        return set()
+    # Gaps are measured in calendar weeks, never in list positions: scan may
+    # be handed a sparse window, and two adjacent entries in it can be months
+    # apart.
+    seen = sorted(_week_ordinal(w) for w in weeks_seen if _week_ordinal(w))
+    if not seen:
+        return set()
+    floor = seen[-1]
+    for older, newer in zip(reversed(seen[:-1]), reversed(seen[1:])):
+        if newer - older > max_gap + 1:
+            break
+        floor = older
+    return {
+        w
+        for w in window
+        if (o := _week_ordinal(w)) is not None and o >= floor
+    }
+
+
 def _last_week_keys(today_local: date, n: int) -> list[str]:
     """The n trailing ISO week keys ending with today's week, oldest first."""
     return [_week_of_date(today_local - timedelta(weeks=k)) for k in range(n - 1, -1, -1)]
@@ -342,6 +389,7 @@ def collect_claude(
     tokens_by_week: dict[str, int] = {}
     spend_by_week: dict[str, float] = {}
     seen: set[str] = set()
+    weeks_seen: set[str] = set()
     pattern = _repo_pattern(repos_root) if repos_root else None
 
     for transcript in sorted(projects_root.glob("*/*.jsonl")):
@@ -369,6 +417,8 @@ def collect_claude(
                 entrypoint = rec["entrypoint"]
             dt = _parse_ts(rec.get("timestamp"))
             week = _week_key(rec.get("timestamp"), tz)
+            if week is not None:
+                weeks_seen.add(week)
 
             # Tokens/spend for every record with a billable usage block.
             msg = rec.get("message") or {}
@@ -418,6 +468,7 @@ def collect_claude(
         "sessions_by_week": {k: len(v) for k, v in session_weeks.items()},
         "tokens_by_week": tokens_by_week,
         "spend_by_week": spend_by_week,
+        "weeks_seen": weeks_seen,
     }
 
 
@@ -439,6 +490,7 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
     events: list[tuple[datetime, str]] = []
     session_weeks: dict[str, set[str]] = {}
     tokens_by_week: dict[str, int] = {}
+    weeks_seen: set[str] = set()
 
     for rollout in sorted(codex_root.rglob("rollout-*.jsonl")):
         try:
@@ -477,6 +529,7 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
                 week = _week_key(rec.get("timestamp"), tz)
                 if week:
                     last_week = week
+                    weeks_seen.add(week)
             if payload.get("type") == "token_count":
                 info = payload.get("info") or {}
                 total = (info.get("total_token_usage") or {}).get("total_tokens")
@@ -502,6 +555,7 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
         "events": events,
         "sessions_by_week": {k: len(v) for k, v in session_weeks.items()},
         "tokens_by_week": tokens_by_week,
+        "weeks_seen": weeks_seen,
     }
 
 
@@ -831,25 +885,35 @@ def scan(
         for block in _cluster(times, GAP_MINUTES):
             intervals_by_week.setdefault(week, []).append((project, block))
 
+    # Coverage: which weeks a collector actually has records for. Transcripts
+    # and rollouts get pruned and afk telemetry starts at enrollment, so a
+    # week with no records has NO data — writing 0.00 there would render on a
+    # chart as a work stoppage that never happened. Those columns stay blank.
+    # Deliberately a per-week set, not an earliest-record floor: one stray old
+    # transcript would otherwise declare a year of pruned weeks "covered".
+    # Git history, Brag Doc, and task snapshots are never pruned — no gating.
+    attn_weeks = _covered_weeks(
+        claude["weeks_seen"] | codex["weeks_seen"], week_keys
+    )
+    afk_weeks = _covered_weeks(set(afk), week_keys)
+
     rows: dict[str, dict[str, str]] = {}
     for week in week_keys:
         tagged = intervals_by_week.get(week, [])
         all_blocks = [b for _, b in tagged]
-        row: dict[str, str] = {
-            "week": week,
-            "computed_at": computed_at,
-            "attn_total_h": f"{_union_hours(all_blocks):.2f}",
-        }
-        for dom in DOMAINS:
-            blocks = [b for p, b in tagged if _domain(p, DOMAIN_RULES) == dom]
-            row[f"attn_{dom}_h"] = f"{_union_hours(blocks):.2f}"
-        row["claude_sessions"] = str(claude["sessions_by_week"].get(week, 0))
-        row["codex_sessions"] = str(codex["sessions_by_week"].get(week, 0))
-        tokens = claude["tokens_by_week"].get(week, 0) + codex[
-            "tokens_by_week"
-        ].get(week, 0)
-        row["tokens_m"] = f"{tokens / 1_000_000:.2f}"
-        row["spend_usd"] = f"{claude['spend_by_week'].get(week, 0.0):.2f}"
+        row: dict[str, str] = {"week": week, "computed_at": computed_at}
+        if week in attn_weeks:
+            row["attn_total_h"] = f"{_union_hours(all_blocks):.2f}"
+            for dom in DOMAINS:
+                blocks = [b for p, b in tagged if _domain(p, DOMAIN_RULES) == dom]
+                row[f"attn_{dom}_h"] = f"{_union_hours(blocks):.2f}"
+            row["claude_sessions"] = str(claude["sessions_by_week"].get(week, 0))
+            row["codex_sessions"] = str(codex["sessions_by_week"].get(week, 0))
+            tokens = claude["tokens_by_week"].get(week, 0) + codex[
+                "tokens_by_week"
+            ].get(week, 0)
+            row["tokens_m"] = f"{tokens / 1_000_000:.2f}"
+            row["spend_usd"] = f"{claude['spend_by_week'].get(week, 0.0):.2f}"
         # None = the collector failed; omit the keys so the upsert preserves
         # whatever the ledger already holds instead of zeroing it.
         if vault_git is not None:
@@ -860,15 +924,18 @@ def scan(
                 git_week.get("deliberate_personal", 0)
             )
             row["deliberate_commits_work"] = str(git_week.get("deliberate_work", 0))
-        afk_week = afk.get(week)
-        row["afk_merged"] = str(afk_week["merged"]) if afk_week else "0"
-        row["afk_first_attempt_pct"] = (
-            f"{afk_week['first_attempt_pct']:.1f}" if afk_week else "0.0"
-        )
-        row["afk_quarantine_pct"] = (
-            f"{afk_week['quarantine_pct']:.1f}" if afk_week else "0.0"
-        )
-        row["afk_cost_usd"] = f"{afk_week['cost_usd']:.2f}" if afk_week else "0.00"
+        if week in afk_weeks:
+            afk_week = afk.get(week)
+            row["afk_merged"] = str(afk_week["merged"]) if afk_week else "0"
+            row["afk_first_attempt_pct"] = (
+                f"{afk_week['first_attempt_pct']:.1f}" if afk_week else "0.0"
+            )
+            row["afk_quarantine_pct"] = (
+                f"{afk_week['quarantine_pct']:.1f}" if afk_week else "0.0"
+            )
+            row["afk_cost_usd"] = (
+                f"{afk_week['cost_usd']:.2f}" if afk_week else "0.00"
+            )
         if week in tasks:
             row["tasks_done"] = str(tasks[week])
         row["wins"] = str(wins.get(week, 0))
@@ -885,6 +952,26 @@ def _positive_int(raw: str) -> int:
     if value < 1:
         raise argparse.ArgumentTypeError("must be >= 1")
     return value
+
+
+def has_evidence(row: dict[str, str]) -> bool:
+    """True if any source actually measured something for this week.
+
+    A week that predates every surviving source computes to all zeros, and a
+    zero row is not the same claim as no row: written into the ledger it reads
+    as "measured, and the answer was nothing", which drags any rolling median
+    down and invents a collapse that never happened. Backfill writes a row
+    only when something is behind it.
+    """
+    for column, value in row.items():
+        if column in ("week", "machine", "computed_at") or not value:
+            continue
+        try:
+            if float(value) != 0.0:
+                return True
+        except ValueError:
+            return True  # a non-numeric value is content, not a zero
+    return False
 
 
 def existing_weeks(ledger_path: Path) -> set[str]:
@@ -921,11 +1008,17 @@ def _report_lines(rows: dict[str, dict[str, str]], machine: str) -> list[str]:
     ]
     for week in sorted(rows):
         r = rows[week]
+
+        def cell(name: str) -> str:
+            # "—" means no data from that collector for the week, which is a
+            # different claim from a measured zero.
+            return r.get(name) or "—"
+
         lines.append(
-            f"  {week:9} {r['attn_total_h']:>8} {r['attn_vault_h']:>6} "
-            f"{r['attn_build_h']:>6} {r['attn_home_h']:>6} "
-            f"{r['attn_school_h']:>7} {r['afk_merged']:>5} {r['wins']:>5} "
-            f"{r.get('tasks_done', '') or '—':>6}"
+            f"  {week:9} {cell('attn_total_h'):>8} {cell('attn_vault_h'):>6} "
+            f"{cell('attn_build_h'):>6} {cell('attn_home_h'):>6} "
+            f"{cell('attn_school_h'):>7} {cell('afk_merged'):>5} "
+            f"{cell('wins'):>5} {cell('tasks_done'):>6}"
         )
     lines.append(
         "  attn = hours an interactive Claude/Codex session was active "
@@ -1024,6 +1117,16 @@ def main() -> int:
         include_vault_git=not args.no_vault_git,
         computed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
+    if args.backfill:
+        empty = [w for w, r in rows.items() if not has_evidence(r)]
+        for week in empty:
+            del rows[week]
+        if empty:
+            print(
+                f"pulse: backfill wrote no row for {len(empty)} week(s) with "
+                "no surviving evidence (absent ≠ measured zero)",
+                file=sys.stderr,
+            )
     upsert_ledger(ledger, rows, machine=machine)
 
     if args.json:

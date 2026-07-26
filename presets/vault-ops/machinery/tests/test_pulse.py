@@ -917,6 +917,33 @@ class TestUpsertLedger:
             upsert_ledger(ledger, {"2026-W30": {"wins": "1"}}, machine="personal")
 
 
+class TestHasEvidence:
+    def test_all_zero_row_is_not_evidence(self) -> None:
+        row = {c: "" for c in pulse.LEDGER_COLUMNS}
+        row.update(
+            {
+                "week": "2025-W30",
+                "machine": "personal",
+                "computed_at": "2026-07-26T00:00:00Z",
+                "attn_total_h": "0.00",
+                "claude_sessions": "0",
+                "afk_merged": "0",
+                "tokens_m": "0.00",
+            }
+        )
+        assert pulse.has_evidence(row) is False
+
+    def test_any_nonzero_is_evidence(self) -> None:
+        row = {c: "" for c in pulse.LEDGER_COLUMNS}
+        row.update({"week": "2026-W30", "attn_total_h": "0.00", "wins": "1"})
+        assert pulse.has_evidence(row) is True
+
+    def test_manual_rating_alone_is_evidence(self) -> None:
+        row = {c: "" for c in pulse.LEDGER_COLUMNS}
+        row.update({"week": "2026-W30", "attn_total_h": "0.00", "energy": "4"})
+        assert pulse.has_evidence(row) is True
+
+
 class TestExistingWeeks:
     def test_reads_week_keys(self, tmp_path: Path) -> None:
         ledger = tmp_path / "pulse-personal.csv"
@@ -1002,10 +1029,37 @@ class TestScan:
         assert w30["tokens_m"] == "0.01"
         assert w30["afk_merged"] == "2"
         assert w30["wins"] == "1"
-        # Empty week zero-fills derived numerics.
+        # W29 precedes every collector's earliest record, so its columns stay
+        # BLANK — a pruned-source week is not a measured-zero week.
         w29 = rows["2026-W29"]
-        assert w29["attn_total_h"] == "0.00"
-        assert w29["afk_merged"] == "0"
+        assert "attn_total_h" not in w29
+        assert "afk_merged" not in w29
+        assert w29["wins"] == "0"  # Brag Doc is never pruned: a real zero
+
+    def test_a_quiet_week_inside_coverage_is_a_real_zero(
+        self, tmp_path: Path
+    ) -> None:
+        """The distinction the ledger lives on: a week with no sessions but
+        live sources is a measured zero (the school signal), while a week
+        whose transcripts were pruned is blank."""
+        claude_root = tmp_path / "claude"
+        claude_root.mkdir()
+        _claude_fixture(claude_root)  # events in 2026-W30
+        rows = pulse.scan(
+            projects_root=claude_root,
+            codex_root=tmp_path / "codex",
+            repos_root=tmp_path / "repos",
+            vault_root=tmp_path / "vault",
+            week_keys=["2026-W20", "2026-W29", "2026-W30", "2026-W31"],
+            tz=TZ,
+        )
+        # After the newest record the collector demonstrably ran, so an empty
+        # week is a measured zero — this is the shape the school signal takes.
+        assert rows["2026-W31"]["attn_total_h"] == "0.00"
+        # Below the earliest record, pruned and quiet are indistinguishable:
+        # claim nothing rather than invent a zero.
+        assert "attn_total_h" not in rows["2026-W20"]
+        assert "attn_total_h" not in rows["2026-W29"]
 
     def test_scan_survives_missing_everything(self, tmp_path: Path) -> None:
         rows = pulse.scan(
@@ -1016,7 +1070,35 @@ class TestScan:
             week_keys=["2026-W30"],
             tz=TZ,
         )
-        assert rows["2026-W30"]["attn_total_h"] == "0.00"
+        # No sources at all: the row exists but claims nothing.
+        assert "attn_total_h" not in rows["2026-W30"]
+        assert rows["2026-W30"]["wins"] == "0"
+
+
+class TestCoveredWeeks:
+    WINDOW = [f"2026-W{n:02d}" for n in range(20, 31)]
+
+    def test_pruned_history_is_not_covered(self) -> None:
+        # Nothing is claimed below the earliest record: whether W28 was quiet
+        # or simply pruned is unknowable, so it gets no zero.
+        got = pulse._covered_weeks({"2026-W29", "2026-W30"}, self.WINDOW)
+        assert got == {"2026-W29", "2026-W30"}
+
+    def test_short_gap_stays_covered(self) -> None:
+        got = pulse._covered_weeks({"2026-W26", "2026-W28", "2026-W30"}, self.WINDOW)
+        assert {"2026-W27", "2026-W29"} <= got
+
+    def test_lone_ancient_record_does_not_cover_the_gap(self) -> None:
+        got = pulse._covered_weeks({"2026-W20", "2026-W30"}, self.WINDOW)
+        assert "2026-W20" not in got
+        assert "2026-W21" not in got
+
+    def test_weeks_after_newest_record_are_covered(self) -> None:
+        got = pulse._covered_weeks({"2026-W25"}, self.WINDOW)
+        assert {"2026-W29", "2026-W30"} <= got
+
+    def test_no_records(self) -> None:
+        assert pulse._covered_weeks(set(), self.WINDOW) == set()
 
 
 # ---------------------------------------------------------------------------
@@ -1098,6 +1180,19 @@ class TestCli:
         assert rows[week]["vault_sessions_personal"] == "7"
         assert rows[week]["deliberate_commits_personal"] == "5"
         assert "git collector failed" in out.stderr
+
+    def test_backfill_writes_no_row_for_evidence_free_weeks(
+        self, tmp_path: Path
+    ) -> None:
+        """Weeks predating every source must be ABSENT, not zero: 50-odd zero
+        rows would drag a rolling median and invent a collapse."""
+        (tmp_path / ".vault-context").write_text("personal\n")
+        out = self._run(tmp_path, "--backfill", "--no-vault-git")
+        assert out.returncode == 0, out.stderr
+        ledger = tmp_path / "perf" / "metrics" / "pulse-personal.csv"
+        rows = list(csv.DictReader(ledger.open()))
+        assert rows == []
+        assert "no surviving evidence" in out.stderr
 
     def test_weeks_zero_is_rejected(self, tmp_path: Path) -> None:
         (tmp_path / ".vault-context").write_text("personal\n")
