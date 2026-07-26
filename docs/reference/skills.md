@@ -73,6 +73,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-init` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. | vault-ops |
 | `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
 | `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
+| `/vault-pulse` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. | vault-ops |
 | `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
 | `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
 | `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
@@ -437,6 +438,12 @@ Run Charles's vault (The Vault) /link helper to find notes and suggest or insert
 *`vault-ops` preset*
 
 Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+
+### `/vault-pulse`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. Trigger when Charles invokes /pulse, mentions /pulse, or asks whether his work output or attention is trending up or down.
 
 ### `/vault-recall`
 
