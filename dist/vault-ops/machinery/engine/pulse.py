@@ -1138,7 +1138,7 @@ def _report_lines(rows: dict[str, dict[str, str]], machine: str) -> list[str]:
             f"{cell('wins'):>5} {cell('tasks_done'):>6}"
         )
     lines.append(
-        "  attn = hours an interactive Claude/Codex session was active "
+        "  attn = hours an interactive Claude/Codex/Cortex session was active "
         "(union — parallel sessions count once, but a long autonomous run "
         "inside a session counts as active)."
     )
