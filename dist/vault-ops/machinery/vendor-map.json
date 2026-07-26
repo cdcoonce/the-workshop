@@ -8,6 +8,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/budget_burn_defaults.py",
+      "target": ".claude/scripts/budget_burn_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/classify-message.py",
       "target": ".claude/scripts/classify-message.py"
     },
@@ -15,6 +20,11 @@
       "kind": "file",
       "source": "engine/content_classifier.py",
       "target": ".claude/scripts/content_classifier.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/content_routing_defaults.py",
+      "target": ".claude/scripts/content_routing_defaults.py"
     },
     {
       "kind": "file",
@@ -30,6 +40,11 @@
       "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/frontmatter_schema_defaults.py",
+      "target": ".claude/scripts/frontmatter_schema_defaults.py"
     },
     {
       "kind": "file",

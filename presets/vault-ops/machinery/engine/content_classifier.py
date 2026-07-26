@@ -45,147 +45,39 @@ def _phrase(phrase: str) -> re.Pattern[str]:
     return re.compile(rf"\b{re.escape(phrase)}\b", re.IGNORECASE)
 
 
-CATEGORIES: list[_CategoryDef] = [
-    _CategoryDef(
-        name="incident",
-        patterns=[
-            _phrase("incident"), _phrase("outage"), _phrase("postmortem"), _phrase("post-mortem"),
-            _phrase("root cause"), _phrase("downtime"), _phrase("severity"),
-            _phrase("on-call"), _phrase("oncall"), _phrase("pager"), _phrase("alert"),
-            _phrase("service degradation"), _phrase("data loss"),
-        ],
-        folder="work/incidents",
-        template="Incident",
-        routing_hint="Consider creating an incident report in work/incidents/",
-    ),
-    _CategoryDef(
-        name="1-1",
-        patterns=[
-            _phrase("1:1"), _phrase("1-1"), _phrase("one on one"),
-            _phrase("1 on 1"), _phrase("one-on-one"),
-            _phrase("met with"), _phrase("meeting with"),
-            _phrase("sync with"), _phrase("caught up with"),
-            _phrase("check-in with"), _phrase("check in with"),
-        ],
-        folder="work/1-1",
-        template="1-1 Note",
-        routing_hint="Consider creating a 1:1 note in work/1-1/",
-    ),
-    _CategoryDef(
-        name="decision",
-        patterns=[
-            _phrase("decided"), _phrase("decision"), _phrase("we chose"),
-            _phrase("going with"), _phrase("opted for"),
-            _phrase("trade-off"), _phrase("tradeoff"),
-            _phrase("pros and cons"), _phrase("decided to"),
-            _phrase("agreed to"), _phrase("settled on"),
-        ],
-        folder="work/decisions",
-        template="Decision Record",
-        routing_hint="Consider creating a decision record in work/decisions/",
-    ),
-    _CategoryDef(
-        name="win",
-        patterns=[
-            _phrase("shipped"), _phrase("launched"), _phrase("completed"),
-            _phrase("accomplished"), _phrase("delivered"),
-            _phrase("great feedback"), _phrase("positive feedback"),
-            _phrase("promoted"), _phrase("recognized"),
-            _phrase("saved time"), _phrase("reduced cost"),
-            _phrase("improved"), _phrase("milestone"),
-            _phrase("shout-out"), _phrase("shoutout"), _phrase("kudos"),
-        ],
-        folder="perf",
-        template="Work Note",
-        routing_hint="Consider updating the Brag Doc and creating evidence in perf/",
-    ),
-    _CategoryDef(
-        name="project-update",
-        patterns=[
-            _phrase("project update"), _phrase("status update"),
-            _phrase("progress on"), _phrase("working on"),
-            _phrase("sprint"), _phrase("blocker"),
-            _phrase("next steps"), _phrase("roadmap"),
-            _phrase("backlog"), _phrase("pipeline"),
-            _phrase("deployed"), _phrase("merged"),
-        ],
-        folder="work/active/ad-hoc",
-        template="Work Note",
-        routing_hint="Prefer updating an existing project note (work/active/<cluster>/ or work/active/); if none fits, capture it in work/active/ad-hoc/ for later triage — it's a temporary inbox, not a permanent home.",
-    ),
-    _CategoryDef(
-        name="person-context",
-        patterns=[
-            _phrase("works on"), _phrase("reports to"),
-            _phrase("responsible for"), _phrase("their role"),
-            _phrase("team lead"), _phrase("manager"),
-            _phrase("cross-functional"), _phrase("stakeholder"),
-            _phrase("new hire"), _phrase("joined the team"),
-        ],
-        folder="org/people",
-        template="Person",
-        routing_hint="Consider creating or updating a person profile in org/people/",
-    ),
-    _CategoryDef(
-        name="learning",
-        patterns=[
-            _phrase("learned"), _phrase("learning"),
-            _phrase("tutorial"), _phrase("course"),
-            _phrase("studying"), _phrase("reading about"),
-            _phrase("TIL"), _phrase("today I learned"),
-            _phrase("documentation"), _phrase("how to"),
-            _phrase("figured out"), _phrase("concept"),
-        ],
-        folder="personal/learning",
-        template="Learning Note",
-        routing_hint="Consider creating a learning note in personal/learning/",
-    ),
-    _CategoryDef(
-        name="side-project",
-        patterns=[
-            _phrase("side project"), _phrase("personal project"),
-            _phrase("hobby project"), _phrase("building"),
-            _phrase("my app"), _phrase("my tool"),
-            _phrase("weekend project"), _phrase("pet project"),
-        ],
-        folder="personal/projects",
-        template="Side Project",
-        routing_hint="Consider creating a side project note in personal/projects/",
-    ),
-    _CategoryDef(
-        name="project-idea",
-        patterns=[
-            _phrase("what if"), _phrase("idea for"),
-            _phrase("could build"), _phrase("might be cool"),
-            _phrase("brainstorm"), _phrase("concept for"),
-            _phrase("wouldn't it be"), _phrase("imagine"),
-            _phrase("pitch"), _phrase("prototype"),
-        ],
-        folder="personal/ideas",
-        template="Idea",
-        routing_hint="Consider capturing this idea in personal/ideas/",
-    ),
-    _CategoryDef(
-        name="task",
-        patterns=[
-            _phrase("need to"), _phrase("reminder"), _phrase("todo"),
-            _phrase("to-do"), _phrase("pick up"), _phrase("buy"),
-            _phrase("schedule"), _phrase("appointment"), _phrase("errand"),
-            _phrase("don't forget"), _phrase("remember to"),
-            _phrase("grocery"), _phrase("chore"),
-        ],
-        folder="personal/tasks",
-        template="Task",
-        routing_hint="Consider adding this as a task in personal/tasks/",
-    ),
-]
+from content_routing_defaults import CATEGORIES as _DEFAULT_CATEGORIES
+from content_routing_defaults import DEFAULT_CATEGORY as _DEFAULT_DEFAULT_CATEGORY
 
-# Default fallback
+try:  # Scaffold-owned config; absent in a vault vendored before it existed.
+    from content_routing import CATEGORIES as _RAW_CATEGORIES
+    from content_routing import DEFAULT_CATEGORY as _RAW_DEFAULT_CATEGORY
+except ImportError:
+    _RAW_CATEGORIES = _DEFAULT_CATEGORIES
+    _RAW_DEFAULT_CATEGORY = _DEFAULT_DEFAULT_CATEGORY
+
+
+def _compile_category(raw: dict) -> _CategoryDef:
+    """Compile one config category (plain dict, phrase strings) for matching."""
+    return _CategoryDef(
+        name=raw["name"],
+        patterns=[_phrase(p) for p in raw["phrases"]],
+        folder=raw["folder"],
+        template=raw["template"],
+        routing_hint=raw["routing_hint"],
+    )
+
+
+# Priority-ordered routing table, sourced from the scaffolded config when
+# present, shipped defaults otherwise (content_routing_defaults documents the
+# ordering contract).
+CATEGORIES: list[_CategoryDef] = [_compile_category(c) for c in _RAW_CATEGORIES]
+
+# Default fallback when nothing scores above zero.
 DEFAULT_RESULT = ClassificationResult(
-    category="thought",
-    routing_hint="Consider saving this as a thinking note in thinking/",
-    suggested_folder="thinking",
-    suggested_template="Thinking Note",
+    category=_RAW_DEFAULT_CATEGORY["name"],
+    routing_hint=_RAW_DEFAULT_CATEGORY["routing_hint"],
+    suggested_folder=_RAW_DEFAULT_CATEGORY["folder"],
+    suggested_template=_RAW_DEFAULT_CATEGORY["template"],
     confidence=0.0,
 )
 
