@@ -22,4 +22,7 @@ COMMON_NOTE_PATHS: dict[str, str] = {
 CONTEXT_NOTE_PATHS: dict[str, dict[str, str]] = {
     "work": {"work_index": "work/Index.md"},
     "personal": {"personal_index": "personal/Index.md"},
+    # Read on every machine: coursework competes with work and personal time
+    # on both of them.
+    "school": {"school_index": "school/Index.md"},
 }
