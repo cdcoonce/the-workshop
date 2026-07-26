@@ -23,10 +23,21 @@ RECOMPUTE_WEEKS = 10
 # larger window is safe but weeks with no surviving evidence stay absent.
 BACKFILL_WEEKS = 60
 
-# First substring match wins; unmatched projects land in "other".
+# Matched against a SCOPE — "repo/dir/subdir", not just a repo name — so a
+# directory inside a repo can carry its own domain. First match wins, which
+# is why the school rules come first: coursework lives inside the vault, and
+# a repo-level match would book those hours to "vault", inflating the number
+# whose decline the ledger exists to detect.
 # Domains: vault (second-brain ops), build (personal engineering),
 # home (household software), school (the master's program), other.
 DOMAIN_RULES: tuple[tuple[str, str], ...] = (
+    # School first — these win wherever they appear in a path.
+    ("school", "school"),
+    ("coursework", "school"),
+    ("asu", "school"),
+    ("cse5", "school"),  # CSE 511 Data Processing at Scale, CSE 575, ...
+    ("hse5", "school"),  # HSE 542 Foundations of Human Systems Engineering
+    ("dse5", "school"),
     ("the-vault", "vault"),
     ("my-brain", "vault"),
     ("second-brain", "vault"),

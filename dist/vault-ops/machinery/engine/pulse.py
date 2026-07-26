@@ -310,8 +310,10 @@ def _normalize_project(cwd: object) -> str:
 
 
 def _repo_pattern(repos_root: Path) -> re.Pattern:
-    """Regex matching repo directories under the repos root."""
-    return re.compile(re.escape(str(repos_root)) + r"/([A-Za-z0-9_.-]+)")
+    """Regex capturing (repo, path-within-repo) under the repos root."""
+    return re.compile(
+        re.escape(str(repos_root)) + r"/([A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)"
+    )
 
 
 def _tool_use_payload(rec: dict) -> str:
@@ -331,27 +333,44 @@ def _tool_use_payload(rec: dict) -> str:
     )
 
 
-def _touched_repo(text: str, pattern: re.Pattern) -> str | None:
-    """The repo this text is clearly about, else None.
+def _touched_scope(text: str, pattern: re.Pattern) -> str | None:
+    """What this text is clearly about, as ``repo/dir/subdir``, else None.
 
-    Sessions are launched from the vault and work cross-repo, so the launch
-    cwd books everything to one project. The paths in a record's tool calls
-    say what the session is actually doing. Text naming several repos equally
-    (a listing, a survey) carries no signal and returns None, so the caller
-    keeps whatever repo the session was already on.
+    Repo alone is too coarse: coursework lives INSIDE the vault, so a
+    repo-level key books school hours to ``vault`` — inflating the very
+    number whose decline the ledger exists to detect. Keeping the directory
+    path lets ``_domain`` separate them.
+
+    Text naming several places equally (a listing, a survey) carries no
+    signal and returns None, so the caller keeps the session's current scope.
     """
     hits = pattern.findall(text)
     if not hits:
         return None
     counts: dict[str, int] = {}
-    for hit in hits:
+    for repo, rest in hits:
         # A repo's worktree sibling dir (foo-worktrees/) is still foo's work.
-        repo = hit[: -len("-worktrees")] if hit.endswith("-worktrees") else hit
-        counts[repo] = counts.get(repo, 0) + 1
+        if repo.endswith("-worktrees"):
+            repo = repo[: -len("-worktrees")]
+        # Keep directories, drop the filename; two levels is enough to name a
+        # course or an area without exploding into per-file scopes.
+        parts = [p for p in rest.split("/") if p][:-1]
+        scope = "/".join([repo, *parts[:2]]) if parts else repo
+        counts[scope] = counts.get(scope, 0) + 1
     ranked = sorted(counts.items(), key=lambda kv: -kv[1])
     if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
         return None
     return ranked[0][0]
+
+
+def _scope_repo(scope: str) -> str:
+    """The repo a scope belongs to — the clustering bucket key.
+
+    Blocks cluster per repo, not per scope: a session hopping between
+    directories inside one repo is one stretch of work, and bucketing finer
+    would chop it into many tiny blocks.
+    """
+    return scope.split("/", 1)[0]
 
 
 def _domain(project: str, rules: tuple = DOMAIN_RULES) -> str:
@@ -378,7 +397,7 @@ def collect_claude(
     an entrypoint is untrusted and contributes neither hours nor a count.
 
     Project attribution follows the repo whose paths the session touches,
-    falling back to the launch cwd until one appears (see ``_touched_repo``).
+    falling back to the launch cwd until one appears (see ``_touched_scope``).
 
     Tokens/spend: EVERY session (headless work costs real money), deduped by
     requestId across all files exactly like budget_burn — a resumed session
@@ -400,7 +419,7 @@ def collect_claude(
         entrypoint: str | None = None
         interactive_weeks: set[str] = set()
         pending: list[tuple[datetime, str]] = []
-        current_repo: str | None = None
+        current_scope: str | None = None
         for line in lines:
             line = line.strip()
             if not line:
@@ -410,9 +429,9 @@ def collect_claude(
             except json.JSONDecodeError:
                 continue
             if pattern is not None:
-                touched = _touched_repo(_tool_use_payload(rec), pattern)
+                touched = _touched_scope(_tool_use_payload(rec), pattern)
                 if touched is not None:
-                    current_repo = touched
+                    current_scope = touched
             if entrypoint is None and isinstance(rec.get("entrypoint"), str):
                 entrypoint = rec["entrypoint"]
             dt = _parse_ts(rec.get("timestamp"))
@@ -447,8 +466,8 @@ def collect_claude(
             # Candidate attention events: non-sidechain and timestamped. The
             # session-level entrypoint verdict is applied after the loop.
             if dt is not None and week is not None and rec.get("isSidechain") is not True:
-                project = current_repo or _normalize_project(rec.get("cwd"))
-                pending.append((dt, project))
+                scope = current_scope or _normalize_project(rec.get("cwd"))
+                pending.append((dt, scope))
                 interactive_weeks.add(week)
 
         # Session verdict: an undeclared entrypoint is untrusted (it is what
@@ -872,18 +891,21 @@ def scan(
         since = datetime.now(tz).date() - timedelta(weeks=len(week_keys) + 2)
         vault_git = collect_vault_git(vault_root, tz, since)
 
-    # Attention: bucket events by (week, tool, project), cluster per bucket,
-    # then union per week (total) and per domain.
+    # Attention: bucket events by (week, tool, scope), cluster per bucket,
+    # then union per week (total) and per domain. Scope carries the directory
+    # path, so switching between coursework and vault work inside one repo
+    # ends one block and starts another — which is what keeps school hours
+    # out of the vault column.
     by_bucket: dict[tuple[str, str, str], list[datetime]] = {}
     for tool, data in (("claude", claude), ("codex", codex)):
-        for dt, project in data["events"]:
+        for dt, scope in data["events"]:
             week = _week_of_date(dt.astimezone(tz).date())
             if week in wanted:
-                by_bucket.setdefault((week, tool, project), []).append(dt)
+                by_bucket.setdefault((week, tool, scope), []).append(dt)
     intervals_by_week: dict[str, list[tuple[str, tuple[datetime, datetime]]]] = {}
-    for (week, _tool, project), times in by_bucket.items():
+    for (week, _tool, scope), times in by_bucket.items():
         for block in _cluster(times, GAP_MINUTES):
-            intervals_by_week.setdefault(week, []).append((project, block))
+            intervals_by_week.setdefault(week, []).append((scope, block))
 
     # Coverage: which weeks a collector actually has records for. Transcripts
     # and rollouts get pruned and afk telemetry starts at enrollment, so a
