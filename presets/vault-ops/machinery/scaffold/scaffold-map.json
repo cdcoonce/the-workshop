@@ -36,6 +36,10 @@
     {
       "template": "budget_burn_config.py.tmpl",
       "target": ".claude/scripts/budget_burn_config.py"
+    },
+    {
+      "template": "frontmatter_schema.json.tmpl",
+      "target": ".claude/scripts/frontmatter_schema.json"
     }
   ],
   "trees": [
