@@ -198,34 +198,91 @@ class TestNormalizeProject:
         assert _normalize_project(None) == "_unknown"
 
 
-class TestTouchedRepo:
-    """Attribution follows the repo a session TOUCHES, not the dir it was
+class TestSchoolScope:
+    """Coursework happens IN the vault via Claude, so repo-level attribution
+    books it to `vault` — school time would inflate vault work and mask the
+    decline it is causing. Domain must be decided by path, not repo."""
+
+    PATTERN = pulse._repo_pattern(Path("/Users/x/Developer/GitHub"))
+    RULES = pulse_defaults.DOMAIN_RULES
+
+    def test_coursework_in_the_vault_is_school_not_vault(self) -> None:
+        scope = pulse._touched_scope(
+            '{"file_path": "/Users/x/Developer/GitHub/the-vault/school/'
+            'cse511/week-1-notes.md"}',
+            self.PATTERN,
+        )
+        assert scope == "the-vault/school/cse511"
+        assert _domain(scope, self.RULES) == "school"
+
+    def test_ordinary_vault_work_is_still_vault(self) -> None:
+        scope = pulse._touched_scope(
+            '{"file_path": "/Users/x/Developer/GitHub/the-vault/work/Tasks.md"}',
+            self.PATTERN,
+        )
+        assert scope == "the-vault/work"
+        assert _domain(scope, self.RULES) == "vault"
+
+    def test_course_codes_and_asu_anywhere_are_school(self) -> None:
+        for path, expected in (
+            ("/Users/x/Developer/GitHub/the-vault/personal/school/a.md", "school"),
+            ("/Users/x/Developer/GitHub/the-vault/personal/asu/notes.md", "school"),
+            ("/Users/x/Developer/GitHub/cse511-project/src/main.py", "school"),
+            ("/Users/x/Developer/GitHub/the-vault/personal/hse542/x.md", "school"),
+            ("/Users/x/Developer/GitHub/the-vault/coursework/a.md", "school"),
+        ):
+            scope = pulse._touched_scope(f'{{"file_path": "{path}"}}', self.PATTERN)
+            assert _domain(scope, self.RULES) == "school", path
+
+    def test_repo_root_file_keeps_the_repo_scope(self) -> None:
+        scope = pulse._touched_scope(
+            '{"file_path": "/Users/x/Developer/GitHub/graphmark/README.md"}',
+            self.PATTERN,
+        )
+        assert scope == "graphmark"
+        assert _domain(scope, self.RULES) == "build"
+
+    def test_bucket_key_stays_the_repo(self) -> None:
+        # Clustering buckets by repo so a session hopping directories inside
+        # one repo does not fragment into many tiny blocks.
+        assert pulse._scope_repo("the-vault/school/cse511") == "the-vault"
+        assert pulse._scope_repo("graphmark") == "graphmark"
+
+
+class TestTouchedScope:
+    """Attribution follows what a session TOUCHES, not the dir it was
     launched from: nearly every session is launched from the vault and works
     cross-repo, so cwd alone books all of it to 'vault'."""
 
     PATTERN = pulse._repo_pattern(Path("/Users/x/Developer/GitHub"))
 
-    def test_dominant_repo_in_line(self) -> None:
+    def test_dominant_scope_in_line(self) -> None:
         line = (
-            'edit /Users/x/Developer/GitHub/the-workshop/a.py and '
-            '/Users/x/Developer/GitHub/the-workshop/b.py vs '
+            'edit /Users/x/Developer/GitHub/the-workshop/core/a.py and '
+            '/Users/x/Developer/GitHub/the-workshop/core/b.py vs '
             '/Users/x/Developer/GitHub/the-vault/c.md'
         )
-        assert pulse._touched_repo(line, self.PATTERN) == "the-workshop"
+        assert pulse._touched_scope(line, self.PATTERN) == "the-workshop/core"
 
     def test_worktree_sibling_dir_maps_to_repo(self) -> None:
         line = "/Users/x/Developer/GitHub/afk-agent-system-worktrees/aa6/x.py"
-        assert pulse._touched_repo(line, self.PATTERN) == "afk-agent-system"
+        assert (
+            pulse._touched_scope(line, self.PATTERN) == "afk-agent-system/aa6"
+        )
 
     def test_tie_is_no_signal(self) -> None:
         line = (
-            "/Users/x/Developer/GitHub/alpha/a "
-            "/Users/x/Developer/GitHub/beta/b"
+            "/Users/x/Developer/GitHub/alpha/src/a "
+            "/Users/x/Developer/GitHub/beta/src/b"
         )
-        assert pulse._touched_repo(line, self.PATTERN) is None
+        assert pulse._touched_scope(line, self.PATTERN) is None
+
+    def test_depth_is_capped_at_two_directories(self) -> None:
+        line = "/Users/x/Developer/GitHub/the-vault/a/b/c/d/e.md"
+        assert pulse._touched_scope(line, self.PATTERN) == "the-vault/a/b"
 
     def test_no_mention(self) -> None:
-        assert pulse._touched_repo("nothing here", self.PATTERN) is None
+        assert pulse._touched_scope("nothing here", self.PATTERN) is None
 
 
 class TestDomain:
@@ -462,6 +519,63 @@ class TestCollectClaude:
         assert got["sessions_by_week"] == {"2026-W30": 1}
         # requestId dedup already protects tokens: 1000, not 2000.
         assert got["tokens_by_week"] == {"2026-W30": 1000}
+
+    def test_school_hours_do_not_inflate_vault_hours(self, tmp_path: Path) -> None:
+        """End-to-end: an hour of coursework in the vault must land in
+        attn_school_h, not attn_vault_h."""
+        proj = tmp_path / "-Users-x-Developer-GitHub-the-vault"
+        proj.mkdir(parents=True)
+        base = {
+            "sessionId": "sc",
+            "cwd": "/Users/x/Developer/GitHub/the-vault",
+            "entrypoint": "claude-desktop",
+            "isSidechain": False,
+        }
+
+        def edit(ts: str, path: str) -> dict:
+            return {
+                **base,
+                "type": "assistant",
+                "timestamp": ts,
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Edit",
+                            "input": {"file_path": path},
+                        }
+                    ]
+                },
+            }
+
+        school = "/Users/x/Developer/GitHub/the-vault/school/cse511/hw1.md"
+        vault = "/Users/x/Developer/GitHub/the-vault/work/Tasks.md"
+        # Steps stay under GAP_MINUTES so each run is one continuous block.
+        records = [
+            edit("2026-09-07T18:00:00.000Z", school),
+            edit("2026-09-07T18:10:00.000Z", school),
+            edit("2026-09-07T18:20:00.000Z", school),
+            edit("2026-09-07T18:30:00.000Z", school),
+            edit("2026-09-07T20:00:00.000Z", vault),
+            edit("2026-09-07T20:10:00.000Z", vault),
+            edit("2026-09-07T20:20:00.000Z", vault),
+            edit("2026-09-07T20:30:00.000Z", vault),
+        ]
+        (proj / "sc.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+        rows = pulse.scan(
+            projects_root=tmp_path,
+            codex_root=tmp_path / "none",
+            repos_root=Path("/Users/x/Developer/GitHub"),
+            vault_root=tmp_path / "vault",
+            week_keys=["2026-W37"],
+            tz=TZ,
+        )
+        r = rows["2026-W37"]
+        assert r["attn_school_h"] == "0.50"
+        assert r["attn_vault_h"] == "0.50"
+        assert r["attn_total_h"] == "1.00"
 
     def test_attribution_follows_touched_repo(self, tmp_path: Path) -> None:
         """A vault-launched session working on graphmark is graphmark work."""
