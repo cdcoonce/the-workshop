@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -11,6 +13,7 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import content_classifier
 from content_classifier import ClassificationResult, classify, routing_hook_output
 
 
@@ -382,3 +385,102 @@ class TestConfidenceComparable:
         a = classify("There was an incident")        # incident (13 patterns), 1 hit
         b = classify("This is my side project")      # side-project (8 patterns), 1 hit
         assert a.confidence == pytest.approx(b.confidence)
+
+
+# ---------------------------------------------------------------------------
+# Default-config fixture — proves the shipped default routing table reproduces
+# pre-refactor classification results (#428) for a representative message set.
+# ---------------------------------------------------------------------------
+
+REPRESENTATIVE_MESSAGES: list[tuple[str, str, str, str]] = [
+    # (text, category, suggested_folder, suggested_template)
+    ("There was a production incident with the data pipeline", "incident", "work/incidents", "Incident"),
+    ("Had a 1:1 with Jane about pipeline performance", "1-1", "work/1-1", "1-1 Note"),
+    ("We decided to use Snowflake instead of BigQuery", "decision", "work/decisions", "Decision Record"),
+    ("Shipped the new customer segmentation pipeline", "win", "perf", "Work Note"),
+    ("Still working on the data warehouse migration, hit a blocker", "project-update", "work/active/ad-hoc", "Work Note"),
+    ("Jake works on the platform team and is responsible for CI/CD", "person-context", "org/people", "Person"),
+    ("Learned about window functions in advanced SQL today", "learning", "personal/learning", "Learning Note"),
+    ("My side project is a hobby project CLI data profiler", "side-project", "personal/projects", "Side Project"),
+    ("What if we built a data quality scoreboard for the company?", "project-idea", "personal/ideas", "Idea"),
+    ("I need to buy groceries later", "task", "personal/tasks", "Task"),
+    ("The weather is nice today", "thought", "thinking", "Thinking Note"),
+]
+
+
+class TestDefaultConfigFixture:
+    """The shipped default routing table must reproduce today's classification."""
+
+    @pytest.mark.parametrize(
+        "text,category,folder,template", REPRESENTATIVE_MESSAGES
+    )
+    def test_default_config_matches_pre_refactor_output(
+        self, text: str, category: str, folder: str, template: str
+    ) -> None:
+        result = classify(text)
+        assert result.category == category
+        assert result.suggested_folder == folder
+        assert result.suggested_template == template
+
+
+# ---------------------------------------------------------------------------
+# Custom routing table — a vault can replace the shipped default outright.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def scaffolded_routing():
+    """Reload content_classifier against a stand-in scaffolded content_routing module.
+
+    Mirrors the context_loader scaffolded-config fixture: the seam under test
+    is the module-level import, not a specific merge behavior. Teardown
+    restores the shipped defaults.
+    """
+
+    def _configure(categories: list[dict], default_category: dict) -> ModuleType:
+        module = ModuleType("content_routing")
+        module.CATEGORIES = categories
+        module.DEFAULT_CATEGORY = default_category
+        sys.modules["content_routing"] = module
+        return importlib.reload(content_classifier)
+
+    yield _configure
+
+    sys.modules.pop("content_routing", None)
+    importlib.reload(content_classifier)
+
+
+class TestCustomRoutingTable:
+    def test_custom_categories_and_default_are_used(self, scaffolded_routing) -> None:
+        classifier = scaffolded_routing(
+            categories=[
+                {
+                    "name": "recipe",
+                    "phrases": ["recipe", "ingredients"],
+                    "folder": "kitchen/recipes",
+                    "template": "Recipe",
+                    "routing_hint": "Consider saving this recipe in kitchen/recipes/",
+                },
+            ],
+            default_category={
+                "name": "note",
+                "folder": "inbox",
+                "template": "Note",
+                "routing_hint": "Consider saving this in inbox/",
+            },
+        )
+
+        recipe_result = classifier.classify("New recipe: list the ingredients first")
+        assert recipe_result.category == "recipe"
+        assert recipe_result.suggested_folder == "kitchen/recipes"
+        assert recipe_result.suggested_template == "Recipe"
+
+        default_result = classifier.classify("Nothing here matches any keyword")
+        assert default_result.category == "note"
+        assert default_result.suggested_folder == "inbox"
+        assert default_result.suggested_template == "Note"
+
+    def test_absent_config_module_uses_shipped_defaults(self) -> None:
+        """A vault vendored before the scaffold config exists still classifies."""
+        assert "content_routing" not in sys.modules
+        result = classify("There was a production incident")
+        assert result.category == "incident"

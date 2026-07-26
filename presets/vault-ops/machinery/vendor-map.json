@@ -23,6 +23,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/content_routing_defaults.py",
+      "target": ".claude/scripts/content_routing_defaults.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/context_loader.py",
       "target": ".claude/scripts/context_loader.py"
     },
