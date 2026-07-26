@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from context_paths_defaults import COMMON_NOTE_PATHS as DEFAULT_COMMON_NOTE_PATHS
@@ -71,6 +71,36 @@ HANDOFF_MAX_BYTES = 8000    # ceiling; whole trailing sections drop past it
 # Types
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class DigestBucket:
+    """One workspace's contribution to the session digest.
+
+    ``note`` is a name in NOTE_PATHS; ``sections`` are the index headings
+    whose list items count as active work there.
+    """
+    note: str
+    label: str
+    sections: tuple[str, ...]
+    personal_only: bool = False
+
+
+# Adding a workspace to the digest is an entry here plus a path in
+# context_paths — deliberately NOT a code change in load_context. The digest
+# named work_index and personal_index in code until 2026-07-26, so a new
+# scope could be configured, read, and still never surface: config that
+# looks wired but does nothing is worse than config that is missing.
+DIGEST_BUCKETS: tuple[DigestBucket, ...] = (
+    DigestBucket("work_index", "Active work projects", ("Active Projects",)),
+    DigestBucket(
+        "personal_index",
+        "Active personal items",
+        ("Learning", "Side Projects", "Ideas"),
+        personal_only=True,
+    ),
+    DigestBucket("school_index", "Active coursework", ("Courses",)),
+)
+
+
 @dataclass
 class SessionContext:
     """Assembled session context for Claude."""
@@ -81,6 +111,12 @@ class SessionContext:
     active_personal: list[str]  # Active personal items
     recent_git: str  # Recent git log output
     quick_reference: str  # Quick-Reference content for fast decoding
+    buckets: dict[str, list[str]] = field(default_factory=dict)  # every bucket by note name
+
+    @property
+    def active_school(self) -> list[str]:
+        """Coursework items, for symmetry with active_work/active_personal."""
+        return self.buckets.get("school_index", [])
 
 
 # ---------------------------------------------------------------------------
@@ -323,16 +359,18 @@ def load_context(vault_path: str | Path) -> SessionContext:
     # Load Quick Reference for fast decoding
     quick_reference = _read_note(vault_path, "quick_reference")
 
-    # Scan indexes for active items
-    work_index = _read_note(vault_path, "work_index")
-    personal_index = _read_note(vault_path, "personal_index")
+    # Scan indexes for active items — one pass over the bucket table, so a
+    # new workspace is a table entry rather than another branch here.
+    buckets: dict[str, list[str]] = {}
+    for bucket in DIGEST_BUCKETS:
+        index = _read_note(vault_path, bucket.note)
+        items: list[str] = []
+        for section in bucket.sections:
+            items += _extract_section_items(index, section)
+        buckets[bucket.note] = items
 
-    active_work = _extract_section_items(work_index, "Active Projects")
-    active_personal = (
-        _extract_section_items(personal_index, "Learning")
-        + _extract_section_items(personal_index, "Side Projects")
-        + _extract_section_items(personal_index, "Ideas")
-    )
+    active_work = buckets.get("work_index", [])
+    active_personal = buckets.get("personal_index", [])
 
     # Recent git activity
     recent_git = _get_recent_git_log(vault_path)
@@ -340,16 +378,14 @@ def load_context(vault_path: str | Path) -> SessionContext:
     # Build summary
     summary_lines = [f"Machine context: {machine}"]
 
-    _append_bucket(
-        summary_lines, "Active work projects", active_work, _note_path("work_index")
-    )
-
-    if machine in ("personal", "unknown"):
+    for bucket in DIGEST_BUCKETS:
+        if bucket.personal_only and machine not in ("personal", "unknown"):
+            continue
         _append_bucket(
             summary_lines,
-            "Active personal items",
-            active_personal,
-            _note_path("personal_index"),
+            bucket.label,
+            buckets.get(bucket.note, []),
+            _note_path(bucket.note),
         )
 
     if recent_git:
@@ -371,4 +407,5 @@ def load_context(vault_path: str | Path) -> SessionContext:
         active_personal=active_personal,
         recent_git=recent_git,
         quick_reference=quick_reference,
+        buckets=buckets,
     )

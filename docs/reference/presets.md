@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.7.0*
+*project preset · v1.8.0*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
