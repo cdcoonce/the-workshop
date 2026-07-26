@@ -7,6 +7,7 @@ Public interface:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -44,18 +45,55 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # Required fields for every note
 UNIVERSAL_FIELDS = ("date", "description", "tags")
 
-# Type-specific required fields (detected by tag presence)
-TYPE_FIELDS: dict[str, list[str]] = {
-    "work-note": ["status", "project"],
-    "decision": ["status"],
-    "1-1": ["participant"],
-    "incident": ["ticket", "severity"],
-    "competency": ["current_level", "target_level"],
-    "learning": ["source", "status"],
-    "side-project": ["status"],
-    "person": ["role", "team"],
-    "tasks": ["week"],
-}
+class FrontmatterSchemaError(Exception):
+    """Raised when a scaffolded frontmatter_schema.json is malformed.
+
+    Fails closed on purpose: silently ignoring a broken schema file would
+    validate every custom note type against nothing.
+    """
+
+
+def load_note_type_schemas(config_dir: Path | None = None) -> dict[str, list[str]]:
+    """Load the note-type schema: scaffolded config first, shipped defaults else.
+
+    The scaffold-rendered ``frontmatter_schema.json`` (owner-editable, written
+    once at init) replaces the shipped table wholesale when present. A missing
+    file falls back to ``frontmatter_schema_defaults.NOTE_TYPE_SCHEMAS``; a
+    malformed one raises ``FrontmatterSchemaError`` naming the problem.
+    """
+    directory = Path(__file__).resolve().parent if config_dir is None else config_dir
+    path = directory / "frontmatter_schema.json"
+    if not path.exists():
+        from frontmatter_schema_defaults import NOTE_TYPE_SCHEMAS
+
+        return dict(NOTE_TYPE_SCHEMAS)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise FrontmatterSchemaError(
+            f"unreadable or invalid frontmatter_schema.json at {path}: {exc}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise FrontmatterSchemaError(
+            f"frontmatter_schema.json at {path} must be a JSON object mapping "
+            "note type to a list of required fields"
+        )
+    schemas: dict[str, list[str]] = {}
+    for note_type, fields in raw.items():
+        if not isinstance(fields, list) or not all(
+            isinstance(f, str) for f in fields
+        ):
+            raise FrontmatterSchemaError(
+                f"note type {note_type!r} in frontmatter_schema.json must map "
+                "to a list of field-name strings"
+            )
+        schemas[str(note_type)] = list(fields)
+    return schemas
+
+
+# Type-specific required fields (detected by tag presence). Sourced from the
+# scaffolded config when present, shipped defaults otherwise.
+TYPE_FIELDS: dict[str, list[str]] = load_note_type_schemas()
 
 VALID_STATUSES = {"active", "completed", "on-hold", "paused", "idea",
                   "proposed", "decided", "implemented", "superseded"}
