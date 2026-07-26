@@ -21,11 +21,13 @@ Build order (plugin format):
 from __future__ import annotations
 
 import copy
+import errno
 import importlib.util
 import json
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 # macOS Finder conflict copies ("SKILL 2.md") are gitignored ('* 2.*') so they
@@ -43,6 +45,25 @@ _HOOK_SCRIPT_REFERENCE = re.compile(r"run-hook\.sh\s+(\S+\.py)")
 _JUNK_IGNORE = shutil.ignore_patterns(
     ".ruff_cache", "__pycache__", ".pytest_cache", ".mypy_cache", ".DS_Store"
 )
+
+
+def _rmtree_retry(path: Path, *, attempts: int = 5, delay: float = 0.05) -> None:
+    """Remove a directory tree, retrying on transient ENOTEMPTY.
+
+    macOS injects ``.DS_Store`` into a directory that is open in Finder or
+    being indexed by Spotlight, which can land mid-walk between rmtree's
+    scan and its rmdir and raise ENOTEMPTY even though nothing but rmtree
+    itself is meant to touch dist/. Retrying the whole tree removal a few
+    times clears the transient entry without masking a real failure.
+    """
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError as exc:
+            if exc.errno != errno.ENOTEMPTY or attempt == attempts - 1:
+                raise
+            time.sleep(delay)
 
 
 class BuildValidationError(Exception):
@@ -112,7 +133,7 @@ def _copy_with_override(src: Path, dest: Path, *, kind: str) -> None:
         print(
             f"WARNING: preset {kind} '{dest.name}' overrides core {kind} '{dest.name}'"
         )
-        shutil.rmtree(dest)
+        _rmtree_retry(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dest, ignore=_JUNK_IGNORE)
 
@@ -397,7 +418,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         )
 
     if dist_path.exists():
-        shutil.rmtree(dist_path)
+        _rmtree_retry(dist_path)
     dist_path.mkdir(parents=True)
 
     # 1. Copy core skills -> skills/ (root level)
@@ -597,7 +618,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
             continue
         if excluded_path.exists():
             if excluded_path.is_dir():
-                shutil.rmtree(excluded_path)
+                _rmtree_retry(excluded_path)
             else:
                 excluded_path.unlink()
         else:
