@@ -25,9 +25,12 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from vault_mcp import (  # noqa: E402
     MAX_RESULTS,
     VaultAccessError,
+    active_context,
+    note_context,
     read_note,
     resolve_note,
     search_notes,
+    visible_in_context,
 )
 
 
@@ -135,43 +138,218 @@ def test_read_note_refuses_what_resolve_refuses(vault: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_search_delegates_to_the_injected_fn() -> None:
+def test_search_delegates_to_the_injected_fn(vault: Path) -> None:
     calls: list[tuple[str, int]] = []
 
     def fake_search(query: str, k: int = 8) -> list[dict]:
         calls.append((query, k))
         return [{"note_path": "reference/alpha.md", "score": 0.9, "snippet": "x"}]
 
-    results = search_notes("alpha", 3, search_fn=fake_search)
+    results = search_notes("alpha", 3, search_fn=fake_search, vault_root=vault)
 
-    assert calls == [("alpha", 3)]
+    assert [q for q, _ in calls] == ["alpha"]
     assert results[0]["note_path"] == "reference/alpha.md"
 
 
-def test_search_clamps_k_to_the_cap() -> None:
-    """An unbounded k would let one call haul the whole index over MCP."""
-    seen: list[int] = []
+def test_search_caps_returned_results(vault: Path) -> None:
+    """An unbounded k would let one call haul the whole index over MCP.
+
+    Asserted on what the caller receives rather than on the internal fetch
+    size, so the over-fetch factor stays an implementation detail.
+    """
 
     def fake_search(query: str, k: int = 8) -> list[dict]:
-        seen.append(k)
-        return []
+        return [
+            {"note_path": f"reference/n{i}.md", "score": 0.5, "snippet": ""}
+            for i in range(k)
+        ]
 
-    search_notes("alpha", 10_000, search_fn=fake_search)
+    results = search_notes("alpha", 10_000, search_fn=fake_search, vault_root=vault)
 
-    assert seen == [MAX_RESULTS]
+    assert len(results) == MAX_RESULTS
 
 
-def test_search_rejects_nonpositive_k() -> None:
+def test_search_rejects_nonpositive_k(vault: Path) -> None:
     def fake_search(query: str, k: int = 8) -> list[dict]:  # pragma: no cover
         raise AssertionError("must not be called")
 
     with pytest.raises(ValueError):
-        search_notes("alpha", 0, search_fn=fake_search)
+        search_notes("alpha", 0, search_fn=fake_search, vault_root=vault)
 
 
-def test_search_rejects_blank_query() -> None:
+def test_search_rejects_blank_query(vault: Path) -> None:
     def fake_search(query: str, k: int = 8) -> list[dict]:  # pragma: no cover
         raise AssertionError("must not be called")
 
     with pytest.raises(ValueError):
-        search_notes("   ", 5, search_fn=fake_search)
+        search_notes("   ", 5, search_fn=fake_search, vault_root=vault)
+
+
+# ---------------------------------------------------------------------------
+# Context scoping
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def scoped_vault(tmp_path: Path) -> Path:
+    """A vault holding one note in each of the three scopes."""
+    root = tmp_path / "vault"
+    for folder in ("work", "personal", "reference"):
+        (root / folder).mkdir(parents=True)
+    (root / "work" / "roadmap.md").write_text("# Roadmap\n")
+    (root / "personal" / "diary.md").write_text("# Diary\n")
+    (root / "reference" / "shared.md").write_text("# Shared\n")
+    return root
+
+
+class TestNoteContext:
+    """Which context owns a note is decided by its top-level directory."""
+
+    def test_work_dir_is_work_scoped(self) -> None:
+        assert note_context("work/roadmap.md") == "work"
+
+    def test_personal_dir_is_personal_scoped(self) -> None:
+        assert note_context("personal/diary.md") == "personal"
+
+    def test_everything_else_is_shared(self) -> None:
+        """brain/, reference/, org/, perf/, thinking/ belong to both machines."""
+        for rel in (
+            "reference/shared.md",
+            "brain/Patterns.md",
+            "org/people/x.md",
+            "perf/review.md",
+            "thinking/idea.md",
+        ):
+            assert note_context(rel) is None, rel
+
+
+class TestVisibleInContext:
+    def test_matching_context_sees_its_own_notes(self) -> None:
+        assert visible_in_context("work/roadmap.md", "work")
+        assert visible_in_context("personal/diary.md", "personal")
+
+    def test_work_machine_never_surfaces_personal_notes(self) -> None:
+        """The exposure that matters: personal material on an employer machine."""
+        assert not visible_in_context("personal/diary.md", "work")
+
+    def test_personal_machine_also_sees_work_notes(self) -> None:
+        """Deliberately asymmetric.
+
+        The vault is one repo synced to both machines, so work/ notes are
+        already on the personal machine's disk. Hiding them from search would
+        cost reach without protecting anything.
+        """
+        assert visible_in_context("work/roadmap.md", "personal")
+
+    def test_shared_notes_are_visible_everywhere(self) -> None:
+        for ctx in ("work", "personal", "unknown"):
+            assert visible_in_context("reference/shared.md", ctx), ctx
+
+    def test_unknown_context_sees_only_shared(self) -> None:
+        """Fail closed: an unidentified machine gets the intersection, not the union.
+
+        `read_vault_context` returns "unknown" when the marker is missing, which
+        is precisely when we know least about where we are running.
+        """
+        assert not visible_in_context("work/roadmap.md", "unknown")
+        assert not visible_in_context("personal/diary.md", "unknown")
+
+
+class TestActiveContextIsServerSide:
+    """Context is read from the vault the server is rooted at, never from the caller.
+
+    A caller-supplied context would be trivially spoofable — the remote agent
+    is the untrusted party here, so it must not get a vote.
+    """
+
+    def test_reads_the_marker_from_the_vault(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        assert active_context(scoped_vault) == "work"
+
+    def test_missing_marker_is_unknown(self, scoped_vault: Path) -> None:
+        assert active_context(scoped_vault) == "unknown"
+
+
+class TestResolveNoteHonorsContext:
+    def test_refuses_a_note_from_the_other_context(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        with pytest.raises(VaultAccessError):
+            resolve_note("personal/diary.md", scoped_vault)
+
+    def test_allows_a_note_from_the_active_context(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        assert resolve_note("work/roadmap.md", scoped_vault).name == "roadmap.md"
+
+    def test_allows_shared_notes(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        assert resolve_note("reference/shared.md", scoped_vault).name == "shared.md"
+
+    def test_read_note_inherits_the_same_refusal(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        with pytest.raises(VaultAccessError):
+            read_note("personal/diary.md", scoped_vault)
+
+
+class TestSearchHonorsContext:
+    def test_filters_out_of_context_hits(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        def fake_search(query: str, k: int = 8) -> list[dict]:
+            return [
+                {"note_path": "personal/diary.md", "score": 0.99, "snippet": ""},
+                {"note_path": "work/roadmap.md", "score": 0.80, "snippet": ""},
+                {"note_path": "reference/shared.md", "score": 0.70, "snippet": ""},
+            ]
+
+        hits = search_notes("x", 5, search_fn=fake_search, vault_root=scoped_vault)
+
+        assert [h["note_path"] for h in hits] == [
+            "work/roadmap.md",
+            "reference/shared.md",
+        ]
+
+    def test_overfetches_so_filtering_does_not_starve_results(
+        self, scoped_vault: Path
+    ) -> None:
+        """Filtering AFTER a k-truncated search would silently return too few.
+
+        If the top k hits are all out-of-context, a naive implementation returns
+        an empty list even though in-context matches exist further down. The
+        server must ask the index for more than k and truncate after filtering.
+        """
+        (scoped_vault / ".vault-context").write_text("work\n")
+        asked: list[int] = []
+
+        def fake_search(query: str, k: int = 8) -> list[dict]:
+            asked.append(k)
+            noise = [
+                {"note_path": f"personal/n{i}.md", "score": 0.9, "snippet": ""}
+                for i in range(10)
+            ]
+            wanted = [
+                {"note_path": f"work/w{i}.md", "score": 0.5, "snippet": ""}
+                for i in range(3)
+            ]
+            return noise + wanted
+
+        hits = search_notes("x", 3, search_fn=fake_search, vault_root=scoped_vault)
+
+        assert asked and asked[0] > 3, "must over-fetch beyond the requested k"
+        assert len(hits) == 3
+        assert all(h["note_path"].startswith("work/") for h in hits)
+
+    def test_still_truncates_to_k_after_filtering(self, scoped_vault: Path) -> None:
+        (scoped_vault / ".vault-context").write_text("work\n")
+
+        def fake_search(query: str, k: int = 8) -> list[dict]:
+            return [
+                {"note_path": f"work/w{i}.md", "score": 0.5, "snippet": ""}
+                for i in range(20)
+            ]
+
+        assert len(search_notes("x", 4, search_fn=fake_search, vault_root=scoped_vault)) == 4
