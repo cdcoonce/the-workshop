@@ -7,13 +7,24 @@ test_command = "make test"
 permission_mode = "acceptEdits"
 
 # Integration posture (2026-06-15): promoted to F2 — slices merge-queue onto a
-# standing afk/staging branch and surface as ONE staging→main integration PR.
-# auto_promote stays OFF: staging→main is Charles's deliberate human gate. This
+# standing afk/staging branch and surface as ONE staging→dev integration PR.
+# auto_promote stays OFF: that MR is Charles's deliberate human gate. This
 # repo is load-bearing estate infra, so the consolidated MR still gets a full
 # human review. allow_f2_to_main left at default (false): never silently land on main.
 autonomy_frontier = "F2"
 integration_target = "afk/staging"
 auto_promote = false
+
+# This repo's promotion policy (root CLAUDE.md) is: branch off dev, PR into dev,
+# promote dev → main, and never merge a feature branch straight into main. afk
+# used to hardcode `main` for both the branch it forks slices from and the branch
+# it opens the integration PR against, so every nightly aimed that PR at `main`
+# against policy — #496 had to be retargeted by hand — and, because GitHub only
+# auto-closes linked issues on merges into the DEFAULT branch, the `Closes`
+# clause silently stopped closing them (#443 was closed by hand).
+#
+# afk#998 made it configurable. This is the one line that opts this repo in.
+trunk_branch = "dev"
 
 agent_prompt = """Implement the linked GitHub issue using test-driven development \
 (red-green-refactor). Keep changes minimal and scoped to the issue's acceptance \
