@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "1.5.2",
+  "version": "1.8.0",
   "core": {
     "skills": [],
     "agents": [],
@@ -36,6 +36,7 @@
     "vault-init",
     "vault-link",
     "vault-mr-review-packet",
+    "vault-pulse",
     "vault-recall",
     "vault-standup",
     "vault-sync",

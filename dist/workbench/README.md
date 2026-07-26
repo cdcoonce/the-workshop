@@ -22,6 +22,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. |
 | `/dbt-expert` | Expert guidance for working with dbt Core. |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
+| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |

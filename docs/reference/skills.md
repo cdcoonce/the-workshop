@@ -14,6 +14,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
+| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
@@ -72,6 +73,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-init` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. | vault-ops |
 | `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
 | `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
+| `/vault-pulse` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. | vault-ops |
 | `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
 | `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
 | `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
@@ -112,6 +114,12 @@ AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. Use
 *universal*
 
 Generate multiple radically different interface designs for a module using parallel sub-agents. Use when user wants to design an API, explore interface options, compare module shapes, or mentions "design it twice".
+
+### `/detector-teeth-check`
+
+*universal*
+
+Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. Use after writing tests for a security boundary, a validator, a detector, or any guard whose failure mode is silent — and before trusting a green suite as evidence.
 
 ### `/dev-cycle`
 
@@ -430,6 +438,12 @@ Run Charles's vault (The Vault) /link helper to find notes and suggest or insert
 *`vault-ops` preset*
 
 Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+
+### `/vault-pulse`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. Trigger when Charles invokes /pulse, mentions /pulse, or asks whether his work output or attention is trending up or down.
 
 ### `/vault-recall`
 
