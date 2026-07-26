@@ -7,10 +7,11 @@ data that already exists on disk. Nothing here asks the human to log time.
 
 Collected per week:
 - ATTENTION (leading indicator): gap-clustered interactive hours from Claude
-  Code transcripts (``~/.claude/projects``) and Codex rollouts
-  (``~/.codex/sessions``), union-merged so parallel sessions cannot exceed
-  wall clock, split by project domain. Headless traffic (sdk entrypoints,
-  sidechains, ``codex_exec``) is never attention.
+  Code transcripts (``~/.claude/projects``), Codex rollouts
+  (``~/.codex/sessions``) and Cortex Code (``~/Library/Application Support/
+  Cortex Code``), union-merged so parallel sessions cannot exceed wall clock,
+  split by project domain. Headless traffic (sdk entrypoints, sidechains,
+  ``codex_exec``) is never attention.
 - OUTPUT (lagging): afk slices merged / first-attempt rate / quarantine rate
   and cost across every enrolled repo's ``telemetry.jsonl``; deliberate vault
   commits and auto-sync session proxies per machine from the vault's git
