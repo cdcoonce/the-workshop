@@ -1,5 +1,6 @@
 """Tests for build_preset.py — verifies plugin-format output assembly."""
 
+import errno
 import json
 import os
 import shutil
@@ -8,7 +9,12 @@ import subprocess
 
 import pytest
 
-from scripts.build_preset import BuildValidationError, _merge_settings, build_preset
+from scripts.build_preset import (
+    BuildValidationError,
+    _merge_settings,
+    _rmtree_retry,
+    build_preset,
+)
 
 
 def test_workbench_manifest_includes_gitlab_mr_create() -> None:
@@ -1087,3 +1093,96 @@ class TestSharedHookModuleShipping:
         build_preset("python-api", repo_root=tmp_repo)
 
         assert (tmp_repo / "dist" / "python-api" / "hooks" / "scripts").is_dir()
+
+
+class TestRmtreeRetry:
+    """_rmtree_retry absorbs the transient ENOTEMPTY macOS injects mid-walk.
+
+    Spotlight indexing or an open Finder window can drop a .DS_Store into a
+    directory between rmtree's scandir and its rmdir, so the build blows up
+    on a race no build-time locking can prevent. The retry must be narrow:
+    only ENOTEMPTY, only a bounded number of times, and it must stay a
+    drop-in for shutil.rmtree in every other respect.
+    """
+
+    def _populated(self, root: Path) -> Path:
+        tree = root / "dist"
+        (tree / "nested").mkdir(parents=True)
+        (tree / "nested" / "skill.md").write_text("body\n")
+        return tree
+
+    def test_removes_a_populated_tree(self, tmp_path: Path) -> None:
+        """Baseline: it is a working rmtree when nothing races it."""
+        tree = self._populated(tmp_path)
+
+        _rmtree_retry(tree)
+
+        assert not tree.exists()
+
+    def test_retries_until_the_transient_entry_clears(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two ENOTEMPTY failures are absorbed; the third attempt lands."""
+        tree = self._populated(tmp_path)
+        real_rmtree = shutil.rmtree
+        calls: list[int] = []
+
+        def flaky(path, *args, **kwargs):
+            calls.append(1)
+            if len(calls) <= 2:
+                raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+            return real_rmtree(path, *args, **kwargs)
+
+        monkeypatch.setattr("scripts.build_preset.shutil.rmtree", flaky)
+
+        _rmtree_retry(tree, delay=0)
+
+        assert len(calls) == 3
+        assert not tree.exists()
+
+    def test_does_not_retry_a_different_errno(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A real failure (e.g. EACCES) must surface immediately, not after N sleeps.
+
+        Retrying a permissions error would turn a clear failure into a slow
+        one and hide the cause, which is the exact trap a broad retry sets.
+        """
+        tree = self._populated(tmp_path)
+        calls: list[int] = []
+
+        def denied(path, *args, **kwargs):
+            calls.append(1)
+            raise OSError(errno.EACCES, "Permission denied", str(path))
+
+        monkeypatch.setattr("scripts.build_preset.shutil.rmtree", denied)
+
+        with pytest.raises(OSError) as excinfo:
+            _rmtree_retry(tree, delay=0)
+
+        assert excinfo.value.errno == errno.EACCES
+        assert len(calls) == 1
+
+    def test_gives_up_after_the_attempt_budget(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A persistent ENOTEMPTY is a real bug and must not loop forever."""
+        tree = self._populated(tmp_path)
+        calls: list[int] = []
+
+        def always_full(path, *args, **kwargs):
+            calls.append(1)
+            raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+
+        monkeypatch.setattr("scripts.build_preset.shutil.rmtree", always_full)
+
+        with pytest.raises(OSError) as excinfo:
+            _rmtree_retry(tree, attempts=3, delay=0)
+
+        assert excinfo.value.errno == errno.ENOTEMPTY
+        assert len(calls) == 3
+
+    def test_missing_path_still_raises(self, tmp_path: Path) -> None:
+        """Drop-in equivalence: absent paths fail like shutil.rmtree, not silently."""
+        with pytest.raises(FileNotFoundError):
+            _rmtree_retry(tmp_path / "never-existed", delay=0)
