@@ -13,9 +13,10 @@ The fixed integration model for Clearway **GitLab data-pipeline repos**
 (Dagster pulls, dbt marts, ingestion pipelines). `dev` is the shared
 integration branch; `main` is the release branch. Each merge is one concern.
 
-**Scope.** GitLab pipeline repos only. This is _not_ the-workshop (GitHub-native
-`dev → main`, deploy gated on `main`; its GitLab fork is a downstream mirror —
-never push/merge it there). If the repo's own `AGENTS.md`/`CLAUDE.md` states a
+**Scope.** GitLab pipeline repos only. This does _not_ apply to repos whose
+GitLab presence is a read-only downstream mirror of an integration flow that
+lives elsewhere (e.g. the-workshop: GitHub-native `dev → main` — never
+push/merge it on GitLab). If the repo's own `AGENTS.md`/`CLAUDE.md` states a
 different policy, that wins — resolve repository policy first (see
 `using-workflow`).
 
@@ -37,7 +38,7 @@ different policy, that wins — resolve repository policy first (see
 1. **Cut a branch off `dev`.** Name `<type>/<kebab-slug>` using Conventional
    Commit types (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`,
    `ci/`, `perf/`, `style/`). One concern per branch. No vendor/agent prefixes.
-2. **MR into `dev`** — **1 approval** (designated reviewer, currently Biodun;
+2. **MR into `dev`** — **1 approval** (the repo's designated reviewer;
    any member may approve), CI green. Use `gitlab-mr-create`; never invoke
    `glab mr create` directly.
 
@@ -65,8 +66,8 @@ different policy, that wins — resolve repository policy first (see
 3. **`dev` is integration/staging.** Merging to `dev` may deploy to a **dev
    instance** of the app/tool _where one exists_ — that is expected. It must
    **never** deploy to production.
-4. **Promote `dev → main`** once dev CI is green — the owner's solo CI-push
-   promote (Charles), no MR review. Never self-merge a branch straight to `main`.
+4. **Promote `dev → main`** once dev CI is green — the repo owner's solo
+   CI-push promote, no MR review. Never self-merge a branch straight to `main`.
 5. **`main` CI passing = the production release.** Production deploys **only**
    through the `main` CI path. Never ship prod off `dev` or a feature branch.
 
