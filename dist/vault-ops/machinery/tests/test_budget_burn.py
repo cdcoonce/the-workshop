@@ -6,7 +6,7 @@ transcript record for one API call must be counted once), and the _pace helper
 (normal/over-pace pacing, non-leap February day count, and day-1 projection).
 
 Also covers sourcing project aliases, the price table, and the monthly budget
-from the scaffold-owned ``budget_burn_config.py`` (issue #429): a vault
+out of the scaffold-owned ``budget_burn_config.py`` (issue #429): a vault
 without that config falls back to the shipped ``budget_burn_defaults`` rather
 than to empty aliases or a zero budget, a config that defines an unusable
 value raises a clear error naming the config path, and a project not covered
