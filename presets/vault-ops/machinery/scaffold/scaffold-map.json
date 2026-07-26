@@ -40,6 +40,10 @@
     {
       "template": "frontmatter_schema.json.tmpl",
       "target": ".claude/scripts/frontmatter_schema.json"
+    },
+    {
+      "template": "content_routing.py.tmpl",
+      "target": ".claude/scripts/content_routing.py"
     }
   ],
   "trees": [
