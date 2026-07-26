@@ -27,6 +27,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # without fields, and a hook may legitimately act on it (verify-tests-before-stop
 # correctly runs the suite when no stop_hook_active flag is present). Asserting
 # a no-op there would encode a false expectation.
+#
+# Empty/whitespace stdin is a similar special case: it is the *well-formed*
+# condition on Codex, which delivers hooks no payload at all (COMPATIBILITY.md
+# → Codex → Hooks), and a hook may legitimately derive facts from its working
+# directory there. Those cases therefore run in an empty scratch cwd below —
+# the guarantee stays "no crash, exit 0", without demanding the hook treat
+# payload-less stdin as unusable.
 UNUSABLE_PAYLOADS = {
     "malformed-json": "not json at all",
     "empty-stdin": "",
@@ -35,6 +42,8 @@ UNUSABLE_PAYLOADS = {
     "json-string": '"hello"',
     "json-null": "null",
 }
+
+PAYLOAD_LESS_LABELS = {"empty-stdin", "whitespace-only"}
 
 
 def _hook_scripts() -> list[Path]:
@@ -67,7 +76,9 @@ def test_library_modules_are_not_scanned_as_hooks() -> None:
 
 @pytest.mark.parametrize("hook", HOOKS, ids=lambda p: p.name)
 @pytest.mark.parametrize("label", sorted(UNUSABLE_PAYLOADS))
-def test_hook_fails_open_on_unusable_input(hook: Path, label: str) -> None:
+def test_hook_fails_open_on_unusable_input(
+    hook: Path, label: str, tmp_path: Path
+) -> None:
     """Unusable stdin makes the hook a no-op that exits 0."""
     result = subprocess.run(
         [sys.executable, str(hook)],
@@ -75,7 +86,7 @@ def test_hook_fails_open_on_unusable_input(hook: Path, label: str) -> None:
         capture_output=True,
         text=True,
         timeout=30,
-        cwd=REPO_ROOT,
+        cwd=tmp_path if label in PAYLOAD_LESS_LABELS else REPO_ROOT,
     )
     assert result.returncode == 0, (
         f"{hook.name} exited {result.returncode} on {label} input; hooks must "

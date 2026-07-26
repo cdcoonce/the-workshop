@@ -10,9 +10,13 @@ no-op instead of a full suite run.
 Fails open everywhere: no test command detected, not a git repo, git/test
 binary missing, or the run itself errors out all exit 0 rather than
 blocking on ambiguity. Portable across Claude Code, Cortex Code (CoCo),
-and Codex — pure stdlib, no reliance on Claude-Code-only stdin fields
-beyond ones that degrade safely when absent (`stop_hook_active`,
-`session_id`).
+and Codex — pure stdlib. Codex delivers hooks *no stdin payload at all*
+(see COMPATIBILITY.md → Codex → Hooks), so empty stdin is the payload-less
+platform condition, not malformed input: the hook proceeds with
+self-derived facts (cwd from its own working directory, a `default`
+session). Because `stop_hook_active` never arrives payload-less, that path
+blocks once per failing tree state instead of looping. Non-empty stdin
+that isn't a JSON object still fails open.
 """
 
 import json
@@ -22,14 +26,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-try:
-    data = json.load(sys.stdin)
-except json.JSONDecodeError:
-    sys.exit(0)
-
-if not isinstance(data, dict):
-    # Fail open: a payload that isn't a JSON object isn't ours to act on.
-    sys.exit(0)
+raw_payload = sys.stdin.read()
+payload_absent = not raw_payload.strip()
+if payload_absent:
+    # Codex: hooks receive no stdin payload — every fact below self-derives.
+    data = {}
+else:
+    try:
+        data = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        sys.exit(0)
+    if not isinstance(data, dict):
+        # Fail open: a payload that isn't a JSON object isn't ours to act on.
+        sys.exit(0)
 
 # Claude Code sets this once it has already blocked a Stop to force a
 # continuation loop. Codex/CoCo may never send it — absence just means
@@ -98,6 +107,17 @@ signature = f"{head_sha(cwd) or ''}\n{signature}"
 
 session_id = data.get("session_id") or "default"
 state_file = repo_git_dir / "the-workshop-stop-gate" / f"{session_id}.txt"
+blocked_file = repo_git_dir / "the-workshop-stop-gate" / f"{session_id}.blocked"
+
+if payload_absent and blocked_file.exists():
+    # Payload-less platforms never send stop_hook_active, so this marker is
+    # the loop guard: one block per failing tree state. Any change to the
+    # tree produces a new signature and re-arms the block.
+    try:
+        if blocked_file.read_text() == signature:
+            sys.exit(0)
+    except OSError:
+        pass
 
 previous_signature = None
 if state_file.exists():
@@ -128,9 +148,17 @@ if result.returncode == 0:
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_file.write_text(signature)
+        blocked_file.unlink(missing_ok=True)
     except OSError:
         pass
     sys.exit(0)
+
+if payload_absent:
+    try:
+        blocked_file.parent.mkdir(parents=True, exist_ok=True)
+        blocked_file.write_text(signature)
+    except OSError:
+        pass
 
 tail = "\n".join((result.stdout + result.stderr).splitlines()[-40:])
 print(

@@ -28,13 +28,16 @@ def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
     )
 
 
-def run_hook_raw(raw_stdin: str) -> subprocess.CompletedProcess[str]:
+def run_hook_raw(
+    raw_stdin: str, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(HOOK_PATH)],
         input=raw_stdin,
         capture_output=True,
         text=True,
         timeout=30,
+        cwd=cwd,
     )
 
 
@@ -48,11 +51,81 @@ def _write_makefile(path: Path, exit_code: int) -> None:
     (path / "Makefile").write_text(f"test:\n\t@exit {exit_code}\n")
 
 
-@pytest.mark.parametrize("payload", ["", "   ", "not json", "{ broken"])
-def test_malformed_stdin_fails_open(payload: str) -> None:
-    result = run_hook_raw(payload)
+@pytest.mark.parametrize("payload", ["not json", "{ broken", "[1, 2]", "3"])
+def test_garbage_stdin_fails_open(payload: str, tmp_path: Path) -> None:
+    # Non-empty input that isn't a JSON object is a broken caller, not a
+    # payload-less platform — fail open even where tests would fail.
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=1)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook_raw(payload, cwd=tmp_path)
+
     assert result.returncode == 0
     assert "Traceback" not in result.stderr
+
+
+def test_empty_stdin_derives_facts_and_blocks_on_failing_tests(
+    tmp_path: Path,
+) -> None:
+    # Codex delivers hooks no stdin payload at all (COMPATIBILITY.md → Codex →
+    # Hooks). Empty stdin must not be treated as malformed: the hook derives
+    # cwd from its own working directory and still gates on the test suite.
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=1)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook_raw("", cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert "Tests are failing" in result.stderr
+
+
+def test_empty_stdin_green_tests_exit_clean_and_write_default_state(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=0)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook_raw("", cwd=tmp_path)
+
+    assert result.returncode == 0
+    state_file = tmp_path / ".git" / "the-workshop-stop-gate" / "default.txt"
+    assert state_file.exists()
+
+
+def test_payloadless_blocks_once_per_failing_signature(tmp_path: Path) -> None:
+    # Without a payload there is no stop_hook_active to break a block loop
+    # (Codex never sends it), so the payload-less path blocks once per failing
+    # tree state: an unchanged tree is not re-blocked, and any change re-arms.
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=1)
+    (tmp_path / "dirty.txt").write_text("v1")
+
+    first = run_hook_raw("", cwd=tmp_path)
+    assert first.returncode == 2
+
+    second = run_hook_raw("", cwd=tmp_path)
+    assert second.returncode == 0, "unchanged failing tree must not re-block payload-less"
+
+    (tmp_path / "dirty.txt").write_text("v2")
+    third = run_hook_raw("", cwd=tmp_path)
+    assert third.returncode == 2, "a changed tree re-arms the payload-less block"
+
+
+def test_payload_present_reblocks_on_unchanged_failing_tree(tmp_path: Path) -> None:
+    # With a real payload (Claude Code), stop_hook_active is the loop guard —
+    # the block-once marker must not soften repeated distinct Stops there.
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=1)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    first = run_hook({"cwd": str(tmp_path), "session_id": "s9"})
+    assert first.returncode == 2
+
+    second = run_hook({"cwd": str(tmp_path), "session_id": "s9"})
+    assert second.returncode == 2
 
 
 def test_no_test_command_detected_exits_clean(tmp_path: Path) -> None:

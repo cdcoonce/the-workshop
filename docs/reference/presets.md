@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.5.1*
+*project preset · v1.5.2*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -40,9 +40,9 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 ### `workbench`
 
-*project preset · v1.3.1*
+*project preset · v1.3.2*
 
-The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Plan, build, and ship with the full first-party dev workflow on Claude Code, Codex, and Cortex Code.
+The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
 **Conventions:**
 
@@ -60,7 +60,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*project preset · v1.0.3*
+*project preset · v1.0.4*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
