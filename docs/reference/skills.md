@@ -14,6 +14,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
+| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
@@ -112,6 +113,12 @@ AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. Use
 *universal*
 
 Generate multiple radically different interface designs for a module using parallel sub-agents. Use when user wants to design an API, explore interface options, compare module shapes, or mentions "design it twice".
+
+### `/detector-teeth-check`
+
+*universal*
+
+Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. Use after writing tests for a security boundary, a validator, a detector, or any guard whose failure mode is silent — and before trusting a green suite as evidence.
 
 ### `/dev-cycle`
 
