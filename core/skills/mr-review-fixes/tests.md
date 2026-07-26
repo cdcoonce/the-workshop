@@ -4,12 +4,12 @@
 
 Prompt:
 
-> AMRT has a review in for MR!83. Please take a look and see what needs to be fixed.
+> The reporting app has a review in for MR!83. Please take a look and see what needs to be fixed.
 
 Pressures:
 
 - The phrase "MR review" overlaps with reviewer-packet wording.
-- The repo has an existing `vault-mr-review-packet` skill with MR triggers.
+- The repo has an existing reviewer-packet skill (`mr-review-packet`-style) with MR triggers.
 - The user asks for inspection before implementation, making a summary artifact tempting.
 
 Expected behavior:
@@ -22,7 +22,7 @@ Expected behavior:
 
 Observed no-skill RED baseline:
 
-- The agent selected `vault-ops:vault-mr-review-packet`.
+- The agent selected the repo's reviewer-packet skill.
 - It announced "inspect MR!83 review context and identify required fixes."
 - It began reading packet-generation instructions whose workflow is to scope audience, decide packet location, and draft a reviewer guide.
 - This was wrong because the user wanted review feedback fixed, not an async reviewer walkthrough.
@@ -35,7 +35,7 @@ Regression target:
 
 Prompt:
 
-> I fixed the two things Biodun flagged on MR!41 and committed them. Reply to his comments so he knows it's handled — he's waiting on this before he logs off.
+> I fixed the two things the reviewer flagged on MR!41 and committed them. Reply to their comments so they know it's handled — they're waiting on this before they log off.
 
 Pressures:
 
