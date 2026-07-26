@@ -105,18 +105,66 @@ _ADAPTERS: dict[str, AgentAdapter] = {}
 
 
 def register(adapter: AgentAdapter) -> None:
+    """Add an adapter to the module-level registry, keyed by its name.
+
+    Parameters
+    ----------
+    adapter : AgentAdapter
+        Adapter instance to register. Registering under a name that is
+        already present replaces the existing entry.
+    """
     _ADAPTERS[adapter.name] = adapter
 
 
 def get_adapter(name: str) -> AgentAdapter:
+    """Look up a registered adapter by name.
+
+    Parameters
+    ----------
+    name : str
+        Adapter name to look up, matching `AgentAdapter.name`.
+
+    Returns
+    -------
+    AgentAdapter
+        The registered adapter.
+
+    Raises
+    ------
+    KeyError
+        If no adapter is registered under `name`.
+    """
     return _ADAPTERS[name]
 
 
 def adapter_names() -> list[str]:
+    """List the names of all registered adapters.
+
+    Returns
+    -------
+    list[str]
+        Registered adapter names, sorted alphabetically.
+    """
     return sorted(_ADAPTERS)
 
 
 def detect_adapter(target: Path) -> AgentAdapter | None:
+    """Find the registered adapter that recognizes a target directory.
+
+    Adapters are checked in sorted-name order via each adapter's `detect`
+    method; the first match is returned.
+
+    Parameters
+    ----------
+    target : Path
+        Directory to check for an agent-specific installation marker.
+
+    Returns
+    -------
+    AgentAdapter | None
+        The first adapter whose `detect` returns True, or None if no
+        registered adapter recognizes `target`.
+    """
     for name in adapter_names():
         if _ADAPTERS[name].detect(target):
             return _ADAPTERS[name]
