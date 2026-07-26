@@ -575,3 +575,103 @@ class TestSharedHookModules:
         model = build_model(docs_repo)
 
         assert "_git_baseline.py" not in {h.name for h in model.hooks}
+
+
+class TestPlatformSupport:
+    """The per-platform capability matrix generated from core/platform-support.json."""
+
+    @staticmethod
+    def _support_data() -> dict:
+        def cell(status: str) -> dict:
+            return {"status": status, "note": "n", "compat": "Section"}
+
+        return {
+            "platforms": ["Claude Code", "Codex", "Cortex Code"],
+            "components": [
+                {
+                    "name": "Skills",
+                    "cells": {
+                        "Claude Code": {
+                            "status": "partial",
+                            "note": "no plugin skills under headless `-p`",
+                            "compat": "Claude Code → Headless",
+                        },
+                        "Codex": cell("works"),
+                        "Cortex Code": cell("works"),
+                    },
+                },
+                {
+                    "name": "Hooks (plugin-level)",
+                    "cells": {
+                        "Claude Code": cell("works"),
+                        "Codex": {
+                            "status": "inert",
+                            "note": "plugin_hooks feature removed",
+                            "compat": "Codex → Hooks",
+                        },
+                        "Cortex Code": cell("inert"),
+                    },
+                },
+            ],
+        }
+
+    def test_platform_support_parsed(self, docs_repo: Path) -> None:
+        _write(
+            docs_repo / "core" / "platform-support.json",
+            json.dumps(self._support_data()),
+        )
+
+        model = build_model(docs_repo)
+
+        assert model.platform_support is not None
+        assert model.platform_support.platforms == ("Claude Code", "Codex", "Cortex Code")
+        names = [c.name for c in model.platform_support.components]
+        assert names == ["Skills", "Hooks (plugin-level)"]
+        skills = model.platform_support.components[0]
+        assert skills.cells["Claude Code"].status == "partial"
+        assert skills.cells["Codex"].status == "works"
+
+    def test_missing_data_file_tolerated(self, docs_repo: Path) -> None:
+        model = build_model(docs_repo)
+
+        assert model.platform_support is None
+        outputs = generate(docs_repo)
+        assert docs_repo / "docs" / "reference" / "platform-support.md" not in outputs
+
+    def test_readme_block_and_reference_page_generated(self, docs_repo: Path) -> None:
+        _write(
+            docs_repo / "core" / "platform-support.json",
+            json.dumps(self._support_data()),
+        )
+        _write(
+            docs_repo / "README.md",
+            "# Demo\n\n<!-- BEGIN GENERATED: platform-matrix -->\n"
+            "<!-- END GENERATED: platform-matrix -->\n",
+        )
+
+        outputs = generate(docs_repo)
+
+        page = outputs[docs_repo / "docs" / "reference" / "platform-support.md"]
+        assert "Platform Support" in page
+        assert "plugin_hooks feature removed" in page
+        readme = outputs[docs_repo / "README.md"]
+        assert "| Skills | Partial | Works | Works |" in readme
+        assert "| Hooks (plugin-level) | Works | Inert | Inert |" in readme
+        assert "platform-support.md" in readme
+
+    def test_invalid_status_fails(self, docs_repo: Path) -> None:
+        data = self._support_data()
+        data["components"][0]["cells"]["Codex"]["status"] = "sometimes"
+        _write(docs_repo / "core" / "platform-support.json", json.dumps(data))
+
+        with pytest.raises(DocsError, match="sometimes"):
+            build_model(docs_repo)
+
+    def test_cell_platform_mismatch_fails(self, docs_repo: Path) -> None:
+        data = self._support_data()
+        cells = data["components"][1]["cells"]
+        cells["Cursor"] = cells.pop("Cortex Code")
+        _write(docs_repo / "core" / "platform-support.json", json.dumps(data))
+
+        with pytest.raises(DocsError, match="Cursor"):
+            build_model(docs_repo)

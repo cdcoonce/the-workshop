@@ -148,6 +148,36 @@ class PresetDoc:
     conventions: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PlatformCellDoc:
+    """One platform's support status for a component class."""
+
+    status: str  # works | partial | inert | unverified
+    note: str
+    compat: str  # COMPATIBILITY.md section the status is grounded in
+
+
+@dataclass(frozen=True)
+class PlatformComponentDoc:
+    """A component class row in the platform-support matrix."""
+
+    name: str
+    cells: dict[str, PlatformCellDoc]  # keyed by platform name
+
+
+@dataclass(frozen=True)
+class PlatformSupportDoc:
+    """The per-platform capability matrix, from core/platform-support.json.
+
+    COMPATIBILITY.md holds the evidence; this file holds the verdicts in a
+    shape the doc generator can render, so the README's platform claims are
+    drift-gated like every other generated region.
+    """
+
+    platforms: tuple[str, ...]
+    components: tuple[PlatformComponentDoc, ...]
+
+
 @dataclass
 class DocsModel:
     """The full parsed model rendered into every doc page."""
@@ -158,6 +188,7 @@ class DocsModel:
     methodology: list[MethodologyDoc] = field(default_factory=list)
     scripts: list[ScriptDoc] = field(default_factory=list)
     presets: list[PresetDoc] = field(default_factory=list)
+    platform_support: PlatformSupportDoc | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -437,9 +468,56 @@ def _shipped_hooks(manifest: dict) -> list[str]:
     return sorted(h for h in hooks if h not in excluded)
 
 
+_PLATFORM_STATUSES = frozenset({"works", "partial", "inert", "unverified"})
+
+
+def _load_platform_support(root: Path) -> PlatformSupportDoc | None:
+    """Parse core/platform-support.json, or None when the repo doesn't ship one."""
+    path = root / "core" / "platform-support.json"
+    if not path.exists():
+        return None
+    data = _read_json(path)
+    platforms = data.get("platforms")
+    if not isinstance(platforms, list) or not all(
+        isinstance(p, str) for p in platforms
+    ):
+        raise DocsError(f"'{path}' needs a 'platforms' list of platform names")
+    components: list[PlatformComponentDoc] = []
+    for entry in data.get("components", []):
+        name = entry.get("name")
+        cells_raw = entry.get("cells")
+        if not isinstance(name, str) or not isinstance(cells_raw, dict):
+            raise DocsError(f"'{path}' component entries need 'name' and 'cells'")
+        if set(cells_raw) != set(platforms):
+            mismatched = sorted(set(cells_raw) ^ set(platforms))
+            raise DocsError(
+                f"'{path}' component '{name}' cells must cover exactly the "
+                f"declared platforms; mismatched: {', '.join(mismatched)}"
+            )
+        cells: dict[str, PlatformCellDoc] = {}
+        for platform, cell in cells_raw.items():
+            status = cell.get("status") if isinstance(cell, dict) else None
+            if status not in _PLATFORM_STATUSES:
+                raise DocsError(
+                    f"'{path}' component '{name}' platform '{platform}' has "
+                    f"invalid status {status!r}; expected one of "
+                    f"{', '.join(sorted(_PLATFORM_STATUSES))}"
+                )
+            cells[platform] = PlatformCellDoc(
+                status=status,
+                note=str(cell.get("note", "")),
+                compat=str(cell.get("compat", "")),
+            )
+        components.append(PlatformComponentDoc(name=name, cells=cells))
+    if not components:
+        raise DocsError(f"'{path}' declares no components")
+    return PlatformSupportDoc(platforms=tuple(platforms), components=tuple(components))
+
+
 def build_model(root: Path) -> DocsModel:
     """Parse core + presets into the full documentation model."""
     model = DocsModel()
+    model.platform_support = _load_platform_support(root)
     core_skills = _core_skill_names(root)
     core_agents = _core_agent_names(root)
     base_settings_path = root / "core" / "settings-base.json"
@@ -875,7 +953,9 @@ def render_hooks_page(model: DocsModel) -> str:
         "Hooks Reference",
         "Lifecycle hooks and the events they run on. The event column is derived "
         "from the settings wiring (the authoritative source); the summary is each "
-        "hook module's docstring.",
+        "hook module's docstring. Plugin-level hooks currently execute on Claude "
+        "Code only — see [platform-support.md](platform-support.md) for the "
+        "per-platform truth table.",
     )
     lines += ["## All hooks", "", render_hooks_table(model.hooks, model), ""]
     lines += ["## Details", ""]
@@ -950,6 +1030,47 @@ def render_methodology_page(model: DocsModel) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_platform_matrix(support: PlatformSupportDoc) -> str:
+    """Compact per-platform capability table for the README."""
+    header = "| Component | " + " | ".join(support.platforms) + " |"
+    divider = "| --- |" + " --- |" * len(support.platforms)
+    lines = [header, divider]
+    for component in support.components:
+        cells = " | ".join(
+            component.cells[p].status.capitalize() for p in support.platforms
+        )
+        lines.append(f"| {_escape_cell(component.name)} | {cells} |")
+    lines += [
+        "",
+        "Per-cell notes and evidence: "
+        "[platform support reference](docs/reference/platform-support.md); "
+        "how each verdict was verified: [COMPATIBILITY.md](COMPATIBILITY.md).",
+    ]
+    return "\n".join(lines)
+
+
+def render_platform_support_page(model: DocsModel) -> str:
+    support = model.platform_support
+    lines = _catalog_header(
+        "Platform Support Reference",
+        "What each component class actually does on each target platform, "
+        "rendered from `core/platform-support.json`. Every verdict is grounded "
+        "in a section of [COMPATIBILITY.md](../../COMPATIBILITY.md), which "
+        "records how it was verified — a claim without recorded evidence is "
+        "marked `unverified`, not assumed to work.",
+    )
+    lines += [render_platform_matrix(support), ""]
+    for component in support.components:
+        lines += [f"## {component.name}", ""]
+        for platform in support.platforms:
+            cell = component.cells[platform]
+            note = f" — {cell.note}" if cell.note else ""
+            compat = f" _(COMPATIBILITY.md → {cell.compat})_" if cell.compat else ""
+            lines.append(f"- **{platform}: {cell.status}**{note}{compat}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 # --------------------------------------------------------------------------- #
 # Marker block registries
 # --------------------------------------------------------------------------- #
@@ -961,7 +1082,7 @@ def readme_blocks(model: DocsModel) -> dict[str, str]:
     preset_skills = [s for s in model.skills if s.source != "core"]
     core_agents = [a for a in model.agents if a.source == "core"]
     preset_agents = [a for a in model.agents if a.source != "core"]
-    return {
+    blocks = {
         "counts": render_counts(model),
         "skills-table": render_skills_table(core_skills, model),
         "preset-skills-table": render_skills_table(preset_skills, model),
@@ -971,6 +1092,9 @@ def readme_blocks(model: DocsModel) -> dict[str, str]:
         "presets-table": render_presets_table(model.presets),
         "methodology-table": render_methodology_table(model.methodology),
     }
+    if model.platform_support is not None:
+        blocks["platform-matrix"] = render_platform_matrix(model.platform_support)
+    return blocks
 
 
 def wiring_blocks(model: DocsModel) -> dict[str, str]:
@@ -1058,6 +1182,10 @@ def generate(root: Path) -> dict[Path, str]:
         reference / "presets.md": render_presets_page(model),
         reference / "methodology.md": render_methodology_page(model),
     }
+    if model.platform_support is not None:
+        outputs[reference / "platform-support.md"] = render_platform_support_page(
+            model
+        )
 
     readme_path = root / "README.md"
     if readme_path.exists():
