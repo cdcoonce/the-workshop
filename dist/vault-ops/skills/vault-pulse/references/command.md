@@ -10,7 +10,7 @@ Run the pulse engine and present the trend. The script does all the heavy liftin
 2. Present the weekly table as-is, then add interpretation:
    - **Trend rule:** compare the latest week to the rolling 4-week median. Flag a downtrend only on **2+ consecutive weeks below** the band — single bad weeks are noise.
    - **Attention vs output:** `attn_*` columns are the leading indicator (interactive hours move first when the schedule tightens); `afk_merged` is the autonomous pipeline and does **not** measure Charles's attention — never present blended totals.
-   - **School watch:** once the master's program starts, the `school` domain appears automatically for repos/dirs matching the domain rules; the question to answer is whether `attn_build_h` + tasks/wins hold while `attn_school_h` grows.
+   - **School watch:** the ledger detects school by **displacement, not by measuring school**. Most coursework (lectures, reading, assignments) happens outside Claude/Codex and is invisible here; `attn_school_h` only catches school work done through the tools. So the signal to watch is `attn_build_h` and tasks/wins **falling**, not `attn_school_h` rising. Per [[asu-fall-2026-course-selection]], the load is gentle from Aug 20 and roughly doubles from Oct 14 — expect the real test in November, and compare against the Aug baseline rather than against October.
 3. If the user gives energy/satisfaction ratings (1–5), write them into the manual `energy`/`satisfaction` columns of the current week's row in the ledger — the engine never overwrites them.
 
 ## What the attention number is, exactly
