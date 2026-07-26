@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.5.1*
+*project preset · v1.5.2*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -60,7 +60,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*project preset · v1.0.3*
+*project preset · v1.0.4*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
