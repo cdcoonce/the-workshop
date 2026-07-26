@@ -46,6 +46,19 @@ DEFAULT_RESULTS = 8
 # (brain/, org/, perf/, reference/, thinking/) is shared by both machines.
 CONTEXT_DIRS = {"work": "work", "personal": "personal"}
 
+# Which owned scopes each machine context may see. Deliberately ASYMMETRIC.
+#
+# The vault is one repo synced to both machines, so work/ notes are already on
+# the personal machine's disk — hiding them from search costs reach and
+# protects nothing. The exposure that actually matters runs the other way:
+# personal material surfacing inside an agent session on an employer-managed
+# machine. So the work context is the restricted one, and a context absent
+# from this map (notably "unknown") sees shared notes only.
+VISIBLE_SCOPES = {
+    "personal": frozenset({"personal", "work"}),
+    "work": frozenset({"work"}),
+}
+
 # Context filtering happens after the index returns its ranked hits, so asking
 # for exactly k would under-deliver whenever the top k are out of context.
 # Over-fetch, filter, then truncate.
@@ -71,15 +84,18 @@ def note_context(rel_path: str) -> str | None:
 def visible_in_context(rel_path: str, context: str) -> bool:
     """True when a note in *rel_path* may be surfaced on a *context* machine.
 
-    Shared notes are visible everywhere. A context-owned note is visible only
-    on its own machine, so an ``unknown`` context — the value
-    ``read_vault_context`` returns when the marker is missing — sees the
-    shared intersection and nothing else. That is the fail-closed direction:
-    the moment we are least sure where we are running is the moment to reveal
-    least.
+    Shared notes are visible everywhere. Owned notes follow `VISIBLE_SCOPES`:
+    the personal machine sees both scopes, the work machine sees only work.
+
+    An ``unknown`` context — what ``read_vault_context`` returns when the
+    marker is missing — is absent from the map and so sees shared notes only.
+    That is the fail-closed direction: the moment we are least sure where we
+    are running is the moment to reveal least.
     """
     owner = note_context(rel_path)
-    return True if owner is None else owner == context
+    if owner is None:
+        return True
+    return owner in VISIBLE_SCOPES.get(context, frozenset())
 
 
 def active_context(vault_root: Path) -> str:

@@ -228,10 +228,18 @@ class TestVisibleInContext:
         assert visible_in_context("work/roadmap.md", "work")
         assert visible_in_context("personal/diary.md", "personal")
 
-    def test_other_context_notes_are_hidden(self) -> None:
-        """The whole point: a work machine must not surface personal notes."""
+    def test_work_machine_never_surfaces_personal_notes(self) -> None:
+        """The exposure that matters: personal material on an employer machine."""
         assert not visible_in_context("personal/diary.md", "work")
-        assert not visible_in_context("work/roadmap.md", "personal")
+
+    def test_personal_machine_also_sees_work_notes(self) -> None:
+        """Deliberately asymmetric.
+
+        The vault is one repo synced to both machines, so work/ notes are
+        already on the personal machine's disk. Hiding them from search would
+        cost reach without protecting anything.
+        """
+        assert visible_in_context("work/roadmap.md", "personal")
 
     def test_shared_notes_are_visible_everywhere(self) -> None:
         for ctx in ("work", "personal", "unknown"):
