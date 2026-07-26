@@ -18,6 +18,11 @@ GAP_MINUTES = 15
 # so recomputing them would silently shrink history.
 RECOMPUTE_WEEKS = 10
 
+# How far back --backfill looks. Backfill is FILL-ONLY: it adds rows for
+# weeks the ledger doesn't have yet and never rewrites an existing row, so a
+# larger window is safe but weeks with no surviving evidence stay absent.
+BACKFILL_WEEKS = 60
+
 # First substring match wins; unmatched projects land in "other".
 # Domains: vault (second-brain ops), build (personal engineering),
 # home (household software), school (the master's program), other.

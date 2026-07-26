@@ -74,6 +74,15 @@ class TestWeekKey:
         # 2026-07-20 03:00 UTC = 2026-07-19 21:00 in Denver (Sunday) → W29.
         assert _week_key("2026-07-20T03:00:00.000Z", TZ) == "2026-W29"
 
+    def test_date_only_is_read_as_local(self) -> None:
+        # A bare date has no zone. Reading it as UTC midnight would shift it
+        # to the previous local day and the previous ISO week; 2026-07-20 is
+        # a Monday and must stay in W30 (matches collect_wins' reading).
+        assert _week_key("2026-07-20", TZ) == "2026-W30"
+
+    def test_naive_timestamp_is_read_as_local(self) -> None:
+        assert _week_key("2026-07-20T01:30:00", TZ) == "2026-W30"
+
     def test_offset_timestamp(self) -> None:
         assert _week_key("2026-07-20T10:00:00+00:00", TZ) == "2026-W30"
 
@@ -187,6 +196,36 @@ class TestNormalizeProject:
     def test_empty(self) -> None:
         assert _normalize_project("") == "_unknown"
         assert _normalize_project(None) == "_unknown"
+
+
+class TestTouchedRepo:
+    """Attribution follows the repo a session TOUCHES, not the dir it was
+    launched from: nearly every session is launched from the vault and works
+    cross-repo, so cwd alone books all of it to 'vault'."""
+
+    PATTERN = pulse._repo_pattern(Path("/Users/x/Developer/GitHub"))
+
+    def test_dominant_repo_in_line(self) -> None:
+        line = (
+            'edit /Users/x/Developer/GitHub/the-workshop/a.py and '
+            '/Users/x/Developer/GitHub/the-workshop/b.py vs '
+            '/Users/x/Developer/GitHub/the-vault/c.md'
+        )
+        assert pulse._touched_repo(line, self.PATTERN) == "the-workshop"
+
+    def test_worktree_sibling_dir_maps_to_repo(self) -> None:
+        line = "/Users/x/Developer/GitHub/afk-agent-system-worktrees/aa6/x.py"
+        assert pulse._touched_repo(line, self.PATTERN) == "afk-agent-system"
+
+    def test_tie_is_no_signal(self) -> None:
+        line = (
+            "/Users/x/Developer/GitHub/alpha/a "
+            "/Users/x/Developer/GitHub/beta/b"
+        )
+        assert pulse._touched_repo(line, self.PATTERN) is None
+
+    def test_no_mention(self) -> None:
+        assert pulse._touched_repo("nothing here", self.PATTERN) is None
 
 
 class TestDomain:
@@ -315,6 +354,184 @@ class TestCollectClaude:
         assert got["events"] == []
         assert got["sessions_by_week"] == {}
 
+    def test_pre_entrypoint_records_of_sdk_session_are_not_attention(
+        self, tmp_path: Path
+    ) -> None:
+        """The real transcript shape: two timestamped queue-operation records
+        before the entrypoint appears. Deciding interactivity per-record leaks
+        the opening of every headless run into attention."""
+        proj = tmp_path / "-Users-x-Developer-GitHub-graphmark"
+        proj.mkdir(parents=True)
+        records = [
+            {
+                "type": "queue-operation",
+                "timestamp": "2026-07-22T02:00:00.000Z",
+                "sessionId": "h1",
+                "cwd": None,
+            },
+            {
+                "type": "queue-operation",
+                "timestamp": "2026-07-22T02:30:00.000Z",
+                "sessionId": "h1",
+                "cwd": None,
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-07-22T02:31:00.000Z",
+                "sessionId": "h1",
+                "cwd": "/Users/x/Developer/GitHub/graphmark",
+                "entrypoint": "sdk-cli",
+                "isSidechain": False,
+                "requestId": "req_h",
+                "message": {
+                    "model": "claude-sonnet-5",
+                    "usage": {"input_tokens": 100, "output_tokens": 10},
+                },
+            },
+        ]
+        (proj / "h1.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+        got = collect_claude(tmp_path, TZ)
+        assert got["events"] == []
+        assert got["sessions_by_week"] == {}
+        # Headless work still costs money, so tokens must survive: 110.
+        assert got["tokens_by_week"] == {"2026-W30": 110}
+
+    def test_session_without_entrypoint_is_untrusted(self, tmp_path: Path) -> None:
+        proj = tmp_path / "-Users-x-Developer-GitHub-graphmark"
+        proj.mkdir(parents=True)
+        records = [
+            {
+                "type": "user",
+                "timestamp": "2026-07-22T18:00:00.000Z",
+                "sessionId": "u1",
+                "cwd": "/Users/x/Developer/GitHub/graphmark",
+                "isSidechain": False,
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-07-22T18:05:00.000Z",
+                "sessionId": "u1",
+                "cwd": "/Users/x/Developer/GitHub/graphmark",
+                "isSidechain": False,
+            },
+        ]
+        (proj / "u1.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+        got = collect_claude(tmp_path, TZ)
+        # Neither hours nor a session count — the two must never disagree.
+        assert got["events"] == []
+        assert got["sessions_by_week"] == {}
+
+    def test_duplicate_transcript_across_project_dirs_counts_once(
+        self, tmp_path: Path
+    ) -> None:
+        """The dir-rename reconciliation left 141 byte-identical transcripts
+        in two project dirs; a path-keyed session count double-counts them."""
+        records = [
+            {
+                "type": "user",
+                "timestamp": "2026-07-22T18:00:00.000Z",
+                "sessionId": "d1",
+                "cwd": "/Users/x/Developer/GitHub/the-vault",
+                "entrypoint": "claude-desktop",
+                "isSidechain": False,
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-07-22T18:05:00.000Z",
+                "sessionId": "d1",
+                "cwd": "/Users/x/Developer/GitHub/the-vault",
+                "entrypoint": "claude-desktop",
+                "isSidechain": False,
+                "requestId": "req_d",
+                "message": {
+                    "model": "claude-opus-5",
+                    "usage": {"input_tokens": 1000, "output_tokens": 0},
+                },
+            },
+        ]
+        body = "\n".join(json.dumps(r) for r in records) + "\n"
+        for dirname in ("-Users-x-my-brain", "-Users-x-the-vault"):
+            d = tmp_path / dirname
+            d.mkdir(parents=True)
+            (d / "d1.jsonl").write_text(body)
+        got = collect_claude(tmp_path, TZ)
+        assert got["sessions_by_week"] == {"2026-W30": 1}
+        # requestId dedup already protects tokens: 1000, not 2000.
+        assert got["tokens_by_week"] == {"2026-W30": 1000}
+
+    def test_attribution_follows_touched_repo(self, tmp_path: Path) -> None:
+        """A vault-launched session working on graphmark is graphmark work."""
+        proj = tmp_path / "-Users-x-Developer-GitHub-the-vault"
+        proj.mkdir(parents=True)
+        base = {
+            "sessionId": "t1",
+            "cwd": "/Users/x/Developer/GitHub/the-vault",
+            "entrypoint": "claude-desktop",
+            "isSidechain": False,
+        }
+        records = [
+            # Before any repo is touched: falls back to the launch dir.
+            {**base, "type": "user", "timestamp": "2026-07-22T18:00:00.000Z"},
+            {
+                **base,
+                "type": "assistant",
+                "timestamp": "2026-07-22T18:05:00.000Z",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Edit",
+                            "input": {
+                                "file_path": (
+                                    "/Users/x/Developer/GitHub/graphmark/a.py"
+                                )
+                            },
+                        }
+                    ]
+                },
+            },
+            # Sticky: no mention here, but the session is still on graphmark.
+            {**base, "type": "user", "timestamp": "2026-07-22T18:10:00.000Z"},
+        ]
+        (proj / "t1.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n"
+        )
+        got = collect_claude(
+            tmp_path, TZ, repos_root=Path("/Users/x/Developer/GitHub")
+        )
+        assert [e[1] for e in got["events"]] == [
+            "the-vault",
+            "graphmark",
+            "graphmark",
+        ]
+
+    def test_request_id_dedup_spans_files(self, tmp_path: Path) -> None:
+        """A resumed session rewrites earlier records into a new transcript;
+        `seen` is scoped across files so the API call counts once."""
+        proj = tmp_path / "-Users-x-Developer-GitHub-graphmark"
+        proj.mkdir(parents=True)
+        rec = {
+            "type": "assistant",
+            "timestamp": "2026-07-22T18:00:00.000Z",
+            "cwd": "/Users/x/Developer/GitHub/graphmark",
+            "entrypoint": "claude-desktop",
+            "isSidechain": False,
+            "requestId": "req_shared",
+            "message": {
+                "model": "claude-opus-5",
+                "usage": {"input_tokens": 1000, "output_tokens": 500},
+            },
+        }
+        (proj / "a.jsonl").write_text(json.dumps({**rec, "sessionId": "a"}) + "\n")
+        (proj / "b.jsonl").write_text(json.dumps({**rec, "sessionId": "b"}) + "\n")
+        got = collect_claude(tmp_path, TZ)
+        assert got["tokens_by_week"] == {"2026-W30": 1500}
+        assert got["spend_by_week"]["2026-W30"] == pytest.approx(0.0175)
+
 
 # ---------------------------------------------------------------------------
 # collect_codex — rollouts → interactive events + last-total tokens
@@ -398,6 +615,83 @@ class TestCollectCodex:
         )
         got = collect_codex(tmp_path, TZ)
         assert {e[1] for e in got["events"]} == {"_desktop-temp"}
+
+    def test_subagent_source_dict_is_automation(self, tmp_path: Path) -> None:
+        """Real rollouts carry source as a dict for subagent runs; a string
+        compare against 'exec' lets that automation through."""
+        path = tmp_path / "2026/07/22/rollout-sub.jsonl"
+        path.parent.mkdir(parents=True)
+        records = [
+            {
+                "timestamp": "2026-07-22T18:00:00.000Z",
+                "type": "session_meta",
+                "payload": {
+                    "session_id": "g",
+                    "cwd": "/Users/x/Developer/GitHub/graphmark",
+                    "originator": "Codex Desktop",
+                    "source": {"subagent": {"other": "guardian"}},
+                },
+            },
+            {
+                "timestamp": "2026-07-22T18:10:00.000Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {"total_token_usage": {"total_tokens": 900}},
+                },
+            },
+        ]
+        path.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+        got = collect_codex(tmp_path, TZ)
+        assert got["events"] == []
+        assert got["sessions_by_week"] == {}
+        assert got["tokens_by_week"] == {}
+
+    def test_week_spanning_session_books_token_deltas_per_week(
+        self, tmp_path: Path
+    ) -> None:
+        """A Sunday→Monday session must not bill Sunday's tokens to Monday:
+        attention splits across both weeks, so tokens have to as well."""
+        path = tmp_path / "2026/07/20/rollout-span.jsonl"
+        path.parent.mkdir(parents=True)
+        records = [
+            # Sun 2026-07-19 22:00 local (W29) = 2026-07-20 04:00Z
+            {
+                "timestamp": "2026-07-20T04:00:00.000Z",
+                "type": "session_meta",
+                "payload": {
+                    "session_id": "s",
+                    "cwd": "/Users/x/Developer/GitHub/graphmark",
+                    "originator": "Codex Desktop",
+                    "source": "vscode",
+                },
+            },
+            {
+                "timestamp": "2026-07-20T04:30:00.000Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {"total_token_usage": {"total_tokens": 4_500_000}},
+                },
+            },
+            # Mon 2026-07-20 00:30 local (W30) = 2026-07-20 06:30Z
+            {
+                "timestamp": "2026-07-20T06:30:00.000Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "token_count",
+                    "info": {"total_token_usage": {"total_tokens": 5_000_000}},
+                },
+            },
+        ]
+        path.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+        got = collect_codex(tmp_path, TZ)
+        assert got["tokens_by_week"] == {
+            "2026-W29": 4_500_000,
+            "2026-W30": 500_000,
+        }
+        # The session itself counts in both weeks it touched.
+        assert got["sessions_by_week"] == {"2026-W29": 1, "2026-W30": 1}
 
     def test_empty_root(self, tmp_path: Path) -> None:
         got = collect_codex(tmp_path, TZ)
@@ -530,6 +824,17 @@ class TestCollectTasks:
         # 2026-07-20 is the Monday of W30.
         assert got == {"2026-W30": 2}
 
+    def test_flat_archive_layout(self, tmp_path: Path) -> None:
+        """The real vault has snapshots BOTH at archive/<year>/tasks/ and
+        directly at archive/tasks/; a single-layout glob silently drops one."""
+        nested = tmp_path / "work" / "archive" / "2026" / "tasks"
+        nested.mkdir(parents=True)
+        (nested / "2026-W27-tasks.md").write_text("- [x] a\n")
+        flat = tmp_path / "work" / "archive" / "tasks"
+        flat.mkdir(parents=True)
+        (flat / "2026-W28-tasks.md").write_text("- [x] a\n- [x] b\n")
+        assert collect_tasks(tmp_path) == {"2026-W27": 1, "2026-W28": 2}
+
     def test_missing_dirs(self, tmp_path: Path) -> None:
         assert collect_tasks(tmp_path) == {}
 
@@ -583,6 +888,47 @@ class TestUpsertLedger:
         got = list(csv.DictReader(ledger.open()))
         assert got[0]["week"] == "2026-W30"
         assert got[0]["machine"] == "personal"
+
+    def test_unknown_columns_survive_on_frozen_rows(self, tmp_path: Path) -> None:
+        """A newer engine's column must survive an older engine's run —
+        frozen weeks can never be recomputed, so a drop is unrecoverable."""
+        ledger = tmp_path / "pulse-personal.csv"
+        fields = pulse.LEDGER_COLUMNS + ["attn_meetings_h"]
+        with ledger.open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=fields)
+            w.writeheader()
+            frozen = self._row("2026-W20")
+            frozen["attn_meetings_h"] = "3.50"
+            w.writerow(frozen)
+        upsert_ledger(ledger, {"2026-W30": {"wins": "1"}}, machine="personal")
+        rows = {r["week"]: r for r in csv.DictReader(ledger.open())}
+        assert rows["2026-W20"]["attn_meetings_h"] == "3.50"
+        assert "attn_meetings_h" in rows["2026-W30"]
+
+    def test_duplicate_week_raises(self, tmp_path: Path) -> None:
+        """Last-wins would silently discard the first row's manual values."""
+        ledger = tmp_path / "pulse-personal.csv"
+        with ledger.open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=pulse.LEDGER_COLUMNS)
+            w.writeheader()
+            w.writerow(self._row("2026-W28", energy="4"))
+            w.writerow(self._row("2026-W28"))
+        with pytest.raises(ValueError, match="2026-W28"):
+            upsert_ledger(ledger, {"2026-W30": {"wins": "1"}}, machine="personal")
+
+
+class TestExistingWeeks:
+    def test_reads_week_keys(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "pulse-personal.csv"
+        upsert_ledger(
+            ledger,
+            {"2026-W29": {"wins": "1"}, "2026-W30": {"wins": "2"}},
+            machine="personal",
+        )
+        assert pulse.existing_weeks(ledger) == {"2026-W29", "2026-W30"}
+
+    def test_missing_file(self, tmp_path: Path) -> None:
+        assert pulse.existing_weeks(tmp_path / "nope.csv") == set()
 
 
 # ---------------------------------------------------------------------------
@@ -677,6 +1023,88 @@ class TestScan:
 # CLI smoke — the engine runs headless as a script
 # ---------------------------------------------------------------------------
 class TestCli:
+    def _run(self, tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS_DIR / "pulse.py"),
+                "--vault-root", str(tmp_path),
+                "--projects-root", str(tmp_path / "none"),
+                "--codex-root", str(tmp_path / "none2"),
+                "--repos-root", str(tmp_path / "none3"),
+                *extra,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    def test_backfill_never_rewrites_an_existing_row(self, tmp_path: Path) -> None:
+        """The failure this guards: transcripts get pruned, so recomputing an
+        old week yields zeros — a backfill that overwrites destroys the very
+        baseline the ledger exists to hold."""
+        (tmp_path / ".vault-context").write_text("personal\n")
+        ledger = tmp_path / "perf" / "metrics" / "pulse-personal.csv"
+        ledger.parent.mkdir(parents=True)
+        old_week = pulse._last_week_keys(
+            datetime.now(TZ).date(), pulse.RECOMPUTE_WEEKS + 5
+        )[0]
+        with ledger.open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=pulse.LEDGER_COLUMNS)
+            w.writeheader()
+            row = {c: "" for c in pulse.LEDGER_COLUMNS}
+            row.update(
+                {
+                    "week": old_week,
+                    "machine": "personal",
+                    "attn_total_h": "21.50",
+                    "claude_sessions": "14",
+                }
+            )
+            w.writerow(row)
+        out = self._run(tmp_path, "--backfill", "--no-vault-git")
+        assert out.returncode == 0, out.stderr
+        rows = {r["week"]: r for r in csv.DictReader(ledger.open())}
+        assert rows[old_week]["attn_total_h"] == "21.50"
+        assert rows[old_week]["claude_sessions"] == "14"
+        assert "backfill skipped" in out.stderr
+
+    def test_git_collector_failure_preserves_prior_columns(
+        self, tmp_path: Path
+    ) -> None:
+        """A failed git read must not read as 'a quiet week' — zeros there
+        would look exactly like the output crash the ledger is watching for."""
+        (tmp_path / ".vault-context").write_text("personal\n")
+        ledger = tmp_path / "perf" / "metrics" / "pulse-personal.csv"
+        ledger.parent.mkdir(parents=True)
+        week = pulse._last_week_keys(datetime.now(TZ).date(), 1)[0]
+        with ledger.open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=pulse.LEDGER_COLUMNS)
+            w.writeheader()
+            row = {c: "" for c in pulse.LEDGER_COLUMNS}
+            row.update(
+                {
+                    "week": week,
+                    "machine": "personal",
+                    "vault_sessions_personal": "7",
+                    "deliberate_commits_personal": "5",
+                }
+            )
+            w.writerow(row)
+        # tmp_path is not a git repo, so the collector fails.
+        out = self._run(tmp_path, "--weeks", "1")
+        assert out.returncode == 0, out.stderr
+        rows = {r["week"]: r for r in csv.DictReader(ledger.open())}
+        assert rows[week]["vault_sessions_personal"] == "7"
+        assert rows[week]["deliberate_commits_personal"] == "5"
+        assert "git collector failed" in out.stderr
+
+    def test_weeks_zero_is_rejected(self, tmp_path: Path) -> None:
+        (tmp_path / ".vault-context").write_text("personal\n")
+        out = self._run(tmp_path, "--weeks", "0", "--no-vault-git")
+        assert out.returncode == 2
+        assert "must be >= 1" in out.stderr
+
     def test_json_mode_runs(self, tmp_path: Path) -> None:
         (tmp_path / ".vault-context").write_text("personal\n")
         out = subprocess.run(

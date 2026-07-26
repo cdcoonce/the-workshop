@@ -26,7 +26,7 @@ only a trailing window — older rows are frozen because their sources
 
 Usage:
     python3 pulse.py                # recompute trailing weeks, upsert, report
-    python3 pulse.py --backfill     # extend the window to all available data
+    python3 pulse.py --backfill     # add missing older rows, rewrite nothing
     python3 pulse.py --json
 """
 
@@ -37,6 +37,7 @@ import csv
 import json
 import re
 import subprocess
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -47,6 +48,7 @@ from pulse_defaults import (
     AUTOMATION_SUBJECT_PATTERNS as DEFAULT_AUTOMATION_SUBJECT_PATTERNS,
 )
 from pulse_defaults import AUTOSYNC_PREFIX as DEFAULT_AUTOSYNC_PREFIX
+from pulse_defaults import BACKFILL_WEEKS as DEFAULT_BACKFILL_WEEKS
 from pulse_defaults import DOMAIN_RULES as DEFAULT_DOMAIN_RULES
 from pulse_defaults import GAP_MINUTES as DEFAULT_GAP_MINUTES
 from pulse_defaults import RECOMPUTE_WEEKS as DEFAULT_RECOMPUTE_WEEKS
@@ -64,6 +66,7 @@ class PulseConfigError(RuntimeError):
 _CONFIG_TYPES: dict[str, type | tuple[type, ...]] = {
     "GAP_MINUTES": (int, float),
     "RECOMPUTE_WEEKS": int,
+    "BACKFILL_WEEKS": int,
     "DOMAIN_RULES": tuple,
     "AUTHOR_MACHINE_RULES": tuple,
     "AUTOSYNC_PREFIX": str,
@@ -99,6 +102,7 @@ def _from_config(name: str, default: object) -> object:
 
 GAP_MINUTES: float = _from_config("GAP_MINUTES", DEFAULT_GAP_MINUTES)
 RECOMPUTE_WEEKS: int = _from_config("RECOMPUTE_WEEKS", DEFAULT_RECOMPUTE_WEEKS)
+BACKFILL_WEEKS: int = _from_config("BACKFILL_WEEKS", DEFAULT_BACKFILL_WEEKS)
 DOMAIN_RULES: tuple = _from_config("DOMAIN_RULES", DEFAULT_DOMAIN_RULES)
 AUTHOR_MACHINE_RULES: tuple = _from_config(
     "AUTHOR_MACHINE_RULES", DEFAULT_AUTHOR_MACHINE_RULES
@@ -151,7 +155,12 @@ _TEMP_PREFIXES = ("/private/var/folders", "/var/folders", "/private/tmp", "/tmp"
 # Time helpers
 # ---------------------------------------------------------------------------
 def _parse_ts(ts: object) -> datetime | None:
-    """ISO-8601 string (Z or offset) → aware UTC datetime, else None."""
+    """ISO-8601 string WITH a zone (Z or offset) → aware UTC datetime.
+
+    Naive and date-only strings return None: they carry no zone, so treating
+    them as UTC would shift a local-midnight record into the previous day.
+    ``_week_key`` handles that shape itself, taking it at face value as local.
+    """
     if not isinstance(ts, str) or len(ts) < 10:
         return None
     try:
@@ -159,7 +168,7 @@ def _parse_ts(ts: object) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        return None
     return dt.astimezone(timezone.utc)
 
 
@@ -171,13 +180,22 @@ def _week_of_date(d: date) -> str:
 def _week_key(ts: object, tz: ZoneInfo) -> str | None:
     """LOCAL-timezone ISO week ('2026-W30') for an ISO timestamp, else None.
 
-    UTC records near local midnight must land in the local week — a Sunday
-    21:00 in Denver is Monday 03:00 UTC, and it belongs to Sunday's week.
+    Zoned records convert to local first — a Sunday 21:00 in Denver is Monday
+    03:00 UTC and belongs to Sunday's week. A naive or date-only value has no
+    zone to convert, so it is taken at face value as local (the same reading
+    ``collect_wins`` gives a bare Brag Doc date); anything else returns None.
     """
     dt = _parse_ts(ts)
-    if dt is None:
-        return None
-    return _week_of_date(dt.astimezone(tz).date())
+    if dt is not None:
+        return _week_of_date(dt.astimezone(tz).date())
+    if isinstance(ts, str) and len(ts) >= 10:
+        try:
+            naive = datetime.fromisoformat(ts)
+        except ValueError:
+            return None
+        if naive.tzinfo is None:
+            return _week_of_date(naive.date())
+    return None
 
 
 def _last_week_keys(today_local: date, n: int) -> list[str]:
@@ -244,6 +262,51 @@ def _normalize_project(cwd: object) -> str:
     return parts[-1] if parts else "_unknown"
 
 
+def _repo_pattern(repos_root: Path) -> re.Pattern:
+    """Regex matching repo directories under the repos root."""
+    return re.compile(re.escape(str(repos_root)) + r"/([A-Za-z0-9_.-]+)")
+
+
+def _tool_use_payload(rec: dict) -> str:
+    """The record's tool-call inputs, serialized — its paths, not its metadata.
+
+    Scoped to tool_use blocks on purpose: every record carries the launch
+    ``cwd``, so scanning the whole line would add one vote for the launch
+    repo every time and drown the repo actually being edited.
+    """
+    blocks = (rec.get("message") or {}).get("content")
+    if not isinstance(blocks, list):
+        return ""
+    return "".join(
+        json.dumps(b.get("input"))
+        for b in blocks
+        if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("input")
+    )
+
+
+def _touched_repo(text: str, pattern: re.Pattern) -> str | None:
+    """The repo this text is clearly about, else None.
+
+    Sessions are launched from the vault and work cross-repo, so the launch
+    cwd books everything to one project. The paths in a record's tool calls
+    say what the session is actually doing. Text naming several repos equally
+    (a listing, a survey) carries no signal and returns None, so the caller
+    keeps whatever repo the session was already on.
+    """
+    hits = pattern.findall(text)
+    if not hits:
+        return None
+    counts: dict[str, int] = {}
+    for hit in hits:
+        # A repo's worktree sibling dir (foo-worktrees/) is still foo's work.
+        repo = hit[: -len("-worktrees")] if hit.endswith("-worktrees") else hit
+        counts[repo] = counts.get(repo, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return None
+    return ranked[0][0]
+
+
 def _domain(project: str, rules: tuple = DOMAIN_RULES) -> str:
     for substring, domain in rules:
         if substring in project:
@@ -254,18 +317,32 @@ def _domain(project: str, rules: tuple = DOMAIN_RULES) -> str:
 # ---------------------------------------------------------------------------
 # Collector: Claude Code transcripts
 # ---------------------------------------------------------------------------
-def collect_claude(projects_root: Path, tz: ZoneInfo) -> dict:
+def collect_claude(
+    projects_root: Path, tz: ZoneInfo, repos_root: Path | None = None
+) -> dict:
     """Interactive attention events + deduped token/spend sums.
 
-    Attention: records in sessions whose entrypoint is not sdk-* and that are
-    not sidechains. Tokens/spend: EVERY session (headless work costs real
-    money), deduped by requestId exactly like budget_burn.
+    Attention is decided PER SESSION, not per record: a transcript's records
+    are buffered and only admitted once the whole file has been read and the
+    session's entrypoint is known. Real transcripts open with two timestamped
+    ``queue-operation`` records before the entrypoint appears, so a per-record
+    decision would leak the opening moments of every headless run into
+    attention (measured: +35% on a real week). A session that never declares
+    an entrypoint is untrusted and contributes neither hours nor a count.
+
+    Project attribution follows the repo whose paths the session touches,
+    falling back to the launch cwd until one appears (see ``_touched_repo``).
+
+    Tokens/spend: EVERY session (headless work costs real money), deduped by
+    requestId across all files exactly like budget_burn — a resumed session
+    re-writes its earlier records into a new transcript.
     """
     events: list[tuple[datetime, str]] = []
     session_weeks: dict[str, set[str]] = {}
     tokens_by_week: dict[str, int] = {}
     spend_by_week: dict[str, float] = {}
     seen: set[str] = set()
+    pattern = _repo_pattern(repos_root) if repos_root else None
 
     for transcript in sorted(projects_root.glob("*/*.jsonl")):
         try:
@@ -274,6 +351,8 @@ def collect_claude(projects_root: Path, tz: ZoneInfo) -> dict:
             continue
         entrypoint: str | None = None
         interactive_weeks: set[str] = set()
+        pending: list[tuple[datetime, str]] = []
+        current_repo: str | None = None
         for line in lines:
             line = line.strip()
             if not line:
@@ -282,6 +361,10 @@ def collect_claude(projects_root: Path, tz: ZoneInfo) -> dict:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if pattern is not None:
+                touched = _touched_repo(_tool_use_payload(rec), pattern)
+                if touched is not None:
+                    current_repo = touched
             if entrypoint is None and isinstance(rec.get("entrypoint"), str):
                 entrypoint = rec["entrypoint"]
             dt = _parse_ts(rec.get("timestamp"))
@@ -311,27 +394,24 @@ def collect_claude(projects_root: Path, tz: ZoneInfo) -> dict:
                         week, 0.0
                     ) + budget_burn._record_cost(usage, tier)
 
-            # Attention events: interactive, non-sidechain, timestamped.
-            session_interactive = entrypoint is None or not entrypoint.startswith(
-                "sdk"
-            )
-            if (
-                dt is not None
-                and week is not None
-                and session_interactive
-                and rec.get("isSidechain") is not True
-            ):
-                project = _normalize_project(rec.get("cwd"))
-                events.append((dt, project))
+            # Candidate attention events: non-sidechain and timestamped. The
+            # session-level entrypoint verdict is applied after the loop.
+            if dt is not None and week is not None and rec.get("isSidechain") is not True:
+                project = current_repo or _normalize_project(rec.get("cwd"))
+                pending.append((dt, project))
                 interactive_weeks.add(week)
-        # A session with no non-null entrypoint at all is untrusted — only
-        # count it as a session if it produced interactive events AND declared
-        # itself interactive.
-        if interactive_weeks and (
-            entrypoint is not None and not entrypoint.startswith("sdk")
-        ):
-            for week in interactive_weeks:
-                session_weeks.setdefault(week, set()).add(str(transcript))
+
+        # Session verdict: an undeclared entrypoint is untrusted (it is what
+        # the opening queue-operation records look like), so it earns neither
+        # hours nor a count.
+        if entrypoint is None or entrypoint.startswith("sdk"):
+            continue
+        events.extend(pending)
+        for week in interactive_weeks:
+            # Key by basename (the session UUID): the dir-rename reconciliation
+            # left 141 byte-identical transcripts in two project dirs, and a
+            # path key would count each of those sessions twice.
+            session_weeks.setdefault(week, set()).add(transcript.name)
 
     return {
         "events": events,
@@ -345,12 +425,16 @@ def collect_claude(projects_root: Path, tz: ZoneInfo) -> dict:
 # Collector: Codex rollouts
 # ---------------------------------------------------------------------------
 def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
-    """Interactive Codex sessions → attention events + last-total tokens.
+    """Interactive Codex sessions → attention events + per-week token deltas.
 
-    ``codex_exec`` / ``source=exec`` sessions are automation (afk slices,
-    scripted probes) and are excluded entirely. Tokens are the session's LAST
-    cumulative ``total_token_usage`` — rollouts repeat the running total per
-    turn, so summing would overcount.
+    Automation is excluded entirely: ``codex_exec`` / ``source=exec`` (afk
+    slices, scripted probes) and subagent sessions, whose ``source`` is a dict
+    like ``{"subagent": {...}}`` rather than a string.
+
+    ``total_token_usage`` is cumulative per turn, so tokens are booked as
+    per-week DELTAS of that counter — summing would overcount, and taking only
+    the final total would bill a Sunday-to-Monday session entirely to Monday
+    while its attention hours split across both weeks.
     """
     events: list[tuple[datetime, str]] = []
     session_weeks: dict[str, set[str]] = {}
@@ -364,7 +448,9 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
         project: str | None = None
         interactive = True
         session_events: list[datetime] = []
-        last_total: int | None = None
+        # Cumulative counter readings in encounter order, tagged with the week
+        # they were observed in — differenced after the loop.
+        readings: list[tuple[str, int]] = []
         last_week: str | None = None
         for line in lines:
             line = line.strip()
@@ -376,9 +462,11 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
                 continue
             payload = rec.get("payload") or {}
             if rec.get("type") == "session_meta":
+                source = payload.get("source")
                 if (
                     payload.get("originator") == "codex_exec"
-                    or payload.get("source") == "exec"
+                    or source == "exec"
+                    or (isinstance(source, dict) and "subagent" in source)
                 ):
                     interactive = False
                     break
@@ -392,8 +480,8 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
             if payload.get("type") == "token_count":
                 info = payload.get("info") or {}
                 total = (info.get("total_token_usage") or {}).get("total_tokens")
-                if isinstance(total, int):
-                    last_total = total
+                if isinstance(total, int) and last_week is not None:
+                    readings.append((last_week, total))
         if not interactive or not session_events:
             continue
         proj = project or "_unknown"
@@ -402,9 +490,13 @@ def collect_codex(codex_root: Path, tz: ZoneInfo) -> dict:
             events.append((dt, proj))
             weeks.add(_week_of_date(dt.astimezone(tz).date()))
         for week in weeks:
-            session_weeks.setdefault(week, set()).add(str(rollout))
-        if last_total is not None and last_week is not None:
-            tokens_by_week[last_week] = tokens_by_week.get(last_week, 0) + last_total
+            session_weeks.setdefault(week, set()).add(rollout.name)
+        prev = 0
+        for week, total in readings:
+            # A counter that goes backwards means a reset, not negative work.
+            delta = max(total - prev, 0)
+            tokens_by_week[week] = tokens_by_week.get(week, 0) + delta
+            prev = max(total, prev)
 
     return {
         "events": events,
@@ -540,8 +632,14 @@ def _classify_vault_commits(
     return weekly
 
 
-def collect_vault_git(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
-    """Weekly commit classification from the vault repo, fail-open."""
+def collect_vault_git(vault_root: Path, tz: ZoneInfo, since: date) -> dict | None:
+    """Weekly commit classification from the vault repo.
+
+    Returns None when git itself failed (missing, timeout, not a repo) so the
+    caller can leave the columns untouched — an empty dict means "repo read
+    fine, no commits", and conflating the two would overwrite good ledger
+    values with zeros and call it a quiet week.
+    """
     try:
         out = subprocess.run(
             [
@@ -557,8 +655,13 @@ def collect_vault_git(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
             timeout=60,
             check=True,
         )
-    except (OSError, subprocess.SubprocessError):
-        return {}
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(
+            f"pulse: vault git collector failed ({exc.__class__.__name__}); "
+            "cross-machine columns left untouched",
+            file=sys.stderr,
+        )
+        return None
     entries: list[tuple[str, str, str]] = []
     for line in out.stdout.splitlines():
         parts = line.split("\t", 2)
@@ -605,7 +708,9 @@ def collect_tasks(vault_root: Path) -> dict[str, int]:
     out: dict[str, int] = {}
     archive = vault_root / "work" / "archive"
     if archive.is_dir():
-        for snapshot in sorted(archive.glob("*/tasks/*-tasks.md")):
+        # Both layouts exist in the real vault: work/archive/<year>/tasks/ and
+        # work/archive/tasks/. _SNAPSHOT_RE rejects anything else.
+        for snapshot in sorted(archive.glob("**/*-tasks.md")):
             m = _SNAPSHOT_RE.search(snapshot.name)
             if not m:
                 continue
@@ -636,20 +741,40 @@ def upsert_ledger(
 ) -> None:
     """Upsert computed rows into the per-machine CSV ledger.
 
-    Rows not named in ``new_rows`` are untouched (frozen history). For named
-    rows, computed columns overwrite, MANUAL_COLUMNS keep whatever a human
-    already wrote, and unknown existing columns are dropped (the header is
-    the schema). Deterministic output: same inputs, byte-identical file."""
+    Rows not named in ``new_rows`` are untouched (frozen history), including
+    columns this engine doesn't know about — a newer engine's column must
+    survive an older engine's run, because frozen weeks can never be
+    recomputed. For named rows, computed columns overwrite and MANUAL_COLUMNS
+    keep whatever a human already wrote. A duplicate week (only reachable via
+    a hand edit or a keep-both merge resolution) raises rather than silently
+    dropping one row's manual values. Deterministic: same inputs, same bytes.
+    """
     existing: dict[str, dict[str, str]] = {}
+    extras: list[str] = []
     if ledger_path.is_file():
         with ledger_path.open(newline="") as fh:
-            for row in csv.DictReader(fh):
-                if row.get("week"):
-                    existing[row["week"]] = row
+            reader = csv.DictReader(fh)
+            extras = [
+                c
+                for c in (reader.fieldnames or [])
+                if c and c not in LEDGER_COLUMNS
+            ]
+            for row in reader:
+                week = row.get("week")
+                if not week:
+                    continue
+                if week in existing:
+                    raise ValueError(
+                        f"pulse: duplicate row for {week} in {ledger_path} — "
+                        "merge them by hand before rerunning (keeping both "
+                        "would silently drop one row's energy/satisfaction)."
+                    )
+                existing[week] = row
+    fields = LEDGER_COLUMNS + extras
     for week, computed in new_rows.items():
-        base = {c: "" for c in LEDGER_COLUMNS}
+        base = {c: "" for c in fields}
         prior = existing.get(week, {})
-        base.update({k: v for k, v in prior.items() if k in LEDGER_COLUMNS})
+        base.update({k: v for k, v in prior.items() if k in fields})
         base.update({k: v for k, v in computed.items() if k in LEDGER_COLUMNS})
         for col in MANUAL_COLUMNS:
             if prior.get(col):
@@ -659,11 +784,10 @@ def upsert_ledger(
         existing[week] = base
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     with ledger_path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=LEDGER_COLUMNS, extrasaction="ignore")
+        writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for week in sorted(existing):
-            row = {c: existing[week].get(c, "") for c in LEDGER_COLUMNS}
-            writer.writerow(row)
+            writer.writerow({c: existing[week].get(c) or "" for c in fields})
 
 
 # ---------------------------------------------------------------------------
@@ -682,12 +806,12 @@ def scan(
 ) -> dict[str, dict[str, str]]:
     """Compute a ledger row per requested week. Every collector fails open."""
     wanted = set(week_keys)
-    claude = collect_claude(projects_root, tz)
+    claude = collect_claude(projects_root, tz, repos_root=repos_root)
     codex = collect_codex(codex_root, tz)
     afk = collect_afk(repos_root, tz)
     wins = collect_wins(vault_root / "perf" / "Brag Doc.md", tz)
     tasks = collect_tasks(vault_root)
-    vault_git: dict = {}
+    vault_git: dict | None = None
     if include_vault_git and week_keys:
         # Log window: today minus the requested span plus a 2-week margin —
         # cheaper than inverting week keys, and _week_key filters precisely.
@@ -726,8 +850,10 @@ def scan(
         ].get(week, 0)
         row["tokens_m"] = f"{tokens / 1_000_000:.2f}"
         row["spend_usd"] = f"{claude['spend_by_week'].get(week, 0.0):.2f}"
-        git_week = vault_git.get(week, {})
-        if include_vault_git:
+        # None = the collector failed; omit the keys so the upsert preserves
+        # whatever the ledger already holds instead of zeroing it.
+        if vault_git is not None:
+            git_week = vault_git.get(week, {})
             row["vault_sessions_personal"] = str(git_week.get("autosync_personal", 0))
             row["vault_sessions_work"] = str(git_week.get("autosync_work", 0))
             row["deliberate_commits_personal"] = str(
@@ -753,6 +879,22 @@ def scan(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+def _positive_int(raw: str) -> int:
+    """argparse type: reject 0 and negatives instead of silently defaulting."""
+    value = int(raw)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return value
+
+
+def existing_weeks(ledger_path: Path) -> set[str]:
+    """Week keys already present in the ledger (empty if it has none)."""
+    if not ledger_path.is_file():
+        return set()
+    with ledger_path.open(newline="") as fh:
+        return {row["week"] for row in csv.DictReader(fh) if row.get("week")}
+
+
 def _detect_vault_root(start: str) -> Path | None:
     """Walk up from the script for the vault root (holds `.vault-context`)."""
     p = Path(start).resolve()
@@ -786,8 +928,17 @@ def _report_lines(rows: dict[str, dict[str, str]], machine: str) -> list[str]:
             f"{r.get('tasks_done', '') or '—':>6}"
         )
     lines.append(
-        "  attn = interactive Claude+Codex hours (union — parallel sessions "
-        "count once); afk✓ = pipeline slices merged (not your attention)."
+        "  attn = hours an interactive Claude/Codex session was active "
+        "(union — parallel sessions count once, but a long autonomous run "
+        "inside a session counts as active)."
+    )
+    lines.append(
+        "  Domain columns are each a union and OVERLAP: two repos worked in "
+        "parallel occupy the same wall clock, so they need not sum to attn."
+    )
+    lines.append(
+        "  afk✓ = pipeline slices merged — the autonomous pipeline's output, "
+        "not your attention. Read the two side by side, never blended."
     )
     return lines
 
@@ -795,11 +946,19 @@ def _report_lines(rows: dict[str, dict[str, str]], machine: str) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--weeks", type=int, default=None)
+    ap.add_argument(
+        "--weeks",
+        type=_positive_int,
+        default=None,
+        help=f"trailing ISO weeks to recompute (default: {RECOMPUTE_WEEKS})",
+    )
     ap.add_argument(
         "--backfill",
         action="store_true",
-        help="extend the recompute window to all plausibly available history",
+        help=(
+            f"add missing rows across the trailing {BACKFILL_WEEKS} weeks; "
+            "rows the ledger already has are never rewritten"
+        ),
     )
     ap.add_argument("--machine", default=None, help="ledger key (default: .vault-context)")
     ap.add_argument("--vault-root", default=None)
@@ -833,8 +992,28 @@ def main() -> int:
         else datetime.now().astimezone().tzinfo or timezone.utc
     )
     machine = args.machine or _machine_for(vault_root)
-    weeks = args.weeks or (60 if args.backfill else RECOMPUTE_WEEKS)
+    ledger = (
+        Path(args.ledger)
+        if args.ledger
+        else vault_root / "perf" / "metrics" / f"pulse-{machine}.csv"
+    )
+    if args.weeks is not None:
+        weeks = args.weeks
+    else:
+        weeks = BACKFILL_WEEKS if args.backfill else RECOMPUTE_WEEKS
     week_keys = _last_week_keys(datetime.now(tz).date(), weeks)
+    if args.backfill:
+        # Fill-only: a week whose transcripts have since been pruned would
+        # recompute to zero, so backfill never touches a row that exists.
+        have = existing_weeks(ledger)
+        skipped = [w for w in week_keys if w in have]
+        week_keys = [w for w in week_keys if w not in have]
+        if skipped:
+            print(
+                f"pulse: backfill skipped {len(skipped)} week(s) already in "
+                f"the ledger ({skipped[0]}..{skipped[-1]})",
+                file=sys.stderr,
+            )
     rows = scan(
         projects_root=Path(args.projects_root),
         codex_root=Path(args.codex_root),
@@ -844,11 +1023,6 @@ def main() -> int:
         tz=tz,
         include_vault_git=not args.no_vault_git,
         computed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
-    ledger = (
-        Path(args.ledger)
-        if args.ledger
-        else vault_root / "perf" / "metrics" / f"pulse-{machine}.csv"
     )
     upsert_ledger(ledger, rows, machine=machine)
 

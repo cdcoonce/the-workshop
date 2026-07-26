@@ -13,6 +13,12 @@ Run the pulse engine and present the trend. The script does all the heavy liftin
    - **School watch:** once the master's program starts, the `school` domain appears automatically for repos/dirs matching the domain rules; the question to answer is whether `attn_build_h` + tasks/wins hold while `attn_school_h` grows.
 3. If the user gives energy/satisfaction ratings (1–5), write them into the manual `energy`/`satisfaction` columns of the current week's row in the ledger — the engine never overwrites them.
 
+## What the attention number is, exactly
+
+`attn_*` measures **hours an interactive session was active**, gap-clustered at 15 minutes — not hours of human focus. A session where Charles sets a task and an agent works for an hour counts that hour. Treat it as an upper bound on attention whose bias is roughly constant, which is what makes the week-over-week trend meaningful even though the level is generous.
+
+Attribution follows the **repo the session touches** (paths in its tool calls), not the directory it was launched from — nearly every session starts in the vault and works cross-repo, so launch-dir attribution booked ~100% of hours to `vault`. Domain columns are each a union and **overlap**: two repos worked in parallel share wall clock, so the domain columns need not sum to `attn_total_h`.
+
 ## Notes
 
 - The ledger is **per-machine**: `perf/metrics/pulse-<machine>.csv` (machine from `.vault-context`). Attention/tokens/afk columns reflect **this machine only**; the `vault_sessions_*` and `deliberate_commits_*` columns come from vault git history and see **both** machines. Union the two CSVs when charting.
