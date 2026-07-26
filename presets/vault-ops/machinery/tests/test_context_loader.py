@@ -162,6 +162,59 @@ def scaffolded_config():
     importlib.reload(context_loader)
 
 
+class TestDigestBuckets:
+    """A new workspace joins the digest by CONFIG, not by editing the engine.
+
+    The digest used to name work_index and personal_index in code, so adding
+    a scope meant an engine change nobody would remember to make — a path
+    could be configured and read and still never appear, which is the
+    silent-inert-config failure this table exists to prevent."""
+
+    def test_school_bucket_ships_by_default(self, vault: Path) -> None:
+        (vault / "school").mkdir()
+        (vault / "school" / "Index.md").write_text(
+            "---\ndate: 2026-07-26\ndescription: school index\ntags:\n  - index\n---\n\n"
+            "# School\n\n## Courses\n\n- [[CSE 511]]\n- [[HSE 542]]\n"
+        )
+
+        ctx = load_context(vault)
+
+        assert ctx.active_school == ["[[CSE 511]]", "[[HSE 542]]"]
+        assert "Active coursework: 2" in ctx.summary
+
+    def test_absent_workspace_adds_nothing(self, vault: Path) -> None:
+        ctx = load_context(vault)
+
+        assert ctx.active_school == []
+        assert "Active coursework" not in ctx.summary
+
+    def test_a_new_bucket_needs_only_a_table_entry(
+        self, vault: Path, monkeypatch
+    ) -> None:
+        """The property that keeps this from being forgotten again."""
+        (vault / "garage").mkdir()
+        (vault / "garage" / "Index.md").write_text(
+            "---\ndate: 2026-07-26\ndescription: garage\ntags:\n  - index\n---\n\n"
+            "# Garage\n\n## Restorations\n\n- [[1972 Bronco]]\n"
+        )
+        monkeypatch.setitem(
+            context_loader.NOTE_PATHS, "garage_index", "garage/Index.md"
+        )
+        monkeypatch.setattr(
+            context_loader,
+            "DIGEST_BUCKETS",
+            (*context_loader.DIGEST_BUCKETS,
+             context_loader.DigestBucket(
+                 "garage_index", "Active restorations", ("Restorations",)
+             )),
+        )
+
+        ctx = load_context(vault)
+
+        assert "Active restorations: 1" in ctx.summary
+        assert ctx.buckets["garage_index"] == ["[[1972 Bronco]]"]
+
+
 class TestConfigurableNotePaths:
     """Digest-source paths come from config, not literals in the loader."""
 
@@ -232,11 +285,12 @@ class TestConfigurableNotePaths:
     def test_absent_config_module_uses_shipped_defaults(self, vault: Path) -> None:
         """A vault vendored before the scaffold config exists still digests."""
         assert "context_paths" not in sys.modules
-        assert context_loader.NOTE_PATHS == {
-            **context_paths_defaults.COMMON_NOTE_PATHS,
-            **context_paths_defaults.CONTEXT_NOTE_PATHS["work"],
-            **context_paths_defaults.CONTEXT_NOTE_PATHS["personal"],
-        }
+        expected = dict(context_paths_defaults.COMMON_NOTE_PATHS)
+        # Every shipped section, not a hand-listed pair — adding a workspace
+        # to the defaults must not require editing this assertion.
+        for section in context_paths_defaults.CONTEXT_NOTE_PATHS.values():
+            expected.update(section)
+        assert context_loader.NOTE_PATHS == expected
 
         ctx = load_context(vault)
 
