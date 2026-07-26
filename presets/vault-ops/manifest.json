@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "1.9.0",
+  "version": "1.9.1",
   "core": {
     "skills": [],
     "agents": [],
