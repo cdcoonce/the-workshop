@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; hooks and personas execute on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**30 universal skills · 2 core agents · 9 hooks · 3 project presets · 7 persona plugins**
+**31 universal skills · 2 core agents · 9 hooks · 3 project presets · 7 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -175,7 +175,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 23 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 36 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
+| **`workbench`** | project | 37 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
 | **`workshop-maintainer`** | project | 10 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
@@ -204,6 +204,7 @@ These ship with every preset:
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
+| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
