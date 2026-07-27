@@ -203,3 +203,26 @@ class TestParseFrontmatterBlockScalar:
                 "Use when the user asks for a security review."
             ),
         }
+
+
+class TestParseFrontmatterClosingDelimiterLineAnchored:
+    """The closing ``---`` must be matched on its own line, not as a
+    substring inside a field value (e.g. an em-dash-style separator).
+    """
+
+    def test_value_containing_triple_dash_does_not_truncate_parsing(self) -> None:
+        text = (
+            "---\n"
+            "name: foo\n"
+            "description: some text --- with a dash-break in it\n"
+            "---\n"
+            "Body\n"
+        )
+        assert _parse_frontmatter(text) == {
+            "name": "foo",
+            "description": "some text --- with a dash-break in it",
+        }
+
+    def test_closing_delimiter_with_trailing_spaces(self) -> None:
+        text = "---\nname: foo\n---   \nBody\n"
+        assert _parse_frontmatter(text) == {"name": "foo"}

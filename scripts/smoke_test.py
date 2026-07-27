@@ -280,9 +280,10 @@ def _parse_frontmatter(text: str) -> dict | None:
     """
     if not text.startswith("---"):
         return None
-    end = text.find("---", 3)
-    if end == -1:
+    closing = re.search(r"\n---[ \t]*(?:\n|\Z)", text[3:])
+    if closing is None:
         return None
+    end = 3 + closing.start()
     frontmatter_text = text[3:end].strip()
     if not frontmatter_text:
         return None

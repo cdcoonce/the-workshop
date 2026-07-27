@@ -182,29 +182,35 @@ class MergeRequest:
     title: str = ""
 
 
+def _extend_chain(
+    node: str, chain: list[str], children: dict[str, list[str]], chains: list[list[str]]
+) -> None:
+    kids = [c for c in children.get(node, []) if c not in chain]  # defensive: never loop on a cycle
+    if not kids:
+        if len(chain) > 1:
+            chains.append(chain)
+        return
+    for kid in sorted(kids):
+        _extend_chain(kid, chain + [kid], children, chains)
+
+
 def detect_chains(mrs: list[MergeRequest]) -> list[list[str]]:
     """Stacked MRs: one targeting another's source branch.
 
-    Returns each chain as an ordered list of branch names, bottom first.
+    Returns each chain as an ordered list of branch names, bottom first. A
+    fork (two MRs targeting the same parent branch) yields one chain per
+    child, sharing the common prefix.
     """
     by_source = {mr.source: mr for mr in mrs}
-    children: dict[str, str] = {}
+    children: dict[str, list[str]] = {}
     for mr in mrs:
         if mr.target in by_source:
-            children[mr.target] = mr.source
+            children.setdefault(mr.target, []).append(mr.source)
 
     bottoms = [mr.source for mr in mrs if mr.target not in by_source and mr.source in children]
     chains: list[list[str]] = []
     for bottom in sorted(bottoms):
-        chain = [bottom]
-        node = bottom
-        while node in children:
-            node = children[node]
-            if node in chain:  # defensive: never loop on a cycle
-                break
-            chain.append(node)
-        if len(chain) > 1:
-            chains.append(chain)
+        _extend_chain(bottom, [bottom], children, chains)
     return chains
 
 
