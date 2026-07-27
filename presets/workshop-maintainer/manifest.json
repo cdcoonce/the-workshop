@@ -6,15 +6,9 @@
     "Keep source ownership distinct from distribution membership",
     "Regenerate docs and dist after changing any component"
   ],
-  "version": "1.0.5",
+  "version": "1.1.0",
   "core": {
-    "skills": [
-      "using-workflow",
-      "grill-me",
-      "tdd",
-      "commit",
-      "daa-code-review"
-    ],
+    "skills": ["using-workflow", "grill-me", "tdd", "commit", "daa-code-review"],
     "agents": [],
     "hooks": [
       "protect-files.py",
@@ -22,7 +16,8 @@
       "snapshot-subagent-start.py",
       "verify-subagent-evidence.py",
       "audit-config-change.py",
-      "inject-skill-router.py"
+      "inject-skill-router.py",
+      "remind-skill-announce.py"
     ]
   },
   "exclude": [],
@@ -34,12 +29,5 @@
     "persona-builder"
   ],
   "preset_hooks": [],
-  "preset_agents": [
-    "skill-analyst",
-    "qa-tester",
-    "skill-writer",
-    "strategy",
-    "skill-builder",
-    "skill-reviewer"
-  ]
+  "preset_agents": ["skill-analyst", "qa-tester", "skill-writer", "strategy", "skill-builder", "skill-reviewer"]
 }

@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.10.1*
+*project preset · v1.11.0*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -36,11 +36,11 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 **Skills (25):** `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-connect`, `vault-context-then-delegate`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-link`, `vault-mr-review-packet`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-upgrade`, `vault-wrap-up`, `vault-write`
 
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (8):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `workbench`
 
-*project preset · v1.5.0*
+*project preset · v1.6.0*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
@@ -56,11 +56,11 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 **Agents (10):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (8):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `workshop-maintainer`
 
-*project preset · v1.0.5*
+*project preset · v1.1.0*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
@@ -74,7 +74,7 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 
 **Agents (6):** `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`
 
-**Hooks (6):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
 
 ### `advisor-product-design`
 
