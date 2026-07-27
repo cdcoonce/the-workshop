@@ -11,6 +11,11 @@ as a bullet list, then emits the combined text as SessionStart `additionalContex
 the skill-invocation rules and project conventions are layered on top of the default
 engineering instructions (purely additive — it never replaces the base prompt).
 
+The router body is byte-identical in every preset that ships this hook, and Claude
+Code runs each installed copy on SessionStart — so the body is claimed once per
+`session_id` and later copies emit only their own conventions. Deduplication is a
+pure optimization: if the claim cannot be recorded, the body is emitted anyway.
+
 Cross-platform by design: pure Python via `uv run`, no bash. Fails safe — any error
 prints nothing and exits 0, so an unbuilt or broken plugin can never break a session.
 """
@@ -20,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -38,7 +44,56 @@ def _format_conventions(conventions: list[str]) -> str:
     return f"## Project Conventions\n\n{bullets}"
 
 
-def main() -> int:
+def _claim_router_body(session_id: str | None) -> bool:
+    """Return True if this process is the one that should emit the router body.
+
+    The claim is an exclusive-create of a per-session marker, so concurrent hook
+    copies cannot both win. Any failure to record the claim returns True: a
+    duplicated router is a wasted paragraph, a missing one changes behavior.
+    """
+    if not session_id:
+        return True
+    try:
+        # `TMPDIR` first, uncached: `tempfile.gettempdir()` memoizes its answer and
+        # silently discards a TMPDIR that is not a usable directory, which would
+        # send markers to the real /tmp instead of reporting the failure.
+        base = os.environ.get("TMPDIR") or tempfile.gettempdir()
+        marker_dir = Path(base, "the-workshop-skill-router")
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        os.close(
+            os.open(
+                marker_dir / f"{safe_id}.claim",
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+        )
+    except FileExistsError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _read_session_id() -> str | None:
+    """Read `session_id` from the SessionStart payload, if a payload arrives at all."""
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return None
+        raw = sys.stdin.read()
+    except (OSError, ValueError):
+        return None
+    if not raw.strip():
+        return None  # Codex delivers hooks no stdin payload.
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    session_id = data.get("session_id") if isinstance(data, dict) else None
+    return session_id if isinstance(session_id, str) else None
+
+
+def main(session_id: str | None = None) -> int:
     root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if not root:
         return 0  # fail safe: nothing to inject
@@ -66,12 +121,19 @@ def main() -> int:
     ):
         return 0
 
+    formatted_conventions = _format_conventions(conventions)
+    context = (
+        f"{body}\n\n{formatted_conventions}"
+        if _claim_router_body(session_id)
+        else formatted_conventions
+    )
+
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "SessionStart",
-                    "additionalContext": f"{body}\n\n{_format_conventions(conventions)}",
+                    "additionalContext": context,
                 }
             }
         )
@@ -81,7 +143,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        sys.exit(main(session_id=_read_session_id()))
     except Exception:
         # Never let the skill router hook break a session.
         sys.exit(0)
