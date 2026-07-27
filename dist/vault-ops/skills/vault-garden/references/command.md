@@ -20,10 +20,10 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
    so the gardener's detached Stop-hook workers **bail instead of regenerating the queue** while you
    apply — without it, a worker can overwrite `.brain/gardener-<context>.md` mid-pass (the
    producer/consumer race; see `thinking/2026-06-27-gardener-apply-lock-race-fix-design.md`). The lock
-   self-heals after 30 min if a pass is abandoned. **You MUST release it before exiting** (step 6).
+   self-heals after 30 min if a pass is abandoned. **You MUST release it before exiting** (step 7).
 
 2. **Load the queue.** Read `.brain/gardener-<context>.md` (`<context>` from `.vault-context`,
-   default `personal`). If it's absent or has no proposals, **release the lock** (step 6), report
+   default `personal`). If it's absent or has no proposals, **release the lock** (step 7), report
    "🌱 nothing pending" plus the last gardener-run time, and stop. Briefly note the
    `## Applied (auto-repairs)` section if present — those already happened (broken links the gardener
    auto-fixed); they're for transparency, nothing to do.
@@ -103,18 +103,30 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
    - Rewrite `.brain/gardener-<context>.md` with only the skipped items, preserving its frontmatter and
      the `## Applied` section. If nothing remains, you may delete the file.
 
-6. **Release the apply-lock.** Run
+6. **Verify vault health before releasing the lock.** Any edit that adds or rewrites a `[[wikilink]]`
+   (missing links, weak-connection links, broken-link repairs, orphan links) can _look_ right —
+   correct syntax, plausible target — and still fail to resolve: a note's stem may be ambiguous
+   (`SKILL.md` catalogs as `"skill"`, not its folder name), or the target may have no matching alias.
+   The "validate frontmatter + wikilinks" contract in step 4 only checks that a note _has_ a
+   wikilink present, not that it _resolves_ — that gap is exactly how a `/garden` pass shipped a
+   broken link straight through CI on 2026-07-27. Close it here: if this pass applied **any**
+   wikilink-adding edit, run `uv run ci/vault_health.py`. If it regressed (`max_unresolved_links`
+   rose), fix it now — add the missing `aliases:` entry, correct the target, or revert the edit —
+   and re-run until it passes, **before** moving to step 7. Skip this step only if the pass applied
+   zero wikilink edits (dismiss/skip-only passes can't regress it).
+
+7. **Release the apply-lock.** Run
    `uv run python .claude/scripts/graph_gardener.py --release-lock`. This is the **last action of every
    exit path** — the normal end, the "nothing pending" early-exit (step 2), and any error/abort.
    Leaving it set blocks queue regeneration until the 30-min TTL clears. Releasing also **stamps
    "last gardened"** (`last_applied_ts`), which drives the escalating session-start / `/standup` nudge —
    so running `/garden` resets the reminder.
 
-7. **Report** what was applied, dismissed, and skipped, with the note paths and links touched.
+8. **Report** what was applied, dismissed, and skipped, with the note paths and links touched.
 
 ## Constraints
 
-- **Always release the lock** — acquire it first (step 1), release it on **every** exit path (step 6),
+- **Always release the lock** — acquire it first (step 1), release it on **every** exit path (step 7),
   including "nothing pending" and any error. A held lock blocks the gardener until the 30-min TTL.
 - **Every edit confirmed** — `/garden` proposes; Charles disposes. Nothing auto-applies.
 - **Reuse, don't rebuild** — link targets for orphans come from `/find`'s `semantic_index.py`; the
