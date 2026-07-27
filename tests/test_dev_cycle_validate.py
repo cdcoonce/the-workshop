@@ -58,6 +58,36 @@ branch: feat/dark-mode-toggle
         with pytest.raises(ValueError, match="frontmatter"):
             parse_state_file(state_file)
 
+    def test_parse_embedded_dash_line_does_not_truncate_frontmatter(
+        self, tmp_path: Path
+    ) -> None:
+        content = """\
+---
+schema_version: 1
+feature: dark-mode-toggle
+notes: see below
+--- this line starts with a delimiter-like sequence but is not the closer
+status: in_progress
+current_phase: plan
+created: 2026-03-21
+updated: 2026-03-21
+branch: feat/dark-mode-toggle
+---
+
+## Artifacts
+
+## Log
+"""
+        state_file = tmp_path / "dark-mode-toggle.state.md"
+        state_file.write_text(content)
+
+        result = parse_state_file(state_file)
+
+        assert result.feature == "dark-mode-toggle"
+        assert result.status == "in_progress"
+        assert result.current_phase == "plan"
+        assert result.branch == "feat/dark-mode-toggle"
+
     def test_parse_missing_required_field_raises(self, tmp_path: Path) -> None:
         content = """\
 ---
