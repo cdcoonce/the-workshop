@@ -212,6 +212,17 @@ def test_independent_mrs_produce_no_chain(repo: Path) -> None:
     assert merge_order.detect_chains(mrs) == []
 
 
+def test_fork_produces_a_chain_per_child(repo: Path) -> None:
+    """Two MRs both targeting feat-a must each surface as their own chain."""
+    mrs = [
+        merge_order.MergeRequest(ident="1", source="feat-a", target="dev", draft=False),
+        merge_order.MergeRequest(ident="2", source="feat-b", target="feat-a", draft=False),
+        merge_order.MergeRequest(ident="3", source="feat-c", target="feat-a", draft=False),
+    ]
+    chains = merge_order.detect_chains(mrs)
+    assert chains == [["feat-a", "feat-b"], ["feat-a", "feat-c"]]
+
+
 # --- guards -----------------------------------------------------------------
 
 
