@@ -13,7 +13,11 @@ an update silently took the owner's tuning and memory with it.
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from scripts.installer.adapters import ClaudeCodeAdapter
 from scripts.installer.bundle import Bundle
@@ -142,3 +146,68 @@ class TestPersonaLayering:
 
         tuning = install / "local" / "tuning.md"
         assert tuning.read_text() == overlay[tuning]
+
+    def test_overlay_survives_a_reinstall_that_fails_partway_through(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A reinstall that dies after clearing `dest` but before restoring
+        `local/` must not destroy the owner's overlay in the process."""
+        presets = tmp_path / "presets"
+        target = tmp_path / "repo"
+        target.mkdir()
+        # `mkdtemp` defaults to the system temp root, which is not under
+        # `tmp_path` — point it here so leftover staging dirs are observable.
+        staging_root = tmp_path / "staging"
+        staging_root.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(staging_root))
+        _advisor_package(presets, "advisor-x", version="1.0.0", spec="# v1 spec\n")
+        install = _install(presets, "advisor-x", target)
+        overlay = _owner_overlay(install)
+
+        _advisor_package(presets, "advisor-x", version="2.0.0", spec="# v2 spec\n")
+
+        def _boom(*args: object, **kwargs: object) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(shutil, "copytree", _boom)
+
+        adapter = ClaudeCodeAdapter()
+        with pytest.raises(OSError, match="disk full"):
+            adapter.install(Bundle.load(presets, "advisor-x"), target, Scope.PROJECT)
+
+        for path, text in overlay.items():
+            assert path.exists(), f"{path.name} was lost on a failed reinstall"
+            assert path.read_text() == text, f"{path.name} was corrupted"
+
+        assert not list(staging_root.iterdir()), "staging tempdir was left behind"
+
+    def test_overlay_is_restored_over_a_half_copied_base(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`copytree` leaves its partial output behind when it raises, so a
+        base-shipped `local/` can already be sitting at the overlay's own path.
+        Restoring must replace it, not nest the overlay inside it."""
+        presets = tmp_path / "presets"
+        target = tmp_path / "repo"
+        target.mkdir()
+        _advisor_package(presets, "advisor-x", version="1.0.0", spec="# v1 spec\n")
+        install = _install(presets, "advisor-x", target)
+        overlay = _owner_overlay(install)
+
+        _advisor_package(presets, "advisor-x", version="2.0.0", spec="# v2 spec\n")
+        _write(presets / "advisor-x" / "local" / "tuning.md", "# SHIPPED DEFAULT\n")
+
+        def _partial_copy(src: str, dst: str, *args: object, **kwargs: object) -> None:
+            _write(Path(dst) / "local" / "tuning.md", "# SHIPPED DEFAULT\n")
+            raise OSError("disk full")
+
+        monkeypatch.setattr(shutil, "copytree", _partial_copy)
+
+        adapter = ClaudeCodeAdapter()
+        with pytest.raises(OSError, match="disk full"):
+            adapter.install(Bundle.load(presets, "advisor-x"), target, Scope.PROJECT)
+
+        assert not (install / "local" / "local").exists(), "overlay was nested"
+        for path, text in overlay.items():
+            assert path.exists(), f"{path.name} was lost on a failed reinstall"
+            assert path.read_text() == text, f"{path.name} was overwritten"
