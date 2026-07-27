@@ -79,7 +79,12 @@ def test_workshop_maintainer_ships_only_maintenance_skills() -> None:
         "skill-builder",
         "skill-reviewer",
     ]
-    assert vault_ops["core"]["skills"] == []
+    # vault-ops takes no *workflow* skill from core — its own vault-* set is
+    # complete. `using-workflow` is infrastructure, not a workflow: the preset runs
+    # inject-skill-router.py, which reads skills/using-workflow/SKILL.md from its own
+    # plugin root and injects nothing at all when the file is absent. Without this
+    # the hook shipped dead and vault-ops' conventions never reached a session.
+    assert vault_ops["core"]["skills"] == ["using-workflow"]
 
 
 def test_maintenance_components_have_preset_only_ownership() -> None:
