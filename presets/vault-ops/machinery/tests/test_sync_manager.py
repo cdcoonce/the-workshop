@@ -350,6 +350,53 @@ class TestPush:
         commit_call = mock_git.call_args_list[1]  # second call is commit
         assert "custom: test message" in str(commit_call)
 
+    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._has_remote", return_value=True)
+    @patch("sync_manager._run_git")
+    def test_push_pre_push_check_blocks_push_but_keeps_commit(
+        self, mock_git, _remote, _changes, tmp_path: Path
+    ) -> None:
+        """A failing gate must stop the push without undoing the local commit.
+
+        The commit already happened by the time the gate runs — a regression
+        (e.g. a broken wikilink) is captured locally, never lost, but must not
+        reach the shared remote unvetted.
+        """
+        mock_git.side_effect = [
+            _make_result(),  # add
+            _make_result(),  # commit
+        ]
+        check = lambda cwd: (False, "max_unresolved_links: 1 exceeds limit 0")  # noqa: E731
+        result = push(tmp_path, pre_push_check=check)
+        assert result.success is False
+        assert "commit kept locally" in result.message.lower()
+        assert "max_unresolved_links" in result.message
+        # Only add + commit ran — no pull, no push attempted.
+        assert mock_git.call_count == 2
+
+    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._has_remote", return_value=True)
+    @patch("sync_manager._run_git")
+    def test_push_pre_push_check_passing_still_pushes(
+        self, mock_git, _remote, _changes, tmp_path: Path
+    ) -> None:
+        mock_git.return_value = _make_result(stdout="main")
+        check = lambda cwd: (True, "")  # noqa: E731
+        result = push(tmp_path, pre_push_check=check)
+        assert result.success is True
+        assert "pushed" in result.message.lower() or "committed" in result.message.lower()
+
+    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._has_remote", return_value=True)
+    @patch("sync_manager._run_git")
+    def test_push_receives_repo_path_in_pre_push_check(
+        self, mock_git, _remote, _changes, tmp_path: Path
+    ) -> None:
+        mock_git.return_value = _make_result(stdout="main")
+        seen = []
+        push(tmp_path, pre_push_check=lambda cwd: (seen.append(cwd) or True, ""))
+        assert seen == [Path(tmp_path)]
+
 
 # ---------------------------------------------------------------------------
 # Integration tests — real git (bare remote + two clones). These exercise the

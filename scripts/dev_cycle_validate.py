@@ -19,7 +19,11 @@ VALID_STATUSES = ("not_started", "in_progress", "completed", "abandoned")
 VALID_ARTIFACT_STATUSES = ("pending", "in_progress", "completed", "blocked")
 CURRENT_SCHEMA_VERSION = 1
 
-_FRONTMATTER_RE = re.compile(r"\A---\n(.+?)\n---", re.DOTALL)
+# The closing delimiter must sit on its own line (optionally followed by
+# trailing whitespace, then a newline or end-of-string). Without that anchor,
+# a frontmatter value containing a literal `\n---` line closes the match
+# early — the same failure mode as smoke_test._parse_frontmatter's str.find.
+_FRONTMATTER_RE = re.compile(r"\A---\n(.+?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 # A trailing `# comment` counts only when whitespace precedes the `#`. With
 # `\s*` the optional comment group matches at the first `#` anywhere in the
 # value — the lazy `(.+?)` stops there — so `branch: fix/issue-#123` parsed as

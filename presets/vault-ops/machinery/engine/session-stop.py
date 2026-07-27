@@ -30,6 +30,30 @@ from term_tracker import record_terms
 from vault_utils import find_vault_root_from_env
 
 
+def _vault_health_check(cwd: Path) -> tuple[bool, str]:
+    """Run ``ci/vault_health.py`` as a pre-push gate, if the vault has one.
+
+    Not every consumer of this vendored engine ships that script, and a missing
+    or misbehaving checker must never be able to block sync — so absence, a
+    timeout, or any other failure to run it is treated as a pass (fail-open).
+    Only an actual regression reported by the script blocks the push.
+    """
+    script = cwd / "ci" / "vault_health.py"
+    if not script.exists():
+        return True, ""
+    try:
+        result = subprocess.run(
+            ["uv", "run", str(script)],
+            cwd=cwd, capture_output=True, text=True, check=False, timeout=30,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return True, ""
+    if result.returncode == 0:
+        return True, ""
+    detail = result.stderr.strip() or result.stdout.strip()
+    return False, detail
+
+
 def _sync_branch_status(vault_root: Path) -> tuple[bool, str, str]:
     """Return (on_sync_branch, current_branch, default_branch).
 
@@ -86,8 +110,10 @@ def main() -> int:
         capture_output=True, text=True, check=False, timeout=10,
     ).stdout.strip()
 
-    # Push changes
-    result = push(vault_root)
+    # Push changes — gated on vault health so a regression (e.g. a broken
+    # wikilink from /garden, /connect, or a manual edit) is committed locally
+    # but never pushed to the shared remote unvetted.
+    result = push(vault_root, pre_push_check=_vault_health_check)
     if result.success:
         lines.append(f"✓ Git: {result.message}")
     else:

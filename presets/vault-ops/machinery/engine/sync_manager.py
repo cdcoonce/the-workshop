@@ -2,7 +2,7 @@
 
 Public interface:
     pull(vault_path) → SyncResult
-    push(vault_path, message) → SyncResult
+    push(vault_path, message, pre_push_check) → SyncResult
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -238,12 +239,23 @@ def pull(vault_path: str | Path) -> SyncResult:
             lock_path.unlink(missing_ok=True)
 
 
-def push(vault_path: str | Path, message: str = "vault: auto-sync session changes") -> SyncResult:
+def push(
+    vault_path: str | Path,
+    message: str = "vault: auto-sync session changes",
+    pre_push_check: Callable[[Path], tuple[bool, str]] | None = None,
+) -> SyncResult:
     """Stage all changes, commit, and push to remote.
 
     Args:
         vault_path: Path to the vault root directory.
         message: Commit message.
+        pre_push_check: Optional gate run after commit, before pull/push. Takes
+            the repo path and returns ``(ok, detail)``; a caller-supplied check
+            (e.g. a vault-health gate) so this module stays generic — most
+            consumers of this vendored engine have no such check to run. On
+            failure the commit is kept locally (never lost) and the push is
+            skipped, leaving a human to fix and re-sync rather than shipping a
+            regression straight to the shared remote.
 
     Returns:
         SyncResult with success status and message.
@@ -268,6 +280,20 @@ def push(vault_path: str | Path, message: str = "vault: auto-sync session change
         result = _run_git(["commit", "-m", message], cwd)
         if result.returncode != 0:
             return SyncResult(success=False, message=f"Git commit failed: {result.stderr.strip()}")
+
+        # Gate the push (not the commit) on the caller's check — the commit above already
+        # happened, so a regression is captured locally rather than lost, but never reaches
+        # the shared remote unvetted.
+        if pre_push_check is not None:
+            check_ok, check_detail = pre_push_check(cwd)
+            if not check_ok:
+                return SyncResult(
+                    success=False,
+                    message=(
+                        "Pre-push check failed — commit kept locally, push skipped.\n"
+                        f"{check_detail}"
+                    ),
+                )
 
         # Rebase-pull before pushing — integrate the other machine's commits first
         # (the vault syncs across two machines; CLAUDE.md requires rebase-first). Never

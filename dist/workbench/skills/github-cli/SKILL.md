@@ -40,6 +40,11 @@ merge gates.
 
 **After pushing a PR:** watch checks go green (`gh pr checks --watch`) before declaring the work done. Never walk away from a red PR.
 
+**Before squash-merging a branch:** run `gh pr list --base <branch>` for the
+branch about to be merged. A squash-merge with `--delete-branch` auto-closes
+every open PR still targeting it — retarget or rebase any hit onto the
+post-merge base first, or surface the risk. Never merge blind.
+
 ## Core Workflows
 
 `gh` covers the full GitHub loop from the terminal. See [references/commands.md](references/commands.md) for the exact syntax, flags, and examples for every command family below.
@@ -53,20 +58,15 @@ Scope any command to another repository with `-R OWNER/REPO`.
 
 ## Common Flag Reference
 
-| Flag                    | Description                    |
-| ----------------------- | ------------------------------ |
-| `-R, --repo OWNER/REPO` | Target different repository    |
-| `--base`                | Base branch for PR             |
-| `--head`                | Head branch for PR             |
-| `-t, --title`           | Title for issue/PR             |
-| `-b, --body`            | Body for issue/PR              |
-| `-l, --label`           | Labels (comma-separated)       |
-| `-a, --assignee`        | Assignee username              |
-| `-m, --milestone`       | Milestone name                 |
-| `--draft`               | Create as draft PR             |
-| `--fill`                | Auto-fill from commit messages |
-| `--web`                 | Open in browser                |
-| `-y, --yes`             | Skip confirmation prompts      |
+| Flag                    | Description                 |
+| ----------------------- | --------------------------- |
+| `-R, --repo OWNER/REPO` | Target different repository |
+| `--base`                | Base branch for PR          |
+| `--head`                | Head branch for PR          |
+| `-l, --label`           | Labels (comma-separated)    |
+| `-a, --assignee`        | Assignee username           |
+| `-m, --milestone`       | Milestone name              |
+| `--draft`               | Create as draft PR          |
 
 ## Environment Variables
 

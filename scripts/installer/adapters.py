@@ -35,6 +35,17 @@ def _preserved_overlay(dest: Path) -> Iterator[Path | None]:
     try:
         yield staged
     finally:
+        if staged.exists():
+            # The caller never claimed the overlay (it raised before reaching
+            # its restore step) — put it back where it started rather than
+            # deleting it along with the staging dir.
+            overlay.parent.mkdir(parents=True, exist_ok=True)
+            if overlay.exists():
+                # A half-finished copy can leave a base-shipped `local/` in the
+                # way; the owner's overlay wins over it, and moving onto it
+                # would nest rather than replace.
+                shutil.rmtree(overlay, ignore_errors=True)
+            shutil.move(str(staged), str(overlay))
         shutil.rmtree(staging, ignore_errors=True)
 
 
