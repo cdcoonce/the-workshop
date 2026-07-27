@@ -14,6 +14,7 @@ Lifecycle hooks and the events they run on. The event column is derived from the
 | `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
+| `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. | all |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
@@ -50,6 +51,12 @@ Post-edit hook: auto-format and lint edited files with whatever toolchain is
 *core · events: `PreToolUse` · matcher: `edit|write|multi_edit|Edit|Write|MultiEdit`*
 
 Pre-edit hook: block edits to sensitive/generated files.
+
+### `remind-skill-announce.py`
+
+*core · events: `PostToolUse` · matcher: `Skill`*
+
+PostToolUse hook: remind Claude to announce a skill it just invoked.
 
 ### `snapshot-subagent-start.py`
 

@@ -8,7 +8,7 @@
     "Conventional commits; stage explicitly, never git add .",
     "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
   ],
-  "version": "1.5.0",
+  "version": "1.6.0",
   "core": {
     "skills": "all",
     "agents": "all",
@@ -18,7 +18,8 @@
       "snapshot-subagent-start.py",
       "verify-subagent-evidence.py",
       "audit-config-change.py",
-      "inject-skill-router.py"
+      "inject-skill-router.py",
+      "remind-skill-announce.py"
     ]
   },
   "exclude": [],
