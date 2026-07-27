@@ -164,3 +164,90 @@ class TestMainSuccess:
         assert "Route skills before responding." in additional_context
         assert "Ruff for linting and formatting" in additional_context
         assert "Type hints on public functions" in additional_context
+
+
+class TestRouterBodyDeduplication:
+    """The router body is identical in every preset — inject it once per session.
+
+    Several presets ship this hook, and Claude Code runs each installed copy on
+    SessionStart. Without a session-scoped claim the same ~1500-word router is
+    pasted into context once per preset. Conventions differ per preset, so those
+    are always emitted; only the shared body is deduplicated.
+    """
+
+    def _setup(self, monkeypatch: pytest.MonkeyPatch, root: Path, convention: str) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        _write_skill(root, "# Using Workflow\n\nRoute skills before responding.\n")
+        _write_conventions(root, [convention])
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(root))
+
+    def test_second_preset_in_a_session_emits_conventions_without_the_router_body(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+
+        self._setup(monkeypatch, tmp_path / "first", "Inventory before reorganizing")
+        assert main(session_id="s-1") == 0
+        first = json.loads(capsys.readouterr().out)["hookSpecificOutput"][
+            "additionalContext"
+        ]
+
+        self._setup(monkeypatch, tmp_path / "second", "Conventional commits only")
+        assert main(session_id="s-1") == 0
+        second = json.loads(capsys.readouterr().out)["hookSpecificOutput"][
+            "additionalContext"
+        ]
+
+        assert "Route skills before responding." in first
+        assert "Inventory before reorganizing" in first
+
+        assert "Route skills before responding." not in second
+        assert "Conventional commits only" in second
+
+    def test_a_different_session_gets_the_router_body_again(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+        self._setup(monkeypatch, tmp_path / "p", "Inventory before reorganizing")
+
+        assert main(session_id="s-1") == 0
+        capsys.readouterr()
+        assert main(session_id="s-2") == 0
+
+        assert "Route skills before responding." in capsys.readouterr().out
+
+    def test_without_a_session_id_the_body_is_always_emitted(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        """Codex delivers no stdin payload; a missing id must not suppress the router."""
+        monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+        self._setup(monkeypatch, tmp_path / "p", "Inventory before reorganizing")
+
+        assert main() == 0
+        assert "Route skills before responding." in capsys.readouterr().out
+        assert main() == 0
+        assert "Route skills before responding." in capsys.readouterr().out
+
+    def test_an_unwritable_marker_directory_still_emits_the_router(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        """Dedup is an optimization — it must never cost a session its router."""
+        blocker = tmp_path / "tmp"
+        blocker.write_text("not a directory")
+        monkeypatch.setenv("TMPDIR", str(blocker))
+        self._setup(monkeypatch, tmp_path / "p", "Inventory before reorganizing")
+
+        assert main(session_id="s-1") == 0
+        assert "Route skills before responding." in capsys.readouterr().out
