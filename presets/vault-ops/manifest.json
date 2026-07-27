@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "1.10.1",
+  "version": "1.11.0",
   "core": {
     "skills": ["using-workflow"],
     "agents": [],
@@ -16,7 +16,8 @@
       "snapshot-subagent-start.py",
       "verify-subagent-evidence.py",
       "audit-config-change.py",
-      "inject-skill-router.py"
+      "inject-skill-router.py",
+      "remind-skill-announce.py"
     ]
   },
   "exclude": [],
