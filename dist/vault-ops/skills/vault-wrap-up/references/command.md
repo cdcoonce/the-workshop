@@ -34,6 +34,8 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 8. **Fix obvious issues in-place**: missing date from git history, trivial frontmatter gaps, a missing wikilink with an obvious target. Fix silently; only ask about ambiguous cases.
 
+8.5. **Refresh per-project status sections**: For every note carrying a `status:` frontmatter field (any status value, any of `work/`, `personal/`, `perf/`) that this session touched — edited directly, or discussed/decided-on even without a file diff — rewrite its `## Current Status` section with 1–3 sentences of prose describing where the project was left: what happened this session, what's blocking, what's next. Link (`[[wikilink]]`) to the session's key notes. Replace the section wholesale each time; it reflects current state, not a running log — history lives in git blame. If the note doesn't have a `## Current Status` section yet, create one (placed after the intro/context, before other content sections). This is distinct from the handoff below: the handoff is a short-lived cross-project digest that gets fully overwritten every run, while `## Current Status` is the durable, per-project memory that outlives any one session. Do this silently, same as step 8.
+
 9. **Refresh the rolling handoff** (`/handoff`): rewrite `.brain/handoff-<context>.md` (pick the file via `.vault-context`) as a fresh digest — _resume-from-here / where we are / what's running / open threads / mode_ — so the next session resumes accurately. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Overwrite in place; keep it lean (it's a digest, not a log). Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
 
 10. **Commit & push** (`/sync`): commit the audited fixes, the harvested decisions/wins, and the refreshed handoff, then push — so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state.
@@ -69,6 +71,9 @@ Audit all notes created or modified during this session. Validate quality, fix m
 ### Skill Candidates
 - `repo-map-mermaid` — skill for generating Mermaid-based repo maps → approved, stub created
 - `snowflake-cortex-query` — pattern for ad-hoc Cortex queries from Claude sessions → dismissed
+
+### Project Status Updates
+- work/active/amrt/asset-management-reporting-tool.md — refreshed ## Current Status: generation harmonization workstream findings
 
 ### Actions Taken
 - Added date field to thinking/draft.md from git history
