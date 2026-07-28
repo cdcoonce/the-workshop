@@ -70,6 +70,7 @@ def test_workshop_maintainer_ships_only_maintenance_skills() -> None:
         "improve-skill",
         "add-the-workshop-hook",
         "land-skill-candidate",
+        "sync-gitlab-dev",
         "persona-builder",
     ]
     assert maintainer["preset_agents"] == [

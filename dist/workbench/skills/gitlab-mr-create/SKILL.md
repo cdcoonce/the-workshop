@@ -5,7 +5,7 @@ description: Create GitLab merge requests with `glab` using the `HEAD` conventio
 
 # GitLab MR creation
 
-**Scope:** for repos where GitLab is the primary remote (e.g. the work DAA GitLab). Do NOT use on repos where GitLab is only a CI mirror of a GitHub origin (e.g. the-workshop) — those take PRs via `github-cli`; the mirror receives pushes, never MRs.
+**Scope:** for repos where GitLab is the primary remote (e.g. the work DAA GitLab), and also for the-workshop's GitLab `dev` branch specifically, via `sync-gitlab-dev` — that skill invokes this script rather than duplicating MR-creation logic. Do NOT use this directly on the-workshop for anything else: GitHub (`origin`) remains its own integration point (PRs via `github-cli`), and GitLab `main` there is a solo CI-green merge with no MR step at all.
 
 Use `bash scripts/create-mr DESCRIPTION.md [glab mr create options]` from the target repository. Do not invoke `glab mr create` directly.
 
