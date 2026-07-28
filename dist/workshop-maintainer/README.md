@@ -17,6 +17,7 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
+| `/land-skill-candidate` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. |
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
 | `/skill-inventory` | Audits agent skills and their package boundaries. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
