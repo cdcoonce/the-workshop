@@ -20,6 +20,7 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 | `/land-skill-candidate` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. |
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
 | `/skill-inventory` | Audits agent skills and their package boundaries. |
+| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. |

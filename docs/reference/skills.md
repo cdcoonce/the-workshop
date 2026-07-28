@@ -58,6 +58,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
+| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. | workshop-maintainer |
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -349,6 +350,12 @@ Applies deliberate design taste to React UI generation — adjustable dials (var
 *`workshop-maintainer` preset*
 
 Audits agent skills and their package boundaries. Use when the user asks to inventory skills, find duplicate or overlapping skills, consolidate skills, group capabilities, reorganize presets, or decide where a skill belongs.
+
+### `/sync-gitlab-dev`
+
+*`workshop-maintainer` preset*
+
+Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. Use when GitHub dev or main has moved and GitLab hasn't been updated yet, or when the user asks to sync, push, or update GitLab for the-workshop.
 
 ### `/vault-audit`
 

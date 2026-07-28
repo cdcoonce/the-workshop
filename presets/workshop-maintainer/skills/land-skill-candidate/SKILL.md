@@ -75,8 +75,10 @@ Never commit on a red gate.
 ## 6. Land
 
 Commit with a message stating why (the constraint or evidence from step 1),
-push the branch, open a PR with base `dev` (never `main` directly, never
-GitLab — GitHub is `origin`, GitLab is a downstream mirror). Watch CI
+push the branch, open a PR with base `dev` (never `main` directly, and never
+GitLab — GitHub is `origin` and is this repo's own integration point; GitLab
+is a separate downstream copy synced by `sync-gitlab-dev`, not by landing a
+candidate here). Watch CI
 (`gh pr checks <n> --watch`) until it reports green; a pending or absent
 check is never a pass. Merge only if the user has already authorized merging
 this candidate; otherwise stop once CI is green and ask. Promoting `dev` to
@@ -93,5 +95,6 @@ approval.
 - Do not invent or scope candidates yourself — that's the source workflow's
   job (`/wrap-up`, `improve-skill`, a review, or the user).
 - Do not push directly to `dev` or `main`; always land through a PR.
-- Do not touch the GitLab remote — it is a one-way mirror fed by `dev`.
+- Do not touch the GitLab remote — syncing it is `sync-gitlab-dev`'s job, run
+  separately once this candidate's GitHub PR has merged.
 - Do not promote `dev` to `main` as part of landing a candidate.

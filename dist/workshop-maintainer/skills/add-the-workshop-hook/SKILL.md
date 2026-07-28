@@ -94,9 +94,10 @@ you skipped `make docs`/`make build` in step 6 — regenerate and commit.
 
 Then commit with a message stating the _why_ (the constraint from step 1, the
 tradeoff from steps 3/4) and follow CLAUDE.md's branch policy: **branch off
-`dev`, PR into `dev`.** Never push to `main`; never push or merge this repo on
-GitLab — `origin` is GitHub, GitLab is a one-way mirror fed by merges into
-`dev`. Confirm with `git remote -v` rather than assuming.
+`dev`, PR into `dev`.** Never push to `main` directly. `origin` is GitHub and
+is this repo's own integration point; GitLab is a separate downstream copy —
+sync it afterward with `sync-gitlab-dev`, not as part of landing this hook.
+Confirm remotes with `git remote -v` rather than assuming.
 
 If the hook ships in a preset someone already has installed, **bump that
 preset's version** — otherwise `claude plugin update` offers nothing and the
