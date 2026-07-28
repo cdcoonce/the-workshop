@@ -15,7 +15,7 @@ NO REVIEW-FEEDBACK REQUEST BECOMES A REVIEW PACKET UNLESS THE USER ASKS FOR A PA
 
 Default to acting: read the threads keeping each finding's discussion ID, give every finding a disposition before writing code, patch the MR branch without disturbing unrelated local changes, test the reviewed behavior, then push, watch CI, and answer the reviewer.
 
-**Check each finding against the current head before fixing it.** A review states what was true at the commit it cites; the fix may have landed since, leaving the MR blocked on something that no longer reproduces. When the branch has moved on, invoke the `stale-artifact-sweep` skill if available, otherwise re-run the cited case at head yourself. Only ever claim a finding is resolved on the strength of a re-run, never a guess.
+**Check each finding against the current head before fixing it.** A review states what was true at the commit it cites; the fix may have landed since, leaving the MR blocked on something that no longer reproduces. Fetch before trusting a local branch as head — a stale local checkout silently re-runs the cited case against an old commit, which can misreport a live finding as already fixed. When the branch has moved on, invoke the `stale-artifact-sweep` skill if available, otherwise re-run the cited case at head yourself. Only ever claim a finding is resolved on the strength of a re-run, never a guess.
 
 ## Trigger Guard
 
