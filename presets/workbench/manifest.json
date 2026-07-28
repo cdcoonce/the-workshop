@@ -8,7 +8,7 @@
     "Conventional commits; stage explicitly, never git add .",
     "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
   ],
-  "version": "1.6.1",
+  "version": "2.0.0",
   "core": {
     "skills": "all",
     "agents": "all",

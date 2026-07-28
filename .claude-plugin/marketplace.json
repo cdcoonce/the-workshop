@@ -18,43 +18,43 @@
     },
     {
       "name": "persona-pair-programmer",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.",
       "source": "./dist/persona-pair-programmer"
     },
     {
       "name": "persona-ship-it",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves.",
       "source": "./dist/persona-ship-it"
     },
     {
       "name": "persona-staff-eng-deep",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out.",
       "source": "./dist/persona-staff-eng-deep"
     },
     {
       "name": "persona-terse-staff-eng",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona.",
       "source": "./dist/persona-terse-staff-eng"
     },
     {
       "name": "persona-thinking-partner",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Socratic thinking partner — sharp questions and decision-sharpening over answers.",
       "source": "./dist/persona-thinking-partner"
     },
     {
       "name": "vault-ops",
-      "version": "1.12.0",
+      "version": "2.0.0",
       "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
       "source": "./dist/vault-ops"
     },
     {
       "name": "workbench",
-      "version": "1.6.1",
+      "version": "2.0.0",
       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.",
       "source": "./dist/workbench"
     },
