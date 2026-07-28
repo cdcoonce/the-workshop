@@ -6,7 +6,7 @@
     "Keep source ownership distinct from distribution membership",
     "Regenerate docs and dist after changing any component"
   ],
-  "version": "1.1.0",
+  "version": "1.2.0",
   "core": {
     "skills": ["using-workflow", "grill-me", "tdd", "commit", "daa-code-review"],
     "agents": [],
@@ -26,6 +26,7 @@
     "workshop-skill-creator",
     "improve-skill",
     "add-the-workshop-hook",
+    "land-skill-candidate",
     "persona-builder"
   ],
   "preset_hooks": [],
