@@ -1,7 +1,7 @@
 {
   "name": "persona-terse-staff-eng",
   "description": "Terse senior-staff-engineer voice \u2014 answer-first, minimal, expert assumptions. The least verbose persona.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "base_settings": false,
   "core": {
     "skills": [],

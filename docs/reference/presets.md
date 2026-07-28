@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v1.12.0*
+*project preset · v2.0.0*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -40,7 +40,7 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 ### `workbench`
 
-*project preset · v1.6.1*
+*project preset · v2.0.0*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
@@ -106,7 +106,7 @@ Product-strategy sounding board and coach persona for a design+PM hybrid at an e
 
 ### `persona-pair-programmer`
 
-*persona plugin · v1.0.1*
+*persona plugin · v1.0.2*
 
 Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.
 
@@ -114,7 +114,7 @@ Collaborative pair-programmer voice — brief think-aloud, checks in at decision
 
 ### `persona-ship-it`
 
-*persona plugin · v1.0.1*
+*persona plugin · v1.0.2*
 
 Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves.
 
@@ -122,7 +122,7 @@ Momentum-first voice — blunt, bias-to-action, picks a sensible default and mov
 
 ### `persona-staff-eng-deep`
 
-*persona plugin · v1.0.1*
+*persona plugin · v1.0.2*
 
 Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out.
 
@@ -130,7 +130,7 @@ Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cas
 
 ### `persona-terse-staff-eng`
 
-*persona plugin · v1.0.1*
+*persona plugin · v1.0.2*
 
 Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona.
 
@@ -138,7 +138,7 @@ Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions.
 
 ### `persona-thinking-partner`
 
-*persona plugin · v1.0.1*
+*persona plugin · v1.0.2*
 
 Socratic thinking partner — sharp questions and decision-sharpening over answers.
 

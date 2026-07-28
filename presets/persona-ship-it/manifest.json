@@ -1,7 +1,7 @@
 {
   "name": "persona-ship-it",
   "description": "Momentum-first voice \u2014 blunt, bias-to-action, picks a sensible default and moves.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "base_settings": false,
   "core": {
     "skills": [],
