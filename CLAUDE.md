@@ -53,15 +53,15 @@ Write plans to `docs/plans/{file_name}.md`. Archive completed plans to `docs/arc
 
 ## Branch and Promotion Policy
 
-This repo **integrates on GitHub**. The GitLab remote is a one-way downstream
-mirror — never push or merge the-workshop on GitLab.
+This repo **integrates on GitHub**.
 
-- **`origin` is GitHub; `gitlab` is the mirror.** Confirm with `git remote -v`
-  before branching — do not assume, and do not trust `origin` to be the
-  integration remote in a clone you did not configure. A clone that had these
-  reversed branched work off a GitLab `dev` that was 56 commits behind, which
-  silently deleted merged skills from the working tree; the remotes were renamed
-  afterwards so `origin` means the integration remote here.
+- **`origin` is GitHub; `gitlab` is a downstream copy.** Confirm with
+  `git remote -v` before branching — do not assume, and do not trust `origin`
+  to be the integration remote in a clone you did not configure. A clone that
+  had these reversed branched work off a GitLab `dev` that was 56 commits
+  behind, which silently deleted merged skills from the working tree; the
+  remotes were renamed afterwards so `origin` means the integration remote
+  here.
 - **Branch off `dev`**, one concern per branch, named `<type>/<kebab-slug>` using
   Conventional Commit types (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`,
   `chore/`, `ci/`, `perf/`, `style/`). No vendor or agent prefixes.
@@ -71,11 +71,20 @@ mirror — never push or merge the-workshop on GitLab.
   branch straight into it.
 - **Both branches are protected.** The `test` check must pass and the branch
   must be up to date with its base before a merge is allowed.
-- Merging into `dev` triggers the GitLab mirror. The mirror is an output, not an
-  integration path.
 - Before any push or pull request, confirm the target branch from these project
   instructions and `.github/workflows/`; do not infer it from the repository's
   default branch.
+
+### GitLab (downstream copy)
+
+GitLab is no longer kept in sync by an automated mirror job — `git push gitlab
+<branch>` by hand when an update is wanted, there is no scheduled or
+push-triggered sync. Once pushed, GitLab-side promotion mirrors the standard
+work-repo pattern used elsewhere: branch → MR → `dev` (1 approval required,
+enforced by a GitLab approval rule scoped to the `dev` protected branch), then
+`dev` → `main` is a solo CI-green merge — no extra approval gate. GitLab CI
+(`.gitlab-ci.yml`) runs the same `make test` gate on `dev`, `main`, and every
+merge request.
 
 Before a pull request is ready, `make docs`, `make build`, and `make test` must
 all pass, with the regenerated `docs/` and `dist/` included in the change.
