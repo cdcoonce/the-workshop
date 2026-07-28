@@ -24,11 +24,18 @@ workflow:
 test:
   stage: test
   image: python:3.12
+  variables:
+    GIT_DEPTH: 0
   before_script:
     # The full test target shells out to `make` and `git`; the GitLab MR guard
     # exercised by the suite also requires `jq`.
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends make git jq
     - pip install --quiet uv
     - uv sync
+    # scripts.check_version_bumps diffs against origin/main; GitLab's MR
+    # pipelines only fetch the MR ref by default, so origin/main never exists
+    # locally without an explicit fetch (unlike actions/checkout, which pulls
+    # all branches at fetch-depth 0).
+    - git fetch origin main
   script:
     - make test
