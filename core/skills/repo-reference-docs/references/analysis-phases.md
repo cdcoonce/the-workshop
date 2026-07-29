@@ -1,10 +1,10 @@
 # Codebase Analysis Methodology Reference
 
-This is the detailed reference for **Step 1 (Codebase Analysis)** of the readme-generator workflow. The main SKILL.md contains a brief summary of each phase and links here for the full methodology.
+The deep version of the analysis in [analysis-method.md](analysis-method.md). Use it when a repo needs more than an orienting sweep — an unfamiliar codebase, a full doc set from scratch, or a README that has to be right about dependencies, commands, and environment variables.
 
 This methodology is tailored for **Python** projects in **analytics engineering** and **data engineering** — the common tools include uv, Polars, Streamlit, dagster, dbt, dlt, Snowflake, openpyxl, loguru, and pytest.
 
-Follow these four phases sequentially (unless scaling guidance says otherwise). Tag every extracted fact with a confidence level. The output of all four phases feeds directly into Step 2 (Clarifying Questions) and Step 3 (README Generation).
+Follow these four phases sequentially (unless scaling guidance says otherwise). Tag every extracted fact with a confidence level. Facts that stay low-confidence become the questions you ask before writing.
 
 ---
 
@@ -15,9 +15,9 @@ Tag every fact recorded during analysis. These tags propagate through the entire
 | Tag               | Meaning                                                                              | Source                           | Downstream effect                                 |
 | ----------------- | ------------------------------------------------------------------------------------ | -------------------------------- | ------------------------------------------------- |
 | `[confirmed]`     | Read directly from source code, config file, or existing documentation               | Literal value in a file          | Use in README without qualification               |
-| `[inferred-high]` | Strong evidence from naming conventions, directory structure, or consistent patterns | Multiple corroborating signals   | Use in README, but flag for user review in Step 2 |
-| `[inferred-low]`  | Guess based on partial or ambiguous evidence                                         | Single weak signal, naming alone | Becomes a **clarifying question** in Step 2       |
-| `[unknown]`       | Cannot determine from codebase analysis alone                                        | No evidence found                | Becomes a **clarifying question** in Step 2       |
+| `[inferred-high]` | Strong evidence from naming conventions, directory structure, or consistent patterns | Multiple corroborating signals   | Use it, but flag for user review            |
+| `[inferred-low]`  | Guess based on partial or ambiguous evidence                                         | Single weak signal, naming alone | Becomes a **clarifying question**                |
+| `[unknown]`       | Cannot determine from codebase analysis alone                                        | No evidence found                | Becomes a **clarifying question**                |
 
 Apply tags inline next to each recorded fact:
 
@@ -444,7 +444,7 @@ When dispatching subagents for Phase 3, use this prompt template:
 ```markdown
 ## Task: Analyze modules in [directory/cluster name]
 
-You are analyzing a subset of Python modules for README generation. Below is the
+You are analyzing a subset of Python modules for repo documentation. Below is the
 full import graph from Phase 2 — use it to understand how your modules connect to
 the rest of the system.
 
@@ -711,7 +711,7 @@ BaseError
 - Source-to-sink data path documented (e.g., Snowflake → transform → Excel → download/SharePoint)
 - Test-to-module mapping built
 - Exception hierarchy known and at least 3 troubleshooting scenarios identified
-- **OR** 60%+ context window consumed (leave room for README generation)
+- **OR** 60%+ context window consumed (leave room for writing the docs)
 
 ### Do NOT stop if any of these are true:
 
@@ -733,134 +733,3 @@ BaseError
 | **Large** (20+ source files)   | Phases 1-2 sequentially. Dispatch 4-6 parallel agents for Phase 3 (one per directory or subsystem). Dispatch 2 parallel agents for Phase 4 (one for tests, one for docs/config/assets). Merge results and verify cross-references between agent outputs. |
 
 **When dispatching parallel agents, always include the import graph from Phase 2 in each agent's prompt.** Without it, agents cannot determine how their modules connect to the rest of the system.
-
----
-
-## README Structure
-
-The output template for **Step 3 (Generate the README.md)** — the main SKILL.md links here once analysis (Step 1) and clarifying questions (Step 2) are complete. Use this as your template. Include all sections, but scale depth to match the project's complexity. Use `---` horizontal rules between every major section for visual breathing room.
-
-````markdown
-# Project Name
-
-![Language](https://img.shields.io/badge/...) ![Framework](https://img.shields.io/badge/...) ![Tool](https://img.shields.io/badge/...)
-
-Brief, clear description. Use **bold** to highlight the key technology or product type.
-
----
-
-## Table of Contents
-
-Generate a thorough, nested table of contents that includes ALL ## and ### headings. Indent sub-sections under their parents so readers can see the full structure at a glance. This is especially important for longer READMEs — the TOC serves as both a navigation tool and an outline of the entire document.
-
-Example of the expected depth:
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-  - [High-Level Architecture](#high-level-architecture)
-  - [Folder Structure](#folder-structure)
-  - [Module Dependency Graph](#module-dependency-graph)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running Tests](#running-tests)
-- [Environment Variables](#environment-variables)
-- [Usage](#usage)
-  - [Example: Primary Use Case](#example-primary-use-case)
-  - [Example: Secondary Use Case](#example-secondary-use-case)
-- [API Reference](#api-reference)
-  - [Resource A](#resource-a)
-  - [Resource B](#resource-b)
-- [Troubleshooting](#troubleshooting)
-- [Contact](#contact)
-- [License](#license)
-
-Every ### heading in the document should appear as an indented entry under its parent ## heading. Don't skip sub-sections — the whole point of a thorough TOC is that readers can jump directly to any part of the document.
-
----
-
-## Overview
-
-Expand on the description. Bold key terms. Use numbered lists for multi-step processes.
-
----
-
-## Architecture
-
-### High-Level Architecture
-
-```mermaid
-graph TD
-    ...
-```
-````
-
-### Folder Structure
-
-```
-project-root/
-├── src/           # Brief annotation
-├── tests/         # Brief annotation
-└── ...
-```
-
-### [Data Flow / Pipeline / Module Dependencies — additional diagrams]
-
-```mermaid
-...
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-### Installation
-
-### Running Tests
-
----
-
-## Environment Variables
-
-| Variable | Required | Description                  |
-| -------- | -------- | ---------------------------- |
-| `DB_URL` | Yes      | PostgreSQL connection string |
-
----
-
-## Usage
-
-Real code examples for the 2-3 most common operations.
-
----
-
-## API Reference <!-- if applicable -->
-
----
-
-## Troubleshooting
-
-| Symptom         | Likely Cause | Fix           |
-| --------------- | ------------ | ------------- |
-| `error message` | What's wrong | How to fix it |
-
----
-
-## Contact
-
-For questions or support, contact:
-
-- **Name** — email@company.com
-
----
-
-## License
-
-**Internal Use Only – Company Name**
-Proprietary software. © [Year] [Company]. All rights reserved.
-
-```
-
-```

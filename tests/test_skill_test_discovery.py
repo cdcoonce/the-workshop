@@ -24,11 +24,18 @@ def test_discovers_known_suites() -> None:
         assert expected in suites, f"{name} script suite not discovered"
 
 
-def test_excludes_empty_scaffolding() -> None:
+def test_excludes_empty_scaffolding(tmp_path: Path) -> None:
     """A scripts/tests dir with no test files is not treated as a suite."""
-    suites = {p.resolve() for p in find_suites(REPO_ROOT)}
-    empty = (REPO_ROOT / "core/skills/readme-generator/scripts").resolve()
-    assert empty not in suites
+    empty = tmp_path / "core/skills/scaffolded/scripts"
+    (empty / "tests").mkdir(parents=True)
+    (empty / "tests" / "__init__.py").write_text("")
+    real = tmp_path / "core/skills/covered/scripts"
+    (real / "tests").mkdir(parents=True)
+    (real / "tests" / "test_thing.py").write_text("def test_ok() -> None:\n    assert True\n")
+
+    suites = {p.resolve() for p in find_suites(tmp_path)}
+    assert empty.resolve() not in suites
+    assert real.resolve() in suites
 
 
 def test_discovery_matches_disk_exactly() -> None:
