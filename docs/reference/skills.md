@@ -27,8 +27,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
 | `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
-| `/readme-generator` | Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. | workbench |
-| `/repo-reference-docs` | Create and maintain a thorough, human-readable Markdown reference-docs set for a repository under docs/reference/ — architecture overview, module/directory map, data and control flow, conventions and glossary, plus an index. | workbench |
+| `/repo-reference-docs` | Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). | workbench |
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
@@ -58,6 +57,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
+| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. | workshop-maintainer |
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
@@ -194,17 +194,11 @@ Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical s
 
 Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. Use this skill when the user asks to create, update, regenerate, or refresh project context, or says things like "update project.md", "generate project context", "this repo needs a project.md", or "Claude doesn't know about this project". Also trigger when onboarding Claude to a new repository for the first time.
 
-### `/readme-generator`
-
-*universal*
-
-Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. Also triggers on "this repo needs a README" or just "README"/"readme" in a codebase context. This skill owns the single root README (the front door) and keeps it current. For a multi-file, in-depth reference set — architecture, module map, data flow, conventions — use repo-reference-docs instead.
-
 ### `/repo-reference-docs`
 
 *universal*
 
-Create and maintain a thorough, human-readable Markdown reference-docs set for a repository under docs/reference/ — architecture overview, module/directory map, data and control flow, conventions and glossary, plus an index. Use when someone wants deep repo documentation, a reference-docs set, an architecture doc, a "where does X live" module map, a data-flow write-up, or wants existing repo reference docs refreshed, updated, or checked for staleness against the code. Not for a single front-door README (use readme-generator) or the Claude-facing project.md (use project-context).
+Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", or wants deep repo documentation, an architecture doc, a "where does X live" module map, a data-flow write-up, or a staleness check of existing docs against the code. Not for the Claude-facing project.md (use project-context).
 
 ### `/request-refactor-plan`
 
@@ -349,6 +343,12 @@ Applies deliberate design taste to React UI generation — adjustable dials (var
 *`workshop-maintainer` preset*
 
 Audits agent skills and their package boundaries. Use when the user asks to inventory skills, find duplicate or overlapping skills, consolidate skills, group capabilities, reorganize presets, or decide where a skill belongs.
+
+### `/sync-gitlab-dev`
+
+*`workshop-maintainer` preset*
+
+Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. Use when GitHub dev or main has moved and GitLab hasn't been updated yet, or when the user asks to sync, push, or update GitLab for the-workshop.
 
 ### `/vault-audit`
 

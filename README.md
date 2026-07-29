@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; hooks and personas execute on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**31 universal skills · 2 core agents · 10 hooks · 3 project presets · 7 persona plugins**
+**30 universal skills · 2 core agents · 10 hooks · 3 project presets · 7 persona plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -175,8 +175,8 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 25 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 37 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
-| **`workshop-maintainer`** | project | 11 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
+| **`workbench`** | project | 36 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
+| **`workshop-maintainer`** | project | 12 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`persona-pair-programmer`** | persona | 0 | 0 | — |
@@ -217,8 +217,7 @@ These ship with every preset:
 | `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
 | `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
 | `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
-| `/readme-generator` | Use when the user asks to create, write, generate, update, improve, or refresh the root README.md of a repository, or asks for a project's front-door / landing documentation. | workbench |
-| `/repo-reference-docs` | Create and maintain a thorough, human-readable Markdown reference-docs set for a repository under docs/reference/ — architecture overview, module/directory map, data and control flow, conventions and glossary, plus an index. | workbench |
+| `/repo-reference-docs` | Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). | workbench |
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
@@ -252,6 +251,7 @@ These ship only with the presets that declare them:
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
 | `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
 | `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
+| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. | workshop-maintainer |
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |

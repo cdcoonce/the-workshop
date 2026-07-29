@@ -6,15 +6,15 @@ from scripts.smoke_test import _lint_trigger_overlaps
 def test_flags_shared_quoted_trigger_phrase() -> None:
     """Two skills quoting the same multi-word trigger collide and are flagged."""
     descriptions = {
-        "readme-generator": 'Use when the user says "write docs for this repo".',
-        "repo-reference-docs": 'Use when the user says "write docs for this repo" for depth.',
+        "shallow-docs": 'Use when the user says "write docs for this repo".',
+        "deep-docs": 'Use when the user says "write docs for this repo" for depth.',
     }
     findings = _lint_trigger_overlaps(descriptions)
     assert len(findings) == 1
     joined = findings[0].lower()
     assert "write docs for this repo" in joined
-    assert "readme-generator" in joined
-    assert "repo-reference-docs" in joined
+    assert "shallow-docs" in joined
+    assert "deep-docs" in joined
 
 
 def test_no_finding_for_distinct_triggers() -> None:

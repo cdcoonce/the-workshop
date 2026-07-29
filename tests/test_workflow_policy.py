@@ -17,18 +17,20 @@ def test_finish_branch_requires_explicit_integration_branch() -> None:
 def test_workshop_declares_dev_first_promotion_path() -> None:
     """Workshop integrates on GitHub: branch to dev, then promote dev to main.
 
-    GitLab is a one-way downstream mirror, never an integration path — the
-    policy must say so, because an agent that reads it otherwise will try to
-    promote through a GitLab merge request that no one reviews.
+    GitLab is a downstream copy updated by a manual push, not an automated
+    mirror job — the policy must say so, because an agent that reads it
+    otherwise will assume a bot keeps GitLab in sync on its own.
     """
     repository_root = Path(__file__).resolve().parents[1]
     instructions = " ".join((repository_root / "CLAUDE.md").read_text().split())
 
     assert "integrates on GitHub" in instructions
-    assert "never push or merge the-workshop on GitLab" in instructions
+    assert "gitlab` is a downstream copy" in instructions
     assert "Open a pull request into `dev`" in instructions
     assert "Promote `dev` → `main`" in instructions
     assert "never push to it directly" in instructions
+    assert "no longer kept in sync by an automated mirror job" in instructions
+    assert "1 approval required" in instructions
 
 
 def test_router_requires_policy_resolution_and_afk_mode() -> None:
