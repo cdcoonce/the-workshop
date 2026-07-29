@@ -20,8 +20,8 @@ works, for engineers onboarding to it. Two surfaces, one pass, one skill:
   run it, what the environment needs, where to look next.
 - **`docs/reference/`** — the deep set, for repos that need more than a front door.
 
-Every claim is grounded in real source that you read first — never describe code
-you have not opened. Write only these two surfaces; never edit
+Every claim is grounded in real source that you read first — never describe code you
+have not opened. Write only these two surfaces; never edit
 `.claude/docs/project.md` (that is `project-context`), link to it instead.
 
 ## Scope — pick before writing
@@ -48,26 +48,26 @@ Under `docs/reference/` (layouts in
 - `data-flow.md` — how data and control move end to end; key sequences, with a
   Mermaid sequence/flow diagram where it clarifies.
 - `conventions.md` — naming, recurring patterns, and a glossary of domain terms.
+- `schema.md` — **optional, database repos only.** Entities, keys, join paths, view
+  dependencies, generated from the repo's SQL DDL where there is one:
+  [references/generated-erd.md](references/generated-erd.md).
 
 Trim docs that do not apply; note the omission in the index, never ship an empty file.
 
-## Modes
-
-Detect which applies from the repo state:
+## Modes — detect which applies from the repo state
 
 - **Create / update (default).** Generate what is absent. Where a doc or README
   already exists, update only the ones whose covered source changed since their
   baseline (see freshness below); leave the rest alone.
 - **Check / staleness.** Read-only. Run `scripts/check_docs.py` to report the
-  README and any reference doc whose covered paths moved, disappeared, or
-  changed since baseline. Writes nothing and exits non-zero on drift, so it
-  works in CI and on any clone.
+  README and any reference doc whose covered paths moved, disappeared, or changed
+  since baseline. Writes nothing and exits non-zero on drift, so it works in CI.
 
-Follow [references/analysis-method.md](references/analysis-method.md) for how to
-analyze a repo, ground each section, and scope an incremental update. For an
-unfamiliar codebase or a from-scratch pass, use the deeper four-phase sweep in
-[references/analysis-phases.md](references/analysis-phases.md), then ask the user
-only about what analysis could not settle.
+Follow [references/analysis-method.md](references/analysis-method.md) to analyze a
+repo, ground each section, and scope an incremental update. For an unfamiliar
+codebase or a from-scratch pass, use the four-phase sweep in
+[references/analysis-phases.md](references/analysis-phases.md), then ask only
+about what analysis could not settle.
 
 ## Freshness & provenance
 
@@ -80,10 +80,10 @@ checker both read:
 
 `covers` lists the source paths that doc is derived from; for the README those
 are its front-door anchors (manifests, env templates, CI configs, entry points),
-not every file. `baseline` is the commit it was last synced to. This lives
-in-repo so staleness is visible to everyone and to CI. A richer local analysis
-cache may be kept under `~/.workshop/repo-reference-docs/<repo-key>/` purely to
-speed incremental updates — it is an optimization, never the source of truth.
+not every file. `baseline` is the commit it was last synced to. This lives in-repo
+so staleness is visible to everyone and to CI. A richer local analysis cache may
+be kept under `~/.workshop/repo-reference-docs/<repo-key>/` purely to speed
+incremental updates — an optimization, never the source of truth.
 
 READMEs stamped by the retired `readme-generator` skill carry a
 `<!-- readme-generator: ... -->` footer. That is provenance too — read it,
