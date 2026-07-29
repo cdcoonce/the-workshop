@@ -27,6 +27,10 @@ A typical comprehensive README should have **3-6 mermaid diagrams**. Complex pro
   - `graph TD` / `graph LR` — architecture, data flow, dependencies
   - `sequenceDiagram` — request/response flows, "what happens when..."
   - `flowchart TD` — decision trees, processes with branches
+  - `erDiagram` — database entities, keys, and cardinality. It has no notion of a
+    view, so pair it with a `flowchart` for the view dependency graph; see
+    [generated-erd.md](generated-erd.md), which also covers generating both from
+    the DDL rather than drawing them by hand.
 
 ## Choosing Diagrams by Project Type
 

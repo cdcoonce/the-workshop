@@ -92,6 +92,28 @@ what it must not do, where its responsibility ends.
 
 ---
 
+## schema.md (optional, database repos)
+
+Only when the repo declares a database schema. Layout:
+
+- **What this schema is** — one paragraph, plus links to the DDL and any data
+  dictionary.
+- **Reading the model** — the two or three facts that explain its shape (grain
+  splits, derived vs authored tables, append-only-ness).
+- **Entities** — a Mermaid `erDiagram` plus an entity/grain/PK/natural-key table.
+- **View dependencies** — a Mermaid `flowchart` DAG plus a view/reads/use-it-for
+  table per group.
+- **Common queries** — a few real ones, and the traps they avoid.
+- **Verifying against the live database** — catalog queries a human can run, and
+  a statement that they do not run in CI.
+- **Regenerating this page** — only if it is generated.
+
+Generate the two diagram sections from the DDL when the repo qualifies; see
+[generated-erd.md](generated-erd.md) for the generator, marker injection, and
+drift tests. The provenance footer goes outside the generated markers.
+
+---
+
 ## Mermaid guidance
 
 - Use `flowchart`/`graph` for component and dependency structure,
