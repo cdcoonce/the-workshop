@@ -54,7 +54,7 @@
     },
     {
       "name": "workbench",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.",
       "source": "./dist/workbench"
     },
