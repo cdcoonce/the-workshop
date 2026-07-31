@@ -34,6 +34,7 @@ verdict is the failure this skill exists to prevent — never emit one.
 | `SUPERSEDED`           | Something else changed the ground under it; the record is now wrong. |
 | `NO_LONGER_REPRODUCES` | The check that produced it was re-run and passed.                    |
 | `UNVERIFIABLE`         | Could not be decided from available evidence. Say what is missing.   |
+| `REMEDY_UNSOUND`       | Reproduces exactly as written, but its diagnosis or prescribed fix is wrong. |
 
 `NO_LONGER_REPRODUCES` requires an **actual re-run**. "The fix probably landed" is
 `UNVERIFIABLE`, not a clean bill of health.
@@ -70,6 +71,14 @@ A blocker declared on commit X says nothing about head Y.
 - If the cited files moved, **re-run the original check** — the CI job, the scanner, the test.
 - Only a passing re-run justifies `NO_LONGER_REPRODUCES`. A newer green pipeline on a _different_
   commit does not count.
+
+### 3b. Sound finding, unsound remedy — the verdict the other five miss
+
+The others all ask whether the record went **stale**. A finding can be perfectly current and
+still be **wrong on the merits**, and `STILL_VALID` then reads as authorization to implement
+it. Settle it with `detector-teeth-check`: apply the prescribed fix and watch the suite. If it
+turns a failing case green, record `REMEDY_UNSOUND` with the mutation result. See
+[references/unsound-remedy.md](references/unsound-remedy.md).
 
 ### 4. Semantic staleness — read the content
 
