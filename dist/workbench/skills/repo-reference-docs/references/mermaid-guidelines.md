@@ -32,6 +32,60 @@ A typical comprehensive README should have **3-6 mermaid diagrams**. Complex pro
     [generated-erd.md](generated-erd.md), which also covers generating both from
     the DDL rather than drawing them by hand.
 
+## Validate every diagram before committing
+
+A Mermaid syntax error **renders as a broken block in the host** — it does not fail
+a build, a lint, or a test. Nothing tells you. Parse each block you wrote or edited:
+
+```bash
+npm install mermaid jsdom   # in a scratch dir, not the repo
+```
+
+````js
+import { JSDOM } from "jsdom";
+
+// DOM globals must exist BEFORE mermaid is imported.
+const dom = new JSDOM("<!doctype html><html><body></body></html>");
+global.window = dom.window;
+global.document = dom.window.document;
+// navigator is read-only on newer Node, so it needs defineProperty.
+Object.defineProperty(global, "navigator", {
+  value: dom.window.navigator,
+  configurable: true
+});
+
+const { default: mermaid } = await import("mermaid"); // dynamic, AFTER the globals
+mermaid.initialize({ startOnLoad: false });
+
+// then: for each ```mermaid block, await mermaid.parse(block)
+````
+
+**The trap that will cost you an hour.** A static `import mermaid from "mermaid"` at
+the top of the file evaluates *before* those global assignments, so Mermaid binds a
+stubbed DOMPurify. Any block whose **labels need sanitizing** then fails with
+`DOMPurify.addHook is not a function` — which reads like a diagram defect and is not.
+Use a dynamic `await import()` after the globals.
+
+The failure is label-driven, not diagram-type-driven, and that is what makes it
+confusing. Verified against a static import:
+
+| Block                                          | Result                        |
+| ---------------------------------------------- | ----------------------------- |
+| `flowchart LR` with a plain label              | passes                        |
+| `flowchart LR` with an HTML label (`A<br/>B`)  | **fails** — `addHook`         |
+| `erDiagram`, `sequenceDiagram`                 | passes                        |
+
+Since `<br/>` is the normal way to wrap a node label, most real-world flowcharts trip
+it while a toy reproduction does not — so a minimal test can wrongly convince you the
+harness is fine.
+
+**How to tell harness from diagram:** the giveaway is that **pre-existing,
+previously-rendering diagrams fail too**. If a block you never touched is suddenly
+invalid, fix the harness, not the page.
+
+Delete the scratch script and dependencies afterwards unless the repo wants a
+permanent check.
+
 ## Choosing Diagrams by Project Type
 
 ### Data pipeline project — aim for 4-6 diagrams:
