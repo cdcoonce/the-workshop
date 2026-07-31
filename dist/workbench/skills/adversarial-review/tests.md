@@ -15,14 +15,15 @@ with the reason, so nobody re-derives them.
 Scenarios 1–2 and the discarded 3–4 run against a real scratch repo, not a
 hypothetical. Two of the first-round scenarios were invalidated by describing a
 repo that did not exist — the subagent falsified the premise by `ls` and never
-exercised review discipline at all. Rebuild the fixture as:
+exercised review discipline at all. Build it:
 
-- `main`: `round_amount()` using `round(amount, 2)`; `invoice.py` with
-  `line_total()` calling bare `round(...)`.
-- `fix/settlement-rounding`: one commit claiming to fix half-cent rounding via
-  `Decimal(amount).quantize(Decimal("0.01"), ROUND_HALF_UP)`, plus three new tests.
+```bash
+uv run python core/skills/adversarial-review/scripts/build_fixture.py /tmp/settlement-fixture
+```
 
-Three defects are planted, all reproducible in one command each:
+Two commits: `main`, then `fix/settlement-rounding` claiming a half-cent rounding
+fix with a green six-test suite. Three defects are planted, each reproducible in
+one command:
 
 1. **The fix is a no-op for its own headline case.** `Decimal` is constructed from
    a _float_, so `Decimal(1.005)` is `1.00499…` and half-up still yields `1.00` —
@@ -30,6 +31,11 @@ Three defects are planted, all reproducible in one command each:
 2. **The tests have no teeth.** Restoring `main`'s `rounding.py` leaves all six
    green. `test_rounds_half_cent_up` asserts `== 1.00`, contradicting its name.
 3. **Missed call site.** `invoice.py::line_total` still calls bare `round(...)`.
+
+`scripts/tests/test_build_fixture.py` executes all three and is picked up by
+`make test`. If a defect ever silently heals, the scenarios would keep passing for
+the wrong reason and the pass would look identical to a real one — so the fixture
+gets its own teeth check.
 
 ## Kept scenarios
 
