@@ -57,3 +57,20 @@ what you tried, grade it `PLAUSIBLE`, and move on.
 The ceiling protects coverage, not the author. Every extra minute on the defect you
 cannot demonstrate is another ledger row that goes unattacked — and, on the
 evidence above, unmentioned.
+
+**Check the barrier is real before you start counting attempts.** A reviewer spent
+an hour treating "production runs Python 3.9, my box does not" as a hard limit; the
+machine shipped 3.9 all along and settling the question took four minutes. Its own
+conclusion:
+
+> "The thing I was worried about for an hour was fine. Checking it took about four
+> minutes once I stopped assuming 3.9 was unavailable."
+
+An unreachability claim is a claim. Attack it like any other before it earns a
+`PLAUSIBLE` and closes the row — the ceiling exists to stop grinding, not to
+license surrender at the first obstacle that looks solid.
+
+Note that unlike the rest of this file, the ceiling is **unfalsified**: seven
+no-skill baselines produced no instance of an agent grinding past three attempts.
+It is retained as cheap insurance, not as machinery answering an observed failure.
+See `tests.md`.

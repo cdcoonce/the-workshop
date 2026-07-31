@@ -46,9 +46,9 @@ that condition. Prefer the disproof you can run over the one you can only argue.
 the standard attacks per claim type — including the one that catches most: revert
 the change and check whether the new tests actually go red.
 
-Three failed attempts to reproduce a suspected defect is the ceiling. Record what
-you tried, grade it `PLAUSIBLE`, and move on — do not grind, and do not promote a
-hypothesis to a finding because you spent time on it.
+Check the barrier before accepting it — "no credentials", "wrong runtime", "needs
+prod" are assumptions more often than facts. Once it is real, three failed
+attempts is the ceiling: record what you tried, grade it `PLAUSIBLE`, move on.
 
 ## 3. Grade on evidence, not conviction
 
