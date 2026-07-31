@@ -120,4 +120,10 @@ drift tests. The provenance footer goes outside the generated markers.
   `sequenceDiagram` for ordered interactions.
 - Keep a diagram to what fits on one screen; split rather than sprawl.
 - Every diagram is followed by prose — the diagram supports the text, not the
-  reverse. Validate syntax (e.g. via `daa-code-review`) before committing.
+  reverse.
+- **Validate syntax before committing** — a Mermaid error renders as a broken block
+  in the host, not as a build failure, so nothing else catches it. Either
+  `daa-code-review`, or the `mermaid.parse()` harness in
+  [mermaid-guidelines.md](mermaid-guidelines.md#validate-every-diagram-before-committing),
+  which also documents the import-order trap that fails diagrams with a misleading
+  DOMPurify error.

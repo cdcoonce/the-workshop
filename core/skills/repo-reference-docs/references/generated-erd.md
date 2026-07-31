@@ -161,18 +161,16 @@ npx --no-install prettier --check docs/reference/schema.md
 ```
 
 **Validate the Mermaid before committing.** Mermaid syntax errors render as a
-broken block in the host, not as a build failure. Parse each emitted block:
+broken block in the host, not as a build failure, so a generator that emits invalid
+syntax ships silently. Parse **both** emitted blocks — the `erDiagram` and the
+view-dependency `flowchart` — after every regeneration, not only the first time.
 
-```bash
-npm install mermaid jsdom
-```
-
-Then, in a throwaway node script, extract each ` ```mermaid ` block from the page
-and call `mermaid.parse()` on it. Mermaid needs a DOM: create a `jsdom` window and
-assign `global.window` / `global.document`, and on Node 26 set navigator via
-`Object.defineProperty(global, "navigator", { value: window.navigator })` because
-the global is read-only. Delete the script and the dev dependencies afterwards
-unless the repo wants a permanent check.
+The runnable harness, and the import-order trap that fails a diagram with a
+misleading `DOMPurify.addHook is not a function`, are in
+[mermaid-guidelines.md](mermaid-guidelines.md#validate-every-diagram-before-committing).
+Worth knowing here specifically: that trap fires on labels needing sanitization
+(`<br/>`), which the view-dependency `flowchart` commonly has and the `erDiagram`
+does not — so on this page it can look like only half the generator is broken.
 
 ## State the provenance limit on the page
 
