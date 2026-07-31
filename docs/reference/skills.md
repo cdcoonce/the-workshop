@@ -85,6 +85,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-upgrade` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. | vault-ops |
 | `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
+| `/walkthrough` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. | — |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
@@ -514,6 +515,12 @@ Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git
 *`vault-ops` preset*
 
 Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+
+### `/walkthrough`
+
+*`workbench` preset*
+
+Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals in the browser, and lets the user drill down interactively until understanding is complete. Produces a summary note at the end. Use when: user says "walk me through", "walkthrough this repo", "walk me through this MR", "walk me through this email", "walk me through this project", "walk me through this database", "explain this repo/MR/project to me".
 
 ### `/workshop-skill-creator`
 

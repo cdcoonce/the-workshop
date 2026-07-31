@@ -279,6 +279,7 @@ These ship only with the presets that declare them:
 | `/vault-upgrade` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. | vault-ops |
 | `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
+| `/walkthrough` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. | — |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 <!-- END GENERATED: preset-skills-table -->
 
