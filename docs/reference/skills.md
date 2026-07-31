@@ -32,12 +32,14 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
 | `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
 | `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. | workbench |
+| `/sql-deploy-precheck` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. | workbench |
 | `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. | workbench |
 | `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
 | `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
 | `/triage-quarantine` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. | workbench |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | all |
+| `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. | workbench |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
 
 ## Preset skills
@@ -224,6 +226,12 @@ Set up pre-commit hooks for the current repo. Use when user wants to add pre-com
 
 Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
 
+### `/sql-deploy-precheck`
+
+*universal*
+
+Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. Use when about to run a .sql file at a warehouse, after any ALTER TABLE, before re-running a views file, or when a deploy half-applied and left objects inconsistent. Skip for local-only or fixture SQL.
+
 ### `/stale-artifact-sweep`
 
 *universal*
@@ -259,6 +267,12 @@ Diagnose and resolve a failed, quarantined, or question-parked autonomous agent 
 *universal*
 
 Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action.
+
+### `/warehouse-sql-test-harness`
+
+*universal*
+
+Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. Use when changing warehouse SQL that has no executing tests, when a repo has sql/ but no tests/sql/, when a review says a view layer has zero coverage, or when you catch yourself asserting a SQL string contains a substring.
 
 ### `/write-a-prd`
 

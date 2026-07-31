@@ -33,3 +33,38 @@ def test_the_sweep_names_the_workflows_it_precedes() -> None:
 
     for skill in CONSUMERS:
         assert skill in text, f"stale-artifact-sweep does not mention {skill}"
+
+
+# ---------------------------------------------------------------------------
+# A finding can reproduce exactly as written and still be wrong
+# ---------------------------------------------------------------------------
+
+
+def test_the_sweep_has_a_verdict_for_a_sound_finding_with_an_unsound_remedy() -> None:
+    """The gap the five original verdicts leave open.
+
+    All of `STILL_VALID`, `ALREADY_DONE`, `SUPERSEDED`, `NO_LONGER_REPRODUCES` and
+    `UNVERIFIABLE` ask whether the record is *stale*. None covers the case where the
+    finding reproduces exactly as written, is not stale in any way, and its diagnosis
+    or prescribed fix is simply wrong — so `STILL_VALID` reads as authorization to
+    implement it.
+
+    Found in a PCI curve-audit review: a finding recorded as the queue's
+    highest-priority item quoted a code comment as its contract, the comment
+    contradicted the module it described, and the prescribed fix would have rendered
+    a phantom success CLEAN. It reproduced perfectly. It was still wrong.
+    """
+    text = (REPO_ROOT / "core" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
+
+    assert "REMEDY_UNSOUND" in text, (
+        "the sweep can only classify a finding as stale or not; a finding that "
+        "reproduces but whose prescribed fix is wrong has no verdict"
+    )
+
+
+def test_the_sweep_routes_the_unsound_remedy_check_to_detector_teeth_check() -> None:
+    """Proving a remedy wrong means applying it and watching the suite go red —
+    which is `detector-teeth-check`'s job, not a second copy of it here."""
+    text = (REPO_ROOT / "core" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
+
+    assert "detector-teeth-check" in text
