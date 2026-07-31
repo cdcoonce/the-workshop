@@ -520,7 +520,7 @@ Draft Outlook or Teams messages in Charles's voice using The Vault's /write comm
 
 *`workbench` preset*
 
-Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals in the browser, and lets the user drill down interactively until understanding is complete. Produces a summary note at the end. Use when: user says "walk me through", "walkthrough this repo", "walk me through this MR", "walk me through this email", "walk me through this project", "walk me through this database", "explain this repo/MR/project to me".
+Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals in the browser, and lets the user drill down interactively until understanding is complete. Produces a summary note at the end. Stateful — persists progress to .workbench/walkthrough/ and can resume across sessions. Use when: user says "walk me through", "walkthrough this repo", "walk me through this MR", "walk me through this email", "walk me through this project", "walk me through this database", "explain this repo/MR/project to me".
 
 ### `/workshop-skill-creator`
 

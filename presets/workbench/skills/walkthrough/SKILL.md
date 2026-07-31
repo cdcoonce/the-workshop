@@ -4,7 +4,8 @@ description: >
   Interactive visual walkthrough of any artifact — repos, merge requests, emails,
   projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals
   in the browser, and lets the user drill down interactively until understanding is
-  complete. Produces a summary note at the end.
+  complete. Produces a summary note at the end. Stateful — persists progress to
+  .workbench/walkthrough/ and can resume across sessions.
   Use when: user says "walk me through", "walkthrough this repo", "walk me through
   this MR", "walk me through this email", "walk me through this project",
   "walk me through this database", "explain this repo/MR/project to me".
@@ -34,43 +35,114 @@ Load the matching reference file for type-specific guidance on what to explain a
 
 If the type is ambiguous, ask with `AskUserQuestion` before proceeding.
 
+## State Management
+
+The walkthrough skill is **stateful and resumable**. All state persists to `.workbench/walkthrough/` in the project root.
+
+### Directory Structure
+
+```
+.workbench/walkthrough/
+├── index.md                        # Log of all walkthroughs in this project
+├── <slug>/                         # One directory per walkthrough session
+│   ├── state.json                  # Session state (phase, progress, findings)
+│   ├── summary.md                  # The final summary note (written at end)
+│   ├── overview.html               # The initial overview visual
+│   └── drilldown-<section>.html    # Drill-down visuals (named by section)
+```
+
+### state.json Schema
+
+```json
+{
+  "artifact_type": "repository",
+  "artifact_name": "the-workshop",
+  "slug": "the-workshop-repo",
+  "created": "2026-07-31T20:00:00Z",
+  "updated": "2026-07-31T20:45:00Z",
+  "phase": "drill-down",
+  "status": "in-progress",
+  "sections": {
+    "architecture": { "status": "explored", "summary": "..." },
+    "data-model": { "status": "explored", "summary": "..." },
+    "request-flow": { "status": "pending" },
+    "config": { "status": "pending" },
+    "testing": { "status": "pending" },
+    "build-deploy": { "status": "pending" }
+  },
+  "key_findings": [
+    "Plugin system uses directory-convention discovery",
+    "Dist is generated from presets via build_preset script"
+  ],
+  "drill_down_history": [
+    { "section": "architecture", "timestamp": "2026-07-31T20:15:00Z" },
+    { "section": "data-model", "timestamp": "2026-07-31T20:30:00Z" }
+  ]
+}
+```
+
+### State Rules
+
+1. **Create `.workbench/walkthrough/` if it doesn't exist.** Add `.workbench/` to `.gitignore` if not already present.
+2. **Derive `<slug>` from the artifact** (kebab-case, e.g. `the-workshop-repo`, `mr-547`, `q3-planning-email`).
+3. **Write `state.json` at every phase transition** — after overview, after each drill-down, on wrap-up.
+4. **On invocation, check for existing state first:**
+   - If `.workbench/walkthrough/<slug>/state.json` exists and `status` is `"in-progress"`:
+     - Read the state, summarize where you left off, and ask if the user wants to **resume** or **start fresh**.
+   - If resuming: skip to the current phase, present unexplored sections as drill-down options.
+   - If starting fresh: archive the old directory (rename to `<slug>-<date>`) and begin anew.
+5. **Track explored sections** — after each drill-down, update the section's status to `"explored"` and write a one-line summary of what was learned.
+6. **Accumulate key findings** — noteworthy discoveries go into `key_findings` as the session progresses. These feed the final summary.
+7. **Mark `status: "complete"` when the summary is produced.**
+8. **Append to `index.md` on completion:** `- [<title>](<slug>/summary.md) — <date> — <artifact_type> — <status>`.
+
 ## Process
 
 ### Phase 1: Gather & Orient
 
-1. Identify the artifact type (see table above).
-2. Load the type-specific reference file.
-3. Read/explore the artifact thoroughly using appropriate tools (filesystem for repos, git for MRs, user-provided content for emails).
-4. Build an internal model of the artifact's structure, key components, and relationships.
+1. Check for existing state (see State Rules #4 above).
+2. Identify the artifact type (see detection table).
+3. Load the type-specific reference file.
+4. Read/explore the artifact thoroughly using appropriate tools (filesystem for repos, git for MRs, user-provided content for emails).
+5. Build an internal model of the artifact's structure, key components, and relationships.
+6. Initialize `state.json` with `phase: "overview"`, all identified sections as `"pending"`.
 
 ### Phase 2: Overview Visual
 
-5. Generate an HTML page with a high-level visual representation of the artifact:
+7. Generate an HTML page with a high-level visual representation of the artifact:
    - Use **Mermaid** (loaded from CDN) for standard diagrams: flowcharts, sequence diagrams, ER diagrams, class diagrams, architecture graphs.
    - Use **D3.js** (loaded from CDN) for custom interactive visuals: force-directed graphs, treemaps, zoomable hierarchies, annotated timelines.
-   - The HTML is a local file opened in the browser — full CDN access, no sandbox restrictions.
+   - The HTML is a local file — full CDN access, no sandbox restrictions.
    - See [references/visuals.md](references/visuals.md) for rendering guidance.
-6. Open the HTML in the browser and present a concise textual overview alongside it — the "map" of what you're looking at.
+8. Save to `.workbench/walkthrough/<slug>/overview.html` and open in the browser.
+9. Present a concise textual overview — the "map" of what you're looking at.
+10. Update `state.json`: `phase: "drill-down"`.
 
 ### Phase 3: Interactive Drill-Down
 
-7. Ask the user what they want to explore deeper using `AskUserQuestion`:
-   - Options should be the major sections/components identified in the overview.
-   - Always include a "I understand enough — wrap up" option.
-8. For the chosen section:
-   - Explain it in depth with specifics (code references, data flows, decisions, implications).
-   - Update or generate a new focused visual if it helps understanding.
-   - Surface connections to other parts of the artifact.
-9. Repeat steps 7–8 until the user signals they're done.
+11. Ask the user what they want to explore deeper using `AskUserQuestion`:
+    - Options = sections with `status: "pending"`.
+    - Already-explored sections shown as disabled/noted (so user knows what's covered).
+    - Always include a "I understand enough — wrap up" option.
+12. For the chosen section:
+    - Explain it in depth with specifics (code references, data flows, decisions, implications).
+    - Generate a focused visual if it helps → save to `drilldown-<section>.html`, open in browser.
+    - Surface connections to other parts of the artifact.
+    - Record key findings.
+13. Update `state.json`: mark section as `"explored"`, append to `drill_down_history`, update `key_findings`.
+14. Repeat steps 11–13 until the user signals done.
 
 ### Phase 4: Summary
 
-10. Produce a markdown summary note capturing:
+15. Produce a markdown summary note capturing:
     - What the artifact is and its purpose.
     - Key structural insights (architecture, flow, relationships).
-    - Anything surprising or noteworthy surfaced during drill-downs.
+    - All key findings accumulated during drill-downs.
+    - Which sections were explored vs. skipped (transparency).
     - Inline Mermaid diagrams (no HTML dependency) for portability.
-11. Ask the user where to save the summary (or suggest a default location based on context).
+16. Save to `.workbench/walkthrough/<slug>/summary.md`.
+17. Update `state.json`: `status: "complete"`, `phase: "done"`.
+18. Append to `index.md`.
 
 ## Depth Calibration by Artifact Type
 
@@ -87,7 +159,7 @@ If the type is ambiguous, ask with `AskUserQuestion` before proceeding.
 4. Use a dark theme by default (dark background, light text, colored accents) — matches IDE context.
 5. Make visuals **interactive** where possible: hover tooltips, clickable nodes, zoomable areas.
 6. Keep diagram complexity manageable — 15-20 nodes max per view. Break larger systems into focused sub-diagrams.
-7. Write the HTML to a temp file and open it with the browser tool.
+7. Save HTML visuals to `.workbench/walkthrough/<slug>/` and open them with the browser tool.
 
 ## Directives
 
@@ -96,11 +168,14 @@ If the type is ambiguous, ask with `AskUserQuestion` before proceeding.
 3. **Let the user steer.** After the overview, the user chooses what to explore. Don't impose a fixed order.
 4. **Stay concrete.** Reference specific files, lines, tables, fields, sentences. Abstract explanations without grounding are useless.
 5. **Depth adapts to the artifact.** Don't over-explain an email. Don't under-explain a database schema.
-6. **Produce the summary.** Every walkthrough ends with a persistent markdown note. The browser visuals are ephemeral; the summary is the durable artifact.
+6. **Produce the summary.** Every walkthrough ends with a persistent markdown note saved to `.workbench/walkthrough/<slug>/summary.md`.
 7. **Use `AskUserQuestion` for navigation.** Don't ask "what do you want to explore?" as plain text. Use the tool with concrete options derived from the artifact's structure.
+8. **State is sacred.** Write `state.json` at every transition. A crash between sessions must not lose progress.
+9. **Resume gracefully.** On re-invocation, check for existing state and offer to continue. Never silently overwrite an in-progress walkthrough.
 
 ## When to Stop
 
 The walkthrough is complete when:
 - The user selects "I understand enough — wrap up" or equivalent.
-- The summary note has been produced and saved.
+- The summary note has been produced and saved to `.workbench/walkthrough/<slug>/summary.md`.
+- `state.json` shows `status: "complete"`.
