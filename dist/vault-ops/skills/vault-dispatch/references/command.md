@@ -21,14 +21,16 @@ Close the dispatch seam: turn an idea, decision, or pain point from the live ses
    - `## Notes` — size rationale ("afk-sized: localized to …") + program/design wikilinks.
 5. **File it.** `gh issue create --repo <repo> --title "<imperative title>" --label "proposed,afk-sized"` (epics: `proposed,decompose:ready`). Add `afk:cheap` or `afk:frontier` when the tier call is clear — only if the repo has those labels (the-workshop doesn't; the Budget line carries the tier there).
    - **Two decompose flavors (learned 2026-07-17, afk#875):** `decompose:ready` alone → a _plain_ decomposed parent; its children are ordinary afk-sized issues promoted **individually** with `--promote <child>` (`Depends on #N` still gates scheduling), and `--promote-epic` will NOT work on it (its errors are misleading — don't re-decompose). Label the parent `afk:epic` **before** `--decompose` only when you want the unit flow: children get `Target: afk/epic-<N>` markers, integrate on an epic branch, and are approved as a DAG via `--promote-epic`. Default to the plain flavor.
-6. **Promotion decision** — apply the low-risk test below. Pass → promote via the pinned toolbox command: `uv run --directory /Users/cdcoonce/Developer/GitHub/afk-agent-system afk-driver --project . --repo <repo> --promote <N>`. Fail → leave `proposed` and print the promote command for Charles.
-7. **Link it into the graph.** Add the issue (as a markdown link with one-line context) to the most relevant vault note — the project note, the design note, or the note that sparked it. A dispatch that isn't in the graph didn't happen, Connections-wise.
-8. **Digest:** issue URL, labels, size call, promoted-or-not + which test clause decided it, vault note updated.
+6. **Cold read.** Run [/cold-read](../../vault-cold-read/references/command.md) on the filed issue before deciding promotion. The reader must not have shaped the issue — dispatch a subagent whose prompt is the issue body, not this conversation. REWRITE findings are resolved by editing the body; NOT-DISPATCH-READY stops here.
+7. **Promotion decision** — apply the low-risk test below. Pass → promote via the pinned toolbox command: `uv run --directory /Users/cdcoonce/Developer/GitHub/afk-agent-system afk-driver --project . --repo <repo> --promote <N>`. Fail → leave `proposed` and print the promote command for Charles.
+8. **Link it into the graph.** Add the issue (as a markdown link with one-line context) to the most relevant vault note — the project note, the design note, or the note that sparked it. A dispatch that isn't in the graph didn't happen, Connections-wise.
+9. **Digest:** issue URL, labels, size call, promoted-or-not + which test clause decided it, vault note updated.
 
 ## Low-risk auto-promotion test
 
 **Owned by [[Constitution]] §3** (Charles-tuned 2026-06-11) — if this block and the Constitution disagree, the Constitution wins and this block is the bug. Auto-promote ONLY if **all** hold; otherwise leave `proposed`:
 
+- **Cold read passed.** A BUILD verdict from a reader that did not shape the issue. No cold read, a degraded (non-subagent) read, or any unresolved finding → leave `proposed`.
 - **Origin: this skill.** Only issues shaped via `/dispatch` qualify; Scout proposals and other origins always wait for human triage.
 - Localized, single-concern change (true `afk-sized`, not a borderline call).
 - Budget ≤ 2 slices, any tier.

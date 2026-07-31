@@ -6,9 +6,11 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "2.0.0",
+  "version": "2.1.0",
   "core": {
-    "skills": ["using-workflow"],
+    "skills": [
+      "using-workflow"
+    ],
     "agents": [],
     "hooks": [
       "protect-files.py",
@@ -24,6 +26,7 @@
   "preset_skills": [
     "vault-budget",
     "vault-clickup-task-sync",
+    "vault-cold-read",
     "vault-connect",
     "vault-context-then-delegate",
     "vault-dispatch",
@@ -47,6 +50,8 @@
     "vault-wrap-up",
     "vault-write"
   ],
-  "preset_hooks": ["suggest-handoff-on-context.py"],
+  "preset_hooks": [
+    "suggest-handoff-on-context.py"
+  ],
   "preset_agents": []
 }

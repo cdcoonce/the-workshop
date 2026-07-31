@@ -288,6 +288,24 @@
     },
     {
       "kind": "file",
+      "source": "skills/vault-cold-read/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-cold-read/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-cold-read/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-cold-read/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-cold-read/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-cold-read/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
       "source": "skills/vault-connect/SKILL.md",
       "source_root": "preset",
       "target": ".claude/skills/vault-connect/SKILL.md"
@@ -717,6 +735,24 @@
       "source": "skills/vault-clickup-task-sync/references/vault-operating-principles.md",
       "source_root": "preset",
       "target": ".codex/skills/vault-clickup-task-sync/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-cold-read/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-cold-read/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-cold-read/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-cold-read/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-cold-read/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-cold-read/references/vault-operating-principles.md"
     },
     {
       "kind": "file",

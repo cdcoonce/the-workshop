@@ -174,7 +174,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 <!-- BEGIN GENERATED: presets-table -->
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
-| **`vault-ops`** | project | 25 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
+| **`vault-ops`** | project | 26 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
 | **`workbench`** | project | 40 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
 | **`workshop-maintainer`** | project | 12 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
@@ -258,6 +258,7 @@ These ship only with the presets that declare them:
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
+| `/vault-cold-read` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. | vault-ops |
 | `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
 | `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
 | `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
