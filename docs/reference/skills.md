@@ -9,6 +9,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 
 | Skill | Summary | Presets |
 | --- | --- | --- |
+| `/adversarial-review` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. | workbench |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. | workbench |
 | `/commit` | Git commit workflow with enforced conventional commit style. | workbench, workshop-maintainer |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
@@ -87,6 +88,12 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
 
 ## Full descriptions
+
+### `/adversarial-review`
+
+*universal*
+
+Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. Use when the user says "adversarial review", "attack this", "try to break this", "poke holes in this", "prove me wrong", "be skeptical", or wants a hostile pass over work that is claimed done — before declaring it finished, shipping it, merging it, or trusting a result.
 
 ### `/brainstorm`
 
