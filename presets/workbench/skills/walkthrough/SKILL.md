@@ -94,7 +94,7 @@ The walkthrough skill is **stateful and resumable**. All state persists to `.wor
 5. **Track explored sections** — after each drill-down, update the section's status to `"explored"` and write a one-line summary of what was learned.
 6. **Accumulate key findings** — noteworthy discoveries go into `key_findings` as the session progresses. These feed the final summary.
 7. **Mark `status: "complete"` when the summary is produced.**
-8. **Append to `index.md` on completion:** `- [<title>](<slug>/summary.md) — <date> — <artifact_type> — <status>`.
+8. **Append to `index.md` on completion:** a line linking to the slug's summary with date, artifact type, and status.
 
 ## Process
 
