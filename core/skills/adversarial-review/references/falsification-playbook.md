@@ -60,12 +60,8 @@ that already does what the plan proposes to build, the config that says otherwis
 A citation that contradicts the claim is reproducible evidence. Only when nothing
 in reach can settle it does the row become `PLAUSIBLE` or `UNVERIFIABLE`.
 
-## The three-attempt ceiling
+## When reproduction keeps failing
 
-Three failed reproduction attempts on one suspected defect is the limit. Record
-what you tried, grade it `PLAUSIBLE`, list it, and move on.
-
-Grinding past three costs the rest of the review — every minute spent on the
-defect you cannot demonstrate is a claim elsewhere in the ledger that goes
-unattacked and unmentioned. The ceiling exists to protect coverage, not to protect
-the author.
+Three failed attempts on one suspected defect is the ceiling — see the
+three-attempt ceiling in `discipline.md` for why it is set there and what to
+record.
