@@ -14,6 +14,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 | Skill | Summary |
 | --- | --- |
+| `/adversarial-review` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
 | `/commit` | Git commit workflow with enforced conventional commit style. |
