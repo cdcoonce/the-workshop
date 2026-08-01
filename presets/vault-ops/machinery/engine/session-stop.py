@@ -78,7 +78,7 @@ def _sync_branch_status(vault_root: Path) -> tuple[bool, str, str]:
 
 def main() -> int:
     if "--explicit-sync" not in sys.argv[1:]:
-        print(json.dumps({"hookSpecificOutput": (
+        print(json.dumps({"systemMessage": (
             "Git sync skipped — run /sync or /wrap-up explicitly to commit and push."
         )}))
         return 0
@@ -97,7 +97,7 @@ def main() -> int:
     # commit/push so deliberate work isn't swept into auto-sync commits.
     on_sync_branch, cur_branch, default_branch = _sync_branch_status(vault_root)
     if not on_sync_branch:
-        print(json.dumps({"hookSpecificOutput": (
+        print(json.dumps({"systemMessage": (
             f"⏸️ Auto-sync paused — on feature branch '{cur_branch}' "
             f"(not '{default_branch}'). Commit deliberately; run /sync to push."
         )}))
@@ -169,7 +169,7 @@ def main() -> int:
     lines.append("  • Are indexes up to date?")
     lines.append("  • Any notes ready to archive?")
 
-    print(json.dumps({"hookSpecificOutput": "\n".join(lines)}))
+    print(json.dumps({"systemMessage": "\n".join(lines)}))
     return 0 if result.success else 1
 
 
@@ -179,6 +179,6 @@ if __name__ == "__main__":
     except Exception:
         traceback.print_exc(file=sys.stderr)
         print(json.dumps({
-            "hookSpecificOutput": "⚠️ Session stop hook crashed. Changes may not be synced."
+            "systemMessage": "⚠️ Session stop hook crashed. Changes may not be synced."
         }))
         sys.exit(1)

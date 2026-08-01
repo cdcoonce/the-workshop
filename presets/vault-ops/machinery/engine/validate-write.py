@@ -91,7 +91,10 @@ def main() -> int:
         # Engine crash — output traceback to stderr, don't block
         traceback.print_exc(file=sys.stderr)
         msg = json.dumps({
-            "hookSpecificOutput": "⚠️ Frontmatter validation crashed. Check stderr for details."
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "additionalContext": "⚠️ Frontmatter validation crashed. Check stderr for details.",
+            }
         })
         print(msg)
         return 2
@@ -130,7 +133,12 @@ def main() -> int:
         lines.append("")
         lines.append("Fix these issues before proceeding.")
 
-    output = json.dumps({"hookSpecificOutput": "\n".join(lines)})
+    output = json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": "\n".join(lines),
+        }
+    })
     print(output)
 
     return 1 if blocking else 2
@@ -142,6 +150,9 @@ if __name__ == "__main__":
     except Exception:
         traceback.print_exc(file=sys.stderr)
         print(json.dumps({
-            "hookSpecificOutput": "⚠️ Frontmatter hook crashed unexpectedly. Check stderr."
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "additionalContext": "⚠️ Frontmatter hook crashed unexpectedly. Check stderr.",
+            }
         }))
         sys.exit(2)
