@@ -64,8 +64,10 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
+| `/vault-cold-read` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. | vault-ops |
 | `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
 | `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
+| `/vault-debrief` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. | vault-ops |
 | `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
 | `/vault-dump` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
 | `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. | vault-ops |
@@ -390,6 +392,12 @@ Run Charles's vault (The Vault) /budget spend and subscription-value meter from 
 
 Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
 
+### `/vault-cold-read`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. Trigger when Charles invokes /cold-read, mentions /cold-read, asks whether an issue is buildable cold, or is about to promote a `proposed` issue.
+
 ### `/vault-connect`
 
 *`vault-ops` preset*
@@ -401,6 +409,12 @@ Run Charles's vault (The Vault) /connect autonomous graph connection pass with p
 *`vault-ops` preset*
 
 Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+
+### `/vault-debrief`
+
+*`vault-ops` preset*
+
+Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. Trigger when Charles invokes /debrief, mentions /debrief, asks how much of the autonomous work needed his hands, asks whether /cold-read is actually earning its cost, or asks which stage keeps producing rework.
 
 ### `/vault-dispatch`
 
