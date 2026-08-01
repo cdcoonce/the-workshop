@@ -48,7 +48,7 @@
     },
     {
       "name": "vault-ops",
-      "version": "2.3.1",
+      "version": "2.3.2",
       "description": "Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows",
       "source": "./dist/vault-ops"
     },
