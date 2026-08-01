@@ -124,6 +124,38 @@ class TestPull:
         assert "authentication" in result.message.lower()
 
     @patch("sync_manager._run_git")
+    def test_pull_rebase_abort_failure_reports_mid_rebase(self, mock_git, tmp_path: Path) -> None:
+        mock_git.side_effect = [
+            _make_result(stdout="origin"),
+            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
+            _make_result(returncode=1, stderr="fatal: authentication failed"),
+            _make_result(returncode=1, stderr="fatal: could not abort rebase"),  # abort fails
+        ]
+        result = pull(tmp_path)
+        assert result.success is False
+        assert "Repo left mid-rebase" in result.message
+        assert "Rebase aborted" not in result.message
+        assert "could not abort rebase" in result.message
+
+    @patch("sync_manager._run_git")
+    def test_pull_conflict_with_rebase_abort_failure_reports_mid_rebase(self, mock_git, tmp_path: Path) -> None:
+        mock_git.side_effect = [
+            _make_result(stdout="origin"),
+            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
+            _make_result(
+                returncode=1,
+                stdout="CONFLICT (content): Merge conflict in brain/North Star.md",
+                stderr="error: could not apply",
+            ),
+            _make_result(returncode=1, stderr="fatal: could not abort rebase"),  # abort fails
+        ]
+        result = pull(tmp_path)
+        assert result.success is False
+        assert "Repo left mid-rebase" in result.message
+        assert "Rebase aborted" not in result.message
+        assert "could not abort rebase" in result.message
+
+    @patch("sync_manager._run_git")
     def test_pull_timeout(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
@@ -144,6 +176,19 @@ class TestPull:
         result = pull(tmp_path)
         assert result.success is False
         assert "not installed" in result.message.lower() or "not on PATH" in result.message.lower()
+
+    @patch("sync_manager._run_git")
+    def test_pull_remote_check_git_error(self, mock_git, tmp_path: Path) -> None:
+        mock_git.return_value = _make_result(returncode=1, stderr="fatal: not a git repository")
+        result = pull(tmp_path)
+        assert result.success is False
+        assert "not a git repository" in result.message
+
+    @patch("sync_manager._run_git")
+    def test_pull_remote_check_git_not_found(self, mock_git, tmp_path: Path) -> None:
+        mock_git.side_effect = FileNotFoundError("git not found")
+        result = pull(tmp_path)
+        assert result.success is False
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +441,29 @@ class TestPush:
         seen = []
         push(tmp_path, pre_push_check=lambda cwd: (seen.append(cwd) or True, ""))
         assert seen == [Path(tmp_path)]
+
+    @patch("sync_manager._run_git")
+    def test_push_remote_check_git_error(self, mock_git, tmp_path: Path) -> None:
+        mock_git.return_value = _make_result(returncode=1, stderr="fatal: not a git repository")
+        result = push(tmp_path)
+        assert result.success is False
+        assert "not a git repository" in result.message
+
+    @patch("sync_manager._run_git")
+    def test_push_status_check_git_error(self, mock_git, tmp_path: Path) -> None:
+        mock_git.side_effect = [
+            _make_result(stdout="origin"),  # remote check succeeds
+            _make_result(returncode=1, stderr="fatal: index file corrupt"),  # status check fails
+        ]
+        result = push(tmp_path)
+        assert result.success is False
+        assert "index file corrupt" in result.message
+
+    @patch("sync_manager._run_git")
+    def test_push_remote_check_git_not_found(self, mock_git, tmp_path: Path) -> None:
+        mock_git.side_effect = FileNotFoundError("git not found")
+        result = push(tmp_path)
+        assert result.success is False
 
 
 # ---------------------------------------------------------------------------

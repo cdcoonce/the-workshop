@@ -27,6 +27,15 @@ class SyncResult:
     conflicts: list[str] = field(default_factory=list)  # conflicting file paths
 
 
+class GitCommandError(Exception):
+    """Raised by _has_remote/_has_changes when the underlying git command fails."""
+
+    def __init__(self, cmd: str, stderr: str) -> None:
+        self.cmd = cmd
+        self.stderr = stderr
+        super().__init__(f"git {cmd} failed: {stderr}")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -113,13 +122,17 @@ def _try_lock(lock_path: Path) -> bool | None:
 def _has_remote(cwd: Path) -> bool:
     """Check if the repo has a remote configured."""
     result = _run_git(["remote"], cwd)
-    return result.returncode == 0 and result.stdout.strip() != ""
+    if result.returncode != 0:
+        raise GitCommandError("remote", result.stderr)
+    return result.stdout.strip() != ""
 
 
 def _has_changes(cwd: Path) -> bool:
     """Check if there are any uncommitted changes."""
     result = _run_git(["status", "--porcelain"], cwd)
-    return result.returncode == 0 and result.stdout.strip() != ""
+    if result.returncode != 0:
+        raise GitCommandError("status", result.stderr)
+    return result.stdout.strip() != ""
 
 
 def _parse_conflict_files(output: str) -> list[str]:
@@ -169,7 +182,15 @@ def pull(vault_path: str | Path) -> SyncResult:
     cwd = Path(vault_path)
 
     # Check if remote exists
-    if not _has_remote(cwd):
+    try:
+        has_remote = _has_remote(cwd)
+    except GitCommandError as e:
+        return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        return SyncResult(success=False, message="Git pull timed out after 25 seconds.")
+    except FileNotFoundError:
+        return SyncResult(success=False, message="Git is not installed or not on PATH.")
+    if not has_remote:
         return SyncResult(success=True, message="No remote configured — skipping pull.")
 
     lock_path = None
@@ -221,18 +242,30 @@ def pull(vault_path: str | Path) -> SyncResult:
         conflicts = _parse_conflict_files(all_output)
 
         # Abort the rebase to return to clean state
-        _run_git(["rebase", "--abort"], cwd)
+        abort_result = _run_git(["rebase", "--abort"], cwd)
+        abort_failed = abort_result.returncode != 0
 
         if conflicts:
+            message = (
+                f"Merge conflict in {len(conflicts)} file(s). "
+                + (
+                    f"Repo left mid-rebase: {abort_result.stderr.strip()}"
+                    if abort_failed
+                    else "Rebase aborted."
+                )
+            )
             return SyncResult(
                 success=False,
-                message=f"Merge conflict in {len(conflicts)} file(s). Rebase aborted.",
+                message=message,
                 conflicts=conflicts,
             )
 
+        message = f"Pull failed: {result.stderr.strip()}"
+        if abort_failed:
+            message += f"\nRepo left mid-rebase: {abort_result.stderr.strip()}"
         return SyncResult(
             success=False,
-            message=f"Pull failed: {result.stderr.strip()}",
+            message=message,
         )
     finally:
         if lock_path is not None:
@@ -263,11 +296,27 @@ def push(
     cwd = Path(vault_path)
 
     # Check if remote exists
-    if not _has_remote(cwd):
+    try:
+        has_remote = _has_remote(cwd)
+    except GitCommandError as e:
+        return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        return SyncResult(success=False, message="Git operation timed out.")
+    except FileNotFoundError:
+        return SyncResult(success=False, message="Git is not installed or not on PATH.")
+    if not has_remote:
         return SyncResult(success=True, message="No remote configured — skipping push.")
 
     # Check for changes
-    if not _has_changes(cwd):
+    try:
+        has_changes = _has_changes(cwd)
+    except GitCommandError as e:
+        return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        return SyncResult(success=False, message="Git operation timed out.")
+    except FileNotFoundError:
+        return SyncResult(success=False, message="Git is not installed or not on PATH.")
+    if not has_changes:
         return SyncResult(success=True, message="No changes to commit.")
 
     # Stage all changes
