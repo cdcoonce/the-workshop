@@ -5,10 +5,15 @@ Called by Claude Code after Write/Edit tool completions.
 Reads hook event JSON from stdin, validates the target file, and outputs
 structured feedback via hookSpecificOutput.
 
+Also warns — never blocks — when the write cites an auto-memory that was never
+promoted into the vault (see ``unpromoted_memory``). That lane is advisory by
+design: a forward reference, where the target note is written moments later, is
+ordinary practice, so blocking it would make the correct workflow impossible.
+
 Exit codes:
     0 — validation passed (or file excluded)
     1 — blocking validation errors found
-    2 — non-blocking warnings only (YAML parse errors)
+    2 — non-blocking warnings only (YAML parse errors, unpromoted memory links)
 """
 
 from __future__ import annotations
@@ -22,7 +27,30 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from frontmatter_engine import validate, ValidationError
+from frontmatter_engine import validate, ValidationError, _is_excluded
+
+
+def _unpromoted_memory_lines(file_path: Path, vault_root: Path) -> list[str]:
+    """Advisory lines for auto-memories cited but never promoted. Never raises.
+
+    Import is deferred and the whole lane is wrapped: it reaches graphmark through a
+    subprocess, and no failure there may cost the author their frontmatter feedback.
+    The cheap pre-filter runs first so the ordinary write pays no subprocess at all.
+    """
+    try:
+        from unpromoted_memory import (
+            format_warning,
+            has_candidate_memory_link,
+            unpromoted_memory_links,
+        )
+
+        if not has_candidate_memory_link(file_path, vault_root):
+            return []
+        rel = str(file_path.resolve().relative_to(vault_root.resolve()))
+        return format_warning(unpromoted_memory_links(vault_root, rel))
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        return []
 
 
 def main() -> int:
@@ -72,7 +100,14 @@ def main() -> int:
         print(msg)
         return 2
 
-    if not errors:
+    # Advisory lane: excluded files (CLAUDE.md, AGENTS.md, templates) are outside the
+    # graph contract, so they are outside this check too.
+    memory_lines = (
+        [] if _is_excluded(file_path, vault_root)
+        else _unpromoted_memory_lines(file_path, vault_root)
+    )
+
+    if not errors and not memory_lines:
         return 0
 
     # Separate blocking errors from warnings
@@ -80,6 +115,10 @@ def main() -> int:
     warnings = [e for e in errors if e.severity == "warning"]
 
     lines: list[str] = []
+
+    if memory_lines:
+        lines.extend(memory_lines)
+        lines.append("")
 
     if warnings:
         lines.append("⚠️ Frontmatter warnings:")
