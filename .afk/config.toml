@@ -6,6 +6,35 @@
 test_command = "make test"
 permission_mode = "acceptEdits"
 
+# Mirrors the `permissions.allow` block already checked into .claude/settings.json.
+# This grants nothing new: every entry below is verbatim from that human-approved
+# list. It has to be restated here because a slice runs in a worktree path that has
+# never seen a trust dialog, and the trust gate discards settings.json `allow`
+# entries wholesale — `--setting-sources project,local` loads the file, but only
+# `--allowedTools` on argv survives (afk_driver/runtime.py:298-333).
+#
+# Without this, the agent gets no Bash at all. #564 quarantined `capability` after
+# 2 attempts on exactly that: its reviewer reported "every Bash invocation of
+# pytest/make was refused in this environment" and could not run the gate, so the
+# final acceptance criterion went unverified — on work that was already correct and
+# whose gate passed green when run by hand.
+#
+# `deny` entries in settings.json are NOT dropped by the trust gate and still beat
+# an argv grant, so the checked-in git push / git merge / gh pr merge denials keep
+# binding regardless of what is listed here.
+allowed_tools = [
+  "Bash(make test)",
+  "Bash(make lint)",
+  "Bash(make docs)",
+  "Bash(make build)",
+  "Bash(make verify-generated)",
+  "Bash(make verify-versions)",
+  "Bash(uv run python -m scripts.build_preset:*)",
+  "Bash(uv run python -m scripts.build_marketplace:*)",
+  "Bash(uv run python -m scripts.build_docs:*)",
+  "Bash(uv run python -m scripts.smoke_test:*)",
+]
+
 # Integration posture (2026-06-15): promoted to F2 — slices merge-queue onto a
 # standing afk/staging branch and surface as ONE staging→dev integration PR.
 # auto_promote stays OFF: that MR is Charles's deliberate human gate. This
