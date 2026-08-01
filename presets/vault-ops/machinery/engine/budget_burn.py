@@ -33,6 +33,7 @@ from pathlib import Path
 from budget_burn_defaults import MONTHLY_BUDGET as DEFAULT_MONTHLY_BUDGET
 from budget_burn_defaults import PROJECT_ALIASES as DEFAULT_PROJECT_ALIASES
 from budget_burn_defaults import RATES as DEFAULT_RATES
+import vault_utils
 
 try:  # Scaffold-owned config; absent in a vault vendored before it existed.
     import budget_burn_config as _config
@@ -206,16 +207,6 @@ def _pace(spent: float, today: date, budget: float) -> dict:
     }
 
 
-def _detect_context(start: str) -> str | None:
-    """Walk up from the script to find the vault's `.vault-context` (work|personal)."""
-    p = Path(start).resolve()
-    for parent in [p, *p.parents]:
-        vc = parent / ".vault-context"
-        if vc.exists():
-            return vc.read_text().strip().lower() or None
-    return None
-
-
 def _tier_lines(result: dict) -> list[str]:
     spent = result["total"]
     opus_pct = (result["by_tier"].get("opus", 0) / spent * 100) if spent else 0
@@ -241,7 +232,15 @@ def main() -> int:
 
     today = date.today()
     month = args.month or today.strftime("%Y-%m")
-    context = args.context or _detect_context(__file__) or "personal"
+    if args.context is not None:
+        context = args.context
+    else:
+        root = vault_utils.find_vault_root(Path(__file__).parent)
+        context = (
+            vault_utils.read_vault_context(root, default="personal")
+            if root is not None
+            else "personal"
+        )
     result = scan(Path(args.projects_root), month)
     spent = result["total"]
 

@@ -283,6 +283,80 @@ class TestScanRounding:
 
 
 # ---------------------------------------------------------------------------
+# Context resolution — main()'s --context handling delegates to vault_utils
+# (find_vault_root + read_vault_context) walking up from the script's own
+# directory, falling back to "personal" (not vault_utils's "unknown" default)
+# when no vault signature is found above the script. --context still wins.
+# ---------------------------------------------------------------------------
+class TestContextResolution:
+    def test_explicit_context_flag_wins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        monkeypatch.setattr(budget_burn, "__file__", str(tmp_path / "engine" / "budget_burn.py"))
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["budget_burn.py", "--json", "--context", "work", "--projects-root", str(tmp_path)],
+        )
+
+        assert budget_burn.main() == 0
+
+        assert json.loads(capsys.readouterr().out)["context"] == "work"
+
+    def test_no_signature_above_script_defaults_to_personal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        engine_dir = tmp_path / "engine"
+        engine_dir.mkdir()
+        monkeypatch.setattr(budget_burn, "__file__", str(engine_dir / "budget_burn.py"))
+        monkeypatch.setattr(
+            sys, "argv", ["budget_burn.py", "--json", "--projects-root", str(tmp_path)]
+        )
+
+        assert budget_burn.main() == 0
+
+        assert json.loads(capsys.readouterr().out)["context"] == "personal"
+
+    def test_signature_without_marker_defaults_to_personal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        # Vault root found but no `.vault-context`: read_vault_context's own
+        # default is "unknown", so only the explicit default="personal" keeps
+        # the CLI's documented default intact.
+        (tmp_path / "CLAUDE.md").write_text("# vault", encoding="utf-8")
+        (tmp_path / "brain").mkdir()
+        (tmp_path / "perf").mkdir()
+        engine_dir = tmp_path / "engine"
+        engine_dir.mkdir()
+        monkeypatch.setattr(budget_burn, "__file__", str(engine_dir / "budget_burn.py"))
+        monkeypatch.setattr(
+            sys, "argv", ["budget_burn.py", "--json", "--projects-root", str(tmp_path)]
+        )
+
+        assert budget_burn.main() == 0
+
+        assert json.loads(capsys.readouterr().out)["context"] == "personal"
+
+    def test_full_signature_reads_vault_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# vault", encoding="utf-8")
+        (tmp_path / "brain").mkdir()
+        (tmp_path / "perf").mkdir()
+        (tmp_path / ".vault-context").write_text("work\n", encoding="utf-8")
+        engine_dir = tmp_path / "engine"
+        engine_dir.mkdir()
+        monkeypatch.setattr(budget_burn, "__file__", str(engine_dir / "budget_burn.py"))
+        monkeypatch.setattr(
+            sys, "argv", ["budget_burn.py", "--json", "--projects-root", str(tmp_path)]
+        )
+
+        assert budget_burn.main() == 0
+
+        assert json.loads(capsys.readouterr().out)["context"] == "work"
+
+
+# ---------------------------------------------------------------------------
 # _pace — budget pacing helper
 # ---------------------------------------------------------------------------
 class TestPace:
