@@ -41,6 +41,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/triage-quarantine` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. | workbench |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | all |
 | `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. | workbench |
+| `/wayfinder` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. | workbench |
 | `/worktree-audit` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. | workbench |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
 
@@ -284,6 +285,12 @@ Use when starting any conversation or task in this project — establishes prece
 *universal*
 
 Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. Use when changing warehouse SQL that has no executing tests, when a repo has sql/ but no tests/sql/, when a review says a view layer has zero coverage, or when you catch yourself asserting a SQL string contains a substring.
+
+### `/wayfinder`
+
+*universal*
+
+Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. Use when the user explicitly invokes /wayfinder, says "chart a map" or "work the map", names an existing map issue to continue, or asks to plan something too large and foggy to spec in one sitting. Planning only — it produces decisions, not build slices.
 
 ### `/worktree-audit`
 
