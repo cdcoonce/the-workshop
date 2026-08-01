@@ -84,7 +84,7 @@ The per-component truth table — what actually runs where. Skills are the porta
 | Component | Claude Code | Codex | Cortex Code |
 | --- | --- | --- | --- |
 | Skills | Partial | Works | Works |
-| Agents | Works | Unverified | Unverified |
+| Agents | Works | Inert | Partial |
 | Hooks (plugin-level) | Works | Inert | Inert |
 | Personas (output styles) | Works | Inert | Inert |
 | Settings (plugin-root settings.json) | Works | Inert | Unverified |
