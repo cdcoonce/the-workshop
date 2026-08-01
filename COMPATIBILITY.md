@@ -39,16 +39,17 @@ unverified claims may still be marked the way the Claude Code section does
 
 Every event this repo ships a hook for, with the mechanism it depends on:
 
-| Event              | Hook                                          | Depends on                         |
-| ------------------ | --------------------------------------------- | ---------------------------------- |
-| `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                |
-| `PostToolUse`      | `post-edit-lint.py`                           | side effect only                   |
-| `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `additionalContext`                |
-| `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block               |
-| `SubagentStart`    | `snapshot-subagent-start.py`                  | side effect only; **cannot block** |
-| `SubagentStop`     | `verify-subagent-evidence.py`                 | top-level `decision: "block"`      |
-| `SessionStart`     | `inject-skill-router.py`, `inject_persona.py` | `additionalContext`                |
-| `ConfigChange`     | `audit-config-change.py`                      | `systemMessage`; side effect only  |
+| Event              | Hook                                          | Depends on                                                                        |
+| ------------------ | --------------------------------------------- | --------------------------------------------------------------------------------- |
+| `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                                                               |
+| `PostToolUse`      | `post-edit-lint.py`                           | side effect only                                                                  |
+| `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `additionalContext`                                                               |
+| `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block                                                              |
+| `SubagentStart`    | `snapshot-subagent-start.py`                  | side effect only; **cannot block**                                                |
+| `SubagentStop`     | `verify-subagent-evidence.py`                 | top-level `decision: "block"`                                                     |
+| `SessionStart`     | `inject-skill-router.py`, `inject_persona.py` | `additionalContext`                                                               |
+| `ConfigChange`     | `audit-config-change.py`                      | `systemMessage`; side effect only                                                 |
+| `SessionEnd`       | `warn-off-trunk.py`                           | side effect only (stderr); **`SessionEnd` does not exist on Codex** — inert there |
 
 Constraints that shape the hooks above, and would break them if they changed:
 
