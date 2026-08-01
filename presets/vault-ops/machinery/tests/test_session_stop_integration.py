@@ -158,3 +158,93 @@ class TestVaultHealthCheck:
             session_stop.main()
             _, kwargs = mock_push.call_args
             assert kwargs.get("pre_push_check") is session_stop._vault_health_check
+
+
+class TestSystemMessageShapes:
+    """Every informational message from this Stop hook must travel on the
+    top-level ``systemMessage`` channel alone — no ``hookSpecificOutput``,
+    ``additionalContext``, or ``decision`` key. That is a different shape
+    from the PostToolUse hook (validate-write.py), which nests its message
+    under ``hookSpecificOutput.additionalContext``; this class pins
+    session-stop.py's side of that split.
+    """
+
+    def test_sync_skipped_message_shape(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with patch.object(sys, "argv", ["session-stop.py"]):
+            exit_code = session_stop.main()
+
+        assert exit_code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert set(payload.keys()) == {"systemMessage"}
+        assert "Git sync skipped" in payload["systemMessage"]
+
+    def test_auto_sync_paused_message_shape(
+        self,
+        vault: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (vault / "perf").mkdir()
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
+        with patch(
+            "session_stop._sync_branch_status",
+            return_value=(False, "feature/x", "main"),
+        ), patch.object(sys, "argv", ["session-stop.py", "--explicit-sync"]):
+            exit_code = session_stop.main()
+
+        assert exit_code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert set(payload.keys()) == {"systemMessage"}
+        assert "Auto-sync paused" in payload["systemMessage"]
+        assert "feature/x" in payload["systemMessage"]
+
+    def test_wrapup_checklist_message_shape(
+        self,
+        vault: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (vault / "perf").mkdir()
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
+        with patch("session_stop.push") as mock_push, \
+             patch("session_stop._sync_branch_status", return_value=(True, "main", "main")), \
+             patch.object(sys, "argv", ["session-stop.py", "--explicit-sync"]):
+            from sync_manager import SyncResult
+            mock_push.return_value = SyncResult(success=True, message="ok")
+            exit_code = session_stop.main()
+
+        assert exit_code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert set(payload.keys()) == {"systemMessage"}
+        assert "Session checklist:" in payload["systemMessage"]
+
+    def test_crash_handler_message_shape(self, tmp_path: Path) -> None:
+        """Stripping ``git`` off PATH makes the `_sync_branch_status`
+        subprocess call raise ``FileNotFoundError`` uncaught, exercising the
+        outer ``if __name__ == "__main__":`` handler.
+        """
+        vault_dir = tmp_path / "vault"
+        (vault_dir / "brain").mkdir(parents=True)
+        (vault_dir / "perf").mkdir()
+        (vault_dir / "CLAUDE.md").write_text("# Vault", encoding="utf-8")
+
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = str(vault_dir)
+        env["PATH"] = str(tmp_path / "empty-bin")
+        (tmp_path / "empty-bin").mkdir()
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "session-stop.py"), "--explicit-sync"],
+            cwd=vault_dir,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 1, result.stderr
+        payload = json.loads(result.stdout)
+        assert set(payload.keys()) == {"systemMessage"}
+        assert "Session stop hook crashed" in payload["systemMessage"]
