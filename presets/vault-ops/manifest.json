@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "2.1.0",
+  "version": "2.2.0",
   "core": {
     "skills": [
       "using-workflow"
@@ -29,6 +29,7 @@
     "vault-cold-read",
     "vault-connect",
     "vault-context-then-delegate",
+    "vault-debrief",
     "vault-dispatch",
     "vault-dump",
     "vault-essay",
