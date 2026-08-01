@@ -342,6 +342,24 @@
     },
     {
       "kind": "file",
+      "source": "skills/vault-debrief/SKILL.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-debrief/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-debrief/references/command.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-debrief/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-debrief/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".claude/skills/vault-debrief/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
       "source": "skills/vault-dispatch/SKILL.md",
       "source_root": "preset",
       "target": ".claude/skills/vault-dispatch/SKILL.md"
@@ -789,6 +807,24 @@
       "source": "skills/vault-context-then-delegate/references/vault-operating-principles.md",
       "source_root": "preset",
       "target": ".codex/skills/vault-context-then-delegate/references/vault-operating-principles.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-debrief/SKILL.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-debrief/SKILL.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-debrief/references/command.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-debrief/references/command.md"
+    },
+    {
+      "kind": "file",
+      "source": "skills/vault-debrief/references/vault-operating-principles.md",
+      "source_root": "preset",
+      "target": ".codex/skills/vault-debrief/references/vault-operating-principles.md"
     },
     {
       "kind": "file",
