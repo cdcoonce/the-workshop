@@ -14,15 +14,27 @@ they build a throwaway vault under tmp_path with its own CLAUDE.md root.
 
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 HOOK = SCRIPTS_DIR / "validate-write.py"
+
+# validate-write.py has a hyphen, so it can't be `import`ed by name — load it by
+# path, same pattern used for the other hyphenated hook scripts in this test
+# suite (see test_session_stop_integration.py). Registered in sys.modules so
+# string-based `patch("validate_write.x")` targets resolve like a real import.
+_spec = importlib.util.spec_from_file_location("validate_write", HOOK)
+validate_write = importlib.util.module_from_spec(_spec)
+sys.modules["validate_write"] = validate_write
+_spec.loader.exec_module(validate_write)
 
 VALID_FRONTMATTER = """---
 date: 2026-06-07
@@ -147,10 +159,15 @@ class TestBlockingError:
         result = _run_hook(note)
 
         assert result.returncode == 1, result.stderr
-        # Blocking failures must emit structured hookSpecificOutput.
+        # Blocking failures must emit structured hookSpecificOutput —
+        # {hookEventName, additionalContext}, not a bare string.
         payload = json.loads(result.stdout)
-        assert "hookSpecificOutput" in payload
-        assert "failed" in payload["hookSpecificOutput"].lower()
+        assert isinstance(payload["hookSpecificOutput"], dict)
+        assert payload["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+        additional_context = payload["hookSpecificOutput"]["additionalContext"]
+        assert "failed" in additional_context.lower()
+        assert "Fix these issues before proceeding." in additional_context
+        assert "systemMessage" not in payload
 
 
 class TestNoFrontmatter:
@@ -165,7 +182,9 @@ class TestNoFrontmatter:
         result = _run_hook(note)
 
         assert result.returncode == 2, result.stderr
-        assert "hookSpecificOutput" in json.loads(result.stdout)
+        payload = json.loads(result.stdout)
+        assert isinstance(payload["hookSpecificOutput"], dict)
+        assert "additionalContext" in payload["hookSpecificOutput"]
 
 
 class TestWarningOnly:
@@ -177,7 +196,8 @@ class TestWarningOnly:
 
         assert result.returncode == 2, result.stderr
         payload = json.loads(result.stdout)
-        assert "hookSpecificOutput" in payload
+        assert isinstance(payload["hookSpecificOutput"], dict)
+        assert "additionalContext" in payload["hookSpecificOutput"]
 
 
 class TestUnpromotedMemoryLane:
@@ -236,7 +256,7 @@ class TestUnpromotedMemoryLane:
 
         # Exit 2, never 1: a forward reference is legitimate and must stay writable.
         assert result.returncode == 2, result.stderr
-        output = json.loads(result.stdout)["hookSpecificOutput"]
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
         assert "some-durable-lesson" in output
         assert "auto-memory" in output
 
@@ -283,7 +303,8 @@ class TestUnpromotedMemoryLane:
         result = _run_hook(note)
 
         assert result.returncode == 2, result.stderr
-        assert "some-durable-lesson" in json.loads(result.stdout)["hookSpecificOutput"]
+        additional_context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "some-durable-lesson" in additional_context
 
     def test_no_auto_memory_on_machine_is_silent(
         self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -335,3 +356,45 @@ class TestExcludedAndNoop:
         # Malformed JSON must not crash the hook.
         result = _run_hook_raw("this is not json {{{")
         assert result.returncode == 0, result.stderr
+
+
+class TestCrashPayloadShapes:
+    """The two crash handlers must emit the same {hookSpecificOutput:
+    {hookEventName, additionalContext}} shape as the normal-path output —
+    a crash is still a PostToolUse response, not a different channel.
+    """
+
+    def test_validate_engine_crash_emits_structured_payload(
+        self, vault: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`validate()` raising is caught at the inner handler (~line 94)."""
+        note = vault / "work" / "note.md"
+        note.write_text(VALID_FRONTMATTER, encoding="utf-8")
+        event = json.dumps({"tool_input": {"file_path": str(note)}})
+
+        with patch("validate_write.validate", side_effect=RuntimeError("boom")), \
+             patch.object(sys, "stdin", io.StringIO(event)):
+            exit_code = validate_write.main()
+
+        assert exit_code == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert isinstance(payload["hookSpecificOutput"], dict)
+        assert payload["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+        additional_context = payload["hookSpecificOutput"]["additionalContext"]
+        assert "crashed" in additional_context.lower()
+        assert "systemMessage" not in payload
+
+    def test_outer_wrapper_crash_emits_structured_payload(self) -> None:
+        """A non-dict-but-valid-JSON event (e.g. a bare list) makes
+        `event.get(...)` raise AttributeError outside every inner try/except,
+        exercising the outer `if __name__ == "__main__":` handler (~line 144).
+        """
+        result = _run_hook_raw("[]")
+
+        assert result.returncode == 2, result.stderr
+        payload = json.loads(result.stdout)
+        assert isinstance(payload["hookSpecificOutput"], dict)
+        assert payload["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+        additional_context = payload["hookSpecificOutput"]["additionalContext"]
+        assert "crashed" in additional_context.lower()
+        assert "systemMessage" not in payload
