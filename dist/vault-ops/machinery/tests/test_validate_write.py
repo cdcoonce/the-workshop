@@ -209,6 +209,39 @@ class TestUnpromotedMemoryLane:
 
         assert result.returncode == 0, result.stderr
 
+    def test_fires_on_a_note_outside_frontmatter_governance(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Frontmatter governance and graph scope are different questions.
+
+        ``thinking/`` is exempt from the frontmatter contract but its wikilinks are
+        fully counted by graphmark and by ``vault_health``. Gating this lane on the
+        frontmatter exclusion set therefore silenced the check on notes that can
+        still break the gate — verified live, where a ``thinking/`` note with an
+        unpromoted-memory link failed ``max_unresolved_links`` while the hook said
+        nothing. graphmark is the only authority on scope here.
+        """
+        monkeypatch.setenv("HOME", self._fake_home(tmp_path, vault, "some-durable-lesson"))
+        thinking = vault / "thinking"
+        thinking.mkdir()
+        note = thinking / "a-design-note.md"
+        note.write_text(
+            "# Design\n\nBuilding on [[some-durable-lesson]].\n", encoding="utf-8"
+        )
+        self._stub_resolver(
+            vault,
+            {
+                "thinking/a-design-note.md": [
+                    {"display": "some-durable-lesson", "reason": "missing", "candidates": []}
+                ]
+            },
+        )
+
+        result = _run_hook(note)
+
+        assert result.returncode == 2, result.stderr
+        assert "some-durable-lesson" in json.loads(result.stdout)["hookSpecificOutput"]
+
     def test_no_auto_memory_on_machine_is_silent(
         self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

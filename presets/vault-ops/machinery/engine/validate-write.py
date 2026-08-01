@@ -27,7 +27,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from frontmatter_engine import validate, ValidationError, _is_excluded
+from frontmatter_engine import validate, ValidationError
 
 
 def _unpromoted_memory_lines(file_path: Path, vault_root: Path) -> list[str]:
@@ -100,12 +100,13 @@ def main() -> int:
         print(msg)
         return 2
 
-    # Advisory lane: excluded files (CLAUDE.md, AGENTS.md, templates) are outside the
-    # graph contract, so they are outside this check too.
-    memory_lines = (
-        [] if _is_excluded(file_path, vault_root)
-        else _unpromoted_memory_lines(file_path, vault_root)
-    )
+    # Advisory lane. Deliberately NOT gated on _is_excluded: that answers "must this
+    # file carry frontmatter?", which is a different question from "do this file's
+    # wikilinks count in the graph?". `thinking/` is exempt from the first and fully
+    # subject to the second, so gating on it silenced the check on notes that can
+    # still fail vault_health. graphmark is the authority — a file outside graph
+    # scope never appears in its broken map, so no gate is needed here.
+    memory_lines = _unpromoted_memory_lines(file_path, vault_root)
 
     if not errors and not memory_lines:
         return 0
