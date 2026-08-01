@@ -92,13 +92,18 @@ def _run_hook_raw(stdin: str) -> subprocess.CompletedProcess[str]:
 class TestVaultRootSignature:
     """Root resolution delegates to vault_utils.find_vault_root, which requires
     the full brain/ + perf/ + CLAUDE.md signature — not CLAUDE.md/AGENTS.md alone.
-    Each negative case uses content that would otherwise fail validation, so exit 0
-    proves validation was skipped rather than merely passing.
+    Each negative case writes into a governed dir (``work/``) with content that
+    would otherwise fail validation, so exit 0 proves validation was skipped
+    rather than merely passing. The governed dir is load-bearing: a note at the
+    tmpdir root is never governed (``vault_scope_defaults.is_governed_markdown_note``
+    requires ``parts[0]`` in ``GOVERNED_NOTE_DIRS``), so ``validate()`` returns no
+    errors regardless of which root resolved, and the case cannot fail.
     """
 
     def test_claude_md_alone_skips_validation(self, tmp_path: Path) -> None:
         (tmp_path / "CLAUDE.md").write_text("# not a vault", encoding="utf-8")
-        note = tmp_path / "broken.md"
+        (tmp_path / "work").mkdir()
+        note = tmp_path / "work" / "broken.md"
         note.write_text(MISSING_REQUIRED_FIELD, encoding="utf-8")
 
         result = _run_hook(note)
@@ -107,7 +112,8 @@ class TestVaultRootSignature:
 
     def test_agents_md_alone_skips_validation(self, tmp_path: Path) -> None:
         (tmp_path / "AGENTS.md").write_text("# not a vault", encoding="utf-8")
-        note = tmp_path / "broken.md"
+        (tmp_path / "work").mkdir()
+        note = tmp_path / "work" / "broken.md"
         note.write_text(MISSING_REQUIRED_FIELD, encoding="utf-8")
 
         result = _run_hook(note)
