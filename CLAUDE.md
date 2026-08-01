@@ -74,6 +74,9 @@ This repo **integrates on GitHub**.
 - Before any push or pull request, confirm the target branch from these project
   instructions and `.github/workflows/`; do not infer it from the repository's
   default branch.
+- To sync local `main` after a promotion, use `git fetch origin main:main` —
+  it updates the local ref without moving HEAD, so the working checkout stays
+  on whatever branch it was already on.
 
 ### GitLab (downstream copy)
 
