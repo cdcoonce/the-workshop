@@ -148,6 +148,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/unpromoted_memory.py",
+      "target": ".claude/scripts/unpromoted_memory.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/validate-write.py",
       "target": ".claude/scripts/validate-write.py"
     },
