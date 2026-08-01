@@ -6,7 +6,7 @@
     "Keep source ownership distinct from distribution membership",
     "Regenerate docs and dist after changing any component"
   ],
-  "version": "1.3.0",
+  "version": "1.4.0",
   "core": {
     "skills": ["using-workflow", "grill-me", "tdd", "commit", "daa-code-review"],
     "agents": [],
@@ -17,7 +17,8 @@
       "verify-subagent-evidence.py",
       "audit-config-change.py",
       "inject-skill-router.py",
-      "remind-skill-announce.py"
+      "remind-skill-announce.py",
+      "warn-off-trunk.py"
     ]
   },
   "exclude": [],

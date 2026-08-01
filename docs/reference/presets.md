@@ -10,7 +10,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 | Preset | Kind | Skills | Agents | Conventions |
 | --- | --- | --- | --- | --- |
 | **`vault-ops`** | project | 27 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 41 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
+| **`workbench`** | project | 42 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
 | **`workshop-maintainer`** | project | 12 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
 | **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
 | **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v2.3.3*
+*project preset · v2.4.0*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -36,11 +36,11 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 **Skills (27):** `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-cold-read`, `vault-connect`, `vault-context-then-delegate`, `vault-debrief`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-link`, `vault-mr-review-packet`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-upgrade`, `vault-wrap-up`, `vault-write`
 
-**Hooks (8):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (9):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`, `warn-off-trunk.py`
 
 ### `workbench`
 
-*project preset · v2.4.0*
+*project preset · v2.5.0*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
@@ -52,15 +52,15 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 - Conventional commits; stage explicitly, never git add .
 - Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured
 
-**Skills (41):** `adversarial-review`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`
+**Skills (42):** `adversarial-review`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `walkthrough`, `warehouse-sql-test-harness`, `wayfinder`, `worktree-audit`, `write-a-prd`
 
 **Agents (10):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 
-**Hooks (8):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (9):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`, `warn-off-trunk.py`
 
 ### `workshop-maintainer`
 
-*project preset · v1.3.0*
+*project preset · v1.4.0*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
@@ -74,7 +74,7 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 
 **Agents (6):** `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`
 
-**Hooks (7):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`
+**Hooks (8):** `audit-config-change.py`, `inject-skill-router.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`, `warn-off-trunk.py`
 
 ### `advisor-product-design`
 

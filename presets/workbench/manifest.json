@@ -8,7 +8,7 @@
     "Conventional commits; stage explicitly, never git add .",
     "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
   ],
-  "version": "2.4.0",
+  "version": "2.5.0",
   "core": {
     "skills": "all",
     "agents": "all",
@@ -19,7 +19,8 @@
       "verify-subagent-evidence.py",
       "audit-config-change.py",
       "inject-skill-router.py",
-      "remind-skill-announce.py"
+      "remind-skill-announce.py",
+      "warn-off-trunk.py"
     ]
   },
   "exclude": [],
@@ -32,9 +33,7 @@
     "gitlab-promotion-flow",
     "walkthrough"
   ],
-  "preset_hooks": [
-    "post-edit-lint.py"
-  ],
+  "preset_hooks": ["post-edit-lint.py"],
   "preset_agents": [
     "analysis-builder",
     "pipeline-builder",

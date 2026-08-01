@@ -8,7 +8,7 @@ What each component class actually does on each target platform, rendered from `
 | Component | Claude Code | Codex | Cortex Code |
 | --- | --- | --- | --- |
 | Skills | Partial | Works | Works |
-| Agents | Works | Unverified | Unverified |
+| Agents | Works | Inert | Partial |
 | Hooks (plugin-level) | Works | Inert | Inert |
 | Personas (output styles) | Works | Inert | Inert |
 | Settings (plugin-root settings.json) | Works | Inert | Unverified |
@@ -25,8 +25,8 @@ Per-cell notes and evidence: [platform support reference](docs/reference/platfor
 ## Agents
 
 - **Claude Code: works** — Subagent dispatch via the `Agent` tool with `subagent_type` _(COMPATIBILITY.md → Claude Code → Agent Features)_
-- **Codex: unverified** — No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Codex _(COMPATIBILITY.md → Codex (no Agents section yet))_
-- **Cortex Code: unverified** — No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Cortex _(COMPATIBILITY.md → Cortex Code (no Agents section yet))_
+- **Codex: inert** — Agent files ship in the plugin but nothing loads them — the Codex plugin manifest schema has no `agents` key, and no first-party Codex plugin ships an `agents/` dir _(COMPATIBILITY.md → Codex → Agents)_
+- **Cortex Code: partial** — Cortex reads `agents/<name>.md` (bundled spec, v1.18.0), but this repo ships `agents/<name>/AGENT.md` directories, so none is discovered; frontmatter `role`/`skills` are also unsupported _(COMPATIBILITY.md → Cortex Code → Agents)_
 
 ## Hooks (plugin-level)
 

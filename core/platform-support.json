@@ -1,23 +1,27 @@
 {
-  "platforms": ["Claude Code", "Codex", "Cortex Code"],
+  "platforms": [
+    "Claude Code",
+    "Codex",
+    "Cortex Code"
+  ],
   "components": [
     {
       "name": "Skills",
       "cells": {
         "Claude Code": {
           "status": "partial",
-          "note": "Interactive plugin skills work; plugin skills do not load at all under headless `claude -p` — headless automation needs project-scope `.claude/skills/` copies",
-          "compat": "Claude Code → Headless (`claude -p`)"
+          "note": "Interactive plugin skills work; plugin skills do not load at all under headless `claude -p` \u2014 headless automation needs project-scope `.claude/skills/` copies",
+          "compat": "Claude Code \u2192 Headless (`claude -p`)"
         },
         "Codex": {
           "status": "works",
           "note": "Plugin skills load and trigger namespaced `<plugin>:<skill>`, including under headless `codex exec`; not trust-gated",
-          "compat": "Codex → Skills"
+          "compat": "Codex \u2192 Skills"
         },
         "Cortex Code": {
           "status": "works",
           "note": "Auto-discovered from `.cortex/skills/`, `.claude/skills/`, and `.snova/skills/`; also installable via `--plugin-dir` or `cortex skill add`",
-          "compat": "Cortex Code → Skills"
+          "compat": "Cortex Code \u2192 Skills"
         }
       }
     },
@@ -27,17 +31,17 @@
         "Claude Code": {
           "status": "works",
           "note": "Subagent dispatch via the `Agent` tool with `subagent_type`",
-          "compat": "Claude Code → Agent Features"
+          "compat": "Claude Code \u2192 Agent Features"
         },
         "Codex": {
-          "status": "unverified",
-          "note": "No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Codex",
-          "compat": "Codex (no Agents section yet)"
+          "status": "inert",
+          "note": "Agent files ship in the plugin but nothing loads them \u2014 the Codex plugin manifest schema has no `agents` key, and no first-party Codex plugin ships an `agents/` dir",
+          "compat": "Codex \u2192 Agents"
         },
         "Cortex Code": {
-          "status": "unverified",
-          "note": "No probe recorded — plugin `agents/` discovery and subagent dispatch have not been tested on Cortex",
-          "compat": "Cortex Code (no Agents section yet)"
+          "status": "partial",
+          "note": "Cortex reads `agents/<name>.md` (bundled spec, v1.18.0), but this repo ships `agents/<name>/AGENT.md` directories, so none is discovered; frontmatter `role`/`skills` are also unsupported",
+          "compat": "Cortex Code \u2192 Agents"
         }
       }
     },
@@ -47,17 +51,17 @@
         "Claude Code": {
           "status": "works",
           "note": "`hooks/hooks.json` merges with user and project hooks while the plugin is enabled; requires `bash` and `python3` on PATH",
-          "compat": "Claude Code → Hooks"
+          "compat": "Claude Code \u2192 Hooks"
         },
         "Codex": {
           "status": "inert",
-          "note": "The `plugin_hooks` feature is removed — a preset's `hooks/hooks.json` never runs. Hook delivery on Codex is a vendored repo-level flat `.codex/hooks.json` behind a two-layer silent trust gate",
-          "compat": "Codex → Hooks"
+          "note": "The `plugin_hooks` feature is removed \u2014 a preset's `hooks/hooks.json` never runs. Hook delivery on Codex is a vendored repo-level flat `.codex/hooks.json` behind a two-layer silent trust gate",
+          "compat": "Codex \u2192 Hooks"
         },
         "Cortex Code": {
           "status": "inert",
           "note": "Plugin-level `hooks/hooks.json` is never read (probe-verified: an identical user-level hook fired, the plugin-level one never has). Inline-manifest hook delivery is documented by Cortex but unprobed",
-          "compat": "Cortex Code → Hooks"
+          "compat": "Cortex Code \u2192 Hooks"
         }
       }
     },
@@ -67,17 +71,17 @@
         "Claude Code": {
           "status": "works",
           "note": "Injected by a SessionStart plugin hook; requires `uv` on PATH",
-          "compat": "Claude Code → Hooks"
+          "compat": "Claude Code \u2192 Hooks"
         },
         "Codex": {
           "status": "inert",
-          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Codex does nothing",
-          "compat": "Codex → Hooks"
+          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires \u2014 installing a persona on Codex does nothing",
+          "compat": "Codex \u2192 Hooks"
         },
         "Cortex Code": {
           "status": "inert",
-          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Cortex does nothing",
-          "compat": "Cortex Code → Hooks"
+          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires \u2014 installing a persona on Cortex does nothing",
+          "compat": "Cortex Code \u2192 Hooks"
         }
       }
     },
@@ -87,16 +91,16 @@
         "Claude Code": {
           "status": "works",
           "note": "In daily use; not re-verified against a current spec",
-          "compat": "Claude Code → Settings"
+          "compat": "Claude Code \u2192 Settings"
         },
         "Codex": {
           "status": "inert",
           "note": "No consumer of a plugin-root `settings.json` observed; the settings surface on Codex is `~/.codex/config.toml` plus `-c` overrides",
-          "compat": "Codex → Settings"
+          "compat": "Codex \u2192 Settings"
         },
         "Cortex Code": {
           "status": "unverified",
-          "note": "No probe recorded — whether Cortex reads a plugin-root `settings.json` is an open question",
+          "note": "No probe recorded \u2014 whether Cortex reads a plugin-root `settings.json` is an open question",
           "compat": "Cortex Code (settings unprobed)"
         }
       }
@@ -107,17 +111,17 @@
         "Claude Code": {
           "status": "works",
           "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
-          "compat": "—"
+          "compat": "\u2014"
         },
         "Codex": {
           "status": "works",
           "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
-          "compat": "—"
+          "compat": "\u2014"
         },
         "Cortex Code": {
           "status": "works",
           "note": "Passive Markdown bundled under `docs/` in every preset; nothing platform-specific to break",
-          "compat": "—"
+          "compat": "\u2014"
         }
       }
     }
