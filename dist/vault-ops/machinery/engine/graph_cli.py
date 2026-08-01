@@ -60,19 +60,7 @@ from vault_scope_resolved import (  # noqa: E402
     OPERATING_FILENAMES,
     TRANSIENT_PREFIXES,
 )
-
-
-def find_vault_root() -> Path | None:
-    import os
-
-    env = os.environ.get("CLAUDE_PROJECT_DIR")
-    if env:
-        return Path(env).resolve()
-    cur = Path.cwd().resolve()
-    for p in (cur, *cur.parents):
-        if (p / ".vault-context").exists() or (p / "CLAUDE.md").exists():
-            return p
-    return None
+import vault_utils  # noqa: E402
 
 
 def build(vault_root: Path) -> tuple[VaultGraph, VaultConfig]:
@@ -187,7 +175,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hub-degree", type=int, default=GAPS_DEFAULT_HUB_DEGREE, dest="hub_degree")
     args = p.parse_args(argv)
 
-    vault_root = Path(args.vault_root).resolve() if args.vault_root else find_vault_root()
+    vault_root = (
+        Path(args.vault_root).resolve() if args.vault_root else vault_utils.find_vault_root_from_env()
+    )
     if vault_root is None:
         print("ERROR: vault root not found. Use --vault-root or run inside the vault.", file=sys.stderr)
         return 1

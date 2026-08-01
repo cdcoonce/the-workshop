@@ -28,6 +28,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import validate, ValidationError
+import vault_utils
 
 
 def _unpromoted_memory_lines(file_path: Path, vault_root: Path) -> list[str]:
@@ -78,12 +79,7 @@ def main() -> int:
     if file_path.suffix.lower() != ".md":
         return 0
 
-    # Find vault root by walking up to AGENTS.md or CLAUDE.md
-    vault_root = None
-    for parent in [file_path.parent, *file_path.parents]:
-        if (parent / "AGENTS.md").exists() or (parent / "CLAUDE.md").exists():
-            vault_root = parent
-            break
+    vault_root = vault_utils.find_vault_root(file_path.parent)
 
     if vault_root is None:
         return 0  # Not in a vault — skip

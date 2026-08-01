@@ -63,7 +63,10 @@ Body.
 
 @pytest.fixture
 def vault(tmp_path: Path) -> Path:
+    # Full vault_utils.find_vault_root signature: CLAUDE.md + brain/ + perf/.
     (tmp_path / "CLAUDE.md").write_text("# Vault", encoding="utf-8")
+    (tmp_path / "brain").mkdir()
+    (tmp_path / "perf").mkdir()
     (tmp_path / "work").mkdir()
     return tmp_path
 
@@ -84,6 +87,40 @@ def _run_hook_raw(stdin: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+class TestVaultRootSignature:
+    """Root resolution delegates to vault_utils.find_vault_root, which requires
+    the full brain/ + perf/ + CLAUDE.md signature — not CLAUDE.md/AGENTS.md alone.
+    Each negative case uses content that would otherwise fail validation, so exit 0
+    proves validation was skipped rather than merely passing.
+    """
+
+    def test_claude_md_alone_skips_validation(self, tmp_path: Path) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# not a vault", encoding="utf-8")
+        note = tmp_path / "broken.md"
+        note.write_text(MISSING_REQUIRED_FIELD, encoding="utf-8")
+
+        result = _run_hook(note)
+
+        assert result.returncode == 0, result.stderr
+
+    def test_agents_md_alone_skips_validation(self, tmp_path: Path) -> None:
+        (tmp_path / "AGENTS.md").write_text("# not a vault", encoding="utf-8")
+        note = tmp_path / "broken.md"
+        note.write_text(MISSING_REQUIRED_FIELD, encoding="utf-8")
+
+        result = _run_hook(note)
+
+        assert result.returncode == 0, result.stderr
+
+    def test_full_signature_validates(self, vault: Path) -> None:
+        note = vault / "work" / "broken.md"
+        note.write_text(MISSING_REQUIRED_FIELD, encoding="utf-8")
+
+        result = _run_hook(note)
+
+        assert result.returncode == 1, result.stderr
 
 
 class TestValidWrite:
