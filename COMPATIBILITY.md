@@ -208,6 +208,29 @@ repo, listed by a headless `codex exec` session):
 - `SKILL.md` frontmatter is validated — unexpected keys are rejected with an
   allowed-properties list; `name` + `description` work.
 
+### Agents
+
+Probed 2026-08-01 on codex-cli 0.144.6. **Evidence is manifest-schema,
+first-party-corpus, and binary strings — not live-fired.**
+
+- **Plugin `agents/` is not a Codex component.** The plugin manifest schema
+  the CLI carries knows `skills`, `hooks`, and `mcpServers`; there is **no
+  `agents` key**. Agent files placed in a plugin ship inside the tarball and
+  are inert — unreferenced by the manifest and undiscoverable.
+- **No first-party Codex plugin ships an `agents/` dir.** All 12 installed
+  across `openai-primary-runtime` and `openai-bundled` ship `skills/` only.
+- **`agents/openai.yaml` in the binary is a false friend** — it is *skill*
+  metadata (`Create agents/openai.yaml for a skill directory`), unrelated to
+  subagents. Do not read it as agent support.
+- **`codex features list` reports `multi_agent  stable  true`.** That is
+  Codex's own internal orchestration, not plugin-supplied agents, and must not
+  be read as plugin agent support. (The same command reports `plugin_hooks
+  removed`, reproducing the 2026-07-25 hooks finding — the instrument agrees
+  with prior work.)
+
+Not yet live-fired: installing a preset carrying `agents/` and confirming
+nothing is exposed. Low value, since the manifest has no key to populate.
+
 ### Settings
 
 - The `settings.json` concept maps to **`~/.codex/config.toml`** (global):
@@ -219,6 +242,7 @@ repo, listed by a headless `codex exec` session):
 **Last Verified:** 2026-07-25 — hooks, trust layers, skills, plugin install
 surface, and settings verified live as described above; event inventory from
 binary strings. Matcher names carried from 2026-07-02 (commit `bde36ea`).
+Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
 
 ## Cortex Code (CoCo)
 
@@ -314,6 +338,35 @@ silently. Skills are unaffected and work fully.
 - Skills can also arrive via `--plugin-dir`, or be added/published through
   `cortex skill add|publish` (including from a Snowflake stage).
 
+### Agents
+
+Probed 2026-08-01 against Cortex Code **v1.18.0**'s bundled first-party plugin
+spec (`Contents/Resources/app/resources/snowflake/skills/plugin-creator/reference.md`).
+**Documentation evidence — not live-fired.**
+
+- **Cortex supports plugin agents.** The spec lists `agents/` as a first-class
+  optional component and documents the format as
+  **`agents/<name>.md`** — "Agents are Markdown files in the `agents/`
+  directory. The filename (without `.md`) becomes the agent name."
+- **This repo's layout does not match, so nothing is discovered.** We ship
+  `agents/<name>/AGENT.md` **directories**; Cortex looks for a flat
+  `agents/<name>.md`. Component placement is otherwise correct — the spec
+  forbids putting `skills/`, `agents/` or `hooks/` inside `.cortex-plugin/`,
+  and ours sit at plugin root.
+- **Agent frontmatter differs.** Cortex documents exactly `name`,
+  `description`, `tools`, `resources`. Ours add `role` and
+  `skills: {add, remove}`, which have no counterpart — a rename alone would
+  not carry this repo's skill-attachment semantics.
+- **Tool-ID trap, currently dodged.** The spec warns that agent `tools` must
+  use CoCo's lowercase/snake_case tool IDs, and that PascalCase Claude Code
+  names like `Read`/`Write`/`Edit` "will silently match no tool and **disable
+  the restriction**". This repo's agents declare no `tools` key, so there is
+  no silent-disable exposure — do not add one without snake_case IDs.
+
+Not yet live-fired: renaming one agent to `agents/<name>.md`, installing, and
+confirming it lists and dispatches. That would settle whether the rename alone
+suffices or the frontmatter must change too.
+
 **Last Verified:** 2026-07-23 — Cortex Code v1.1.8, against its bundled
 first-party reference (`bundled_skills/cortex-code-guide/HOOKS.md`, `SKILLS.md`)
 and its own bundled plugins, plus live runs on an install that already had
@@ -324,3 +377,20 @@ Skill discovery and hook non-execution are both confirmed by observation. The
 manifest claim (`.cortex-plugin/plugin.json` is read by nothing) rests on
 Cortex's own bundled plugins using `.claude-plugin/` and no `.cortex-plugin`
 existing in the install — strong, but not a direct experiment.
+
+**⚠️ The v1.1.8 findings above are superseded in part by v1.18.0 (installed
+2026-08-01).** Its bundled plugin spec names `.cortex-plugin/plugin.json` the
+primary CoCo-convention manifest with `.claude-plugin/` "also recognized" — the
+opposite of the "read by nothing" claim — and documents **both** a plugin-root
+`hooks/hooks.json` component directory **and** hooks read inline from the
+manifest when `hooks` is an object. Whether either actually executes on 1.18.0
+is unresolved and is the open question in #487; the v1.1.8 observation that
+plugin hooks never fire has not been re-run against 1.18.0. Treat the hook and
+manifest rows for Cortex as stale pending that probe.
+
+Cortex's documented event set (v1.18.0): `PreToolUse`, `PostToolUse`,
+`PermissionRequest`, `Notification`, `SessionStart`, `SessionEnd`,
+`UserPromptSubmit`, `Stop`, `SubagentStop`, `PreCompact`, `Setup`.
+`SubagentStart` and `ConfigChange` are absent — but **`SessionEnd` is
+present**, so `warn-off-trunk.py` is not inert on Cortex the way it is on
+Codex. Matchers must use snake_case tool IDs.
