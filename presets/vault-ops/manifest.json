@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "2.3.5",
+  "version": "2.4.0",
   "core": {
     "skills": ["using-workflow"],
     "agents": [],
@@ -17,7 +17,8 @@
       "verify-subagent-evidence.py",
       "audit-config-change.py",
       "inject-skill-router.py",
-      "remind-skill-announce.py"
+      "remind-skill-announce.py",
+      "warn-off-trunk.py"
     ]
   },
   "exclude": [],

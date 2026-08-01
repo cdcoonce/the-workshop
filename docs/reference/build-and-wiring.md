@@ -65,6 +65,7 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
+| `warn-off-trunk.py` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. | all |
 <!-- END GENERATED: hooks-wiring-table -->
 
 ## Keeping this in sync

@@ -19,6 +19,7 @@ Lifecycle hooks and the events they run on. The event column is derived from the
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
+| `warn-off-trunk.py` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. | all |
 
 ## Details
 
@@ -81,3 +82,9 @@ SubagentStop hook: catch a subagent claiming a change it never made.
 *core · events: `Stop` · matcher: —*
 
 Stop hook: verify the project's test suite is green before Claude stops.
+
+### `warn-off-trunk.py`
+
+*core · events: `SessionEnd` · matcher: —*
+
+SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch.
