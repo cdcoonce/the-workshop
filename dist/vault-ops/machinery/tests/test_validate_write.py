@@ -137,6 +137,91 @@ class TestWarningOnly:
         assert "hookSpecificOutput" in payload
 
 
+class TestUnpromotedMemoryLane:
+    """The lane must warn, never block.
+
+    Driven through the real subprocess like the rest of this file, so the wiring is
+    covered and not just ``unpromoted_memory``'s pure functions (tested separately).
+    Auto-memory is redirected via ``HOME``, which the child inherits — these tests
+    must never read the real memory store.
+    """
+
+    @staticmethod
+    def _stub_resolver(vault: Path, payload: dict) -> None:
+        """A stand-in ``graph_cli.py --diagnose-broken`` at the path the lane shells to.
+
+        Stubbing the seam rather than the function keeps the subprocess boundary under
+        test — argv shape, exit code, JSON parsing — which is where a wiring bug would
+        actually live. A tmp vault has no graphmark, and without this the positive path
+        cannot fire at all.
+        """
+        scripts = vault / ".claude" / "scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        (scripts / "graph_cli.py").write_text(
+            "import json, sys\nprint(json.dumps(%r))\n" % (payload,), encoding="utf-8"
+        )
+
+    @staticmethod
+    def _fake_home(tmp_path: Path, vault: Path, *slugs: str) -> str:
+        home = tmp_path / "home"
+        mem = home / ".claude" / "projects" / str(vault).replace("/", "-") / "memory"
+        mem.mkdir(parents=True)
+        (mem / "MEMORY.md").write_text("# Memory Index\n", encoding="utf-8")
+        for slug in slugs:
+            (mem / f"{slug}.md").write_text("a durable fact", encoding="utf-8")
+        return str(home)
+
+    def test_unpromoted_link_warns_without_blocking(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", self._fake_home(tmp_path, vault, "some-durable-lesson"))
+        note = vault / "work" / "decisions.md"
+        note.write_text(
+            VALID_FRONTMATTER.replace("[[Something]]", "[[some-durable-lesson]]"),
+            encoding="utf-8",
+        )
+        self._stub_resolver(
+            vault,
+            {
+                "work/decisions.md": [
+                    {"display": "some-durable-lesson", "reason": "missing", "candidates": []}
+                ]
+            },
+        )
+
+        result = _run_hook(note)
+
+        # Exit 2, never 1: a forward reference is legitimate and must stay writable.
+        assert result.returncode == 2, result.stderr
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        assert "some-durable-lesson" in output
+        assert "auto-memory" in output
+
+    def test_link_naming_no_memory_stays_silent(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A plain unresolved link is the existing lane's business, not this one."""
+        monkeypatch.setenv("HOME", self._fake_home(tmp_path, vault, "some-durable-lesson"))
+        note = vault / "work" / "note.md"
+        note.write_text(VALID_FRONTMATTER, encoding="utf-8")  # links [[Something]]
+
+        result = _run_hook(note)
+
+        assert result.returncode == 0, result.stderr
+
+    def test_no_auto_memory_on_machine_is_silent(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Self-sufficiency: a fresh machine has no memory store and must still pass."""
+        monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))
+        note = vault / "work" / "note.md"
+        note.write_text(VALID_FRONTMATTER, encoding="utf-8")
+
+        result = _run_hook(note)
+
+        assert result.returncode == 0, result.stderr
+
+
 class TestExcludedAndNoop:
     def test_non_markdown_path_exits_zero(self, vault: Path) -> None:
         other = vault / "work" / "data.json"
