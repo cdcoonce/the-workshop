@@ -21,11 +21,11 @@ NOT for: issues already promoted or in flight (that ship has sailed — fix forw
 
 - **Default:** dispatch a subagent whose entire prompt is the issue body, the repo name, and this procedure. Do not summarize the conversation into it. Do not "helpfully" add the context that makes it make sense — that context is exactly what the executor will not have.
 - **If a subagent is unavailable:** say so out loud, then re-derive strictly from `gh issue view <N> --repo <repo>` output and treat every claim in your own memory as unavailable. This is weaker and must be labeled weaker in the digest. Never silently downgrade.
-- The reader may read the target repo **only** to resolve evidence the issue cites — does this file exist, does this issue number resolve. It may not go code-archaeologing to reconstruct intent the issue failed to state. If understanding requires reading the code, that IS the finding.
+- The reader may read the target repo **only** to resolve evidence the issue cites — does this file exist, does this issue number resolve, and (detector 8) does the cited code actually behave as the body claims. It may not go code-archaeologing to reconstruct intent the issue failed to state. Reading a function to check a stated fact is verification; reading the codebase to work out what the issue _meant_ is the finding.
 
 ## Detectors
 
-Run all seven. Each has a test that returns yes or no — record which ones you ran and what you found, per detector. "Looks fine" is not a result.
+Run all eight. Each has a test that returns yes or no — record which ones you ran and what you found, per detector. "Looks fine" is not a result.
 
 1. **Unbound referent.** Every "it", "this", "the existing X", "the current behavior" resolves to a named file, function, flag, or issue number _inside the body_.
    → Test: can you point at the noun? If resolving it needs the conversation, it is unbound.
@@ -48,6 +48,9 @@ Run all seven. Each has a test that returns yes or no — record which ones you 
 7. **Unauthorized decision.** A place where the executor must choose between two defensible approaches and the issue does not say which.
    → Test: read the Proposed behavior and ask "where would I, building this, have to invent policy?" Naming schemes, error-vs-skip, ordering, defaults. Every such fork is a finding unless the body picks a side.
 
+8. **Unverified behavioral claim.** Detectors 1–7 interrogate the words against themselves; this one asks whether they are true. Every sentence of the form "X does Y" about existing code is a factual claim the executor will build on.
+   → Test: for each one, name the line that makes it true. If the claim is about what a function _returns_ or _carries_, read the function — **resolving the symbol is not resolving the behavior**. Detector 5 answers "does `rebuild` exist at that line?"; this one answers "does it do what this paragraph says?" A premise no line supports is blocking, whatever else the issue gets right. Cheapest place to start: the sentence beginning "Since …" or "Because …" — that is where a spec states the fact its whole argument rests on, and it is the sentence least likely to have been checked (precedent: afk#919, whose false premise about `rebuild()`'s `attempts` count passed a seven-detector cold read, built at one attempt, went green on every gate, and had to be reverted).
+
 ## Every finding carries a default
 
 A finding that ends in a question blocks. A finding that ends in a proposed default is one word from resolved. Write each as:
@@ -59,7 +62,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 ## Procedure
 
 1. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
-2. **Run all seven detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
+2. **Run all eight detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
 3. **Resolve cited evidence** — one unpiped command per citation. Do not batch into a pipeline whose failure you cannot attribute to a specific citation.
 4. **Assign a verdict:**
    - **BUILD** — zero blocking findings. Non-blocking defaults may still be listed; they do not gate.
@@ -87,7 +90,7 @@ The failure mode of this skill is a confident BUILD on a vague issue — it is f
 
 ## Constraints
 
-- **The spec, not the code.** Every finding must be a defect in the _words_.
+- **The spec, not the code.** Every finding must be a defect in the _words_ — including a sentence that is false about the code (detector 8). Reporting a false premise is a spec finding; fixing the code is not.
 - **One issue per run.** Cold-reading a batch means skimming.
 - **Never edit acceptance criteria to match what you think the executor will do.** Criteria describe what Charles wants; if they are wrong, that is a finding, not an edit.
 - **Report degradation honestly.** A cold read run inside the shaping session's own context is worth less. Label it and let Charles decide whether to re-run it clean.
