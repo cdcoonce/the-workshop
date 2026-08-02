@@ -40,7 +40,7 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 ### `workbench`
 
-*project preset · v2.5.0*
+*project preset · v3.0.0*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
@@ -52,7 +52,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 - Conventional commits; stage explicitly, never git add .
 - Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured
 
-**Skills (42):** `adversarial-review`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `walkthrough`, `warehouse-sql-test-harness`, `wayfinder`, `worktree-audit`, `write-a-prd`
+**Skills (42):** `adversarial-review`, `blueprint`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`
 
 **Agents (10):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 

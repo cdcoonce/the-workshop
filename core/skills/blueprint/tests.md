@@ -1,4 +1,4 @@
-# wayfinder — Pressure Scenarios
+# blueprint — Pressure Scenarios
 
 Behavioral contract for the skill. Re-score by re-dispatching each kept
 scenario through `qa-tester` scenario-execution mode, with the fixture
@@ -13,12 +13,12 @@ discarded, with the reason, so nobody re-derives them.
 
 ## Fixture
 
-All scenarios run against a real local-markdown wayfinder effort — a
+All scenarios run against a real local-markdown blueprint effort — a
 household-energy-dashboard map with resolved and open tickets — built per
 scenario variant by the fixture script:
 
 ```bash
-uv run python core/skills/wayfinder/scripts/build_fixture.py /tmp/wayfinder-fixture
+uv run python core/skills/blueprint/scripts/build_fixture.py /tmp/blueprint-fixture
 ```
 
 The builder writes three variants (`task-restraint`, `fog-graduation`,

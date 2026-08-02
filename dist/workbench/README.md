@@ -15,6 +15,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | Skill | Summary |
 | --- | --- |
 | `/adversarial-review` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
+| `/blueprint` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
 | `/commit` | Git commit workflow with enforced conventional commit style. |
@@ -53,7 +54,6 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/walkthrough` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |
 | `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. |
-| `/wayfinder` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. |
 | `/worktree-audit` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
 

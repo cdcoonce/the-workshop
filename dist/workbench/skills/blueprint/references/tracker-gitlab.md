@@ -1,4 +1,4 @@
-# Wayfinding on GitLab
+# Blueprinting on GitLab
 
 Use this tracker when the repo's remote is on GitLab. All operations go
 through the `glab` CLI; `glab` infers the project from the clone. GitLab
@@ -21,22 +21,22 @@ glab api projects/:id --jq .permissions
 
 ## Label guard
 
-Identical to GitHub's: a wayfinder map or ticket carries **only
-`wayfinder:*` labels** — never anything from an autonomous picker's
+Identical to GitHub's: a blueprint map or ticket carries **only
+`blueprint:*` labels** — never anything from an autonomous picker's
 vocabulary (`proposed`, `decompose:ready` are the live examples). Positive
 statement, so future picker labels stay excluded by construction.
 
 ## Operations
 
-- **Map**: one issue labelled `wayfinder:map`. (Native epics can hold a map
+- **Map**: one issue labelled `blueprint:map`. (Native epics can hold a map
   on tiers that have them; a labelled issue works everywhere — prefer it.)
 
 ```bash
-glab issue create --title "<map title>" --label "wayfinder:map" --description "<body>"
+glab issue create --title "<map title>" --label "blueprint:map" --description "<body>"
 ```
 
 - **Child ticket**: an issue with `Part of #<map>` at the top of its
-  description, labelled `wayfinder:<type>` (`research` / `prototype` /
+  description, labelled `blueprint:<type>` (`research` / `prototype` /
   `grilling` / `task`). Creation is **idempotent by title**: list existing
   children first, skip any title that already exists.
 - **Blocking**: GitLab's **native blocking link**, added as a quick action —
@@ -57,7 +57,7 @@ resuming an interrupted chart — it is idempotent.
   with an assignee. First in map order wins.
 
 ```bash
-glab issue list -F json --label "wayfinder:grilling"
+glab issue list -F json --label "blueprint:grilling"
 glab api projects/:id/issues/<iid>/links
 ```
 

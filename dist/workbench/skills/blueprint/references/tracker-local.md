@@ -1,4 +1,4 @@
-# Wayfinding in Local Markdown
+# Blueprinting in Local Markdown
 
 Use this tracker when the repo has no usable remote issue tracker — a
 tracker-less clone, a private notes repository, or coursework. The map and

@@ -1,6 +1,6 @@
-"""Build the wayfinder pressure-scenario fixtures.
+"""Build the blueprint pressure-scenario fixtures.
 
-Each variant is a small repo-shaped tree holding a local-markdown wayfinder
+Each variant is a small repo-shaped tree holding a local-markdown blueprint
 effort (a household-energy-dashboard map with resolved and open tickets).
 The pressure scenarios in the skill's tests.md run subagents against these
 trees, so their state is load-bearing: two first-round baseline runs were
@@ -9,7 +9,7 @@ is therefore scripted and deterministic — never hand-copied.
 
 Usage:
 
-    uv run python core/skills/wayfinder/scripts/build_fixture.py <target-dir>
+    uv run python core/skills/blueprint/scripts/build_fixture.py <target-dir>
 
 The target directory gains one subdirectory per variant. Existing variant
 subdirectories are removed and rebuilt, so a rerun always yields a clean
