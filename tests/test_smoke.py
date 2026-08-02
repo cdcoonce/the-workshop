@@ -14,12 +14,16 @@ REAL_PRESETS = sorted(p.name for p in (REPO_ROOT / "presets").iterdir() if p.is_
 
 
 class TestSmokeRealPresets:
-    """Build and smoke-test every real preset against the actual core/+presets/ tree."""
+    """Build and smoke-test every real preset against the actual core/+presets/
+    tree, into a per-test directory so concurrent runs never race on the
+    shared repo dist/."""
 
     @pytest.mark.parametrize("preset_name", REAL_PRESETS)
-    def test_real_preset_builds_and_passes_smoke_test(self, preset_name: str) -> None:
-        dist_path = build_preset(preset_name, repo_root=REPO_ROOT)
-        result = smoke_test(dist_path)
+    def test_real_preset_builds_and_passes_smoke_test(
+        self, preset_name: str, tmp_path: Path
+    ) -> None:
+        dist_path = build_preset(preset_name, repo_root=REPO_ROOT, dist_root=tmp_path)
+        result = smoke_test(dist_path, core_skills_dir=REPO_ROOT / "core" / "skills")
         assert result.passed, f"{preset_name} smoke test failed: {result.errors}"
 
 
@@ -275,6 +279,46 @@ class TestSmokeSkillAuthoringBudgets:
 
         result = smoke_test(dist)
         assert not any("one level deep" in e for e in result.errors)
+
+
+class TestSmokeCoreSkillsDir:
+    """smoke_test locates core/skills two parents above dist_path; a build in a
+    caller-owned directory (hermetic tests) breaks that shape and silently
+    skips every core-skill authoring check. core_skills_dir restores it."""
+
+    def test_core_skills_dir_restores_core_classification(
+        self, tmp_repo: Path
+    ) -> None:
+        skill_src = tmp_repo / "core" / "skills" / "oversized-skill"
+        skill_src.mkdir(parents=True)
+        body = "\n".join(f"line {i}" for i in range(150))
+        (skill_src / "SKILL.md").write_text(
+            f"---\nname: oversized-skill\ndescription: test\n---\n\n{body}\n"
+        )
+        out = tmp_repo / "out" / "deep"
+
+        dist = build_preset("python-api", repo_root=tmp_repo, dist_root=out)
+
+        # Without the override the parent-hop derivation finds no core/skills
+        # next to `out` and the line cap silently goes unenforced.
+        weakened = smoke_test(dist)
+        assert not any("oversized-skill" in e for e in weakened.errors)
+
+        result = smoke_test(dist, core_skills_dir=tmp_repo / "core" / "skills")
+        assert result.passed is False
+        assert any(
+            "oversized-skill/SKILL.md" in e and "line" in e.lower()
+            for e in result.errors
+        )
+
+    def test_explicit_missing_core_skills_dir_raises(self, tmp_repo: Path) -> None:
+        """A typo'd override must not quietly disable the checks it exists to
+        keep alive — that is the exact failure mode of the derived path."""
+        build_preset("python-api", repo_root=tmp_repo)
+        dist = tmp_repo / "dist" / "python-api"
+
+        with pytest.raises(ValueError, match="core_skills_dir"):
+            smoke_test(dist, core_skills_dir=tmp_repo / "nonexistent")
 
 
 class TestSmokeAllowlistShrinkOnly:

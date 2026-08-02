@@ -370,8 +370,10 @@ def _generate_readme(manifest: dict, dist_path: Path) -> str:
     )
 
 
-def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
-    """Build a preset into dist/<preset_name>/ in plugin format.
+def build_preset(
+    preset_name: str, *, repo_root: Path | None = None, dist_root: Path | None = None
+) -> Path:
+    """Build a preset into <dist_root>/<preset_name>/ in plugin format.
 
     Parameters
     ----------
@@ -379,6 +381,11 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
         Name of the preset directory under presets/.
     repo_root
         Root of the template repo. Defaults to current working directory.
+    dist_root
+        Directory to build into, defaulting to <repo_root>/dist. Callers that
+        share repo_root with other processes (the test suite) pass a private
+        directory here so concurrent builds cannot race on the same output
+        tree.
 
     Returns
     -------
@@ -388,7 +395,7 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     root = repo_root or Path.cwd()
     core_path = root / "core"
     preset_path = root / "presets" / preset_name
-    dist_path = root / "dist" / preset_name
+    dist_path = (dist_root if dist_root is not None else root / "dist") / preset_name
 
     if not preset_path.exists():
         raise BuildValidationError(f"Preset '{preset_name}' not found at {preset_path}")
@@ -520,7 +527,11 @@ def build_preset(preset_name: str, *, repo_root: Path | None = None) -> Path:
     if machinery_src.exists():
         # A machinery payload carrying a wiring spec regenerates its rendered
         # adapters and vendor map first, so the shipped copy is always fresh.
-        if (machinery_src / "wiring" / "hooks-spec.json").exists():
+        # Only for in-tree builds: the regeneration writes into the SOURCE
+        # tree, and an out-of-tree (dist_root) build promises to leave
+        # repo_root untouched — it ships the committed wiring instead, whose
+        # freshness verify-generated guards separately.
+        if dist_root is None and (machinery_src / "wiring" / "hooks-spec.json").exists():
             _regenerate_machinery_wiring(machinery_src)
         shutil.copytree(machinery_src, dist_path / "machinery", ignore=_JUNK_IGNORE)
 
