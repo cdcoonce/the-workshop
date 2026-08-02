@@ -24,9 +24,9 @@ def test_repo_reference_docs_is_core_skill() -> None:
     assert (SKILL_DIR / "SKILL.md").is_file()
 
 
-def test_workbench_ships_repo_reference_docs() -> None:
+def test_workbench_ships_repo_reference_docs(tmp_path: Path) -> None:
     """workbench (core.skills: 'all') includes the skill in its built plugin."""
-    dist_path = build_preset("workbench", repo_root=REPO_ROOT)
+    dist_path = build_preset("workbench", repo_root=REPO_ROOT, dist_root=tmp_path)
     assert (dist_path / "skills" / "repo-reference-docs" / "SKILL.md").is_file()
 
 

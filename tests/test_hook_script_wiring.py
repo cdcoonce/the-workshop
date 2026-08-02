@@ -57,9 +57,14 @@ def test_manifest_declares_every_inherited_hook_script(preset_name: str) -> None
 
 
 @pytest.mark.parametrize("preset_name", PRESET_NAMES)
-def test_built_preset_ships_every_referenced_hook_script(preset_name: str) -> None:
+def test_built_preset_ships_every_referenced_hook_script(
+    preset_name: str, tmp_path: Path
+) -> None:
     """A built preset's hooks.json never references a script it omits."""
-    hooks_dir = build_preset(preset_name, repo_root=REPOSITORY_ROOT) / "hooks"
+    hooks_dir = (
+        build_preset(preset_name, repo_root=REPOSITORY_ROOT, dist_root=tmp_path)
+        / "hooks"
+    )
     hooks_config = json.loads((hooks_dir / "hooks.json").read_text())
     referenced = _referenced_scripts(hooks_config)
     shipped = {path.name for path in (hooks_dir / "scripts").glob("*.py")}
