@@ -24,29 +24,8 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+from notebook_core import NOTEBOOK_SKELETON  # noqa: E402
 from vault_utils import find_vault_root_from_env, read_vault_context  # noqa: E402
-
-NOTEBOOK_SKELETON = """\
-# Session Notebook — {context_title}
-
-_Live session state · updated {stamp} · session {sid}_
-
-## Now
-
-(what we're actively doing — 1-2 sentences)
-
-## Established (don't re-derive)
-
-(durable facts and decisions locked this session — the "don't make me repeat myself" list)
-
-## Open loops
-
-(unfinished threads / next steps this session)
-
-## Touched
-
-(files or notes created or edited this session)
-"""
 
 
 def ensure_stub(vault_root: Path, context: str, session_id: str) -> None:
