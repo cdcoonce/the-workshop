@@ -9,7 +9,10 @@ fastembed only lazily, so no heavy deps are pulled in here.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
+
+import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -36,6 +39,16 @@ def _note_path(name: str = "brain/sample.md") -> Path:
     argument and only uses the path for its vault-relative string.
     """
     return VAULT_ROOT / name
+
+
+def _nonws(s: str) -> str:
+    """The non-whitespace characters of *s*, in order.
+
+    Chunk packing normalises whitespace (sections are stripped and re-joined),
+    so lossless splitting is asserted on the ordered non-whitespace character
+    stream rather than on exact byte equality.
+    """
+    return "".join(s.split())
 
 
 # ---------------------------------------------------------------------------
@@ -157,13 +170,18 @@ class TestChunkNote:
         chunks = chunk_note(_note_path(), raw)
         assert len(chunks) >= 2
 
-    def test_oversize_single_section_emitted_alone(self) -> None:
-        # One section larger than the window is emitted as its own chunk.
+    def test_word_oversize_section_splits_into_bounded_chunks(self) -> None:
+        # A section beyond the packing window must be split into consecutive
+        # windows, never emitted whole — the old escape hatch that emitted it
+        # alone is the defect fixed for the-vault#137.
         big = " ".join(["w"] * (CHUNK_TARGET_WORDS + 50))
         raw = f"# Big\n\n{big}\n"
         chunks = chunk_note(_note_path(), raw)
-        assert len(chunks) == 1
-        assert len(chunks[0]["text"].split()) >= CHUNK_TARGET_WORDS
+        assert len(chunks) >= 2
+        for c in chunks:
+            assert len(c["text"].split()) <= CHUNK_TARGET_WORDS
+            assert len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS
+        assert _nonws("".join(c["text"] for c in chunks)) == _nonws(raw)
 
     def test_small_sections_packed_into_one_window(self) -> None:
         # Several tiny sections that together fit under the target word count
@@ -206,3 +224,118 @@ class TestChunkNote:
         chunks = chunk_note(_note_path(), raw)
         assert len(chunks) == 1
         assert chunks[0]["text"] == raw.strip()
+
+
+# ---------------------------------------------------------------------------
+# Oversize-section splitting (the-vault#137)
+# ---------------------------------------------------------------------------
+
+
+class TestOversizeSectionSplitting:
+    """Every chunk must fit under the embedder's silent-truncation cap.
+
+    bge-small-en-v1.5 truncates input past 512 tokens (~2000 chars), so any
+    chunk longer than CHUNK_MAX_CHARS loses its tail to search. Measured on
+    the live vault before the fix: 14.1% of chunks exceeded the cap and
+    27.8% of all chunkable characters were never embedded.
+    """
+
+    def test_char_oversize_section_splits_into_bounded_chunks(self) -> None:
+        # Heading-sparse note: one heading, 40 prose paragraphs. The old
+        # escape hatch emitted the whole section as one unbounded chunk.
+        paragraphs = [f"P{i:03d} " + " ".join(["lorem"] * 60) for i in range(40)]
+        raw = "# Gotchas\n\n" + "\n\n".join(paragraphs) + "\n"
+        assert len(raw) > 3 * semantic_index.CHUNK_MAX_CHARS
+
+        chunks = chunk_note(_note_path(), raw)
+        assert len(chunks) > 1
+        for c in chunks:
+            assert len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS
+            assert len(c["text"].split()) <= CHUNK_TARGET_WORDS
+
+    def test_split_respects_paragraph_boundaries(self) -> None:
+        # When paragraphs individually fit a window, pieces must be built
+        # from whole paragraphs — no mid-paragraph cuts.
+        paragraphs = [f"P{i:03d} " + " ".join(["word"] * 49) for i in range(20)]
+        raw = "# H\n\n" + "\n\n".join(paragraphs) + "\n"
+        chunks = chunk_note(_note_path(), raw)
+        assert len(chunks) > 1
+
+        seen: list[str] = []
+        for c in chunks:
+            assert len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS
+            for piece in c["text"].split("\n\n"):
+                if piece == "# H":
+                    continue
+                seen.append(piece)
+        # Every paragraph survives intact and in reading order.
+        assert seen == paragraphs
+
+    def test_no_silent_loss_on_heading_sparse_note(self) -> None:
+        # Mimics the worst live case (brain/Gotchas.md: 3 headings, one
+        # ~100k-char section, ~98% invisible to search before the fix).
+        sentences = [
+            f"Fact {i:04d} " + " ".join(["detail"] * 20) + "." for i in range(400)
+        ]
+        lines: list[str] = []
+        for i, s in enumerate(sentences):
+            lines.append(s)
+            if i % 5 == 4:
+                lines.append("")  # blank line → paragraph break every 5 sentences
+        body = (
+            "# Intro\n\nShort intro.\n\n"
+            "# Gotchas\n\n" + "\n".join(lines) + "\n\n"
+            "# Outro\n\nShort outro.\n"
+        )
+        raw = '---\ndescription: "Hard-won lessons"\n---\n' + body
+
+        chunks = chunk_note(_note_path(), raw)
+
+        # Chunk-0 contract: the frontmatter description still leads.
+        assert chunks[0]["text"] == "Hard-won lessons"
+
+        body_chunks = chunks[1:]
+        total_chars = sum(len(c["text"]) for c in body_chunks)
+        embedded_chars = sum(
+            min(len(c["text"]), semantic_index.CHUNK_MAX_CHARS) for c in body_chunks
+        )
+        # Embedded chars == chunkable chars: nothing lost past the cap.
+        assert embedded_chars == total_chars
+        # And the split dropped nothing: the ordered non-whitespace stream of
+        # the chunks equals the body's.
+        assert _nonws("".join(c["text"] for c in body_chunks)) == _nonws(body)
+
+    def test_boundary_free_blob_hard_sliced_under_cap(self) -> None:
+        # A single 12KiB run with no blank lines, newlines, spaces, or
+        # sentence punctuation (a pasted minified payload). The last-resort
+        # splitter must hard-slice at the ceiling rather than emit it whole.
+        blob = "x" * (12 * 1024)
+        raw = f"# Blob\n\n{blob}\n"
+        chunks = chunk_note(_note_path(), raw)
+        assert len(chunks) > 1
+        assert all(len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS for c in chunks)
+        assert _nonws("".join(c["text"] for c in chunks)) == _nonws(raw)
+
+
+# ---------------------------------------------------------------------------
+# _fastembed_cache_dir
+# ---------------------------------------------------------------------------
+
+
+class TestFastembedCacheDir:
+    """The first-run probe must look where fastembed actually caches.
+
+    fastembed resolves $FASTEMBED_CACHE_PATH first, else falls back to
+    <system tempdir>/fastembed_cache — not ~/.cache/fastembed. Probing the
+    wrong path made the "first run ~130MB download" notice fire on every
+    reindex.
+    """
+
+    def test_env_override_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("FASTEMBED_CACHE_PATH", "/opt/fe-cache")
+        assert semantic_index._fastembed_cache_dir() == Path("/opt/fe-cache")
+
+    def test_defaults_to_system_tempdir(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("FASTEMBED_CACHE_PATH", raising=False)
+        expected = Path(tempfile.gettempdir()) / "fastembed_cache"
+        assert semantic_index._fastembed_cache_dir() == expected
