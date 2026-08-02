@@ -6,7 +6,7 @@ wayfinder pattern from Matt Pocock's skills repository
 
 ## The map body
 
-The map is a single tracker issue labelled `wayfinder:map` — the canonical
+The map is a single tracker issue labelled `blueprint:map` — the canonical
 artifact. It is an **index, not a store**: a decision lives in exactly one
 place (its ticket); the map only gists and links, never restates. Open tickets
 are **not** listed in the body — they are open child issues, found by query.
@@ -55,7 +55,7 @@ single agent session:
 <the decision or investigation this ticket resolves>
 ```
 
-Each ticket carries one `wayfinder:<type>` label. A session **claims** a
+Each ticket carries one `blueprint:<type>` label. A session **claims** a
 ticket by assigning it to the driving dev before any other work; an open,
 unassigned ticket is unclaimed. Blocking uses the tracker's native dependency
 edges (see the tracker doc), wired in a second pass after creation — issues
@@ -160,11 +160,11 @@ vault session`. Any later session that loads the map with the vault in
 date: <today>
 description: "<what this map is finding its way to — one line>"
 tags:
-  - wayfinder-map
+  - blueprint-map
 status: active
 ---
 
-# <Effort name> — wayfinder map
+# <Effort name> — blueprint map
 
 Map: <map URL>
 

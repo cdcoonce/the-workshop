@@ -1,4 +1,4 @@
-"""Pin the load-bearing state of each wayfinder pressure-scenario fixture.
+"""Pin the load-bearing state of each blueprint pressure-scenario fixture.
 
 If a fixture drifts — a ticket pre-resolved, a map already indexed, a claim
 already set — its scenario keeps "passing" while measuring nothing, and the

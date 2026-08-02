@@ -1,18 +1,18 @@
 ---
-name: wayfinder
+name: blueprint
 description: >
   Charts an effort too big for one agent session as a shared map of decision
   tickets on the repo's issue tracker, worked one at a time until the way to
-  the destination is clear. Use when the user explicitly invokes /wayfinder,
+  the destination is clear. Use when the user explicitly invokes /blueprint,
   says "chart a map" or "work the map", names an existing map issue to
   continue, or asks to plan something too large and foggy to spec in one
   sitting. Planning only — it produces decisions, not build slices.
 ---
 
-# Wayfinder
+# Blueprint
 
 A loose idea has arrived — too big for one session, wrapped in fog: the way
-from here to the **destination** isn't visible yet. Wayfinding charts that
+from here to the **destination** isn't visible yet. Blueprinting charts that
 way as a shared map on the repo's issue tracker, then resolves its **decision
 tickets** — questions whose resolution is a decision, not slices of a build —
 until nothing is left to decide before someone goes and does the thing.
@@ -84,8 +84,8 @@ tracker exists.
 
 - brainstorm — single-session shaping of a fuzzy idea into a committed
   direction; no persistent map, no frontier.
-- grill-me — one interrogation; wayfinder _invokes_ it inside tickets.
+- grill-me — one interrogation; blueprint _invokes_ it inside tickets.
 - write-a-prd / prd-to-plan — the way is already clear enough to spec or
-  slice; wayfinder is what runs while it isn't.
+  slice; blueprint is what runs while it isn't.
 - Dispatch and slicing flows — consume the map's resolved decisions at its
-  edge; wayfinder never files build issues itself.
+  edge; blueprint never files build issues itself.

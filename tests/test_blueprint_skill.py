@@ -1,4 +1,4 @@
-"""Ownership and discipline contract for the `wayfinder` skill.
+"""Ownership and discipline contract for the `blueprint` skill.
 
 The capability is charting an effort too big for one agent session as a shared
 map of decision tickets on the repo's issue tracker, then resolving them one
@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SLUG = "wayfinder"
+SLUG = "blueprint"
 SKILL_DIR = REPO_ROOT / "core" / "skills" / SLUG
 
 SIBLING_PLANNERS = ("brainstorm", "grill-me", "write-a-prd", "prd-to-plan")
@@ -94,11 +94,11 @@ def test_skill_md_stays_under_the_line_budget() -> None:
 def test_description_is_trigger_only_and_explicit_invocation() -> None:
     """The description is a retrieval index, not a spec — and upstream's
     `disable-model-invocation` frontmatter cannot be carried here, so the
-    explicit `/wayfinder` trigger is the description's job."""
+    explicit `/blueprint` trigger is the description's job."""
     description = _description()
     assert len(description) < 1024
     assert "use when" in description.lower()
-    assert "/wayfinder" in description, "explicit invocation trigger missing"
+    assert "/blueprint" in description, "explicit invocation trigger missing"
     assert "→" not in description, "description narrates a step chain"
     assert "phase" not in description.lower(), "description leaks structure"
 
@@ -188,12 +188,12 @@ def test_names_its_boundary_against_every_sibling_planner() -> None:
 
 def test_remote_trackers_carry_the_positive_label_guard() -> None:
     """afk's pickers scan labels positively (`proposed`, `decompose:ready`),
-    and wayfinder maps can share a repo with afk's backlog. The guard must be
-    stated positively — wayfinder labels only — so future afk vocabulary stays
+    and blueprint maps can share a repo with afk's backlog. The guard must be
+    stated positively — blueprint labels only — so future afk vocabulary stays
     excluded by construction."""
     for tracker in REMOTE_TRACKERS:
         text = _flat(_reference(tracker))
-        assert "only `wayfinder:" in text.lower(), (
+        assert "only `blueprint:" in text.lower(), (
             f"{tracker}: labels-only guard missing"
         )
         assert "proposed" in text, (
@@ -213,7 +213,7 @@ def test_vault_linkage_headings_match_the_digest_scraper() -> None:
         )
         assert heading in scraper, (
             f"context_loader.py DIGEST_BUCKETS no longer scrapes '{heading}' "
-            "— the wayfinder vault-linkage prose is now stale"
+            "— the blueprint vault-linkage prose is now stale"
         )
 
 
