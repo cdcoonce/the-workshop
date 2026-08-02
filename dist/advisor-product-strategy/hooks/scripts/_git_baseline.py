@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 
 
-def git_dir(project_dir: Path):
+def git_dir(project_dir: Path) -> Path | None:
     """Absolute .git directory for `project_dir`, or None outside a repo."""
     try:
         result = subprocess.run(
@@ -36,7 +36,7 @@ def git_dir(project_dir: Path):
     return Path(result.stdout.strip())
 
 
-def head_sha(project_dir: Path):
+def head_sha(project_dir: Path) -> str | None:
     """Current HEAD sha, or None when there is no resolvable HEAD."""
     try:
         result = subprocess.run(
@@ -52,7 +52,7 @@ def head_sha(project_dir: Path):
     return result.stdout.strip()
 
 
-def working_tree_signature(project_dir: Path):
+def working_tree_signature(project_dir: Path) -> str | None:
     """A content-aware fingerprint of what's changed.
 
     `git status --porcelain` alone only reports per-path status flags (M/A/??),

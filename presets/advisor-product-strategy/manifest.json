@@ -6,7 +6,7 @@
     "Steelman duty: the strongest opposing case before endorsing the owner's lean",
     "Base/tuning/private layering \u2014 local/ is the owner's, never the repo's"
   ],
-  "version": "0.1.1",
+  "version": "0.1.2",
   "base_settings": false,
   "core": {
     "skills": [],
@@ -14,9 +14,7 @@
     "hooks": []
   },
   "exclude": [],
-  "preset_skills": [
-    "advisor-product-strategy"
-  ],
+  "preset_skills": ["advisor-product-strategy"],
   "preset_hooks": [],
   "preset_agents": []
 }

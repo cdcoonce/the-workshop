@@ -27,34 +27,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from notebook_core import build_prompt, latest_turn
+from notebook_core import NOTEBOOK_SKELETON, build_prompt, latest_turn
 from vault_utils import read_batch_model, read_vault_context
 
 MIN_TURN_CHARS = 200           # debounce: skip trivial turns
 CLAUDE_TIMEOUT = 90            # seconds for the headless call
 STALE_HOURS = 6               # reap per-session notebooks older than this
-
-NOTEBOOK_SKELETON = """\
-# Session Notebook — {context_title}
-
-_Live session state · updated {stamp} · session {sid}_
-
-## Now
-
-(what we're actively doing — 1-2 sentences)
-
-## Established (don't re-derive)
-
-(durable facts and decisions locked this session — the "don't make me repeat myself" list)
-
-## Open loops
-
-(unfinished threads / next steps this session)
-
-## Touched
-
-(files or notes created or edited this session)
-"""
 
 
 def log(vault_root: Path, msg: str) -> None:
