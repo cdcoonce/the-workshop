@@ -122,3 +122,15 @@ All three scenarios flipped with the skill text loaded.
   scenarios survive this because their failing conjunct is never an
   option — it is an act the prompt doesn't mention — which is also why
   future scenarios should put the measured discipline outside the menu.
+- The dispatch handoff (`references/dispatch-handoff.md`) has **no scored
+  scenario**. Its provenance is a production observation rather than a
+  fixtured RED: on 2026-08-01 a real map drained to zero open tickets
+  _with this skill loaded_, and the session stalled — "Work the map" named
+  the success state and then stopped, so there was nowhere to go. That is
+  a stronger signal than a fixture RED in one respect (it happened in
+  earnest, at full scale) and weaker in another (n=1, unrepeated, and no
+  no-skill baseline exists to compare against, since the failure was the
+  skill's own silence). None of the three fixture variants builds a
+  drained map, so scoring it needs a fourth variant whose tickets are all
+  closed with resolution comments complete enough to compose an epic
+  from — which is itself the condition under test.

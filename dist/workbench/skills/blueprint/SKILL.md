@@ -33,7 +33,9 @@ that, the law holds under every deadline and every "just ship it".
 - **Claim first.** Assign the ticket to the driving dev before any work —
   the assignee is the claim; concurrent sessions skip claimed tickets.
 - **One ticket per session** — research tickets excepted (they run as
-  parallel background subagents). Tickets are sized to one session.
+  parallel background subagents). Tickets are sized to one session. The
+  user may direct continuation past one; checkpoint the session handoff
+  between tickets when they do.
 - **Create, then wire.** Tickets need ids before blocking edges can point at
   them; wiring is a second pass, idempotent, re-run on any resumed chart.
 - **Fog or ticket?** Ticket when the question can be stated precisely now —
@@ -67,8 +69,9 @@ tracker exists.
 1. Load the map body — not every ticket.
 2. Query the frontier. Four outcomes:
    - A takeable ticket → claim it, then resolve it.
-   - **Zero open tickets** → the way is clear; hand the resolved decisions
-     to the ecosystem's dispatch flow. This is success, not an error.
+   - **Zero open tickets** → the way is clear; run the dispatch handoff
+     ([references/dispatch-handoff.md](references/dispatch-handoff.md)).
+     This is success, not an error.
    - Open but **all blocked** → a wiring defect or dependency cycle — say
      so and show the cycle; never report the map as done.
    - Open but **all claimed** → report who holds the claims; reclaim only

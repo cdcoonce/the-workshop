@@ -33,6 +33,13 @@ CONTEXT_LOADER = (
 
 REMOTE_TRACKERS = ("tracker-github.md", "tracker-gitlab.md")
 
+HANDOFF = "dispatch-handoff.md"
+
+# The four sections a resolution must support are named in two places: the
+# resolution-completeness contract in map-and-tickets.md, and the epic template
+# in dispatch-handoff.md. They are the same four by design.
+EPIC_SECTIONS = ("problem", "evidence", "proposed behavior", "acceptance criteria")
+
 
 def _skill_text() -> str:
     return (SKILL_DIR / "SKILL.md").read_text()
@@ -174,6 +181,108 @@ def test_work_flow_disambiguates_the_empty_frontier() -> None:
     assert "all blocked" in text
     assert "all claimed" in text
     assert "cycle" in text, "dependency-cycle outcome is not named"
+
+
+def test_empty_frontier_routes_to_the_dispatch_handoff() -> None:
+    """The success terminal state is the one outcome with work left to do.
+    Naming it without linking the procedure is how the seam failed before:
+    the skill said 'hand it to dispatch' and stopped, so a drained map had
+    nowhere to go and the session stalled at its own success state."""
+    zero_ticket_block = _flat(
+        _skill_text().split("Zero open tickets", 1)[1].split("Open but", 1)[0]
+    )
+    assert HANDOFF in zero_ticket_block, (
+        "the empty-frontier outcome does not link the dispatch handoff; the "
+        "procedure exists but is unreachable from the flow that needs it"
+    )
+
+
+def test_one_ticket_per_session_admits_user_directed_continuation() -> None:
+    """The sizing contract is a default, not a cage. Without a stated
+    exception a session working several tickets on explicit instruction is
+    either silently violating the contract or refusing the user."""
+    text = _flat(_skill_text()).lower()
+    assert "continuation" in text or "direct continuation" in text, (
+        "no user-directed exception to the one-ticket contract"
+    )
+    assert "checkpoint" in text, (
+        "continuation is permitted without a context checkpoint between tickets"
+    )
+
+
+def test_dispatch_handoff_files_one_epic_not_one_issue_per_ticket() -> None:
+    """Ticket boundaries are decision boundaries, sized to one session of
+    deciding. Shipping them as build boundaries invents a dependency graph
+    nobody drew."""
+    text = _flat(_reference(HANDOFF)).lower()
+    assert "one epic" in text
+    assert "not one issue per ticket" in text or "do **not** become" in text, (
+        "the N-tickets-is-not-N-issues rule is not stated"
+    )
+    assert "decomposer" in text, "nothing says who cuts the DAG instead"
+
+
+def test_dispatch_handoff_inverts_the_label_guard() -> None:
+    """The map's guard and the epic's are exact opposites, and both failure
+    directions are silent: a picker-labelled ticket gets swept into a build
+    pipeline mid-map, and a `blueprint:*`-labelled epic lands in a backlog no
+    picker scans — filed, and never picked up."""
+    text = _flat(_reference(HANDOFF))
+    lowered = text.lower()
+    assert "only `blueprint:" in lowered, "the map-side guard is not restated"
+    assert "invert" in lowered, "the epic-side inversion is not named"
+    assert "no `blueprint:*` label" in lowered or "no `blueprint:" in lowered, (
+        "nothing forbids carrying a blueprint label onto the epic"
+    )
+
+
+def test_dispatch_handoff_leaves_promotion_to_the_user() -> None:
+    """Filing an epic and promoting it into an autonomous pipeline are
+    different trust steps; the second spends real tokens."""
+    text = _flat(_reference(HANDOFF)).lower()
+    assert "promotion" in text
+    assert "spends real tokens" in text or "real tokens" in text
+
+
+def test_dispatch_handoff_epic_sections_match_the_resolution_contract() -> None:
+    """map-and-tickets.md sets what a resolution must support; this reference
+    sets what the epic is built from. Drift between them means resolutions
+    stop carrying what the epic needs — and the gap only shows up at the one
+    moment the map is supposed to be done."""
+    contract = _flat(_reference("map-and-tickets.md")).lower()
+    handoff = _flat(_reference(HANDOFF)).lower()
+    for section in EPIC_SECTIONS:
+        assert section in contract, (
+            f"map-and-tickets.md resolution contract no longer names {section!r}"
+        )
+        assert section in handoff, (
+            f"{HANDOFF} epic template no longer names {section!r} — it has "
+            "drifted from the resolution-completeness contract"
+        )
+
+
+def test_dispatch_handoff_refuses_code_archaeology_for_thin_resolutions() -> None:
+    """The completeness test is only falsifiable if failing it sends you back
+    to the ticket. Filling the gap by reading code converts an unmade decision
+    into an implementation guess that arrives with a decision's authority."""
+    text = _flat(_reference(HANDOFF)).lower()
+    assert "code archaeology" in text
+    assert "reopen" in text, "nothing routes a thin resolution back to its ticket"
+
+
+def test_dispatch_handoff_records_the_epic_back_on_the_map() -> None:
+    """An unrecorded epic leaves the map reading as drained-but-abandoned, and
+    the next session re-derives an epic that already exists."""
+    text = _flat(_reference(HANDOFF)).lower()
+    assert "append" in text and "map body" in text
+    assert "re-read" in text, "the append discipline is not carried over"
+
+
+def test_dispatch_handoff_keeps_the_no_builds_law() -> None:
+    """The handoff is the skill's edge, which is exactly where the pull to
+    just build it is strongest."""
+    text = _flat(_reference(HANDOFF)).lower()
+    assert "never files build issues itself" in text
 
 
 def test_names_its_boundary_against_every_sibling_planner() -> None:
