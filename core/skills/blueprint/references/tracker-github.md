@@ -1,4 +1,4 @@
-# Wayfinding on GitHub
+# Blueprinting on GitHub
 
 Use this tracker when the repo's `origin` remote is on GitHub. All operations
 go through the `gh` CLI; `gh` infers the repo from the clone.
@@ -16,7 +16,7 @@ gh api repos/<owner>/<repo> --jq .permissions.push
 
 ## Label guard
 
-A wayfinder map or ticket carries **only `wayfinder:*` labels** — never
+A blueprint map or ticket carries **only `blueprint:*` labels** — never
 anything from the afk vocabulary. Autonomous pickers scan labels positively
 (`proposed` and `decompose:ready` are live examples that trigger
 auto-promotion and decomposition), and a map can share its repo — and its
@@ -25,14 +25,14 @@ keeps future picker vocabulary excluded by construction.
 
 ## Operations
 
-- **Map**: one issue labelled `wayfinder:map`.
+- **Map**: one issue labelled `blueprint:map`.
 
 ```bash
-gh issue create --title "<map title>" --label "wayfinder:map" --body-file <tmpfile>
+gh issue create --title "<map title>" --label "blueprint:map" --body-file <tmpfile>
 ```
 
 - **Child ticket**: a GitHub **sub-issue** of the map, labelled
-  `wayfinder:<type>` (`research` / `prototype` / `grilling` / `task`).
+  `blueprint:<type>` (`research` / `prototype` / `grilling` / `task`).
   Creation is **idempotent by title**: list existing children first and skip
   any title that already exists, so a resumed chart never duplicates tickets.
   If the sub-issue API errors (feature unavailable on the repo), fall back to
