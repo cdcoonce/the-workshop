@@ -446,7 +446,9 @@ def _lint_trigger_overlaps(descriptions: dict[str, str]) -> list[str]:
     return findings
 
 
-def _core_skill_names(dist_path: Path) -> frozenset[str]:
+def _core_skill_names(
+    dist_path: Path, core_skills_dir: Path | None = None
+) -> frozenset[str]:
     """Names of skills sourced from core/skills/, given a built plugin path.
 
     The skill-authoring budget checks (line cap, frontmatter shape, reference
@@ -458,7 +460,13 @@ def _core_skill_names(dist_path: Path) -> frozenset[str]:
     ----------
     dist_path
         Path to the built plugin directory (e.g., dist/python-api/), expected
-        at ``<repo_root>/dist/<preset_name>``.
+        at ``<repo_root>/dist/<preset_name>`` unless ``core_skills_dir`` is
+        given.
+    core_skills_dir
+        Explicit core/skills directory. Required whenever ``dist_path`` does
+        not sit at ``<repo_root>/dist/<preset_name>`` (a hermetic test build),
+        where the parent-hop derivation below would find nothing and silently
+        disable every core-skill check.
 
     Returns
     -------
@@ -466,9 +474,14 @@ def _core_skill_names(dist_path: Path) -> frozenset[str]:
         Directory names under core/skills/, or an empty set if core/skills/
         can't be located relative to ``dist_path``.
     """
-    core_skills_dir = dist_path.parent.parent / "core" / "skills"
-    if not core_skills_dir.is_dir():
-        return frozenset()
+    if core_skills_dir is None:
+        core_skills_dir = dist_path.parent.parent / "core" / "skills"
+        if not core_skills_dir.is_dir():
+            return frozenset()
+    elif not core_skills_dir.is_dir():
+        # An explicit override that points nowhere would silently disable the
+        # core-skill checks — the exact trap the parameter exists to avoid.
+        raise ValueError(f"core_skills_dir is not a directory: {core_skills_dir}")
     return frozenset(d.name for d in core_skills_dir.iterdir() if d.is_dir())
 
 
@@ -612,13 +625,21 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
     return errors
 
 
-def smoke_test(dist_path: Path) -> SmokeTestResult:
+def smoke_test(
+    dist_path: Path, *, core_skills_dir: Path | None = None
+) -> SmokeTestResult:
     """Validate internal consistency of a built plugin.
 
     Parameters
     ----------
     dist_path
         Path to the built plugin directory (e.g., dist/python-api/).
+    core_skills_dir
+        Explicit core/skills directory for classifying core vs preset skills.
+        Pass it whenever ``dist_path`` is not ``<repo_root>/dist/<preset>``
+        (e.g. a build_preset(dist_root=...) output), where the default
+        derivation cannot find core/skills and the core-skill authoring
+        checks would silently not run.
 
     Returns
     -------
@@ -653,7 +674,7 @@ def smoke_test(dist_path: Path) -> SmokeTestResult:
 
     # 2. Validate skills: every directory in skills/ has a valid SKILL.md
     skills_dir = dist_path / "skills"
-    core_skill_names = _core_skill_names(dist_path)
+    core_skill_names = _core_skill_names(dist_path, core_skills_dir)
     skill_descriptions: dict[str, str] = {}
     if skills_dir.exists():
         for skill_dir in sorted(skills_dir.iterdir()):

@@ -610,56 +610,58 @@ class TestBuildMachinery:
         assert not (tmp_repo / "dist" / "python-api" / "machinery").exists()
 
 
+def write_wired_machinery(tmp_repo: Path) -> Path:
+    """Create a machinery payload with a wiring spec for build tests."""
+    repo_tools = (
+        Path(__file__).resolve().parent.parent
+        / "presets"
+        / "vault-ops"
+        / "machinery"
+        / "tools"
+    )
+    preset = tmp_repo / "presets" / "python-api"
+    machinery = preset / "machinery"
+    engine = machinery / "engine"
+    engine.mkdir(parents=True)
+    (engine / "session-stop.py").write_text("# hook script\n")
+    agents = machinery / "agents"
+    agents.mkdir()
+    (agents / "helper.md").write_text(
+        "---\nname: helper\ndescription: A helper agent\n---\n\n# Helper\n\nDo helpful things.\n"
+    )
+    (machinery / "wiring").mkdir()
+    (machinery / "wiring" / "hooks-spec.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "entries": [
+                    {
+                        "event": "Stop",
+                        "script": "session-stop.py",
+                        "args": ["--explicit-sync"],
+                        "timeout_ms": 60000,
+                    }
+                ],
+            }
+        )
+    )
+    tools = machinery / "tools"
+    tools.mkdir()
+    for tool in ("wiring_gen.py", "vendor_map_gen.py"):
+        shutil.copy2(repo_tools / tool, tools / tool)
+    skills = preset / "skills" / "deploy"
+    assert skills.is_dir(), "tmp_repo fixture ships the deploy skill"
+    return machinery
+
+
 class TestBuildMachineryWiring:
     """A machinery payload with a wiring spec regenerates rendered/ and the
     vendor map at build time, so both are always fresh in source and dist."""
 
-    def _write_wired_machinery(self, tmp_repo: Path) -> Path:
-        repo_tools = (
-            Path(__file__).resolve().parent.parent
-            / "presets"
-            / "vault-ops"
-            / "machinery"
-            / "tools"
-        )
-        preset = tmp_repo / "presets" / "python-api"
-        machinery = preset / "machinery"
-        engine = machinery / "engine"
-        engine.mkdir(parents=True)
-        (engine / "session-stop.py").write_text("# hook script\n")
-        agents = machinery / "agents"
-        agents.mkdir()
-        (agents / "helper.md").write_text(
-            "---\nname: helper\ndescription: A helper agent\n---\n\n# Helper\n\nDo helpful things.\n"
-        )
-        (machinery / "wiring").mkdir()
-        (machinery / "wiring" / "hooks-spec.json").write_text(
-            json.dumps(
-                {
-                    "schema": 1,
-                    "entries": [
-                        {
-                            "event": "Stop",
-                            "script": "session-stop.py",
-                            "args": ["--explicit-sync"],
-                            "timeout_ms": 60000,
-                        }
-                    ],
-                }
-            )
-        )
-        tools = machinery / "tools"
-        tools.mkdir()
-        for tool in ("wiring_gen.py", "vendor_map_gen.py"):
-            shutil.copy2(repo_tools / tool, tools / tool)
-        skills = preset / "skills" / "deploy"
-        assert skills.is_dir(), "tmp_repo fixture ships the deploy skill"
-        return machinery
-
     def test_build_renders_wiring_and_regenerates_map(
         self, tmp_repo: Path
     ) -> None:
-        machinery = self._write_wired_machinery(tmp_repo)
+        machinery = write_wired_machinery(tmp_repo)
 
         build_preset("python-api", repo_root=tmp_repo)
 
@@ -687,7 +689,7 @@ class TestBuildMachineryWiring:
         ).read_text()
 
     def test_build_removes_stale_rendered_files(self, tmp_repo: Path) -> None:
-        machinery = self._write_wired_machinery(tmp_repo)
+        machinery = write_wired_machinery(tmp_repo)
         stale = machinery / "rendered" / "codex-agents" / "ghost.toml"
         stale.parent.mkdir(parents=True)
         stale.write_text('name = "ghost"\n')
@@ -701,7 +703,7 @@ class TestBuildMachineryWiring:
         ).exists()
 
     def test_wiring_without_tools_fails_the_build(self, tmp_repo: Path) -> None:
-        machinery = self._write_wired_machinery(tmp_repo)
+        machinery = write_wired_machinery(tmp_repo)
         shutil.rmtree(machinery / "tools")
 
         with pytest.raises(BuildValidationError, match="wiring"):
@@ -1193,3 +1195,41 @@ class TestRmtreeRetry:
         """Drop-in equivalence: absent paths fail like shutil.rmtree, not silently."""
         with pytest.raises(FileNotFoundError):
             _rmtree_retry(tmp_path / "never-existed", delay=0)
+
+
+class TestBuildDistRoot:
+    """An explicit dist_root redirects output away from the shared repo dist/.
+
+    Tests that rebuild <repo_root>/dist/<preset> in place race any concurrent
+    run reading or rewriting the same tree (spurious missing-SKILL.md
+    failures); a caller-owned output directory makes each build hermetic.
+    """
+
+    def test_dist_root_redirects_output_away_from_repo_dist(
+        self, tmp_repo: Path
+    ) -> None:
+        out = tmp_repo / "out"
+
+        result = build_preset("python-api", repo_root=tmp_repo, dist_root=out)
+
+        assert result == out / "python-api"
+        assert (result / ".claude-plugin" / "plugin.json").exists()
+        assert (result / "skills" / "commit" / "SKILL.md").exists()
+        assert not (tmp_repo / "dist" / "python-api").exists()
+
+    def test_dist_root_build_writes_nothing_into_source_tree(
+        self, tmp_repo: Path
+    ) -> None:
+        """In-tree builds refresh machinery wiring in presets/<name>/machinery/;
+        an out-of-tree build must leave the source tree alone and ship the
+        machinery payload as committed."""
+        machinery = write_wired_machinery(tmp_repo)
+        out = tmp_repo / "out"
+
+        build_preset("python-api", repo_root=tmp_repo, dist_root=out)
+
+        assert not (machinery / "rendered").exists()
+        assert not (machinery / "vendor-map.json").exists()
+        assert (
+            out / "python-api" / "machinery" / "engine" / "session-stop.py"
+        ).exists()
