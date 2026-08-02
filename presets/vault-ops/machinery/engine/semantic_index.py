@@ -57,6 +57,12 @@ CHUNK_TARGET_TOKENS = 300
 WORDS_PER_TOKEN = 1 / 1.3  # words per token estimate
 CHUNK_TARGET_WORDS = int(CHUNK_TARGET_TOKENS * WORDS_PER_TOKEN)  # ≈230 words
 
+# Hard per-chunk ceiling in characters. The embedding model silently truncates
+# input past 512 tokens; at a conservative ~4 chars/token that cliff sits near
+# 2000 chars, so 1600 keeps a safety margin for token-dense text (code, URLs).
+# Any chunk beyond this cap loses its tail to search entirely.
+CHUNK_MAX_CHARS = 1600
+
 SNIPPET_LEN = 200  # characters kept as the display snippet
 
 
@@ -107,14 +113,120 @@ def _snippet(text: str) -> str:
     return text.strip()[:SNIPPET_LEN].replace("\n", " ")
 
 
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
+_LINE_SPLIT_RE = re.compile(r"\n")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _fits_window(text: str) -> bool:
+    """True if *text* fits one packing window under both chunk limits."""
+    return _word_count(text) <= CHUNK_TARGET_WORDS and len(text) <= CHUNK_MAX_CHARS
+
+
+def _pack_units(units: list[str], joiner: str) -> list[str]:
+    """Greedily pack *units* into windows under the word and char limits.
+
+    A unit that alone exceeds a limit becomes its own window; callers split
+    such windows further.
+    """
+    windows: list[str] = []
+    parts: list[str] = []
+    words = 0
+    chars = 0
+    for unit in units:
+        w = _word_count(unit)
+        c = len(unit)
+        if parts and (
+            words + w > CHUNK_TARGET_WORDS
+            or chars + len(joiner) + c > CHUNK_MAX_CHARS
+        ):
+            windows.append(joiner.join(parts))
+            parts = []
+            words = 0
+            chars = 0
+        parts.append(unit)
+        words += w
+        chars += c if len(parts) == 1 else len(joiner) + c
+    if parts:
+        windows.append(joiner.join(parts))
+    return windows
+
+
+def _word_slices(text: str) -> list[str]:
+    """Last-resort split for text with no structural boundaries.
+
+    Accumulates whitespace-separated words up to the chunk limits, hard-slicing
+    any single word longer than the char ceiling (e.g. a minified blob).
+    """
+    slices: list[str] = []
+    parts: list[str] = []
+    chars = 0
+    for word in text.split():
+        while len(word) > CHUNK_MAX_CHARS:
+            if parts:
+                slices.append(" ".join(parts))
+                parts = []
+                chars = 0
+            slices.append(word[:CHUNK_MAX_CHARS])
+            word = word[CHUNK_MAX_CHARS:]
+        if not word:
+            continue
+        if parts and (
+            len(parts) >= CHUNK_TARGET_WORDS or chars + 1 + len(word) > CHUNK_MAX_CHARS
+        ):
+            slices.append(" ".join(parts))
+            parts = []
+            chars = 0
+        parts.append(word)
+        chars += len(word) if len(parts) == 1 else 1 + len(word)
+    if parts:
+        slices.append(" ".join(parts))
+    return slices
+
+
+def _split_oversize(text: str) -> list[str]:
+    """Split one oversize section into consecutive window-sized pieces.
+
+    Tries progressively finer boundaries — blank-line paragraphs, then single
+    lines, then sentences — packing each level back into windows, and falls
+    back to word-level slicing when a run has no boundaries at all. Every
+    returned piece fits under CHUNK_TARGET_WORDS and CHUNK_MAX_CHARS, so
+    nothing is lost to the embedding model's silent 512-token truncation.
+    """
+    if _fits_window(text):
+        return [text]
+    for splitter, joiner in (
+        (_PARAGRAPH_SPLIT_RE, "\n\n"),
+        (_LINE_SPLIT_RE, "\n"),
+        (_SENTENCE_SPLIT_RE, " "),
+    ):
+        units = [u.strip() for u in splitter.split(text) if u.strip()]
+        if len(units) <= 1:
+            continue
+        pieces: list[str] = []
+        for window in _pack_units(units, joiner):
+            if _fits_window(window):
+                pieces.append(window)
+            else:
+                # Only a single-unit window can overflow; recursing descends
+                # to the next finer boundary, so this terminates.
+                pieces.extend(_split_oversize(window))
+        return pieces
+    return _word_slices(text)
+
+
 def chunk_note(path: Path, raw: str) -> list[dict[str, Any]]:
     """Split a note into embeddable chunks.
 
     Strategy:
     1. Strip frontmatter; if a `description` field exists, emit it as a
        standalone high-signal chunk.
-    2. Split body on markdown headings, then pack consecutive paragraphs
-       into ~300-token windows (overflow always starts a new chunk).
+    2. Split body on markdown headings, then pack consecutive sections
+       into ~300-token windows (overflow always starts a new chunk). A
+       single section larger than a window is split at paragraph, line, or
+       sentence boundaries into consecutive windows — never emitted whole,
+       because the embedding model silently truncates past ~512 tokens
+       (CHUNK_MAX_CHARS enforces that cap on every body chunk).
     3. Each chunk carries a short snippet for display.
     """
     fields, body = _extract_frontmatter(raw)
@@ -142,6 +254,7 @@ def chunk_note(path: Path, raw: str) -> list[dict[str, Any]]:
     # Pack sections into ~300-token windows
     window_parts: list[str] = []
     window_words = 0
+    window_chars = 0
 
     def flush_window() -> None:
         if not window_parts:
@@ -154,24 +267,33 @@ def chunk_note(path: Path, raw: str) -> list[dict[str, Any]]:
 
     for section in sections:
         w = _word_count(section)
-        # If a single section overflows the window, flush then emit it alone
-        if w > CHUNK_TARGET_WORDS:
+        c = len(section)
+        # A single section beyond the window cannot be embedded whole — the
+        # model truncates past ~512 tokens — so split it into consecutive
+        # window-sized pieces instead of emitting it unbounded.
+        if w > CHUNK_TARGET_WORDS or c > CHUNK_MAX_CHARS:
             flush_window()
             window_parts = []
             window_words = 0
-            text = section.strip()
-            chunks.append(
-                {"text": text, "snippet": _snippet(text), "note_path": rel}
-            )
+            window_chars = 0
+            for piece in _split_oversize(section):
+                chunks.append(
+                    {"text": piece, "snippet": _snippet(piece), "note_path": rel}
+                )
             continue
 
-        if window_words + w > CHUNK_TARGET_WORDS and window_parts:
+        if window_parts and (
+            window_words + w > CHUNK_TARGET_WORDS
+            or window_chars + 2 + c > CHUNK_MAX_CHARS
+        ):
             flush_window()
             window_parts = []
             window_words = 0
+            window_chars = 0
 
         window_parts.append(section)
         window_words += w
+        window_chars += c if len(window_parts) == 1 else 2 + c
 
     flush_window()
 
@@ -453,21 +575,35 @@ def _error(message: str, remediation: str = "") -> None:
     sys.exit(1)
 
 
+def _fastembed_cache_dir() -> Path:
+    """The directory fastembed actually caches models in.
+
+    fastembed resolves $FASTEMBED_CACHE_PATH first, then falls back to
+    <system tempdir>/fastembed_cache — not ~/.cache/fastembed. Probing the
+    wrong path made the first-run notice fire on every reindex.
+    """
+    import os
+    import tempfile
+
+    override = os.environ.get("FASTEMBED_CACHE_PATH")
+    if override:
+        return Path(override)
+    return Path(tempfile.gettempdir()) / "fastembed_cache"
+
+
 def _check_first_run() -> None:
-    """Warn once (to stderr) if the model cache is absent — first run will download ~130MB."""
+    """Warn (to stderr) if the model cache is absent — the next run downloads the model."""
     try:
         import fastembed  # noqa: F401 — presence check only
-        from pathlib import Path as _P
-        import os
 
-        cache_root = _P(os.environ.get("XDG_CACHE_HOME", _P.home() / ".cache")) / "fastembed"
+        cache_root = _fastembed_cache_dir()
         if not cache_root.exists():
             print(
                 json.dumps({
                     "notice": (
                         "First run: fastembed will download the bge-small-en-v1.5 ONNX model "
-                        "(~130MB) to ~/.cache/fastembed. This happens once; subsequent runs are "
-                        "instant. Indexing may take 30–60 seconds."
+                        f"(~65MB) to {cache_root}. Subsequent runs reuse the cache. "
+                        "Indexing may take 30–60 seconds."
                     )
                 }),
                 file=sys.stderr,
