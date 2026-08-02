@@ -53,6 +53,7 @@ from pulse_defaults import BACKFILL_WEEKS as DEFAULT_BACKFILL_WEEKS
 from pulse_defaults import DOMAIN_RULES as DEFAULT_DOMAIN_RULES
 from pulse_defaults import GAP_MINUTES as DEFAULT_GAP_MINUTES
 from pulse_defaults import RECOMPUTE_WEEKS as DEFAULT_RECOMPUTE_WEEKS
+import vault_utils
 
 try:  # Scaffold-owned config; absent in a vault vendored before it existed.
     import pulse_config as _config
@@ -1099,15 +1100,6 @@ def existing_weeks(ledger_path: Path) -> set[str]:
         return {row["week"] for row in csv.DictReader(fh) if row.get("week")}
 
 
-def _detect_vault_root(start: str) -> Path | None:
-    """Walk up from the script for the vault root (holds `.vault-context`)."""
-    p = Path(start).resolve()
-    for parent in [p, *p.parents]:
-        if (parent / ".vault-context").exists():
-            return parent
-    return None
-
-
 def _machine_for(vault_root: Path) -> str:
     vc = vault_root / ".vault-context"
     if vc.is_file():
@@ -1192,7 +1184,7 @@ def main() -> int:
     vault_root = (
         Path(args.vault_root).resolve()
         if args.vault_root
-        else _detect_vault_root(__file__)
+        else vault_utils.find_vault_root(Path(__file__).parent)
     )
     if vault_root is None:
         print("pulse: no vault root found (.vault-context) — pass --vault-root")

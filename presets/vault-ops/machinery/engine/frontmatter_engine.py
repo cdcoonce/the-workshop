@@ -1,7 +1,8 @@
 """Frontmatter Engine — validates and generates YAML frontmatter for vault notes.
 
 Public interface:
-    validate(file_path) → list[ValidationError]
+    validate(file_path, vault_root) → list[ValidationError]
+        (omit vault_root to auto-detect via the brain/+perf/ signature walk-up)
     generate(note_type, fields) → str
 """
 
@@ -16,7 +17,7 @@ from typing import Any
 
 import yaml
 
-from vault_utils import WIKILINK_RE
+from vault_utils import WIKILINK_RE, find_vault_root
 from vault_scope_resolved import is_governed_markdown_note, is_transient_note
 
 
@@ -162,8 +163,10 @@ def validate(file_path: str | Path, vault_root: str | Path | None = None) -> lis
 
     Args:
         file_path: Path to the markdown file.
-        vault_root: Root of the vault. If None, walks up from file_path
-                    looking for CLAUDE.md.
+        vault_root: Root of the vault. If None, auto-detected via
+                    vault_utils.find_vault_root walking up from file_path
+                    (the brain/+perf/ signature), falling back to
+                    file_path.parent if no signature is found.
 
     Returns:
         List of ValidationError objects. Empty list means valid.
@@ -174,11 +177,9 @@ def validate(file_path: str | Path, vault_root: str | Path | None = None) -> lis
 
     # Resolve vault root
     if vault_root is None:
-        vault_root = file_path.parent
-        for parent in file_path.parents:
-            if (parent / "AGENTS.md").exists() or (parent / "CLAUDE.md").exists():
-                vault_root = parent
-                break
+        vault_root = find_vault_root(file_path.parent)
+        if vault_root is None:
+            vault_root = file_path.parent
     vault_root = Path(vault_root)
 
     # Skip non-markdown
