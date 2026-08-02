@@ -566,3 +566,40 @@ class TestLoadNoteTypeSchemas:
         )
         with pytest.raises(FrontmatterSchemaError, match="recipe"):
             load_note_type_schemas(config_dir=tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# vault_root auto-detection — validate(file_path) alone, the documented
+# one-argument signature, delegates to vault_utils.find_vault_root (#573)
+# ---------------------------------------------------------------------------
+class TestVaultRootAutoDetection:
+    def test_full_vault_signature_resolves_without_explicit_root(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        (tmp_path / "brain").mkdir()
+        (tmp_path / "perf").mkdir()
+        p = _write_note(tmp_path, "work/active/note.md", "Just a note, no frontmatter.\n")
+
+        errors = validate(p)
+
+        assert isinstance(errors, list)
+        assert errors == [
+            ValidationError(
+                "note.md",
+                "frontmatter",
+                "No YAML frontmatter found (file must start with ---)",
+                severity="warning",
+            )
+        ]
+
+    def test_claude_md_alone_does_not_resolve_falls_back_to_file_parent(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Vault")
+        p = _write_note(tmp_path, "work/active/note.md", "Just a note, no frontmatter.\n")
+
+        errors = validate(p)
+
+        assert isinstance(errors, list)
+        assert errors == []
