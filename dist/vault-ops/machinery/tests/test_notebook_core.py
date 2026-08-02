@@ -7,6 +7,7 @@ can be unit-tested. Mirrors session_terms.py / transcript_backup.py.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -14,7 +15,16 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import notebook_core
 from notebook_core import _block_text, build_prompt, latest_turn
+
+
+def _load_hyphenated(name: str, filename: str):
+    """Exec a hyphenated (non-importable) engine script as a fresh module."""
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS_DIR / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 # ---------------------------------------------------------------------------
@@ -104,3 +114,31 @@ class TestBuildPrompt:
     def test_includes_section_skeleton_instruction(self) -> None:
         out = build_prompt("nb", "u", "a")
         assert "Now / Established / Open loops / Touched" in out
+
+
+# ---------------------------------------------------------------------------
+# NOTEBOOK_SKELETON — shared between notebook-update.py and notebook-distill.py
+# ---------------------------------------------------------------------------
+
+
+class TestNotebookSkeletonIsShared:
+    def test_update_stub_and_distill_fallback_render_from_same_constant(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            notebook_core, "NOTEBOOK_SKELETON", "SENTINEL {context_title} {stamp} {sid}"
+        )
+
+        nu = _load_hyphenated("notebook_update_skeleton_test", "notebook-update.py")
+        nd = _load_hyphenated("notebook_distill_skeleton_test", "notebook-distill.py")
+
+        nu.ensure_stub(tmp_path, "work", "sess1")
+        stub = (tmp_path / ".brain" / "notebook-work-sess1.md").read_text(
+            encoding="utf-8"
+        )
+        assert "SENTINEL" in stub
+
+        fallback = nd.NOTEBOOK_SKELETON.format(
+            context_title="Work", stamp="2026-01-01 00:00", sid="sess1"
+        )
+        assert "SENTINEL" in fallback

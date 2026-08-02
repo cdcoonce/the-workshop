@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -36,8 +37,6 @@ _MARKER_DIRNAME = "workshop-handoff-gate"
 
 def _threshold() -> int:
     """Context-token threshold; overridable via WORKSHOP_HANDOFF_CONTEXT_TOKENS."""
-    import os
-
     raw = os.environ.get("WORKSHOP_HANDOFF_CONTEXT_TOKENS")
     if raw:
         try:

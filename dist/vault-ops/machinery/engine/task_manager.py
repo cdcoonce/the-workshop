@@ -325,5 +325,3 @@ def rollover_tasks(vault_root: Path, source_week: str, target_week: str) -> int:
     source_path.replace(archive_dir / _weekly_filename(source_week))
 
     return len(incomplete)
-
-    return len(incomplete)
