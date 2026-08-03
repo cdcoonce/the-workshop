@@ -22,5 +22,15 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Resolve version-bump gate base from the PR target branch
+        # This repo branches off `dev` and PRs into `dev`; only on
+        # pull_request events is github.base_ref populated with that target.
+        # On push, VERSION_BASE stays unset so the Makefile's own
+        # `origin/main` default applies. See #568.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+
       - name: Run gate (lint + test suites + docs/dist drift check)
         run: make test

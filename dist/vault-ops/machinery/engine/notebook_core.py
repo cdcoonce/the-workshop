@@ -14,6 +14,28 @@ from pathlib import Path
 
 MAX_TURN_CHARS = 3000  # cap per side fed to the distiller
 
+NOTEBOOK_SKELETON = """\
+# Session Notebook — {context_title}
+
+_Live session state · updated {stamp} · session {sid}_
+
+## Now
+
+(what we're actively doing — 1-2 sentences)
+
+## Established (don't re-derive)
+
+(durable facts and decisions locked this session — the "don't make me repeat myself" list)
+
+## Open loops
+
+(unfinished threads / next steps this session)
+
+## Touched
+
+(files or notes created or edited this session)
+"""
+
 
 def _block_text(message: dict) -> str:
     """Flatten an assistant/user message's content blocks to plain text."""

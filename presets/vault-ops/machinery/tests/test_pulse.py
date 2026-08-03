@@ -1330,6 +1330,37 @@ class TestCoveredWeeks:
 
 
 # ---------------------------------------------------------------------------
+# Vault root auto-detection — main()'s no-`--vault-root` path delegates to
+# vault_utils.find_vault_root, which requires the brain/+perf/ signature, not
+# a bare `.vault-context` marker (#573).
+# ---------------------------------------------------------------------------
+class TestVaultRootDetection:
+    def test_no_brain_perf_signature_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        (tmp_path / ".vault-context").write_text("personal\n")
+        engine_dir = tmp_path / "engine"
+        engine_dir.mkdir()
+        monkeypatch.setattr(pulse, "__file__", str(engine_dir / "pulse.py"))
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "pulse.py",
+                "--weeks", "1",
+                "--no-vault-git",
+                "--projects-root", str(tmp_path / "none"),
+                "--codex-root", str(tmp_path / "none2"),
+                "--cortex-root", str(tmp_path / "none4"),
+                "--repos-root", str(tmp_path / "none3"),
+            ],
+        )
+
+        assert pulse.main() == 1
+        assert "no vault root found" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # CLI smoke — the engine runs headless as a script
 # ---------------------------------------------------------------------------
 class TestCli:
