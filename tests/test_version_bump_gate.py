@@ -16,6 +16,7 @@ than trying to infer which source files feed which preset.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -67,6 +68,24 @@ def repo(tmp_path: Path) -> Path:
 def commit(repo: Path, message: str) -> None:
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", message)
+
+
+def ci_version_base(base_ref: str) -> str:
+    """The `VERSION_BASE` CI hands the gate for a PR targeting `base_ref`.
+
+    Reads the real workflow instead of restating what it ought to say, so
+    reverting the base plumbing to a hardcoded `origin/main` turns the tests
+    that call this red rather than leaving them green against a fiction.
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    # Both spellings the workflow could use: the expression inline, or bound to
+    # an env var the shell then expands.
+    workflow = re.sub(r"\$\{\{\s*github\.base_ref\s*\}\}", base_ref, workflow)
+    match = re.search(r"VERSION_BASE=(\S+)", workflow)
+    if match is None:
+        raise AssertionError("ci.yml exports no VERSION_BASE for the gate")
+    value = match.group(1).rstrip('"')
+    return value.replace("${BASE_REF}", base_ref).replace("$BASE_REF", base_ref)
 
 
 class TestMissingBumps:
@@ -149,6 +168,66 @@ class TestMissingBumps:
         assert find_missing_bumps(repo, "main") == ["advisor"]
 
 
+@pytest.fixture
+def dev_ahead_of_main(tmp_path: Path) -> Path:
+    """The #568 shape: `dev` a version ahead of `main`, a slice cut off `dev`.
+
+    `main` ships advisor 1.0.0. A sibling slice already bumped `dev` to 1.1.0
+    and merged. This branch changes advisor again but still says 1.1.0 —
+    byte-identical to `dev`'s manifest line, so the rebase was clean and
+    nothing warned.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    _preset(repo, "advisor", "1.0.0", "# v1\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "release 1.0.0 on main")
+
+    git(repo, "checkout", "-q", "-b", "dev")
+    _preset(repo, "advisor", "1.1.0", "# v2 — the sibling slice\n")
+    commit(repo, "bump advisor on dev")
+
+    # CI resolves `origin/<base>`, not a local branch.
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    git(repo, "update-ref", "refs/remotes/origin/dev", "dev")
+
+    git(repo, "checkout", "-q", "-b", "work")
+    _preset(repo, "advisor", "1.1.0", "# v3 — this slice, no-op bump\n")
+    commit(repo, "change advisor again, forgetting dev already claimed 1.1.0")
+    return repo
+
+
+class TestBaseFollowsPrTarget:
+    """The gate's base must follow the PR's target branch (#568).
+
+    Two sibling slices, both cut when `dev` was at one version, can otherwise
+    ship different component sets under the same version string: the second
+    one's bump is a no-op against `dev` but still looks like a bump against the
+    older `main`. Observed on #565/#567 — corrected by hand before merge.
+    """
+
+    def test_the_base_ci_derives_for_a_pr_into_dev_catches_the_no_op_bump(
+        self, dev_ahead_of_main: Path
+    ) -> None:
+        """End-to-end: the base CI actually computes, fed to the real gate.
+
+        Reads the base out of `ci.yml`, so hardcoding `VERSION_BASE=origin/main`
+        back into the workflow turns this red.
+        """
+        base = ci_version_base("dev")
+
+        assert find_missing_bumps(dev_ahead_of_main, base) == ["advisor"]
+
+    def test_the_same_tree_slips_past_a_main_based_gate(
+        self, dev_ahead_of_main: Path
+    ) -> None:
+        """The escape being closed: against `main`, 1.0.0 -> 1.1.0 looks bumped."""
+        assert find_missing_bumps(dev_ahead_of_main, "origin/main") == []
+
+
 class TestUnavailableBase:
     def test_missing_base_ref_raises_rather_than_passing_silently(
         self, repo: Path
@@ -168,6 +247,27 @@ class TestCiWiring:
         workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
         assert "fetch-depth: 0" in workflow
+
+    def test_ci_derives_the_gate_base_from_the_pr_target(self) -> None:
+        """Whatever branch the PR targets is the branch the gate compares to."""
+        assert ci_version_base("dev") == "origin/dev"
+        assert ci_version_base("main") == "origin/main"
+
+    def test_the_base_ref_env_var_is_bound_to_the_pr_target(self) -> None:
+        """The shell expansion above is only honest if BASE_REF is that target."""
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+        assert re.search(r"BASE_REF:\s*\$\{\{\s*github\.base_ref\s*\}\}", workflow)
+
+    def test_the_base_resolution_is_scoped_to_pull_request_events(self) -> None:
+        """On push, base_ref is empty — `origin/` alone would fail to resolve.
+
+        Leaving VERSION_BASE unset there hands the Makefile's own `origin/main`
+        default to the gate, which is what a push to dev or main wants anyway.
+        """
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+        assert "if: github.event_name == 'pull_request'" in workflow
 
 
 class TestBumpLevel:
