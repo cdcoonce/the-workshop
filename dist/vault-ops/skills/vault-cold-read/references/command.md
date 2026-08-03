@@ -63,7 +63,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 
 1. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
 2. **Run all eight detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
-3. **Resolve cited evidence** — one unpiped command per citation. Do not batch into a pipeline whose failure you cannot attribute to a specific citation.
+3. **Resolve every path the body names** — one unpiped command each, evidence and destination alike (detector 5). Do not batch into a pipeline whose failure you cannot attribute to a specific path.
 4. **Assign a verdict:**
    - **BUILD** — zero blocking findings. Non-blocking defaults may still be listed; they do not gate.
    - **REWRITE** — findings exist and are fixable by editing the issue body. This is the common case. Produce the exact replacement text for each affected section, not a description of it.
