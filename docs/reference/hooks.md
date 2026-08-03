@@ -49,13 +49,13 @@ Post-edit hook: auto-format and lint edited files with whatever toolchain is
 
 ### `protect-files.py`
 
-*core · events: `PreToolUse` · matcher: `edit|write|multi_edit|Edit|Write|MultiEdit`*
+*core · events: `PreToolUse` · matcher: `^(edit|write|multi_edit|Edit|Write|MultiEdit)$`*
 
 Pre-edit hook: block edits to sensitive/generated files.
 
 ### `remind-skill-announce.py`
 
-*core · events: `PostToolUse` · matcher: `Skill|skill`*
+*core · events: `PostToolUse` · matcher: `^(Skill|skill)$`*
 
 PostToolUse hook: remind Claude to announce a skill it just invoked.
 

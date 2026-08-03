@@ -13,7 +13,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
+        "matcher": "^(edit|write|multi_edit|Edit|Write|MultiEdit)$",
         "hooks": [
           {
             "type": "command",
@@ -65,7 +65,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Skill|skill",
+        "matcher": "^(Skill|skill)$",
         "hooks": [
           {
             "type": "command",

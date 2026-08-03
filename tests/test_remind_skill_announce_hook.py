@@ -93,11 +93,29 @@ def test_strips_surrounding_whitespace_from_skill_name() -> None:
 def test_post_tool_use_matcher_is_dual_cased_and_scoped_to_skill_tool() -> None:
     """The registered PostToolUse matcher must fire on Cortex's lowercase tool
     ID as well as Claude Code's PascalCase one, without over-matching an
-    unrelated tool whose name happens to contain "skill" as a substring."""
+    unrelated tool whose name happens to contain "skill" as a substring. The
+    matcher is unanchored regex under host semantics, so the negative
+    assertions must use re.search (the semantics that can actually
+    over-match), not re.fullmatch (which is vacuously true for any pattern
+    that only fullmatches the two literals)."""
     settings = json.loads(SETTINGS_BASE_PATH.read_text())
     matcher = settings["hooks"]["PostToolUse"][0]["matcher"]
 
     pattern = re.compile(matcher)
-    assert pattern.fullmatch("Skill")
-    assert pattern.fullmatch("skill")
-    assert not pattern.fullmatch("skill_search")
+    assert pattern.search("Skill")
+    assert pattern.search("skill")
+    assert not pattern.search("skill_search")
+    assert not pattern.search("search_skills")
+
+
+def test_pre_tool_use_matcher_is_dual_cased_and_scoped_to_edit_tools() -> None:
+    """The registered PreToolUse matcher must fire on its six edit/write tool
+    branches without over-matching a tool name that merely contains one of
+    those branches as a substring."""
+    settings = json.loads(SETTINGS_BASE_PATH.read_text())
+    matcher = settings["hooks"]["PreToolUse"][0]["matcher"]
+
+    pattern = re.compile(matcher)
+    assert pattern.search("Edit")
+    assert pattern.search("edit")
+    assert not pattern.search("NotebookEdit")
