@@ -24,7 +24,7 @@ Every preset the marketplace can install, with the skills, agents, hooks, and co
 
 ### `vault-ops`
 
-*project preset · v2.4.5*
+*project preset · v2.4.6*
 
 Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and writing workflows
 
@@ -40,7 +40,7 @@ Charles Coonce's vault (The Vault) lifecycle, graph, capture, search, sync, and 
 
 ### `workbench`
 
-*project preset · v3.1.2*
+*project preset · v3.1.3*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code today. Plan, build, and ship with the full first-party dev workflow.
 
@@ -60,7 +60,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*project preset · v1.4.2*
+*project preset · v1.4.3*
 
 Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries
 
@@ -78,7 +78,7 @@ Tools for auditing and maintaining The Workshop's skills, presets, and distribut
 
 ### `advisor-product-design`
 
-*persona plugin · v0.1.4*
+*persona plugin · v0.1.5*
 
 Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.
 
@@ -92,7 +92,7 @@ Product-design/UI-UX advisor persona — artifact-first design reviews with seve
 
 ### `advisor-product-strategy`
 
-*persona plugin · v0.1.2*
+*persona plugin · v0.1.3*
 
 Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.
 
@@ -106,7 +106,7 @@ Product-strategy sounding board and coach persona for a design+PM hybrid at an e
 
 ### `persona-pair-programmer`
 
-*persona plugin · v1.0.3*
+*persona plugin · v1.0.4*
 
 Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.
 
@@ -114,7 +114,7 @@ Collaborative pair-programmer voice — brief think-aloud, checks in at decision
 
 ### `persona-ship-it`
 
-*persona plugin · v1.0.3*
+*persona plugin · v1.0.4*
 
 Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves.
 
@@ -122,7 +122,7 @@ Momentum-first voice — blunt, bias-to-action, picks a sensible default and mov
 
 ### `persona-staff-eng-deep`
 
-*persona plugin · v1.0.3*
+*persona plugin · v1.0.4*
 
 Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out.
 
@@ -130,7 +130,7 @@ Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cas
 
 ### `persona-terse-staff-eng`
 
-*persona plugin · v1.0.3*
+*persona plugin · v1.0.4*
 
 Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona.
 
@@ -138,7 +138,7 @@ Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions.
 
 ### `persona-thinking-partner`
 
-*persona plugin · v1.0.3*
+*persona plugin · v1.0.4*
 
 Socratic thinking partner — sharp questions and decision-sharpening over answers.
 

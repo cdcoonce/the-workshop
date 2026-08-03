@@ -6,6 +6,7 @@ hook records a baseline, the stop hook compares against it.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -17,6 +18,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 START_HOOK = REPO_ROOT / "core" / "hooks" / "snapshot-subagent-start.py"
 STOP_HOOK = REPO_ROOT / "core" / "hooks" / "verify-subagent-evidence.py"
+GIT_BASELINE = REPO_ROOT / "core" / "hooks" / "_git_baseline.py"
+
+_spec = importlib.util.spec_from_file_location("_git_baseline", GIT_BASELINE)
+_git_baseline = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_git_baseline)
+working_tree_signature = _git_baseline.working_tree_signature
 
 
 def run(hook_path: Path, payload) -> subprocess.CompletedProcess[str]:
@@ -232,3 +239,26 @@ def test_hooks_fail_open_when_the_shared_helper_is_missing(tmp_path: Path) -> No
 
     assert result.returncode == 0
     assert result.stdout.strip() == ""
+
+
+def test_signature_changes_for_edits_inside_an_already_untracked_directory(
+    tmp_path: Path,
+) -> None:
+    """`git status --porcelain` collapses an untracked dir to one `?? dir/` line.
+
+    Without `--untracked-files=all`, adding a second file inside a directory
+    that is already untracked produces the identical porcelain line, so the
+    signature never changes even though real content was added.
+    """
+    _init_git_repo(tmp_path)
+    untracked_dir = tmp_path / "scratch"
+    untracked_dir.mkdir()
+    (untracked_dir / "first.txt").write_text("one\n")
+
+    before = working_tree_signature(tmp_path)
+
+    (untracked_dir / "second.txt").write_text("two\n")
+
+    after = working_tree_signature(tmp_path)
+
+    assert before != after

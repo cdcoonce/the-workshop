@@ -62,7 +62,7 @@ def working_tree_signature(project_dir: Path) -> str | None:
     """
     try:
         status = subprocess.run(
-            ["git", "-C", str(project_dir), "status", "--porcelain"],
+            ["git", "-C", str(project_dir), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True,
             text=True,
             timeout=10,
