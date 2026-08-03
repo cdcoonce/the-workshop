@@ -1,6 +1,6 @@
 {
   "name": "persona-pair-programmer",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Collaborative pair-programmer voice \u2014 brief think-aloud, checks in at decision points.",
   "author": {
     "name": "Charles Coonce"
