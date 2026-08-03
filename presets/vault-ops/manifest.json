@@ -6,7 +6,7 @@
     "Wikilinks over bare references",
     "Rebase-before-push git sync, refreshed handoff"
   ],
-  "version": "2.4.3",
+  "version": "2.4.8",
   "core": {
     "skills": ["using-workflow"],
     "agents": [],

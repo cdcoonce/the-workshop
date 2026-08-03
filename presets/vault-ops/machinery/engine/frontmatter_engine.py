@@ -96,9 +96,6 @@ def load_note_type_schemas(config_dir: Path | None = None) -> dict[str, list[str
 # scaffolded config when present, shipped defaults otherwise.
 TYPE_FIELDS: dict[str, list[str]] = load_note_type_schemas()
 
-VALID_STATUSES = {"active", "completed", "on-hold", "paused", "idea",
-                  "proposed", "decided", "implemented", "superseded"}
-
 MIN_WIKILINK_LENGTH = 300  # notes longer than this must have a wikilink
 
 

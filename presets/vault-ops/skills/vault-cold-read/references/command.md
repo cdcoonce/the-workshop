@@ -39,8 +39,8 @@ Run all eight. Each has a test that returns yes or no — record which ones you 
 4. **Missing anti-scope.** The body states what the executor must NOT touch.
    → Test: name one adjacent file or behavior an over-eager executor would plausibly "improve." If the body does not forbid it, that is the finding.
 
-5. **Unresolvable evidence.** Every cited artifact resolves: file paths exist, issue/PR numbers open, vault notes are real.
-   → Test: check them, one unpiped command each. A citation that does not resolve is either stale or invented; both are blocking.
+5. **Unresolvable evidence.** Every path the body names resolves, in either role it plays: as **evidence** (cited as proof of existing state — a file, an issue/PR number, a vault note) or as a **destination** (named as where the slice will create something new — a test file, a module, a fixture).
+   → Test: for each path in the body, classify it evidence or destination, then resolve it — one unpiped command each. An evidence path must exist as named: file paths exist, issue/PR numbers open, vault notes are real. A destination path need not exist itself, but its parent directory must; the file is what the slice is about to create, but the directory it lands in is a claim about the repo right now. Example: an AC saying a test lands in `scripts/tests/` is a destination claim — that path resolves only if `scripts/tests/` exists at repo root. It doesn't; the directory shape it's borrowing lives one level down inside individual skills (`core/skills/adversarial-review/scripts/tests/`, among others), and the repo's real suite is `tests/`, which does exist and is the parent the AC should have named. A citation or destination that does not resolve is either stale, invented, or the wrong path; all three are blocking (precedent: #568).
 
 6. **Size lie.** The `afk-sized` claim survives the footprint the body actually implies.
    → Test: list the files the proposed behavior touches. A new module, a new mechanism, or changes persisting outside the issue's footprint is never `afk-sized` (precedent: afk#324, quarantined on scope after 4 attempts). If the implied slice count exceeds the Budget line, the Budget is the bug.
@@ -63,7 +63,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 
 1. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
 2. **Run all eight detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
-3. **Resolve cited evidence** — one unpiped command per citation. Do not batch into a pipeline whose failure you cannot attribute to a specific citation.
+3. **Resolve every path the body names** — one unpiped command each, evidence and destination alike (detector 5). Do not batch into a pipeline whose failure you cannot attribute to a specific path.
 4. **Assign a verdict:**
    - **BUILD** — zero blocking findings. Non-blocking defaults may still be listed; they do not gate.
    - **REWRITE** — findings exist and are fixable by editing the issue body. This is the common case. Produce the exact replacement text for each affected section, not a description of it.

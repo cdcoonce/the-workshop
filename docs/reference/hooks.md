@@ -55,7 +55,7 @@ Pre-edit hook: block edits to sensitive/generated files.
 
 ### `remind-skill-announce.py`
 
-*core · events: `PostToolUse` · matcher: `Skill`*
+*core · events: `PostToolUse` · matcher: `Skill|skill`*
 
 PostToolUse hook: remind Claude to announce a skill it just invoked.
 
