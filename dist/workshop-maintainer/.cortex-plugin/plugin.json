@@ -1,6 +1,6 @@
 {
   "name": "workshop-maintainer",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Tools for auditing and maintaining The Workshop's skills, presets, and distribution boundaries",
   "author": {
     "name": "Charles Coonce"
