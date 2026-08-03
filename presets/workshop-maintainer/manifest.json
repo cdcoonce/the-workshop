@@ -6,7 +6,7 @@
     "Keep source ownership distinct from distribution membership",
     "Regenerate docs and dist after changing any component"
   ],
-  "version": "1.4.3",
+  "version": "1.4.4",
   "core": {
     "skills": ["using-workflow", "grill-me", "tdd", "commit", "daa-code-review"],
     "agents": [],
