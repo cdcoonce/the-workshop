@@ -65,7 +65,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Skill|skill",
+        "matcher": "^(Skill|skill)$",
         "hooks": [
           {
             "type": "command",
