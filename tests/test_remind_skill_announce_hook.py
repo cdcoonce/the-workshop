@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOK_PATH = REPO_ROOT / "core" / "hooks" / "remind-skill-announce.py"
+SETTINGS_BASE_PATH = REPO_ROOT / "core" / "settings-base.json"
 
 
 def run(payload) -> subprocess.CompletedProcess[str]:
@@ -86,3 +88,16 @@ def test_strips_surrounding_whitespace_from_skill_name() -> None:
     context = payload["hookSpecificOutput"]["additionalContext"]
     assert '"tdd"' in context
     assert '"  tdd  "' not in context
+
+
+def test_post_tool_use_matcher_is_dual_cased_and_scoped_to_skill_tool() -> None:
+    """The registered PostToolUse matcher must fire on Cortex's lowercase tool
+    ID as well as Claude Code's PascalCase one, without over-matching an
+    unrelated tool whose name happens to contain "skill" as a substring."""
+    settings = json.loads(SETTINGS_BASE_PATH.read_text())
+    matcher = settings["hooks"]["PostToolUse"][0]["matcher"]
+
+    pattern = re.compile(matcher)
+    assert pattern.fullmatch("Skill")
+    assert pattern.fullmatch("skill")
+    assert not pattern.fullmatch("skill_search")
