@@ -31,7 +31,8 @@
     "react-ui-ux",
     "gitlab-mr-create",
     "gitlab-promotion-flow",
-    "walkthrough"
+    "walkthrough",
+    "data-discovery"
   ],
   "preset_hooks": ["post-edit-lint.py"],
   "preset_agents": [
