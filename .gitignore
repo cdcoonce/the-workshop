@@ -23,9 +23,20 @@ scripts/installer/presets/*
 !scripts/installer/presets/.gitkeep
 
 # afk runtime state (machine-local). config.toml is the tracked repo-level afk
-# policy; transcripts/, conductor/, and worktrees/ are per-run local state.
-# Mirrors afk-agent-system's root .gitignore convention.
+# policy; everything else under .afk/ is per-run local state.
+# Mirrors afk-agent-system's root .gitignore convention — keep this list in step
+# with it, since a directory afk writes but neither repo ignores shows up as
+# untracked noise inside the control-plane dir and can be committed by accident.
 .afk/worktrees/
+# Per-attempt agent transcripts persisted by the executor — local-only,
+# secret-scrubbed, and can be large.
 .afk/transcripts/
+# Per-round conductor nested-session transcripts — local-only, secret-scrubbed.
 .afk/conductor/
+# Maildir inter-agent envelopes — the transport is deliberately out-of-band so
+# agents never contend on shared git state; committing it would defeat that.
+.afk/mailbox/
+.afk/seeds/
+# Shadow-parity ledgers — per-repo agreement history; local telemetry.
+.afk/parity/
 .coverage
