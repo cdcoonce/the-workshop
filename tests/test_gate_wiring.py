@@ -72,3 +72,76 @@ def test_afk_gate_invokes_make_test() -> None:
         ".afk/config.toml test_command must run `make test` so the gate covers "
         "both the root suite and every skill-script suite"
     )
+
+
+def _afk_config() -> dict:
+    """`.afk/config.toml` parsed. It is afk's control plane, not ordinary config.
+
+    The file is entry 14 of afk's own ``PROTECTED_DENY_SURFACE``, so an executor
+    cannot edit it — every change here is hand-written, and these guards are the
+    only thing standing between a hand edit and a silently weakened gate.
+    """
+    import tomllib
+
+    return tomllib.loads((REPO_ROOT / ".afk" / "config.toml").read_text())
+
+
+def test_afk_gate_compares_versions_against_the_integration_branch() -> None:
+    """afk's own gate must use the base the slice will actually land against.
+
+    `Makefile:81` defaults `VERSION_BASE` to `origin/main`, deliberately (#568).
+    afk runs `test_command` verbatim as a shell string, so without an override
+    the executor grades a slice against `main` while landing it on the
+    integration branch. Between two promotions the trunk runs several versions
+    ahead, and in that window the executor cannot see an unbumped preset at all
+    — #583 shipped three of them and only CI caught it.
+    """
+    config = _afk_config()
+    target = config["integration_target"]
+
+    assert f"VERSION_BASE={target}" in config["test_command"], (
+        f"test_command must pass VERSION_BASE={target} so afk's gate compares "
+        f"against the branch slices land on; got {config['test_command']!r}. "
+        "origin/main cannot see a trunk that has moved ahead, and origin/dev "
+        "cannot see slices already queued on the integration branch."
+    )
+
+
+def test_version_base_override_names_the_configured_integration_target() -> None:
+    """The two keys must not drift apart in the same file.
+
+    Retargeting `integration_target` without moving the override would leave
+    the gate silently grading against a branch nothing lands on.
+    """
+    config = _afk_config()
+
+    match = re.search(r"VERSION_BASE=(\S+)", config["test_command"])
+    assert match, "test_command carries no VERSION_BASE override"
+    assert match.group(1) == config["integration_target"], (
+        f"VERSION_BASE={match.group(1)!r} does not match "
+        f"integration_target={config['integration_target']!r}"
+    )
+
+
+def test_scoped_checks_would_discard_the_version_base_override() -> None:
+    """A `scoped_checks` table silently throws the override away.
+
+    afk computes `select_scoped_command(paths, scoped_checks, test_command)` on
+    both the build path and the merge-queue re-validation path, and passes the
+    RESULT to the gate. When every changed path matches a rule, that result is
+    assembled purely from the matched rules — `test_command`, and with it the
+    `VERSION_BASE` override above, is discarded entirely.
+
+    This repo defines no `scoped_checks`, so the override survives. This guard
+    fails the moment one is added, which is the moment the override would stop
+    taking effect without any other signal.
+    """
+    config = _afk_config()
+
+    assert "scoped_checks" not in config, (
+        "adding scoped_checks discards test_command — and with it the "
+        "VERSION_BASE override — on every path where all changed files match a "
+        "rule. Carry `VERSION_BASE=<integration_target>` into each scoped "
+        "command, or keep verify-versions out of the scoped set, then update "
+        "this guard to assert that instead."
+    )

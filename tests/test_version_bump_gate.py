@@ -396,3 +396,81 @@ class TestBumpLevel:
         commit(released, "add a hook library module")
 
         assert find_level_violations(released, "main") == []
+
+
+def afk_version_base() -> str:
+    """The `VERSION_BASE` afk's gate is configured to use.
+
+    Read from `.afk/config.toml` rather than restated, so retargeting the
+    override turns the tests that call this red instead of leaving them green
+    against a fiction.
+    """
+    import tomllib
+
+    config = tomllib.loads((REPO_ROOT / ".afk" / "config.toml").read_text())
+    match = re.search(r"VERSION_BASE=(\S+)", config["test_command"])
+    if match is None:
+        raise AssertionError(".afk/config.toml sets no VERSION_BASE for the gate")
+    return match.group(1)
+
+
+@pytest.fixture
+def second_slice_on_advanced_staging(tmp_path: Path) -> Path:
+    """Two slices in one drain, both claiming the same version (#603).
+
+    `main` and `dev` both ship advisor 1.0.0. Slice A bumps to 1.1.0 and lands
+    on the integration branch, which afk's merge queue then trial-merges slice
+    B onto. Slice B changes advisor again but still declares 1.1.0 — a no-op
+    against the branch it is landing on, yet a real bump against `dev`.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    _preset(repo, "advisor", "1.0.0", "# v1\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "release 1.0.0")
+
+    git(repo, "checkout", "-q", "-b", "dev")
+    git(repo, "checkout", "-q", "-b", "afk/staging")
+
+    # Slice A lands on the integration branch.
+    _preset(repo, "advisor", "1.1.0", "# v2 — slice A\n")
+    commit(repo, "slice A: bump advisor to 1.1.0")
+
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    git(repo, "update-ref", "refs/remotes/origin/dev", "dev")
+
+    # Slice B is trial-merged onto the now-advanced integration branch.
+    git(repo, "checkout", "-q", "-b", "trial/slice-b")
+    _preset(repo, "advisor", "1.1.0", "# v3 — slice B, same version\n")
+    commit(repo, "slice B: change advisor, still declaring 1.1.0")
+    return repo
+
+
+class TestSecondSliceInADrain:
+    """A drain's second slice must be graded against what already landed (#603).
+
+    afk re-runs `test_command` on a trial-merged workspace, so the tree it
+    grades accumulates as slices land. Grading against the trunk instead lets
+    two slices in one batch ship different component sets under one version —
+    #568's collision, reproduced inside a single drain.
+    """
+
+    def test_the_configured_base_catches_the_second_slices_no_op_bump(
+        self, second_slice_on_advanced_staging: Path
+    ) -> None:
+        base = afk_version_base()
+
+        assert find_missing_bumps(second_slice_on_advanced_staging, base) == ["advisor"]
+
+    def test_the_same_tree_slips_past_a_trunk_based_gate(
+        self, second_slice_on_advanced_staging: Path
+    ) -> None:
+        """The escape being closed: against `dev`, 1.0.0 -> 1.1.0 looks bumped.
+
+        This is why `origin/dev` is not sufficient — it is the mutation the
+        single-slice criterion could not distinguish from a correct fix.
+        """
+        assert find_missing_bumps(second_slice_on_advanced_staging, "origin/dev") == []
