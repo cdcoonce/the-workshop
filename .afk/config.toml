@@ -3,7 +3,16 @@
 # `make test` runs BOTH the root suite and the daa-code-review analyzer suite
 # (the latter in its own rootdir, with ruff) — see the Makefile `test` target
 # and #141. Keep this as `make test` so a gate can't silently skip the analyzer.
-test_command = "make test"
+# VERSION_BASE overrides the Makefile's own `origin/main` default (Makefile:81),
+# which #568 deliberately left alone so a bare local `make test` is unchanged.
+# afk runs this string verbatim as a shell command, so without the override the
+# executor grades a slice against `main` while landing it on afk/staging: #583
+# shipped three unbumped presets that way and only CI caught them. It must name
+# the INTEGRATION branch, not the trunk — the merge queue re-runs this command on
+# a trial-merged tree that accumulates as slices land, so grading against `dev`
+# would let two slices in one drain declare the same version. Local ref, not
+# origin/: the local branch is what accumulates; the remote can lag mid-drain.
+test_command = "make test VERSION_BASE=afk/staging"
 permission_mode = "acceptEdits"
 
 # Integration posture (2026-06-15): promoted to F2 — slices merge-queue onto a
