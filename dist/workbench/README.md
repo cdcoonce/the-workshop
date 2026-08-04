@@ -22,6 +22,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
 | `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. |
+| `/data-discovery` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
 | `/dbt-expert` | Expert guidance for working with dbt Core. |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
 | `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |

@@ -54,6 +54,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
 | `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
+| `/data-discovery` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. | workbench |
 | `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). | workbench |
@@ -333,6 +334,12 @@ Applies chart-design taste to React data visualization — a chart-type decision
 *`workbench` preset*
 
 Expert guidance for working with Dagster and the dg CLI. ALWAYS use before doing any task that requires knowledge specific to Dagster, or that references assets, materialization, components, data tools or data pipelines. Common tasks may include creating a new project, adding new definitions, understanding the current project structure, answering general questions about the codebase (finding asset, schedule, sensor, component or job definitions), debugging issues, or providing deep information about a specific Dagster concept.
+
+### `/data-discovery`
+
+*`workbench` preset*
+
+Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. Produces a single markdown file with table inventory, coverage summary, Mermaid relationship diagram, and runnable discovery queries with plain English headers. Adaptive depth for engineers or analysts. Use when: onboarding someone to a dataset, documenting available data, creating a data walkthrough, exploring what's in a schema. Triggers: data discovery, discover data, what data is available, document this schema, data walkthrough, schema handoff, onboard to dataset, what tables exist, explore this data.
 
 ### `/dbt-expert`
 
