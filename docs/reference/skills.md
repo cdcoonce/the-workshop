@@ -19,6 +19,7 @@ Every skill available in the plugin, parsed from each skill's `SKILL.md` frontma
 | `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. | workbench |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
 | `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
+| `/drain-queue` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. | workbench |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
 | `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
 | `/gitlab-cli` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. | workbench |
@@ -154,6 +155,12 @@ Use when user says "dev cycle", "development workflow", "full development pipeli
 *universal*
 
 Production Python coding standards with automatic version detection (3.10-3.13). Use when writing,
+
+### `/drain-queue`
+
+*universal*
+
+Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. Use when several ready issues must be built and merged as a batch, when an unattended executor is unavailable and its backlog still has to move, or when the user says "work the queue", "drain the backlog", "land these tickets", or "build these by hand".
 
 ### `/finish-branch`
 
