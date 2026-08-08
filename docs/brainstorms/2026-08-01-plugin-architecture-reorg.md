@@ -1,7 +1,9 @@
 # Brainstorm: Plugin architecture reorg — graph-derived plugins (2026-08-01)
 
-**Status.** Decision record only — this document authorizes no build. Next lane is a
-grill-me stress-test; implementation starts only after that and a PRD.
+**Status.** SUPERSEDED 2026-08-08 by `2026-08-08-flat-plugin-reorg.md` — the owner's
+post-grill re-judgment collapsed the catalog/profiles direction into a flat-toolbox
+model (one workbench uber-plugin, live-referenced vault). Kept for the killed-options
+and premortem record. Original status: decision record only, authorizing no build.
 
 **Problem.** Co-installing Workshop presets puts duplicate copies of shared skills into
 every session (routing ambiguity, context bloat, version skew), and the core-vs-presets
