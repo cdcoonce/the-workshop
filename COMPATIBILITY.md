@@ -219,13 +219,13 @@ first-party-corpus, and binary strings — not live-fired.**
   are inert — unreferenced by the manifest and undiscoverable.
 - **No first-party Codex plugin ships an `agents/` dir.** All 12 installed
   across `openai-primary-runtime` and `openai-bundled` ship `skills/` only.
-- **`agents/openai.yaml` in the binary is a false friend** — it is *skill*
+- **`agents/openai.yaml` in the binary is a false friend** — it is _skill_
   metadata (`Create agents/openai.yaml for a skill directory`), unrelated to
   subagents. Do not read it as agent support.
 - **`codex features list` reports `multi_agent  stable  true`.** That is
   Codex's own internal orchestration, not plugin-supplied agents, and must not
   be read as plugin agent support. (The same command reports `plugin_hooks
-  removed`, reproducing the 2026-07-25 hooks finding — the instrument agrees
+removed`, reproducing the 2026-07-25 hooks finding — the instrument agrees
   with prior work.)
 
 Not yet live-fired: installing a preset carrying `agents/` and confirming
@@ -248,7 +248,29 @@ Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
 
 ### Plugin System
 
-- **Cortex reads `.claude-plugin/plugin.json`, not `.cortex-plugin/`.** Its own
+- **Probe-verified 2026-08-08 (v1.20.2, the-workshop#634): plugin hooks EXECUTE
+  and both manifest conventions are read.** Controlled probe with three
+  single-variant plugins registered in `~/.snowflake/cortex/plugins/`:
+  `.cortex-plugin/plugin.json`-only + `hooks/hooks.json`,
+  `.claude-plugin/plugin.json`-only + `hooks/hooks.json`, and
+  `.cortex-plugin`-only with an **inline `hooks` object** (no hooks dir). All
+  three activated (`PluginRegistry: Activated 5 plugin(s)`) and all three
+  SessionStart hooks fired on a user-initiated chat
+  (`HookExecutor: Executing 4 hook(s) for SessionStart/*` — 3 probes + 1
+  pre-existing plugin hook). This supersedes the v1.1.8 conclusions retained
+  below. Three caveats, all observed in the same probe:
+  1. **`CLAUDE_PLUGIN_ROOT` is unset in Cortex's hook environment** — every
+     hook command this repo ships
+     (`bash "${CLAUDE_PLUGIN_ROOT}"/hooks/run-hook.sh …`) resolves against the
+     cwd and fails on Cortex even though the hook itself fires.
+  2. **Window-restore first sessions race plugin activation**: `ChatService`
+     executes SessionStart ~1s before that window's `PluginRegistry`
+     activation (reproduced 3×) — plugin SessionStart hooks always miss a
+     window's first auto-session.
+  3. **The app self-updates silently** (1.18.0 → 1.20.2 observed at launch);
+     version-pinned findings go stale without any user action.
+- **(v1.1.8, superseded 2026-08-08 — retained for history)** Cortex reads
+  `.claude-plugin/plugin.json`, not `.cortex-plugin/`. Its own
   bundled plugins (`bundled_plugins/airflow`, `bundled_plugins/review`) ship a
   `.claude-plugin/` directory; no `.cortex-plugin` exists anywhere in the
   install. The `.cortex-plugin/plugin.json` this repo emits appears to be read by
@@ -267,8 +289,11 @@ Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
   manages skill directories separately.
 - Cortex's bundled plugin declares its hooks **inline in `plugin.json`**, not in
   a plugin-level `hooks/hooks.json`.
-- **Cortex does not read plugin-level `hooks/hooks.json`. No Workshop hook runs
-  on Cortex.** Verified experimentally, not inferred — see below.
+- **(v1.1.8, superseded 2026-08-08 — retained for history)** Cortex does not
+  read plugin-level `hooks/hooks.json`. No Workshop hook runs on Cortex.
+  Verified experimentally on v1.1.8; overturned for v1.20.2 by the probe above.
+  Note the `CLAUDE_PLUGIN_ROOT` caveat: hooks now _fire_, but this repo's hook
+  _commands_ still fail on Cortex until they self-locate.
 
 ### Hooks
 
@@ -302,10 +327,12 @@ What that means for the hooks this repo ships:
 | `verify-subagent-evidence.py` (SubagentStop)                 | event exists, but **silently inert**: its baseline comes from the SubagentStart hook, so it finds no snapshot and fails open by design |
 | `audit-config-change.py` (ConfigChange)                      | **never fires — no such event**                                                                                                        |
 
-That table is now moot in practice: **none of these hooks run on Cortex at all**,
-because Cortex never loads a plugin's `hooks/hooks.json`. The event-level gaps
-still matter for the day plugin hooks are supported, or if hooks are moved
-inline into `plugin.json`.
+~~That table is now moot in practice: none of these hooks run on Cortex at
+all, because Cortex never loads a plugin's `hooks/hooks.json`.~~ **Updated
+2026-08-08:** v1.20.2 loads and executes plugin hooks (see the probe under
+Plugin System), so the event-level rows above are live again — but every
+command still fails to resolve until it stops depending on
+`CLAUDE_PLUGIN_ROOT`, which Cortex does not set.
 
 #### How that was established
 
@@ -383,10 +410,12 @@ existing in the install — strong, but not a direct experiment.
 primary CoCo-convention manifest with `.claude-plugin/` "also recognized" — the
 opposite of the "read by nothing" claim — and documents **both** a plugin-root
 `hooks/hooks.json` component directory **and** hooks read inline from the
-manifest when `hooks` is an object. Whether either actually executes on 1.18.0
-is unresolved and is the open question in #487; the v1.1.8 observation that
-plugin hooks never fire has not been re-run against 1.18.0. Treat the hook and
-manifest rows for Cortex as stale pending that probe.
+manifest when `hooks` is an object. ~~Whether either actually executes on
+1.18.0 is unresolved and is the open question in #487.~~ **Resolved
+2026-08-08:** the controlled probe (the-workshop#634) ran against v1.20.2 —
+both manifest conventions are read and both hook forms execute; see the
+Plugin System section above for the full result and its three caveats. The
+hook and manifest rows for Cortex are no longer stale.
 
 Cortex's documented event set (v1.18.0): `PreToolUse`, `PostToolUse`,
 `PermissionRequest`, `Notification`, `SessionStart`, `SessionEnd`,
