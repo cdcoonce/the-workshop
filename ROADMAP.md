@@ -11,9 +11,12 @@ Shipped:
 - Every preset build emits three plugin manifests from one shared source —
   `.claude-plugin/plugin.json` (Claude Code), `.codex-plugin/plugin.json` (Codex),
   `.cortex-plugin/plugin.json` (Cortex Code) — see `scripts/build_preset.py`.
-- Cortex Code currently reuses the Codex manifest shape verbatim — **now known
-  to be wrong**: Cortex reads `.claude-plugin/plugin.json`, and the
-  `.cortex-plugin/` manifest appears to be read by nothing. See COMPATIBILITY.md.
+- Cortex Code reuses the Codex manifest shape verbatim — **probe-verified
+  2026-08-08 (v1.20.2, #634): correct after all.** Cortex reads both
+  `.cortex-plugin/plugin.json` (its primary convention) and
+  `.claude-plugin/plugin.json`, and executes plugin hooks (file-based and
+  inline). Caveat: Cortex does not set `CLAUDE_PLUGIN_ROOT`, so this repo's
+  hook commands fail to resolve there. See COMPATIBILITY.md.
 - Hook matchers cover all three platforms' tool-ID naming conventions in one
   pattern (`edit|write|multi_edit|Edit|Write|MultiEdit`).
 - Codex plugin marketplace support (`.agents/plugins/marketplace.json`,
