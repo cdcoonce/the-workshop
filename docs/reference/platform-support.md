@@ -7,9 +7,9 @@ What each component class actually does on each target platform, rendered from `
 
 | Component | Claude Code | Codex | Cortex Code |
 | --- | --- | --- | --- |
-| Skills | Partial | Works | Works |
+| Skills | Works | Works | Works |
 | Agents | Works | Inert | Partial |
-| Hooks (plugin-level) | Works | Inert | Inert |
+| Hooks (plugin-level) | Works | Works | Works |
 | Personas (output styles) | Works | Inert | Inert |
 | Settings (plugin-root settings.json) | Works | Inert | Unverified |
 | Methodology docs | Works | Works | Works |
@@ -18,7 +18,7 @@ Per-cell notes and evidence: [platform support reference](docs/reference/platfor
 
 ## Skills
 
-- **Claude Code: partial** — Interactive plugin skills work; plugin skills do not load at all under headless `claude -p` — headless automation needs project-scope `.claude/skills/` copies _(COMPATIBILITY.md → Claude Code → Headless (`claude -p`))_
+- **Claude Code: works** — Plugin skills load interactively and under headless `claude -p`, namespaced `<plugin>:<skill>` (re-verified 2026-08-09 on 2.1.223, including with `--setting-sources project,local`) — project-scope copies are not needed for headless automation _(COMPATIBILITY.md → Claude Code → Headless (`claude -p`))_
 - **Codex: works** — Plugin skills load and trigger namespaced `<plugin>:<skill>`, including under headless `codex exec`; not trust-gated _(COMPATIBILITY.md → Codex → Skills)_
 - **Cortex Code: works** — Auto-discovered from `.cortex/skills/`, `.claude/skills/`, and `.snova/skills/`; also installable via `--plugin-dir` or `cortex skill add` _(COMPATIBILITY.md → Cortex Code → Skills)_
 
@@ -31,14 +31,14 @@ Per-cell notes and evidence: [platform support reference](docs/reference/platfor
 ## Hooks (plugin-level)
 
 - **Claude Code: works** — `hooks/hooks.json` merges with user and project hooks while the plugin is enabled; requires `bash` and `python3` on PATH _(COMPATIBILITY.md → Claude Code → Hooks)_
-- **Codex: inert** — The `plugin_hooks` feature is removed — a preset's `hooks/hooks.json` never runs. Hook delivery on Codex is a vendored repo-level flat `.codex/hooks.json` behind a two-layer silent trust gate _(COMPATIBILITY.md → Codex → Hooks)_
-- **Cortex Code: inert** — Plugin-level `hooks/hooks.json` is never read (probe-verified: an identical user-level hook fired, the plugin-level one never has). Inline-manifest hook delivery is documented by Cortex but unprobed _(COMPATIBILITY.md → Cortex Code → Hooks)_
+- **Codex: works** — Plugin-bundled `hooks/hooks.json` loads when the plugin is enabled (corrected 2026-08-09 — the retired `plugin_hooks` flag had been read as a removed capability), behind a silent per-hook-hash trust gate: unapproved hooks are skipped with no output, and every plugin version bump re-prompts. Hook commands receive `PLUGIN_ROOT`/`PLUGIN_DATA`, not `CLAUDE_PLUGIN_ROOT` _(COMPATIBILITY.md → Codex → Hooks)_
+- **Cortex Code: works** — Plugin-level hooks execute — file-based `hooks/hooks.json` and inline-manifest both (probe-verified on 1.20.2, 2026-08-08, superseding the v1.1.8 finding). Caveats: `CLAUDE_PLUGIN_ROOT` is unset in the hook env, and a restored window's first session fires SessionStart before plugin activation _(COMPATIBILITY.md → Cortex Code → Hooks)_
 
 ## Personas (output styles)
 
 - **Claude Code: works** — Injected by a SessionStart plugin hook; requires `uv` on PATH _(COMPATIBILITY.md → Claude Code → Hooks)_
-- **Codex: inert** — A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Codex does nothing _(COMPATIBILITY.md → Codex → Hooks)_
-- **Cortex Code: inert** — A persona's only mechanism is a plugin-level SessionStart hook, which never fires — installing a persona on Cortex does nothing _(COMPATIBILITY.md → Cortex Code → Hooks)_
+- **Codex: inert** — Plugin SessionStart hooks now fire on Codex (see Hooks), but the persona hook command interpolates `CLAUDE_PLUGIN_ROOT` with no fallback and Codex supplies `PLUGIN_ROOT` instead — injection fails until a self-locating command form ships _(COMPATIBILITY.md → Codex → Hooks)_
+- **Cortex Code: inert** — Plugin SessionStart hooks now fire on Cortex (see Hooks), but `CLAUDE_PLUGIN_ROOT` is unset in the hook env, so the persona hook command resolves nowhere — injection fails until a self-locating command form ships _(COMPATIBILITY.md → Cortex Code → Hooks)_
 
 ## Settings (plugin-root settings.json)
 
