@@ -25,7 +25,7 @@ NOT for: issues already promoted or in flight (that ship has sailed — fix forw
 
 ## Detectors
 
-Run all eight. Each has a test that returns yes or no — record which ones you ran and what you found, per detector. "Looks fine" is not a result.
+Run all nine. Each has a test that returns yes or no — record which ones you ran and what you found, per detector. "Looks fine" is not a result.
 
 1. **Unbound referent.** Every "it", "this", "the existing X", "the current behavior" resolves to a named file, function, flag, or issue number _inside the body_.
    → Test: can you point at the noun? If resolving it needs the conversation, it is unbound.
@@ -51,6 +51,9 @@ Run all eight. Each has a test that returns yes or no — record which ones you 
 8. **Unverified behavioral claim.** Detectors 1–7 interrogate the words against themselves; this one asks whether they are true. Every sentence of the form "X does Y" about existing code is a factual claim the executor will build on.
    → Test: for each one, name the line that makes it true. If the claim is about what a function _returns_ or _carries_, read the function — **resolving the symbol is not resolving the behavior**. Detector 5 answers "does `rebuild` exist at that line?"; this one answers "does it do what this paragraph says?" A premise no line supports is blocking, whatever else the issue gets right. Cheapest place to start: the sentence beginning "Since …" or "Because …" — that is where a spec states the fact its whole argument rests on, and it is the sentence least likely to have been checked (precedent: afk#919, whose false premise about `rebuild()`'s `attempts` count passed a seven-detector cold read, built at one attempt, went green on every gate, and had to be reverted).
 
+9. **Unreachable bar.** Every numeric or threshold acceptance criterion names the mechanism by which a _faithful_ implementation attains it, using only what the spec itself authorizes.
+   → Test: derive the bar from the spec's own tables and mechanics — simulate or count when cheap. A bar attainable only through behavior the spec forbids or never specifies is blocking: a gate-green run will still exist, but only by distortion, and the reviewer becomes the last line of defense. Detector 3 asks "would the test go red if the feature broke?"; this one asks "can the test go green without cheating?" (Precedent: kaggriculture#23 — "≥18 water ops/day" against a PLANT table supporting ~15; two gate-green attempts both faked it by double-watering, and the reviewer, not the gate, caught them. kaggriculture#29 — a crash-detection teeth-check demanded a raise surface through a never-raise safety shell, and its "fits 8 minutes" budget claim measured 12.5–17.5 min; two attempts burned.)
+
 ## Every finding carries a default
 
 A finding that ends in a question blocks. A finding that ends in a proposed default is one word from resolved. Write each as:
@@ -62,7 +65,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 ## Procedure
 
 1. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
-2. **Run all eight detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
+2. **Run all nine detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
 3. **Resolve every path the body names** — one unpiped command each, evidence and destination alike (detector 5). Do not batch into a pipeline whose failure you cannot attribute to a specific path.
 4. **Assign a verdict:**
    - **BUILD** — zero blocking findings. Non-blocking defaults may still be listed; they do not gate.
@@ -78,6 +81,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 - **No `proposed` issue is auto-promoted without a BUILD verdict from a cold reader that did not shape it.** This is an additional clause on `/dispatch`'s low-risk test, not a replacement for it: every existing clause still has to hold.
 - A REWRITE resolved by editing the body clears the gate. A NOT-DISPATCH-READY does not, ever, without Charles.
 - Cold read never promotes. It clears or withholds; the promote command is `/dispatch`'s to run or Charles's to paste.
+- **A verdict is stamped to the fork-point SHA the reader checked.** If the fork branch moves past that SHA before dispatch — an integration lands, a prerequisite is pushed — the body's present-tense claims (rosters, "X does not exist yet", dependency status) may have rotted: re-run detectors 5 and 8 against the new SHA before promoting. (Precedent: kaggriculture#29 — its "two registered zoo members" claim went stale when the integration it waited behind registered four more; kaggriculture#41 — a "do not promote until #30/#31 merge" gate survived their landing and contradicted the updated status paragraph above it.)
 
 ## Anti-rubber-stamp
 
