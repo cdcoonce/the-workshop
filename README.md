@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white) ![Claude Code](https://img.shields.io/badge/Claude_Code-native-6B4FBB?logo=anthropic&logoColor=white) ![Codex](https://img.shields.io/badge/Codex-native-000000?logo=openai&logoColor=white) ![Cortex Code](https://img.shields.io/badge/Cortex_Code-native-29B5E8?logo=snowflake&logoColor=white) ![pytest](https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white) ![uv](https://img.shields.io/badge/Package_Manager-uv-DE5FE9)
 
-A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; hooks and personas execute on Claude Code only today — see [Platform Support](#platform-support).
+A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; plugin-level hooks execute on all three (trust-gated on Codex, env caveats on Cortex), while personas activate on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
 **36 universal skills · 2 core agents · 11 hooks · 3 project presets · 7 persona plugins**
@@ -53,7 +53,7 @@ Every coding-agent project needs skills, hooks, settings, and development standa
 
 **The Workshop** solves this. It's a portable dev-environment toolkit that installs natively on **Claude Code**, **Codex**, and **Cortex Code**: the full skill set, every agent, methodology docs, and safety hooks, picked up by pasting a URL. Install **`workbench`** and you get the whole environment configured automatically.
 
-**One shared source, three native outputs — with honest platform limits.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (read by Claude Code and Cortex Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex's documented convention; see [COMPATIBILITY.md](COMPATIBILITY.md)) — from the same components, with no install-time transform. Skills install and run on all three platforms. Hooks and personas currently execute on Claude Code only: Codex removed plugin-level hooks outright, and Cortex has never executed a plugin's `hooks/hooks.json`. The [Platform Support](#platform-support) matrix below is the per-component truth table.
+**One shared source, three native outputs — with honest platform limits.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (read by Claude Code and Cortex Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex's documented convention; see [COMPATIBILITY.md](COMPATIBILITY.md)) — from the same components, with no install-time transform. Skills install and run on all three platforms. Plugin-level hooks execute on all three — behind a silent trust gate on Codex, and with env caveats on Cortex (`CLAUDE_PLUGIN_ROOT` unset) that break the current command strings there. Personas activate on Claude Code only today. The [Platform Support](#platform-support) matrix below is the per-component truth table.
 
 The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each maps to a self-contained plugin directory under `dist/`, indexed for Claude Code in `.claude-plugin/marketplace.json` and for Codex in `.agents/plugins/marketplace.json`.
 
@@ -78,14 +78,14 @@ Complete, always-current reference for every component — generated from source
 
 ## Platform Support
 
-The per-component truth table — what actually runs where. Skills are the portable layer; hooks and personas are Claude-Code-only today, and cells marked _Unverified_ mean no probe has been recorded, not "probably fine".
+The per-component truth table — what actually runs where. Skills and plugin-level hooks are the portable layers (hooks with per-platform trust and env caveats); personas are Claude-Code-only today, and cells marked _Unverified_ mean no probe has been recorded, not "probably fine".
 
 <!-- BEGIN GENERATED: platform-matrix -->
 | Component | Claude Code | Codex | Cortex Code |
 | --- | --- | --- | --- |
-| Skills | Partial | Works | Works |
+| Skills | Works | Works | Works |
 | Agents | Works | Inert | Partial |
-| Hooks (plugin-level) | Works | Inert | Inert |
+| Hooks (plugin-level) | Works | Works | Works |
 | Personas (output styles) | Works | Inert | Inert |
 | Settings (plugin-root settings.json) | Works | Inert | Unverified |
 | Methodology docs | Works | Works | Works |
@@ -111,7 +111,7 @@ Claude reads `.claude-plugin/marketplace.json`, finds the available packages, an
 
 > **Prerequisites:** `bash` and `python3` on PATH — every project-preset hook runs through them. Persona plugins additionally need [`uv`](https://docs.astral.sh/uv/) for their SessionStart hook.
 
-> **Headless caveat:** plugin skills load in interactive sessions only. Under `claude -p` they do not load at all — for scripted automation, copy the skills you need into the target repo's `.claude/skills/` (see [COMPATIBILITY.md](COMPATIBILITY.md) → Claude Code → Headless).
+> **Headless:** plugin skills load under `claude -p` too, namespaced `<plugin>:<skill>` (re-verified 2026-08-09 on Claude Code 2.1.223, including with `--setting-sources project,local`) — no project-scope copies needed for scripted automation (see [COMPATIBILITY.md](COMPATIBILITY.md) → Claude Code → Headless).
 
 See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
 
@@ -129,7 +129,7 @@ codex plugin add workbench@the-workshop
 
 Verify with `codex plugin list`. Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
 
-> **What you get on Codex is skills (and bundled docs) only.** Plugin-level hooks never run — Codex removed its `plugin_hooks` feature outright. Hooks can reach a Codex repo only as a hand-vendored repo-level `.codex/hooks.json`, and those sit behind a **two-layer silent trust gate** (project `trust_level = "trusted"` in `~/.codex/config.toml`, plus per-hook approval): with either layer missing, hooks produce no output and no error. Don't rely on hook protections on Codex without reading [COMPATIBILITY.md](COMPATIBILITY.md) → Codex → Hooks. Persona plugins, whose only mechanism is a hook, install as no-ops here.
+> **What you get on Codex is skills, bundled docs, and plugin-level hooks.** Plugin-bundled hooks load when the plugin is enabled (corrected 2026-08-09 — an earlier entry read the retired `plugin_hooks` feature flag as a removed capability), but they sit behind a **silent trust gate**: Codex records trust against each hook definition's hash and skips unapproved hooks with no output and no error, so expect a re-approval prompt after every plugin update. Repo-level `.codex/hooks.json` additionally needs project trust (`trust_level = "trusted"` in `~/.codex/config.toml`). Don't rely on hook protections on Codex without reading [COMPATIBILITY.md](COMPATIBILITY.md) → Codex → Hooks. Persona plugins remain no-ops here for a different reason: their hook command interpolates `CLAUDE_PLUGIN_ROOT`, and Codex supplies `PLUGIN_ROOT` instead.
 
 ### Cortex Code (CoCo Desktop)
 
@@ -147,14 +147,14 @@ For example, to install `workbench`:
 
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
 
-> **Skills work fully on Cortex. No Workshop hook runs there today** — Cortex has never executed a plugin's `hooks/hooks.json` (probe-verified; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). File protection, test-before-stop, and the other hook protections are silently absent, and persona plugins (whose only mechanism is a SessionStart hook) install as no-ops on Cortex.
+> **Skills work fully on Cortex, and plugin-level hooks execute** (probe-verified on 1.20.2, 2026-08-08 — superseding the earlier "never executed" finding from v1.1.8; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). Two caveats: `CLAUDE_PLUGIN_ROOT` is **unset** in Cortex's hook environment, so the Workshop's current hook commands (including persona injection) resolve against the wrong directory and fail there until a self-locating command form ships; and a restored window's first session fires SessionStart before plugin activation, so plugin SessionStart hooks always miss it.
 
 ### Any Other Agent (Manual Copy)
 
 Each `dist/<preset-name>/` is a complete, self-contained plugin. The portable layer is `skills/` — copy it into your agent's verified skill root (a whole-plugin copy into `.claude/plugins/` is discovered by nothing):
 
 ```bash
-# Claude Code project scope (also what headless `claude -p` needs):
+# Claude Code project scope:
 cp -r dist/workbench/skills/. /path/to/your-project/.claude/skills/
 ```
 

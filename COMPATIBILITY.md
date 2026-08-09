@@ -19,6 +19,20 @@ otherwise. This applies prospectively to new and edited entries; existing
 unverified claims may still be marked the way the Claude Code section does
 (see "Not re-verified in this pass" below) rather than rewritten.
 
+Two corollaries, learned 2026-08-09 when two rows in this file fell in one
+session (see Claude Code → Headless and Codex → Hooks):
+
+- **A silently gated feature is indistinguishable from a removed one unless
+  the probe trusts its own rig.** Codex skips untrusted hooks with no output
+  and no error — so an unapproved probe plugin produces the exact evidence
+  "feature removed" would. A probe that concludes absence must first prove
+  its own rig was authorized to fire.
+- **A feature flag reported `removed` can mean the flag graduated**, not
+  that the capability was deleted. Interpret instrument output against
+  current vendor docs and release history before recording a conclusion —
+  probes verify that the shipped build matches the docs; they are not a
+  substitute for reading them.
+
 ## Claude Code
 
 ### Plugin System
@@ -89,17 +103,28 @@ Constraints that shape the hooks above, and would break them if they changed:
 
 ### Headless (`claude -p`)
 
-Verified experimentally 2026-07-25 (scrubbed env + `CLAUDE_CODE_OAUTH_TOKEN`,
-the same invocation shape the vault's batch runs use):
+Corrected 2026-08-09 on Claude Code 2.1.223 (live re-probe in this repo:
+`claude -p` asked to enumerate available skills, run twice — once with
+defaults, once with `--setting-sources project,local`):
+
+- **Plugin skills DO load under `-p`.** All 41 workbench skills listed,
+  namespaced `<plugin>:<skill>`, in both runs — including with
+  `--setting-sources project,local` (the exact flag afk's headless executor
+  passes). The 2026-07-25 finding below is falsified on current Claude Code;
+  vendoring plugin skills into a repo's `.claude/skills/` for headless
+  parity is no longer necessary.
+- Superseded (probed 2026-07-25, **no CLI version recorded** — the gap that
+  made this row uncheckable for drift): ~~plugin skills do not load under
+  `-p` at all; any skill a headless workflow invokes must exist
+  project-scope~~. Whether that was true of the July build or a probe
+  artifact is unknowable without the version pin; pin the version on every
+  Claude Code entry going forward.
+
+Still true from the 2026-07-25 pass (not re-verified, low drift risk):
 
 - Project-scope `.claude/skills/*/SKILL.md` **resolves** as a slash command
   under `-p`.
 - Project-scope `.claude/commands/*.md` **resolves** under `-p`.
-- **Plugin skills do not load under `-p` at all.** Probed with a plugin-only
-  skill both outside and _inside_ a project where that plugin's skills are
-  active interactively; both return `Unknown command`. Consequence: any skill
-  a headless workflow invokes must exist project-scope in the target repo —
-  an installed plugin is not a carrier for headless automation.
 
 Not re-verified in this pass, and still carried from the original entry: skill
 auto-discovery, `references/` loading, the agent-tool list, and plugin-root
@@ -158,13 +183,35 @@ flat-vs-nested in-session control and a trust-layer isolation):
   `.../GitHub/my-brain/.codex/hooks.json` while that repo now lives at
   `the-vault` — its vendored hooks are silently untrusted again until
   re-approved.
-- **Plugin-level hooks cannot fire: the `plugin_hooks` feature is `removed`**
-  (`codex features list`). A preset's `hooks/hooks.json` is inert on Codex —
-  the same practical conclusion as Cortex, reached by a different mechanism
-  (legacy `[hooks.state]` entries for plugin sources remain from when the
-  feature existed, and no longer correspond to anything that runs). Hook
-  delivery to a Codex repo is the vendored repo-level flat `.codex/hooks.json`
-  the vault-ops machinery generates.
+- **Plugin-level hooks WORK on Codex** (corrected 2026-08-09; the struck
+  claim below stood for 15 days). Evidence: openai/codex PR #19705 (merged
+  2026-04-28) added plugin hook discovery — `hooks/hooks.json` in the plugin
+  root, or a manifest `hooks` entry; current official docs state "When a
+  plugin is enabled, Codex can load lifecycle hooks from that plugin
+  alongside user, project, and managed hooks"; the shipped manifest parser
+  (`codex-rs/core-plugins/src/manifest.rs`) carries a first-class `hooks`
+  field; and live operator observation on this machine — plugin-bundled
+  hooks firing, with a trust re-approval prompt on every plugin update.
+  Not yet re-run as a controlled sentinel probe.
+  - **Trust is per hook-definition hash**, same review flow as other
+    non-managed hooks: "Codex records trust against the hook's current
+    hash, so new or changed hooks are marked for review and skipped until
+    trusted." Installs land in versioned dirs
+    (`~/.codex/plugins/cache/<mkt>/<plugin>/<version>/`), so **every plugin
+    version bump re-prompts hook approval**.
+  - Plugin hook commands receive **`PLUGIN_ROOT` and `PLUGIN_DATA`** env
+    vars (per current docs) — not `CLAUDE_PLUGIN_ROOT`. Command strings must
+    not depend on any one platform's root variable (the stamper's
+    `BASH_SOURCE`-derived resolver sidesteps this).
+  - Superseded: ~~plugin-level hooks cannot fire: the `plugin_hooks`
+    feature is `removed` (`codex features list`); a preset's
+    `hooks/hooks.json` is inert on Codex~~. Two compounding errors: the
+    flag was removed because the capability **graduated into the stable
+    hooks engine** (`hooks stable true` in the same listing), and the
+    2026-07-25 probe's plugin hooks were almost certainly **silently
+    skipped as untrusted** — the same silent gate this section documents
+    for repo hooks, applied to the probe's own rig (see the corollaries
+    under Evidence standard).
 - **Event inventory (binary-string evidence, not live-fired):** the CLI
   embeds `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
   `Stop`, `SubagentStart`, `SubagentStop`, `PreCompact`, and
@@ -224,9 +271,12 @@ first-party-corpus, and binary strings — not live-fired.**
   subagents. Do not read it as agent support.
 - **`codex features list` reports `multi_agent  stable  true`.** That is
   Codex's own internal orchestration, not plugin-supplied agents, and must not
-  be read as plugin agent support. (The same command reports `plugin_hooks
-removed`, reproducing the 2026-07-25 hooks finding — the instrument agrees
-  with prior work.)
+  be read as plugin agent support. (This entry originally cited `plugin_hooks
+removed` from the same command as corroborating the 2026-07-25 hooks
+  finding — that reading was wrong; see Hooks above. The no-`agents`-key
+  finding itself was independently re-corroborated 2026-08-09 against the
+  shipped parser source, `codex-rs/core-plugins/src/manifest.rs`: fields are
+  `skills`, `mcp_servers`, `apps`, `hooks`, `interface` — no `agents`.)
 
 Not yet live-fired: installing a preset carrying `agents/` and confirming
 nothing is exposed. Low value, since the manifest has no key to populate.
@@ -243,6 +293,9 @@ nothing is exposed. Low value, since the manifest has no key to populate.
 surface, and settings verified live as described above; event inventory from
 binary strings. Matcher names carried from 2026-07-02 (commit `bde36ea`).
 Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
+Plugin-hooks row corrected 2026-08-09 (codex-cli 0.144.6 still current;
+vendor docs + parser source + live operator observation — sentinel re-probe
+owed); agents no-`agents`-key re-corroborated against parser source same day.
 
 ## Cortex Code (CoCo)
 
