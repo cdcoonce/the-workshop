@@ -19,6 +19,20 @@ otherwise. This applies prospectively to new and edited entries; existing
 unverified claims may still be marked the way the Claude Code section does
 (see "Not re-verified in this pass" below) rather than rewritten.
 
+Two corollaries, learned 2026-08-09 when two rows in this file fell in one
+session (see Claude Code → Headless and Codex → Hooks):
+
+- **A silently gated feature is indistinguishable from a removed one unless
+  the probe trusts its own rig.** Codex skips untrusted hooks with no output
+  and no error — so an unapproved probe plugin produces the exact evidence
+  "feature removed" would. A probe that concludes absence must first prove
+  its own rig was authorized to fire.
+- **A feature flag reported `removed` can mean the flag graduated**, not
+  that the capability was deleted. Interpret instrument output against
+  current vendor docs and release history before recording a conclusion —
+  probes verify that the shipped build matches the docs; they are not a
+  substitute for reading them.
+
 ## Claude Code
 
 ### Plugin System
@@ -89,17 +103,28 @@ Constraints that shape the hooks above, and would break them if they changed:
 
 ### Headless (`claude -p`)
 
-Verified experimentally 2026-07-25 (scrubbed env + `CLAUDE_CODE_OAUTH_TOKEN`,
-the same invocation shape the vault's batch runs use):
+Corrected 2026-08-09 on Claude Code 2.1.223 (live re-probe in this repo:
+`claude -p` asked to enumerate available skills, run twice — once with
+defaults, once with `--setting-sources project,local`):
+
+- **Plugin skills DO load under `-p`.** All 41 workbench skills listed,
+  namespaced `<plugin>:<skill>`, in both runs — including with
+  `--setting-sources project,local` (the exact flag afk's headless executor
+  passes). The 2026-07-25 finding below is falsified on current Claude Code;
+  vendoring plugin skills into a repo's `.claude/skills/` for headless
+  parity is no longer necessary.
+- Superseded (probed 2026-07-25, **no CLI version recorded** — the gap that
+  made this row uncheckable for drift): ~~plugin skills do not load under
+  `-p` at all; any skill a headless workflow invokes must exist
+  project-scope~~. Whether that was true of the July build or a probe
+  artifact is unknowable without the version pin; pin the version on every
+  Claude Code entry going forward.
+
+Still true from the 2026-07-25 pass (not re-verified, low drift risk):
 
 - Project-scope `.claude/skills/*/SKILL.md` **resolves** as a slash command
   under `-p`.
 - Project-scope `.claude/commands/*.md` **resolves** under `-p`.
-- **Plugin skills do not load under `-p` at all.** Probed with a plugin-only
-  skill both outside and _inside_ a project where that plugin's skills are
-  active interactively; both return `Unknown command`. Consequence: any skill
-  a headless workflow invokes must exist project-scope in the target repo —
-  an installed plugin is not a carrier for headless automation.
 
 Not re-verified in this pass, and still carried from the original entry: skill
 auto-discovery, `references/` loading, the agent-tool list, and plugin-root
@@ -158,13 +183,35 @@ flat-vs-nested in-session control and a trust-layer isolation):
   `.../GitHub/my-brain/.codex/hooks.json` while that repo now lives at
   `the-vault` — its vendored hooks are silently untrusted again until
   re-approved.
-- **Plugin-level hooks cannot fire: the `plugin_hooks` feature is `removed`**
-  (`codex features list`). A preset's `hooks/hooks.json` is inert on Codex —
-  the same practical conclusion as Cortex, reached by a different mechanism
-  (legacy `[hooks.state]` entries for plugin sources remain from when the
-  feature existed, and no longer correspond to anything that runs). Hook
-  delivery to a Codex repo is the vendored repo-level flat `.codex/hooks.json`
-  the vault-ops machinery generates.
+- **Plugin-level hooks WORK on Codex** (corrected 2026-08-09; the struck
+  claim below stood for 15 days). Evidence: openai/codex PR #19705 (merged
+  2026-04-28) added plugin hook discovery — `hooks/hooks.json` in the plugin
+  root, or a manifest `hooks` entry; current official docs state "When a
+  plugin is enabled, Codex can load lifecycle hooks from that plugin
+  alongside user, project, and managed hooks"; the shipped manifest parser
+  (`codex-rs/core-plugins/src/manifest.rs`) carries a first-class `hooks`
+  field; and live operator observation on this machine — plugin-bundled
+  hooks firing, with a trust re-approval prompt on every plugin update.
+  Not yet re-run as a controlled sentinel probe.
+  - **Trust is per hook-definition hash**, same review flow as other
+    non-managed hooks: "Codex records trust against the hook's current
+    hash, so new or changed hooks are marked for review and skipped until
+    trusted." Installs land in versioned dirs
+    (`~/.codex/plugins/cache/<mkt>/<plugin>/<version>/`), so **every plugin
+    version bump re-prompts hook approval**.
+  - Plugin hook commands receive **`PLUGIN_ROOT` and `PLUGIN_DATA`** env
+    vars (per current docs) — not `CLAUDE_PLUGIN_ROOT`. Command strings must
+    not depend on any one platform's root variable (the stamper's
+    `BASH_SOURCE`-derived resolver sidesteps this).
+  - Superseded: ~~plugin-level hooks cannot fire: the `plugin_hooks`
+    feature is `removed` (`codex features list`); a preset's
+    `hooks/hooks.json` is inert on Codex~~. Two compounding errors: the
+    flag was removed because the capability **graduated into the stable
+    hooks engine** (`hooks stable true` in the same listing), and the
+    2026-07-25 probe's plugin hooks were almost certainly **silently
+    skipped as untrusted** — the same silent gate this section documents
+    for repo hooks, applied to the probe's own rig (see the corollaries
+    under Evidence standard).
 - **Event inventory (binary-string evidence, not live-fired):** the CLI
   embeds `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
   `Stop`, `SubagentStart`, `SubagentStop`, `PreCompact`, and
@@ -219,14 +266,17 @@ first-party-corpus, and binary strings — not live-fired.**
   are inert — unreferenced by the manifest and undiscoverable.
 - **No first-party Codex plugin ships an `agents/` dir.** All 12 installed
   across `openai-primary-runtime` and `openai-bundled` ship `skills/` only.
-- **`agents/openai.yaml` in the binary is a false friend** — it is *skill*
+- **`agents/openai.yaml` in the binary is a false friend** — it is _skill_
   metadata (`Create agents/openai.yaml for a skill directory`), unrelated to
   subagents. Do not read it as agent support.
 - **`codex features list` reports `multi_agent  stable  true`.** That is
   Codex's own internal orchestration, not plugin-supplied agents, and must not
-  be read as plugin agent support. (The same command reports `plugin_hooks
-  removed`, reproducing the 2026-07-25 hooks finding — the instrument agrees
-  with prior work.)
+  be read as plugin agent support. (This entry originally cited `plugin_hooks
+removed` from the same command as corroborating the 2026-07-25 hooks
+  finding — that reading was wrong; see Hooks above. The no-`agents`-key
+  finding itself was independently re-corroborated 2026-08-09 against the
+  shipped parser source, `codex-rs/core-plugins/src/manifest.rs`: fields are
+  `skills`, `mcp_servers`, `apps`, `hooks`, `interface` — no `agents`.)
 
 Not yet live-fired: installing a preset carrying `agents/` and confirming
 nothing is exposed. Low value, since the manifest has no key to populate.
@@ -243,12 +293,37 @@ nothing is exposed. Low value, since the manifest has no key to populate.
 surface, and settings verified live as described above; event inventory from
 binary strings. Matcher names carried from 2026-07-02 (commit `bde36ea`).
 Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
+Plugin-hooks row corrected 2026-08-09 (codex-cli 0.144.6 still current;
+vendor docs + parser source + live operator observation — sentinel re-probe
+owed); agents no-`agents`-key re-corroborated against parser source same day.
 
 ## Cortex Code (CoCo)
 
 ### Plugin System
 
-- **Cortex reads `.claude-plugin/plugin.json`, not `.cortex-plugin/`.** Its own
+- **Probe-verified 2026-08-08 (v1.20.2, the-workshop#634): plugin hooks EXECUTE
+  and both manifest conventions are read.** Controlled probe with three
+  single-variant plugins registered in `~/.snowflake/cortex/plugins/`:
+  `.cortex-plugin/plugin.json`-only + `hooks/hooks.json`,
+  `.claude-plugin/plugin.json`-only + `hooks/hooks.json`, and
+  `.cortex-plugin`-only with an **inline `hooks` object** (no hooks dir). All
+  three activated (`PluginRegistry: Activated 5 plugin(s)`) and all three
+  SessionStart hooks fired on a user-initiated chat
+  (`HookExecutor: Executing 4 hook(s) for SessionStart/*` — 3 probes + 1
+  pre-existing plugin hook). This supersedes the v1.1.8 conclusions retained
+  below. Three caveats, all observed in the same probe:
+  1. **`CLAUDE_PLUGIN_ROOT` is unset in Cortex's hook environment** — every
+     hook command this repo ships
+     (`bash "${CLAUDE_PLUGIN_ROOT}"/hooks/run-hook.sh …`) resolves against the
+     cwd and fails on Cortex even though the hook itself fires.
+  2. **Window-restore first sessions race plugin activation**: `ChatService`
+     executes SessionStart ~1s before that window's `PluginRegistry`
+     activation (reproduced 3×) — plugin SessionStart hooks always miss a
+     window's first auto-session.
+  3. **The app self-updates silently** (1.18.0 → 1.20.2 observed at launch);
+     version-pinned findings go stale without any user action.
+- **(v1.1.8, superseded 2026-08-08 — retained for history)** Cortex reads
+  `.claude-plugin/plugin.json`, not `.cortex-plugin/`. Its own
   bundled plugins (`bundled_plugins/airflow`, `bundled_plugins/review`) ship a
   `.claude-plugin/` directory; no `.cortex-plugin` exists anywhere in the
   install. The `.cortex-plugin/plugin.json` this repo emits appears to be read by
@@ -267,8 +342,11 @@ Agents added 2026-08-01 (codex-cli 0.144.6, manifest-schema evidence).
   manages skill directories separately.
 - Cortex's bundled plugin declares its hooks **inline in `plugin.json`**, not in
   a plugin-level `hooks/hooks.json`.
-- **Cortex does not read plugin-level `hooks/hooks.json`. No Workshop hook runs
-  on Cortex.** Verified experimentally, not inferred — see below.
+- **(v1.1.8, superseded 2026-08-08 — retained for history)** Cortex does not
+  read plugin-level `hooks/hooks.json`. No Workshop hook runs on Cortex.
+  Verified experimentally on v1.1.8; overturned for v1.20.2 by the probe above.
+  Note the `CLAUDE_PLUGIN_ROOT` caveat: hooks now _fire_, but this repo's hook
+  _commands_ still fail on Cortex until they self-locate.
 
 ### Hooks
 
@@ -302,10 +380,12 @@ What that means for the hooks this repo ships:
 | `verify-subagent-evidence.py` (SubagentStop)                 | event exists, but **silently inert**: its baseline comes from the SubagentStart hook, so it finds no snapshot and fails open by design |
 | `audit-config-change.py` (ConfigChange)                      | **never fires — no such event**                                                                                                        |
 
-That table is now moot in practice: **none of these hooks run on Cortex at all**,
-because Cortex never loads a plugin's `hooks/hooks.json`. The event-level gaps
-still matter for the day plugin hooks are supported, or if hooks are moved
-inline into `plugin.json`.
+~~That table is now moot in practice: none of these hooks run on Cortex at
+all, because Cortex never loads a plugin's `hooks/hooks.json`.~~ **Updated
+2026-08-08:** v1.20.2 loads and executes plugin hooks (see the probe under
+Plugin System), so the event-level rows above are live again — but every
+command still fails to resolve until it stops depending on
+`CLAUDE_PLUGIN_ROOT`, which Cortex does not set.
 
 #### How that was established
 
@@ -383,10 +463,12 @@ existing in the install — strong, but not a direct experiment.
 primary CoCo-convention manifest with `.claude-plugin/` "also recognized" — the
 opposite of the "read by nothing" claim — and documents **both** a plugin-root
 `hooks/hooks.json` component directory **and** hooks read inline from the
-manifest when `hooks` is an object. Whether either actually executes on 1.18.0
-is unresolved and is the open question in #487; the v1.1.8 observation that
-plugin hooks never fire has not been re-run against 1.18.0. Treat the hook and
-manifest rows for Cortex as stale pending that probe.
+manifest when `hooks` is an object. ~~Whether either actually executes on
+1.18.0 is unresolved and is the open question in #487.~~ **Resolved
+2026-08-08:** the controlled probe (the-workshop#634) ran against v1.20.2 —
+both manifest conventions are read and both hook forms execute; see the
+Plugin System section above for the full result and its three caveats. The
+hook and manifest rows for Cortex are no longer stale.
 
 Cortex's documented event set (v1.18.0): `PreToolUse`, `PostToolUse`,
 `PermissionRequest`, `Notification`, `SessionStart`, `SessionEnd`,

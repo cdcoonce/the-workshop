@@ -1,16 +1,12 @@
 {
-  "platforms": [
-    "Claude Code",
-    "Codex",
-    "Cortex Code"
-  ],
+  "platforms": ["Claude Code", "Codex", "Cortex Code"],
   "components": [
     {
       "name": "Skills",
       "cells": {
         "Claude Code": {
-          "status": "partial",
-          "note": "Interactive plugin skills work; plugin skills do not load at all under headless `claude -p` \u2014 headless automation needs project-scope `.claude/skills/` copies",
+          "status": "works",
+          "note": "Plugin skills load interactively and under headless `claude -p`, namespaced `<plugin>:<skill>` (re-verified 2026-08-09 on 2.1.223, including with `--setting-sources project,local`) \u2014 project-scope copies are not needed for headless automation",
           "compat": "Claude Code \u2192 Headless (`claude -p`)"
         },
         "Codex": {
@@ -54,13 +50,13 @@
           "compat": "Claude Code \u2192 Hooks"
         },
         "Codex": {
-          "status": "inert",
-          "note": "The `plugin_hooks` feature is removed \u2014 a preset's `hooks/hooks.json` never runs. Hook delivery on Codex is a vendored repo-level flat `.codex/hooks.json` behind a two-layer silent trust gate",
+          "status": "works",
+          "note": "Plugin-bundled `hooks/hooks.json` loads when the plugin is enabled (corrected 2026-08-09 \u2014 the retired `plugin_hooks` flag had been read as a removed capability), behind a silent per-hook-hash trust gate: unapproved hooks are skipped with no output, and every plugin version bump re-prompts. Hook commands receive `PLUGIN_ROOT`/`PLUGIN_DATA`, not `CLAUDE_PLUGIN_ROOT`",
           "compat": "Codex \u2192 Hooks"
         },
         "Cortex Code": {
-          "status": "inert",
-          "note": "Plugin-level `hooks/hooks.json` is never read (probe-verified: an identical user-level hook fired, the plugin-level one never has). Inline-manifest hook delivery is documented by Cortex but unprobed",
+          "status": "works",
+          "note": "Plugin-level hooks execute \u2014 file-based `hooks/hooks.json` and inline-manifest both (probe-verified on 1.20.2, 2026-08-08, superseding the v1.1.8 finding). Caveats: `CLAUDE_PLUGIN_ROOT` is unset in the hook env, and a restored window's first session fires SessionStart before plugin activation",
           "compat": "Cortex Code \u2192 Hooks"
         }
       }
@@ -75,12 +71,12 @@
         },
         "Codex": {
           "status": "inert",
-          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires \u2014 installing a persona on Codex does nothing",
+          "note": "Plugin SessionStart hooks now fire on Codex (see Hooks), but the persona hook command interpolates `CLAUDE_PLUGIN_ROOT` with no fallback and Codex supplies `PLUGIN_ROOT` instead \u2014 injection fails until a self-locating command form ships",
           "compat": "Codex \u2192 Hooks"
         },
         "Cortex Code": {
           "status": "inert",
-          "note": "A persona's only mechanism is a plugin-level SessionStart hook, which never fires \u2014 installing a persona on Cortex does nothing",
+          "note": "Plugin SessionStart hooks now fire on Cortex (see Hooks), but `CLAUDE_PLUGIN_ROOT` is unset in the hook env, so the persona hook command resolves nowhere \u2014 injection fails until a self-locating command form ships",
           "compat": "Cortex Code \u2192 Hooks"
         }
       }
