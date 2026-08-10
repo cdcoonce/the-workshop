@@ -9,69 +9,17 @@ setup:
 		|| git config --local --add include.path '../.gitconfig'
 	@echo "wired git conventions (.gitconfig)"
 
-PRESETS := $(notdir $(wildcard presets/*))
+PLUGINS := $(notdir $(wildcard plugins/*))
 
-# Regenerate the living reference docs (docs/reference/ + README tables) from
-# component source. Run after changing any skill, hook, agent, or preset.
-.PHONY: docs
-docs:
-	uv run python -m scripts.build_docs
-
-# Remove dist/<name> trees whose preset no longer exists, so a deleted preset
-# can't leave an installable orphan behind.
-.PHONY: prune-dist
-prune-dist:
-	@for d in dist/*/; do \
-		[ -d "$$d" ] || continue; \
-		b=$$(basename "$$d"); \
-		case " $(PRESETS) " in *" $$b "*) : ;; *) echo "pruning stale dist/$$b"; rm -rf "$$d";; esac; \
-	done
-
-# Regenerate the marketplace index and rebuild every preset into dist/.
-.PHONY: build
-build: prune-dist
-	uv run python -m scripts.build_marketplace
-	@for p in $(PRESETS); do uv run python -m scripts.build_preset $$p >/dev/null; done
-
-# Drift gate: docs must be fresh (build_docs --check) and a fresh rebuild of
-# dist/marketplace must be a NO-OP on the working tree. Staleness is judged by
-# content (scripts.dist_digest before vs after the rebuild), not by git status
-# against HEAD — an uncommitted-but-correct dist/ (e.g. an afk slice's
-# deliverable diff syncing shared core/ files into preset copies) passes; a
-# source change whose regenerated output wasn't included still fails.
-.PHONY: verify-generated
-verify-generated:
-	uv run python -m scripts.build_docs --check
-	@before="$$(uv run python -m scripts.dist_digest)"; \
-	$(MAKE) prune-dist; \
-	uv run python -m scripts.build_marketplace >/dev/null; \
-	for p in $(PRESETS); do uv run python -m scripts.build_preset $$p >/dev/null; done; \
-	after="$$(uv run python -m scripts.dist_digest)"; \
-	if [ "$$before" != "$$after" ]; then \
-		echo "ERROR: dist/ or marketplace is stale — a fresh rebuild changed the generated output."; \
-		echo "digest before rebuild: $$before"; \
-		echo "digest after rebuild:  $$after"; \
-		echo "Run 'make build' and include the regenerated files in your change:"; \
-		git status --porcelain -- dist .claude-plugin/marketplace.json .agents/plugins/marketplace.json "presets/*/machinery/rendered" "presets/*/machinery/vendor-map.json"; \
-		exit 1; \
-	fi
-
-# Full gate: the root suite, every skill-script suite, and the generated-docs/
-# dist drift gate. Skill-script suites live in isolated subtrees with a sibling
-# `scripts` package and bare imports, so they run in their OWN rootdir (a
-# separate pytest invocation) — collecting them in the root process collides on
-# the `tests` package name. They are DISCOVERED automatically
-# (scripts.discover_skill_test_suites), so a new skill's tests can never fall
-# out of the gate by a forgotten Makefile line.
-# Lint the repo's own Python (build tooling, tests, hook scripts) against the
+# Lint the repo's own Python (tooling, tests, hook scripts) against the
 # high-signal rule set pinned in pyproject.toml. Scoped to real defects, so a
 # clean run means something; see the [tool.ruff.lint] comment for why E501 is out.
 .PHONY: lint
 lint:
-	uv run --with ruff ruff check scripts tests core presets
+	uv run --with ruff ruff check scripts tests plugins
 
-# Delivery gate: a preset whose shipped dist/ content changed must also declare
-# a new version, or `claude plugin update` offers nothing and the change reaches
+# Delivery gate: a plugin whose shipped content changed must also declare a new
+# version, or `claude plugin update` offers nothing and the change reaches
 # nobody who has it installed. Compares against the release branch, so one bump
 # covers everything that lands on dev between promotions.
 .PHONY: verify-versions
@@ -80,24 +28,30 @@ verify-versions:
 
 VERSION_BASE ?= origin/main
 
-# Vault machinery suite: the vault's engine scripts and their tests ship as a
-# preset payload (presets/vault-ops/machinery/). Like the skill-script suites,
-# the tests live in an isolated subtree beside the code they exercise and run
-# in their OWN rootdir (a separate pytest invocation from machinery/). Deps
-# mirror the vault's dev group (pytest/hypothesis/numpy) plus its pyyaml
-# runtime dependency, wired with `uv run --with` exactly as the skill-script
-# runner does. graphmark is graph_cli's own pinned dependency — without it
-# the alias-resolver suite importorskips itself and CI reports green on
-# tests it never ran.
+# Vault machinery suite: the vault's engine scripts ship as workbench payload
+# (plugins/workbench/machinery/). Like the skill-script suites, the tests live
+# in an isolated subtree beside the code they exercise and run in their OWN
+# rootdir (a separate pytest invocation from machinery/). Deps mirror the
+# vault's dev group (pytest/hypothesis/numpy) plus its pyyaml runtime
+# dependency, wired with `uv run --with` exactly as the skill-script runner
+# does. graphmark is graph_cli's own pinned dependency — without it the
+# alias-resolver suite importorskips itself and CI reports green on tests it
+# never ran.
 .PHONY: test-machinery
 test-machinery:
-	cd presets/vault-ops/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.6,<0.7' python -m pytest -q tests
+	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.6,<0.7' python -m pytest -q tests
 
+# Full gate: the root suite, every skill-script suite, and the machinery suite.
+# Skill-script suites live in isolated subtrees with a sibling `scripts` package
+# and bare imports, so they run in their OWN rootdir (a separate pytest
+# invocation) — collecting them in the root process collides on the `tests`
+# package name. They are DISCOVERED automatically
+# (scripts.discover_skill_test_suites), so a new skill's tests can never fall
+# out of the gate by a forgotten Makefile line.
 .PHONY: test
 test:
 	$(MAKE) lint
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) test-machinery
-	$(MAKE) verify-generated
 	$(MAKE) verify-versions

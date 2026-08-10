@@ -1,7 +1,0 @@
-{
-  "conventions": [
-    "Frontmatter on every note",
-    "Wikilinks over bare references",
-    "Rebase-before-push git sync, refreshed handoff"
-  ]
-}

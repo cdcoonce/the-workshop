@@ -11,8 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The version-bump gate diffs dist/ against the base branch, so the
-          # base ref must be resolvable. checkout defaults to depth 1.
+          # The version-bump gate diffs plugins/ against the base branch, so
+          # the base ref must be resolvable. checkout defaults to depth 1.
           fetch-depth: 0
 
       - name: Install uv
@@ -32,5 +32,5 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
 
-      - name: Run gate (lint + test suites + docs/dist drift check)
+      - name: Run gate (lint + test suites + version-bump gate)
         run: make test
