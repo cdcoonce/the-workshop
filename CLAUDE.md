@@ -8,7 +8,7 @@ A template system for coding-agent plugin configurations, targeting Claude Code,
 
 See [ROADMAP.md](ROADMAP.md) for the multi-platform goal and design principle, [COMPATIBILITY.md](COMPATIBILITY.md) for per-platform requirements, and [.claude/docs/project.md](.claude/docs/project.md) for detailed project context (tech stack, data flow, architecture patterns).
 
-Working under `core/` loads an additional scoped [core/CLAUDE.md](core/CLAUDE.md); read it before editing there, and before editing a preset copy of anything shared. (`presets/` has no scoped `CLAUDE.md` of its own — `scripts/build_marketplace.py` treats every entry under `presets/` as a preset directory, so a stray file there fails the build.)
+Every directory under `plugins/` is a shipped plugin, so a stray file or directory there is a defect.
 
 ## Commands
 
@@ -46,6 +46,37 @@ This convention exists because issue #260 found the executor had quarantined 3 s
 
 - Type hints on all function signatures
 - Numpy-style docstrings for public functions
+
+## Output and Metadata Locations
+
+Skills produce two kinds of output, and they go to two different places. Choosing
+wrong either buries a repo artifact in a home directory or litters a target repo
+with machine-local files.
+
+1. **Repo-scoped artifacts** — output that describes, plans, or configures the
+   target repository and is meant to be committed and reviewed alongside its code.
+   These stay **inside the target repo** at their conventional paths:
+   `docs/plans/` (plans), `docs/dev-cycle/*.state.md` and `docs/archive/`
+   (dev-cycle state), `.claude/docs/project.md` (project context). Never relocate
+   these to a home directory — a plan belongs to the repo it plans.
+
+2. **Machine-local outputs and metadata** — output that belongs to the user or the
+   machine rather than to any one repository: study documents, ingested notes,
+   caches, personal indexes, and skill run-state that no target repo should carry.
+   These default to **`~/.workshop/`** unless the invoking skill was given an
+   explicit destination (a setting, env var, or argument). A skill in this
+   category writes under a named subdirectory, e.g. `~/.workshop/transcript-notes/`,
+   and treats a configured destination as authoritative when one is provided.
+
+When adding a skill that writes output, classify it against these two categories
+first. If the output is not a repo artifact, it defaults to `~/.workshop/<skill>/`;
+do not invent a new home-directory location per skill.
+
+This convention exists because an audit ahead of the first machine-local skill
+(`transcript-notes`) found every existing output-writing skill correctly wrote
+repo-scoped artifacts into the target repo, and no skill wrote scattered
+machine-local output — so the rule codifies the split that was already implicit
+before a second category of skill could diverge from it.
 
 ## Planning
 
