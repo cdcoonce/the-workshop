@@ -8,6 +8,11 @@
 # a PEP-723 `# /// script` block gets its own resolved environment. Hooks that
 # need nothing but the stdlib take the default path and stay dependency-free.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Self-located root, always correct regardless of which env var (if any) got
+# this script invoked. Export it so the Python hooks below — which only ever
+# check CLAUDE_PLUGIN_ROOT — see a real value on platforms (Cortex) that never
+# set it themselves.
+export CLAUDE_PLUGIN_ROOT="$(cd "$HOOK_DIR/.." && pwd)"
 if [ "$1" = "--uv" ]; then
   shift
   exec uv run "$HOOK_DIR/scripts/$1" "${@:2}"

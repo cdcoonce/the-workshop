@@ -15,7 +15,9 @@ plugin's `hooks/scripts/`.
 """
 
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -102,3 +104,50 @@ def test_check_has_teeth_against_a_hooks_json_naming_a_missing_script(
     )
 
     assert _missing_scripts(hooks_json_path) == {"ghost-script.py"}
+
+
+def test_run_hook_exports_plugin_root_when_no_env_var_is_preset(
+    tmp_path: Path,
+) -> None:
+    """run-hook.sh must self-locate AND export the result as CLAUDE_PLUGIN_ROOT.
+
+    Every dispatched hook script reads only `os.environ["CLAUDE_PLUGIN_ROOT"]` --
+    none of them know about the `PLUGIN_ROOT` / `WORKSHOP_PLUGIN_ROOT` fallbacks
+    hooks.json's command line offers, and Cortex sets none of the three. If
+    run-hook.sh resolves its own location via BASH_SOURCE but never forwards
+    that to the Python process it execs, every hook fails silently (each one
+    fails open and prints nothing) on any platform that doesn't set
+    CLAUDE_PLUGIN_ROOT itself. This runs the real, shipped run-hook.sh as a
+    subprocess with all three vars stripped from the environment.
+    """
+    real_runner = (
+        REPO_ROOT / "plugins" / "workbench" / "hooks" / "run-hook.sh"
+    ).read_text()
+
+    plugin_dir = tmp_path / "plugins" / "demo"
+    hooks_dir = plugin_dir / "hooks"
+    scripts_dir = hooks_dir / "scripts"
+    scripts_dir.mkdir(parents=True)
+    (hooks_dir / "run-hook.sh").write_text(real_runner)
+    (scripts_dir / "echo-root.py").write_text(
+        "import os\nprint(os.environ.get('CLAUDE_PLUGIN_ROOT', ''))\n"
+    )
+
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "WORKSHOP_PLUGIN_ROOT"}
+    }
+    result = subprocess.run(
+        ["bash", str(hooks_dir / "run-hook.sh"), "echo-root.py"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+
+    assert result.stdout.strip() == str(plugin_dir.resolve()), (
+        "run-hook.sh did not export a self-located CLAUDE_PLUGIN_ROOT to the "
+        "dispatched script -- a hook relying on it fails silently wherever no "
+        "platform env var sets it (Cortex)."
+    )
