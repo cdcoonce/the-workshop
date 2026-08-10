@@ -24,12 +24,15 @@ Code) all make it a silent no-op that exits 0 — it can never block a prompt.
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
-import sys
-import tempfile
-from pathlib import Path
+# scripts/stamp.py statically reads this constant to build hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "UserPromptSubmit"}
+
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 DEFAULT_THRESHOLD = 300_000
 _MARKER_DIRNAME = "workshop-handoff-gate"

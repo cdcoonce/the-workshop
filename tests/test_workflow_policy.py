@@ -7,7 +7,7 @@ def test_finish_branch_requires_explicit_integration_branch() -> None:
     """The default branch must never be assumed to be the integration branch."""
     repository_root = Path(__file__).resolve().parents[1]
     skill = " ".join(
-        (repository_root / "core/skills/finish-branch/SKILL.md").read_text().split()
+        (repository_root / "plugins/workbench/skills/finish-branch/SKILL.md").read_text().split()
     )
 
     assert "Never infer the integration branch from the repository default branch." in skill
@@ -37,7 +37,7 @@ def test_router_requires_policy_resolution_and_afk_mode() -> None:
     """The universal router must work unattended without assuming CI policy."""
     repository_root = Path(__file__).resolve().parents[1]
     router = " ".join(
-        (repository_root / "core/skills/using-workflow/SKILL.md").read_text().split()
+        (repository_root / "plugins/workbench/skills/using-workflow/SKILL.md").read_text().split()
     )
 
     assert "Resolve repository policy before selecting an integration workflow." in router
@@ -49,7 +49,7 @@ def test_router_resolves_development_branch_naming_without_agent_prefixes() -> N
     """Branch naming follows user/repository policy before a conventional fallback."""
     repository_root = Path(__file__).resolve().parents[1]
     router = " ".join(
-        (repository_root / "core/skills/using-workflow/SKILL.md").read_text().split()
+        (repository_root / "plugins/workbench/skills/using-workflow/SKILL.md").read_text().split()
     )
 
     assert "Historical vendor- or agent-prefixed branches do not count as policy." in router

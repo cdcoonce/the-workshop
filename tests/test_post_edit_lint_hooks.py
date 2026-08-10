@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # The consolidated `workbench` package ships one superset post-edit-lint hook
 # (Ruff + Prettier + ESLint + Stylelint), replacing the old per-preset variants.
-WORKBENCH_HOOK = REPO_ROOT / "presets" / "workbench" / "hooks" / "post-edit-lint.py"
+WORKBENCH_HOOK = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "post-edit-lint.py"
 
 HOOK_PATHS = {"workbench": WORKBENCH_HOOK}
 

@@ -22,11 +22,15 @@ prints nothing and exits 0, so an unbuilt or broken plugin can never break a ses
 
 from __future__ import annotations
 
-import json
-import os
-import sys
-import tempfile
-from pathlib import Path
+# Declares this hook's platform wiring; scripts/stamp.py reads it to build
+# hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "SessionStart", "matcher": "startup|clear|compact"}
+
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 
 def _strip_frontmatter(text: str) -> str:

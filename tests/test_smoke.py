@@ -1,4 +1,4 @@
-"""Tests for smoke_test.py -- validates internal consistency of built plugins."""
+"""Tests for smoke_test.py -- validates internal consistency of source plugins."""
 
 import json
 import shutil
@@ -6,83 +6,77 @@ from pathlib import Path
 
 import pytest
 
-from scripts.build_preset import build_preset
 from scripts.smoke_test import smoke_test
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REAL_PRESETS = sorted(p.name for p in (REPO_ROOT / "presets").iterdir() if p.is_dir())
+REAL_PLUGINS = sorted(p.name for p in (REPO_ROOT / "plugins").iterdir() if p.is_dir())
 
 
-class TestSmokeRealPresets:
-    """Build and smoke-test every real preset against the actual core/+presets/
-    tree, into a per-test directory so concurrent runs never race on the
-    shared repo dist/."""
+class TestSmokeRealPlugins:
+    """Smoke-test every real plugin directly against its source tree.
 
-    @pytest.mark.parametrize("preset_name", REAL_PRESETS)
-    def test_real_preset_builds_and_passes_smoke_test(
-        self, preset_name: str, tmp_path: Path
-    ) -> None:
-        dist_path = build_preset(preset_name, repo_root=REPO_ROOT, dist_root=tmp_path)
-        result = smoke_test(dist_path, core_skills_dir=REPO_ROOT / "core" / "skills")
-        assert result.passed, f"{preset_name} smoke test failed: {result.errors}"
+    Plugins ship straight from ``plugins/<name>/`` — what is on disk is what
+    ships, with no build step and no per-test directory needed."""
+
+    @pytest.mark.parametrize("plugin_name", REAL_PLUGINS)
+    def test_real_plugin_passes_smoke_test(self, plugin_name: str) -> None:
+        result = smoke_test(REPO_ROOT / "plugins" / plugin_name)
+        assert result.passed, f"{plugin_name} smoke test failed: {result.errors}"
 
 
 class TestSmokePluginJson:
     """Smoke test validates .claude-plugin/plugin.json."""
 
-    def test_valid_build_passes_smoke_test(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        result = smoke_test(dist)
+    def test_valid_build_passes_smoke_test(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
+        result = smoke_test(plugin)
         assert result.passed is True
         assert len(result.errors) == 0
 
-    def test_missing_plugin_json_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_missing_plugin_json_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        (dist / ".claude-plugin" / "plugin.json").unlink()
+        (plugin / ".claude-plugin" / "plugin.json").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("plugin.json" in e for e in result.errors)
 
-    def test_plugin_json_missing_name_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_plugin_json_missing_name_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        plugin_json = dist / ".claude-plugin" / "plugin.json"
+        plugin_json = plugin / ".claude-plugin" / "plugin.json"
         data = json.loads(plugin_json.read_text())
         del data["name"]
         plugin_json.write_text(json.dumps(data))
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("name" in e for e in result.errors)
 
-    def test_plugin_json_missing_version_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_plugin_json_missing_version_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        plugin_json = dist / ".claude-plugin" / "plugin.json"
+        plugin_json = plugin / ".claude-plugin" / "plugin.json"
         data = json.loads(plugin_json.read_text())
         del data["version"]
         plugin_json.write_text(json.dumps(data))
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("version" in e for e in result.errors)
 
-    def test_plugin_json_missing_description_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_plugin_json_missing_description_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        plugin_json = dist / ".claude-plugin" / "plugin.json"
+        plugin_json = plugin / ".claude-plugin" / "plugin.json"
         data = json.loads(plugin_json.read_text())
         del data["description"]
         plugin_json.write_text(json.dumps(data))
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("description" in e for e in result.errors)
 
@@ -90,70 +84,66 @@ class TestSmokePluginJson:
 class TestSmokeSkills:
     """Smoke test validates skill structure."""
 
-    def test_skill_with_skill_md_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        result = smoke_test(dist)
+    def test_skill_with_skill_md_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_skill_directory_missing_skill_md_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_skill_directory_missing_skill_md_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
 
-        # Remove SKILL.md from one skill
-        (dist / "skills" / "commit" / "SKILL.md").unlink()
+        (plugin / "skills" / "commit" / "SKILL.md").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("commit" in e and "SKILL.md" in e for e in result.errors)
 
-    def test_skill_missing_frontmatter_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_skill_missing_frontmatter_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text("# No frontmatter here\n")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("commit/SKILL.md" in e and "frontmatter" in e for e in result.errors)
 
-    def test_skill_missing_name_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_skill_missing_name_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text("---\ndescription: test\n---\n# Missing name\n")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("commit/SKILL.md" in e and "name" in e for e in result.errors)
 
-    def test_skill_missing_description_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_skill_missing_description_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text("---\nname: commit\n---\n# Missing description\n")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("commit/SKILL.md" in e and "description" in e for e in result.errors)
 
-    def test_skill_with_frontmatter_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_skill_with_frontmatter_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text("---\nname: commit\ndescription: test\n---\n# Valid\n")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert not any("commit/SKILL.md" in e for e in result.errors)
 
-    def test_skill_with_folded_description_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_skill_with_folded_description_passes(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text(
             "---\n"
@@ -164,303 +154,153 @@ class TestSmokeSkills:
             "---\n# Valid\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert not any("commit/SKILL.md" in e for e in result.errors)
-
-
-class TestSmokeSkillAuthoringBudgets:
-    """Smoke test enforces skill-authoring budgets (#281): line cap, frontmatter
-    shape, and reference depth."""
-
-    def test_skill_over_line_cap_fails(self, tmp_repo: Path) -> None:
-        # Use a fresh oversized skill (not a real core skill) to exercise the cap
-        # itself, independent of the shrink-only allowlist's current contents.
-        skill_src = tmp_repo / "core" / "skills" / "oversized-skill"
-        skill_src.mkdir(parents=True)
-        body = "\n".join(f"line {i}" for i in range(150))
-        (skill_src / "SKILL.md").write_text(
-            f"---\nname: oversized-skill\ndescription: test\n---\n\n{body}\n"
-        )
-
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-
-        result = smoke_test(dist)
-        assert result.passed is False
-        assert any(
-            "oversized-skill/SKILL.md" in e and "line" in e.lower()
-            for e in result.errors
-        )
-
-    def test_skill_under_line_cap_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
-
-        skill_md.write_text("---\nname: commit\ndescription: test\n---\n\nShort.\n")
-
-        result = smoke_test(dist)
-        assert not any("line" in e.lower() for e in result.errors)
-
-    def test_allowlisted_skill_over_line_cap_passes(
-        self, tmp_repo: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # The real allowlist is shrink-only and is now empty (every grandfathered
-        # skill has been slimmed), so inject a synthetic entry to exercise the
-        # allowlist mechanism without depending on real allowlist membership.
-        import scripts.smoke_test as smoke_mod
-
-        monkeypatch.setattr(
-            smoke_mod, "SKILL_LINE_CAP_ALLOWLIST", frozenset({"commit"})
-        )
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
-
-        body = "\n".join(f"line {i}" for i in range(150))
-        skill_md.write_text(f"---\nname: commit\ndescription: test\n---\n\n{body}\n")
-
-        result = smoke_test(dist)
-        assert not any(
-            "commit/SKILL.md" in e and "line" in e.lower() for e in result.errors
-        )
-
-    def test_frontmatter_with_extra_key_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
-
-        skill_md.write_text(
-            "---\nname: commit\ndescription: test\nrole: implementer\n---\n# Body\n"
-        )
-
-        result = smoke_test(dist)
-        assert result.passed is False
-        assert any(
-            "commit/SKILL.md" in e and "role" in e and "unexpected" in e.lower()
-            for e in result.errors
-        )
-
-    def test_frontmatter_with_only_name_and_description_passes(
-        self, tmp_repo: Path
-    ) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
-
-        skill_md.write_text("---\nname: commit\ndescription: test\n---\n# Body\n")
-
-        result = smoke_test(dist)
-        assert not any("unexpected" in e.lower() for e in result.errors)
-
-    def test_nested_references_directory_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-
-        skill_dir = dist / "skills" / "commit"
-        nested_dir = skill_dir / "references" / "advanced"
-        nested_dir.mkdir(parents=True)
-        (nested_dir / "detail.md").write_text("# Detail\n")
-
-        result = smoke_test(dist)
-        assert result.passed is False
-        assert any(
-            "commit/references" in e and "one level deep" in e for e in result.errors
-        )
-
-    def test_flat_references_directory_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-
-        skill_dir = dist / "skills" / "commit"
-        refs_dir = skill_dir / "references"
-        refs_dir.mkdir(parents=True)
-        (refs_dir / "detail.md").write_text("# Detail\n")
-
-        result = smoke_test(dist)
-        assert not any("one level deep" in e for e in result.errors)
-
-
-class TestSmokeCoreSkillsDir:
-    """smoke_test locates core/skills two parents above dist_path; a build in a
-    caller-owned directory (hermetic tests) breaks that shape and silently
-    skips every core-skill authoring check. core_skills_dir restores it."""
-
-    def test_core_skills_dir_restores_core_classification(
-        self, tmp_repo: Path
-    ) -> None:
-        skill_src = tmp_repo / "core" / "skills" / "oversized-skill"
-        skill_src.mkdir(parents=True)
-        body = "\n".join(f"line {i}" for i in range(150))
-        (skill_src / "SKILL.md").write_text(
-            f"---\nname: oversized-skill\ndescription: test\n---\n\n{body}\n"
-        )
-        out = tmp_repo / "out" / "deep"
-
-        dist = build_preset("python-api", repo_root=tmp_repo, dist_root=out)
-
-        # Without the override the parent-hop derivation finds no core/skills
-        # next to `out` and the line cap silently goes unenforced.
-        weakened = smoke_test(dist)
-        assert not any("oversized-skill" in e for e in weakened.errors)
-
-        result = smoke_test(dist, core_skills_dir=tmp_repo / "core" / "skills")
-        assert result.passed is False
-        assert any(
-            "oversized-skill/SKILL.md" in e and "line" in e.lower()
-            for e in result.errors
-        )
-
-    def test_explicit_missing_core_skills_dir_raises(self, tmp_repo: Path) -> None:
-        """A typo'd override must not quietly disable the checks it exists to
-        keep alive — that is the exact failure mode of the derived path."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-
-        with pytest.raises(ValueError, match="core_skills_dir"):
-            smoke_test(dist, core_skills_dir=tmp_repo / "nonexistent")
-
-
-class TestSmokeAllowlistShrinkOnly:
-    """The line-cap grandfather allowlist may only shrink (#281)."""
-
-    def test_shrinking_below_baseline_passes(self) -> None:
-        from scripts.smoke_test import _validate_allowlist_shrink_only
-
-        errors = _validate_allowlist_shrink_only(
-            current=frozenset({"a"}), baseline=frozenset({"a", "b"})
-        )
-        assert errors == []
-
-    def test_adding_entry_beyond_baseline_fails(self) -> None:
-        from scripts.smoke_test import _validate_allowlist_shrink_only
-
-        errors = _validate_allowlist_shrink_only(
-            current=frozenset({"a", "b"}), baseline=frozenset({"a"})
-        )
-        assert errors
-        assert "b" in errors[0]
-
-    def test_current_allowlist_has_not_grown_beyond_baseline(self) -> None:
-        from scripts.smoke_test import (
-            SKILL_LINE_CAP_ALLOWLIST,
-            SKILL_LINE_CAP_ALLOWLIST_BASELINE,
-            _validate_allowlist_shrink_only,
-        )
-
-        assert (
-            _validate_allowlist_shrink_only(
-                SKILL_LINE_CAP_ALLOWLIST, SKILL_LINE_CAP_ALLOWLIST_BASELINE
-            )
-            == []
-        )
 
 
 class TestSmokeAgents:
     """Smoke test validates agent integrity."""
 
-    def test_valid_agents_pass(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        result = smoke_test(dist)
+    def test_valid_agents_pass(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(
+            "---\nname: tdd-implementer\ndescription: test\nrole: implementer\n---\n"
+        )
+
+        result = smoke_test(plugin)
         assert result.passed
 
-    def test_agent_missing_agent_md_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_agent_missing_agent_md_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
 
-        (dist / "agents" / "tdd-implementer" / "AGENT.md").unlink()
+        (plugin / "agents" / "tdd-implementer" / "AGENT.md").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert not result.passed
         assert any("tdd-implementer" in e and "AGENT.md" in e for e in result.errors)
 
-    def test_missing_frontmatter_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+    def test_missing_frontmatter_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
         agent_md.write_text("# No frontmatter here\n")
-        result = smoke_test(dist)
+
+        result = smoke_test(plugin)
         assert not result.passed
         assert any(
             "frontmatter" in e.lower() or "required" in e.lower() for e in result.errors
         )
 
-    def test_invalid_role_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+    def test_invalid_role_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
         agent_md.write_text(
             "---\nname: tdd-implementer\ndescription: test\nrole: invalid\n---\n"
         )
-        result = smoke_test(dist)
+
+        result = smoke_test(plugin)
         assert not result.passed
         assert any("role" in e for e in result.errors)
 
-    def test_non_implementer_role_accepted(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+    def test_non_implementer_role_accepted(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
         agent_md.write_text(
             "---\nname: tdd-implementer\ndescription: test\nrole: analyst\n---\n"
         )
-        result = smoke_test(dist)
+
+        result = smoke_test(plugin)
         assert not any("role" in e for e in result.errors)
 
-    def test_name_mismatch_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+    def test_name_mismatch_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
         agent_md.write_text(
             "---\nname: wrong-name\ndescription: test\nrole: implementer\n---\n"
         )
-        result = smoke_test(dist)
+
+        result = smoke_test(plugin)
         assert not result.passed
         assert any("name" in e and "match" in e for e in result.errors)
 
-    def test_missing_skill_reference_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        agent_md = dist / "agents" / "tdd-implementer" / "AGENT.md"
+    def test_missing_skill_reference_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
         agent_md.write_text(
             "---\nname: tdd-implementer\ndescription: test\nrole: implementer\n"
             "skills:\n  add: [nonexistent-skill]\n---\n"
         )
-        result = smoke_test(dist)
+
+        result = smoke_test(plugin)
         assert not result.passed
         assert any("nonexistent-skill" in e for e in result.errors)
 
 
-class TestSmokeHooks:
-    """Smoke test validates hook references."""
+def _write_hooks_json(
+    plugin: Path, *, event: str = "SessionStart", script: str = "demo-hook.py"
+) -> None:
+    """Write a minimal hooks/hooks.json dispatching through hooks/run-hook.sh.
 
-    def test_valid_hooks_pass(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        result = smoke_test(dist)
+    Matches the flat plugin tree's real command shape:
+    ``bash "${CLAUDE_PLUGIN_ROOT:-.}"/hooks/run-hook.sh <script> [args...]``.
+    """
+    hooks_dir = plugin / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    (hooks_dir / "hooks.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    event: [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": (
+                                        'bash "${CLAUDE_PLUGIN_ROOT:-.}"'
+                                        f"/hooks/run-hook.sh {script}"
+                                    ),
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+    )
+
+
+class TestSmokeHooks:
+    """Smoke test validates hook references dispatched through run-hook.sh."""
+
+    def test_valid_hooks_pass(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo", hooks=True)
+        _write_hooks_json(plugin, script="demo-hook.py")
+
+        result = smoke_test(plugin)
         assert result.passed
 
-    def test_hooks_json_refs_missing_script_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_hooks_json_refs_missing_script_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", hooks=True)
+        _write_hooks_json(plugin, script="demo-hook.py")
 
-        # Remove a hook script that hooks.json references
-        (dist / "hooks" / "scripts" / "protect-files.py").unlink()
+        # Remove the hook script that hooks.json references
+        (plugin / "hooks" / "scripts" / "demo-hook.py").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
-        assert any("protect-files.py" in e for e in result.errors)
+        assert any("demo-hook.py" in e for e in result.errors)
 
 
 class TestSmokeIntraSkillLinks:
     """Smoke test validates intra-skill reference links."""
 
-    def test_valid_intra_skill_link_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_valid_intra_skill_link_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
         # Add a skill with a valid reference link
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         refs_dir = skill_dir / "references"
         refs_dir.mkdir()
@@ -470,91 +310,89 @@ class TestSmokeIntraSkillLinks:
             "See [guide](references/guide.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_broken_intra_skill_link_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_broken_intra_skill_link_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
         # Add a skill with a broken reference link
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [missing](references/nonexistent.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors
         )
 
-    def test_external_links_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_external_links_skipped(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [docs](https://example.com) and [section](#anchor) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_http_links_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_http_links_skipped(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [docs](http://example.com) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_project_root_relative_links_skipped(self, tmp_repo: Path) -> None:
+    def test_project_root_relative_links_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """Links to .claude/ paths are project-root-relative, not plugin-internal."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [project.md](.claude/docs/project.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_mailto_links_skipped(self, tmp_repo: Path) -> None:
+    def test_mailto_links_skipped(self, tmp_path: Path, make_plugin) -> None:
         """mailto: links are a URI scheme, not a relative file path."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "Contact [support](mailto:support@example.com) for help.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_broken_link_inside_fenced_code_block_skipped(self, tmp_repo: Path) -> None:
+    def test_broken_link_inside_fenced_code_block_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """Illustrative example links inside ``` fences are not real references."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
@@ -563,33 +401,33 @@ class TestSmokeIntraSkillLinks:
             "```\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_broken_link_outside_fenced_code_block_fails(self, tmp_repo: Path) -> None:
+    def test_broken_link_outside_fenced_code_block_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """The same link text outside a fence is still checked and still fails."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [example](references/nonexistent.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors
         )
 
-    def test_anchored_cross_doc_link_passes(self, tmp_repo: Path) -> None:
+    def test_anchored_cross_doc_link_passes(self, tmp_path: Path, make_plugin) -> None:
         """A link with a #fragment resolves against the file portion only."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         refs_dir = skill_dir / "references"
         refs_dir.mkdir()
@@ -599,22 +437,23 @@ class TestSmokeIntraSkillLinks:
             "See [guide](references/guide.md#section) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_anchored_link_to_missing_file_fails(self, tmp_repo: Path) -> None:
+    def test_anchored_link_to_missing_file_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """The #fragment doesn't hide a missing file portion."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See [missing](references/nonexistent.md#section) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/SKILL.md" in e and "nonexistent.md" in e for e in result.errors
@@ -624,29 +463,27 @@ class TestSmokeIntraSkillLinks:
 class TestSmokeBacktickReferences:
     """Smoke test validates backtick-quoted intra-skill doc paths (#286)."""
 
-    def test_broken_backtick_reference_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_broken_backtick_reference_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         (skill_dir / "references").mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See `references/missing.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/SKILL.md" in e and "references/missing.md" in e
             for e in result.errors
         )
 
-    def test_valid_backtick_reference_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_valid_backtick_reference_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         refs_dir = skill_dir / "references"
         refs_dir.mkdir(parents=True)
         (refs_dir / "guide.md").write_text("# Guide\n")
@@ -655,73 +492,74 @@ class TestSmokeBacktickReferences:
             "See `references/guide.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_root_relative_backtick_mention_skipped(self, tmp_repo: Path) -> None:
+    def test_root_relative_backtick_mention_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """A first segment that isn't a directory in the skill is not a reference."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "Report saved to `docs/skill-reviews/report.md`.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_bare_basename_backtick_mention_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_bare_basename_backtick_mention_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See `CLAUDE.md` for project conventions.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_claude_prefixed_backtick_mention_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_claude_prefixed_backtick_mention_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See `.claude/docs/project.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_uri_backtick_mention_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_uri_backtick_mention_skipped(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
             "See `https://example.com/foo.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
     def test_broken_backtick_reference_inside_fenced_code_block_skipped(
-        self, tmp_repo: Path
+        self, tmp_path: Path, make_plugin
     ) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         (skill_dir / "references").mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\n"
@@ -730,17 +568,16 @@ class TestSmokeBacktickReferences:
             "```\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
     def test_broken_backtick_reference_in_companion_doc_fails(
-        self, tmp_repo: Path
+        self, tmp_path: Path, make_plugin
     ) -> None:
         """Companion docs bundled alongside SKILL.md are scanned too."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         (skill_dir / "references").mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\nSee companion.md.\n"
@@ -749,19 +586,20 @@ class TestSmokeBacktickReferences:
             "See `references/missing.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/companion.md" in e and "references/missing.md" in e
             for e in result.errors
         )
 
-    def test_broken_markdown_link_in_companion_doc_fails(self, tmp_repo: Path) -> None:
+    def test_broken_markdown_link_in_companion_doc_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """Companion docs are scanned for markdown-style links too, not just backticks."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
             "---\nname: test\ndescription: test\n---\n\nSee companion.md.\n"
@@ -770,7 +608,7 @@ class TestSmokeBacktickReferences:
             "See [missing](nonexistent.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/companion.md" in e and "nonexistent.md" in e
@@ -778,16 +616,15 @@ class TestSmokeBacktickReferences:
         )
 
     def test_stale_flat_path_after_reference_move_regression(
-        self, tmp_repo: Path
+        self, tmp_path: Path, make_plugin
     ) -> None:
         """Regression for the dignified-python incident (#286): references moved
         from a flat `references/` layout into `references/advanced/`, but
         SKILL.md and a companion doc still named the stale flat path.
         """
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        skill_dir = dist / "skills" / "test-skill"
+        skill_dir = plugin / "skills" / "test-skill"
         advanced_dir = skill_dir / "references" / "advanced"
         advanced_dir.mkdir(parents=True)
         (advanced_dir / "exception-handling.md").write_text("# Exceptions\n")
@@ -799,7 +636,7 @@ class TestSmokeBacktickReferences:
             "See `references/exception-handling.md` for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-skill/SKILL.md" in e and "references/exception-handling.md" in e
@@ -814,12 +651,11 @@ class TestSmokeBacktickReferences:
 class TestSmokeIntraAgentLinks:
     """Smoke test validates intra-agent reference links."""
 
-    def test_valid_intra_agent_link_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_valid_intra_agent_link_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
         # Add an agent with a valid reference link
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         refs_dir = agent_dir / "references"
         refs_dir.mkdir()
@@ -829,33 +665,31 @@ class TestSmokeIntraAgentLinks:
             "See [spec](references/spec.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_broken_intra_agent_link_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_broken_intra_agent_link_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
         # Add an agent with a broken reference link
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "See [missing](references/nonexistent.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "test-agent/AGENT.md" in e and "nonexistent.md" in e for e in result.errors
         )
 
-    def test_anchored_cross_doc_link_passes(self, tmp_repo: Path) -> None:
+    def test_anchored_cross_doc_link_passes(self, tmp_path: Path, make_plugin) -> None:
         """A link with a #fragment resolves against the file portion only."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         refs_dir = agent_dir / "references"
         refs_dir.mkdir()
@@ -865,77 +699,76 @@ class TestSmokeIntraAgentLinks:
             "See [spec](references/spec.md#section) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_external_links_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_external_links_skipped(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "See [docs](https://example.com) and [section](#anchor) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_http_links_skipped(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_http_links_skipped(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "See [docs](http://example.com) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_project_root_relative_links_skipped(self, tmp_repo: Path) -> None:
+    def test_project_root_relative_links_skipped(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
         """Links to .claude/ paths are project-root-relative, not plugin-internal."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "See [project.md](.claude/docs/project.md) for details.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
-    def test_mailto_links_skipped(self, tmp_repo: Path) -> None:
+    def test_mailto_links_skipped(self, tmp_path: Path, make_plugin) -> None:
         """mailto: links are a URI scheme, not a relative file path."""
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+        plugin = make_plugin(tmp_path, "demo")
 
-        agent_dir = dist / "agents" / "test-agent"
+        agent_dir = plugin / "agents" / "test-agent"
         agent_dir.mkdir(parents=True)
         (agent_dir / "AGENT.md").write_text(
             "---\nname: test-agent\ndescription: test\nrole: implementer\n---\n\n"
             "Contact [support](mailto:support@example.com) for help.\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is True
 
 
-def _write_valid_plugin_json(dist: Path) -> None:
-    """Write a minimal valid .claude-plugin/plugin.json into ``dist``.
+def _write_valid_plugin_json(plugin_dir: Path) -> None:
+    """Write a minimal valid .claude-plugin/plugin.json into ``plugin_dir``.
 
-    Lets a hand-built dist tree clear the plugin.json validation gate so a test
-    can exercise a later error branch (agents, hooks) without early-returning.
+    Lets a hand-built plugin tree clear the plugin.json validation gate so a
+    test can exercise a later error branch (agents, hooks) without
+    early-returning.
     """
-    plugin_dir = dist / ".claude-plugin"
-    plugin_dir.mkdir(parents=True, exist_ok=True)
-    (plugin_dir / "plugin.json").write_text(
+    manifest_dir = plugin_dir / ".claude-plugin"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    (manifest_dir / "plugin.json").write_text(
         json.dumps({"name": "demo", "version": "1.0.0", "description": "demo"})
     )
 
@@ -943,8 +776,9 @@ def _write_valid_plugin_json(dist: Path) -> None:
 class TestSmokeMalformedInputs:
     """Smoke test reports malformed JSON and structurally invalid agents.
 
-    Each test builds its own minimal dist tree under tmp_path so the corrupted
-    input is the only variable, independent of any real preset's contents.
+    Each test builds its own minimal plugin tree under tmp_path so the
+    corrupted input is the only variable, independent of any real plugin's
+    contents.
     """
 
     def test_invalid_plugin_json_fails(self, tmp_path: Path) -> None:
@@ -996,19 +830,18 @@ class TestSmokeMalformedInputs:
 class TestSmokeSettingsJson:
     """Smoke test validates settings.json."""
 
-    def test_valid_settings_json_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        result = smoke_test(dist)
+    def test_valid_settings_json_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
+        (plugin / "settings.json").write_text("{}")
+        result = smoke_test(plugin)
         assert result.passed
 
-    def test_invalid_settings_json_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_invalid_settings_json_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        (dist / "settings.json").write_text("not valid json {{{")
+        (plugin / "settings.json").write_text("not valid json {{{")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any("settings.json" in e for e in result.errors)
 
@@ -1095,10 +928,11 @@ class TestLintDescriptionProcessMarkers:
 class TestSmokeDescriptionProcessMarkers:
     """Smoke test rejects skill descriptions that read like process summaries (#279)."""
 
-    def test_description_with_process_marker_fails(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_description_with_process_marker_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text(
             "---\nname: commit\n"
@@ -1106,16 +940,17 @@ class TestSmokeDescriptionProcessMarkers:
             "---\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert result.passed is False
         assert any(
             "commit/SKILL.md" in e and "trigger-only" in e for e in result.errors
         )
 
-    def test_description_without_process_marker_passes(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        skill_md = dist / "skills" / "commit" / "SKILL.md"
+    def test_description_without_process_marker_passes(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", skills=["commit"])
+        skill_md = plugin / "skills" / "commit" / "SKILL.md"
 
         skill_md.write_text(
             "---\nname: commit\n"
@@ -1123,7 +958,7 @@ class TestSmokeDescriptionProcessMarkers:
             "---\n"
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
         assert not any(
             "commit/SKILL.md" in e and "trigger-only" in e for e in result.errors
         )
@@ -1132,16 +967,15 @@ class TestSmokeDescriptionProcessMarkers:
 class TestSmokeMachinery:
     """Every engine file the machinery tests reference must have shipped."""
 
-    def _dist_with_machinery(self, tmp_repo: Path) -> Path:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        engine = dist / "machinery" / "engine"
+    def _plugin_with_machinery(self, tmp_path: Path, make_plugin) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        engine = plugin / "machinery" / "engine"
         engine.mkdir(parents=True)
         (engine / "vault_utils.py").write_text("# engine module\n")
         (engine / "session-stop.py").write_text("# hook script\n")
         (engine / "queries").mkdir()
         (engine / "queries" / "vault_query.py").write_text("# query module\n")
-        tests_dir = dist / "machinery" / "tests"
+        tests_dir = plugin / "machinery" / "tests"
         tests_dir.mkdir()
         (tests_dir / "test_vault_utils.py").write_text(
             "import json\n"
@@ -1157,78 +991,125 @@ class TestSmokeMachinery:
             "import vault_query\n"
             'HOOK = SCRIPTS_DIR / "session-stop.py"\n'
         )
-        return dist
+        return plugin
 
-    def test_consistent_machinery_passes(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_machinery(tmp_repo)
+    def test_consistent_machinery_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert not any("machinery" in e for e in result.errors)
 
-    def test_import_of_unshipped_engine_module_fails(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_machinery(tmp_repo)
-        (dist / "machinery" / "engine" / "vault_utils.py").unlink()
+    def test_import_of_unshipped_engine_module_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        (plugin / "machinery" / "engine" / "vault_utils.py").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
         assert any(
-            "machinery/engine/vault_utils.py" in e and "not in the build output" in e
+            "machinery/engine/vault_utils.py" in e and "not in the plugin" in e
             for e in result.errors
         )
 
     def test_path_reference_to_unshipped_engine_file_fails(
-        self, tmp_repo: Path
+        self, tmp_path: Path, make_plugin
     ) -> None:
-        dist = self._dist_with_machinery(tmp_repo)
-        (dist / "machinery" / "engine" / "session-stop.py").unlink()
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        (plugin / "machinery" / "engine" / "session-stop.py").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
         assert any(
-            "machinery/engine/session-stop.py" in e and "not in the build output" in e
+            "machinery/engine/session-stop.py" in e and "not in the plugin" in e
             for e in result.errors
         )
 
     def test_stdlib_and_test_dep_imports_are_not_engine_references(
-        self, tmp_repo: Path
+        self, tmp_path: Path, make_plugin
     ) -> None:
         """json/sys/pathlib/pytest imports must not demand engine modules."""
-        dist = self._dist_with_machinery(tmp_repo)
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         for name in ("json", "sys", "pathlib", "pytest"):
             assert not any(f"'{name}'" in e for e in result.errors)
 
-    def test_tests_without_engine_dir_fails(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_machinery(tmp_repo)
-        shutil.rmtree(dist / "machinery" / "engine")
+    def test_tests_without_engine_dir_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        shutil.rmtree(plugin / "machinery" / "engine")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
         assert any("no engine/ directory" in e for e in result.errors)
 
-    def test_plugin_without_machinery_is_unaffected(self, tmp_repo: Path) -> None:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
+    def test_plugin_without_machinery_is_unaffected(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo")
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is True
+
+    def test_three_segment_path_reference_to_unshipped_file_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        """Regression for upstream #644: a fixed one-or-two-segment cap on the
+        SCRIPTS_DIR path-reference regex silently truncated 3+-segment
+        references, so a broken third segment was never checked. A test
+        module that points three segments deep at a file the plugin doesn't
+        ship must now be caught.
+        """
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        (plugin / "machinery" / "tests" / "test_vault_utils.py").write_text(
+            'from pathlib import Path\n'
+            "\n"
+            'SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"\n'
+            'MISSING = SCRIPTS_DIR / "queries" / "nested" / "missing.py"\n'
+        )
+
+        result = smoke_test(plugin)
+
+        assert result.passed is False
+        assert any(
+            "machinery/engine/queries/nested/missing.py" in e
+            and "not in the plugin" in e
+            for e in result.errors
+        )
+
+    def test_three_segment_path_reference_to_shipped_file_passes(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        """The three-segment counterpart that does exist must not be flagged."""
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        nested = plugin / "machinery" / "engine" / "queries" / "nested"
+        nested.mkdir(parents=True)
+        (nested / "present.py").write_text("# nested query module\n")
+        (plugin / "machinery" / "tests" / "test_vault_utils.py").write_text(
+            'from pathlib import Path\n'
+            "\n"
+            'SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"\n'
+            'PRESENT = SCRIPTS_DIR / "queries" / "nested" / "present.py"\n'
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("nested/present.py" in e for e in result.errors)
 
 
 class TestSmokeMachineryWiring:
     """W4 checks: wiring-spec scripts exist, rendered files parse, and the
     vendor map keeps unique targets."""
 
-    def _dist_with_wiring(self, tmp_repo: Path) -> Path:
-        build_preset("python-api", repo_root=tmp_repo)
-        dist = tmp_repo / "dist" / "python-api"
-        machinery = dist / "machinery"
+    def _plugin_with_wiring(self, tmp_path: Path, make_plugin) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        machinery = plugin / "machinery"
         engine = machinery / "engine"
         engine.mkdir(parents=True)
         (engine / "session-stop.py").write_text("# hook script\n")
@@ -1252,9 +1133,7 @@ class TestSmokeMachineryWiring:
         (rendered / "codex-agents").mkdir(parents=True)
         (rendered / "claude-settings-hooks.json").write_text('{"Stop": []}\n')
         (rendered / "codex-hooks.json").write_text('{"hooks": {}}\n')
-        (rendered / "codex-agents" / "helper.toml").write_text(
-            'name = "helper"\n'
-        )
+        (rendered / "codex-agents" / "helper.toml").write_text('name = "helper"\n')
         (machinery / "vendor-map.json").write_text(
             json.dumps(
                 {
@@ -1269,62 +1148,62 @@ class TestSmokeMachineryWiring:
                 }
             )
         )
-        return dist
+        return plugin
 
-    def test_consistent_wiring_passes(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_wiring(tmp_repo)
+    def test_consistent_wiring_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin_with_wiring(tmp_path, make_plugin)
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert not any("wiring" in e or "rendered" in e for e in result.errors)
 
-    def test_spec_script_missing_from_engine_fails(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_wiring(tmp_repo)
-        (dist / "machinery" / "engine" / "session-stop.py").unlink()
+    def test_spec_script_missing_from_engine_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin_with_wiring(tmp_path, make_plugin)
+        (plugin / "machinery" / "engine" / "session-stop.py").unlink()
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
-        assert any(
-            "session-stop.py" in e and "wiring" in e for e in result.errors
+        assert any("session-stop.py" in e and "wiring" in e for e in result.errors)
+
+    def test_unparseable_rendered_json_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin_with_wiring(tmp_path, make_plugin)
+        (plugin / "machinery" / "rendered" / "claude-settings-hooks.json").write_text(
+            "{not json"
         )
 
-    def test_unparseable_rendered_json_fails(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_wiring(tmp_repo)
-        (
-            dist / "machinery" / "rendered" / "claude-settings-hooks.json"
-        ).write_text("{not json")
-
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
         assert any("claude-settings-hooks.json" in e for e in result.errors)
 
-    def test_unparseable_rendered_toml_fails(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_wiring(tmp_repo)
+    def test_unparseable_rendered_toml_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin_with_wiring(tmp_path, make_plugin)
         (
-            dist / "machinery" / "rendered" / "codex-agents" / "helper.toml"
+            plugin / "machinery" / "rendered" / "codex-agents" / "helper.toml"
         ).write_text('name = unclosed "')
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
         assert any("helper.toml" in e for e in result.errors)
 
-    def test_duplicate_vendor_map_targets_fail(self, tmp_repo: Path) -> None:
-        dist = self._dist_with_wiring(tmp_repo)
+    def test_duplicate_vendor_map_targets_fail(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin_with_wiring(tmp_path, make_plugin)
         entry = {
             "kind": "file",
             "source": "engine/session-stop.py",
             "target": ".claude/scripts/session-stop.py",
         }
-        (dist / "machinery" / "vendor-map.json").write_text(
+        (plugin / "machinery" / "vendor-map.json").write_text(
             json.dumps({"schema": 2, "entries": [entry, dict(entry)]})
         )
 
-        result = smoke_test(dist)
+        result = smoke_test(plugin)
 
         assert result.passed is False
-        assert any(
-            "vendor-map" in e and "duplicate" in e for e in result.errors
-        )
+        assert any("vendor-map" in e and "duplicate" in e for e in result.errors)

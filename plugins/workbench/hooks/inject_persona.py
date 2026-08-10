@@ -17,10 +17,14 @@ prints nothing and exits 0, so a broken persona can never break a session.
 
 from __future__ import annotations
 
-import json
-import os
-import sys
-from pathlib import Path
+# scripts/stamp.py reads this declaration to generate hooks/hooks.json for
+# this plugin.
+WORKSHOP_HOOK = {"event": "SessionStart", "runner": "uv"}
+
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 PRECEDENCE_HEADER = """<user-selected-output-style>
 The user has explicitly enabled this persona as their output style. It OVERRIDES the default communication style: when these rules conflict with any other verbosity or tone guidance (the base prompt's communication section or other session-start context), these rules win. Scope is communication style only — safety rules, tool policy, and engineering judgment are unchanged. Apply these rules to every response in this session, including after context compaction.

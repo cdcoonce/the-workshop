@@ -1,13 +1,12 @@
 """Shared git-baseline helpers for hook scripts.
 
-Not a hook. The leading underscore keeps it out of hook discovery — `build_docs`
-globs `core/hooks/*.py` and requires every match to declare an event in its
-docstring, which a library module has none of.
+Not a hook. The leading underscore keeps it out of hook discovery — `scripts/stamp.py`
+scans `hooks/scripts/*.py` and treats a file without a `WORKSHOP_HOOK` declaration
+as a library module rather than a hook, which is exactly what this file is.
 
 `run-hook.sh` invokes hooks as `python3 <hooks/scripts/name.py>`, so `sys.path[0]`
-is that directory and a sibling import resolves at runtime. `build_preset` ships
-this module unconditionally, like `run-hook.sh`, so it is always next to the
-hooks that need it.
+is that directory and a sibling import resolves at runtime. The stamper ships
+this module alongside `run-hook.sh`, so it is always next to the hooks that need it.
 
 Every helper returns None on any failure — missing git, not a repo, timeout, a
 non-zero exit. Hooks run on the user's prompt and tool path, so they fail open;

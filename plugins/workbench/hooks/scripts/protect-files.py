@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Pre-edit hook: block edits to sensitive/generated files."""
 
-import json
-import sys
-from pathlib import PurePath
+# Wiring declaration for scripts/stamp.py, which builds hooks/hooks.json from it.
+WORKSHOP_HOOK = {"event": "PreToolUse", "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit"}
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from pathlib import PurePath  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

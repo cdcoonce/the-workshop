@@ -28,6 +28,19 @@ verify-versions:
 
 VERSION_BASE ?= origin/main
 
+# The repo's only build component. `stamp` writes every generated file from the
+# hand-written truth in the tree (each plugin's `.claude-plugin/plugin.json`,
+# SKILL.md/AGENT.md frontmatter, and each hook script's own WORKSHOP_HOOK
+# declaration). `stamp-check` renders the same path map in memory and fails,
+# naming the file and printing a diff, on anything committed stale.
+.PHONY: stamp
+stamp:
+	uv run python -m scripts.stamp
+
+.PHONY: stamp-check
+stamp-check:
+	uv run python -m scripts.stamp --check
+
 # Vault machinery suite: the vault's engine scripts ship as workbench payload
 # (plugins/workbench/machinery/). Like the skill-script suites, the tests live
 # in an isolated subtree beside the code they exercise and run in their OWN
@@ -54,4 +67,5 @@ test:
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) test-machinery
+	$(MAKE) stamp-check
 	$(MAKE) verify-versions

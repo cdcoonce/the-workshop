@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = REPO_ROOT / "core" / "hooks" / "audit-config-change.py"
+HOOK_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "audit-config-change.py"
 
 
 def run(payload) -> subprocess.CompletedProcess[str]:

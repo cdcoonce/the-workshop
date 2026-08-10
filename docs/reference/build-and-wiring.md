@@ -28,14 +28,11 @@ lets `make test` gate on staleness.
 <!-- BEGIN GENERATED: scripts-table -->
 | Script | Purpose |
 | --- | --- |
-| `scripts/build_docs.py` | Generate the repo's living reference documentation from component metadata. |
-| `scripts/build_marketplace.py` | Generate Claude and Codex marketplace indexes from preset manifests. |
-| `scripts/build_preset.py` | Assemble a Claude plugin from core + preset delta. |
-| `scripts/check_version_bumps.py` | Fail when a preset's shipped output changed without a version bump. |
+| `scripts/check_version_bumps.py` | Fail when a plugin's shipped output changed without a version bump. |
 | `scripts/dev_cycle_validate.py` | Dev cycle state file parser and validator. |
 | `scripts/discover_skill_test_suites.py` | Discover and run every skill-script test suite in its own rootdir. |
-| `scripts/dist_digest.py` | Stable content digest of the generated output tree (dist/ + marketplaces). |
-| `scripts/smoke_test.py` | Validate internal consistency of a built plugin. |
+| `scripts/smoke_test.py` | Validate internal consistency of a source plugin directory. |
+| `scripts/stamp.py` | Stamp every generated file in the flat plugin tree from its hand-written source. |
 <!-- END GENERATED: scripts-table -->
 
 ## Hook wiring
@@ -53,19 +50,23 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 "Pre-edit hook" but is wired to `PreToolUse`).
 
 <!-- BEGIN GENERATED: hooks-wiring-table -->
-| Hook | Event | Summary | Presets |
+| Hook | Plugin | Event | Summary |
 | --- | --- | --- | --- |
-| `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | all |
-| `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | all |
-| `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
-| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
-| `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
-| `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. | all |
-| `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
-| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
-| `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
-| `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
-| `warn-off-trunk.py` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. | all |
+| `audit-config-change.py` | `workbench` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. |
+| `inject-skill-router.py` | `workbench` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. |
+| `inject_persona.py` | `persona-pair-programmer` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-ship-it` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-staff-eng-deep` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-terse-staff-eng` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-thinking-partner` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `post-edit-lint.py` | `workbench` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
+| `protect-files.py` | `workbench` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
+| `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
+| `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
+| `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
+| `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
+| `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
 <!-- END GENERATED: hooks-wiring-table -->
 
 ## Keeping this in sync

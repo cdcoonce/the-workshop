@@ -1,10 +1,10 @@
 """Discover and run every skill-script test suite in its own rootdir.
 
-Skill scripts (e.g. ``core/skills/daa-code-review/scripts``) keep their tests in
-a sibling ``tests`` package with bare imports (``from models import ...``), so
-they cannot share the root pytest collection — a ``tests`` package-name
-collision. They must each run as a separate pytest invocation from their own
-``scripts`` directory.
+Skill scripts (e.g. ``plugins/workbench/skills/daa-code-review/scripts``) keep
+their tests in a sibling ``tests`` package with bare imports (``from models
+import ...``), so they cannot share the root pytest collection — a ``tests``
+package-name collision. They must each run as a separate pytest invocation from
+their own ``scripts`` directory.
 
 This module finds those suites automatically instead of relying on a
 hand-maintained Makefile list, so a new skill's tests can never silently fall
@@ -18,8 +18,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Directories whose ``*/scripts/tests`` subtrees hold skill-script test suites.
-_SEARCH_ROOTS = ("core/skills", "presets")
+# The one tree whose ``*/scripts/tests`` subtrees hold skill-script suites.
+# Every skill now lives under ``plugins/<name>/skills/``, so a single root
+# covers them all — there is no second tier to remember to add here.
+_SEARCH_ROOTS = ("plugins",)
 
 
 def find_suites(repo_root: Path) -> list[Path]:

@@ -21,11 +21,14 @@ HEAD, or a linked worktree checkout all exit 0 silently. Any other exception
 also exits 0 — a hook that breaks session end is worse than the bug it reports.
 """
 
-import json
-import subprocess
-import sys
-import tomllib
-from pathlib import Path
+# scripts/stamp.py reads this declaration to generate hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "SessionEnd"}
+
+import json  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import tomllib  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 raw_payload = sys.stdin.read()
 if not raw_payload.strip():

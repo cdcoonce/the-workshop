@@ -4,7 +4,7 @@ This file is auto-loaded every conversation. It defines how coding agents should
 
 ## What This Repo Is
 
-A template system for coding-agent plugin configurations, targeting Claude Code, Codex, and Cortex Code (CoCo) as first-class outputs. It builds self-contained plugin directories (manifests, skills, agents, hooks, and settings) for new projects.
+A toolkit of coding-agent plugins, targeting Claude Code, Codex, and Cortex Code (CoCo) as first-class outputs. The nine directories under `plugins/` are self-contained plugins — manifests, skills, agents, hooks, and settings — and the platforms read them straight from source. Nothing is built or copied anywhere.
 
 See [ROADMAP.md](ROADMAP.md) for the multi-platform goal and design principle, [COMPATIBILITY.md](COMPATIBILITY.md) for per-platform requirements, and [.claude/docs/project.md](.claude/docs/project.md) for detailed project context (tech stack, data flow, architecture patterns).
 
@@ -12,9 +12,14 @@ Every directory under `plugins/` is a shipped plugin, so a stray file or directo
 
 ## Commands
 
-- Build a preset: `uv run python -m scripts.build_preset <preset_name>`
-- Build marketplace index: `uv run python -m scripts.build_marketplace`
-- Smoke test: `uv run python -m scripts.smoke_test <preset_name>`
+- Regenerate everything generated: `make stamp`
+- Check for generated-file drift without writing: `make stamp-check`
+- Smoke test one plugin: `uv run python -m scripts.smoke_test <plugin_name>`
+
+`scripts/stamp.py` is the only build component. It owns a fixed map of
+generated paths, marks every file it writes, and refuses to overwrite a file
+that lacks its marker — so a mis-mapped output cannot silently consume
+hand-written work. Anything not in that map is hand-authored.
 
 ## Avoiding Capability-Blocked Bash Calls During Unattended Execution
 
@@ -120,18 +125,24 @@ enforced by a GitLab approval rule scoped to the `dev` protected branch), then
 (`.gitlab-ci.yml`) runs the same `make test` gate on `dev`, `main`, and every
 merge request.
 
-Before a pull request is ready, `make docs`, `make build`, and `make test` must
-all pass, with the regenerated `docs/` and `dist/` included in the change.
-`make test` covers the root suite, every auto-discovered skill-script suite, and
-the generated-docs/dist drift gate.
+Before a pull request is ready, `make stamp` and `make test` must both pass,
+with the regenerated files included in the change. `make test` covers the root
+suite, every auto-discovered skill-script suite, the vault machinery suite, the
+`stamp --check` drift gate, and the version-bump gate.
 
-## Preset Versioning
+## Plugin Versioning
 
-A preset's version is how an installed copy learns there is anything to take:
-`claude plugin update` compares it. **Change a preset's shipped content without
+A plugin's version is how an installed copy learns there is anything to take:
+`claude plugin update` compares it. **Change a plugin's shipped content without
 bumping its version and the change reaches nobody** — it merges green, promotes
 green, and silently never arrives. `make test` fails on this
 (`scripts/check_version_bumps.py`).
+
+The version lives in the hand-written `plugins/<name>/.claude-plugin/plugin.json`;
+the two stamped platform manifests carry the same value. The gate diffs
+`plugins/<name>/` against the release branch, excluding stamper-owned paths and
+`machinery/` — generated content is a pure function of hand-authored content, so
+a real change already trips the gate through its source.
 
 The consumer is an owner with the plugin installed, and what they depend on is
 the component surface: which skills, agents, and hooks exist, and what triggers
@@ -139,8 +150,9 @@ them.
 
 - **Major** — something they rely on breaks. A skill, agent, or hook **removed**
   or renamed (its trigger phrases go with it, so their invocations silently stop
-  matching); a hook that now blocks where it did not; owner data changing
-  location.
+  matching); one **moved to a different plugin**, which an owner who has only the
+  losing plugin installed experiences as a removal; a hook that now blocks where
+  it did not; owner data changing location.
 - **Minor** — new capability, nothing existing changes. A skill, agent, or hook
   **added**; new guidance inside an existing skill.
 - **Patch** — fixes that change neither the surface nor the triggers. A script
@@ -163,16 +175,27 @@ Agents are specialized role definitions (`AGENT.md` with YAML frontmatter) that 
 
 An agent's `role` must be one of `implementer`, `reviewer`, `analyst`,
 `qa-tester`, `skill-writer`, or `strategy`. This vocabulary is enforced for every
-agent — core and preset — by `VALID_ROLES` in `scripts/smoke_test.py`; keep the
-two in sync.
+agent by `VALID_ROLES` in `scripts/smoke_test.py`; keep the two in sync.
 
-For the current roster — every agent, its role, its skills, and which presets
-ship it — see the generated [docs/reference/agents.md](docs/reference/agents.md);
-regenerate it with `make docs`.
+For the current roster — every agent, its role, its skills, and the plugin that
+ships it — see the generated [docs/reference/agents.md](docs/reference/agents.md);
+regenerate it with `make stamp`.
 
-### Manifest fields
+### Plugin membership
 
-- `core.agents` — `"all"` (default) or list of agent names to include
-- `preset_agents` — List of preset-specific agent names (default `[]`)
-- Exclusion format: `agents/<name>`
-- Preset agent with same name as core agent replaces it (override semantics)
+Membership is the filesystem. A plugin ships exactly the skills in its own
+`skills/` directory, the agents in its own `agents/`, and the hooks in its own
+`hooks/scripts/` — there is no manifest field declaring what to include, and no
+mechanism for one plugin to inherit a component from another.
+
+**One plugin per slug, globally.** A skill or agent lives in exactly one plugin,
+chosen by audience: universal, data, and vault work goes to `workbench`;
+self-maintenance goes to `workshop-maintainer`; a persona's or advisor's own
+payload goes to that plugin. Two plugins shipping the same slug is a repo defect,
+not a distribution choice — `make stamp` fails on it, and `improve-skill`
+resolves a skill by a flat `plugins/*/skills/<slug>/` glob that aborts on a
+second hit.
+
+A plugin's `.claude-plugin/plugin.json` is hand-written and carries only `name`,
+`version`, `description`, and optionally `conventions`. Everything else about a
+plugin is derived from what is in its directory.

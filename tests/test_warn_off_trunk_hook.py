@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = REPO_ROOT / "core" / "hooks" / "warn-off-trunk.py"
+HOOK_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "warn-off-trunk.py"
 
 
 def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:

@@ -19,12 +19,16 @@ blocks once per failing tree state instead of looping. Non-empty stdin
 that isn't a JSON object still fails open.
 """
 
-import json
-import re
-import shutil
-import subprocess
-import sys
-from pathlib import Path
+# This hook's wiring lives here; scripts/stamp.py statically reads it to emit
+# hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "Stop"}
+
+import json  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 raw_payload = sys.stdin.read()
 payload_absent = not raw_payload.strip()

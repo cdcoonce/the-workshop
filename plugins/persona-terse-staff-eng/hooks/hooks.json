@@ -1,0 +1,15 @@
+{
+  "_generated": "scripts/stamp.py",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh --uv inject_persona.py"
+          }
+        ]
+      }
+    ]
+  }
+}

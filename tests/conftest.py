@@ -1,168 +1,146 @@
-"""Shared test fixtures for the template system."""
+"""Shared test fixtures for the flat plugin tree.
+
+The fixtures that lived here before the flat reorg modelled the composition
+build: a `core/` tier, per-preset `manifest.json` files declaring what to
+compose in, and a `dist/` directory to build into. None of those exist, so
+none of those fixtures survived. What replaces them is smaller, because the
+thing being modelled is smaller — a plugin is now just a directory.
+"""
 
 import json
 from pathlib import Path
 
 import pytest
 
+# A hook that declares its own wiring, which is all `scripts/stamp.py` needs to
+# generate a plugin's `hooks/hooks.json`. Kept deliberately minimal: tests that
+# care about hook *behaviour* run the real hooks, not this one.
+_DEMO_HOOK = '''#!/usr/bin/env python3
+"""SessionStart hook: a test double that does nothing and exits clean."""
+
+WORKSHOP_HOOK = {"event": "SessionStart"}
+
+import sys  # noqa: E402
+
+sys.exit(0)
+'''
+
+_RUN_HOOK = """#!/usr/bin/env bash
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$HOOK_DIR/scripts/$1" "${@:2}"
+"""
+
+
+def _skill(path: Path, slug: str, description: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "SKILL.md").write_text(
+        f"---\nname: {slug}\ndescription: {description}\n---\n\n# {slug}\n"
+    )
+
+
+def _agent(path: Path, slug: str, description: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "AGENT.md").write_text(
+        f"---\nname: {slug}\ndescription: {description}\nrole: builder\n---\n\n# {slug}\n"
+    )
+
 
 @pytest.fixture
-def make_preset():
-    """Build a minimal installable preset bundle on disk.
+def make_plugin():
+    """Build one plugin directory under ``<root>/plugins/<name>/``.
 
-    The installer tests each grew their own copy of this, differing only in
-    whether a `skills/` directory and a skill file were created — so a new
-    required manifest field had to be found and fixed in three places.
-
-    Parameters
-    ----------
-    skills : bool
-        Create the `skills/` directory. The CLI tests rely on its absence.
-    skill_file : str | None
-        Name of a skill file to write inside `skills/`, when one is needed.
-
-    Returns
-    -------
-    Callable[..., Path]
-        Builder returning the preset directory.
+    Returns the plugin dir. Every part is optional so a test can build the
+    smallest plugin that exercises what it cares about — a manifest-only plugin
+    is a legitimate shape now that nothing composes content into it.
     """
 
-    def _make_preset(
-        root: Path, name: str, *, skills: bool = True, skill_file: str | None = None
+    def _make(
+        root: Path,
+        name: str,
+        *,
+        version: str = "1.0.0",
+        description: str | None = None,
+        conventions: list[str] | None = None,
+        skills: list[str] | None = None,
+        agents: list[str] | None = None,
+        hooks: bool = False,
     ) -> Path:
-        plugin_dir = root / name / ".claude-plugin"
-        plugin_dir.mkdir(parents=True)
-        (plugin_dir / "plugin.json").write_text(
-            json.dumps({"name": name, "version": "1.0.0"})
-        )
-        if skills or skill_file:
-            (root / name / "skills").mkdir()
-        if skill_file:
-            (root / name / "skills" / skill_file).write_text("# skill")
-        return root / name
+        plugin = root / "plugins" / name
+        manifest_dir = plugin / ".claude-plugin"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        doc: dict[str, object] = {
+            "name": name,
+            "version": version,
+            "description": description or f"{name} test plugin",
+        }
+        if conventions:
+            doc["conventions"] = conventions
+        (manifest_dir / "plugin.json").write_text(json.dumps(doc, indent=2) + "\n")
 
-    return _make_preset
+        for slug in skills or []:
+            _skill(plugin / "skills" / slug, slug, f"Test skill {slug}.")
+        for slug in agents or []:
+            _agent(plugin / "agents" / slug, slug, f"Test agent {slug}.")
+
+        if hooks:
+            hooks_dir = plugin / "hooks"
+            (hooks_dir / "scripts").mkdir(parents=True, exist_ok=True)
+            (hooks_dir / "run-hook.sh").write_text(_RUN_HOOK)
+            (hooks_dir / "scripts" / "demo-hook.py").write_text(_DEMO_HOOK)
+
+        return plugin
+
+    return _make
 
 
 @pytest.fixture
-def tmp_repo(tmp_path: Path) -> Path:
-    """Create a minimal template repo structure for testing."""
-    core = tmp_path / "core"
-    core.mkdir()
+def flat_repo(tmp_path: Path, make_plugin) -> Path:
+    """A minimal but complete repo in the flat layout, ready to stamp.
 
-    skills = core / "skills"
-    skills.mkdir()
-    for skill_name in ["commit", "daa-code-review", "tdd"]:
-        skill_dir = skills / skill_name
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {skill_name}\ndescription: {skill_name} skill\n---\n\n"
-            f"# {skill_name} skill\n"
+    One plugin with every component class present, plus the two repo-level
+    inputs the stamper reads (`scripts/platform-support.json`) and writes into
+    (`docs/reference/`). Tests that need a second plugin add one with
+    ``make_plugin``.
+    """
+    make_plugin(
+        tmp_path,
+        "demo",
+        description="A demo plugin.",
+        conventions=["Test-driven development: write the failing test first"],
+        skills=["demo-skill"],
+        agents=["demo-agent"],
+        hooks=True,
+    )
+
+    (tmp_path / "plugins" / "demo" / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "plugins" / "demo" / "docs" / "tdd.md").write_text(
+        "# Test-Driven Development\n\nWrite the failing test first.\n"
+    )
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / "platform-support.json").write_text(
+        json.dumps(
+            {
+                "platforms": ["Claude Code", "Codex", "Cortex Code"],
+                "components": [
+                    {
+                        "name": "Skills",
+                        "cells": {
+                            platform: {
+                                "status": "works",
+                                "note": "Loads natively.",
+                                "compat": f"{platform} → Skills",
+                            }
+                            for platform in ("Claude Code", "Codex", "Cortex Code")
+                        },
+                    }
+                ],
+            },
+            indent=2,
         )
-
-    hooks = core / "hooks"
-    hooks.mkdir()
-    (hooks / "protect-files.py").write_text("# protect files hook")
-
-    agents = core / "agents"
-    agents.mkdir()
-    for agent_name, role in [("tdd-implementer", "implementer"), ("code-reviewer", "reviewer")]:
-        agent_dir = agents / agent_name
-        agent_dir.mkdir()
-        (agent_dir / "AGENT.md").write_text(
-            f"---\nname: {agent_name}\ndescription: {agent_name} agent\nrole: {role}\n---\n\n# {agent_name}\n"
-        )
-
-    docs = core / "docs"
-    docs.mkdir()
-    (docs / "agent-matching.md").write_text(
-        "# Agent-Matching Algorithm\n\nCanonical matching spec for tests.\n"
-    )
-    # Methodology docs bundled into every preset (#97); project.md must NOT ship.
-    for _doc in [
-        "tdd.md",
-        "root-cause-tracing.md",
-        "subagent-development.md",
-        "parallel-agents.md",
-    ]:
-        (docs / _doc).write_text(f"# {_doc}\n\nMethodology doc for tests.\n")
-    (docs / "project.md").write_text(
-        "# Project\n\nProject-specific — must not ship in a preset.\n"
+        + "\n"
     )
 
-    (core / "settings-base.json").write_text(json.dumps({
-        "hooks": {
-            "PreToolUse": [{"matcher": "Edit|Write", "hooks": [
-                {"type": "command", "command": 'python3 "$CLAUDE_PLUGIN_ROOT"/hooks/scripts/protect-files.py'}
-            ]}]
-        }
-    }))
-
-    presets = tmp_path / "presets"
-    presets.mkdir()
-
-    preset = presets / "python-api"
-    preset.mkdir()
-    (preset / "manifest.json").write_text(json.dumps({
-        "name": "python-api",
-        "description": "Python backend services",
-        "version": "1.0.0",
-        "core": {"skills": "all", "hooks": ["protect-files.py"]},
-        "exclude": [],
-        "preset_skills": ["deploy"],
-        "preset_hooks": ["post-edit-lint.py"],
-    }))
-    (preset / "settings-preset.json").write_text(json.dumps({
-        "hooks": {
-            "PostToolUse": [{"matcher": "Edit|Write", "hooks": [
-                {"type": "command", "command": 'python3 "$CLAUDE_PLUGIN_ROOT"/hooks/scripts/post-edit-lint.py'}
-            ]}]
-        }
-    }))
-
-    preset_skills = preset / "skills"
-    preset_skills.mkdir()
-    deploy_skill = preset_skills / "deploy"
-    deploy_skill.mkdir()
-    (deploy_skill / "SKILL.md").write_text(
-        "---\nname: deploy\ndescription: deploy skill\n---\n\n# deploy skill\n"
-    )
-
-    preset_hooks = preset / "hooks"
-    preset_hooks.mkdir()
-    (preset_hooks / "post-edit-lint.py").write_text("# lint hook")
-
-    preset_agents = preset / "agents"
-    preset_agents.mkdir()
-    api_builder = preset_agents / "api-builder"
-    api_builder.mkdir()
-    (api_builder / "AGENT.md").write_text(
-        "---\nname: api-builder\ndescription: Builds API endpoints\nrole: implementer\n---\n\n# API Builder\n"
-    )
-
-    (tmp_path / "dist").mkdir()
-
+    (tmp_path / "docs" / "reference").mkdir(parents=True, exist_ok=True)
     return tmp_path
-
-
-@pytest.fixture
-def bad_manifest_repo(tmp_repo: Path) -> Path:
-    """Create a repo with an invalid manifest (references nonexistent skill)."""
-    preset = tmp_repo / "presets" / "broken"
-    preset.mkdir()
-    (preset / "manifest.json").write_text(json.dumps({
-        "name": "broken",
-        "description": "Broken preset for testing",
-        "version": "0.1.0",
-        "core": {"skills": "all", "hooks": ["protect-files.py"]},
-        "exclude": [],
-        "preset_skills": ["nonexistent-skill"],
-        "preset_hooks": ["post-edit-lint.py"],
-    }))
-    (preset / "settings-preset.json").write_text(json.dumps({"hooks": {}}))
-
-    preset_hooks = preset / "hooks"
-    preset_hooks.mkdir()
-    (preset_hooks / "post-edit-lint.py").write_text("# lint hook")
-
-    return tmp_repo

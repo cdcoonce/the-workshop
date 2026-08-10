@@ -23,8 +23,11 @@ matcher normally filters this before the script ever runs, but Codex-style
 hosts may not honor matchers), or a missing/blank skill name.
 """
 
-import json
-import sys
+# Declares this hook's wiring for scripts/stamp.py to fold into hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "PostToolUse", "matcher": "^(Skill|skill)$"}
+
+import json  # noqa: E402
+import sys  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

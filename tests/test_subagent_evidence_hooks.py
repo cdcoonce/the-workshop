@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-START_HOOK = REPO_ROOT / "core" / "hooks" / "snapshot-subagent-start.py"
-STOP_HOOK = REPO_ROOT / "core" / "hooks" / "verify-subagent-evidence.py"
-GIT_BASELINE = REPO_ROOT / "core" / "hooks" / "_git_baseline.py"
+START_HOOK = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "snapshot-subagent-start.py"
+STOP_HOOK = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "verify-subagent-evidence.py"
+GIT_BASELINE = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "_git_baseline.py"
 
 _spec = importlib.util.spec_from_file_location("_git_baseline", GIT_BASELINE)
 _git_baseline = importlib.util.module_from_spec(_spec)

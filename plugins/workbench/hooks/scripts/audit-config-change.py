@@ -18,10 +18,13 @@ Fails open: any git/filesystem error still lets the session proceed, logging
 best-effort.
 """
 
-import json
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
+# scripts/stamp.py reads this to generate hooks/hooks.json for this plugin.
+WORKSHOP_HOOK = {"event": "ConfigChange", "matcher": "project_settings|local_settings|skills"}
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

@@ -7,9 +7,12 @@ Fails open: outside a git repo, or on any git error, there's simply nothing
 to snapshot and the paired stop hook will no-op too.
 """
 
-import json
-import sys
-from pathlib import Path
+# scripts/stamp.py parses this declaration to generate hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "SubagentStart"}
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

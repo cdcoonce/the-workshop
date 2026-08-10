@@ -13,10 +13,14 @@ Only blocks on a real contradiction; anything ambiguous (no snapshot, not a
 git repo, no completion-sounding claim in the message) fails open.
 """
 
-import json
-import re
-import sys
-from pathlib import Path
+# Hook wiring declaration, read statically by scripts/stamp.py to build
+# hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "SubagentStop"}
+
+import json  # noqa: E402
+import re  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

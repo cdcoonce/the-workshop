@@ -1,39 +1,41 @@
-"""Tests for the repo-reference-docs core skill and its staleness checker.
+"""Tests for the repo-reference-docs skill and its staleness checker.
 
-This skill absorbed `readme-generator`: one skill now owns the root README *and*
-`docs/reference/`, so a single pass keeps the front door and the deep set
-consistent instead of two skills policing a lane boundary.
+This skill absorbed `readme-generator`: one skill now owns the root README
+*and* `docs/reference/`, so a single pass keeps the front door and the deep
+set consistent instead of two skills policing a lane boundary.
+
+The flat plugin tree has no build step and no `dist/`: the skill lives
+directly at `plugins/workbench/skills/repo-reference-docs/`, which *is* what
+ships, so these tests read that source path straight rather than building a
+copy of workbench first.
 """
 
 import importlib.util
 import sys
 from pathlib import Path
 
-from scripts.build_preset import build_preset
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = REPO_ROOT / "core" / "skills" / "repo-reference-docs"
+SKILL_DIR = REPO_ROOT / "plugins" / "workbench" / "skills" / "repo-reference-docs"
 
 
 def _read_skill() -> str:
     return (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_repo_reference_docs_is_core_skill() -> None:
-    """The skill is owned by core/skills so it flows into workbench via core.skills=all."""
+def test_repo_reference_docs_ships_as_a_workbench_skill() -> None:
+    """The skill lives under workbench's own skills/, and that is what ships.
+
+    The old two-part check here -- "the skill exists under core/skills" plus a
+    second test that built workbench and checked the built copy -- collapses
+    to this one assertion: there is no composition step any more, so the
+    source path and the served path are the same path.
+    """
     assert (SKILL_DIR / "SKILL.md").is_file()
-
-
-def test_workbench_ships_repo_reference_docs(tmp_path: Path) -> None:
-    """workbench (core.skills: 'all') includes the skill in its built plugin."""
-    dist_path = build_preset("workbench", repo_root=REPO_ROOT, dist_root=tmp_path)
-    assert (dist_path / "skills" / "repo-reference-docs" / "SKILL.md").is_file()
 
 
 def test_readme_generator_is_gone() -> None:
     """The folded-in skill must not survive anywhere as an installable skill."""
-    assert not (REPO_ROOT / "core" / "skills" / "readme-generator").exists()
-    assert not (REPO_ROOT / "dist" / "workbench" / "skills" / "readme-generator").exists()
+    assert not any((REPO_ROOT / "plugins").glob("*/skills/readme-generator"))
 
 
 def test_skill_claims_the_readme_lane() -> None:

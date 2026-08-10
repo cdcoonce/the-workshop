@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; plugin-level hooks execute on all three (trust-gated on Codex, env caveats on Cortex), while personas activate on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**36 universal skills · 2 core agents · 11 hooks · 3 project presets · 7 persona plugins**
+**79 skills · 16 agents · 15 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -171,20 +171,19 @@ Hooks and settings don't survive a manual copy — they need the platform's own 
 
 The marketplace ships one everything-package plus focused extras. **`workbench`** carries the complete set — every core skill, every core and preset agent, all methodology docs, and the base hooks plus the auto-format lint hook. **Persona** plugins are output-style-only (voice layers, no skills). **`vault-ops`** is a domain-specific package that ships only its own skills. The table below is generated from each package's manifest.
 
-<!-- BEGIN GENERATED: presets-table -->
-| Preset | Kind | Skills | Agents | Conventions |
-| --- | --- | --- | --- | --- |
-| **`vault-ops`** | project | 27 | 0 | Frontmatter on every note; Wikilinks over bare references; Rebase-before-push git sync, refreshed handoff |
-| **`workbench`** | project | 44 | 10 | Test-driven development: write the failing test first; Regenerate docs and dist after changing any component; Progressive disclosure over monolithic instructions; Conventional commits; stage explicitly, never git add .; Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured |
-| **`workshop-maintainer`** | project | 12 | 6 | Inventory before reorganizing; Keep source ownership distinct from distribution membership; Regenerate docs and dist after changing any component |
-| **`advisor-product-design`** | persona | 1 | 0 | Artifact-first: reviews anchor to who the user is and what they decide; Position first, cite the pack, yield only to user evidence; Base/tuning/private layering — local/ is the owner's, never the repo's |
-| **`advisor-product-strategy`** | persona | 1 | 0 | Owner drives: 2-3 structural questions, then a committed read in the same message; Steelman duty: the strongest opposing case before endorsing the owner's lean; Base/tuning/private layering — local/ is the owner's, never the repo's |
-| **`persona-pair-programmer`** | persona | 0 | 0 | — |
-| **`persona-ship-it`** | persona | 0 | 0 | — |
-| **`persona-staff-eng-deep`** | persona | 0 | 0 | — |
-| **`persona-terse-staff-eng`** | persona | 0 | 0 | — |
-| **`persona-thinking-partner`** | persona | 0 | 0 | — |
-<!-- END GENERATED: presets-table -->
+<!-- BEGIN GENERATED: plugins-table -->
+| Plugin | Version | Skills | Agents | Hooks | Description |
+| --- | --- | --- | --- | --- | --- |
+| **`advisor-product-design`** | `0.2.0` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
+| **`advisor-product-strategy`** | `0.2.0` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
+| **`persona-pair-programmer`** | `1.1.0` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
+| **`persona-ship-it`** | `1.1.0` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
+| **`persona-staff-eng-deep`** | `1.1.0` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
+| **`persona-terse-staff-eng`** | `1.1.0` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
+| **`persona-thinking-partner`** | `1.1.0` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
+| **`workbench`** | `4.0.0` | 70 | 10 | 10 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workshop-maintainer`** | `2.0.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+<!-- END GENERATED: plugins-table -->
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, what preset-specific overrides to layer on top, and the `conventions` shown above. See the [presets reference](docs/reference/presets.md) for the skills, agents, and hooks each one ships.
 
@@ -192,102 +191,89 @@ Each preset's `manifest.json` controls which core components to include, which t
 
 ## Skills
 
-### Universal Skills
-
-These ship with every preset:
-
 <!-- BEGIN GENERATED: skills-table -->
-| Skill | Summary | Presets |
+| Skill | Plugin | Summary |
 | --- | --- | --- |
-| `/adversarial-review` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. | workbench |
-| `/blueprint` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. | workbench |
-| `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. | workbench |
-| `/commit` | Git commit workflow with enforced conventional commit style. | workbench, workshop-maintainer |
-| `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. | workbench |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. | workbench, workshop-maintainer |
-| `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. | workbench |
-| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. | workbench |
-| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. | workbench |
-| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). | workbench |
-| `/drain-queue` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. | workbench |
-| `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. | workbench |
-| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. | workbench |
-| `/gitlab-cli` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. | workbench |
-| `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | workbench, workshop-maintainer |
-| `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. | workbench |
-| `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. | workbench |
-| `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. | workbench |
-| `/prd-to-issues` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. | workbench |
-| `/prd-to-plan` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. | workbench |
-| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. | workbench |
-| `/repo-reference-docs` | Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). | workbench |
-| `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). | workbench |
-| `/security-review` | Security code review for vulnerabilities with confidence-based reporting. | workbench |
-| `/setup-pre-commit` | Set up pre-commit hooks for the current repo. | workbench |
-| `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. | workbench |
-| `/sql-deploy-precheck` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. | workbench |
-| `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. | workbench |
-| `/tdd` | Test-driven development with red-green-refactor loop. | workbench, workshop-maintainer |
-| `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. | workbench |
-| `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. | workbench |
-| `/triage-quarantine` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. | workbench |
-| `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. | all |
-| `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. | workbench |
-| `/worktree-audit` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. | workbench |
-| `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. | workbench |
+| `/add-the-workshop-hook` | `workshop-maintainer` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. |
+| `/adversarial-review` | `workbench` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
+| `/advisor-product-design` | `advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. |
+| `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
+| `/blueprint` | `workbench` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. |
+| `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/chart-taste` | `workbench` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
+| `/commit` | `workbench` | Git commit workflow with enforced conventional commit style. |
+| `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
+| `/daa-code-review` | `workbench` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. |
+| `/dagster-expert` | `workbench` | Expert guidance for working with Dagster and the dg CLI. |
+| `/data-discovery` | `workbench` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
+| `/dbt-expert` | `workbench` | Expert guidance for working with dbt Core. |
+| `/design-an-interface` | `workbench` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
+| `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
+| `/dev-cycle` | `workbench` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
+| `/dignified-python` | `workbench` | Production Python coding standards with automatic version detection (3.10-3.13). |
+| `/drain-queue` | `workbench` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. |
+| `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
+| `/github-cli` | `workbench` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
+| `/gitlab-cli` | `workbench` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. |
+| `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
+| `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
+| `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
+| `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
+| `/land-skill-candidate` | `workshop-maintainer` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. |
+| `/mr-merge-order` | `workbench` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. |
+| `/mr-review-fixes` | `workbench` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. |
+| `/persona-builder` | `workshop-maintainer` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
+| `/plan-ceo-review` | `workbench` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
+| `/prd-to-issues` | `workbench` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. |
+| `/prd-to-plan` | `workbench` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. |
+| `/project-context` | `workbench` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. |
+| `/react-ui-ux` | `workbench` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. |
+| `/repo-reference-docs` | `workbench` | Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). |
+| `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
+| `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
+| `/setup-pre-commit` | `workbench` | Set up pre-commit hooks for the current repo. |
+| `/shared-tree-safety` | `workbench` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
+| `/skill-inventory` | `workshop-maintainer` | Audits agent skills and their package boundaries. |
+| `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
+| `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
+| `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. |
+| `/tdd` | `workbench` | Test-driven development with red-green-refactor loop. |
+| `/transcript-notes` | `workbench` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
+| `/triage-issue` | `workbench` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
+| `/triage-quarantine` | `workbench` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. |
+| `/using-workflow` | `workbench` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
+| `/vault-audit` | `workbench` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. |
+| `/vault-budget` | `workbench` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. |
+| `/vault-clickup-task-sync` | `workbench` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. |
+| `/vault-cold-read` | `workbench` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. |
+| `/vault-connect` | `workbench` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. |
+| `/vault-context-then-delegate` | `workbench` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. |
+| `/vault-debrief` | `workbench` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. |
+| `/vault-dispatch` | `workbench` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. |
+| `/vault-dump` | `workbench` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. |
+| `/vault-essay` | `workbench` | Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. |
+| `/vault-find` | `workbench` | Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. |
+| `/vault-fix-issue` | `workbench` | Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. |
+| `/vault-garden` | `workbench` | Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. |
+| `/vault-grill` | `workbench` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. |
+| `/vault-handoff` | `workbench` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. |
+| `/vault-init` | `workbench` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. |
+| `/vault-link` | `workbench` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. |
+| `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. |
+| `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
+| `/vault-recall` | `workbench` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
+| `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
+| `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
+| `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
+| `/vault-upgrade` | `workbench` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. |
+| `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. |
+| `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
+| `/walkthrough` | `workbench` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |
+| `/warehouse-sql-test-harness` | `workbench` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. |
+| `/workshop-skill-creator` | `workshop-maintainer` | Creates and revises skills owned by The Workshop repository. |
+| `/worktree-audit` | `workbench` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
+| `/write-a-prd` | `workbench` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
 <!-- END GENERATED: skills-table -->
-
-### Preset-Specific Skills
-
-These ship only with the presets that declare them:
-
-<!-- BEGIN GENERATED: preset-skills-table -->
-| Skill | Summary | Presets |
-| --- | --- | --- |
-| `/add-the-workshop-hook` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. | workshop-maintainer |
-| `/advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. | advisor-product-design |
-| `/advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. | advisor-product-strategy |
-| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. | workbench |
-| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. | workbench |
-| `/data-discovery` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. | workbench |
-| `/dbt-expert` | Expert guidance for working with dbt Core. | workbench |
-| `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. | workbench |
-| `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). | workbench |
-| `/improve-skill` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. | workshop-maintainer |
-| `/land-skill-candidate` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. | workshop-maintainer |
-| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. | workshop-maintainer |
-| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. | workbench |
-| `/skill-inventory` | Audits agent skills and their package boundaries. | workshop-maintainer |
-| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. | workshop-maintainer |
-| `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. | vault-ops |
-| `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. | vault-ops |
-| `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. | vault-ops |
-| `/vault-cold-read` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. | vault-ops |
-| `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. | vault-ops |
-| `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. | vault-ops |
-| `/vault-debrief` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. | vault-ops |
-| `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. | vault-ops |
-| `/vault-dump` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. | vault-ops |
-| `/vault-essay` | Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. | vault-ops |
-| `/vault-find` | Run Charles's vault (The Vault) /find semantic vault search workflow, including reindex and status modes. | vault-ops |
-| `/vault-fix-issue` | Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. | vault-ops |
-| `/vault-garden` | Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. | vault-ops |
-| `/vault-grill` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. | vault-ops |
-| `/vault-handoff` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. | vault-ops |
-| `/vault-init` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. | vault-ops |
-| `/vault-link` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. | vault-ops |
-| `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. | vault-ops |
-| `/vault-pulse` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. | vault-ops |
-| `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. | vault-ops |
-| `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. | vault-ops |
-| `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. | vault-ops |
-| `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. | vault-ops |
-| `/vault-upgrade` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. | vault-ops |
-| `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. | vault-ops |
-| `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. | vault-ops |
-| `/walkthrough` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. | workbench |
-| `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. | workshop-maintainer |
-<!-- END GENERATED: preset-skills-table -->
 
 Full descriptions for every skill live in the [skills reference](docs/reference/skills.md).
 
@@ -297,39 +283,26 @@ Full descriptions for every skill live in the [skills reference](docs/reference/
 
 Agents are specialized role definitions (`AGENT.md` with YAML frontmatter) that give subagents domain expertise. Each agent is self-contained — it declares a **role** (`implementer`, `reviewer`, etc.) and its own skill set directly via `skills.add`/`skills.remove` in the frontmatter. A preset agent with the same name as a core agent **replaces** it (override semantics, not merge).
 
-### Core Agents
-
-These ship with every preset:
-
-<!-- BEGIN GENERATED: agents-core-table -->
-| Agent | Role | Skills | Presets |
+<!-- BEGIN GENERATED: agents-table -->
+| Agent | Plugin | Role | Skills |
 | --- | --- | --- | --- |
-| **code-reviewer** | `reviewer` | `daa-code-review`, `dignified-python` | workbench |
-| **tdd-implementer** | `implementer` | `tdd`, `commit`, `dignified-python` | workbench |
-<!-- END GENERATED: agents-core-table -->
-
-### Preset Agents
-
-Each preset adds domain-specific agents that override or extend the core set:
-
-<!-- BEGIN GENERATED: agents-preset-table -->
-| Agent | Role | Skills | Presets |
-| --- | --- | --- | --- |
-| **analysis-builder** | `implementer` | `tdd`, `commit` | workbench |
-| **api-builder** | `implementer` | `tdd`, `commit` | workbench |
-| **backend-builder** | `implementer` | `tdd`, `commit` | workbench |
-| **data-quality-reviewer** | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
-| **frontend-builder** | `implementer` | `tdd`, `commit`, `react-ui-ux` | workbench |
-| **pipeline-builder** | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` | workbench |
-| **qa-tester** | `qa-tester` | — | workshop-maintainer |
-| **security-reviewer** | `reviewer` | `daa-code-review` | workbench |
-| **skill-analyst** | `analyst` | — | workshop-maintainer |
-| **skill-builder** | `implementer` | `tdd`, `commit` | workshop-maintainer |
-| **skill-reviewer** | `reviewer` | `daa-code-review` | workshop-maintainer |
-| **skill-writer** | `skill-writer` | — | workshop-maintainer |
-| **strategy** | `strategy` | — | workshop-maintainer |
-| **ux-reviewer** | `reviewer` | `daa-code-review` | workbench |
-<!-- END GENERATED: agents-preset-table -->
+| **analysis-builder** | `workbench` | `implementer` | `tdd`, `commit` |
+| **api-builder** | `workbench` | `implementer` | `tdd`, `commit` |
+| **backend-builder** | `workbench` | `implementer` | `tdd`, `commit` |
+| **code-reviewer** | `workbench` | `reviewer` | `daa-code-review`, `dignified-python` |
+| **data-quality-reviewer** | `workbench` | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` |
+| **frontend-builder** | `workbench` | `implementer` | `tdd`, `commit`, `react-ui-ux` |
+| **pipeline-builder** | `workbench` | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` |
+| **qa-tester** | `workshop-maintainer` | `qa-tester` | — |
+| **security-reviewer** | `workbench` | `reviewer` | `daa-code-review` |
+| **skill-analyst** | `workshop-maintainer` | `analyst` | — |
+| **skill-builder** | `workshop-maintainer` | `implementer` | `tdd`, `commit` |
+| **skill-reviewer** | `workshop-maintainer` | `reviewer` | `daa-code-review` |
+| **skill-writer** | `workshop-maintainer` | `skill-writer` | — |
+| **strategy** | `workshop-maintainer` | `strategy` | — |
+| **tdd-implementer** | `workbench` | `implementer` | `tdd`, `commit`, `dignified-python` |
+| **ux-reviewer** | `workbench` | `reviewer` | `daa-code-review` |
+<!-- END GENERATED: agents-table -->
 
 See the [agents reference](docs/reference/agents.md) for full descriptions.
 
@@ -340,19 +313,23 @@ See the [agents reference](docs/reference/agents.md) for full descriptions.
 Hooks are scripts wired to Claude Code lifecycle events. The base set ships with every project preset; personas wire only their SessionStart injector. The event column is derived from the settings wiring, not the hook's name. **Plugin-level hooks execute on Claude Code only today** — Codex removed plugin hooks and Cortex never reads them (see [Platform Support](#platform-support)).
 
 <!-- BEGIN GENERATED: hooks-table -->
-| Hook | Event | Summary | Presets |
+| Hook | Plugin | Event | Summary |
 | --- | --- | --- | --- |
-| `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. | all |
-| `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. | all |
-| `inject_persona.py` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. | persona-pair-programmer, persona-ship-it, persona-staff-eng-deep, persona-terse-staff-eng, persona-thinking-partner |
-| `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is | workbench |
-| `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. | all |
-| `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. | all |
-| `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. | all |
-| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. | vault-ops |
-| `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. | all |
-| `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. | all |
-| `warn-off-trunk.py` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. | all |
+| `audit-config-change.py` | `workbench` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. |
+| `inject-skill-router.py` | `workbench` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. |
+| `inject_persona.py` | `persona-pair-programmer` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-ship-it` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-staff-eng-deep` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-terse-staff-eng` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `inject_persona.py` | `persona-thinking-partner` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `post-edit-lint.py` | `workbench` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
+| `protect-files.py` | `workbench` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
+| `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
+| `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
+| `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
+| `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
+| `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
 <!-- END GENERATED: hooks-table -->
 
 See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference](docs/reference/build-and-wiring.md) for details.
@@ -364,13 +341,13 @@ See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference
 Methodology documents in `core/docs/` define how Claude Code agents should work. They are bundled into every preset under `docs/`:
 
 <!-- BEGIN GENERATED: methodology-table -->
-| Document | Summary |
-| --- | --- |
-| [`agent-matching.md`](../../core/docs/agent-matching.md) | This document is the canonical specification for how orchestrators select agents when dispatching subagents. All orchestrators — dev-cycle, subagent-development, parallel-agents — follow this algorithm. |
-| [`parallel-agents.md`](../../core/docs/parallel-agents.md) | When you have multiple unrelated failures (different test files, different subsystems, different bugs), investigating them sequentially wastes time. Each investigation is independent and can happen in parallel. |
-| [`root-cause-tracing.md`](../../core/docs/root-cause-tracing.md) | Bugs often manifest deep in the call stack (file created in wrong location, database opened with wrong path). Your instinct is to fix where the error appears, but that's treating a symptom. |
-| [`subagent-development.md`](../../core/docs/subagent-development.md) | Execute a plan by dispatching a fresh subagent per task, with code review after each. |
-| [`tdd.md`](../../core/docs/tdd.md) | Write the test first. Watch it fail. Write minimal code to pass. |
+| Document | Plugin | Summary |
+| --- | --- | --- |
+| [`agent-matching.md`](../../plugins/workbench/docs/agent-matching.md) | `workbench` | This document is the canonical specification for how orchestrators select agents when dispatching subagents. All orchestrators — dev-cycle, subagent-development, parallel-agents — follow this algorithm. |
+| [`parallel-agents.md`](../../plugins/workbench/docs/parallel-agents.md) | `workbench` | When you have multiple unrelated failures (different test files, different subsystems, different bugs), investigating them sequentially wastes time. Each investigation is independent and can happen in parallel. |
+| [`root-cause-tracing.md`](../../plugins/workbench/docs/root-cause-tracing.md) | `workbench` | Bugs often manifest deep in the call stack (file created in wrong location, database opened with wrong path). Your instinct is to fix where the error appears, but that's treating a symptom. |
+| [`subagent-development.md`](../../plugins/workbench/docs/subagent-development.md) | `workbench` | Execute a plan by dispatching a fresh subagent per task, with code review after each. |
+| [`tdd.md`](../../plugins/workbench/docs/tdd.md) | `workbench` | Write the test first. Watch it fail. Write minimal code to pass. |
 <!-- END GENERATED: methodology-table -->
 
 Full summaries are in the [methodology reference](docs/reference/methodology.md).

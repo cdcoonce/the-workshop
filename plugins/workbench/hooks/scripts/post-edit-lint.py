@@ -6,11 +6,14 @@ so the single workbench hook covers every project type the old per-preset hooks
 did (Ruff-only / +Prettier / +ESLint+Stylelint) without misformatting a project
 that lacks a given tool."""
 
-import json
-import os
-import shutil
-import subprocess
-import sys
+# scripts/stamp.py reads this to generate hooks/hooks.json.
+WORKSHOP_HOOK = {"event": "PostToolUse", "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit"}
+
+import json  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
 
 try:
     data = json.load(sys.stdin)

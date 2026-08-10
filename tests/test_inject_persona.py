@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-HOOK_PATH = Path(__file__).resolve().parents[1] / "core" / "hooks" / "inject_persona.py"
+HOOK_PATH = Path(__file__).resolve().parents[1] / "plugins" / "workbench" / "hooks" / "inject_persona.py"
 
 _spec = importlib.util.spec_from_file_location("inject_persona", HOOK_PATH)
 inject_persona = importlib.util.module_from_spec(_spec)

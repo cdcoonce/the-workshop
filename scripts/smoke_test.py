@@ -1,4 +1,8 @@
-"""Validate internal consistency of a built plugin.
+"""Validate internal consistency of a source plugin directory.
+
+Plugins ship directly from ``plugins/<name>/`` — what is on disk is what
+ships, with no build step in between. This module validates that tree
+in place.
 
 Checks:
 - .claude-plugin/plugin.json exists with required fields (name, version, description)
@@ -7,12 +11,13 @@ Checks:
 - Agent names match their directory names
 - Agent roles are one of the documented roles (see VALID_ROLES)
 - Agent skills.add references resolve to existing skills in skills/
-- hooks/hooks.json references scripts that exist in hooks/scripts/
+- hooks/hooks.json references scripts (via the run-hook.sh dispatcher) that
+  exist in hooks/scripts/
 - Every relative link or backtick-quoted path in bundled skill/agent docs
   resolves within that skill/agent directory
 - settings.json at root is valid JSON
 - Every machinery/engine/ file referenced by machinery/tests/ (imports and
-  SCRIPTS_DIR path literals) exists in the build output
+  SCRIPTS_DIR path literals) exists in the plugin
 """
 
 from __future__ import annotations
@@ -43,69 +48,6 @@ _LINK_SKIP_PREFIXES = ("#", ".claude/")
 _URI_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 _LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-
-# Authoring budget from workshop-skill-creator/references/quality-criteria.md.
-SKILL_LINE_CAP = 100
-
-# Frozen at #281: the skills that already exceeded SKILL_LINE_CAP when this
-# check was introduced. Shrink-only — remove an entry once its SKILL.md drops
-# under the cap; never add a new one (see SKILL_LINE_CAP_ALLOWLIST_BASELINE).
-# Fully burned down: every grandfathered skill has been slimmed under the cap,
-# so the cap now applies to every core skill with no exceptions.
-SKILL_LINE_CAP_ALLOWLIST: frozenset[str] = frozenset()
-
-# High-water mark for SKILL_LINE_CAP_ALLOWLIST, frozen independently of it so
-# an edit to the allowlist above can't silently drag this along. Never edit
-# this set — it exists only so _validate_allowlist_shrink_only can detect a
-# future addition to SKILL_LINE_CAP_ALLOWLIST.
-SKILL_LINE_CAP_ALLOWLIST_BASELINE = frozenset(
-    {
-        "add-the-workshop-hook",
-        "commit",
-        "daa-code-review",
-        "dev-cycle",
-        "dignified-python",
-        "github-cli",
-        "grill-me",
-        "plan-ceo-review",
-        "prd-to-plan",
-        "project-context",
-        "readme-generator",
-        "tdd",
-        "triage-issue",
-    }
-)
-
-# Frontmatter keys a SKILL.md may declare (workshop-skill-creator criteria).
-_SKILL_FRONTMATTER_ALLOWED_KEYS = frozenset({"name", "description"})
-
-
-def _validate_allowlist_shrink_only(
-    current: frozenset[str], baseline: frozenset[str]
-) -> list[str]:
-    """Check that a grandfather allowlist has only shrunk from its baseline.
-
-    Parameters
-    ----------
-    current
-        The active allowlist.
-    baseline
-        The frozen snapshot captured when the allowlist was introduced.
-
-    Returns
-    -------
-    list[str]
-        Error strings for any entries in ``current`` but not ``baseline``.
-    """
-    added = sorted(current - baseline)
-    if not added:
-        return []
-    return [
-        f"SKILL_LINE_CAP_ALLOWLIST added entries {added} not present in "
-        "SKILL_LINE_CAP_ALLOWLIST_BASELINE — the allowlist is shrink-only, "
-        "remove them instead"
-    ]
-
 
 # Matches a backtick-quoted inline token, e.g. `references/foo.md`.
 _BACKTICK_PATTERN = re.compile(r"`([^`\n]+)`")
@@ -446,45 +388,6 @@ def _lint_trigger_overlaps(descriptions: dict[str, str]) -> list[str]:
     return findings
 
 
-def _core_skill_names(
-    dist_path: Path, core_skills_dir: Path | None = None
-) -> frozenset[str]:
-    """Names of skills sourced from core/skills/, given a built plugin path.
-
-    The skill-authoring budget checks (line cap, frontmatter shape, reference
-    depth) enforce this repo's own authoring standard and apply only to core
-    skills, not preset-specific skills bundled alongside them in the same
-    built ``skills/`` directory.
-
-    Parameters
-    ----------
-    dist_path
-        Path to the built plugin directory (e.g., dist/python-api/), expected
-        at ``<repo_root>/dist/<preset_name>`` unless ``core_skills_dir`` is
-        given.
-    core_skills_dir
-        Explicit core/skills directory. Required whenever ``dist_path`` does
-        not sit at ``<repo_root>/dist/<preset_name>`` (a hermetic test build),
-        where the parent-hop derivation below would find nothing and silently
-        disable every core-skill check.
-
-    Returns
-    -------
-    frozenset[str]
-        Directory names under core/skills/, or an empty set if core/skills/
-        can't be located relative to ``dist_path``.
-    """
-    if core_skills_dir is None:
-        core_skills_dir = dist_path.parent.parent / "core" / "skills"
-        if not core_skills_dir.is_dir():
-            return frozenset()
-    elif not core_skills_dir.is_dir():
-        # An explicit override that points nowhere would silently disable the
-        # core-skill checks — the exact trap the parameter exists to avoid.
-        raise ValueError(f"core_skills_dir is not a directory: {core_skills_dir}")
-    return frozenset(d.name for d in core_skills_dir.iterdir() if d.is_dir())
-
-
 # Third-party modules the machinery test runner provides at gate time (see the
 # Makefile's test-machinery step); imports of these are not engine references.
 _MACHINERY_EXTERNAL_MODULES = frozenset({"pytest", "hypothesis", "numpy", "yaml"})
@@ -496,9 +399,12 @@ _MACHINERY_IMPORT_PATTERN = re.compile(
 
 # Engine file references built from the tests' SCRIPTS_DIR anchor, e.g.
 # `SCRIPTS_DIR / "session-stop.py"` or `SCRIPTS_DIR / "queries" / "x.py"`.
-_MACHINERY_PATH_REFERENCE = re.compile(
-    r'SCRIPTS_DIR\s*/\s*"([^"\n]+)"(?:\s*/\s*"([^"\n]+)")?'
-)
+# Captures the *entire* chain of quoted `/ "segment"` hops after SCRIPTS_DIR
+# (upstream #644: a fixed one-or-two-segment cap silently truncated 3+-segment
+# references, so a broken third segment never got checked). The chain is
+# split into individual segments by `_MACHINERY_PATH_SEGMENT` below.
+_MACHINERY_PATH_REFERENCE = re.compile(r'SCRIPTS_DIR((?:\s*/\s*"[^"\n]+")+)')
+_MACHINERY_PATH_SEGMENT = re.compile(r'"([^"\n]+)"')
 
 
 def _validate_machinery(machinery_dir: Path) -> list[str]:
@@ -512,8 +418,8 @@ def _validate_machinery(machinery_dir: Path) -> list[str]:
     Parameters
     ----------
     machinery_dir
-        The built ``machinery/`` directory inside a dist plugin tree,
-        expected to hold ``engine/`` and ``tests/`` subtrees.
+        The ``machinery/`` directory inside a plugin tree, expected to hold
+        ``engine/`` and ``tests/`` subtrees.
 
     Returns
     -------
@@ -544,17 +450,16 @@ def _validate_machinery(machinery_dir: Path) -> list[str]:
                 continue
             errors.append(
                 f"machinery test '{test_file.name}' imports '{module_name}' "
-                f"but machinery/engine/{module_name}.py is not in the build "
-                f"output"
+                f"but machinery/engine/{module_name}.py is not in the plugin"
             )
 
-        for parts in _MACHINERY_PATH_REFERENCE.findall(text):
-            relative = "/".join(p for p in parts if p)
+        for match in _MACHINERY_PATH_REFERENCE.finditer(text):
+            segments = _MACHINERY_PATH_SEGMENT.findall(match.group(1))
+            relative = "/".join(segments)
             if not (engine_dir / relative).exists():
                 errors.append(
                     f"machinery test '{test_file.name}' references "
-                    f"machinery/engine/{relative} but it is not in the build "
-                    f"output"
+                    f"machinery/engine/{relative} but it is not in the plugin"
                 )
 
     return errors
@@ -586,7 +491,7 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
             if not (engine_dir / script).is_file():
                 errors.append(
                     f"machinery wiring spec names '{script}' but "
-                    f"machinery/engine/{script} is not in the build output"
+                    f"machinery/engine/{script} is not in the plugin"
                 )
 
     rendered_dir = machinery_dir / "rendered"
@@ -625,21 +530,37 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
     return errors
 
 
-def smoke_test(
-    dist_path: Path, *, core_skills_dir: Path | None = None
-) -> SmokeTestResult:
-    """Validate internal consistency of a built plugin.
+def _resolve_skill_slug(plugin_path: Path, slug: str) -> Path | None:
+    """Find the one plugin that ships ``slug``, or None if nothing does.
+
+    Resolution is a flat glob across every sibling plugin, which is only
+    unambiguous because slug uniqueness is a global invariant enforced at stamp
+    time. If that invariant ever lapses this returns an arbitrary winner — so
+    the stamper's duplicate-slug failure is what keeps this function honest,
+    not anything here.
+
+    Falls back to the plugin's own ``skills/`` when it has no siblings, which is
+    the case for a synthetic single-plugin tree in a test.
+    """
+    own = plugin_path / "skills" / slug
+    if own.is_dir():
+        return own
+    plugins_root = plugin_path.parent
+    for candidate in sorted(plugins_root.glob(f"*/skills/{slug}")):
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def smoke_test(plugin_path: Path) -> SmokeTestResult:
+    """Validate internal consistency of a source plugin directory.
 
     Parameters
     ----------
-    dist_path
-        Path to the built plugin directory (e.g., dist/python-api/).
-    core_skills_dir
-        Explicit core/skills directory for classifying core vs preset skills.
-        Pass it whenever ``dist_path`` is not ``<repo_root>/dist/<preset>``
-        (e.g. a build_preset(dist_root=...) output), where the default
-        derivation cannot find core/skills and the core-skill authoring
-        checks would silently not run.
+    plugin_path
+        Path to the plugin directory (e.g., plugins/workbench/). Plugins ship
+        directly from this tree — there is no build step, so this validates
+        what is on disk, not a derived artifact.
 
     Returns
     -------
@@ -648,14 +569,8 @@ def smoke_test(
     """
     result = SmokeTestResult()
 
-    result.errors.extend(
-        _validate_allowlist_shrink_only(
-            SKILL_LINE_CAP_ALLOWLIST, SKILL_LINE_CAP_ALLOWLIST_BASELINE
-        )
-    )
-
     # 1. Validate .claude-plugin/plugin.json
-    plugin_json_path = dist_path / ".claude-plugin" / "plugin.json"
+    plugin_json_path = plugin_path / ".claude-plugin" / "plugin.json"
     if not plugin_json_path.exists():
         result.errors.append("plugin.json not found at .claude-plugin/plugin.json")
         return result
@@ -673,8 +588,7 @@ def smoke_test(
             )
 
     # 2. Validate skills: every directory in skills/ has a valid SKILL.md
-    skills_dir = dist_path / "skills"
-    core_skill_names = _core_skill_names(dist_path, core_skills_dir)
+    skills_dir = plugin_path / "skills"
     skill_descriptions: dict[str, str] = {}
     if skills_dir.exists():
         for skill_dir in sorted(skills_dir.iterdir()):
@@ -687,19 +601,7 @@ def smoke_test(
                 )
                 continue
 
-            is_core_skill = skill_dir.name in core_skill_names
             skill_md_text = skill_md.read_text(encoding="utf-8")
-
-            if is_core_skill:
-                line_count = len(skill_md_text.splitlines())
-                if (
-                    line_count > SKILL_LINE_CAP
-                    and skill_dir.name not in SKILL_LINE_CAP_ALLOWLIST
-                ):
-                    result.errors.append(
-                        f"Skill '{skill_dir.name}/SKILL.md' has {line_count} "
-                        f"lines, exceeding the {SKILL_LINE_CAP}-line cap"
-                    )
 
             frontmatter = _parse_frontmatter(skill_md_text)
             if frontmatter is None:
@@ -726,31 +628,12 @@ def smoke_test(
                         f"trigger-only: found {markers_str}"
                     )
 
-            if is_core_skill:
-                extra_keys = sorted(set(frontmatter) - _SKILL_FRONTMATTER_ALLOWED_KEYS)
-                if extra_keys:
-                    result.errors.append(
-                        f"Skill '{skill_dir.name}/SKILL.md' frontmatter has "
-                        f"unexpected keys {extra_keys} (only 'name' and "
-                        "'description' allowed)"
-                    )
-
-                references_dir = skill_dir / "references"
-                if references_dir.exists():
-                    for entry in references_dir.rglob("*"):
-                        if entry.is_dir():
-                            result.errors.append(
-                                f"Skill '{skill_dir.name}/references' has "
-                                f"nested directory '{entry.relative_to(skill_dir)}' "
-                                "— references must be one level deep"
-                            )
-
     # 2b. Cross-skill: no two skills may claim the same distinctive trigger.
     for overlap in _lint_trigger_overlaps(skill_descriptions):
         result.errors.append(f"Trigger collision — {overlap}")
 
     # 3. Validate agents: every directory in agents/ has a valid AGENT.md
-    agents_dir = dist_path / "agents"
+    agents_dir = plugin_path / "agents"
     if agents_dir.exists():
         for agent_dir in sorted(agents_dir.iterdir()):
             if not agent_dir.is_dir():
@@ -794,19 +677,32 @@ def smoke_test(
                     f"match directory name '{agent_dir.name}'"
                 )
 
-            # Validate skills.add references
+            # Validate skills.add references against the WHOLE plugins/ tree,
+            # not just this plugin's own skills/.
+            #
+            # Under the composition build an agent could only name a skill its
+            # own preset composed in, because each preset was a closed bundle.
+            # Flat plugins are not closed: one slug lives in exactly one plugin
+            # (a global invariant `stamp.py` enforces), and a plugin relies on
+            # its siblings being enabled — workshop-maintainer's agents reach
+            # for `tdd`, `commit`, and `daa-code-review`, which are workbench's,
+            # the same way its skills rely on workbench's hooks being present.
+            # Scoping this check to the plugin would make that arrangement
+            # unrepresentable and force three skills to be duplicated, which is
+            # the thing slug uniqueness exists to prevent.
             skills_config = frontmatter.get("skills", {})
             if isinstance(skills_config, dict):
                 for skill_ref in skills_config.get("add", []):
-                    if not skills_dir.exists() or not (skills_dir / skill_ref).is_dir():
+                    if not _resolve_skill_slug(plugin_path, skill_ref):
                         result.errors.append(
                             f"Agent '{agent_dir.name}/AGENT.md' references skill "
-                            f"'{skill_ref}' in skills.add but skill not found "
-                            f"in skills/"
+                            f"'{skill_ref}' in skills.add but no plugin ships it"
                         )
 
-    # 4. Validate hooks: hooks.json references scripts that exist in hooks/scripts/
-    hooks_json_path = dist_path / "hooks" / "hooks.json"
+    # 4. Validate hooks: hooks.json references scripts (dispatched through the
+    # run-hook.sh wrapper as `run-hook.sh [--uv] <script> [args...]`) that
+    # exist in hooks/scripts/.
+    hooks_json_path = plugin_path / "hooks" / "hooks.json"
     if hooks_json_path.exists():
         try:
             hooks_data = json.loads(hooks_json_path.read_text(encoding="utf-8"))
@@ -814,13 +710,18 @@ def smoke_test(
             result.errors.append("hooks/hooks.json is not valid JSON")
             hooks_data = {}
 
-        hooks_scripts_dir = dist_path / "hooks" / "scripts"
+        hooks_scripts_dir = plugin_path / "hooks" / "scripts"
         for hook_type, hook_entries in hooks_data.get("hooks", {}).items():
             for entry in hook_entries:
                 for hook in entry.get("hooks", []):
                     command = hook.get("command", "")
-                    # Extract script filename from $CLAUDE_PLUGIN_ROOT/hooks/scripts/<file>
-                    hook_match = re.search(r'hooks/scripts/([^\s"]+)', command)
+                    # Extract the script name dispatched through run-hook.sh,
+                    # e.g. `.../hooks/run-hook.sh protect-files.py` or, with
+                    # the optional uv-runner flag, `run-hook.sh --uv
+                    # inject_persona.py`.
+                    hook_match = re.search(
+                        r'run-hook\.sh\s+(?:--uv\s+)?([^\s"]+)', command
+                    )
                     if hook_match:
                         script_name = hook_match.group(1)
                         if not (hooks_scripts_dir / script_name).exists():
@@ -838,7 +739,7 @@ def smoke_test(
         result.errors.extend(_validate_doc_links(agents_dir, "AGENT.md", "Agent"))
 
     # 6. Validate settings.json is valid JSON
-    settings_path = dist_path / "settings.json"
+    settings_path = plugin_path / "settings.json"
     if settings_path.exists():
         try:
             json.loads(settings_path.read_text(encoding="utf-8"))
@@ -846,9 +747,9 @@ def smoke_test(
             result.errors.append("settings.json is not valid JSON")
 
     # 7. Validate the machinery payload: every engine file its tests reference
-    # must exist in the build output (the wired-but-not-shipped guard of
-    # check 4, applied to machinery).
-    machinery_dir = dist_path / "machinery"
+    # must exist in the plugin (the wired-but-not-shipped guard of check 4,
+    # applied to machinery).
+    machinery_dir = plugin_path / "machinery"
     if machinery_dir.exists():
         result.errors.extend(_validate_machinery(machinery_dir))
         result.errors.extend(_validate_machinery_wiring(machinery_dir))
@@ -857,20 +758,23 @@ def smoke_test(
 
 
 if __name__ == "__main__":
-    from scripts.build_preset import build_preset
-
     if len(sys.argv) != 2:
-        print("Usage: uv run python -m scripts.smoke_test <preset_name>")
+        print("Usage: uv run python -m scripts.smoke_test <plugin_name>")
         sys.exit(1)
 
-    preset_name = sys.argv[1]
-    dist_path = build_preset(preset_name)
-    result = smoke_test(dist_path)
+    plugin_name = sys.argv[1]
+    plugin_path = Path(__file__).resolve().parent.parent / "plugins" / plugin_name
+
+    if not plugin_path.is_dir():
+        print(f"FAIL: no plugin directory at plugins/{plugin_name}")
+        sys.exit(1)
+
+    result = smoke_test(plugin_path)
 
     if result.passed:
-        print(f"PASS: plugin '{preset_name}' is internally consistent")
+        print(f"PASS: plugin '{plugin_name}' is internally consistent")
     else:
-        print(f"FAIL: plugin '{preset_name}' has {len(result.errors)} error(s):")
+        print(f"FAIL: plugin '{plugin_name}' has {len(result.errors)} error(s):")
         for error in result.errors:
             print(f"  - {error}")
         sys.exit(1)

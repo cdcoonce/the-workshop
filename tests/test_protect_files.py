@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-HOOK_PATH = Path(__file__).resolve().parents[1] / "core" / "hooks" / "protect-files.py"
+HOOK_PATH = Path(__file__).resolve().parents[1] / "plugins" / "workbench" / "hooks" / "scripts" / "protect-files.py"
 
 
 def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:

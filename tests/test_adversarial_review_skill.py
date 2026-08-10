@@ -2,13 +2,13 @@
 
 The capability is attacking finished work: enumerating what the work claims and
 trying to disprove each claim, rather than reading it and pronouncing it sound.
-That is universal to any repo, so `core/` is the canonical owner.
+That is universal to any repo, so `workbench` is the canonical owner.
 
-Membership is the part worth pinning. `workbench` takes `core.skills: "all"`, so
-existence under `core/` is sufficient for it to ship — and every *explicit*
-manifest must leave it alone, or the skill lands in two plugins and the
-one-plugin-per-skill direction erodes silently the first time someone adds it to
-a second list "just to have it there".
+Membership is the part worth pinning, and the mechanism changed with the flat
+reorg: a plugin ships exactly what is in its own `skills/` directory, so
+ownership is the directory it sits in and nothing else declares it. What used to
+erode through a second manifest list now erodes through a second directory, so
+the check below is a directory sweep rather than a manifest read.
 
 The rest of these tests pin the machinery that makes the skill adversarial rather
 than merely another reviewer. A review skill degrades in one direction only: it
@@ -16,12 +16,11 @@ reads the work, finds it plausible, and reports a clean bill of health. Each
 assertion below guards one of the load-bearing parts that failure routes around.
 """
 
-import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SLUG = "adversarial-review"
-SKILL_DIR = REPO_ROOT / "core" / "skills" / SLUG
+SKILL_DIR = REPO_ROOT / "plugins" / "workbench" / "skills" / SLUG
 
 SIBLING_REVIEWERS = (
     "plan-ceo-review",
@@ -52,24 +51,26 @@ def _description() -> str:
     return " ".join(part for part in body if part not in {">", "|"})
 
 
-def test_skill_is_owned_by_core() -> None:
-    """Universal capability: core owns it, and `workbench` ships it via
-    `core.skills: "all"` without a manifest edit."""
+def test_skill_is_owned_by_workbench() -> None:
+    """Universal capability, so it belongs to the plugin everyone installs."""
     assert (SKILL_DIR / "SKILL.md").is_file()
 
 
-def test_no_explicit_preset_manifest_also_ships_it() -> None:
-    """One skill, one plugin. Any preset that lists `core.skills` explicitly must
-    not name this skill, or it ships from two packages at once."""
-    for manifest_path in sorted(REPO_ROOT.glob("presets/*/manifest.json")):
-        manifest = json.loads(manifest_path.read_text())
-        core_skills = manifest.get("core", {}).get("skills", [])
-        if core_skills == "all":
-            continue
-        assert SLUG not in core_skills, (
-            f"{manifest_path.parent.name} lists {SLUG} explicitly; it already "
-            "ships via workbench's core.skills: all"
-        )
+def test_no_other_plugin_also_ships_it() -> None:
+    """One skill, one plugin — a second copy splits the trigger and the edits.
+
+    Under the composition build this was a manifest question: a preset could
+    name the skill in `core.skills` and get its own copy. Flat plugins have no
+    such list, so the only way to duplicate it now is to put a second directory
+    on disk — which is what this sweeps for.
+    """
+    owners = sorted(
+        path.parents[2].name
+        for path in REPO_ROOT.glob(f"plugins/*/skills/{SLUG}/SKILL.md")
+    )
+    assert owners == ["workbench"], (
+        f"{SLUG} is shipped by {owners}; it belongs to workbench alone"
+    )
 
 
 def test_skill_md_stays_under_the_line_budget() -> None:

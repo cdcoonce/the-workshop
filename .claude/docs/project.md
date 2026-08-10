@@ -1,72 +1,63 @@
 # The Workshop — Project Context
 
-Template factory that produces self-contained Claude Code plugins (`.claude-plugin/plugin.json`, skills, agents, hooks, settings) for new projects.
+Marketplace of self-contained plugins (`.claude-plugin/plugin.json`, skills, agents, hooks, settings) that install natively on Claude Code, Codex, and Cortex Code — no per-project build step. Nine plugins ship from `plugins/`: `workbench` (the shared toolkit), `workshop-maintainer` (skills for developing this repo), five persona plugins, and two advisor plugins.
 
 ## Tech Stack
 
 - **Python >=3.12** — all scripts use stdlib only (no runtime dependencies)
-- **uv** — package manager and task runner
-- **hatchling** — build backend (packages only `scripts/`)
-- **pytest** — test framework (93 tests across 5 modules)
+- **uv** — package manager and task runner. `[tool.uv] package = false`: the repo is served, not distributed — nothing here builds a wheel or a console script (no build backend; `hatchling` is no longer used)
+- **pytest** — test framework (`tests/` root suite, plus per-skill test suites discovered by `scripts/discover_skill_test_suites.py`; see Test Markers below)
 
 ## Project Layout
 
 ```text
-core/                        Universal components shared by all presets
-  skills/                    17 universal skills (tdd, commit, dev-cycle, etc.)
-  docs/                      Methodology docs (tdd, root-cause-tracing, etc.)
-  hooks/                     File protection hook (protect-files.py)
-  agents/                    2 universal agents (tdd-implementer, code-reviewer)
-  settings-base.json         Base hooks config merged into output
-presets/                     5 named project configurations
-  python-api/                Lambda, FastAPI, Flask
-  full-stack/                React/Next.js + Python
-  data-pipeline/             Data engineering workflows
-  analysis/                  Data analysis & Jupyter
-  claude-tooling/            Claude Code toolkit development
-  <each contains>            manifest.json, settings-preset.json, skills/, hooks/, agents/
-scripts/                     Python build/test/validation tooling
-  build_preset.py            Assemble core + preset into plugin in dist/ (10-step pipeline)
-  build_marketplace.py       Generate marketplace.json index of all plugins
-  smoke_test.py              Validate internal consistency of built plugin
-  dev_cycle_validate.py      Parse/validate dev-cycle state files
-tests/                       pytest suite (conftest.py + 5 test modules)
-dist/                        Build output (gitignored)
-docs/                        Plans and archives for this metaproject
+plugins/                      9 self-contained plugins — what's on disk is what ships
+  workbench/                  Shared toolkit: skills, agents, hooks, vault machinery
+  workshop-maintainer/        Skills for developing this repo itself
+  advisor-product-design/     2 advisor plugins
+  advisor-product-strategy/
+  persona-*/                  5 persona plugins
+  <each contains>             .claude-plugin/plugin.json, skills/, agents/, hooks/
+scripts/                      Python tooling (stdlib only, no build step)
+  stamp.py                    Regenerate every derived file (`make stamp`, `make stamp-check`)
+  smoke_test.py              Validate internal consistency of a source plugin directory
+  check_version_bumps.py      Fail when a plugin's shipped content changed without a version bump
+  discover_skill_test_suites.py  Discover and run every skill-script test suite in its own rootdir
+  dev_cycle_validate.py       Parse/validate dev-cycle state files
+tests/                        pytest suite (conftest.py + per-module test files)
+docs/                         Plans, archives, and reference docs for this metaproject
 ```
+
+`core/`, `presets/`, and `dist/` no longer exist — they were the old core+preset
+composition build, replaced by the flat `plugins/` layout above. `scripts/build_preset.py`,
+`build_docs.py`, `build_marketplace.py`, `dist_digest.py`, and `scripts/installer/`
+were deleted with it.
 
 ## Data Flow
 
 ```text
-core/skills,docs,hooks,agents ─┐
-                                ├─→ build_preset() ─→ dist/<preset>/
-presets/<name>/manifest.json ──┘        │                 ├── .claude-plugin/plugin.json
-                                        │                 ├── skills/
-                                        │                 ├── agents/
-                                        │                 ├── hooks/ (hooks.json + scripts/)
-                                        │                 ├── settings.json
-                                        │                 └── README.md
-                                        │
-                                   smoke_test() ─→ validates internal consistency
-                                        │
-                              (install as Claude Code plugin)
+plugins/<name>/                ─→ read in place by Claude Code / Codex / Cortex,
+  .claude-plugin/plugin.json       no build or copy step between source and install
+  skills/, agents/, hooks/
+                                ─→ scripts/stamp.py regenerates derived files
+                                     (docs/reference/*.md, marker-injected README
+                                     regions) from that same component metadata
+                                ─→ scripts/smoke_test.py validates the tree in place
 ```
 
 ## Key Architecture Patterns
 
-- **Manifest-driven composition** (`presets/*/manifest.json`): Each preset declares what core components to include, what to exclude, and what preset-specific overrides to layer on.
-- **Override semantics** (`build_preset.py`): Preset skills/agents with the same name as core ones replace them; settings arrays append rather than replace.
-- **Fail-fast validation** (`build_preset.py:_validate_manifest()`): All manifest references checked before any files are copied; errors aggregated, not one-at-a-time.
-- **Path containment safety** (`build_preset.py`): Exclusion paths resolved and verified to stay within output directory, preventing `../../` escapes.
-- **Plugin format** (`.claude-plugin/plugin.json`): Output is a self-contained Claude Code plugin with skills, agents, hooks, and settings at the root level.
+- **No build step** (`scripts/smoke_test.py`): plugins ship directly from `plugins/<name>/` — what is on disk is what ships. The former `core/` + `presets/` composition build and its `dist/` output are gone.
+- **Manifest truth, not manifest-driven composition**: each plugin's own hand-written `plugins/<name>/.claude-plugin/plugin.json` is the source of truth; `stamp.py` reads it plus `SKILL.md`/`AGENT.md` frontmatter and hook wiring to regenerate documentation — it does not assemble or copy files into an output tree.
+- **Delivery gate** (`scripts/check_version_bumps.py`): a plugin whose shipped content changed without a version bump merges and reaches nobody who already has it installed — `make verify-versions` fails the build on that gap.
+- **Plugin format** (`.claude-plugin/plugin.json`): each plugin is self-contained, with skills, agents, hooks, and settings at its own root.
 
 ## Test Markers
 
-- `uv run pytest` — run all 93 tests
-- `uv run pytest --cov=scripts --cov-report=term-missing` — run with coverage over `scripts/`
+- `make test` — full gate: lint, the root pytest suite, per-skill test-suite discovery, the vault machinery suite (`make test-machinery`), and the version-bump gate (`make verify-versions`)
+- `uv run pytest` — root suite only (`tests/`)
 - No custom pytest markers defined
 
 ## Custom Exceptions
 
-- `BuildValidationError` (`build_preset.py`) — manifest references invalid files
-- `SmokeTestFailure` (`smoke_test.py`) — internal consistency check failures
+- `DocsError` (`scripts/stamp.py`) — generated documentation would not regenerate cleanly from source
