@@ -6,9 +6,9 @@ Write best skill, clear tests, generate report, update score ledger, commit, ope
 
 ## Step 1 — Write best skill
 
-Read `core/skills/{slug}/.best_skill.md` (the sidecar written by Phase 4 Step G).
+Read `{skill_dir}/.best_skill.md` (the sidecar written by Phase 4 Step G), where `{skill_dir}` is the directory containing `{skill_path}`.
 Overwrite `{skill_path}` with its full content. This is the final best version.
-Then run `git rm core/skills/{slug}/.best_skill.md` to remove the sidecar — it is a temporary artifact and should not remain in the repository after finalization.
+Then run `git rm {skill_dir}/.best_skill.md` to remove the sidecar — it is a temporary artifact and should not remain in the repository after finalization.
 
 ## Step 2 — Clear tests.md Result/Reason columns
 

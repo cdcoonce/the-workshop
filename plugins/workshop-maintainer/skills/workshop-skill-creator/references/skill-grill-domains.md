@@ -15,7 +15,7 @@ Why are we building this skill? What does success look like?
 - How will we know it's working correctly once installed?
 - What would make this a failure even if the code works?
 
-**Explore before asking:** Check existing skills in `core/skills/` for overlap. Read the user's initial request for stated goals. Look for open issues or plan documents that provide context.
+**Explore before asking:** Check existing skills across `plugins/*/skills/` for overlap. Read the user's initial request for stated goals. Look for open issues or plan documents that provide context.
 
 **Batching hints:** Problem, success criteria, and done-definition questions batch well together. Rarely needs multiSelect.
 
@@ -49,7 +49,7 @@ How does this skill work, and why this approach over alternatives?
 - Where are the trade-offs between simplicity and capability?
 - Should this skill follow existing skill patterns or intentionally break from them?
 
-**Explore before asking:** Read existing skill structures in `core/skills/` for patterns. Check if similar skills exist that this should mirror or diverge from.
+**Explore before asking:** Read existing skill structures across `plugins/*/skills/` for patterns. Check if similar skills exist that this should mirror or diverge from.
 
 **Batching hints:** Structure choice and pattern-conformance questions batch well. Trade-off questions are usually single-select.
 

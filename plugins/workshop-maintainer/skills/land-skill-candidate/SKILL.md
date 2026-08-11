@@ -20,9 +20,9 @@ review, or the user directly).
 
 ## Repository Guard
 
-Run only in The Workshop repository. Verify `core/skills/`, `presets/`,
-`scripts/build_preset.py`, and `scripts/build_docs.py` exist. Otherwise stop
-and explain this is not a generic skill-authoring workflow.
+Run only in The Workshop repository. Verify `plugins/` and `scripts/stamp.py`
+exist. Otherwise stop and explain this is not a generic skill-authoring
+workflow.
 
 ## 1. Intake the Candidate
 
@@ -38,9 +38,12 @@ for Implement and Land once that blueprint is approved.
 
 ## 2. Locate and Scope
 
-Find the canonical source: `core/skills/<slug>/` for universal capabilities,
-`presets/<preset>/skills/<slug>/` for package-specific ones. Never edit
-`dist/` or an installed plugin cache — those are generated consumers. Scope
+Find the source with one flat glob: `plugins/*/skills/<slug>/`. A slug lives
+in exactly one plugin, so a second hit is a repo defect — stop and say so.
+Placement is by audience: universal, data, and vault capabilities belong to
+`workbench`; repo self-maintenance to `workshop-maintainer`; a persona or
+advisor payload to that plugin. Never edit an installed plugin cache — it is a
+consumer of what you are about to change. Scope
 the smallest change that closes the gap; prefer folding a sentence into
 existing prose over adding a new section, especially when the file is near
 the 100-line guideline.

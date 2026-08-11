@@ -19,7 +19,7 @@ Read `new_test_ids` from the state file. If blank or missing, skip this step ent
 
 For each test ID in `new_test_ids`, look up its `Scenario` and `Expected Behavior` row in `{tests_path}`. For each such row:
 
-1. Dispatch a subagent using the `qa-tester` agent identity in **scenario-execution mode** (see `presets/workshop-maintainer/agents/qa-tester/AGENT.md`), with **no skill loaded** — do not paste any SKILL.md content into the dispatch.
+1. Dispatch a subagent using the `qa-tester` agent identity in **scenario-execution mode** (see `plugins/workshop-maintainer/agents/qa-tester/AGENT.md`), with **no skill loaded** — do not paste any SKILL.md content into the dispatch.
 2. Instruct the subagent to act out the `Scenario` as if it were a real task and to record its verbatim behavior and any rationalization for deviating from the `Expected Behavior`.
 3. Compare the subagent's actual behavior to the `Expected Behavior`:
    - **Fails to produce Expected Behavior:** Keep the row. Record the subagent's verbatim rationalization text.

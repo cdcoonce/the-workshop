@@ -1,10 +1,10 @@
 {
   "name": "workshop-maintainer",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries",
   "conventions": [
     "Inventory before reorganizing",
-    "One plugin per slug — a second copy of a skill is a defect, not a distribution choice",
+    "One plugin per slug \u2014 a second copy of a skill is a defect, not a distribution choice",
     "Run `make stamp` after changing any component"
   ]
 }

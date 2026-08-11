@@ -12,9 +12,9 @@ distribution wiring, generated artifacts, and verification.
 
 ## Repository Guard
 
-Run only in The Workshop repository. Verify `core/skills/`, `presets/`,
-`scripts/build_preset.py`, and `scripts/build_docs.py` exist. Otherwise stop and
-explain that this is not a generic skill-authoring workflow.
+Run only in The Workshop repository. Verify `plugins/` and `scripts/stamp.py`
+exist. Otherwise stop and explain that this is not a generic skill-authoring
+workflow.
 
 ## Route the Request
 
@@ -23,8 +23,8 @@ explain that this is not a generic skill-authoring workflow.
 - For package reorganization or broad consolidation, run `skill-inventory` first.
 
 Before every change, perform a targeted inventory: locate related trigger phrases,
-adjacent capabilities, canonical ownership, shipped presets, and generated copies.
-Generated `dist/` and installed cache copies are consumers, never edit targets.
+adjacent capabilities, which plugin owns the slug, and any installed cache copies.
+Installed plugin caches are consumers, never edit targets — what lives under `plugins/` is what ships.
 
 ## 1. Gather and Grill
 
@@ -46,11 +46,15 @@ Write the smallest failing repository test that proves ownership, package member
 or build behavior before changing production source. Then create or revise only the
 canonical skill directory:
 
-- Universal capability: `core/skills/<slug>/`.
-- Package-specific capability: `presets/<preset>/skills/<slug>/`.
+- Universal, data, or vault capability: `plugins/workbench/skills/<slug>/`.
+- Repo self-maintenance: `plugins/workshop-maintainer/skills/<slug>/`.
+- Persona or advisor payload: `plugins/<that-plugin>/skills/<slug>/`.
 
-Use progressive disclosure and keep `SKILL.md` below 100 lines. Wire preset manifests
-explicitly; never copy source merely to make another preset ship it. For process skills,
+One slug belongs to exactly one plugin — the stamper asserts it repo-wide.
+
+Use progressive disclosure and keep `SKILL.md` below 100 lines. Placement is the
+wiring — there is no manifest to edit, and a skill must never be copied into a
+second plugin to make that plugin ship it. For process skills,
 apply [discipline-toolkit.md](references/discipline-toolkit.md) and complete the RED
 baseline required by [pressure-testing.md](references/pressure-testing.md).
 

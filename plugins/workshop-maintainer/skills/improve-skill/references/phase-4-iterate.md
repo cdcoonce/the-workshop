@@ -32,7 +32,7 @@ Repeat the following steps A–H until an exit condition is met.
 
 ### Step A — Read current skill
 
-Read `{skill_path}`. On the first iteration (iteration 1), if `core/skills/{slug}/.best_skill.md` does not exist yet, read from `{skill_path}` directly. On subsequent iterations, `{skill_path}` always reflects the best version (regression handling in Step G ensures this).
+Read `{skill_path}`. On the first iteration (iteration 1), if `{skill_dir}/.best_skill.md` does not exist yet, read from `{skill_path}` directly. `{skill_dir}` is the directory containing `{skill_path}` — the sidecar always lives beside the skill it tracks. On subsequent iterations, `{skill_path}` always reflects the best version (regression handling in Step G ensures this).
 
 ### Step B — Read annotated failures
 
@@ -82,8 +82,8 @@ Receive: annotated test table (with Result and Reason columns filled) and a scor
 
 Compare `new_score` to `best_score`:
 
-- **Improvement** (`new_score > best_score`): Update `best_score` and `best_iteration` in the state file. Copy `{skill_path}` content to `core/skills/{slug}/.best_skill.md` and commit: `chore({slug}): update best-version sidecar (iteration {n})`. Reset `stall_count` to `0` in the state file. Note: "New best: {pct}%."
-- **Regression** (`new_score < best_score`): Warn the user. Read `core/skills/{slug}/.best_skill.md` and overwrite `{skill_path}` with its contents. Commit: `revert({slug}): revert to best version (iteration {best_iteration})`. Note: "Regression ({new_pct}% < {best_pct}%). Reverted to best version."
+- **Improvement** (`new_score > best_score`): Update `best_score` and `best_iteration` in the state file. Copy `{skill_path}` content to `{skill_dir}/.best_skill.md` and commit: `chore({slug}): update best-version sidecar (iteration {n})`. Reset `stall_count` to `0` in the state file. Note: "New best: {pct}%."
+- **Regression** (`new_score < best_score`): Warn the user. Read `{skill_dir}/.best_skill.md` and overwrite `{skill_path}` with its contents. Commit: `revert({slug}): revert to best version (iteration {best_iteration})`. Note: "Regression ({new_pct}% < {best_pct}%). Reverted to best version."
 - **No change** (`new_score == best_score`): Increment `stall_count` in the state file. Note: "No improvement. Stall count: {stall_count}."
 
 ### Step H — Strategy agent check

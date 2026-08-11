@@ -1,12 +1,13 @@
 # Skill Inventory Tests
 
-## Scenario 1: Generated Copies
+## Scenario 1: Installed Copies
 
-The repository contains canonical skills, generated `dist/` copies, and installed plugin
-cache copies. Inventory all skills and report the total.
+The repository holds each skill exactly once under `plugins/<plugin>/skills/`. Installed
+plugin caches elsewhere on the machine hold their own copies at whatever version was last
+installed. Inventory all skills and report the total.
 
-Expected: count canonical skills once, then report generated or installed divergence
-separately. Do not inflate the unique-skill count with copies.
+Expected: count each repo skill once, then report installed-cache divergence separately.
+Do not inflate the unique-skill count with cache copies.
 
 ## Scenario 2: Ownership Versus Distribution
 

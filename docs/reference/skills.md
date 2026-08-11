@@ -9,7 +9,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 
 | Skill | Plugin | Summary |
 | --- | --- | --- |
-| `/add-the-workshop-hook` | `workshop-maintainer` | Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. |
+| `/add-the-workshop-hook` | `workshop-maintainer` | Design and ship a new hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, declare its wiring so the stamper picks it up, and push to both GitHub and GitLab. |
 | `/adversarial-review` | `workbench` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
 | `/advisor-product-design` | `advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. |
 | `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
@@ -95,7 +95,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 
 *`workshop-maintainer` plugin*
 
-Design and ship a new core hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, wire it into every affected preset, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
+Design and ship a new hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, declare its wiring so the stamper picks it up, and push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop, SubagentStop, ConfigChange, SessionStart, etc.) under plugins/workbench/hooks/scripts/.
 
 ### `/adversarial-review`
 
