@@ -4,8 +4,12 @@ version = "0.1.0"
 description = "Portable AI dev-environment toolkit — skills, agents, hooks, and methodology that install natively on Claude Code, Codex, and Cortex Code"
 requires-python = ">=3.12"
 
-[project.scripts]
-the-workshop = "scripts.installer.cli:main"
+# The repo is served, not distributed: the nine directories under `plugins/`
+# are read in place by Claude Code, Codex, and Cortex. Nothing here builds a
+# wheel or a console script, so uv treats it as a plain workspace rather than
+# a package. The `the-workshop` entry point died with `scripts/installer/`.
+[tool.uv]
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -20,19 +24,12 @@ testpaths = ["tests"]
 # and catches no defects. Widen this set only alongside fixing what it flags.
 [tool.ruff]
 target-version = "py312"
-# presets/*/machinery is vendored engine payload (e.g. the vault's scripts and
-# tests under presets/vault-ops/machinery/), kept byte-comparable with its
-# upstream repo — which owns its style, including the sys.path-bootstrap-then-
-# import pattern this repo's E402 would flag. It is exercised by its own gate
-# step (`make test-machinery`), not linted as the workshop's own Python.
-extend-exclude = ["presets/*/machinery"]
+# plugins/workbench/machinery is the vault's engine payload, kept
+# byte-comparable with its upstream repo — which owns its style, including the
+# sys.path-bootstrap-then-import pattern this repo's E402 would flag. It is
+# exercised by its own gate step (`make test-machinery`), not linted as the
+# workshop's own Python.
+extend-exclude = ["plugins/*/machinery"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["scripts"]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"

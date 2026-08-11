@@ -3,8 +3,8 @@
 The capability is charting an effort too big for one agent session as a shared
 map of decision tickets on the repo's issue tracker, then resolving them one
 per session until the way to the destination is clear. Planning at that scale
-is universal to any repo, so `core/` is the canonical owner and `workbench`
-ships it via `core.skills: "all"` without a manifest edit.
+is universal to any repo, so `workbench` is the canonical owner; plugin
+membership follows from directory presence, not a manifest edit.
 
 The rest of these tests pin the machinery that keeps the skill a planner
 rather than a builder. A planning skill degrades in two directions: it starts
@@ -14,12 +14,11 @@ safe for concurrent sessions. Each assertion guards a part that one of those
 failures routes around.
 """
 
-import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SLUG = "blueprint"
-SKILL_DIR = REPO_ROOT / "core" / "skills" / SLUG
+SKILL_DIR = REPO_ROOT / "plugins" / "workbench" / "skills" / SLUG
 
 SIBLING_PLANNERS = ("brainstorm", "grill-me", "write-a-prd", "prd-to-plan")
 
@@ -28,7 +27,7 @@ SIBLING_PLANNERS = ("brainstorm", "grill-me", "write-a-prd", "prd-to-plan")
 # so drift between them is testable — and silent if untested.
 DIGEST_HEADINGS = ("Active Projects", "Side Projects", "Courses")
 CONTEXT_LOADER = (
-    REPO_ROOT / "presets" / "vault-ops" / "machinery" / "engine" / "context_loader.py"
+    REPO_ROOT / "plugins" / "workbench" / "machinery" / "engine" / "context_loader.py"
 )
 
 REMOTE_TRACKERS = ("tracker-github.md", "tracker-gitlab.md")
@@ -72,23 +71,25 @@ def _description() -> str:
 
 
 def test_skill_is_owned_by_core() -> None:
-    """Universal capability: core owns it, and `workbench` ships it via
-    `core.skills: "all"` without a manifest edit."""
+    """Universal capability: workbench owns it; plugin membership follows
+    from directory presence, not a manifest edit."""
     assert (SKILL_DIR / "SKILL.md").is_file()
 
 
 def test_no_explicit_preset_manifest_also_ships_it() -> None:
-    """One skill, one plugin. Any preset that lists `core.skills` explicitly
-    must not name this skill, or it ships from two packages at once. vault-ops
-    co-membership was considered and permanently rejected (2026-08-01)."""
-    for manifest_path in sorted(REPO_ROOT.glob("presets/*/manifest.json")):
-        manifest = json.loads(manifest_path.read_text())
-        core_skills = manifest.get("core", {}).get("skills", [])
-        if core_skills == "all":
+    """One skill, one plugin. Plugin membership follows from directory
+    presence — a plugin ships exactly the skills in its own `skills/`
+    directory — so no other plugin's `skills/` may also contain a `blueprint`
+    directory, or it ships from two packages at once. vault-ops co-membership
+    was considered and permanently rejected (2026-08-01); vault-ops has since
+    been folded into workbench."""
+    for skills_dir in sorted(REPO_ROOT.glob("plugins/*/skills")):
+        plugin_name = skills_dir.parent.name
+        if plugin_name == "workbench":
             continue
-        assert SLUG not in core_skills, (
-            f"{manifest_path.parent.name} lists {SLUG} explicitly; it already "
-            "ships via workbench's core.skills: all"
+        assert not (skills_dir / SLUG).is_dir(), (
+            f"{plugin_name} also ships a `{SLUG}` skill; it already ships via "
+            "workbench"
         )
 
 

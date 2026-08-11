@@ -2,7 +2,7 @@
 
 Covers the three shipped pieces:
 
-- ``presets/vault-ops/machinery/vendor-map.json`` — the managed-set
+- ``plugins/workbench/machinery/vendor-map.json`` — the managed-set
   declaration (every ``engine/`` file -> its vault target path).
 - ``machinery/tools/machinery_check.py`` — offline drift detector run inside
   a target vault (stdlib only, no git, no network).
@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MACHINERY_DIR = REPO_ROOT / "presets" / "vault-ops" / "machinery"
+MACHINERY_DIR = REPO_ROOT / "plugins" / "workbench" / "machinery"
 TOOLS_DIR = MACHINERY_DIR / "tools"
 
 LOCKFILE_RELPATH = ".vault/machinery.lock.json"
@@ -1447,31 +1447,6 @@ class TestStandaloneExecution:
 
 
 class TestShippedPayload:
-    def test_dist_ships_tools_and_vendor_map(self) -> None:
-        """build_preset copies machinery/ wholesale; the checked-in dist must
-        carry the vendor tooling (verify-generated keeps it fresh)."""
-        dist_machinery = REPO_ROOT / "dist" / "vault-ops" / "machinery"
-        assert (dist_machinery / "vendor-map.json").is_file()
-        assert (dist_machinery / "tools" / "machinery_check.py").is_file()
-        assert (dist_machinery / "tools" / "machinery_sync.py").is_file()
-
-    def test_dist_ships_wiring_agents_and_rendered_surfaces(self) -> None:
-        """W4: the wiring spec, canonical agents, and rendered adapters all
-        ride the same machinery copytree into dist (covered by the digest)."""
-        dist_machinery = REPO_ROOT / "dist" / "vault-ops" / "machinery"
-        assert (dist_machinery / "wiring" / "hooks-spec.json").is_file()
-        assert (dist_machinery / "tools" / "wiring_gen.py").is_file()
-        assert (dist_machinery / "tools" / "vendor_map_gen.py").is_file()
-        for name in ("brag-spotter", "cross-linker", "people-profiler"):
-            assert (dist_machinery / "agents" / f"{name}.md").is_file()
-            assert (
-                dist_machinery / "rendered" / "codex-agents" / f"{name}.toml"
-            ).is_file()
-        assert (
-            dist_machinery / "rendered" / "claude-settings-hooks.json"
-        ).is_file()
-        assert (dist_machinery / "rendered" / "codex-hooks.json").is_file()
-
     def test_verbs_are_documented(self) -> None:
         """W5 ships adopt/upgrade/init; only the upstream comparison verb
         remains deliberately deferred, and the module docstring must say so."""

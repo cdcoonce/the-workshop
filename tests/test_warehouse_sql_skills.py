@@ -1,13 +1,14 @@
 """Ownership and trigger-shape contract for the warehouse-SQL skills.
 
-Two capabilities that had no home in `core/skills/`:
+Two capabilities that had no home under a narrower plugin:
 
 * proving warehouse SQL by executing it, rather than asserting on its text;
 * checking a live schema before deploying view or DDL files at it.
 
-Both are universal (any Snowflake/BigQuery/Redshift repo), so they belong in `core/`
-rather than a preset. `workbench` ships `core.skills: "all"`, so membership follows
-from existence — these tests pin the part that does not: that each skill states when
+Both are universal (any Snowflake/BigQuery/Redshift repo), so they belong in
+`workbench` rather than a narrower plugin. Plugin membership follows from
+directory presence — a plugin ships exactly the skills in its own `skills/`
+directory — these tests pin the part that does not: that each skill states when
 to fire in a form the router can act on.
 
 A skill nobody routes to does not run (see `test_skill_cross_routing`). The same is
@@ -24,7 +25,7 @@ SKILLS = ("warehouse-sql-test-harness", "sql-deploy-precheck")
 
 
 def _skill_text(slug: str) -> str:
-    return (REPO_ROOT / "core" / "skills" / slug / "SKILL.md").read_text()
+    return (REPO_ROOT / "plugins" / "workbench" / "skills" / slug / "SKILL.md").read_text()
 
 
 def _description(slug: str) -> str:
@@ -40,9 +41,9 @@ def _description(slug: str) -> str:
 
 @pytest.mark.parametrize("slug", SKILLS)
 def test_skill_is_owned_by_core(slug: str) -> None:
-    """Universal capability, so core is the canonical owner and every preset that
-    takes `core.skills: all` ships it without a manifest edit."""
-    assert (REPO_ROOT / "core" / "skills" / slug / "SKILL.md").is_file()
+    """Universal capability, so workbench is the canonical owner; plugin
+    membership follows from directory presence, not a manifest edit."""
+    assert (REPO_ROOT / "plugins" / "workbench" / "skills" / slug / "SKILL.md").is_file()
 
 
 @pytest.mark.parametrize("slug", SKILLS)

@@ -1,0 +1,108 @@
+{
+  "_generated": "scripts/stamp.py",
+  "hooks": {
+    "ConfigChange": [
+      {
+        "matcher": "project_settings|local_settings|skills",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh audit-config-change.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh post-edit-lint.py"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Skill|skill)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh remind-skill-announce.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh protect-files.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh warn-off-trunk.py"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh inject-skill-router.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh verify-tests-before-stop.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh snapshot-subagent-start.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh verify-subagent-evidence.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh suggest-handoff-on-context.py"
+          }
+        ]
+      }
+    ]
+  }
+}

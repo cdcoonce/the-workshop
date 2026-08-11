@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = REPO_ROOT / "core" / "hooks" / "verify-tests-before-stop.py"
+HOOK_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "verify-tests-before-stop.py"
 
 
 def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:

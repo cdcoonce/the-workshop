@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 HOOK_PATH = (
-    Path(__file__).resolve().parents[1] / "core" / "hooks" / "inject-skill-router.py"
+    Path(__file__).resolve().parents[1]
+    / "plugins"
+    / "workbench"
+    / "hooks"
+    / "scripts"
+    / "inject-skill-router.py"
 )
 
 _spec = importlib.util.spec_from_file_location("inject_skill_router", HOOK_PATH)

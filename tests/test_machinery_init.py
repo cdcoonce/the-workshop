@@ -34,7 +34,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MACHINERY_DIR = REPO_ROOT / "presets" / "vault-ops" / "machinery"
+MACHINERY_DIR = REPO_ROOT / "plugins" / "workbench" / "machinery"
 TOOLS_DIR = MACHINERY_DIR / "tools"
 SCAFFOLD_DIR = MACHINERY_DIR / "scaffold"
 
@@ -798,11 +798,3 @@ class TestShippedScaffold:
             sys.path.remove(str(scripts))
             for name in vendored:
                 sys.modules.pop(name, None)
-
-    def test_dist_ships_the_scaffold_payload(self) -> None:
-        dist_scaffold = (
-            REPO_ROOT / "dist" / "vault-ops" / "machinery" / "scaffold"
-        )
-        assert (dist_scaffold / "scaffold-map.json").is_file()
-        assert (dist_scaffold / "AGENTS.md.tmpl").is_file()
-        assert (dist_scaffold / "templates").is_dir()

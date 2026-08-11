@@ -11,9 +11,9 @@ than a second glab-mr-create implementation.
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-SYNC_SKILL = REPOSITORY_ROOT / "presets/workshop-maintainer/skills/sync-gitlab-dev/SKILL.md"
-GITLAB_MR_CREATE = REPOSITORY_ROOT / "presets/workbench/skills/gitlab-mr-create/SKILL.md"
-MANIFEST = REPOSITORY_ROOT / "presets/workshop-maintainer/manifest.json"
+SYNC_SKILL = REPOSITORY_ROOT / "plugins/workshop-maintainer/skills/sync-gitlab-dev/SKILL.md"
+GITLAB_MR_CREATE = REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-mr-create/SKILL.md"
+SYNC_SKILL_DIR = REPOSITORY_ROOT / "plugins/workshop-maintainer/skills/sync-gitlab-dev"
 
 
 def _normalized(path: Path) -> str:
@@ -21,9 +21,11 @@ def _normalized(path: Path) -> str:
 
 
 def test_sync_gitlab_dev_is_registered_in_workshop_maintainer() -> None:
-    """The manifest must ship the skill or `claude plugin update` offers nothing."""
-    assert SYNC_SKILL.is_file()
-    assert '"sync-gitlab-dev"' in MANIFEST.read_text()
+    """Registration is directory membership under the flat plugin tree: a
+    plugin ships exactly what lives in its own skills/ dir, so the skill is
+    registered iff it exists there with a SKILL.md."""
+    assert SYNC_SKILL_DIR.is_dir()
+    assert (SYNC_SKILL_DIR / "SKILL.md").is_file()
 
 
 def test_sync_gitlab_dev_never_pushes_dev_directly() -> None:

@@ -1,0 +1,8 @@
+{
+  "_generated": "scripts/stamp.py",
+  "conventions": [
+    "Inventory before reorganizing",
+    "One plugin per slug — a second copy of a skill is a defect, not a distribution choice",
+    "Run `make stamp` after changing any component"
+  ]
+}

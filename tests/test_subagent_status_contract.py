@@ -10,12 +10,12 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SUBAGENT_DOC = REPO_ROOT / "core" / "docs" / "subagent-development.md"
-PARALLEL_AGENTS_DOC = REPO_ROOT / "core" / "docs" / "parallel-agents.md"
+SUBAGENT_DOC = REPO_ROOT / "plugins" / "workbench" / "docs" / "subagent-development.md"
+PARALLEL_AGENTS_DOC = REPO_ROOT / "plugins" / "workbench" / "docs" / "parallel-agents.md"
 PHASE_TRANSITIONS_DOC = (
-    REPO_ROOT / "core" / "skills" / "dev-cycle" / "references" / "phase-transitions.md"
+    REPO_ROOT / "plugins" / "workbench" / "skills" / "dev-cycle" / "references" / "phase-transitions.md"
 )
-TDD_IMPLEMENTER_AGENT = REPO_ROOT / "core" / "agents" / "tdd-implementer" / "AGENT.md"
+TDD_IMPLEMENTER_AGENT = REPO_ROOT / "plugins" / "workbench" / "agents" / "tdd-implementer" / "AGENT.md"
 
 STATUS_TOKENS = ("DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT")
 

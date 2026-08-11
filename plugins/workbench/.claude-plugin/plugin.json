@@ -1,0 +1,12 @@
+{
+  "name": "workbench",
+  "version": "4.0.0",
+  "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
+  "conventions": [
+    "Test-driven development: write the failing test first",
+    "Run `make stamp` after changing any component",
+    "Progressive disclosure over monolithic instructions",
+    "Conventional commits; stage explicitly, never git add .",
+    "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
+  ]
+}

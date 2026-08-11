@@ -1,16 +1,17 @@
-"""A preset whose shipped output changed must also carry a version bump.
+"""A plugin whose shipped output changed must also carry a version bump.
 
 This is the one failure mode the rest of the gate cannot see: everything is
 green, the change merges and promotes, and it silently never reaches anyone.
 `claude plugin update` decides there is something to offer by comparing the
-manifest version — an unbumped preset ships into the void.
+manifest version — an unbumped plugin ships into the void.
 
-Hit for real on #401, caught by hand. The rule was previously a note in a design
-doc ("bump workbench whenever a bundled core skill changes"), which is the kind
-of discipline that holds until the once it doesn't.
+Hit for real on #401, caught by hand. The rule was previously a note in a
+design doc ("bump workbench whenever a bundled core skill changes"), which is
+the kind of discipline that holds until the once it doesn't.
 
-Compares `dist/<preset>` — the actual shipped artifact, already tracked — rather
-than trying to infer which source files feed which preset.
+Compares `plugins/<name>` — the real served directory under the flat plugin
+tree, there is no `dist/` any more — against a base ref, with every
+stamper-owned path (`scripts.stamp.owned_paths()`) and `machinery/` excluded.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from scripts.check_version_bumps import find_level_violations, find_missing_bumps
+from scripts.stamp import owned_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,27 +40,43 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _preset(repo: Path, name: str, version: str, payload: str) -> None:
+def _manifest(repo: Path, plugin: str, version: str, *, description: str = "") -> None:
     _write(
-        repo / "presets" / name / "manifest.json",
-        json.dumps({"name": name, "version": version}),
+        repo / "plugins" / plugin / ".claude-plugin" / "plugin.json",
+        json.dumps({"name": plugin, "version": version, "description": description}),
     )
-    _write(repo / "dist" / name / "skills" / "s" / "SKILL.md", payload)
+
+
+def _skill(repo: Path, plugin: str, skill: str, body: str) -> None:
+    """Write a skill with real frontmatter — `scripts.stamp` refuses one without."""
     _write(
-        repo / "dist" / name / ".claude-plugin" / "plugin.json",
-        json.dumps({"name": name, "version": version}),
+        repo / "plugins" / plugin / "skills" / skill / "SKILL.md",
+        f"---\nname: {skill}\ndescription: exercises {skill} for the gate tests\n"
+        f"---\n{body}",
     )
+
+
+def _plugin(repo: Path, name: str, version: str, payload: str) -> None:
+    """Write one plugin at `version`, shipping a single skill with `payload`.
+
+    The skill slug is namespaced by plugin name — `scripts.stamp` refuses two
+    plugins shipping the same slug — so fixtures that create several plugins
+    in one repo (see `TestMissingBumps.test_every_unbumped_plugin_...`) don't
+    collide with each other.
+    """
+    _manifest(repo, name, version)
+    _skill(repo, name, f"{name}-skill", payload)
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    """A repo with `main` holding one released preset."""
+    """A repo with `main` holding one released plugin."""
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     git(repo, "config", "user.email", "test@example.com")
     git(repo, "config", "user.name", "Test")
-    _preset(repo, "advisor", "0.1.0", "# v1\n")
+    _plugin(repo, "advisor", "0.1.0", "# v1\n")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "release")
     git(repo, "checkout", "-q", "-b", "work")
@@ -90,66 +108,65 @@ def ci_version_base(base_ref: str) -> str:
 
 class TestMissingBumps:
     def test_changed_output_without_a_bump_is_flagged(self, repo: Path) -> None:
-        _preset(repo, "advisor", "0.1.0", "# v2 — real change\n")
+        _plugin(repo, "advisor", "0.1.0", "# v2 — real change\n")
         commit(repo, "change advisor")
 
         assert find_missing_bumps(repo, "main") == ["advisor"]
 
     def test_changed_output_with_a_bump_passes(self, repo: Path) -> None:
-        _preset(repo, "advisor", "0.1.1", "# v2 — real change\n")
+        _plugin(repo, "advisor", "0.1.1", "# v2 — real change\n")
         commit(repo, "change advisor and bump")
 
         assert find_missing_bumps(repo, "main") == []
 
-    def test_untouched_preset_needs_no_bump(self, repo: Path) -> None:
+    def test_untouched_plugin_needs_no_bump(self, repo: Path) -> None:
         _write(repo / "README.md", "unrelated edit\n")
         commit(repo, "docs only")
 
         assert find_missing_bumps(repo, "main") == []
 
-    def test_a_brand_new_preset_needs_no_bump(self, repo: Path) -> None:
+    def test_a_brand_new_plugin_needs_no_bump(self, repo: Path) -> None:
         """There is no prior version to bump from."""
-        _preset(repo, "newcomer", "0.1.0", "# hello\n")
-        commit(repo, "add a preset")
+        _plugin(repo, "newcomer", "0.1.0", "# hello\n")
+        commit(repo, "add a plugin")
 
         assert find_missing_bumps(repo, "main") == []
 
-    def test_a_deleted_preset_is_not_flagged(self, repo: Path) -> None:
-        subprocess.run(["rm", "-rf", str(repo / "dist" / "advisor")], check=True)
-        subprocess.run(["rm", "-rf", str(repo / "presets" / "advisor")], check=True)
+    def test_a_deleted_plugin_is_not_flagged(self, repo: Path) -> None:
+        subprocess.run(["rm", "-rf", str(repo / "plugins" / "advisor")], check=True)
         commit(repo, "drop advisor")
 
         assert find_missing_bumps(repo, "main") == []
 
-    def test_every_unbumped_preset_is_reported_not_just_the_first(
+    def test_every_unbumped_plugin_is_reported_not_just_the_first(
         self, repo: Path
     ) -> None:
         """Reporting one at a time turns one fix into three round trips."""
-        _preset(repo, "second", "0.1.0", "# a\n")
-        _preset(repo, "third", "0.1.0", "# a\n")
+        _plugin(repo, "second", "0.1.0", "# a\n")
+        _plugin(repo, "third", "0.1.0", "# a\n")
         commit(repo, "add two more")
         git(repo, "checkout", "-q", "main")
         git(repo, "merge", "-q", "--ff-only", "work")
         git(repo, "checkout", "-q", "work")
 
-        _preset(repo, "advisor", "0.1.0", "# changed\n")
-        _preset(repo, "second", "0.1.0", "# changed\n")
-        _preset(repo, "third", "0.2.0", "# changed\n")
+        _plugin(repo, "advisor", "0.1.0", "# changed\n")
+        _plugin(repo, "second", "0.1.0", "# changed\n")
+        _plugin(repo, "third", "0.2.0", "# changed\n")
         commit(repo, "change three, bump one")
 
         assert find_missing_bumps(repo, "main") == ["advisor", "second"]
 
     def test_a_version_only_change_is_fine(self, repo: Path) -> None:
-        """Bumping alone rewrites dist's plugin.json — that must not self-flag."""
-        _preset(repo, "advisor", "0.1.1", "# v1\n")
+        """Bumping alone rewrites the manifest — that must not self-flag."""
+        _plugin(repo, "advisor", "0.1.1", "# v1\n")
         commit(repo, "bump only")
 
         assert find_missing_bumps(repo, "main") == []
 
     def test_machinery_only_change_needs_no_bump(self, repo: Path) -> None:
-        """dist/<preset>/machinery is engine payload, not owner-facing surface."""
+        """plugins/<name>/machinery is engine payload, not owner-facing surface."""
         _write(
-            repo / "dist" / "advisor" / "machinery" / "engine" / "vault_utils.py",
+            repo / "plugins" / "advisor" / "machinery" / "engine" / "vault_utils.py",
             "# synced engine module\n",
         )
         commit(repo, "sync machinery payload")
@@ -159,13 +176,144 @@ class TestMissingBumps:
     def test_machinery_change_does_not_mask_a_real_change(self, repo: Path) -> None:
         """A skill edit alongside machinery churn still requires a bump."""
         _write(
-            repo / "dist" / "advisor" / "machinery" / "engine" / "vault_utils.py",
+            repo / "plugins" / "advisor" / "machinery" / "engine" / "vault_utils.py",
             "# synced engine module\n",
         )
-        _preset(repo, "advisor", "0.1.0", "# v2 — real change\n")
+        _plugin(repo, "advisor", "0.1.0", "# v2 — real change\n")
         commit(repo, "sync machinery and change a skill")
 
         assert find_missing_bumps(repo, "main") == ["advisor"]
+
+    def test_change_confined_to_a_stamper_owned_path_does_not_demand_a_bump(
+        self, repo: Path
+    ) -> None:
+        """Generated content is a pure function of hand-authored content.
+
+        `plugins/advisor/README.md` is entirely `stamp.py` output (see
+        `render_plugin_readme`). Hand-editing it in place — standing in for a
+        `stamp.py` rendering tweak that reflows every plugin's README on the
+        next `make stamp` — must not read as a real, owner-facing change: the
+        underlying skill/agent/hook inventory that produced it is unchanged,
+        so nothing an owner can invoke actually moved. Requiring a bump here
+        would mean a pure formatting change demands nine simultaneous bumps
+        for zero semantic content.
+        """
+        _write(
+            repo / "plugins" / "advisor" / "README.md",
+            "# advisor\n\nregenerated by a hypothetical stamp.py tweak\n",
+        )
+        commit(repo, "hand-edit a stamper-owned file to simulate stamp.py drift")
+
+        assert find_missing_bumps(repo, "main") == []
+
+    def test_change_to_a_hand_written_manifest_field_demands_a_bump(
+        self, repo: Path
+    ) -> None:
+        """`.claude-plugin/plugin.json` is explicitly never stamper-owned.
+
+        `scripts.stamp.owned_paths()` deliberately excludes it — a stamper
+        that both read and wrote it could rewrite the only declaration of a
+        plugin's version from a bad render — so editing it (here, its
+        description) is hand-written work like any other and must not be
+        swallowed by the exclusion set.
+        """
+        manifest_path = repo / "plugins" / "advisor" / ".claude-plugin" / "plugin.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["description"] = "now with an actual description"
+        _write(manifest_path, json.dumps(manifest))
+        commit(repo, "edit hand-written plugin.json description, no bump")
+
+        assert find_missing_bumps(repo, "main") == ["advisor"]
+
+
+class TestStamperExclusionIsWired:
+    def test_the_exclusion_set_is_non_empty_against_the_real_repo(self) -> None:
+        """Prove the mechanism is actually wired, not silently matching nothing.
+
+        An exclusion list that resolves to an empty set would make the gate
+        demand a version bump on every routine `make stamp` run across every
+        plugin in this repo — the failure mode the exclusion exists to avoid.
+        Resolving `owned_paths()` against this repo's real, valid plugin tree
+        (not a synthetic fixture) proves it returns real paths.
+        """
+        owned = owned_paths(REPO_ROOT)
+
+        assert len(owned) > 0
+        assert all(REPO_ROOT in path.parents for path in owned)
+
+
+class TestCrossPluginMove:
+    """A skill/agent/hook moving between plugins is newly reachable post-reorg.
+
+    The flat tree makes it possible to move a component from one plugin's
+    `skills/`/`agents/`/`hooks/scripts/` directory into another's. An owner
+    who only has the losing plugin installed experiences that exactly like a
+    deletion — the thing they could invoke is gone.
+    """
+
+    def test_moving_a_skill_to_another_plugin_demands_a_major_bump_for_the_loser(
+        self, tmp_path: Path
+    ) -> None:
+        """The per-plugin component inventory already catches this as a removal.
+
+        `_components_at` scopes its listing to one plugin's own subtree, at
+        two points in time. A move makes the component vanish from the losing
+        plugin's own `before` set with nothing in `after` to match — the same
+        `before - after` check that flags any other removal — regardless of
+        where the component reappears. No special-case "moved" tracking is
+        needed; this pins that the reorg's dist/ -> plugins/ repoint kept it
+        true.
+        """
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        _manifest(repo, "alpha", "1.0.0")
+        _skill(repo, "alpha", "shared", "# lives in alpha\n")
+        _manifest(repo, "beta", "1.0.0")
+        _skill(repo, "beta", "own", "# beta's own skill\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+
+        subprocess.run(
+            ["rm", "-rf", str(repo / "plugins" / "alpha" / "skills" / "shared")],
+            check=True,
+        )
+        _skill(repo, "beta", "shared", "# now lives in beta\n")
+        _manifest(repo, "alpha", "1.0.1")  # patch — too small for a removal
+        commit(repo, "move shared from alpha to beta, patch-bump the loser")
+
+        violations = find_level_violations(repo, "main")
+
+        assert ("alpha", "major", "patch") in violations
+
+    def test_moving_a_skill_with_a_major_bump_on_the_loser_passes(
+        self, tmp_path: Path
+    ) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        _manifest(repo, "alpha", "1.0.0")
+        _skill(repo, "alpha", "shared", "# lives in alpha\n")
+        _manifest(repo, "beta", "1.0.0")
+        _skill(repo, "beta", "own", "# beta's own skill\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+
+        subprocess.run(
+            ["rm", "-rf", str(repo / "plugins" / "alpha" / "skills" / "shared")],
+            check=True,
+        )
+        _skill(repo, "beta", "shared", "# now lives in beta\n")
+        _manifest(repo, "alpha", "2.0.0")
+        commit(repo, "move shared from alpha to beta, major-bump the loser")
+
+        assert find_level_violations(repo, "main") == []
 
 
 @pytest.fixture
@@ -182,12 +330,12 @@ def dev_ahead_of_main(tmp_path: Path) -> Path:
     git(repo, "init", "-q", "-b", "main")
     git(repo, "config", "user.email", "test@example.com")
     git(repo, "config", "user.name", "Test")
-    _preset(repo, "advisor", "1.0.0", "# v1\n")
+    _plugin(repo, "advisor", "1.0.0", "# v1\n")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "release 1.0.0 on main")
 
     git(repo, "checkout", "-q", "-b", "dev")
-    _preset(repo, "advisor", "1.1.0", "# v2 — the sibling slice\n")
+    _plugin(repo, "advisor", "1.1.0", "# v2 — the sibling slice\n")
     commit(repo, "bump advisor on dev")
 
     # CI resolves `origin/<base>`, not a local branch.
@@ -195,7 +343,7 @@ def dev_ahead_of_main(tmp_path: Path) -> Path:
     git(repo, "update-ref", "refs/remotes/origin/dev", "dev")
 
     git(repo, "checkout", "-q", "-b", "work")
-    _preset(repo, "advisor", "1.1.0", "# v3 — this slice, no-op bump\n")
+    _plugin(repo, "advisor", "1.1.0", "# v3 — this slice, no-op bump\n")
     commit(repo, "change advisor again, forgetting dev already claimed 1.1.0")
     return repo
 
@@ -281,16 +429,9 @@ class TestBumpLevel:
     """
 
     def _release(self, repo: Path, version: str, skills: list[str]) -> None:
-        _write(
-            repo / "presets" / "advisor" / "manifest.json",
-            json.dumps({"name": "advisor", "version": version}),
-        )
+        _manifest(repo, "advisor", version)
         for skill in skills:
-            _write(repo / "dist" / "advisor" / "skills" / skill / "SKILL.md", f"# {skill}\n")
-        _write(
-            repo / "dist" / "advisor" / ".claude-plugin" / "plugin.json",
-            json.dumps({"name": "advisor", "version": version}),
-        )
+            _skill(repo, "advisor", skill, f"# {skill}\n")
 
     @pytest.fixture
     def released(self, tmp_path: Path) -> Path:
@@ -307,7 +448,8 @@ class TestBumpLevel:
 
     def _drop_skill(self, repo: Path, skill: str) -> None:
         subprocess.run(
-            ["rm", "-rf", str(repo / "dist" / "advisor" / "skills" / skill)], check=True
+            ["rm", "-rf", str(repo / "plugins" / "advisor" / "skills" / skill)],
+            check=True,
         )
 
     def test_removing_a_skill_demands_a_major_bump(self, released: Path) -> None:
@@ -347,7 +489,7 @@ class TestBumpLevel:
 
     def test_content_only_change_is_satisfied_by_a_patch(self, released: Path) -> None:
         self._release(released, "1.2.1", ["alpha", "beta"])
-        _write(released / "dist" / "advisor" / "skills" / "alpha" / "SKILL.md", "# reworded\n")
+        _skill(released, "advisor", "alpha", "# reworded\n")
         commit(released, "reword alpha")
 
         assert find_level_violations(released, "main") == []
@@ -391,7 +533,10 @@ class TestBumpLevel:
 
     def test_library_modules_are_not_components(self, released: Path) -> None:
         """Adding a shared hook helper is not a new capability for the owner."""
-        _write(released / "dist" / "advisor" / "hooks" / "scripts" / "_shared.py", "x = 1\n")
+        _write(
+            released / "plugins" / "advisor" / "hooks" / "scripts" / "_shared.py",
+            "x = 1\n",
+        )
         self._release(released, "1.2.1", ["alpha", "beta"])
         commit(released, "add a hook library module")
 
@@ -428,7 +573,7 @@ def second_slice_on_advanced_staging(tmp_path: Path) -> Path:
     git(repo, "init", "-q", "-b", "main")
     git(repo, "config", "user.email", "test@example.com")
     git(repo, "config", "user.name", "Test")
-    _preset(repo, "advisor", "1.0.0", "# v1\n")
+    _plugin(repo, "advisor", "1.0.0", "# v1\n")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "release 1.0.0")
 
@@ -436,7 +581,7 @@ def second_slice_on_advanced_staging(tmp_path: Path) -> Path:
     git(repo, "checkout", "-q", "-b", "afk/staging")
 
     # Slice A lands on the integration branch.
-    _preset(repo, "advisor", "1.1.0", "# v2 — slice A\n")
+    _plugin(repo, "advisor", "1.1.0", "# v2 — slice A\n")
     commit(repo, "slice A: bump advisor to 1.1.0")
 
     git(repo, "update-ref", "refs/remotes/origin/main", "main")
@@ -444,7 +589,7 @@ def second_slice_on_advanced_staging(tmp_path: Path) -> Path:
 
     # Slice B is trial-merged onto the now-advanced integration branch.
     git(repo, "checkout", "-q", "-b", "trial/slice-b")
-    _preset(repo, "advisor", "1.1.0", "# v3 — slice B, same version\n")
+    _plugin(repo, "advisor", "1.1.0", "# v3 — slice B, same version\n")
     commit(repo, "slice B: change advisor, still declaring 1.1.0")
     return repo
 
