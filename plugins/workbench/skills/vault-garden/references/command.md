@@ -39,8 +39,9 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
    - **Unprofiled people.** A `[[Name]]` indexed in `org/People & Context.md` with no
      `org/people/<Name>.md` profile — a **distinct disposition, NOT** the generic "create or remove"
      broken-link flow above. No-op if the `### Unprofiled people` subsection is absent. Per person, offer:
-     - **Profile** → dispatch the **`people-profiler`** agent (`.claude/agents/people-profiler.md`, cheap
-       tier) to _draft_ `org/people/<Name>.md` from real vault evidence (org schema: `role`/`team`,
+     - **Profile** → dispatch the **`people-profiler`** agent (ships in workbench, cheap
+       tier; it appears namespaced in the agent list) to _draft_ `org/people/<Name>.md`
+       from real vault evidence (org schema: `role`/`team`,
        wikilinks back to the index + mentions). **Review the draft before the write** (every-edit-confirmed);
        **no fabrication** — leave `role`/`team` blank if the vault doesn't state them.
      - **Dismiss** → append the verbatim `unprofiled|<name>` gsig token (read off the line) to

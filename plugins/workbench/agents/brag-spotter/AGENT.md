@@ -1,6 +1,12 @@
 ---
 name: brag-spotter
 description: Scans recent vault activity to find uncaptured wins for the Brag Doc
+role: reviewer
+model: sonnet
+runtimes: [claude, codex]
+skills:
+  add: []
+  remove: []
 ---
 
 # Brag Spotter

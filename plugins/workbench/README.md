@@ -95,9 +95,12 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | analysis-builder | `implementer` | Builds data analysis notebooks and scripts with pandas, SQL, and visualization |
 | api-builder | `implementer` | Builds Python API endpoints with FastAPI, Flask, or Lambda |
 | backend-builder | `implementer` | Builds backend services with Node.js, databases, and APIs |
+| brag-spotter | `reviewer` | Scans recent vault activity to find uncaptured wins for the Brag Doc |
 | code-reviewer | `reviewer` | Reviews code for quality, structure, and correctness |
+| cross-linker | `reviewer` | Finds missing wikilinks and broken links across the vault |
 | data-quality-reviewer | `reviewer` | Reviews data pipelines for correctness, completeness, and reliability |
 | frontend-builder | `implementer` | Builds frontend components with React, TypeScript, and modern CSS |
+| people-profiler | `reviewer` | Maintains person profiles in org/people/ based on mentions across the vault |
 | pipeline-builder | `implementer` | Builds data pipelines with ETL/ELT patterns and orchestration |
 | security-reviewer | `reviewer` | Reviews Python APIs for security vulnerabilities and auth issues |
 | tdd-implementer | `implementer` | Implements features using test-driven development |

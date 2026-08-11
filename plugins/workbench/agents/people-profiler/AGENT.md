@@ -3,6 +3,7 @@ name: people-profiler
 description: Maintains person profiles in org/people/ based on mentions across the vault
 role: reviewer
 model: sonnet
+runtimes: [claude, codex]
 skills:
   add: []
   remove: []
