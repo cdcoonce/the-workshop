@@ -1,4 +1,5 @@
 {
+  "_generated": "scripts/stamp.py",
   "name": "the-workshop",
   "interface": {
     "displayName": "The Workshop"
@@ -8,7 +9,7 @@
       "name": "advisor-product-design",
       "source": {
         "source": "local",
-        "path": "./dist/advisor-product-design"
+        "path": "./plugins/advisor-product-design"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -20,7 +21,7 @@
       "name": "advisor-product-strategy",
       "source": {
         "source": "local",
-        "path": "./dist/advisor-product-strategy"
+        "path": "./plugins/advisor-product-strategy"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -32,7 +33,7 @@
       "name": "persona-pair-programmer",
       "source": {
         "source": "local",
-        "path": "./dist/persona-pair-programmer"
+        "path": "./plugins/persona-pair-programmer"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -44,7 +45,7 @@
       "name": "persona-ship-it",
       "source": {
         "source": "local",
-        "path": "./dist/persona-ship-it"
+        "path": "./plugins/persona-ship-it"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -56,7 +57,7 @@
       "name": "persona-staff-eng-deep",
       "source": {
         "source": "local",
-        "path": "./dist/persona-staff-eng-deep"
+        "path": "./plugins/persona-staff-eng-deep"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -68,7 +69,7 @@
       "name": "persona-terse-staff-eng",
       "source": {
         "source": "local",
-        "path": "./dist/persona-terse-staff-eng"
+        "path": "./plugins/persona-terse-staff-eng"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -80,19 +81,7 @@
       "name": "persona-thinking-partner",
       "source": {
         "source": "local",
-        "path": "./dist/persona-thinking-partner"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
-      "name": "vault-ops",
-      "source": {
-        "source": "local",
-        "path": "./dist/vault-ops"
+        "path": "./plugins/persona-thinking-partner"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -104,7 +93,7 @@
       "name": "workbench",
       "source": {
         "source": "local",
-        "path": "./dist/workbench"
+        "path": "./plugins/workbench"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -116,7 +105,7 @@
       "name": "workshop-maintainer",
       "source": {
         "source": "local",
-        "path": "./dist/workshop-maintainer"
+        "path": "./plugins/workshop-maintainer"
       },
       "policy": {
         "installation": "AVAILABLE",

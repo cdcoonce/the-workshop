@@ -47,16 +47,17 @@ PAYLOAD_LESS_LABELS = {"empty-stdin", "whitespace-only"}
 
 
 def _hook_scripts() -> list[Path]:
-    """Every hook script shipped from core/ or a preset.
+    """Every hook script shipped from a plugin's flat hooks/ tree.
 
     Underscore-prefixed files are shared library modules, not hooks (see
-    `core/hooks/_git_baseline.py`). They read no stdin, so they pass this suite
-    trivially — which is worse than being skipped: it reports a fail-open
-    guarantee for something that was never on the tool path, and quietly pads
-    the count that makes `test_hook_scripts_are_discovered` meaningful.
+    `plugins/workbench/hooks/scripts/_git_baseline.py`). They read no stdin, so
+    they pass this suite trivially — which is worse than being skipped: it
+    reports a fail-open guarantee for something that was never on the tool
+    path, and quietly pads the count that makes
+    `test_hook_scripts_are_discovered` meaningful.
     """
-    scripts = sorted((REPO_ROOT / "core" / "hooks").glob("*.py"))
-    scripts += sorted((REPO_ROOT / "presets").glob("*/hooks/*.py"))
+    scripts = sorted((REPO_ROOT / "plugins").glob("*/hooks/scripts/*.py"))
+    scripts += sorted((REPO_ROOT / "plugins").glob("*/hooks/*.py"))
     return [s for s in scripts if not s.name.startswith("_")]
 
 

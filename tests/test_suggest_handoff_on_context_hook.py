@@ -17,7 +17,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOK_PATH = (
-    REPO_ROOT / "presets" / "vault-ops" / "hooks" / "suggest-handoff-on-context.py"
+    REPO_ROOT
+    / "plugins"
+    / "workbench"
+    / "hooks"
+    / "scripts"
+    / "suggest-handoff-on-context.py"
 )
 
 

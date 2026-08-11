@@ -14,14 +14,11 @@
     "allow": [
       "Bash(make test)",
       "Bash(make lint)",
-      "Bash(make docs)",
-      "Bash(make build)",
-      "Bash(make verify-generated)",
       "Bash(make verify-versions)",
-      "Bash(uv run python -m scripts.build_preset:*)",
-      "Bash(uv run python -m scripts.build_marketplace:*)",
-      "Bash(uv run python -m scripts.build_docs:*)",
-      "Bash(uv run python -m scripts.smoke_test:*)"
+      "Bash(uv run python -m scripts.smoke_test:*)",
+      "Bash(make stamp)",
+      "Bash(make stamp-check)",
+      "Bash(uv run python -m scripts.stamp:*)"
     ]
   },
   "hooks": {
@@ -31,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 core/hooks/protect-files.py"
+            "command": "python3 plugins/workbench/hooks/scripts/protect-files.py"
           }
         ]
       }
@@ -42,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 presets/workbench/hooks/post-edit-lint.py"
+            "command": "python3 plugins/workbench/hooks/scripts/post-edit-lint.py"
           }
         ]
       }

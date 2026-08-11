@@ -145,9 +145,11 @@ checked against a current spec.
 `.codex-plugin/plugin.json``), and an installed Workshop preset
   (`vault-ops`) loads and namespaces its skills from the `skills` path that
   manifest declares.
-- Marketplace listing via `.agents/plugins/marketplace.json`
-  (`scripts/build_marketplace.py`) — this is also the path the CLI itself
-  defaults to (`<marketplace root>/.agents/plugins/marketplace.json`).
+- Marketplace listing via `.agents/plugins/marketplace.json` — this is also
+  the path the CLI itself defaults to (`<marketplace root>/.agents/plugins/
+marketplace.json`). `scripts/build_marketplace.py`, which generated this
+  file, was deleted in the flat-plugin-reorg (2026-08-09); how — or whether —
+  it is regenerated now is not yet re-verified.
 - Install machinery: `codex plugin marketplace add` (local path or Git),
   snapshots stored under `~/.codex/.tmp/marketplaces/<name>/`, registered as
   `[marketplaces.<name>]` in `~/.codex/config.toml`, with installed plugins
@@ -248,8 +250,12 @@ repo, listed by a headless `codex exec` session):
   untrusted and its skills still listed (hooks in the same repo stayed
   silent).
 - **Plugin skills load and trigger, namespaced `<plugin>:<skill>`** (e.g.
-  `vault-ops:vault-standup`), including under headless `codex exec` — the
-  opposite of Claude Code, where plugin skills don't load under `-p` at all.
+  `vault-ops:vault-standup`), including under headless `codex exec`.
+  ~~the opposite of Claude Code, where plugin skills don't load under `-p`
+  at all~~ — corrected 2026-08-09: that contrast no longer holds. Claude
+  Code's `-p` was re-probed live and does load plugin skills too (see
+  Claude Code → Headless above). Codex's skill discovery differs only in
+  not being trust-gated.
 - A user-level root exists at `~/.codex/skills/` (directory observed; loading
   not individually exercised).
 - `SKILL.md` frontmatter is validated — unexpected keys are rejected with an

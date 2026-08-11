@@ -1,0 +1,10 @@
+{
+  "_generated": "scripts/stamp.py",
+  "conventions": [
+    "Test-driven development: write the failing test first",
+    "Run `make stamp` after changing any component",
+    "Progressive disclosure over monolithic instructions",
+    "Conventional commits; stage explicitly, never git add .",
+    "Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured"
+  ]
+}

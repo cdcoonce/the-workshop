@@ -11,8 +11,27 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = REPO_ROOT / "core" / "hooks" / "remind-skill-announce.py"
-SETTINGS_BASE_PATH = REPO_ROOT / "core" / "settings-base.json"
+HOOK_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "remind-skill-announce.py"
+HOOKS_JSON_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "hooks.json"
+
+
+def _matcher_for(event: str, script: str) -> str:
+    """The matcher wired to one specific script, not to an event's first entry.
+
+    `hooks.json` is generated per-script now, so an event holds one entry per
+    distinct matcher — PostToolUse carries both this hook and `post-edit-lint.py`.
+    Indexing `[0]` reads whichever the generator happened to sort first, which
+    is how this test started asserting the edit matcher's semantics against the
+    Skill hook's contract.
+    """
+    entries = json.loads(HOOKS_JSON_PATH.read_text())["hooks"][event]
+    matched = [
+        entry
+        for entry in entries
+        if any(script in hook["command"] for hook in entry["hooks"])
+    ]
+    assert len(matched) == 1, f"{script} is wired {len(matched)} times under {event}"
+    return matched[0]["matcher"]
 
 
 def run(payload) -> subprocess.CompletedProcess[str]:
@@ -100,8 +119,7 @@ def test_post_tool_use_matcher_is_dual_cased_and_scoped_to_skill_tool() -> None:
     any pattern that full-matches only the two literals. Whether the host
     actually searches or anchors is unresolved (#606) — the anchored matcher
     is correct either way, which is why this does not depend on the answer."""
-    settings = json.loads(SETTINGS_BASE_PATH.read_text())
-    matcher = settings["hooks"]["PostToolUse"][0]["matcher"]
+    matcher = _matcher_for("PostToolUse", "remind-skill-announce.py")
 
     pattern = re.compile(matcher)
     assert pattern.search("Skill")
@@ -121,8 +139,7 @@ def test_pre_tool_use_matcher_is_left_unanchored_on_purpose() -> None:
     `mcp__server__write_file`, say. Anchoring would drop those. Whether the
     host anchors is unresolved (#606), so the guard stays wide until it is.
     """
-    settings = json.loads(SETTINGS_BASE_PATH.read_text())
-    matcher = settings["hooks"]["PreToolUse"][0]["matcher"]
+    matcher = _matcher_for("PreToolUse", "protect-files.py")
 
     assert not matcher.startswith("^"), (
         "PreToolUse gates a guard; anchoring it can only narrow what is "

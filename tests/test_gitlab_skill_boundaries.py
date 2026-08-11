@@ -9,10 +9,10 @@ the boundary is asserted here rather than left to prose discipline.
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-GITLAB_CLI = REPOSITORY_ROOT / "core/skills/gitlab-cli/SKILL.md"
-GITLAB_MR_CREATE = REPOSITORY_ROOT / "presets/workbench/skills/gitlab-mr-create/SKILL.md"
-DAA_CODE_REVIEW = REPOSITORY_ROOT / "core/skills/daa-code-review/SKILL.md"
-DAA_PYTHON_CHECKS = REPOSITORY_ROOT / "core/skills/daa-code-review/references/python-checks.md"
+GITLAB_CLI = REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-cli/SKILL.md"
+GITLAB_MR_CREATE = REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-mr-create/SKILL.md"
+DAA_CODE_REVIEW = REPOSITORY_ROOT / "plugins/workbench/skills/daa-code-review/SKILL.md"
+DAA_PYTHON_CHECKS = REPOSITORY_ROOT / "plugins/workbench/skills/daa-code-review/references/python-checks.md"
 
 
 def _normalized(path: Path) -> str:
@@ -20,9 +20,9 @@ def _normalized(path: Path) -> str:
 
 
 def test_gitlab_cli_is_owned_by_core() -> None:
-    """`gitlab-cli` is the sibling of `github-cli`, so core owns it."""
+    """`gitlab-cli` is the sibling of `github-cli`, so workbench owns it."""
     assert GITLAB_CLI.is_file()
-    assert (REPOSITORY_ROOT / "core/skills/github-cli/SKILL.md").is_file()
+    assert (REPOSITORY_ROOT / "plugins/workbench/skills/github-cli/SKILL.md").is_file()
 
 
 def test_gitlab_cli_defers_merge_request_creation() -> None:
@@ -47,7 +47,7 @@ def test_gitlab_mr_create_remains_the_merge_request_owner() -> None:
 def test_gitlab_cli_stays_within_progressive_disclosure_budget() -> None:
     """SKILL.md is the index; the command catalog belongs in references/."""
     assert len(GITLAB_CLI.read_text().splitlines()) < 100
-    assert (REPOSITORY_ROOT / "core/skills/gitlab-cli/references/commands.md").is_file()
+    assert (REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-cli/references/commands.md").is_file()
 
 
 def test_code_review_judges_engineering_practice_not_just_linters() -> None:

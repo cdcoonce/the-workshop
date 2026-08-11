@@ -13,11 +13,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DISPATCH_SITES = [
-    "core/docs/subagent-development.md",
-    "core/docs/parallel-agents.md",
-    "core/skills/dev-cycle/references/phase-transitions.md",
-    "presets/workshop-maintainer/skills/improve-skill/references/phase-3-baseline.md",
-    "core/skills/design-an-interface/SKILL.md",
+    "plugins/workbench/docs/subagent-development.md",
+    "plugins/workbench/docs/parallel-agents.md",
+    "plugins/workbench/skills/dev-cycle/references/phase-transitions.md",
+    "plugins/workshop-maintainer/skills/improve-skill/references/phase-3-baseline.md",
+    "plugins/workbench/skills/design-an-interface/SKILL.md",
 ]
 
 
@@ -35,7 +35,7 @@ def test_every_dispatch_site_requires_a_model_slot() -> None:
 
 
 def test_agent_matching_documents_model_selection() -> None:
-    text = (REPO_ROOT / "core/docs/agent-matching.md").read_text()
+    text = (REPO_ROOT / "plugins/workbench/docs/agent-matching.md").read_text()
     assert "## Model Selection" in text, (
         "agent-matching.md must have a Model Selection section documenting "
         "the role-to-tier rubric"

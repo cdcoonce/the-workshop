@@ -19,7 +19,7 @@ CONSUMERS = ("mr-review-fixes", "triage-issue", "mr-merge-order")
 
 @pytest.mark.parametrize("skill", CONSUMERS)
 def test_skill_routes_to_stale_artifact_sweep(skill: str) -> None:
-    text = (REPO_ROOT / "core" / "skills" / skill / "SKILL.md").read_text()
+    text = (REPO_ROOT / "plugins" / "workbench" / "skills" / skill / "SKILL.md").read_text()
 
     assert "stale-artifact-sweep" in text, (
         f"{skill} acts on recorded artifacts but never routes to the skill that "
@@ -29,7 +29,7 @@ def test_skill_routes_to_stale_artifact_sweep(skill: str) -> None:
 
 def test_the_sweep_names_the_workflows_it_precedes() -> None:
     """The reverse direction: the sweep must say where it belongs in a workflow."""
-    text = (REPO_ROOT / "core" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
+    text = (REPO_ROOT / "plugins" / "workbench" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
 
     for skill in CONSUMERS:
         assert skill in text, f"stale-artifact-sweep does not mention {skill}"
@@ -54,7 +54,7 @@ def test_the_sweep_has_a_verdict_for_a_sound_finding_with_an_unsound_remedy() ->
     contradicted the module it described, and the prescribed fix would have rendered
     a phantom success CLEAN. It reproduced perfectly. It was still wrong.
     """
-    text = (REPO_ROOT / "core" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
+    text = (REPO_ROOT / "plugins" / "workbench" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
 
     assert "REMEDY_UNSOUND" in text, (
         "the sweep can only classify a finding as stale or not; a finding that "
@@ -65,6 +65,6 @@ def test_the_sweep_has_a_verdict_for_a_sound_finding_with_an_unsound_remedy() ->
 def test_the_sweep_routes_the_unsound_remedy_check_to_detector_teeth_check() -> None:
     """Proving a remedy wrong means applying it and watching the suite go red —
     which is `detector-teeth-check`'s job, not a second copy of it here."""
-    text = (REPO_ROOT / "core" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
+    text = (REPO_ROOT / "plugins" / "workbench" / "skills" / "stale-artifact-sweep" / "SKILL.md").read_text()
 
     assert "detector-teeth-check" in text

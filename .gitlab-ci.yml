@@ -1,8 +1,9 @@
 # GitLab CI — the GitLab-side independent gate.
 #
 # Mirrors the GitHub Actions gate exactly: one `make test` invocation runs the
-# root pytest suite, the daa-code-review analyzer suite, and the generated
-# docs/dist drift check. Runs on `dev`, `main`, and every merge request.
+# root pytest suite, the daa-code-review analyzer suite, the vault machinery
+# suite, and the version-bump gate. Runs on `dev`, `main`, and every merge
+# request.
 #
 # Auth: this job needs no minted token — it uses GitLab's automatic
 # CI_JOB_TOKEN for the checkout.
