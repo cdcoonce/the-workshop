@@ -1,9 +1,16 @@
 """Regenerate vendor-map.json (schema 2) for the machinery payload (W4).
 
-The map is committed-generated, like ``dist/``: this tool rebuilds it at
-build time (``scripts/build_preset.py``) and ``make verify-generated`` fails
-when the committed copy is stale. Hand-editing the map is never the move —
-change the trees it describes and rebuild.
+The map is committed-generated, but nothing rebuilds it automatically any
+more: the composition build that used to invoke this tool died with the flat
+reorg (#656), and ``scripts/stamp.py`` does not own ``vendor-map.json``. Run
+this tool directly. Hand-editing the map is never the move — change the trees
+it describes and regenerate.
+
+Regenerating is currently a deliberate act, not a routine one. The scan
+widened from the vault's own skills to all of workbench's when vault-ops
+folded in, so a regeneration right now would commit a map that vendors the
+entire workbench into the vault. Two tests are ``xfail(strict)`` on exactly
+that, and #638 deletes this subsystem outright.
 
 Sections, in emitted order:
 

@@ -26,7 +26,7 @@ an MR that no longer needs to land wastes the whole analysis.
 Run the script. Prefer it over hand-rolling the loops — the ordering rule is easy to invert by accident.
 
 ```bash
-uv run python core/skills/mr-merge-order/scripts/merge_order.py --repo <path> --target dev
+uv run python plugins/workbench/skills/mr-merge-order/scripts/merge_order.py --repo <path> --target dev
 ```
 
 - `--branches a b c` analyses branches directly, skipping MR lookup (useful with no `glab`/`gh`).

@@ -24,7 +24,7 @@ Any of these means the Iron Law has already been broken:
 - Hedging language in your own reasoning — "this should work", "this will probably pass"
 - Keeping the untested code around "just in case" instead of deleting it
 
-See [discipline.md](discipline.md) for the excuse-to-reality table and the delete-means-delete loopholes it closes, and [core/docs/tdd.md](../../docs/tdd.md) for the full narrative walkthrough. This skill is the enforcement layer; that doc is the deep dive — they should never disagree.
+See [discipline.md](discipline.md) for the excuse-to-reality table and the delete-means-delete loopholes it closes, and [docs/tdd.md](../../docs/tdd.md) for the full narrative walkthrough. This skill is the enforcement layer; that doc is the deep dive — they should never disagree.
 
 ## Philosophy
 

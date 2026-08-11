@@ -80,7 +80,7 @@ If the cold-read cohort is not meaningfully lower once both cohorts clear the 5-
 
 The vault's `.claude/skills/` are **vendored** from the-workshop and tracked in `.vault/machinery.lock.json`. Editing a vendored copy creates drift that `/vault-upgrade` will refuse on the next run, and the fix will be silently reverted or force-overwritten.
 
-An accepted skill edit is therefore a change to `presets/vault-ops/skills/<skill>/` in the the-workshop checkout, on a branch, into a PR against `dev` — then `/vault-upgrade` brings it down. Bump the preset version: instruction changes with an unchanged component inventory are a **patch**. If a debrief edit ever lands directly in `.claude/skills/`, that is the bug.
+An accepted skill edit is therefore a change to `plugins/workbench/skills/<skill>/` in the the-workshop checkout, on a branch, into a PR against `dev` — then `/vault-upgrade` brings it down. Bump the preset version: instruction changes with an unchanged component inventory are a **patch**. If a debrief edit ever lands directly in `.claude/skills/`, that is the bug.
 
 ## Anti-theater
 

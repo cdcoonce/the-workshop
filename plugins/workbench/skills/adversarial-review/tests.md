@@ -2,7 +2,7 @@
 
 Behavioral contract for the skill. Re-score by re-dispatching each kept scenario
 through `qa-tester` scenario-execution mode
-(`presets/workshop-maintainer/agents/qa-tester/AGENT.md`).
+(`plugins/workshop-maintainer/agents/qa-tester/AGENT.md`).
 
 Per the Workshop's pressure-testing convention (see the `workshop-skill-creator`
 skill), every scenario was run against a **no-skill** subagent first, before this
@@ -18,7 +18,7 @@ repo that did not exist — the subagent falsified the premise by `ls` and never
 exercised review discipline at all. Build it:
 
 ```bash
-uv run python core/skills/adversarial-review/scripts/build_fixture.py /tmp/settlement-fixture
+uv run python plugins/workbench/skills/adversarial-review/scripts/build_fixture.py /tmp/settlement-fixture
 ```
 
 Two commits: `main`, then `fix/settlement-rounding` claiming a half-cent rounding
