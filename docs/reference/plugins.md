@@ -11,12 +11,12 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 | --- | --- | --- | --- | --- | --- |
 | **`advisor-product-design`** | `0.2.0` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
 | **`advisor-product-strategy`** | `0.2.0` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
-| **`persona-pair-programmer`** | `1.1.0` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
-| **`persona-ship-it`** | `1.1.0` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
-| **`persona-staff-eng-deep`** | `1.1.0` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
-| **`persona-terse-staff-eng`** | `1.1.0` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
-| **`persona-thinking-partner`** | `1.1.0` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `4.2.1` | 70 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`persona-pair-programmer`** | `1.1.1` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
+| **`persona-ship-it`** | `1.1.1` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
+| **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
+| **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
+| **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
+| **`workbench`** | `4.2.2` | 70 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `2.1.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 
 ## Details
@@ -51,7 +51,7 @@ Product-strategy sounding board and coach persona for a design+PM hybrid at an e
 
 ### `persona-pair-programmer`
 
-*v1.1.0 · `plugins/persona-pair-programmer`*
+*v1.1.1 · `plugins/persona-pair-programmer`*
 
 Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.
 
@@ -59,7 +59,7 @@ Collaborative pair-programmer voice — brief think-aloud, checks in at decision
 
 ### `persona-ship-it`
 
-*v1.1.0 · `plugins/persona-ship-it`*
+*v1.1.1 · `plugins/persona-ship-it`*
 
 Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves.
 
@@ -67,7 +67,7 @@ Momentum-first voice — blunt, bias-to-action, picks a sensible default and mov
 
 ### `persona-staff-eng-deep`
 
-*v1.1.0 · `plugins/persona-staff-eng-deep`*
+*v1.1.1 · `plugins/persona-staff-eng-deep`*
 
 Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out.
 
@@ -75,7 +75,7 @@ Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cas
 
 ### `persona-terse-staff-eng`
 
-*v1.1.0 · `plugins/persona-terse-staff-eng`*
+*v1.1.1 · `plugins/persona-terse-staff-eng`*
 
 Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona.
 
@@ -83,7 +83,7 @@ Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions.
 
 ### `persona-thinking-partner`
 
-*v1.1.0 · `plugins/persona-thinking-partner`*
+*v1.1.1 · `plugins/persona-thinking-partner`*
 
 Socratic thinking partner — sharp questions and decision-sharpening over answers.
 
@@ -91,7 +91,7 @@ Socratic thinking partner — sharp questions and decision-sharpening over answe
 
 ### `workbench`
 
-*v4.2.1 · `plugins/workbench`*
+*v4.2.2 · `plugins/workbench`*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.
 
