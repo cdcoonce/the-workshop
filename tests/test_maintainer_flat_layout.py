@@ -15,7 +15,7 @@ authoritative and is wrong is worse than a missing one.
 Scope is `plugins/workshop-maintainer/` because that is what #640 covers.
 `plugins/workbench/` carries the same defect -- including five runnable
 `uv run python core/skills/.../*.py` commands that cannot resolve -- tracked
-separately in #660. When that lands, add workbench to `SCANNED_PLUGINS` rather
+separately in #661. When that lands, add workbench to `SCANNED_PLUGINS` rather
 than writing a second copy of this test.
 
 Note on writing the check: `git grep -E` silently matches NOTHING for `\\bcore/`
