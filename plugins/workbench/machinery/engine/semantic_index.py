@@ -36,18 +36,21 @@ from typing import Any
 import numpy as np
 
 from vault_scope_resolved import is_graph_markdown_note, iter_graph_markdown_notes
+from vault_utils import find_vault_root_from_env
 
 # ---------------------------------------------------------------------------
-# Paths — vault root is two levels above .claude/scripts/
+# Paths — the vault root is resolved from the environment, never from this
+# file's location. The engine ships inside the plugin cache (issue #677):
+# deriving the root positionally pointed every index path into the cache,
+# where the index is never found and a reindex would be wiped on update.
+# ``main()`` resolves once via ``find_vault_root_from_env()`` (which enforces
+# the brain/ + perf/ + CLAUDE.md signature) and threads the root through.
 # ---------------------------------------------------------------------------
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-VAULT_ROOT = SCRIPTS_DIR.parents[1]
-INDEX_DIR = VAULT_ROOT / ".claude" / "data" / "semantic"
 
-VECTORS_FILE = INDEX_DIR / "vectors.npy"
-META_FILE = INDEX_DIR / "meta.json"
-MANIFEST_FILE = INDEX_DIR / "manifest.json"
+def _index_dir(vault_root: Path) -> Path:
+    """The on-disk index directory inside *vault_root*."""
+    return vault_root / ".claude" / "data" / "semantic"
 
 # Embedding model
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
@@ -71,14 +74,14 @@ SNIPPET_LEN = 200  # characters kept as the display snippet
 # ---------------------------------------------------------------------------
 
 
-def _is_excluded(path: Path) -> bool:
+def _is_excluded(path: Path, vault_root: Path) -> bool:
     """Return True if *path* falls under any excluded subtree."""
-    return not is_graph_markdown_note(path, VAULT_ROOT)
+    return not is_graph_markdown_note(path, vault_root)
 
 
-def iter_vault_notes() -> list[Path]:
+def iter_vault_notes(vault_root: Path) -> list[Path]:
     """Yield every in-scope .md file, exclusions applied."""
-    return iter_graph_markdown_notes(VAULT_ROOT)
+    return iter_graph_markdown_notes(vault_root)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +218,7 @@ def _split_oversize(text: str) -> list[str]:
     return _word_slices(text)
 
 
-def chunk_note(path: Path, raw: str) -> list[dict[str, Any]]:
+def chunk_note(path: Path, raw: str, vault_root: Path) -> list[dict[str, Any]]:
     """Split a note into embeddable chunks.
 
     Strategy:
@@ -232,7 +235,7 @@ def chunk_note(path: Path, raw: str) -> list[dict[str, Any]]:
     fields, body = _extract_frontmatter(raw)
     chunks: list[dict[str, Any]] = []
 
-    rel = str(path.relative_to(VAULT_ROOT))
+    rel = str(path.relative_to(vault_root))
 
     # Description chunk — high-signal summary written by the human
     if desc := fields.get("description", "").strip():
@@ -322,25 +325,32 @@ def file_hash(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _load_index() -> tuple[np.ndarray | None, list[dict], dict[str, str]]:
+def _load_index(
+    vault_root: Path,
+) -> tuple[np.ndarray | None, list[dict], dict[str, str]]:
     """Load vectors, meta, manifest from disk.  Returns Nones on any failure."""
+    index_dir = _index_dir(vault_root)
+    vectors_file = index_dir / "vectors.npy"
+    meta_file = index_dir / "meta.json"
+    manifest_file = index_dir / "manifest.json"
     try:
-        vectors = np.load(str(VECTORS_FILE)) if VECTORS_FILE.exists() else None
-        meta = json.loads(META_FILE.read_text()) if META_FILE.exists() else []
-        manifest = json.loads(MANIFEST_FILE.read_text()) if MANIFEST_FILE.exists() else {}
+        vectors = np.load(str(vectors_file)) if vectors_file.exists() else None
+        meta = json.loads(meta_file.read_text()) if meta_file.exists() else []
+        manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else {}
         return vectors, meta, manifest
     except Exception:
         return None, [], {}
 
 
 def _save_index(
-    vectors: np.ndarray, meta: list[dict], manifest: dict[str, str]
+    vault_root: Path, vectors: np.ndarray, meta: list[dict], manifest: dict[str, str]
 ) -> None:
     """Persist the index files atomically-ish (write then rename)."""
-    INDEX_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(str(VECTORS_FILE), vectors.astype(np.float32))
-    META_FILE.write_text(json.dumps(meta, indent=2))
-    MANIFEST_FILE.write_text(json.dumps(manifest, indent=2))
+    index_dir = _index_dir(vault_root)
+    index_dir.mkdir(parents=True, exist_ok=True)
+    np.save(str(index_dir / "vectors.npy"), vectors.astype(np.float32))
+    (index_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+    (index_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
 
 # ---------------------------------------------------------------------------
@@ -372,10 +382,11 @@ def embed_texts(texts: list[str]) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def build_index(force: bool = False) -> dict:
+def build_index(vault_root: Path, force: bool = False) -> dict:
     """Rebuild (incremental or full) the on-disk vector index.
 
     Args:
+        vault_root: The vault the index describes and lives inside.
         force: If True, re-embed every note regardless of content hash.
 
     Returns:
@@ -383,14 +394,14 @@ def build_index(force: bool = False) -> dict:
     """
     t0 = time.monotonic()
 
-    existing_vectors, existing_meta, manifest = _load_index()
+    existing_vectors, existing_meta, manifest = _load_index(vault_root)
     if force or existing_vectors is None:
         existing_vectors = None
         existing_meta = []
         manifest = {}
 
-    notes = iter_vault_notes()
-    note_paths = {str(p.relative_to(VAULT_ROOT)): p for p in notes}
+    notes = iter_vault_notes(vault_root)
+    note_paths = {str(p.relative_to(vault_root)): p for p in notes}
 
     # Drop chunks belonging to deleted notes
     if existing_meta:
@@ -423,7 +434,7 @@ def build_index(force: bool = False) -> dict:
                 existing_vectors = existing_vectors[keep_arr]
 
         raw = path.read_text(encoding="utf-8", errors="replace")
-        chunks = chunk_note(path, raw)
+        chunks = chunk_note(path, raw, vault_root)
         for idx, chunk in enumerate(chunks):
             chunk["chunk_index"] = idx
             chunk["note_hash"] = h
@@ -453,7 +464,7 @@ def build_index(force: bool = False) -> dict:
         all_vectors = np.zeros((0, 384), dtype=np.float32)
         all_meta = []
 
-    _save_index(all_vectors, all_meta, manifest)
+    _save_index(vault_root, all_vectors, all_meta, manifest)
 
     elapsed = round(time.monotonic() - t0, 2)
     return {
@@ -469,13 +480,16 @@ def build_index(force: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def search(query: str, k: int = 8) -> list[dict]:
+def search(query: str, k: int = 8, *, vault_root: Path) -> list[dict]:
     """Semantic search over the index.
 
     Returns up to *k* results deduplicated to note level (best-scoring chunk
-    per note), sorted descending by cosine similarity.
+    per note), sorted descending by cosine similarity. ``vault_root`` is
+    keyword-only on purpose: a stale positional caller from the pre-#677
+    signature fails loudly with a TypeError instead of searching the wrong
+    tree.
     """
-    vectors, meta, _ = _load_index()
+    vectors, meta, _ = _load_index(vault_root)
 
     if vectors is None or len(meta) == 0:
         return []
@@ -518,43 +532,52 @@ def search(query: str, k: int = 8) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def status() -> dict:
-    """Report index health without modifying anything."""
-    vectors, meta, manifest = _load_index()
+def status(vault_root: Path) -> dict:
+    """Report index health without modifying anything.
+
+    Always names the resolved ``vault_root`` and ``index_dir`` in the output:
+    the #677 failure mode was a wrong root masquerading as an empty vault, and
+    a status report that shows *where* it looked makes that visible.
+    """
+    vectors, meta, manifest = _load_index(vault_root)
+    base = {
+        "vault_root": str(vault_root),
+        "index_dir": str(_index_dir(vault_root)),
+        "model": MODEL_NAME,
+    }
 
     if vectors is None:
-        return {
+        return base | {
             "notes": 0,
             "chunks": 0,
             "stale_notes": 0,
             "index_built_at": None,
-            "model": MODEL_NAME,
             "ready": False,
         }
 
-    live_notes = iter_vault_notes()
-    live_rels = {str(p.relative_to(VAULT_ROOT)) for p in live_notes}
+    live_notes = iter_vault_notes(vault_root)
+    live_rels = {str(p.relative_to(vault_root)) for p in live_notes}
 
     stale = 0
     for rel in live_rels:
-        path = VAULT_ROOT / rel
+        path = vault_root / rel
         h = file_hash(path)
         if manifest.get(rel) != h:
             stale += 1
 
     built_at = None
-    if MANIFEST_FILE.exists():
-        mtime = MANIFEST_FILE.stat().st_mtime
+    manifest_file = _index_dir(vault_root) / "manifest.json"
+    if manifest_file.exists():
+        mtime = manifest_file.stat().st_mtime
         built_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
 
     note_set = {m["note_path"] for m in meta}
 
-    return {
+    return base | {
         "notes": len(note_set),
         "chunks": len(meta),
         "stale_notes": stale,
         "index_built_at": built_at,
-        "model": MODEL_NAME,
         "ready": True,
     }
 
@@ -612,11 +635,11 @@ def _check_first_run() -> None:
         pass
 
 
-def cmd_reindex(args: argparse.Namespace) -> None:
+def cmd_reindex(args: argparse.Namespace, vault_root: Path) -> None:
     """Handler for `reindex [--force]`."""
     _check_first_run()
     try:
-        result = build_index(force=args.force)
+        result = build_index(vault_root, force=args.force)
         _emit(result)
     except ImportError as exc:
         _error(
@@ -628,14 +651,14 @@ def cmd_reindex(args: argparse.Namespace) -> None:
         _error(str(exc), "Check stderr for details; try --force to rebuild from scratch.")
 
 
-def cmd_search(args: argparse.Namespace) -> None:
+def cmd_search(args: argparse.Namespace, vault_root: Path) -> None:
     """Handler for `search "<query>" [--k N]`."""
     # Ensure index exists before searching
-    vectors, meta, _ = _load_index()
+    vectors, meta, _ = _load_index(vault_root)
     if vectors is None or len(meta) == 0:
         _check_first_run()
         try:
-            build_index(force=False)
+            build_index(vault_root, force=False)
         except ImportError as exc:
             _error(
                 f"fastembed not available: {exc}",
@@ -646,7 +669,7 @@ def cmd_search(args: argparse.Namespace) -> None:
             _error(str(exc), "Try: uv run python semantic_index.py reindex --force")
 
     try:
-        results = search(args.query, k=args.k)
+        results = search(args.query, k=args.k, vault_root=vault_root)
         _emit(results)
     except ImportError as exc:
         _error(
@@ -658,16 +681,16 @@ def cmd_search(args: argparse.Namespace) -> None:
         _error(str(exc), "Try reindexing first: uv run python semantic_index.py reindex")
 
 
-def cmd_status(args: argparse.Namespace) -> None:  # noqa: ARG001
+def cmd_status(args: argparse.Namespace, vault_root: Path) -> None:  # noqa: ARG001
     """Handler for `status`."""
     try:
-        _emit(status())
+        _emit(status(vault_root))
     except Exception as exc:
         traceback.print_exc(file=sys.stderr)
         _error(str(exc), "Check stderr for details.")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Semantic vault search engine (fastembed / bge-small-en-v1.5)."
     )
@@ -690,13 +713,23 @@ def main() -> None:
     p_status = sub.add_parser("status", help="Report index health.")
     p_status.set_defaults(func=cmd_status)
 
-    args = parser.parse_args()
-    args.func(args)
+    args = parser.parse_args(argv)
+
+    vault_root = find_vault_root_from_env()
+    if vault_root is None:
+        _error(
+            "vault root not found (no brain/ + perf/ + CLAUDE.md signature at "
+            "CLAUDE_PROJECT_DIR or above the working directory)",
+            "Run from inside the vault, or set CLAUDE_PROJECT_DIR to it.",
+        )
+
+    args.func(args, vault_root)
+    return 0
 
 
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main())
     except SystemExit:
         raise
     except Exception as exc:

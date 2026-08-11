@@ -21,10 +21,14 @@ import semantic_index
 from semantic_index import (
     CHUNK_TARGET_WORDS,
     SNIPPET_LEN,
-    VAULT_ROOT,
     _extract_frontmatter,
     chunk_note,
 )
+
+# chunk_note only uses the root to compute the note's vault-relative path, so
+# any absolute base works — the module no longer carries a VAULT_ROOT constant
+# (it resolves the vault from the environment at main(); issue #677).
+VAULT_ROOT = Path("/vault-for-tests")
 
 
 # ---------------------------------------------------------------------------
@@ -123,13 +127,13 @@ class TestExtractFrontmatter:
 class TestChunkNote:
     def test_short_note_no_frontmatter_single_chunk(self) -> None:
         raw = "# Heading\n\nA few short words in one section.\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) == 1
         assert chunks[0]["note_path"] == "brain/sample.md"
 
     def test_chunk_carries_note_path_snippet_and_text(self) -> None:
         raw = "# Title\n\nSome body content here.\n"
-        chunks = chunk_note(_note_path("work/active/foo.md"), raw)
+        chunks = chunk_note(_note_path("work/active/foo.md"), raw, VAULT_ROOT)
         chunk = chunks[0]
         assert set(["text", "snippet", "note_path"]).issubset(chunk.keys())
         assert chunk["note_path"] == "work/active/foo.md"
@@ -142,7 +146,7 @@ class TestChunkNote:
             "---\n"
             "# Heading\n\nBody text.\n"
         )
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert chunks[0]["text"] == "High signal summary"
         # The body becomes at least one additional chunk.
         assert len(chunks) >= 2
@@ -155,7 +159,7 @@ class TestChunkNote:
             "---\n"
             "# Heading\n\nThe actual body.\n"
         )
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         # No body chunk should contain the raw frontmatter fence or fields.
         body_chunks = [c for c in chunks if c["text"] != "Sum"]
         assert body_chunks
@@ -167,7 +171,7 @@ class TestChunkNote:
         # Two sections each just over the target word count → 2+ chunks.
         big_words = " ".join(["word"] * (CHUNK_TARGET_WORDS + 5))
         raw = f"# Section A\n\n{big_words}\n\n# Section B\n\n{big_words}\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) >= 2
 
     def test_word_oversize_section_splits_into_bounded_chunks(self) -> None:
@@ -176,7 +180,7 @@ class TestChunkNote:
         # alone is the defect fixed for the-vault#137.
         big = " ".join(["w"] * (CHUNK_TARGET_WORDS + 50))
         raw = f"# Big\n\n{big}\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) >= 2
         for c in chunks:
             assert len(c["text"].split()) <= CHUNK_TARGET_WORDS
@@ -191,20 +195,20 @@ class TestChunkNote:
             "# B\n\nshort two\n\n"
             "# C\n\nshort three\n"
         )
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) == 1
         # All three sections survive in the packed text.
         assert "short one" in chunks[0]["text"]
         assert "short three" in chunks[0]["text"]
 
     def test_empty_input_still_emits_one_chunk(self) -> None:
-        chunks = chunk_note(_note_path(), "")
+        chunks = chunk_note(_note_path(), "", VAULT_ROOT)
         assert len(chunks) == 1
         # Fallback uses the relative path string when there is no content.
         assert chunks[0]["text"] == "brain/sample.md"
 
     def test_whitespace_only_input_still_emits_one_chunk(self) -> None:
-        chunks = chunk_note(_note_path(), "   \n\n\t  \n")
+        chunks = chunk_note(_note_path(), "   \n\n\t  \n", VAULT_ROOT)
         assert len(chunks) == 1
         # No real content → falls back to the rel path.
         assert chunks[0]["text"] == "brain/sample.md"
@@ -212,7 +216,7 @@ class TestChunkNote:
     def test_snippet_truncated_to_snippet_len(self) -> None:
         long_line = "x" * (SNIPPET_LEN + 100)
         raw = f"# H\n\n{long_line}\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert all(len(c["snippet"]) <= SNIPPET_LEN for c in chunks)
 
     def test_frontmatter_only_no_description_emits_one_chunk(self) -> None:
@@ -221,7 +225,7 @@ class TestChunkNote:
         # raw.strip()` yields the stripped raw text (the only non-empty
         # source), so a single chunk is still emitted.
         raw = "---\n" "date: 2026-06-27\n" "---\n\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) == 1
         assert chunks[0]["text"] == raw.strip()
 
@@ -247,7 +251,7 @@ class TestOversizeSectionSplitting:
         raw = "# Gotchas\n\n" + "\n\n".join(paragraphs) + "\n"
         assert len(raw) > 3 * semantic_index.CHUNK_MAX_CHARS
 
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) > 1
         for c in chunks:
             assert len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS
@@ -258,7 +262,7 @@ class TestOversizeSectionSplitting:
         # from whole paragraphs — no mid-paragraph cuts.
         paragraphs = [f"P{i:03d} " + " ".join(["word"] * 49) for i in range(20)]
         raw = "# H\n\n" + "\n\n".join(paragraphs) + "\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) > 1
 
         seen: list[str] = []
@@ -289,7 +293,7 @@ class TestOversizeSectionSplitting:
         )
         raw = '---\ndescription: "Hard-won lessons"\n---\n' + body
 
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
 
         # Chunk-0 contract: the frontmatter description still leads.
         assert chunks[0]["text"] == "Hard-won lessons"
@@ -311,7 +315,7 @@ class TestOversizeSectionSplitting:
         # splitter must hard-slice at the ceiling rather than emit it whole.
         blob = "x" * (12 * 1024)
         raw = f"# Blob\n\n{blob}\n"
-        chunks = chunk_note(_note_path(), raw)
+        chunks = chunk_note(_note_path(), raw, VAULT_ROOT)
         assert len(chunks) > 1
         assert all(len(c["text"]) <= semantic_index.CHUNK_MAX_CHARS for c in chunks)
         assert _nonws("".join(c["text"] for c in chunks)) == _nonws(raw)

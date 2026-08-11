@@ -353,3 +353,76 @@ class TestSearchHonorsContext:
             ]
 
         assert len(search_notes("x", 4, search_fn=fake_search, vault_root=scoped_vault)) == 4
+
+
+# ---------------------------------------------------------------------------
+# main() — vault-root resolution (issue #677)
+# ---------------------------------------------------------------------------
+
+
+class TestMainRootResolution:
+    """main() previously took ``Path(__file__).parents[2]`` as the vault —
+    correct only while the module was vendored inside the vault. It now
+    resolves through ``find_vault_root_from_env()`` and refuses to serve
+    when no signature vault exists: an MCP server rooted at the plugin
+    cache is not a smaller vault, it is the wrong filesystem subtree.
+    """
+
+    def test_serves_the_env_resolved_vault(self, tmp_path, monkeypatch) -> None:
+        import vault_mcp
+
+        (tmp_path / "CLAUDE.md").write_text("# vault")
+        (tmp_path / "brain").mkdir()
+        (tmp_path / "perf").mkdir()
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+
+        captured: dict = {}
+
+        class _StubServer:
+            def run(self) -> None:
+                captured["ran"] = True
+
+        def fake_build_server(vault_root):
+            captured["root"] = Path(vault_root)
+            return _StubServer()
+
+        monkeypatch.setattr(vault_mcp, "build_server", fake_build_server)
+
+        vault_mcp.main()
+
+        assert captured["ran"] is True
+        assert captured["root"].samefile(tmp_path)
+
+    def test_refuses_to_serve_without_a_vault(self, tmp_path, monkeypatch) -> None:
+        import vault_mcp
+
+        monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            vault_mcp,
+            "build_server",
+            lambda root: pytest.fail("must not build a server with no vault"),
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            vault_mcp.main()
+
+        assert excinfo.value.code == 1
+
+    def test_default_search_scopes_the_index_to_the_vault(self, monkeypatch) -> None:
+        """_default_search must pass the root through to semantic_index —
+        dropping it is exactly how the wrong-root bug stayed invisible."""
+        import semantic_index
+        import vault_mcp
+
+        seen: dict = {}
+
+        def fake_search(query: str, k: int = 8, *, vault_root: Path) -> list[dict]:
+            seen["root"] = vault_root
+            return []
+
+        monkeypatch.setattr(semantic_index, "search", fake_search)
+
+        vault_mcp._default_search("q", 3, Path("/some/vault"))
+
+        assert seen["root"] == Path("/some/vault")
