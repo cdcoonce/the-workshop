@@ -16,7 +16,7 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 | **`persona-staff-eng-deep`** | `1.1.0` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.0` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.0` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `4.0.1` | 70 | 10 | 10 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `4.1.0` | 70 | 10 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `2.1.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 
 ## Details
@@ -91,7 +91,7 @@ Socratic thinking partner — sharp questions and decision-sharpening over answe
 
 ### `workbench`
 
-*v4.0.1 · `plugins/workbench`*
+*v4.1.0 · `plugins/workbench`*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.
 
@@ -107,7 +107,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 **Agents (10):** `analysis-builder`, `api-builder`, `backend-builder`, `code-reviewer`, `data-quality-reviewer`, `frontend-builder`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 
-**Hooks (10):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`, `warn-off-trunk.py`
+**Hooks (17):** `audit-config-change.py`, `inject-skill-router.py`, `post-edit-lint.py`, `protect-files.py`, `remind-skill-announce.py`, `snapshot-subagent-start.py`, `suggest-handoff-on-context.py`, `vault-pre-compact.py`, `vault-session-start.py`, `vault-stop-1-notebook-update.py`, `vault-stop-2-graph-gardener.py`, `vault-stop-3-session-sync.py`, `vault-user-prompt-classify.py`, `vault-validate-write.py`, `verify-subagent-evidence.py`, `verify-tests-before-stop.py`, `warn-off-trunk.py`
 
 ### `workshop-maintainer`
 

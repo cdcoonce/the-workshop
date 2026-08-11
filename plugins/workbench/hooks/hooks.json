@@ -30,6 +30,25 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh remind-skill-announce.py"
           }
         ]
+      },
+      {
+        "matcher": "write|edit|multiedit|multi_edit|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-validate-write.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-pre-compact.py"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -62,11 +81,31 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh inject-skill-router.py"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-session-start.py"
+          }
+        ]
       }
     ],
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-stop-1-notebook-update.py"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-stop-2-graph-gardener.py"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-stop-3-session-sync.py"
+          },
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh verify-tests-before-stop.py"
@@ -100,6 +139,10 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh suggest-handoff-on-context.py"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-user-prompt-classify.py"
           }
         ]
       }
