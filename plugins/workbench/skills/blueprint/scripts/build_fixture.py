@@ -9,7 +9,7 @@ is therefore scripted and deterministic — never hand-copied.
 
 Usage:
 
-    uv run python core/skills/blueprint/scripts/build_fixture.py <target-dir>
+    uv run python plugins/workbench/skills/blueprint/scripts/build_fixture.py <target-dir>
 
 The target directory gains one subdirectory per variant. Existing variant
 subdirectories are removed and rebuilt, so a rerun always yields a clean

@@ -1,6 +1,6 @@
 # TDD Discipline: Excuses, Reality, and Delete-Means-Delete
 
-Counter-rationalization reference for the [tdd](SKILL.md) skill's Iron Law. See [core/docs/tdd.md](../../docs/tdd.md) for the full narrative walkthrough this table summarizes.
+Counter-rationalization reference for the [tdd](SKILL.md) skill's Iron Law. See [docs/tdd.md](../../docs/tdd.md) for the full narrative walkthrough this table summarizes.
 
 ## Excuse → Reality
 

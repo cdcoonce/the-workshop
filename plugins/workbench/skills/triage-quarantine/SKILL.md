@@ -49,7 +49,7 @@ The diagnosis picks the resolution; never default to re-running. Check the prese
 - **Half-done with failing tests**: the worker's own tests are the spec. Merge the recovery branch, watch its tests fail (that is the RED), implement the missing half, land through the normal review path with one version bump.
 - **A confirmed lie-pattern** (e.g. scope vs an AC-mandated file): the work is probably right — review it, land it, then fix the categorizer or footprint declaration so it cannot recur.
 - **Dead premise**: close the issue citing the evidence; do not respec what should not exist.
-- **Re-dispatch** only when none of the above apply — and widen the issue's declared footprint first (name dist/ mirrors, generated files, and test fixtures by path), or the same gate refuses the same files again.
+- **Re-dispatch** only when none of the above apply — and widen the issue's declared footprint first (name stamped output, generated files, and test fixtures by path), or the same gate refuses the same files again.
 
 ## Question-parked slices
 

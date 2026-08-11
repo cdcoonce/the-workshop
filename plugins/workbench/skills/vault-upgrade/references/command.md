@@ -13,7 +13,7 @@ Upgrade the vault's vendored machinery (engine scripts, agents, skills, hook wir
 
 The `--source` is a machinery dir containing `vendor-map.json`:
 
-1. **Local checkout (preferred):** `<the-workshop>/presets/vault-ops/machinery` — make sure it is on up-to-date `main` (`git fetch` first; never upgrade from a mid-review branch).
+1. **Local checkout (preferred):** `<the-workshop>/plugins/workbench/machinery` — make sure it is on up-to-date `main` (`git fetch` first; never upgrade from a mid-review branch).
 2. **Plugin cache:** the installed vault-ops plugin's `machinery/` directory, when no checkout exists on this machine.
 
 ## Process

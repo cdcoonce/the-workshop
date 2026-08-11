@@ -171,7 +171,7 @@ STATUS: <one of DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT>
 
 Exactly one status, exactly once. Free-prose reports give the orchestrator no
 reliable outcome signal — the status line is what phase-transition logic and
-downstream tooling key off of (see `core/skills/dev-cycle/references/phase-transitions.md`).
+downstream tooling key off of (see `plugins/workbench/skills/dev-cycle/references/phase-transitions.md`).
 
 Reply text (report or dispatch prompt) stays ≤15 lines — it stays resident in
 the orchestrator's context for the rest of the session, so detail belongs in

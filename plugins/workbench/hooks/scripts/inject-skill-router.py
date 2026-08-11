@@ -6,7 +6,7 @@
 
 Shipped inside every project preset plugin. On session start Claude Code runs it via
 `uv run`; it reads the plugin's `skills/using-workflow/SKILL.md`, strips the YAML
-frontmatter, and appends the preset's `conventions.json` (written by build_preset.py)
+frontmatter, and appends the plugin's `conventions.json` (written by scripts/stamp.py)
 as a bullet list, then emits the combined text as SessionStart `additionalContext` so
 the skill-invocation rules and project conventions are layered on top of the default
 engineering instructions (purely additive — it never replaces the base prompt).

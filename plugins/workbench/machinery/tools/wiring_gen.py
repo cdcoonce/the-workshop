@@ -20,7 +20,7 @@ both into ``rendered/``:
   full body as ``developer_instructions``). Where a hand-written vault TOML
   drifted from its ``.md``, the ``.md`` wins.
 
-Run at build time by ``scripts/build_preset.py`` (and standalone via
+Run by ``scripts/stamp.py`` (and standalone via
 ``python wiring_gen.py``). Output is byte-stable across runs: no timestamps,
 fixed serializers, sorted directory iteration. Event order in the rendered
 hooks follows spec order, which is semantic — it must reproduce the vault's

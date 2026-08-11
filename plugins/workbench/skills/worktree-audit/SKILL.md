@@ -22,7 +22,7 @@ meant to reap them ran the whole time and could never succeed.
 Read-only unless you pass `--reap`.
 
 ```
-uv run python core/skills/worktree-audit/scripts/worktree_audit.py --root ~/Developer/GitHub
+uv run python plugins/workbench/skills/worktree-audit/scripts/worktree_audit.py --root ~/Developer/GitHub
 ```
 
 - `--repo <path>` — one repo instead of a sweep. No flags at all audits the cwd.
