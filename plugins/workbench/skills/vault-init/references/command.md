@@ -45,19 +45,20 @@ Init prints the checklist; walk it with the owner step by step:
 
 1. Write `.vault-context` (gitignored, one per machine).
 2. Wire git conventions: `git config --local --add include.path '../.gitconfig'`.
-3. Optional: install the vault-ops plugin from the-workshop marketplace for cross-repo use.
-4. Codex only, once per machine: approve hook trust interactively — hooks are silently skipped until trusted (automation may use `codex exec --dangerously-bypass-hook-trust`).
-5. Add a private git remote and push, if the vault should sync across machines.
+3. Install `workbench@the-workshop` from the the-workshop marketplace — the vault's hooks and engine ship in it, so the vault does nothing without it.
+4. Hand-write `.vault/vault.json` declaring `vault`, `plugin`, and `min_plugin_version`. **The scaffold does not emit this file yet (#687)** and its presence is the switch that makes every vault hook run — the hook shim walks up looking for it and exits before starting an interpreter when it is absent. Until it exists the vault is inert, silently.
+5. Codex only, once per machine: approve hook trust interactively — hooks are silently skipped until trusted (automation may use `codex exec --dangerously-bypass-hook-trust`).
+6. Add a private git remote and push, if the vault should sync across machines.
 
 ### 5. Verify
 
 - Open an agent session in the new vault: the session-start hook should inject context with no Python errors.
-- Run `python3 .claude/scripts/machinery_check.py --strict` — every file OK.
+- Confirm the hooks are actually live, not merely installed: make a trivial edit and check the auto-commit fires. A vault missing `.vault/vault.json` looks identical to a healthy one until you look for the thing that did not happen.
 - Skim the scaffolded `AGENTS.md` with the owner and fill in the owner section; the placeholder guidance is meant to be replaced as the vault takes shape.
 
 ## Constraints
 
 - Interview before running; never guess a taxonomy the owner has to live with.
 - Never scaffold over existing content; the emptiness refusal is a safety rail, not an obstacle.
-- The scaffolded files are the owner's (scaffold tier): later `/vault-upgrade` runs never touch them.
+- The scaffolded files are the owner's (scaffold tier): plugin upgrades never touch them.
 - `SETUP.md` in the new vault is the canonical new-machine checklist from then on — point the owner there.

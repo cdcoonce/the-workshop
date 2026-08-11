@@ -6,7 +6,7 @@ Run the pulse engine and present the trend. The script does all the heavy liftin
 
 ## Procedure
 
-1. Run: `python3 .claude/scripts/pulse.py $ARGUMENTS` (add `--json` for structured numbers).
+1. Run: `python3 "<engine>/pulse.py" $ARGUMENTS` (add `--json` for structured numbers).
 2. Present the weekly table as-is, then add interpretation:
    - **Trend rule:** compare the latest week to the rolling 4-week median. Flag a downtrend only on **2+ consecutive weeks below** the band — single bad weeks are noise.
    - **Attention vs output:** `attn_*` columns are the leading indicator (interactive hours move first when the schedule tightens); `afk_merged` is the autonomous pipeline and does **not** measure Charles's attention — never present blended totals.

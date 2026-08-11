@@ -14,7 +14,7 @@ The hand-written truth is exactly three things:
 * A hook's own ``WORKSHOP_HOOK`` declaration, read statically with ``ast``.
   Dropping a script into ``plugins/<name>/hooks/scripts/`` *is* the wiring.
 
-Everything else in the twelve owned path classes (see ``owned_paths``) is
+Everything else in the thirteen owned path classes (see ``owned_paths``) is
 derived. Each generated file carries a ``scripts/stamp.py`` marker — a
 ``_generated`` key in JSON, a comment line in Markdown/shell/Python, and a
 ``description`` field in ``hooks.json``, whose schema Codex validates strictly
@@ -155,9 +155,16 @@ class StampError(Exception):
 
 @dataclass(frozen=True)
 class SkillDoc:
-    """A skill's documented surface, parsed from its SKILL.md frontmatter."""
+    """A skill's documented surface, parsed from its SKILL.md frontmatter.
+
+    ``slug`` is the on-disk directory and is the only field safe to build a path
+    from; ``name`` is author-supplied frontmatter. They are asserted equal at
+    parse time, but code that writes files should still reach for ``slug`` so a
+    future relaxation of that rule cannot turn into a stray directory.
+    """
 
     name: str
+    slug: str
     description: str
     plugin: str
 
@@ -346,8 +353,23 @@ def _parse_skill(skill_dir: Path, plugin: str) -> SkillDoc:
         raise StampError(f"Skill '{skill_dir.name}' has no SKILL.md at {skill_md}")
     frontmatter = _load_frontmatter(skill_md, "Skill")
     label = f"Skill '{skill_dir.name}/SKILL.md'"
+    name = _require_str(frontmatter, "name", label)
+    # Agents have enforced this since the composition build (smoke_test.py);
+    # skills never did, which was harmless while nothing built a path from the
+    # frontmatter name. The vault-principles class does, and a mismatch there
+    # writes a directory that is not a skill and then wedges every later
+    # `stamp` and `--check` on a path nobody created. Fail at parse time, where
+    # the message can name both halves.
+    if name != skill_dir.name:
+        raise StampError(
+            f"{label} declares name '{name}' but lives in directory "
+            f"'{skill_dir.name}'. A skill's frontmatter name must match its "
+            "directory: the slug is the invocation surface and is used to "
+            "build shipped paths."
+        )
     return SkillDoc(
-        name=_require_str(frontmatter, "name", label),
+        name=name,
+        slug=skill_dir.name,
         description=_require_str(frontmatter, "description", label),
         plugin=plugin,
     )
@@ -948,6 +970,41 @@ def persona_settings_template(root: Path) -> Path:
     return root / "plugins" / "workbench" / "hooks" / "settings.persona.json"
 
 
+# Every vault-* skill bundles the same operating principles. They were 26
+# hand-replicated copies until #679, where the engine's path went stale in all
+# of them at once and correcting it meant editing 26 files -- so nobody did.
+# Single-sourcing makes the copies a stamper output like any other: one author,
+# and `--check` names any copy that drifts.
+_VAULT_SKILL_PREFIX = "vault-"
+_VAULT_PRINCIPLES = "vault-operating-principles.md"
+
+
+def vault_principles_template(root: Path) -> Path:
+    """Where the canonical vault operating principles live, if anywhere.
+
+    `shared/` is a sibling of the parsed component dirs on purpose: anything
+    under `skills/` is read as a skill, so a shared reference cannot live there
+    without being parsed as a malformed one.
+    """
+    return root / "plugins" / "workbench" / "shared" / _VAULT_PRINCIPLES
+
+
+def render_vault_principles(root: Path) -> str:
+    """Render the principles copy a vault-* skill ships."""
+    body = vault_principles_template(root).read_text(encoding="utf-8")
+    return f"{_MD_MARKER}\n\n{body}"
+
+
+def is_vault_skill(slug: str) -> bool:
+    """True for skills that ship the vault operating principles.
+
+    The slug prefix *is* the rule, rather than a hand-kept list: a list is one
+    more thing to update when a vault skill is added, and the failure mode is a
+    new skill silently shipping no principles at all.
+    """
+    return slug.startswith(_VAULT_SKILL_PREFIX)
+
+
 def render_persona_settings(root: Path) -> str:
     """Render a persona's settings.json from the workbench template."""
     return _json_doc(_read_json(persona_settings_template(root)))
@@ -1436,6 +1493,24 @@ def _render(root: Path) -> tuple[dict[Path, str], set[Path]]:
             runner = model.persona_plumbing.get("run-hook.sh")
             if runner is not None:
                 outputs[directory / "hooks" / "run-hook.sh"] = runner
+        vault_skills = [s for s in plugin.skills if is_vault_skill(s.slug)]
+        if vault_skills:
+            # Losing the canonical must not quietly un-own 25 shipped files.
+            # Skipping the class when the template is gone leaves every copy on
+            # disk, outside the path map, with `--check` reporting clean -- the
+            # drift gate would go blind at exactly the moment it is needed.
+            if not vault_principles_template(root).exists():
+                raise StampError(
+                    f"'{vault_principles_template(root)}' is missing, but "
+                    f"{plugin.name} ships {len(vault_skills)} vault-* skill(s) "
+                    "whose principles are rendered from it. Restore the canonical, "
+                    "or remove the skills that depend on it."
+                )
+            principles = render_vault_principles(root)
+            for skill in vault_skills:
+                outputs[
+                    directory / "skills" / skill.slug / "references" / _VAULT_PRINCIPLES
+                ] = principles
 
     outputs[root / ".claude-plugin" / "marketplace.json"] = render_marketplace(model)
     outputs[root / ".agents" / "plugins" / "marketplace.json"] = render_codex_marketplace(model)
@@ -1469,7 +1544,7 @@ def _render(root: Path) -> tuple[dict[Path, str], set[Path]]:
 def owned_paths(root: Path) -> dict[Path, str]:
     """Return {absolute path: exact desired content} for every file the stamper owns.
 
-    Pure: renders in memory and writes nothing. The twelve owned path classes are
+    Pure: renders in memory and writes nothing. The thirteen owned path classes are
 
     1. ``plugins/<n>/.codex-plugin/plugin.json``
     2. ``plugins/<n>/.cortex-plugin/plugin.json``

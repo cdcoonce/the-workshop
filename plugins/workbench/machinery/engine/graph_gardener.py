@@ -27,8 +27,9 @@ Hook dispatch model (mirrors notebook-update.py):
     then spawns this same script in --worker mode detached.  The worker runs
     Lane A + Lane B synchronously without touching debounce state.
 
-Usage as Stop hook:
-    bash "${CLAUDE_PROJECT_DIR:-.}"/.claude/scripts/run-hook.sh graph_gardener.py
+Usage as Stop hook (wired by scripts/stamp.py into the plugin's hooks.json —
+this is the generated form, not something to hand-write):
+    bash "${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}"/hooks/run-vault-hook.sh vault-stop-2-graph-gardener.py
 
 Dry-run / standalone testing:
     python graph_gardener.py --dry-run

@@ -6,7 +6,7 @@ Run the budget engine and present it. The script does all the heavy lifting (sca
 
 ## Procedure
 
-1. Run: `python3 .claude/scripts/budget_burn.py $ARGUMENTS` (add `--json` if you need the structured numbers).
+1. Run: `python3 "<engine>/budget_burn.py" $ARGUMENTS` (add `--json` if you need the structured numbers).
 2. Present the output as-is, then add one line of interpretation:
    - **Personal (subscription, value-meter):** this is API-equivalent value the flat subscription delivered — no per-token cap. Frame it as "what your subscription is worth," not a budget to fear.
    - **Work (enterprise, gate):** spend against the ~$350 enterprise cap. If projected month-end is over cap, flag it and point at the lever (below).
