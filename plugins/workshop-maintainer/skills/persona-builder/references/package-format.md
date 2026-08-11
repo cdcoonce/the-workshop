@@ -1,7 +1,7 @@
 # Phase 4/5 — Package Format + Behavior Eval
 
 A persona ships as an **`advisor-<role>` preset** (role-generic name: `advisor-product-design`,
-not `advisor-kathy`) that builds like any other preset — `build_preset` emits the
+not `advisor-kathy`) that stamps like any other plugin — `make stamp` emits the
 Claude, Codex, and Cortex manifests from the one shared source.
 
 ## The three layers
@@ -23,7 +23,7 @@ split is also the privacy boundary. The repo copy stays shareable-grade.
 ## Package skeleton (base layer)
 
 ```
-presets/advisor-<role>/
+plugins/advisor-<role>/
 ├── manifest.json              # name, description, semver version
 ├── settings-preset.json
 └── skills/advisor-<role>/

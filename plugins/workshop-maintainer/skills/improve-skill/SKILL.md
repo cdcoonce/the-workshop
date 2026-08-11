@@ -12,15 +12,15 @@ Run a benchmark-driven improvement loop on any skill: interview → baseline →
 
 **Self-check:** Before executing any phase, count the lines in this SKILL.md file. If it exceeds 100 lines, report the violation and halt execution immediately.
 
-**Reference path rule:** All `references/` paths in this skill are relative to this skill's own directory (`presets/workshop-maintainer/skills/improve-skill/`). Always resolve them from that directory regardless of current working directory.
+**Reference path rule:** All `references/` paths in this skill are relative to this skill's own directory (`plugins/workshop-maintainer/skills/improve-skill/`). Always resolve them from that directory regardless of current working directory.
 
-**Sidecar path rule:** The `.best_skill.md` sidecar file is always written to the same directory as the resolved `skill_path` (i.e., the directory containing the target skill's SKILL.md), not hardcoded to `core/skills/`. This applies to Phase 4 Step G and Phase 5 Step 1.
+**Sidecar path rule:** The `.best_skill.md` sidecar is always written beside the resolved `skill_path` — the directory containing the target skill's SKILL.md. The reference docs state this directly; there is no override to apply.
 
 ## Phase 1: Orchestrator
 
 **Step 1 — Parse and validate slug:** Usage: `/improve-skill <slug>`. If no slug given, reply with usage and stop. Reject the slug if it contains path separators (`/`, `\`), traversal sequences (`..`), spaces, or git-unsafe characters (`~`, `^`, `:`). On rejection, reply: `Error: invalid slug "{slug}". Slugs must be alphanumeric with hyphens only.` and stop.
 
-**Step 2 — Resolve skill path:** Check `core/skills/{slug}/SKILL.md`, then `presets/*/skills/{slug}/SKILL.md`. If not found, abort: `Error: no skill found for slug "{slug}".` Record resolved path as `skill_path`. Derive `tests_path` as the directory of `skill_path` plus `/tests.md`.
+**Step 2 — Resolve skill path:** Glob `plugins/*/skills/{slug}/SKILL.md` — one flat lookup covering every plugin. If no match, abort: `Error: no skill found for slug "{slug}".` If two or more match, abort naming every path found: `Error: slug "{slug}" resolves in N plugins: {paths}.` — one slug belongs to exactly one plugin, and a duplicate is a repo defect to fix, not to guess past. Record the single match as `skill_path`. Derive `tests_path` as the directory of `skill_path` plus `/tests.md`.
 
 **Step 3 — Check state file:** Look for `docs/skill-improve/{slug}.state.md`.
 
@@ -34,7 +34,7 @@ Run a benchmark-driven improvement loop on any skill: interview → baseline →
 
 ## Phase 2: Grill
 
-Read `presets/workshop-maintainer/skills/improve-skill/references/phase-2-grill.md` using the Read tool, then follow its instructions exactly. **Input validation override:** When asking for target pass rate, validate the input is an integer between 1 and 100. If invalid (non-numeric, out of range), explain the valid range and re-prompt. The target will be further validated against baseline in Phase 3.
+Read `plugins/workshop-maintainer/skills/improve-skill/references/phase-2-grill.md` using the Read tool, then follow its instructions exactly. **Input validation override:** When asking for target pass rate, validate the input is an integer between 1 and 100. If invalid (non-numeric, out of range), explain the valid range and re-prompt. The target will be further validated against baseline in Phase 3.
 
 After completion: test suite is written to `{tests_path}`; config (target pass rate, max iterations) is recorded in the state file; `current_phase` is advanced to `baseline`.
 
@@ -42,7 +42,7 @@ After completion: test suite is written to `{tests_path}`; config (target pass r
 
 ## Phase 3: Baseline
 
-Read `presets/workshop-maintainer/skills/improve-skill/references/phase-3-baseline.md` using the Read tool, then follow its instructions exactly. Before scoring the current skill, this phase runs a RED step: each test added in Phase 2 (tracked via `new_test_ids`) is first run against a no-skill subagent, and any test the no-skill baseline already passes is discarded — it measures nothing.
+Read `plugins/workshop-maintainer/skills/improve-skill/references/phase-3-baseline.md` using the Read tool, then follow its instructions exactly. Before scoring the current skill, this phase runs a RED step: each test added in Phase 2 (tracked via `new_test_ids`) is first run against a no-skill subagent, and any test the no-skill baseline already passes is discarded — it measures nothing.
 
 After completion: surviving tests have a recorded no-skill rationalization (`## RED Baseline (no-skill)` table in `{tests_path}`); `baseline_score` is recorded in state; iteration 0 is added to the Scores table; `best_score` is initialized to `baseline_score`.
 
@@ -50,9 +50,7 @@ After completion: surviving tests have a recorded no-skill rationalization (`## 
 
 ## Phase 4: Iterate
 
-Read `presets/workshop-maintainer/skills/improve-skill/references/phase-4-iterate.md` using the Read tool, then follow its instructions with these overrides:
-
-**Sidecar override:** Wherever the reference doc says `core/skills/{slug}/.best_skill.md`, use the directory of `{skill_path}` instead. The sidecar lives next to the target skill, not hardcoded to core.
+Read `plugins/workshop-maintainer/skills/improve-skill/references/phase-4-iterate.md` using the Read tool, then follow its instructions with these overrides:
 
 **Regression/stall override (this takes precedence over the reference doc):** After each iteration compare `new_score` to `best_score`:
 
@@ -66,9 +64,7 @@ When `stall_count` >= 2, invoke the strategy agent, then reset `stall_count` to 
 
 ## Phase 5: Finalize
 
-Read `presets/workshop-maintainer/skills/improve-skill/references/phase-5-finalize.md` using the Read tool, then follow its instructions with these overrides:
-
-**Sidecar override:** Read sidecar from the directory of `{skill_path}`, not hardcoded `core/skills/`.
+Read `plugins/workshop-maintainer/skills/improve-skill/references/phase-5-finalize.md` using the Read tool, then follow its instructions with these overrides:
 
 **Data preservation override:** Before clearing Result/Reason columns (Step 2), read and store the full annotated test table in memory so Step 3 can accurately report "Tests fixed" and "Tests still failing."
 
@@ -80,4 +76,4 @@ After completion: PR is filed using best iteration content; state archived to `d
 
 ## Phase 6: Agent Definitions
 
-Agents live in `core/agents/`: `skill-analyst`, `qa-tester`, `skill-writer`, `strategy`.
+Agents live in `plugins/workshop-maintainer/agents/`: `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`.

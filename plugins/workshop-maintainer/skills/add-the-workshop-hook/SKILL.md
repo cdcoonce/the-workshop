@@ -1,11 +1,12 @@
 ---
 name: add-the-workshop-hook
 description: >
-  Design and ship a new core hook in this repo (the-workshop) — fetch the
-  exact event schema, write a stdlib-only fail-open script, TDD it against
-  real subprocess+git behavior, wire it into every affected preset, and push
-  to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop,
-  SubagentStop, ConfigChange, SessionStart, etc.) under core/hooks/.
+  Design and ship a new hook in this repo (the-workshop) — fetch the exact
+  event schema, write a stdlib-only fail-open script, TDD it against real
+  subprocess+git behavior, declare its wiring so the stamper picks it up, and
+  push to both GitHub and GitLab. Use when adding a new Claude Code hook (Stop,
+  SubagentStop, ConfigChange, SessionStart, etc.) under
+  plugins/workbench/hooks/scripts/.
 ---
 
 # Add The Workshop Hook
@@ -31,13 +32,17 @@ Every hook in this repo is stdlib-only Python and must degrade safely:
 malformed stdin, missing fields, no git repo, missing binaries — all exit 0
 rather than blocking on ambiguity.
 
-Shared logic goes in an underscore-prefixed sibling under `core/hooks/` (e.g.
-`_git_baseline.py`): `run-hook.sh` runs `python3 hooks/scripts/<name>`, so a
-plain `import` resolves, `build_preset` ships `_*.py` unconditionally, and both
-hook discovery and the fail-open scan skip the prefix. Guard it with
-`except ImportError: sys.exit(0)` so a partial install no-ops rather than
-crashing the tool path. (#328 replaced the older "fully self-contained, no
-cross-hook imports" rule after three helpers had been copied into four hooks.)
+Every hook lives in exactly one place: `plugins/workbench/hooks/scripts/`.
+Shared logic goes in a sibling module there (e.g. `_git_baseline.py`):
+`run-hook.sh` runs `python3 hooks/scripts/<name>`, so a plain `import`
+resolves. Guard it with `except ImportError: sys.exit(0)` so a partial install
+no-ops rather than crashing the tool path. (#328 replaced the older "fully
+self-contained, no cross-hook imports" rule after three helpers had been copied
+into four hooks.)
+
+What keeps a helper out of the wiring is the **absence of a `WORKSHOP_HOOK`
+declaration**, not its leading underscore — a module that declares nothing is a
+library. See step 6.
 
 Portability across Claude Code, Cortex
 Code (CoCo), and Codex means: reuse the existing `run-hook.sh` shim
@@ -72,25 +77,43 @@ user.email/user.name`), not a mocked git module. Cover: malformed stdin
 fails open, the no-op path, the blocking/warning path, and the "should NOT
 trigger" path for every plausible false-positive.
 
-## 6. Wire it everywhere it should apply, not just where you're testing
+## 6. Declare the wiring in the hook itself, then stamp
 
-Add the hook entry to `core/settings-base.json` under the right event key,
-then register the script filename in **every** affected preset's
-`manifest.json` under `core.hooks` (skip persona-only presets unless the
-hook is persona-relevant — they opt out of `base_settings` entirely).
-Regenerate the living docs and rebuild every touched preset before committing:
-run `make docs` (rewrites `docs/reference/` and the README's generated hook
-tables from the new hook's docstring + wiring) and `make build` (rebuilds every
-preset into `dist/` and regenerates the marketplace). `dist/` and the reference
-docs are tracked, not gitignored, in this repo — commit the regenerated output
-alongside the hook or the drift gate (step 7) fails.
+Wiring is filesystem-driven: **dropping the script into
+`plugins/workbench/hooks/scripts/` and declaring its event _is_ the
+registration.** There is no per-plugin hook list to update, no base settings
+file to edit, and no composition step to rerun — all three died with the flat
+reorg (#656).
+
+Give the module a top-level literal:
+
+```python
+WORKSHOP_HOOK = {"event": "Stop"}
+```
+
+`event` is required; `matcher` and `runner` are optional. `scripts/stamp.py`
+reads it **statically with `ast`** and never imports the module — these scripts
+read stdin and exit at import time, so importing them would hang the stamper. A
+module with no `WORKSHOP_HOOK` is a shared library and stays out of the wiring
+(that, not the leading underscore, is what excludes `_git_baseline.py`).
+The declaration must be a literal dict; a computed value fails loudly by name.
+
+Then run `make stamp`. It rewrites every generated path from hand-written truth
+— `hooks/hooks.json`, the marketplace index, and `docs/reference/` — from your
+declaration plus the hook's docstring. Generated files are tracked, not
+gitignored: commit them alongside the hook or step 7 fails.
 
 ## 7. Run the full gate, not just the new test file
 
-Run `make test` — it runs the root suite, every auto-discovered skill-script
-suite, AND the docs/dist drift gate (`build_docs --check` plus a `dist/`
-rebuild that fails on any uncommitted diff). If the gate reports stale output,
-you skipped `make docs`/`make build` in step 6 — regenerate and commit.
+Run `make test` — lint, the root suite, every auto-discovered skill-script
+suite, the machinery suite, and `stamp --check`, which re-renders the path map
+in memory and fails **naming the file and printing a diff** on anything
+committed stale. If it reports stale output, you skipped `make stamp` in step 6.
+
+Pass the base you are actually merging into: `make test VERSION_BASE=origin/dev`
+for a PR into `dev`. The Makefile defaults to `origin/main`, so a bare `make
+test` can pass locally on a version bump that CI correctly rejects, because
+`dev` has already moved ahead of `main`.
 
 Then commit with a message stating the _why_ (the constraint from step 1, the
 tradeoff from steps 3/4) and follow CLAUDE.md's branch policy: **branch off
@@ -99,9 +122,9 @@ is this repo's own integration point; GitLab is a separate downstream copy —
 sync it afterward with `sync-gitlab-dev`, not as part of landing this hook.
 Confirm remotes with `git remote -v` rather than assuming.
 
-If the hook ships in a preset someone already has installed, **bump that
-preset's version** — otherwise `claude plugin update` offers nothing and the
-hook never reaches them.
+Hooks ship in workbench, which people already have installed, so **bump
+`plugins/workbench/.claude-plugin/plugin.json`** — otherwise `claude plugin
+update` offers nothing and the hook never reaches them.
 
 Open design questions (shared-helper extraction, cross-tool test coverage
 gaps) are tracked in `references/reference.md`.

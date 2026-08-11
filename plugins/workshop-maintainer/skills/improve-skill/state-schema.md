@@ -10,7 +10,7 @@
 ---
 schema_version: 1
 slug: { slug }
-skill_path: { resolved path, e.g. core/skills/tdd/SKILL.md }
+skill_path: { resolved path, e.g. plugins/workbench/skills/tdd/SKILL.md }
 status: in_progress
 current_phase: grill
 target_pass_rate:
@@ -38,7 +38,7 @@ updated: { YYYY-MM-DD }
 
 - **schema_version:** `1` (integer). Increment on breaking format changes.
 - **slug:** Kebab-case skill name. Must match filename. On collision, suffix with `-2`, `-3`, etc.
-- **skill_path:** Relative path to the resolved `SKILL.md` (e.g., `core/skills/tdd/SKILL.md`).
+- **skill_path:** Relative path to the resolved `SKILL.md` (e.g., `plugins/workbench/skills/tdd/SKILL.md`).
 - **status:** `in_progress` | `completed` | `abandoned`
 - **current_phase:** `grill` | `baseline` | `iterate` | `finalize`
 - **target_pass_rate:** Integer percentage (e.g., `90`). Set during Phase 2 (Grill).
@@ -63,7 +63,7 @@ Append-only event log. Each entry: `{YYYY-MM-DD} — {event description}`.
 Examples:
 
 ```
-2026-04-01 — State file created. Skill path: core/skills/tdd/SKILL.md
+2026-04-01 — State file created. Skill path: plugins/workbench/skills/tdd/SKILL.md
 2026-04-01 — Baseline score: 60%. 9/15 tests passed.
 2026-04-01 — Iteration 1 complete. Score: 73%. New best.
 2026-04-01 — Iteration 2 complete. Score: 67%. Regression — reverted to iteration 1.

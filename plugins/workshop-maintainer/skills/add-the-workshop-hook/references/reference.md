@@ -14,7 +14,7 @@ decision already made.
 **Answer: extracted.** A 4th consumer arrived (`audit-config-change.py`, for
 `git_dir`) and the copies had already drifted — `working_tree_signature`
 returned `""` in two hooks and `None` in a third. They now live in
-`core/hooks/_git_baseline.py`, imported as a sibling: `run-hook.sh` runs
+`plugins/workbench/hooks/scripts/_git_baseline.py`, imported as a sibling: `run-hook.sh` runs
 `python3 hooks/scripts/<name>`, so `sys.path[0]` is that directory.
 
 Three things the extraction turned up, worth knowing before touching it:
@@ -24,8 +24,9 @@ Three things the extraction turned up, worth knowing before touching it:
   string and compares. `None` would serialize as `"None"`, never match, and
   silently disable the evidence check. Both hooks normalize with `or ""` at the
   serialization boundary; a test pins it.
-- **An underscore-prefixed module under `core/hooks/` is not a hook.** Hook
-  discovery in `build_docs` globs `*.py` and demands an event-naming docstring;
+- **A module with no `WORKSHOP_HOOK` declaration is not a hook.** The stamper
+  reads that declaration statically with `ast`; a module without one is a
+  shared library, whatever its filename;
   the fail-open scan would assert a contract a library was never subject to and
   pass trivially. Both skip the prefix.
 - **Guard the import** with `except ImportError: sys.exit(0)` — a stale or

@@ -19,9 +19,8 @@ exists so it doesn't happen again.
 
 ## Repository Guard
 
-Run only in The Workshop repository. Verify `core/skills/`, `presets/`,
-`scripts/build_preset.py`, and `scripts/build_docs.py` exist. Otherwise stop
-and explain this is not a generic sync workflow.
+Run only in The Workshop repository. Verify `plugins/` and `scripts/stamp.py`
+exist. Otherwise stop and explain this is not a generic sync workflow.
 
 ## 1. Confirm the remotes
 
@@ -71,7 +70,7 @@ directly rather than calling `glab mr create` yourself (that skill owns MR
 creation and verification):
 
 ```bash
-bash presets/workbench/skills/gitlab-mr-create/scripts/create-mr \
+bash plugins/workbench/skills/gitlab-mr-create/scripts/create-mr \
   <description-file> --target-branch dev
 ```
 
