@@ -83,7 +83,7 @@ See [delivery-and-pr.md](references/delivery-and-pr.md).
 
 ## Definition of done
 
-- Preset builds cleanly for all three platforms (`build_preset` emits Claude, Codex,
+- The plugin stamps cleanly for all three platforms (`make stamp` emits Claude, Codex,
   and Cortex manifests) and passes the smoke test.
 - `tests.md` scenario suite passes, including every mandatory edge scenario.
 - Every knowledge-pack entry passes the checklist gate; every pack carries citations

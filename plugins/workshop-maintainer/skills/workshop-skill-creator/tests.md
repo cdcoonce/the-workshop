@@ -7,7 +7,7 @@
 | T01 | Invoked outside The Workshop repository | Stops without creating a generic skill. |
 | T02 | New skill overlaps an existing trigger | Reports the overlap during targeted inventory before blueprint approval. |
 | T03 | Package-specific skill requested | Creates canonical source under the owning preset and wires its manifest. |
-| T04 | Universal skill requested | Creates canonical source under `core/skills/` without duplicating it into presets. |
+| T04 | Universal skill requested | Creates the skill under `plugins/workbench/skills/` and nowhere else — no second copy in another plugin. |
 | T05 | Benchmark-driven revision requested | Routes to `improve-skill` instead of running the ordinary revision path. |
 | T06 | Process skill lacks a RED no-skill failure | Refuses completion until a measuring pressure scenario is recorded. |
 | T07 | Generated docs or dist are stale | Repairs propagation and reruns gates before reporting completion. |

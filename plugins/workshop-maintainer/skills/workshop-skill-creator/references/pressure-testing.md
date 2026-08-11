@@ -19,7 +19,7 @@ Write the scenario as a real task, not a hypothetical: "This is a real scenario 
 
 ## RED: No-Skill Baseline
 
-Before writing (or trusting) any pressure-scenario test, run it against a subagent with **no skill loaded**. Use `qa-tester`'s scenario-execution mode (`presets/workshop-maintainer/agents/qa-tester/AGENT.md`) to dispatch the subagent and capture its choice and rationalization verbatim.
+Before writing (or trusting) any pressure-scenario test, run it against a subagent with **no skill loaded**. Use `qa-tester`'s scenario-execution mode (`plugins/workshop-maintainer/agents/qa-tester/AGENT.md`) to dispatch the subagent and capture its choice and rationalization verbatim.
 
 **Discard rule:** if the no-skill subagent already produces the expected behavior unprompted, discard the test — it isn't measuring anything the skill needs to do. Only tests with an observed no-skill failure earn a place in the suite. The rejected rationalization becomes the seed for a rationalization-table row once the skill is written: it tells you exactly which excuse the skill's text must foreclose.
 
