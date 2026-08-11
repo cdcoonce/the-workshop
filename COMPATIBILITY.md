@@ -180,6 +180,15 @@ flat-vs-nested in-session control and a trust-layer isolation):
      `codex exec --dangerously-bypass-hook-trust` bypasses this layer only.
      With either layer missing, hooks produce no output, no error, nothing —
      this, not matcher casing, is why repo hooks appear dead.
+- **`hooks.json` is validated strictly: the only accepted top-level fields are
+  `description` and `hooks`.** An unknown field fails the whole file, so every
+  hook in that plugin goes dark — it is not ignored the way Claude Code ignores
+  it. Observed 2026-08-11 (#682): the stamper's `_generated` provenance key
+  produced `unknown field _generated, expected description or hooks` for all six
+  hook-shipping plugins at once, while the same key in `.codex-plugin/plugin.json`
+  and the marketplace index was accepted — the strictness is specific to the
+  hooks config. Generated `hooks.json` now carries its marker in `description`,
+  which both platforms accept.
 - **Trust keys are absolute-path-keyed, so renaming a repo directory orphans
   its hook trust.** Observed live: `[hooks.state]` still carries entries for
   `.../GitHub/my-brain/.codex/hooks.json` while that repo now lives at

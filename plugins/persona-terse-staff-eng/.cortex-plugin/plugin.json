@@ -1,6 +1,6 @@
 {
   "_generated": "scripts/stamp.py",
   "name": "persona-terse-staff-eng",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona."
 }
