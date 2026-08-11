@@ -3,6 +3,7 @@ name: cross-linker
 description: Finds missing wikilinks and broken links across the vault
 role: reviewer
 model: sonnet
+runtimes: [claude, codex]
 skills:
   add: []
   remove: []

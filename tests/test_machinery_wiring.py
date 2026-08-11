@@ -35,9 +35,18 @@ MACHINERY_DIR = PRESET_DIR / "machinery"
 TOOLS_DIR = MACHINERY_DIR / "tools"
 WIRING_SPEC = MACHINERY_DIR / "wiring" / "hooks-spec.json"
 RENDERED_DIR = MACHINERY_DIR / "rendered"
-AGENTS_DIR = MACHINERY_DIR / "agents"
+# The plugin's own agents/ dir — Claude Code's registration surface. Agents used
+# to live in machinery/agents/, where the CLI never saw them: plugin agents are
+# discovered from agents/<name>/AGENT.md and nowhere else, so the vault had to
+# vendor its own copies to get them at all (#667).
+AGENTS_DIR = PRESET_DIR / "agents"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
+# The agents that also serve Codex, declared via `runtimes:` in frontmatter.
+# Codex plugins cannot ship agents — its manifest schema has no `agents` key
+# (COMPATIBILITY.md) — so these three are still rendered to TOML twins and
+# vendored into `.codex/agents/`. The builder agents are Claude-only and must
+# NOT gain twins.
 AGENT_NAMES = ("brag-spotter", "cross-linker", "people-profiler")
 
 FILE_WRITE_MATCHER = "write|edit|multiedit|multi_edit|Write|Edit|MultiEdit"
@@ -105,15 +114,39 @@ class TestHooksSpec:
 
 class TestAgentsImport:
     def test_three_canonical_agents_ship(self) -> None:
-        assert sorted(p.name for p in AGENTS_DIR.glob("*.md")) == [
-            f"{name}.md" for name in AGENT_NAMES
-        ]
+        present = {p.parent.name for p in AGENTS_DIR.glob("*/AGENT.md")}
+        assert set(AGENT_NAMES) <= present
 
-    def test_agent_frontmatter_names_match_files(self) -> None:
+    def test_agent_frontmatter_names_match_dirs(self) -> None:
         for name in AGENT_NAMES:
-            text = (AGENTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+            text = (AGENTS_DIR / name / "AGENT.md").read_text(encoding="utf-8")
             assert text.startswith("---\n")
             assert f"name: {name}\n" in text.split("---")[1]
+
+    def test_machinery_no_longer_carries_agents(self) -> None:
+        """The old location must be gone, not merely bypassed.
+
+        A leftover copy under machinery/ is worse than no copy: it is inert
+        (the CLI cannot see it) but looks authoritative, which is exactly the
+        trap that nearly deleted these three agents from the vault — the files
+        were present in the installed plugin, so removing the vault's copies
+        read as removing duplicates.
+        """
+        assert not (MACHINERY_DIR / "agents").exists()
+
+    def test_codex_serving_agents_declare_the_runtime(self) -> None:
+        for name in AGENT_NAMES:
+            text = (AGENTS_DIR / name / "AGENT.md").read_text(encoding="utf-8")
+            assert "runtimes:" in text.split("---")[1]
+            assert "codex" in text.split("---")[1]
+
+    def test_claude_only_agents_do_not_declare_codex(self) -> None:
+        """Builder agents must not acquire Codex twins by sitting in the same dir."""
+        for agent_md in AGENTS_DIR.glob("*/AGENT.md"):
+            if agent_md.parent.name in AGENT_NAMES:
+                continue
+            frontmatter = agent_md.read_text(encoding="utf-8").split("---")[1]
+            assert "codex" not in frontmatter
 
 
 # ---------------------------------------------------------------------------
@@ -255,12 +288,23 @@ class TestCodexAgentTomlRender:
             assert path.is_file()
             tomllib.loads(path.read_text(encoding="utf-8"))
 
+    def test_only_codex_declaring_agents_are_rendered(self) -> None:
+        """Reading the shared agents/ dir must not sweep in the builder agents.
+
+        They are Claude-only; rendering twins for them would silently expand
+        what `/vault-init` scaffolds into every new vault's `.codex/agents/`.
+        """
+        rendered = sorted(
+            p.stem for p in (RENDERED_DIR / "codex-agents").glob("*.toml")
+        )
+        assert rendered == sorted(AGENT_NAMES)
+
     def test_toml_fields_come_from_canonical_md(self) -> None:
         """name/description from frontmatter; developer_instructions is the
         full .md body — including the Agent Contract paragraph the
         hand-written vault TOMLs had dropped (the .md is canonical)."""
         for name in AGENT_NAMES:
-            md_text = (AGENTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+            md_text = (AGENTS_DIR / name / "AGENT.md").read_text(encoding="utf-8")
             _, frontmatter, body = md_text.split("---", 2)
             parsed = tomllib.loads(
                 (RENDERED_DIR / "codex-agents" / f"{name}.toml").read_text(
@@ -377,16 +421,38 @@ class TestVendorMapGeneration:
         )
         assert committed_text == json.dumps(regenerated, indent=2) + "\n"
 
-    def test_agent_md_entries(self) -> None:
-        entries = {
-            e["source"]: e["target"]
-            for e in self._map()["entries"]
-            if e["source"].startswith("agents/")
-        }
-        assert entries == {
-            f"agents/{name}.md": f".claude/agents/{name}.md"
-            for name in AGENT_NAMES
-        }
+    def test_generator_no_longer_vendors_claude_agents(self, map_gen) -> None:
+        """Claude agents come from the plugin now, so nothing maps into
+        `.claude/agents/`.
+
+        Vendoring them there was the whole defect: the plugin carried inert
+        copies under machinery/, the CLI registered only the vault's vendored
+        ones, and the two definitions were free to drift (#667).
+
+        Asserted against a fresh generate_map() rather than the committed
+        artifact, because the generator is what this change touched. The
+        committed file is frozen for an unrelated reason — see the sibling
+        test below.
+        """
+        entries = map_gen.generate_map(MACHINERY_DIR)["entries"]
+        assert not [
+            e for e in entries if e["target"].startswith(".claude/agents/")
+        ]
+        assert not [e for e in entries if e["source"].startswith("agents/")]
+
+    def test_committed_map_agrees_that_claude_agents_are_not_vendored(self) -> None:
+        """The frozen artifact must not contradict the generator.
+
+        `test_committed_map_is_fresh` is xfail(strict) — regeneration sweeps
+        the whole sibling skills tree and is slated for deletion with #638 —
+        so this file is hand-tended in the meantime. That makes it possible
+        for it to keep instructing `/vault-upgrade` to re-vendor the very
+        agents we just stopped vendoring, which is worth its own assertion.
+        """
+        entries = self._map()["entries"]
+        assert not [
+            e for e in entries if e["target"].startswith(".claude/agents/")
+        ]
 
     def test_codex_agent_toml_entries(self) -> None:
         entries = {
@@ -512,7 +578,9 @@ class TestVendorMapGeneration:
         )
         assert engine >= 27
         assert tools == 2  # machinery_check + machinery_sync
-        assert agents == 3
+        # Claude agents are not vendored — they register from the plugin's own
+        # agents/ dir (#667). Only the Codex twins remain, under rendered/.
+        assert agents == 0
         assert rendered == 5  # 3 agent TOMLs + codex hooks + settings key
         assert skills % 2 == 0 and skills > 0
         assert len(entries) == engine + tools + skills + agents + rendered

@@ -2,8 +2,11 @@
 
 One spec, three rendered surfaces. ``wiring/hooks-spec.json`` describes the
 vault's hook wiring once — event, engine-relative script, args, timeout, and a
-semantic matcher intent instead of a runtime regex. ``agents/*.md`` are the
-canonical agent definitions (Claude-runtime source of truth). This tool renders
+semantic matcher intent instead of a runtime regex. The canonical agent
+definitions live in the plugin's own ``agents/<name>/AGENT.md`` — Claude Code's
+registration surface, and the only place it discovers plugin agents. (They used
+to sit in ``machinery/agents/``, where the CLI never saw them and every vault
+had to vendor its own copies to get them at all; see #667.) This tool renders
 both into ``rendered/``:
 
 - ``rendered/claude-settings-hooks.json`` — the exact VALUE of the ``hooks``
@@ -15,10 +18,15 @@ both into ``rendered/``:
   (so the ``${CLAUDE_PROJECT_DIR:-.}`` fallback resolves), and matchers must
   stay dual-convention — hence the shared command template and the
   ``file-write`` intent expanding to both runtimes' tool-ID spellings.
-- ``rendered/codex-agents/<name>.toml`` — a generated twin per canonical
-  agent ``.md`` (field mapping: frontmatter ``name``/``description`` plus the
-  full body as ``developer_instructions``). Where a hand-written vault TOML
-  drifted from its ``.md``, the ``.md`` wins.
+- ``rendered/codex-agents/<name>.toml`` — a generated twin per agent that
+  declares ``codex`` in its ``runtimes`` frontmatter (field mapping:
+  ``name``/``description`` plus the full body as ``developer_instructions``).
+  Where a hand-written vault TOML drifted from its ``AGENT.md``, the
+  ``AGENT.md`` wins. Codex needs these vendored because a Codex plugin
+  **cannot** ship agents — its manifest schema has no ``agents`` key
+  (COMPATIBILITY.md) — so unlike Claude, it has no plugin path to them.
+  Agents without the declaration are Claude-only and get no twin, which is
+  what keeps the builder agents out of every vault's ``.codex/agents/``.
 
 Run by ``scripts/stamp.py`` (and standalone via
 ``python wiring_gen.py``). Output is byte-stable across runs: no timestamps,
@@ -203,6 +211,35 @@ def _toml_multiline_body(value: str) -> str:
     return escaped.replace('"""', '""\\"')
 
 
+def _agent_runtimes(md_path: Path) -> tuple[str, ...]:
+    """The runtimes an agent serves, from its ``runtimes:`` frontmatter list.
+
+    Absent means Claude-only. That default is deliberate: agents now share one
+    directory with the Claude-only builder agents, and a permissive default
+    would silently render twins for all of them — expanding what ``/vault-init``
+    scaffolds into every new vault's ``.codex/agents/``. Opting in is a visible
+    line in a file; opting out would be an invisible omission.
+
+    Parsed as a flat ``[a, b]`` scalar because that is all these files use, and
+    ``_parse_agent_md`` already reads frontmatter the same minimal way.
+    """
+    text = md_path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return ()
+    end = text.find("\n---", 4)
+    if end == -1:
+        return ()
+    for line in text[4:end].splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "runtimes":
+            return tuple(
+                part.strip()
+                for part in value.strip().strip("[]").split(",")
+                if part.strip()
+            )
+    return ()
+
+
 def render_codex_agent_toml(md_path: Path) -> str:
     """Render one canonical agent ``.md`` into its Codex TOML twin.
 
@@ -228,6 +265,15 @@ def _dump_json(value: dict) -> str:
     return json.dumps(value, indent=2) + "\n"
 
 
+def agents_dir_for(machinery_dir: Path) -> Path:
+    """The plugin's agent registration surface, given its machinery dir.
+
+    One definition of the location, shared with ``vendor_map_gen``, so the two
+    generators cannot disagree about where agents live.
+    """
+    return machinery_dir.parent / "agents"
+
+
 def generate(machinery_dir: Path, out_dir: Path | None = None) -> Path:
     """Render every adapter surface into ``out_dir`` (default: rendered/).
 
@@ -247,12 +293,24 @@ def generate(machinery_dir: Path, out_dir: Path | None = None) -> Path:
         _dump_json(render_codex_hooks(entries)), encoding="utf-8"
     )
 
-    agents_dir = machinery_dir / "agents"
-    agent_sources = sorted(agents_dir.glob("*.md")) if agents_dir.is_dir() else []
+    # The plugin's agents/ sits beside machinery/, not inside it, because that
+    # is where Claude Code looks. Name the twin from the agent's directory —
+    # every file here is `AGENT.md`, so `md_path.stem` would collide on all of
+    # them.
+    agents_dir = agents_dir_for(machinery_dir)
+    agent_sources = (
+        sorted(
+            path
+            for path in agents_dir.glob("*/AGENT.md")
+            if "codex" in _agent_runtimes(path)
+        )
+        if agents_dir.is_dir()
+        else []
+    )
     if agent_sources:
         (destination / "codex-agents").mkdir()
         for md_path in agent_sources:
-            (destination / "codex-agents" / f"{md_path.stem}.toml").write_text(
+            (destination / "codex-agents" / f"{md_path.parent.name}.toml").write_text(
                 render_codex_agent_toml(md_path), encoding="utf-8"
             )
     return destination
@@ -266,7 +324,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--machinery",
         default=str(Path(__file__).resolve().parent.parent),
-        help="machinery dir holding wiring/, engine/, and agents/ "
+        help="machinery dir holding wiring/ and engine/ (agents/ is read from "
+        "its sibling, the plugin's registration surface) "
         "(default: this tool's own machinery dir)",
     )
     parser.add_argument(

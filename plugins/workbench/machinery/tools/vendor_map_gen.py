@@ -22,15 +22,16 @@ Sections, in emitted order:
 2. lifecycle tools                  -> ``.claude/scripts/`` (W5: the
    ``machinery_check.py``/``machinery_sync.py`` pair, vendored so hooks and
    afk Docker slices can run the drift check offline)
-3. ``agents/*.md``                  -> ``.claude/agents/*.md``  (canonical)
-4. ``rendered/codex-agents/*.toml`` -> ``.codex/agents/*.toml`` (generated twins)
-5. ``rendered/codex-hooks.json``    -> ``.codex/hooks.json``
-6. ``rendered/claude-settings-hooks.json``
+3. ``rendered/codex-agents/*.toml`` -> ``.codex/agents/*.toml`` (generated twins;
+   Codex-only — Claude agents ship in the plugin's ``agents/`` dir and are not
+   vendored at all, because Claude Code registers them from there)
+4. ``rendered/codex-hooks.json``    -> ``.codex/hooks.json``
+5. ``rendered/claude-settings-hooks.json``
                                     -> ``.claude/settings.json`` ``hooks`` key
    (``kind: "json-key"`` — a partial-file merge; settings.json carries
    unmanaged sibling keys a file copy would clobber)
-7. sibling ``skills/**``            -> ``.claude/skills/**``    (source_root
-8. sibling ``skills/**``            -> ``.codex/skills/**``      "preset")
+6. sibling ``skills/**``            -> ``.claude/skills/**``    (source_root
+7. sibling ``skills/**``            -> ``.codex/skills/**``      "preset")
 
 Schema 2 because the map now carries non-schema-1 constructs: the json-key
 kind and preset-root sources (skills live beside machinery/, not inside it).
@@ -90,8 +91,8 @@ def generate_map(machinery_dir: Path) -> dict:
     Parameters
     ----------
     machinery_dir
-        Machinery payload root (``engine/``, ``agents/``, ``rendered/``),
-        whose parent is the preset root holding the sibling ``skills/`` tree.
+        Machinery payload root (``engine/``, ``rendered/``), whose parent is
+        the preset root holding the sibling ``skills/`` and ``agents/`` trees.
     """
     entries: list[dict] = []
 
@@ -115,17 +116,21 @@ def generate_map(machinery_dir: Path) -> dict:
             }
         )
 
-    agent_names = [
-        path.stem for path in sorted((machinery_dir / "agents").glob("*.md"))
-    ] if (machinery_dir / "agents").is_dir() else []
-    for name in agent_names:
-        entries.append(
-            {
-                "kind": "file",
-                "source": f"agents/{name}.md",
-                "target": f".claude/agents/{name}.md",
-            }
-        )
+    # Claude agents are NOT vendored: they ship in the plugin's own agents/ dir
+    # and Claude Code registers them from there. Codex twins still are, because
+    # a Codex plugin cannot carry agents at all — its manifest schema has no
+    # `agents` key (COMPATIBILITY.md), so vendoring is the only delivery path
+    # that runtime has.
+    #
+    # The twin list is derived from what wiring_gen actually rendered rather
+    # than re-deciding it here. Two independent answers to "which agents serve
+    # Codex?" is exactly the drift this map exists to prevent.
+    rendered_agents = machinery_dir / "rendered" / "codex-agents"
+    agent_names = (
+        [path.stem for path in sorted(rendered_agents.glob("*.toml"))]
+        if rendered_agents.is_dir()
+        else []
+    )
     for name in agent_names:
         entries.append(
             {
