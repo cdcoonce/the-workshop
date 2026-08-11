@@ -43,6 +43,14 @@ done
 export CLAUDE_PROJECT_DIR="$vault_root"
 export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 
+# The owner's scaffold-owned config (`vault_scope.py`) must be importable, or
+# `vault_scope_resolved.py` silently falls back to shipped defaults: its lookup
+# is `try: import vault_scope / except ImportError: use default`. Nothing logs
+# and nothing fails — a vault that added "school" to GOVERNED_NOTE_DIRS would
+# just quietly stop governing it. Before the flat reorg this resolved for free,
+# because owner config sat in `.claude/scripts/` beside the engine.
+export PYTHONPATH="$vault_root/.vault/config${PYTHONPATH:+:$PYTHONPATH}"
+
 # Run from the vault root so cwd-relative resolution inside the engine still
 # lands in the vault, and resolve dependencies from the machinery's own
 # pyproject rather than the vault's — that separation is the point of #667.
