@@ -19,37 +19,37 @@
     },
     {
       "name": "persona-pair-programmer",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Collaborative pair-programmer voice — brief think-aloud, checks in at decision points.",
       "source": "./plugins/persona-pair-programmer"
     },
     {
       "name": "persona-ship-it",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves.",
       "source": "./plugins/persona-ship-it"
     },
     {
       "name": "persona-staff-eng-deep",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out.",
       "source": "./plugins/persona-staff-eng-deep"
     },
     {
       "name": "persona-terse-staff-eng",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona.",
       "source": "./plugins/persona-terse-staff-eng"
     },
     {
       "name": "persona-thinking-partner",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Socratic thinking partner — sharp questions and decision-sharpening over answers.",
       "source": "./plugins/persona-thinking-partner"
     },
     {
       "name": "workbench",
-      "version": "4.2.1",
+      "version": "4.2.2",
       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
       "source": "./plugins/workbench"
     },

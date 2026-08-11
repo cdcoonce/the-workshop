@@ -111,6 +111,22 @@ def test_json_marker_is_a_key_not_a_comment(flat_repo: Path):
     assert doc["_generated"] == "scripts/stamp.py"
 
 
+def test_hooks_json_carries_no_field_codex_will_reject(flat_repo: Path):
+    """Codex validates hooks.json strictly: `description` and `hooks`, nothing else.
+
+    It rejects the whole file on an unknown top-level field rather than ignoring
+    it, so a marker key that Claude Code tolerates takes every hook in the plugin
+    down on the other platform (#682). The marker still has to be *somewhere* —
+    the overwrite refusal keys on it — so it rides in `description`.
+    """
+    stamp.stamp(flat_repo)
+    doc = json.loads((flat_repo / "plugins/demo/hooks/hooks.json").read_text())
+    assert set(doc) <= {"description", "hooks"}, (
+        f"hooks.json ships fields Codex will reject: {sorted(set(doc) - {'description', 'hooks'})}"
+    )
+    assert stamp.GENERATED_MARKER in doc["description"]
+
+
 def test_refuses_to_overwrite_an_unmarked_file(flat_repo: Path, capsys):
     """A mis-mapped output must never silently consume hand-written work."""
     victim = flat_repo / "plugins" / "demo" / "README.md"
