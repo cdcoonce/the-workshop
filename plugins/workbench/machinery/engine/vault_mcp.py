@@ -30,11 +30,12 @@ import and to test.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from vault_scope_resolved import is_graph_markdown_note
-from vault_utils import read_vault_context
+from vault_utils import find_vault_root_from_env, read_vault_context
 
 # One call must not be able to haul the whole index across the wire. The cap is
 # on the server side because the caller is the untrusted party here.
@@ -145,15 +146,15 @@ def read_note(rel_path: str, vault_root: Path) -> str:
     return resolve_note(rel_path, vault_root).read_text(encoding="utf-8")
 
 
-def _default_search(query: str, k: int) -> list[dict]:
-    """Delegate to the existing semantic index.
+def _default_search(query: str, k: int, vault_root: Path) -> list[dict]:
+    """Delegate to the existing semantic index, scoped to *vault_root*.
 
     Imported lazily: `semantic_index` pulls numpy at import and fastembed on
     first embed, which the unit tests should not pay for.
     """
     import semantic_index
 
-    return semantic_index.search(query, k)
+    return semantic_index.search(query, k, vault_root=vault_root)
 
 
 def search_notes(
@@ -179,8 +180,10 @@ def search_notes(
         raise ValueError("k must be positive")
 
     k = min(k, MAX_RESULTS)
-    fn = _default_search if search_fn is None else search_fn
-    hits = fn(query, k * OVERFETCH)
+    if search_fn is None:
+        hits = _default_search(query, k * OVERFETCH, vault_root)
+    else:
+        hits = search_fn(query, k * OVERFETCH)
 
     context = active_context(vault_root)
     visible = [h for h in hits if visible_in_context(h.get("note_path", ""), context)]
@@ -211,8 +214,21 @@ def build_server(vault_root: Path) -> Any:
 
 
 def main() -> None:
-    """Serve over stdio, rooted at the vault this script was vendored into."""
-    vault_root = Path(__file__).resolve().parents[2]
+    """Serve over stdio, rooted at the environment-resolved vault.
+
+    The module ships inside the plugin cache (issue #677), so its own file
+    position says nothing about where the vault is. Refusing to serve without
+    a signature vault beats serving the wrong subtree: every tool this server
+    exposes would otherwise read from — and report on — the plugin cache.
+    """
+    vault_root = find_vault_root_from_env()
+    if vault_root is None:
+        print(
+            "vault root not found (no brain/ + perf/ + CLAUDE.md signature at "
+            "CLAUDE_PROJECT_DIR or above the working directory)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     build_server(vault_root).run()
 
 

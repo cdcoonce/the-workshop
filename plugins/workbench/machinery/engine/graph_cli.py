@@ -85,8 +85,16 @@ def vector_similar_fn(vault_root: Path):
     import numpy as np  # noqa: PLC0415
     import semantic_index as si  # noqa: PLC0415
 
-    vectors, meta, _ = si._load_index()
+    vectors, meta, _ = si._load_index(vault_root)
     if vectors is None or not len(meta):
+        # Degrading to a no-op keeps --gaps usable without an index, but it
+        # must be loud: a silent empty fn is exactly how the wrong-root bug
+        # (#677) read as "no gaps found" for two weeks.
+        print(
+            f"semantic index not found under {si._index_dir(vault_root)} — "
+            "gaps will be empty; run semantic_index.py reindex",
+            file=sys.stderr,
+        )
         return lambda rel, k: []
 
     acc: dict[str, list] = {}
