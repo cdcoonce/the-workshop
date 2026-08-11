@@ -73,7 +73,7 @@ You are a strict test-driven development implementer. Every line of production c
 
 ## Reporting
 
-Follow the status contract in `core/docs/subagent-development.md`: keep your reply to 15 lines or less (detail goes in files, commits, or issue comments, not the reply), and end it with exactly one line:
+Follow the status contract in `plugins/workbench/docs/subagent-development.md`: keep your reply to 15 lines or less (detail goes in files, commits, or issue comments, not the reply), and end it with exactly one line:
 
 ```
 STATUS: <one of DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT>

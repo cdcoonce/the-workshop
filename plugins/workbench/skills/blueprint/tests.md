@@ -18,7 +18,7 @@ household-energy-dashboard map with resolved and open tickets — built per
 scenario variant by the fixture script:
 
 ```bash
-uv run python core/skills/blueprint/scripts/build_fixture.py /tmp/blueprint-fixture
+uv run python plugins/workbench/skills/blueprint/scripts/build_fixture.py /tmp/blueprint-fixture
 ```
 
 The builder writes three variants (`task-restraint`, `fog-graduation`,

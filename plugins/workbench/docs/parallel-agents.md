@@ -4,7 +4,7 @@ When you have multiple unrelated failures (different test files, different subsy
 
 **Core principle:** Dispatch one agent per independent problem domain. Let them work concurrently.
 
-Every dispatch here is still subject to the status contract in `core/docs/subagent-development.md`: each agent's reply must end with a `STATUS: <DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT>` line, stay within the 15-line reply cap, and a `BLOCKED` report follows the escalation ladder there — never ignored, never re-dispatched unchanged.
+Every dispatch here is still subject to the status contract in `plugins/workbench/docs/subagent-development.md`: each agent's reply must end with a `STATUS: <DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT>` line, stay within the 15-line reply cap, and a `BLOCKED` report follows the escalation ladder there — never ignored, never re-dispatched unchanged.
 
 ## When to Use
 

@@ -24,7 +24,7 @@ Collect, with sensible defaults offered:
 
 The `--source` is a machinery dir containing `vendor-map.json` and `scaffold/`:
 
-1. **Local checkout (preferred):** `<the-workshop>/presets/vault-ops/machinery`, on up-to-date `main`.
+1. **Local checkout (preferred):** `<the-workshop>/plugins/workbench/machinery`, on up-to-date `main`.
 2. **Plugin cache:** the installed vault-ops plugin's `machinery/` directory.
 
 ### 3. Run Init

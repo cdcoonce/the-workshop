@@ -72,7 +72,7 @@ The walkthrough skill is **stateful and resumable**. All state persists to `.wor
   },
   "key_findings": [
     "Plugin system uses directory-convention discovery",
-    "Dist is generated from presets via build_preset script"
+    "Generated files are stamped in place from plugin sources"
   ],
   "drill_down_history": [
     { "section": "architecture", "timestamp": "2026-07-31T20:15:00Z" },

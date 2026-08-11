@@ -259,11 +259,11 @@ class TestTouchedScope:
 
     def test_dominant_scope_in_line(self) -> None:
         line = (
-            'edit /Users/x/Developer/GitHub/the-workshop/core/a.py and '
-            '/Users/x/Developer/GitHub/the-workshop/core/b.py vs '
+            'edit /Users/x/Developer/GitHub/the-workshop/plugins/a.py and '
+            '/Users/x/Developer/GitHub/the-workshop/plugins/b.py vs '
             '/Users/x/Developer/GitHub/the-vault/c.md'
         )
-        assert pulse._touched_scope(line, self.PATTERN) == "the-workshop/core"
+        assert pulse._touched_scope(line, self.PATTERN) == "the-workshop/plugins"
 
     def test_worktree_sibling_dir_maps_to_repo(self) -> None:
         line = "/Users/x/Developer/GitHub/afk-agent-system-worktrees/aa6/x.py"

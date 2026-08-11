@@ -44,7 +44,7 @@ verdict is the failure this skill exists to prevent — never emit one.
 ### 1. Git-mechanical checks — run the script
 
 ```bash
-uv run python core/skills/stale-artifact-sweep/scripts/stale_check.py --repo <path> --target dev commit <sha>
+uv run python plugins/workbench/skills/stale-artifact-sweep/scripts/stale_check.py --repo <path> --target dev commit <sha>
 ```
 
 - `branch <name>` — per-commit containment. Tells you which commits to **drop** and which are
