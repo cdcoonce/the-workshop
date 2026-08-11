@@ -94,9 +94,13 @@ KNOWN_EVENTS = frozenset(
     }
 )
 
-# The two runners a hook can declare. "bash" runs the script under the plugin's
-# python3; "uv" runs it under `uv run` so a PEP-723 script block is honoured.
-_RUNNERS = frozenset({"bash", "uv"})
+# The runners a hook can declare. "bash" runs the script under the plugin's
+# python3; "uv" runs it under `uv run` so a PEP-723 script block is honoured;
+# "vault" routes through run-vault-hook.sh, which exits before starting any
+# interpreter unless the session is inside a vault (#667). Vault hooks ship in
+# workbench, so every consumer dispatches them — the guard is what keeps that
+# free for everyone else.
+_RUNNERS = frozenset({"bash", "uv", "vault"})
 
 # Marketplace identity. Held here rather than read back out of the generated
 # marketplace files, which would make the stamper's input its own output.
@@ -864,6 +868,8 @@ def hook_command(script: str, runner: str = "bash") -> str:
             f"Unknown hook runner {runner!r}; expected one of "
             f"{', '.join(sorted(_RUNNERS))}."
         )
+    if runner == "vault":
+        return f"bash {_PLUGIN_ROOT_EXPR}/hooks/run-vault-hook.sh {script}"
     flag = "--uv " if runner == "uv" else ""
     return f"bash {_PLUGIN_ROOT_EXPR}/hooks/run-hook.sh {flag}{script}"
 

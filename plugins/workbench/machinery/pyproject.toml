@@ -1,0 +1,37 @@
+[project]
+name = "workbench-machinery"
+version = "0.1.0"
+description = "Vault engine shipped as workbench payload — hooks, graph, and notebook tooling"
+# >=3.11, not >=3.10: graphmark 0.6.0 requires 3.11, and graph_cli imports it
+# unconditionally. The vault's own pyproject claimed >=3.10 and declared only
+# pyyaml, so this floor was never checked against a real resolution — moving
+# the deps here is what surfaced it.
+requires-python = ">=3.11"
+
+# These live here, not in the vault's own pyproject. Before #667 a vault owner
+# had to hand-edit their pyproject whenever the engine took a new dependency,
+# which meant a plugin update could silently break their hooks until they
+# noticed. The engine now carries its own resolution, and `run-vault-hook.sh`
+# points `uv run --project` at this file.
+dependencies = [
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+    "graphmark>=0.6,<0.7",
+]
+
+[project.optional-dependencies]
+# Imported inside functions behind guards, not at module import time: the
+# semantic index degrades to no-embeddings and the MCP server simply does not
+# start. Keeping them out of the default set means a vault that wants neither
+# does not resolve them.
+embeddings = ["fastembed>=0.3"]
+mcp = ["fastmcp>=2.0"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "hypothesis",
+]
+
+[tool.uv]
+package = false

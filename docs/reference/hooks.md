@@ -21,6 +21,13 @@ Lifecycle hooks and the events they run on. The event column is read back out of
 | `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
+| `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
+| `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
+| `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: commits and syncs the vault. |
+| `vault-user-prompt-classify.py` | `workbench` | — | UserPromptSubmit hook: routes freeform input to the right capture path. |
+| `vault-validate-write.py` | `workbench` | — | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
 | `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
@@ -98,6 +105,48 @@ SubagentStart hook: record a git baseline for the evidence check at stop.
 *`workbench` plugin · events: `UserPromptSubmit` · matcher: —*
 
 UserPromptSubmit hook: suggest /handoff once the session's context grows large.
+
+### `vault-pre-compact.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+PreCompact hook: preserves session state before compaction.
+
+### `vault-session-start.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+SessionStart hook: pulls from remote and injects vault context.
+
+### `vault-stop-1-notebook-update.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+Stop hook: updates the session notebook.
+
+### `vault-stop-2-graph-gardener.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+Stop hook: queues link, profile, and index repairs.
+
+### `vault-stop-3-session-sync.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+Stop hook: commits and syncs the vault.
+
+### `vault-user-prompt-classify.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+UserPromptSubmit hook: routes freeform input to the right capture path.
+
+### `vault-validate-write.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+PostToolUse hook: validates frontmatter on vault note writes.
 
 ### `verify-subagent-evidence.py`
 
