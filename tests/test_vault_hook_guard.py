@@ -242,3 +242,42 @@ def test_machinery_declares_its_own_dependencies() -> None:
     text = pyproject.read_text()
     for dep in ("pyyaml", "numpy", "graphmark"):
         assert dep in text, f"{dep} is imported by the engine but not declared"
+
+
+def test_owner_config_dir_is_importable_by_the_engine(tmp_path: Path) -> None:
+    """`.vault/config/` must be on PYTHONPATH, or owner overrides vanish silently.
+
+    `vault_scope.py` is scaffold-owned config; the engine reads it through
+    `vault_scope_resolved.py`, which does `try: import vault_scope / except
+    ImportError: fall back to shipped defaults`. That fallback is SILENT. If the
+    runner does not put the owner's config dir on the path, every override -- a
+    vault that added "school" to GOVERNED_NOTE_DIRS, say -- reverts to defaults
+    with nothing logged and nothing failing.
+
+    Asserted through the spy: PYTHONPATH is exported into the child's env.
+    """
+    vault = _make_vault(tmp_path / "the-vault")
+    (vault / ".vault" / "config").mkdir(parents=True, exist_ok=True)
+    bin_dir = _spy_bin(tmp_path)
+    # Overwrite the uv spy so it records PYTHONPATH rather than argv.
+    (bin_dir / "uv").write_text(
+        f'#!/usr/bin/env bash\necho "PYTHONPATH=$PYTHONPATH" >> "{tmp_path}/spawns.log"\nexit 0\n'
+    )
+    (bin_dir / "uv").chmod(0o755)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    env["CLAUDE_PROJECT_DIR"] = str(vault)
+    env.pop("PYTHONPATH", None)
+    subprocess.run(
+        ["bash", str(RUNNER), "vault-session-start.py"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(vault),
+    )
+    recorded = "\n".join(_spawns(tmp_path))
+    assert str(vault / ".vault" / "config") in recorded, (
+        "the owner config dir is not on PYTHONPATH, so vault_scope overrides "
+        f"would silently fall back to shipped defaults: {recorded!r}"
+    )
