@@ -12,9 +12,12 @@ Specialized subagent roles, parsed from each agent's `AGENT.md` frontmatter. An 
 | **analysis-builder** | `workbench` | `implementer` | `tdd`, `commit` |
 | **api-builder** | `workbench` | `implementer` | `tdd`, `commit` |
 | **backend-builder** | `workbench` | `implementer` | `tdd`, `commit` |
+| **brag-spotter** | `workbench` | `reviewer` | — |
 | **code-reviewer** | `workbench` | `reviewer` | `daa-code-review`, `dignified-python` |
+| **cross-linker** | `workbench` | `reviewer` | — |
 | **data-quality-reviewer** | `workbench` | `reviewer` | `daa-code-review`, `dagster-expert`, `dbt-expert`, `dignified-python` |
 | **frontend-builder** | `workbench` | `implementer` | `tdd`, `commit`, `react-ui-ux` |
+| **people-profiler** | `workbench` | `reviewer` | — |
 | **pipeline-builder** | `workbench` | `implementer` | `tdd`, `commit`, `dagster-expert`, `dbt-expert`, `dignified-python` |
 | **qa-tester** | `workshop-maintainer` | `qa-tester` | — |
 | **security-reviewer** | `workbench` | `reviewer` | `daa-code-review` |
@@ -46,11 +49,23 @@ Builds Python API endpoints with FastAPI, Flask, or Lambda
 
 Builds backend services with Node.js, databases, and APIs
 
+### brag-spotter
+
+*`workbench` plugin · role `reviewer` · skills: none*
+
+Scans recent vault activity to find uncaptured wins for the Brag Doc
+
 ### code-reviewer
 
 *`workbench` plugin · role `reviewer` · skills: `daa-code-review`, `dignified-python`*
 
 Reviews code for quality, structure, and correctness
+
+### cross-linker
+
+*`workbench` plugin · role `reviewer` · skills: none*
+
+Finds missing wikilinks and broken links across the vault
 
 ### data-quality-reviewer
 
@@ -63,6 +78,12 @@ Reviews data pipelines for correctness, completeness, and reliability
 *`workbench` plugin · role `implementer` · skills: `tdd`, `commit`, `react-ui-ux`*
 
 Builds frontend components with React, TypeScript, and modern CSS
+
+### people-profiler
+
+*`workbench` plugin · role `reviewer` · skills: none*
+
+Maintains person profiles in org/people/ based on mentions across the vault
 
 ### pipeline-builder
 

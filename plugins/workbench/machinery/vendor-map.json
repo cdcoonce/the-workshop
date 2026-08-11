@@ -198,21 +198,6 @@
     },
     {
       "kind": "file",
-      "source": "agents/brag-spotter.md",
-      "target": ".claude/agents/brag-spotter.md"
-    },
-    {
-      "kind": "file",
-      "source": "agents/cross-linker.md",
-      "target": ".claude/agents/cross-linker.md"
-    },
-    {
-      "kind": "file",
-      "source": "agents/people-profiler.md",
-      "target": ".claude/agents/people-profiler.md"
-    },
-    {
-      "kind": "file",
       "source": "rendered/codex-agents/brag-spotter.toml",
       "target": ".codex/agents/brag-spotter.toml"
     },
