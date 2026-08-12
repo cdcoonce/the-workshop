@@ -15,10 +15,14 @@ that, and #638 deletes this subsystem outright.
 Sections, in emitted order:
 
 1. ``engine/**``                    -> ``.claude/scripts/**``   (v1 rule),
-   EXCEPT ``engine/vault_scope.py`` — scaffold-owned since W5: init renders
-   it from ``scaffold/vault_scope.py.tmpl`` with the owner's note-dir
-   taxonomy and upgrade never touches it, so it must stay out of the
-   managed map (machinery_sync errors on any scaffold/managed overlap).
+   with no exceptions. There used to be one — ``engine/vault_scope.py``,
+   held out of the managed map because init rendered the owner's copy from
+   ``scaffold/vault_scope.py.tmpl`` and upgrade never touched it. That file
+   was removed in #691: shipping a module named ``vault_scope`` inside the
+   engine let it shadow the owner's real config on ``sys.path``, so every
+   override was silently discarded. Owner config lives at
+   ``<vault>/.vault/config/`` and is resolved by path, never by module name;
+   nothing owner-owned belongs in ``engine/`` for the map to skip.
 2. lifecycle tools                  -> ``.claude/scripts/`` (W5: the
    ``machinery_check.py``/``machinery_sync.py`` pair, vendored so hooks and
    afk Docker slices can run the drift check offline)
@@ -58,8 +62,6 @@ _JUNK_SUFFIXES = (".pyc",)
 # owner's parameters; upgrade never touches them). They stay in engine/ so
 # the machinery test-suite and sibling imports keep working in this repo,
 # but they must never enter the managed map.
-_SCAFFOLD_OWNED_ENGINE_FILES = frozenset({"vault_scope.py"})
-
 # The lifecycle tool pair vendored into the vault so hooks and afk Docker
 # slices can run the drift check offline (.claude/scripts is already an
 # UNTRACKED scan root, so mapping them keeps the check clean).
@@ -97,8 +99,6 @@ def generate_map(machinery_dir: Path) -> dict:
     entries: list[dict] = []
 
     for relative in _tree_files(machinery_dir / "engine"):
-        if relative in _SCAFFOLD_OWNED_ENGINE_FILES:
-            continue
         entries.append(
             {
                 "kind": "file",

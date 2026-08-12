@@ -23,7 +23,6 @@ _spec = importlib.util.spec_from_file_location(
 nd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(nd)
 
-import vault_scope  # noqa: E402 — sys.path patched above
 import vault_utils  # noqa: E402
 
 
@@ -52,10 +51,10 @@ def test_distill_passes_model_to_claude_argv(monkeypatch):
     assert result == "updated notebook"
 
 
-def test_main_uses_custom_scaffold_model(tmp_path, monkeypatch):
+def test_main_uses_custom_owner_model(tmp_path, monkeypatch, owner_scope):
     transcript = tmp_path / "transcript.jsonl"
     _write_transcript(transcript)
-    monkeypatch.setattr(vault_scope, "BATCH_MODEL", "claude-opus-5")
+    owner_scope(BATCH_MODEL="claude-opus-5")
 
     captured = {}
     _capture_claude_argv(monkeypatch, captured)
@@ -66,10 +65,10 @@ def test_main_uses_custom_scaffold_model(tmp_path, monkeypatch):
     assert captured["argv"] == ["claude", "-p", "--model", "claude-opus-5"]
 
 
-def test_main_falls_back_when_scaffold_value_absent(tmp_path, monkeypatch):
+def test_main_falls_back_when_owner_value_absent(tmp_path, monkeypatch, owner_scope):
     transcript = tmp_path / "transcript.jsonl"
     _write_transcript(transcript)
-    monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+    owner_scope(TASKS_DIR="custom/tasks")  # a config defining no BATCH_MODEL
 
     captured = {}
     _capture_claude_argv(monkeypatch, captured)

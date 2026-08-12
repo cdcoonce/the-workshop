@@ -173,9 +173,12 @@ class TestVendorMap:
     def test_covers_engine_tree_exactly(self) -> None:
         """Every engine file is mapped; no stale engine entries linger.
 
-        ``engine/vault_scope.py`` is the one deliberate exception (W5): it is
-        scaffold-owned — init renders it from the scaffold template and
-        upgrade never touches it — so it must NOT appear in the managed map.
+        There are no exceptions. ``engine/vault_scope.py`` used to be one —
+        held out of the managed map as owner-owned — until #691 found that
+        shipping a module of that name inside the engine let it shadow the
+        owner's real config on ``sys.path``. It was removed; owner config
+        lives at ``<vault>/.vault/config/`` and nothing owner-owned belongs
+        under ``engine/``.
         """
         data = json.loads((MACHINERY_DIR / "vendor-map.json").read_text())
         mapped_sources = {
@@ -190,7 +193,7 @@ class TestVendorMap:
             and not path.name.endswith(".pyc")
             and not (_JUNK_NAMES & set(path.parts))
         }
-        assert mapped_sources == actual - {"engine/vault_scope.py"}
+        assert mapped_sources == actual
 
 
 # ---------------------------------------------------------------------------

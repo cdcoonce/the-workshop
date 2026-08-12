@@ -531,8 +531,12 @@ class TestVendorMapGeneration:
             assert entry["target"].endswith(f"/skills/{relative}")
 
     def test_engine_entries_still_follow_v1_rule(self) -> None:
-        """Every engine file is mapped — except the scaffold-owned
-        vault_scope.py, which init writes once and upgrade never touches."""
+        """Every engine file is mapped, with no exceptions.
+
+        ``vault_scope.py`` was the exception until #691 removed it from the
+        engine: a shipped module of that name shadowed the vault owner's own
+        config on ``sys.path``, discarding every override silently.
+        """
         engine_entries = [
             e
             for e in self._map()["entries"]
@@ -543,9 +547,7 @@ class TestVendorMapGeneration:
             for p in (MACHINERY_DIR / "engine").rglob("*")
             if p.is_file() and not p.name.endswith(".pyc")
         }
-        assert {e["source"] for e in engine_entries} == engine_tree - {
-            "engine/vault_scope.py"
-        }
+        assert {e["source"] for e in engine_entries} == engine_tree
         for entry in engine_entries:
             relative = entry["source"].removeprefix("engine/")
             assert entry["target"] == f".claude/scripts/{relative}"

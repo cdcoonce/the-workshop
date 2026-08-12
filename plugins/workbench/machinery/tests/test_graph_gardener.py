@@ -8,7 +8,6 @@ _spec = importlib.util.spec_from_file_location(
 gg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gg)
 
-import vault_scope  # noqa: E402 — sys.path patched by exec_module above
 import vault_utils  # noqa: E402
 
 
@@ -891,7 +890,10 @@ def test_write_queue_unprofiled_suppressed_when_dismissed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Lane B model sourcing — scaffold-owned vault_scope.BATCH_MODEL (#431)
+# Lane B model sourcing — owner-owned vault_scope.BATCH_MODEL (#431)
+#
+# The owner's value comes from a real config file in a real vault (#691), not
+# from a module injected under the name `vault_scope`.
 # ---------------------------------------------------------------------------
 
 _LANE_B_STDOUT = '{"missing_links": [], "orphans": [], "index_drift": []}'
@@ -912,10 +914,10 @@ def test_run_lane_b_headless_passes_model_to_claude_argv(monkeypatch):
     assert captured["argv"] == ["claude", "-p", "--model", "claude-opus-5"]
 
 
-def test_run_lane_b_uses_custom_scaffold_model(tmp_path, monkeypatch):
+def test_run_lane_b_uses_custom_owner_model(tmp_path, monkeypatch, owner_scope):
     repo = _init_repo(tmp_path)
     note = _src_note(repo, "some note content long enough to send")
-    monkeypatch.setattr(vault_scope, "BATCH_MODEL", "claude-opus-5")
+    owner_scope(BATCH_MODEL="claude-opus-5")
 
     captured = {}
     _capture_claude_argv(monkeypatch, captured)
@@ -923,10 +925,12 @@ def test_run_lane_b_uses_custom_scaffold_model(tmp_path, monkeypatch):
     assert captured["argv"] == ["claude", "-p", "--model", "claude-opus-5"]
 
 
-def test_run_lane_b_falls_back_when_scaffold_value_absent(tmp_path, monkeypatch):
+def test_run_lane_b_falls_back_when_owner_value_absent(
+    tmp_path, monkeypatch, owner_scope
+):
     repo = _init_repo(tmp_path)
     note = _src_note(repo, "some note content long enough to send")
-    monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+    owner_scope(TASKS_DIR="custom/tasks")  # a config defining no BATCH_MODEL
 
     captured = {}
     _capture_claude_argv(monkeypatch, captured)
