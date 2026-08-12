@@ -141,8 +141,18 @@ green, and silently never arrives. `make test` fails on this
 The version lives in the hand-written `plugins/<name>/.claude-plugin/plugin.json`;
 the two stamped platform manifests carry the same value. The gate diffs
 `plugins/<name>/` against the release branch, excluding stamper-owned paths and
-`machinery/` — generated content is a pure function of hand-authored content, so
+nothing else — generated content is a pure function of hand-authored content, so
 a real change already trips the gate through its source.
+
+**Hand-authored payload counts wherever it ships from, including
+`plugins/<name>/machinery/`.** That directory was once excluded wholesale, on
+the reading that it was vendored payload versioned upstream. The flat reorg
+made that false: `machinery/engine/` _is_ the upstream, hand-authored and
+shipped, with no source elsewhere in the tree to trip the gate on its behalf —
+so the exclusion removed the only signal there was, and engine fixes merged and
+promoted green while reaching zero installed vaults. Deriving the exclusion set
+from the stamper's own path map is what keeps that from growing back; a second
+hand-kept list is how it drifts.
 
 The consumer is an owner with the plugin installed, and what they depend on is
 the component surface: which skills, agents, and hooks exist, and what triggers
@@ -161,10 +171,15 @@ them.
 Below 1.0, the minor position is the breaking signal: `0.1.3 → 0.2.0`, not
 `1.0.0`.
 
-The gate enforces the part it can see — the shipped component inventory, so a
-removal demands major and an addition demands at least minor. It cannot see a
-behavioural break inside a component that kept its name. Judge those yourself;
-an unchanged inventory only means patch is the _floor_.
+The gate enforces two things it can see. That shipped content changed at all —
+any hand-authored payload, skills and agents and hooks and engine alike — which
+is what demands a bump. And the shipped component inventory, which sets how big
+that bump must be: a removal demands major, an addition at least minor.
+
+It still cannot see a behavioural break inside a component that kept its name.
+An engine fix and a corrected typo look identical to it; both are hand-authored
+changes to an unchanged inventory, so both clear at patch. Judge those
+yourself — an unchanged inventory only means patch is the _floor_.
 
 One bump covers everything that lands on `dev` between promotions — the check
 compares against `main`, not against the PR base.
