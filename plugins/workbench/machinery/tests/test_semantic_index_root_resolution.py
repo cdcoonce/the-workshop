@@ -35,6 +35,8 @@ def _make_vault(tmp_path: Path) -> Path:
     (tmp_path / "CLAUDE.md").write_text("# vault")
     (tmp_path / "brain").mkdir()
     (tmp_path / "perf").mkdir()
+    (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
     return tmp_path
 
 

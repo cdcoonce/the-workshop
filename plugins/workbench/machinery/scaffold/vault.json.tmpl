@@ -1,0 +1,6 @@
+{
+  "vault": "${vault_slug}",
+  "min_plugin_version": "${plugin_version}",
+  "plugin": "workbench@the-workshop",
+  "note": "Presence of this file is what makes workbench's vault hooks run. run-vault-hook.sh walks up for it in bash builtins and exits before starting an interpreter when it is absent, so every non-vault repo on this machine pays nothing. Deleting this file silently disables every vault hook, including the auto-commit."
+}
