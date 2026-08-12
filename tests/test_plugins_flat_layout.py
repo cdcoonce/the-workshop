@@ -135,21 +135,28 @@ def _scan(plugin: str) -> list[str]:
 # docstring that says "invoke this at <path that does not exist>" fails exactly
 # the way a skill does -- #679 missed these only because it scanned `skills/`.
 #
-# KNOWN GAP, exempted rather than fixed here: `machinery/scaffold/` is not just
-# vendoring data. `scaffold-map.json` still writes a new vault's OWNER config
-# (`vault_scope.py`, `context_paths.py`, `budget_burn_config.py`,
-# `content_routing.py`, `frontmatter_schema.json`) to `.claude/scripts/`, but
-# `hooks/run-vault-hook.sh` puts only `<vault>/.vault/config` on PYTHONPATH. A
-# vault scaffolded today therefore silently falls back to shipped defaults --
-# a real defect, filed separately, and NOT a path this guard should silence
-# once it is fixed. Fixing it changes vault-init's behaviour and belongs with
-# its own tests, so it is out of scope for the #679 doc pass rather than
-# out of scope forever.
+# `machinery/scaffold/` was exempted here as a KNOWN GAP: `scaffold-map.json`
+# wrote a new vault's OWNER config to `.claude/scripts/` while
+# `hooks/run-vault-hook.sh` put only `<vault>/.vault/config` on PYTHONPATH, so
+# a vault scaffolded then silently fell back to shipped defaults. #687 fixed
+# that -- owner config is scaffolded to `.vault/config/`, and init vendors
+# nothing -- so the scaffold no longer needs silencing here.
+#
+# Be clear about what removing the exemption buys, because it is less than the
+# note that requested it assumed. That note reasoned the guard "would otherwise
+# have caught these targets" because `vault_scope.py` is an engine script name.
+# It no longer is: #691 deleted `engine/vault_scope.py`, so it dropped out of
+# `_engine_script_names()`, and none of the other four old scaffold targets ever
+# matched an engine script name either. Restoring the old map under this guard
+# is verified to still pass. So this covers FUTURE engine-path references from
+# the scaffold and nothing retrospective; the actual regression guard for #687
+# is `TestScaffoldedVaultIsUsable` plus the scan-root assertion in
+# `test_scaffold_owns_settings_json_and_the_managed_map_is_stale`, which do go
+# red against the old map.
 VENDORING_PATHS = (
     "vendor-map.json",
     "machinery/rendered/",
     "machinery/tools/",
-    "machinery/scaffold/",
     "machinery/tests/",
 )
 

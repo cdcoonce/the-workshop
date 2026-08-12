@@ -374,6 +374,8 @@ class TestMainRootResolution:
         (tmp_path / "CLAUDE.md").write_text("# vault")
         (tmp_path / "brain").mkdir()
         (tmp_path / "perf").mkdir()
+        (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
 
         captured: dict = {}

@@ -26,30 +26,26 @@
       "target": "pyproject.toml"
     },
     {
+      "template": "vault.json.tmpl",
+      "target": ".vault/vault.json"
+    },
+    {
       "template": "vault_scope.py.tmpl",
-      "target": ".claude/scripts/vault_scope.py"
-    },
-    {
-      "template": "context_paths.py.tmpl",
-      "target": ".claude/scripts/context_paths.py"
-    },
-    {
-      "template": "budget_burn_config.py.tmpl",
-      "target": ".claude/scripts/budget_burn_config.py"
-    },
-    {
-      "template": "frontmatter_schema.json.tmpl",
-      "target": ".claude/scripts/frontmatter_schema.json"
-    },
-    {
-      "template": "content_routing.py.tmpl",
-      "target": ".claude/scripts/content_routing.py"
+      "target": ".vault/config/vault_scope.py"
     }
   ],
   "trees": [
     {
       "source": "templates",
       "target": "templates"
+    },
+    {
+      "source": "vault",
+      "target": ".vault"
+    },
+    {
+      "source": "claude",
+      "target": ".claude"
     }
   ]
 }

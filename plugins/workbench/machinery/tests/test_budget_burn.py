@@ -326,6 +326,8 @@ class TestContextResolution:
         (tmp_path / "CLAUDE.md").write_text("# vault", encoding="utf-8")
         (tmp_path / "brain").mkdir()
         (tmp_path / "perf").mkdir()
+        (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         engine_dir = tmp_path / "engine"
         engine_dir.mkdir()
         monkeypatch.setattr(budget_burn, "__file__", str(engine_dir / "budget_burn.py"))
@@ -343,6 +345,8 @@ class TestContextResolution:
         (tmp_path / "CLAUDE.md").write_text("# vault", encoding="utf-8")
         (tmp_path / "brain").mkdir()
         (tmp_path / "perf").mkdir()
+        (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         (tmp_path / ".vault-context").write_text("work\n", encoding="utf-8")
         engine_dir = tmp_path / "engine"
         engine_dir.mkdir()
@@ -397,9 +401,12 @@ class TestPace:
 def scaffolded_config(tmp_path: Path):
     """Reload budget_burn against a stand-in scaffolded budget_burn_config.
 
-    The real config is scaffold-rendered into the vault's script dir, so the
-    seam under test is the module-level import — not the values it resolves
-    to. Each call re-executes budget_burn with the given names; teardown
+    The real config is owner-written into `.vault/config/`, which the hook
+    runner puts on PYTHONPATH, so the seam under test is the module-level
+    import — not the values it resolves to. Injecting under the module name is
+    faithful here, unlike for `vault_scope` (#691): nothing shipped is named
+    `budget_burn_config`, so no engine copy can win the lookup ahead of the
+    owner's. Each call re-executes budget_burn with the given names; teardown
     restores the shipped defaults.
     """
 
@@ -444,22 +451,15 @@ class TestShippedDefaults:
             ),
         }
 
-    def test_scaffold_template_matches_the_shipped_defaults(self) -> None:
-        """A newly scaffolded vault starts from the same values a bare one uses.
-
-        The template and the defaults are hand-maintained separately, so
-        without this an update to one alone would leave new vaults billing
-        against different prices than existing ones.
-        """
-        template = SCRIPTS_DIR.parent / "scaffold" / "budget_burn_config.py.tmpl"
-        rendered: dict[str, object] = {}
-        exec(
-            compile(template.read_text(encoding="utf-8"), str(template), "exec"),
-            rendered,
-        )
-        assert rendered["PROJECT_ALIASES"] == budget_burn_defaults.PROJECT_ALIASES
-        assert rendered["RATES"] == budget_burn_defaults.RATES
-        assert rendered["MONTHLY_BUDGET"] == budget_burn_defaults.MONTHLY_BUDGET
+    # There was a test here pinning `scaffold/budget_burn_config.py.tmpl`
+    # byte-equal to these defaults, because the two were hand-maintained
+    # separately and an update to one alone would have left new vaults billing
+    # against different prices than existing ones. #687 deleted the template
+    # rather than keep policing the copy: it carried no interview placeholders,
+    # so scaffolding it only ever produced a fork of these values frozen on the
+    # day the vault was created. An owner who wants to override copies
+    # `budget_burn_defaults.py` into `.vault/config/budget_burn_config.py`
+    # themselves. `TestScaffoldedConfig` below still covers that override path.
 
 
 class TestScaffoldedConfig:

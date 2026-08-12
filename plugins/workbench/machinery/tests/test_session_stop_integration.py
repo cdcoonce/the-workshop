@@ -53,6 +53,8 @@ class TestTermFrequencyUpdate:
 def test_bare_hook_invocation_never_commits(vault: Path) -> None:
     """A lifecycle Stop event is not authorization to sync the vault."""
     (vault / "perf").mkdir()
+    (vault / ".vault").mkdir(parents=True, exist_ok=True)
+    (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
     remote = vault.parent / "remote.git"
     subprocess.run(["git", "init", "--bare", str(remote)], check=True)
     subprocess.run(["git", "init", "-b", "main"], cwd=vault, check=True)
@@ -149,6 +151,8 @@ class TestVaultHealthCheck:
     ) -> None:
         """The main() flow must wire the health check into push(), not bypass it."""
         (vault / "perf").mkdir()
+        (vault / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         with patch("session_stop.push") as mock_push, \
              patch("session_stop._sync_branch_status", return_value=(True, "main", "main")), \
@@ -187,6 +191,8 @@ class TestSystemMessageShapes:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         (vault / "perf").mkdir()
+        (vault / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         with patch(
             "session_stop._sync_branch_status",
@@ -207,6 +213,8 @@ class TestSystemMessageShapes:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         (vault / "perf").mkdir()
+        (vault / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         with patch("session_stop.push") as mock_push, \
              patch("session_stop._sync_branch_status", return_value=(True, "main", "main")), \
@@ -228,6 +236,8 @@ class TestSystemMessageShapes:
         vault_dir = tmp_path / "vault"
         (vault_dir / "brain").mkdir(parents=True)
         (vault_dir / "perf").mkdir()
+        (vault_dir / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault_dir / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         (vault_dir / "CLAUDE.md").write_text("# Vault", encoding="utf-8")
 
         env = os.environ.copy()

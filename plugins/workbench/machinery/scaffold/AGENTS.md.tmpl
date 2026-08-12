@@ -40,7 +40,7 @@ The vault session is a conductor, not a do-everything agent: it decides, connect
 
 - **Sync:** private git remote. Git is the only sync layer — no cloud drives.
 - **Detection:** read `.vault-context` (gitignored) to know which machine you are on — one of ${context_values}. If missing, ask.
-- **Hooks & scripts:** all Python (`.claude/scripts/`). No bash-only or PowerShell-only scripts; everything must run on every machine the vault lives on.
+- **Hooks & scripts:** all Python, shipped in the `workbench@the-workshop` plugin. No bash-only or PowerShell-only scripts; everything must run on every machine the vault lives on.
 - **Path handling:** always use `pathlib.Path`, never hardcoded separators.
 
 ## Folder Structure
@@ -53,7 +53,8 @@ Supporting directories:
 
 - `templates/` — note templates with frontmatter schemas
 - `thinking/` — working drafts and scratch space (ungoverned)
-- `.claude/` / `.codex/` — agent configuration, vendored machinery, hooks
+- `.claude/` / `.codex/` — agent configuration
+- `.vault/` — what this vault owns: `vault.json` (the marker that makes the hooks run), `check-plugin.sh`, and `config/` for owner overrides
 - `AGENTS.md` — this file, the canonical operating manual
 
 ## Workspace-Scoped Rules
@@ -131,6 +132,6 @@ Only when the owner signals the session is ending: refresh the rolling handoff, 
 
 ## Tool Preferences
 
-1. Prefer the vault's vendored scripts under `.claude/scripts/` over hand-rolled logic.
+1. Prefer the engine scripts shipped in `workbench@the-workshop` over hand-rolled logic.
 2. Direct filesystem access as the universal fallback — works everywhere.
 3. Never depend on UI-only tools — everything must work headless.

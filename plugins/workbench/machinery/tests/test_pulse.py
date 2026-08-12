@@ -1233,6 +1233,8 @@ class TestScan:
         _afk_fixture(repos_root)
         vault_root = tmp_path / "vault"
         (vault_root / "perf").mkdir(parents=True)
+        (vault_root / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault_root / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         (vault_root / "perf" / "Brag Doc.md").write_text(
             "- **2026-07-22 — Win.** x\n"
         )
