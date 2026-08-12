@@ -527,15 +527,24 @@ class TestLoadNoteTypeSchemas:
         assert schemas == {"recipe": ["cuisine", "servings"]}
 
     def test_custom_schema_set_is_used_by_validate(self, vault: Path, monkeypatch) -> None:
-        import frontmatter_engine
-        (vault / "frontmatter_schema.json").write_text(
+        """An owner schema written where owners actually write it drives validate().
+
+        This used to monkeypatch `TYPE_FIELDS` and hand `load_note_type_schemas`
+        an explicit `config_dir`. That input cannot separate "the engine found
+        the owner's file" from "the test told the engine where to look", so it
+        passed for as long as the lookup pointed inside the installed plugin
+        and found nothing (#696). Now the file goes to the real owner config
+        path and the engine is left to resolve it.
+        """
+        config_dir = vault / ".vault" / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (vault / ".vault" / "vault.json").write_text(
+            '{"vault": "test", "plugin": "workbench"}\n', encoding="utf-8"
+        )
+        (config_dir / "frontmatter_schema.json").write_text(
             json.dumps({"recipe": ["cuisine", "servings"]}), encoding="utf-8"
         )
-        monkeypatch.setattr(
-            frontmatter_engine,
-            "TYPE_FIELDS",
-            frontmatter_engine.load_note_type_schemas(config_dir=vault),
-        )
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         p = _write_note(vault, "brain/dinner.md", (
             "---\n"
             "date: 2026-04-04\n"
