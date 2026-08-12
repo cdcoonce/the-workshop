@@ -8,7 +8,7 @@ A **portable AI development environment** — skills, methodology docs, agents, 
 **78 skills · 19 agents · 22 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
-> The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
+> The counts and every component table below are generated from source by `scripts/stamp.py`. Do not edit them by hand — run `make stamp`. Deep reference lives in [`docs/reference/`](docs/reference/).
 
 ---
 
@@ -55,7 +55,7 @@ Every coding-agent project needs skills, hooks, settings, and development standa
 
 **One shared source, three native outputs — with honest platform limits.** Every preset builds a plugin manifest for each platform — `.claude-plugin/` (read by Claude Code and Cortex Code), `.codex-plugin/` (Codex), and `.cortex-plugin/` (Cortex's documented convention; see [COMPATIBILITY.md](COMPATIBILITY.md)) — from the same components, with no install-time transform. Skills install and run on all three platforms. Plugin-level hooks execute on all three — behind a silent trust gate on Codex, and with env caveats on Cortex (`CLAUDE_PLUGIN_ROOT` unset) that break the current command strings there. Personas activate on Claude Code only today. The [Platform Support](#platform-support) matrix below is the per-component truth table.
 
-The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers) and **`vault-ops`** (a domain-specific package). Each maps to a self-contained plugin directory under `dist/`, indexed for Claude Code in `.claude-plugin/marketplace.json` and for Codex in `.agents/plugins/marketplace.json`.
+The marketplace ships one main package plus focused extras. **`workbench`** is the everything package: every skill, every agent, all methodology docs, and the safety hooks. Alongside it are five **persona** plugins (voice/output-style layers), **`workshop-maintainer`** (self-maintenance), and two **advisor** plugins. Each is a self-contained directory under `plugins/`, served straight from source and indexed for Claude Code in `.claude-plugin/marketplace.json` and for Codex in `.agents/plugins/marketplace.json`.
 
 ---
 
@@ -97,11 +97,11 @@ Per-cell notes and evidence: [platform support reference](docs/reference/platfor
 
 ## Installation
 
-Every preset builds native plugin manifests for all three platforms from one shared source. Pick your platform below — and check [Platform Support](#platform-support) for what activates there. Most projects want **`workbench`** (the everything package); swap in a persona or `vault-ops` if you prefer.
+Every plugin ships native manifests for all three platforms from one source. Pick your platform below — and check [Platform Support](#platform-support) for what activates there. Most projects want **`workbench`** (the everything package); add a persona or an advisor if you prefer.
 
 ### Claude Code
 
-Paste the repo URL into Claude and ask for `workbench` (or a specific persona / `vault-ops`):
+Paste the repo URL into Claude and ask for `workbench` (or a specific persona / advisor):
 
 ```
 https://github.com/cdcoonce/the-workshop
@@ -151,16 +151,16 @@ The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and
 
 ### Any Other Agent (Manual Copy)
 
-Each `dist/<preset-name>/` is a complete, self-contained plugin. The portable layer is `skills/` — copy it into your agent's verified skill root (a whole-plugin copy into `.claude/plugins/` is discovered by nothing):
+Each `plugins/<name>/` is a complete, self-contained plugin, served straight from source — there is no build step and no separate output tree. The portable layer is `skills/` — copy it into your agent's verified skill root (a whole-plugin copy into `.claude/plugins/` is discovered by nothing):
 
 ```bash
 # Claude Code project scope:
-cp -r dist/workbench/skills/. /path/to/your-project/.claude/skills/
+cp -r plugins/workbench/skills/. /path/to/your-project/.claude/skills/
 ```
 
 ```bash
 # Codex repo scope:
-cp -r dist/workbench/skills/. /path/to/your-repo/.codex/skills/
+cp -r plugins/workbench/skills/. /path/to/your-repo/.codex/skills/
 ```
 
 Hooks and settings don't survive a manual copy — they need the platform's own plugin install (Claude Code) or a vendored repo-level wiring (Codex; see [COMPATIBILITY.md](COMPATIBILITY.md)).
@@ -169,7 +169,7 @@ Hooks and settings don't survive a manual copy — they need the platform's own 
 
 ## Presets
 
-The marketplace ships one everything-package plus focused extras. **`workbench`** carries the complete set — every core skill, every core and preset agent, all methodology docs, and the base hooks plus the auto-format lint hook. **Persona** plugins are output-style-only (voice layers, no skills). **`vault-ops`** is a domain-specific package that ships only its own skills. The table below is generated from each package's manifest.
+The marketplace ships one everything-package plus focused extras. **`workbench`** carries the complete set — every universal skill, every agent, all methodology docs, the safety hooks, and the vault engine. **`workshop-maintainer`** ships the self-maintenance skills. **Persona** plugins are output-style-only (voice layers, no skills), and the two **advisor** plugins carry their own payload. The table below is generated from each plugin's directory.
 
 <!-- BEGIN GENERATED: plugins-table -->
 | Plugin | Version | Skills | Agents | Hooks | Description |
@@ -182,7 +182,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
 | **`workbench`** | `5.3.1` | 69 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `2.1.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workshop-maintainer`** | `2.1.1` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, what preset-specific overrides to layer on top, and the `conventions` shown above. See the [presets reference](docs/reference/presets.md) for the skills, agents, and hooks each one ships.
@@ -347,7 +347,7 @@ See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference
 
 ## Methodology
 
-Methodology documents in `core/docs/` define how Claude Code agents should work. They are bundled into every preset under `docs/`:
+Methodology documents in `plugins/workbench/docs/` define how coding agents should work. They ship with the plugin that carries them:
 
 <!-- BEGIN GENERATED: methodology-table -->
 | Document | Plugin | Summary |
@@ -416,97 +416,74 @@ uv sync
 
 ```mermaid
 graph TD
-    CORE[core/] --> BUILD[build_preset.py]
-    PRESETS[presets/] --> BUILD
-    BUILD --> DIST[dist/preset-name/]
+    SRC["plugins/&lt;name&gt;/ — the shipped plugin itself"] --> PLATFORMS[Claude Code / Codex / Cortex read this directly]
+    SRC --> STAMP[scripts/stamp.py]
+    STAMP --> GEN["generated: platform manifests, hooks.json,<br/>README, conventions.json, docs/reference/, marketplace"]
 
-    CORE --> DOCS[build_docs.py]
-    PRESETS --> DOCS
-    DOCS --> REF[docs/reference/ + README]
-
-    subgraph "core/"
-        SKILLS_CORE[skills/ -- universal]
-        DOCS_CORE[docs/ -- methodology]
-        HOOKS_CORE[hooks/ -- universal hooks]
-        AGENTS_CORE[agents/ -- universal]
-        BASE_JSON[settings-base.json]
-    end
-
-    subgraph "presets/preset-name/"
-        MANIFEST[manifest.json]
-        PRESET_JSON[settings-preset.json]
-        SKILLS_PRESET[skills/ -- overrides]
-        HOOKS_PRESET[hooks/ -- additions]
-        AGENTS_PRESET[agents/ -- overrides]
-    end
-
-    subgraph "dist/preset-name/ (plugin)"
-        OUT_PLUGIN[".claude-plugin/ + .codex-plugin/ + .cortex-plugin/"]
-        OUT_SKILLS[skills/]
-        OUT_AGENTS[agents/]
-        OUT_HOOKS[hooks/]
-        OUT_SETTINGS[settings.json]
-        OUT_README[README.md]
+    subgraph "plugins/&lt;name&gt;/ (hand-written)"
+        MANIFEST[".claude-plugin/plugin.json — name, version, description"]
+        SKILLS[skills/]
+        AGENTS[agents/]
+        HOOKS["hooks/scripts/ — each declares its own WORKSHOP_HOOK"]
+        MACHINERY["machinery/ — vault engine payload (workbench only)"]
     end
 ```
 
+There is no composition step. A plugin is not assembled from a shared `core/` and a manifest of includes — **membership is the filesystem**, and the platforms read `plugins/<name>/` as-is.
+
 Key design decisions:
 
-- **Plugin format** — Output is a self-contained plugin that ships a manifest per platform convention (`.claude-plugin/`, `.codex-plugin/`, `.cortex-plugin/`); note Cortex also reads `.claude-plugin/`, and which manifest each platform actually consumes is recorded in [COMPATIBILITY.md](COMPATIBILITY.md)
-- **Override semantics** — A preset skill or agent with the same name as a core one **replaces** it entirely
-- **Settings merge** — Base and preset JSON are shallow-merged; hook arrays are appended, not replaced
-- **Fail-fast validation** — All manifest references are checked upfront before any files are copied
-- **Path containment safety** — Exclusion paths are resolved and verified to prevent directory traversal
-- **Marketplace index** — `.claude-plugin/marketplace.json` lists all available plugins with their `dist/` sources, enabling Claude to discover and install presets by URL
-- **Generated docs** — `build_docs.py` renders the reference and README component tables from source, gated on staleness so they can't drift
+- **Plugin format** — each plugin ships a manifest per platform convention (`.claude-plugin/`, `.codex-plugin/`, `.cortex-plugin/`); Cortex also reads `.claude-plugin/`, and which manifest each platform actually consumes is recorded in [COMPATIBILITY.md](COMPATIBILITY.md)
+- **One plugin per slug, globally** — a skill or agent lives in exactly one plugin, chosen by audience. Two plugins shipping the same slug is a repo defect, and `make stamp` fails on it
+- **Hook wiring is the file** — dropping a script into `hooks/scripts/` wires it; its own `WORKSHOP_HOOK` dict names the event, and `stamp.py` renders `hooks.json` from that. There is no settings file to merge
+- **Generation is guarded** — `stamp.py` marks every file it writes and refuses to overwrite one lacking its marker, so a mis-mapped output cannot silently consume hand-written work
+- **Marketplace index** — `.claude-plugin/marketplace.json` (and `.agents/plugins/` for Codex) is generated from the plugin directories, so a new plugin is discoverable without a second registration step
+- **Two gates, not one** — `stamp-check` catches generated-file drift; the version-bump gate catches shipped content that changed without a new version, which would otherwise merge green and reach nobody
 
-### Build Pipeline
-
-The build script assembles a self-contained plugin directory:
+### What `make stamp` does
 
 ```mermaid
 flowchart LR
-    A[Read manifest.json] --> B[Validate references]
-    B --> C[Copy core skills/agents]
-    C --> D[Copy preset skills/agents -- overrides core]
-    D --> E[Copy hook scripts]
-    E --> F[Generate hooks/hooks.json]
-    F --> G[Generate settings.json]
-    G --> H[Generate plugin manifests]
-    H --> I[Apply exclusions]
-    I --> J[Generate README.md]
-    J --> K["dist/{preset}/ (plugin)"]
+    A[Scan plugins/*/] --> B[Read SKILL.md / AGENT.md frontmatter]
+    B --> C[Read each hook's WORKSHOP_HOOK via ast]
+    C --> D[Render the fixed path map in memory]
+    D --> E{Marker present<br/>on each target?}
+    E -- no --> F[Refuse — may be hand-written]
+    E -- yes --> G[Write generated files in place]
 ```
 
 ### Living Documentation
 
 The reference docs and the README component tables are **generated from source**, not hand-maintained, so they can't drift from the components as the repo evolves.
 
-- `make docs` runs `scripts/build_docs.py`, which reads SKILL.md/AGENT.md frontmatter, hook docstrings, settings wiring, and preset manifests, then writes the `docs/reference/` catalogs and rewrites the `<!-- BEGIN/END GENERATED -->` regions of this README and `docs/reference/build-and-wiring.md`.
-- `make build` regenerates the marketplace index and rebuilds every preset into `dist/`.
-- `make test` runs the suites **and** the drift gate: it runs `build_docs --check`, rebuilds `dist/`, and fails if any generated output differs from what's committed. The same gate runs in CI.
+- `make stamp` runs `scripts/stamp.py`, the repo's only build component. It reads SKILL.md/AGENT.md frontmatter and each hook script's own `WORKSHOP_HOOK` declaration, then writes every generated file from its fixed path map: the `docs/reference/` catalogs, each plugin's platform manifests, README, and `conventions.json`, plus the `<!-- BEGIN/END GENERATED -->` regions of this README and `docs/reference/build-and-wiring.md`.
+- `make stamp-check` renders the same map in memory and fails, naming the file and printing a diff, on anything committed stale.
+- `make test` runs the suites **and** two gates: `stamp-check` for generated-file drift, and the version-bump gate, which fails a plugin whose hand-authored content changed without a new version. The same gates run in CI.
 
-When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`workshop-skill-creator`, `add-the-workshop-hook`) end with this step; `create-hook` remains the general-purpose hook workflow.
+When you add or change a skill, hook, or agent, run `make stamp && make test`, commit the regenerated output alongside your change, and bump the version of every plugin you touched — without that bump `claude plugin update` offers nothing and the change reaches nobody. The maintainer skills (`workshop-skill-creator`, `land-skill-candidate`) end with this step; `create-hook` remains the general-purpose hook workflow.
 
 ### Folder Structure
 
 ```
 the-workshop/
 ├── .claude-plugin/
-│   └── marketplace.json     # Plugin registry — lists all presets with dist/ sources
-├── .github/workflows/       # CI — runs make test (suites + drift gate)
-├── core/                    # Universal components shared by all presets
-│   ├── settings-base.json   # Base hook configuration
-│   ├── agents/              # Universal agents
-│   ├── docs/                # Methodology docs (TDD, root-cause, subagent, parallel, agent-matching)
-│   ├── hooks/               # Universal hook scripts
-│   └── skills/              # Universal skills
-├── presets/                  # Project-type configurations (+ persona plugins)
-├── scripts/                 # Build, docs, marketplace, smoke-test, validation tooling
+│   └── marketplace.json     # Generated registry — one entry per plugins/ directory
+├── .agents/plugins/         # Generated Codex marketplace index
+├── .github/workflows/       # CI — runs make test (suites + drift and version gates)
+├── plugins/                 # Every directory here IS a shipped plugin, served from source
+│   ├── workbench/           # The everything package
+│   │   ├── .claude-plugin/  # Hand-written plugin.json (name, version, description)
+│   │   ├── skills/          # What the plugin ships — membership is the filesystem
+│   │   ├── agents/
+│   │   ├── hooks/scripts/   # A script's own WORKSHOP_HOOK declaration IS its wiring
+│   │   ├── docs/            # Methodology docs (TDD, root-cause, subagent, parallel, ...)
+│   │   └── machinery/       # Vault engine payload — hand-authored, ships with the plugin
+│   ├── workshop-maintainer/ # Self-maintenance skills and agents
+│   └── persona-*/           # Voice / output-style layers
+├── scripts/                 # stamp.py (the only build component), smoke test, gates
 ├── tests/                   # pytest suite
-├── dist/                    # Built plugins (committed, gated against drift)
 ├── docs/
-│   ├── reference/           # Generated component reference (skills, hooks, agents, presets, ...)
+│   ├── reference/           # Generated component reference (skills, hooks, agents, ...)
 │   ├── plans/               # Plans and archives
 │   └── dev-cycle/           # Dev-cycle state
 └── .claude/                 # Self-applicable template (dogfooding)
@@ -514,16 +491,17 @@ the-workshop/
 
 ### Scripts Reference
 
-| Command                                                       | Description                                                      |
-| ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `make docs`                                                   | Regenerate `docs/reference/` and the README's generated tables   |
-| `make build`                                                  | Regenerate the marketplace and rebuild every preset into `dist/` |
-| `make test`                                                   | Run the suites plus the docs+dist drift gate                     |
-| `uv run python -m scripts.build_docs [--check]`               | Generate docs, or check for staleness (`--check`)                |
-| `uv run python -m scripts.build_preset <preset>`              | Assemble core + preset into `dist/<preset>/`                     |
-| `uv run python -m scripts.build_marketplace`                  | Regenerate `.claude-plugin/marketplace.json`                     |
-| `uv run python -m scripts.smoke_test <preset>`                | Validate internal consistency of a built preset                  |
-| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions  |
+| Command                                                       | Description                                                     |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `make stamp`                                                  | Regenerate every generated file from hand-written source        |
+| `make stamp-check`                                            | Check for generated-file drift without writing                  |
+| `make lint`                                                   | Ruff over `scripts`, `tests`, and `plugins`                     |
+| `make test`                                                   | Run every suite plus the drift and version-bump gates           |
+| `make verify-versions`                                        | Version-bump gate alone, against the release branch             |
+| `uv run python -m scripts.stamp [--check]`                    | Stamp generated files, or check for staleness (`--check`)       |
+| `uv run python -m scripts.check_version_bumps`                | Fail a plugin whose shipped content changed without a bump      |
+| `uv run python -m scripts.smoke_test <plugin>`                | Validate internal consistency of a source plugin directory      |
+| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions |
 
 ### Running Tests
 
@@ -542,12 +520,13 @@ uv run pytest --cov=scripts --cov-report=term-missing
 
 ## Troubleshooting
 
-| Symptom                                         | Likely Cause                                                                            | Fix                                                                    |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `build_preset.py` fails with "skill not found"  | Manifest references a skill that doesn't exist in `core/skills/` or `presets/*/skills/` | Check `manifest.json` `preset_skills` array against actual directories |
-| `make test` fails with "Documentation is stale" | A component changed but docs/dist weren't regenerated                                   | Run `make docs && make build` and commit the regenerated output        |
-| Smoke test reports missing hook                 | Hook listed in `hooks.json` but script not in `hooks/scripts/`                          | Add the hook script or remove from settings                            |
-| Dev-cycle state file validation fails           | Frontmatter schema mismatch or phase transition error                                   | Check `schema_version: 1` and that phases follow strict order          |
+| Symptom                                          | Likely Cause                                                      | Fix                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `make stamp` refuses to overwrite a file         | The target lacks the generation marker, so it may be hand-written | Confirm the path belongs in the stamper's map before forcing anything   |
+| `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
+| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Bump `plugins/<name>/.claude-plugin/plugin.json`; see Plugin Versioning |
+| Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
+| Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 
 ---
 

@@ -13,12 +13,14 @@ property — do not skip it because "the interview already separated things".
 
 1. `git fetch origin`, branch `feat/advisor-<role>` off `origin/main` — never off
    current HEAD.
-2. Add the preset; `make docs`; `make build`; smoke-test the new preset; `uv run
+2. Add the plugin; `make stamp`; smoke-test the new plugin; `uv run
 pytest`. The layering test and the persona's own tests.md suite must be green.
 3. Conventional commit, stage explicitly (never `git add .`), no agent attribution.
 4. Push, open the PR: what the persona is, who owns it, tests.md results table,
    pack list with researched-on dates. The maintainer reviews and merges; merge →
-   dist rebuild → marketplace → the owner receives it as a plugin update.
+   promote to `main` → marketplace → the owner receives it as a plugin update.
+   The version bump is what makes that last step happen — see Plugin Versioning
+   in CLAUDE.md.
 
 ## Patch-bundle fallback (no write access — e.g. the owner's own machine)
 
