@@ -372,7 +372,9 @@ class TestRenderedTreeFreshness:
             fresh = (out_a / relative).read_bytes()
             assert fresh == (out_b / relative).read_bytes()
             assert fresh == (RENDERED_DIR / relative).read_bytes(), (
-                f"committed rendered/{relative} is stale — run make build"
+                f"committed rendered/{relative} is stale — run "
+                f"`python plugins/workbench/machinery/tools/wiring_gen.py` "
+                f"and commit the result"
             )
 
 
