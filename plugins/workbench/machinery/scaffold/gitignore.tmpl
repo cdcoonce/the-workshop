@@ -1,6 +1,33 @@
 # Machine-local context marker — one per machine, never synced.
 .vault-context
 
+# Plugin presence state — machine-local, must NEVER sync. plugin-state.json is
+# the breadcrumb workbench writes each SessionStart and holds an ABSOLUTE local
+# plugin path; .plugin-miss-count is this machine's grace counter. Syncing them
+# would let one machine's breadcrumb convince another that the plugin is
+# present when it is not, which defeats .vault/check-plugin.sh entirely.
+.vault/plugin-state.json
+.vault/.plugin-miss-count
+
+# Local hook data (per-machine state), including the accumulating
+# term-frequency salience cache. Machine-local on purpose: it is a regenerable
+# counter, and a shared mutable one conflicts on every two-machine sync.
+.claude/data/*
+
+# Ephemeral subagent worktrees (agent isolation scaffolding). Transient
+# per-run checkouts; never tracked. Prune with `git worktree prune`.
+.claude/worktrees/
+
+# Machine-local agent settings (permissions and the like).
+.claude/settings.local.json
+
+# Live session notebook — ephemeral short-term state, rewritten every turn.
+# The durable resume contract is the committed handoff, not this.
+.brain/notebook-*.md
+
+# Graph gardener queue — machine-local, rebuilt each session from git diff.
+.brain/gardener-*.md
+
 # Regenerable runtime junk.
 __pycache__/
 *.pyc

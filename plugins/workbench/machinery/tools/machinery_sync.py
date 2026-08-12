@@ -23,24 +23,37 @@ Verbs
     Scaffold a brand-new vault, non-interactively parameterized (W5).
     Refuses a non-empty target (``.git`` alone does not count; pass
     ``--force-empty-check`` to skip the check), renders every scaffold
-    template from ``<machinery>/scaffold/`` with the parameters, vendors the
-    full managed tier through the same copy path upgrade uses, writes the
-    lockfile, runs ``git init`` + an initial commit when the target is not
-    already a git repo, and prints the post-init checklist
-    (``.vault-context``, ``include.path``, optional plugin install, the
-    Codex hook-trust approval note).
+    template from ``<machinery>/scaffold/`` with the parameters, runs
+    ``git init`` + an initial commit when the target is not already a git
+    repo, and prints the post-init checklist (``.vault-context``,
+    ``include.path``, the required plugin install, the Codex hook-trust
+    approval note).
+
+    Init deliberately vendors NOTHING and writes no lockfile (#687). The
+    engine, skills, agents, and hooks all ship in ``workbench@the-workshop``
+    and run from the installed plugin. A copy inside the vault would be a
+    fork frozen at whatever version was installed the day the vault was
+    created, with no updater to move it forward — ``vault-upgrade`` was
+    retired — and a lockfile whose hashes nothing would ever check.
 
 Scaffold tier
 -------------
-Scaffold outputs are written ONCE by init and never touched by upgrade —
+Scaffold outputs are written ONCE by init and never touched afterwards —
 they are the owner's files (``AGENTS.md``, ``.gitconfig``, the note
-``templates/`` tree, and the taxonomy-parameterized
-``.claude/scripts/vault_scope.py``). The two tiers can never overlap: a
-scaffold target that collides with a managed vendor-map target aborts at
-map-validation time, before any write. Scaffold outputs that live under a
-managed scan root are recorded in the lockfile as ``tier: "scaffold"`` (no
-hash — local edits are the owner's business) so the drift check's UNTRACKED
-scan stays clean; upgrade re-records them on every lock rewrite.
+``templates/`` tree, ``.vault/vault.json``, ``.vault/check-plugin.sh``, and
+the taxonomy-parameterized ``.vault/config/vault_scope.py``).
+
+``.vault/config/`` starts with exactly one file. ``vault_scope.py`` is the
+only owner-config template that consumes an interview answer; the others
+carried no placeholders at all, so scaffolding them produced a byte-copy of
+the shipped defaults that then shadowed those defaults wholesale and never
+received a later fix. An owner who wants one copies the matching
+``*_defaults.py`` out of the engine and edits it.
+
+The two tiers can never overlap: a scaffold target that collides with a
+managed vendor-map target aborts at map-validation time, before any write.
+That check still runs even though init no longer vendors, because ``adopt``
+and ``upgrade`` share these maps.
 
 Structural safety
 -----------------
@@ -925,13 +938,25 @@ def _parse_taxonomy(raw: str, *, label: str) -> list[str]:
 
 
 def build_scaffold_params(
-    vault_name: str, note_dirs: list[str], contexts: list[str]
+    vault_name: str,
+    note_dirs: list[str],
+    contexts: list[str],
+    plugin_version: str | None = None,
 ) -> dict[str, str]:
-    """The substitution dict every scaffold template is rendered with."""
+    """The substitution dict every scaffold template is rendered with.
+
+    ``plugin_version`` becomes the new vault's ``min_plugin_version`` floor,
+    which ``check-plugin.sh`` compares the running plugin against. An unknown
+    source version degrades to ``0.0.0`` rather than raising: the floor exists
+    to catch a *downgrade*, and refusing to scaffold a vault at all because the
+    source could not name its own version would trade a missing warning for a
+    missing vault.
+    """
     slug = re.sub(r"[^a-z0-9]+", "-", vault_name.lower()).strip("-") or "vault"
     return {
         "vault_name": vault_name,
         "vault_slug": slug,
+        "plugin_version": plugin_version or "0.0.0",
         "note_dirs_csv": ", ".join(note_dirs),
         "note_dirs_bullets": "\n".join(
             f"- `{name}/` — describe what lives here" for name in note_dirs
@@ -950,14 +975,15 @@ def _post_init_checklist(contexts: list[str]) -> list[str]:
         f"> .vault-context — valid values: {context_values}",
         "Wire git conventions: git config --local --add include.path "
         "'../.gitconfig'",
-        "Verify the vendored machinery: python3 "
-        ".claude/scripts/machinery_check.py --strict",
-        "Optional: install the vault-ops plugin from the-workshop marketplace "
-        "for cross-repo use of the vault skills",
+        "REQUIRED: install workbench@the-workshop from the the-workshop "
+        "marketplace — the engine, skills, and every vault hook ship in it, "
+        "so the vault does nothing at all until it is installed",
         "Codex only, once per machine: approve hook trust interactively "
         "(hooks are silently skipped until trusted; automation may use "
         "codex exec --dangerously-bypass-hook-trust)",
-        "Open an agent session in the new vault and confirm the hooks fire",
+        "Open an agent session in the new vault and confirm the hooks fire — "
+        "make a trivial edit and check the auto-commit lands, rather than "
+        "trusting that the session started cleanly",
     ]
 
 
@@ -1002,12 +1028,25 @@ def run_init(
             f"no scaffold payload at {source_dir / 'scaffold'}; "
             "init needs scaffold/scaffold-map.json"
         )
-    _ensure_tiers_disjoint(vendor_map, scaffold_map)
+    # No tier-disjointness check here, unlike adopt and upgrade. That check
+    # guards ONE invariant: no path is written by two tiers in the same run.
+    # Init no longer writes the managed tier at all, so for init the check is
+    # not merely vacuous — it is wrong. It would forbid the scaffold from
+    # owning `.claude/settings.json`, a path only the managed map claims, and
+    # that map's claim on it is itself dead: it carries the pre-cutover hook
+    # wiring at `.claude/scripts/run-hook.sh`, which no longer exists. Writing
+    # it into a new vault would point every session at a missing script while
+    # the real hooks already fire from the plugin. The managed map is stale by
+    # its own generator's admission and slated for replacement in #667; this
+    # skips it rather than editing it.
     note_dirs = _parse_taxonomy(note_dirs_raw, label="note-dirs")
     contexts = _parse_taxonomy(contexts_raw, label="contexts")
 
     resolved_name = vault_name or target.resolve().name
-    params = build_scaffold_params(resolved_name, note_dirs, contexts)
+    _, source_version = resolve_source_meta(source_dir)
+    params = build_scaffold_params(
+        resolved_name, note_dirs, contexts, plugin_version=source_version
+    )
 
     if target.exists():
         # A bare `git init`'d dir still counts as empty: only real content
@@ -1051,32 +1090,24 @@ def run_init(
         writer.write_bytes(target_rel, source_path.read_bytes())
         written_scaffold.append(target_rel)
 
-    # 3. Vendor the full managed tier — the same copy path upgrade applies.
-    lock_files: dict[str, dict] = {}
-    written_managed: list[str] = []
-    for entry in vendor_map.entries:
-        if entry.kind == "json-key":
-            _apply_json_key_copy(vendor_map, entry, target, writer)
-        else:
-            writer.write_bytes(
-                entry.target, vendor_map.source_path(entry).read_bytes()
-            )
-        lock_files[entry.target] = _lock_entry_for_source(vendor_map, entry)
-        written_managed.append(entry.target)
-
-    # 4. Lock: managed hashes plus hashless scaffold records for scan roots.
-    lock_files.update(_scaffold_lock_entries(scaffold_map, target, None))
-    _write_lock(writer, _build_lockfile(source_dir, lock_files))
-
-    # 5. git init + initial commit, unless the target is already a repo.
-    _, version = resolve_source_meta(source_dir)
+    # 3. git init + initial commit, unless the target is already a repo.
+    #
+    # There is deliberately no step vendoring a managed tier here, and no
+    # lockfile. The engine, skills, agents, and hooks all ship in
+    # `workbench@the-workshop` and are read from the installed plugin; a copy
+    # inside the vault is not a second source of truth, it is a fork frozen at
+    # whatever version happened to be installed the day the vault was created.
+    # It also has no updater — `vault-upgrade` was retired — so nothing would
+    # ever move it forward, and the lockfile's hashes would be checked by
+    # nothing. A vault init produces now has the same shape as one that works:
+    # owner config under `.vault/`, everything else from the plugin.
     git_initialized = False
     git_error: str | None = None
     if not (target / ".git").exists():
         git_initialized, git_error = _git_init_and_commit(
             target,
             f"chore: initialize {resolved_name} vault "
-            f"(the-workshop vault-ops {version or 'unknown'})",
+            f"(the-workshop workbench {source_version or 'unknown'})",
         )
 
     checklist = _post_init_checklist(contexts)
@@ -1092,8 +1123,6 @@ def run_init(
                     "note_dirs": note_dirs,
                     "contexts": contexts,
                     "scaffold": written_scaffold,
-                    "managed": written_managed,
-                    "lockfile_written": True,
                     "git_initialized": git_initialized,
                     "git_error": git_error,
                     "checklist": checklist,
@@ -1105,8 +1134,8 @@ def run_init(
     else:
         print(f"init: {source_dir} -> {target}")
         print(
-            f"  scaffolded {len(written_scaffold)} file(s), vendored "
-            f"{len(written_managed)} managed file(s), wrote {LOCKFILE_RELPATH}"
+            f"  scaffolded {len(written_scaffold)} file(s); the engine, "
+            "skills, and hooks come from the installed plugin"
         )
         if git_initialized:
             print("  initialized git repo with an initial commit")

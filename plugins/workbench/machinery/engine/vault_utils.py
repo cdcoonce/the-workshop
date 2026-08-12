@@ -31,14 +31,24 @@ def iso_week_string(d: date) -> str:
 
 
 def find_vault_root(start: Path | None = None) -> Path | None:
-    """Find the brain vault root by walking up from *start*.
+    """Find the vault root by walking up from *start*.
 
-    The vault is identified by its signature workspaces (``brain/`` + ``perf/``)
-    alongside ``CLAUDE.md`` — NOT by ``CLAUDE.md`` alone. Many project repos
-    (e.g. am-external-reporting-tools) carry their own ``CLAUDE.md``; matching on
-    that alone let the session-stop auto-commit run inside whatever repo the
-    shell had ``cd``'d into, committing/pushing a non-vault repo. The signature
-    check keeps every hook vault-only.
+    The vault is identified by ``.vault/vault.json`` — the same marker
+    ``run-vault-hook.sh`` walks up for, so the bash guard and the Python engine
+    agree on what counts as a vault.
+
+    It used to be identified by ``CLAUDE.md`` alongside a ``brain/`` + ``perf/``
+    signature. That check existed for a real reason and the reason still holds:
+    many project repos carry their own ``CLAUDE.md``, and matching on that alone
+    once let the session-stop auto-commit run inside whatever repo the shell had
+    ``cd``'d into. But the signature hardcoded one vault's taxonomy into the tool
+    whose whole premise is that the taxonomy is the owner's to choose, and it
+    keyed on directories a freshly scaffolded vault does not have — init creates
+    no note directories, so EVERY new vault reported "not in a vault directory"
+    on its first session, whatever taxonomy its owner picked (#687).
+
+    ``vault.json`` does the original job strictly better: no ordinary project
+    repo has one, and it does not care what the note directories are called.
 
     Args:
         start: Starting directory. Defaults to cwd.
@@ -49,11 +59,7 @@ def find_vault_root(start: Path | None = None) -> Path | None:
     if start is None:
         start = Path.cwd()
     for path in [start, *start.parents]:
-        if (
-            (path / "CLAUDE.md").exists()
-            and (path / "brain").is_dir()
-            and (path / "perf").is_dir()
-        ):
+        if (path / ".vault" / "vault.json").is_file():
             return path
     return None
 

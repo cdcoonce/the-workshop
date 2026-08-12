@@ -37,7 +37,22 @@ python3 <machinery-dir>/tools/machinery_sync.py init \
   --contexts <x,y>
 ```
 
-Non-interactive by design. Behavior: refuses a non-empty target (`--force-empty-check` overrides — owner's explicit call only), renders the scaffold templates (`AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `.gitconfig`, `.gitignore`, `pyproject.toml`, `vault_scope.py`, `templates/`), vendors the full managed tier, writes `.vault/machinery.lock.json`, and runs `git init` plus an initial commit when the target is not already a repo.
+Non-interactive by design. Behavior: refuses a non-empty target (`--force-empty-check` overrides — owner's explicit call only), renders the scaffold templates, copies the verbatim trees, and runs `git init` plus an initial commit when the target is not already a repo.
+
+What it writes:
+
+| Path                                         | What it is                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| `AGENTS.md`, `CLAUDE.md`, `SETUP.md`         | Operating manuals, parameterized with the interview answers       |
+| `.gitconfig`, `.gitignore`, `pyproject.toml` | Repo conventions                                                  |
+| `templates/`                                 | Note templates                                                    |
+| `.vault/vault.json`                          | The marker that makes the vault's hooks run at all                |
+| `.vault/check-plugin.sh`                     | Presence check for the plugin, wired via `.claude/settings.json`  |
+| `.vault/config/vault_scope.py`               | The owner's taxonomy — the one config the interview parameterizes |
+
+Init vendors **nothing** and writes no lockfile. The engine, skills, agents, and hooks all ship in `workbench@the-workshop` and run from the installed plugin.
+
+`.vault/config/` starts with exactly one file. The other owner-config names (`context_paths.py`, `content_routing.py`, `budget_burn_config.py`, `frontmatter_schema.json`) carry no interview answers, so scaffolding them would hand the owner a byte-copy of the shipped defaults that then shadows those defaults wholesale and never receives a later fix. An owner who wants one copies the matching `*_defaults.py` out of `machinery/engine/` into `.vault/config/`, drops the `_defaults` suffix, and edits it.
 
 ### 4. Walk the Post-Init Checklist
 
@@ -45,10 +60,9 @@ Init prints the checklist; walk it with the owner step by step:
 
 1. Write `.vault-context` (gitignored, one per machine).
 2. Wire git conventions: `git config --local --add include.path '../.gitconfig'`.
-3. Install `workbench@the-workshop` from the the-workshop marketplace — the vault's hooks and engine ship in it, so the vault does nothing without it.
-4. Hand-write `.vault/vault.json` declaring `vault`, `plugin`, and `min_plugin_version`. **The scaffold does not emit this file yet (#687)** and its presence is the switch that makes every vault hook run — the hook shim walks up looking for it and exits before starting an interpreter when it is absent. Until it exists the vault is inert, silently.
-5. Codex only, once per machine: approve hook trust interactively — hooks are silently skipped until trusted (automation may use `codex exec --dangerously-bypass-hook-trust`).
-6. Add a private git remote and push, if the vault should sync across machines.
+3. Install `workbench@the-workshop` from the the-workshop marketplace — the vault's hooks and engine ship in it, so the vault does nothing without it. Init writes `.vault/vault.json` with the source plugin's version as `min_plugin_version`, so `check-plugin.sh` will warn if a stale plugin is later installed over it.
+4. Codex only, once per machine: approve hook trust interactively — hooks are silently skipped until trusted (automation may use `codex exec --dangerously-bypass-hook-trust`).
+5. Add a private git remote and push, if the vault should sync across machines.
 
 ### 5. Verify
 

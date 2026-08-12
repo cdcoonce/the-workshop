@@ -245,6 +245,8 @@ def _init_vault(tmp_path):
     (repo / "CLAUDE.md").write_text("# vault", encoding="utf-8")
     (repo / "brain").mkdir()
     (repo / "perf").mkdir()
+    (repo / ".vault").mkdir(parents=True, exist_ok=True)
+    (repo / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
     return repo
 
 

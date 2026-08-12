@@ -1,6 +1,6 @@
 # ${vault_name} — Setup Guide
 
-New-machine checklist for the managed-hybrid era: the vault's engine scripts, agents, skills, and hook wiring are **vendored** from the-workshop's `vault-ops` preset and tracked by `.vault/machinery.lock.json`. Setup is cloning plus a few one-time wires — never hand-copying scripts.
+New-machine checklist. The vault's engine scripts, agents, skills, and hooks all ship in the `workbench@the-workshop` plugin and run from wherever it is installed — nothing is copied into this repo. Setup is cloning, installing the plugin, and a few one-time wires.
 
 ## Prerequisites
 
@@ -36,15 +36,15 @@ The versioned `.gitconfig` (fetch.prune etc.) applies via a local include:
 git config --local --add include.path '../.gitconfig'
 ```
 
-### 4. Verify the vendored machinery
+### 4. Install the plugin
 
 ```bash
-python3 .claude/scripts/machinery_check.py --strict
+claude plugin install workbench@the-workshop
 ```
 
-Every file should report `OK`. Any `LOCAL-EDIT`, `MISSING`, or `UNTRACKED` means the clone drifted from the lockfile — resolve before working.
+This is not optional. Every one of the vault's hooks, its engine, and its skills live in the plugin; without it the vault is an ordinary folder of Markdown. Nothing warns you at the moment it is missing — that is what `.vault/check-plugin.sh` is for, and it runs at session start.
 
-If instead this vault runs on the installed `workbench@the-workshop` plugin (no vendored tier, a `.vault/vault.json` at the root), skip this step: there is no lockfile to check. Confirm `.vault/vault.json` exists and names the plugin, since its presence is the switch that makes every vault hook run.
+Then confirm `.vault/vault.json` is present. Its presence is the switch that makes the hooks run at all: the hook shim walks up looking for it and exits before starting an interpreter when it is absent. A vault missing it looks exactly like a healthy one until you go looking for the thing that did not happen.
 
 ### 5. Open a session
 

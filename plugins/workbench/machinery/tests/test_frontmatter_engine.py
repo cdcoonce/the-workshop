@@ -579,6 +579,8 @@ class TestVaultRootAutoDetection:
         (tmp_path / "CLAUDE.md").write_text("# Vault")
         (tmp_path / "brain").mkdir()
         (tmp_path / "perf").mkdir()
+        (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
         p = _write_note(tmp_path, "work/active/note.md", "Just a note, no frontmatter.\n")
 
         errors = validate(p)

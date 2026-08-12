@@ -49,6 +49,8 @@ def test_full_signature_resolves_and_runs(tmp_path, monkeypatch):
     (tmp_path / "CLAUDE.md").write_text("# vault")
     (tmp_path / "brain").mkdir()
     (tmp_path / "perf").mkdir()
+    (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
 
@@ -70,6 +72,8 @@ def _make_vault_with_index(tmp_path: Path) -> Path:
     (tmp_path / "CLAUDE.md").write_text("# vault")
     (tmp_path / "brain").mkdir()
     (tmp_path / "perf").mkdir()
+    (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
     index_dir = tmp_path / ".claude" / "data" / "semantic"
     index_dir.mkdir(parents=True)
     np.save(
@@ -104,6 +108,8 @@ def test_vector_similar_fn_missing_index_is_loud(tmp_path, capsys):
     (tmp_path / "CLAUDE.md").write_text("# vault")
     (tmp_path / "brain").mkdir()
     (tmp_path / "perf").mkdir()
+    (tmp_path / ".vault").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
 
     fn = gc.vector_similar_fn(tmp_path)
 
