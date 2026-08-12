@@ -16,9 +16,9 @@ Search the vault by **meaning**, not keywords. Uses local fastembed embeddings (
 
 ### `/find <query>`
 
-1. **Incremental reindex.** Run `uv run --script .claude/scripts/semantic_index.py reindex` (no `--force`). The engine checks a sha256 manifest and re-embeds only changed or new notes — near-instant when nothing has changed.
+1. **Incremental reindex.** Run `uv run --script "<engine>/semantic_index.py" reindex` (no `--force`). The engine checks a sha256 manifest and re-embeds only changed or new notes — near-instant when nothing has changed.
 
-2. **Search.** Run `uv run --script .claude/scripts/semantic_index.py search "<query>"`. The engine returns a JSON list of `{note_path, score, snippet}`, deduplicated to note level (best-scoring chunk per note), sorted descending.
+2. **Search.** Run `uv run --script "<engine>/semantic_index.py" search "<query>"`. The engine returns a JSON list of `{note_path, score, snippet}`, deduplicated to note level (best-scoring chunk per note), sorted descending.
 
 3. **Present ranked hits.** Show the user the top results: note path as a `[[wikilink]]`, cosine score, and the matching snippet. Briefly explain why each result matched (what concept or phrase made it relevant).
 
@@ -26,11 +26,11 @@ Search the vault by **meaning**, not keywords. Uses local fastembed embeddings (
 
 ### `/find --reindex`
 
-Run `uv run --script .claude/scripts/semantic_index.py reindex --force`. Forces a full rebuild — re-embeds every in-scope note from scratch. Use when the index seems stale, after a large vault reorganization, or when the user wants to confirm the index is fresh. Report the returned stats: `{indexed, skipped, total_chunks, elapsed}`.
+Run `uv run --script "<engine>/semantic_index.py" reindex --force`. Forces a full rebuild — re-embeds every in-scope note from scratch. Use when the index seems stale, after a large vault reorganization, or when the user wants to confirm the index is fresh. Report the returned stats: `{indexed, skipped, total_chunks, elapsed}`.
 
 ### `/find --status`
 
-Run `uv run --script .claude/scripts/semantic_index.py status`. Report the returned `{notes, chunks, stale_notes, index_built_at, model, ready}` dict in readable form. Flag if `stale_notes > 0` and suggest running `/find --reindex` if the staleness is high.
+Run `uv run --script "<engine>/semantic_index.py" status`. Report the returned `{notes, chunks, stale_notes, index_built_at, model, ready}` dict in readable form. Flag if `stale_notes > 0` and suggest running `/find --reindex` if the staleness is high.
 
 ## Index Scope
 

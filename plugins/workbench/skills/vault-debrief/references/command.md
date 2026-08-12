@@ -78,9 +78,9 @@ If the cold-read cohort is not meaningfully lower once both cohorts clear the 5-
 
 ## Skill edits go to the source, never the vault copy
 
-The vault's `.claude/skills/` are **vendored** from the-workshop and tracked in `.vault/machinery.lock.json`. Editing a vendored copy creates drift that `/vault-upgrade` will refuse on the next run, and the fix will be silently reverted or force-overwritten.
+Skills are not vendored into the vault any more. They ship from `workbench@the-workshop` and run out of the installed plugin, so there is no vault-side copy to edit — and nothing in the vault to edit it in.
 
-An accepted skill edit is therefore a change to `plugins/workbench/skills/<skill>/` in the the-workshop checkout, on a branch, into a PR against `dev` — then `/vault-upgrade` brings it down. Bump the preset version: instruction changes with an unchanged component inventory are a **patch**. If a debrief edit ever lands directly in `.claude/skills/`, that is the bug.
+An accepted skill edit is therefore a change to `plugins/workbench/skills/<skill>/` in the the-workshop checkout, on a branch, into a PR against `dev` — then reinstall or upgrade the plugin to pick it up. Bump the plugin version; `make test` enforces the rule via `scripts/check_version_bumps.py`, and Plugin Versioning in `CLAUDE.md` is the spec. Instruction changes with an unchanged component inventory are a **patch**. If a debrief edit ever lands anywhere but the-workshop, that is the bug.
 
 ## Anti-theater
 

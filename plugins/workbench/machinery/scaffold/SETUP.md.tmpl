@@ -42,15 +42,13 @@ git config --local --add include.path '../.gitconfig'
 python3 .claude/scripts/machinery_check.py --strict
 ```
 
-Every file should report `OK`. Any `LOCAL-EDIT`, `MISSING`, or `UNTRACKED` means the clone drifted from the lockfile — resolve before working (the `/vault-upgrade` skill covers upgrades and refusals).
+Every file should report `OK`. Any `LOCAL-EDIT`, `MISSING`, or `UNTRACKED` means the clone drifted from the lockfile — resolve before working.
+
+If instead this vault runs on the installed `workbench@the-workshop` plugin (no vendored tier, a `.vault/vault.json` at the root), skip this step: there is no lockfile to check. Confirm `.vault/vault.json` exists and names the plugin, since its presence is the switch that makes every vault hook run.
 
 ### 5. Open a session
 
 Start an agent session in the vault root. The session-start hook should inject context with no Python errors. You're done.
-
-## Optional: Marketplace Plugin
-
-To use the vault skills from **other** repos on this machine, install the `vault-ops` plugin from the-workshop marketplace. Inside the vault itself the vendored copies under `.claude/skills/` already cover everything — the plugin is for cross-repo use.
 
 ## Required Once Per Machine (Codex Only): Hook Trust
 
@@ -61,4 +59,4 @@ Codex requires an interactive, per-machine trust approval before it will run thi
 - **"Python not found" errors** — hooks require Python 3.10+ on PATH for your shell.
 - **Merge conflict on session start** — the auto-pull hit a conflict; resolve manually, never auto-resolve.
 - **`.vault-context` missing** — agents will ask which machine this is; write the file to stop being asked.
-- **Machinery drift** — rerun `python3 .claude/scripts/machinery_check.py --strict` and use the `/vault-upgrade` workflow to reconcile.
+- **Hooks silently doing nothing** — check that `.vault/vault.json` still exists and that `workbench@the-workshop` is installed and at or above the `min_plugin_version` that file declares. Deleting `vault.json` disables every vault hook without an error.

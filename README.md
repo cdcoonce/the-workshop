@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; plugin-level hooks execute on all three (trust-gated on Codex, env caveats on Cortex), while personas activate on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**79 skills · 19 agents · 22 hooks · 9 plugins**
+**78 skills · 19 agents · 22 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `4.2.2` | 70 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `5.0.0` | 69 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `2.1.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -265,7 +265,6 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-upgrade` | `workbench` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. |
 | `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | `workbench` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |

@@ -25,16 +25,22 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # --------------------------------------------------------------------------
 
 
-def test_owned_paths_covers_every_documented_path_class(flat_repo: Path):
+def test_owned_paths_covers_every_documented_path_class(flat_repo: Path, make_plugin):
     """The stamper's path map is the contract; nothing generated may sit outside it.
 
-    Each entry here is one of the twelve path classes the stamper owns. A
+    Each entry here is one of the thirteen path classes the stamper owns. A
     renderer added without a map entry writes a file nothing checks; a map
     entry without a renderer is a KeyError at stamp time. Pinning the classes
     keeps both halves honest.
     """
+    _vault_fixture(flat_repo, make_plugin)
     owned = stamp.owned_paths(flat_repo)
     relative = {p.relative_to(flat_repo).as_posix() for p in owned}
+
+    assert (
+        "plugins/workbench/skills/vault-alpha/references/vault-operating-principles.md"
+        in relative
+    )
 
     assert "plugins/demo/.codex-plugin/plugin.json" in relative
     assert "plugins/demo/.cortex-plugin/plugin.json" in relative
@@ -393,6 +399,117 @@ def test_persona_artifacts_are_copies_of_the_workbench_canonicals(flat_repo: Pat
     assert copy.exists()
     assert "WORKSHOP_HOOK" in copy.read_text()
     assert (persona / "hooks" / "run-hook.sh").exists()
+
+
+def _vault_fixture(root: Path, make_plugin) -> Path:
+    """A workbench carrying two vault-* skills, one non-vault skill, and the canonical.
+
+    The non-vault skill is the discriminating input: without it, a stamper that
+    copied the principles into *every* skill would pass identically to one that
+    copied it only into vault-* skills, and the test could not tell them apart.
+    """
+    workbench = make_plugin(
+        root, "workbench", skills=["vault-alpha", "vault-beta", "plain-skill"]
+    )
+    shared = workbench / "shared"
+    shared.mkdir(parents=True, exist_ok=True)
+    (shared / "vault-operating-principles.md").write_text(
+        "# Vault Operating Principles\n\nResolve the engine at `../../machinery/engine`.\n"
+    )
+    return workbench
+
+
+def test_vault_skills_receive_the_principles_and_other_skills_do_not(
+    flat_repo: Path, make_plugin
+):
+    """One author for the principles, and a rule that says who gets a copy.
+
+    26 hand-replicated copies drifted into a shipped defect (#679): the engine
+    path was corrected nowhere because correcting it meant editing 26 files.
+    """
+    workbench = _vault_fixture(flat_repo, make_plugin)
+
+    stamp.stamp(flat_repo)
+
+    alpha = workbench / "skills" / "vault-alpha" / "references" / "vault-operating-principles.md"
+    beta = workbench / "skills" / "vault-beta" / "references" / "vault-operating-principles.md"
+    plain = workbench / "skills" / "plain-skill" / "references" / "vault-operating-principles.md"
+
+    assert alpha.exists(), "a vault-* skill did not receive the principles"
+    assert beta.exists(), "a vault-* skill did not receive the principles"
+    assert not plain.exists(), "a non-vault skill was given vault principles"
+    assert alpha.read_text() == beta.read_text(), "copies drifted at stamp time"
+    assert "machinery/engine" in alpha.read_text()
+
+
+def test_a_drifted_principles_copy_is_named_by_check(flat_repo: Path, make_plugin, capsys):
+    """The drift gate is the whole point of single-sourcing — teeth-check it."""
+    workbench = _vault_fixture(flat_repo, make_plugin)
+    stamp.stamp(flat_repo)
+    copy = workbench / "skills" / "vault-alpha" / "references" / "vault-operating-principles.md"
+    copy.write_text(copy.read_text() + "\nhand-edited\n")
+
+    exit_code = stamp.main(["--check"], root=flat_repo)
+    captured = capsys.readouterr()
+
+    assert exit_code == 1, "a hand-edited principles copy did not fail the gate"
+    assert "vault-alpha/references/vault-operating-principles.md" in (
+        captured.err + captured.out
+    ), "the drift was not reported by name"
+
+
+def test_a_skill_whose_frontmatter_name_differs_from_its_directory_is_a_loud_failure(
+    flat_repo: Path, make_plugin
+):
+    """The principles path is built from the slug, and the two must not diverge.
+
+    Both branches of this were reachable and both were bad. Frontmatter
+    `vault-x` in directory `vault-y` wrote principles into a phantom
+    `vault-x/` that has no SKILL.md, which then wedged every later `stamp` and
+    `--check` on a path nobody created. The mirror -- directory `vault-y`,
+    frontmatter `y` -- was silent: `--check` exited 0 and the shipped skill
+    carried no principles, the exact regression the prefix rule exists to stop.
+    """
+    workbench = _vault_fixture(flat_repo, make_plugin)
+    skill_md = workbench / "skills" / "vault-alpha" / "SKILL.md"
+    skill_md.write_text(
+        skill_md.read_text().replace("name: vault-alpha", "name: vault-alpha-renamed")
+    )
+
+    with pytest.raises(stamp.StampError) as excinfo:
+        stamp.stamp(flat_repo)
+
+    message = str(excinfo.value)
+    assert "vault-alpha-renamed" in message, "the error must name the frontmatter name"
+    assert "vault-alpha" in message, "the error must name the directory"
+    assert not (workbench / "skills" / "vault-alpha-renamed").exists(), (
+        "a phantom skill directory was created"
+    )
+
+
+def test_a_vault_skill_slugged_but_not_named_still_gets_principles(
+    flat_repo: Path, make_plugin
+):
+    """The silent branch: the slug decides, so it cannot be opted out of quietly."""
+    workbench = _vault_fixture(flat_repo, make_plugin)
+    skill_md = workbench / "skills" / "vault-alpha" / "SKILL.md"
+    skill_md.write_text(skill_md.read_text().replace("name: vault-alpha", "name: alpha"))
+
+    with pytest.raises(stamp.StampError):
+        stamp.stamp(flat_repo)
+
+
+def test_the_principles_copy_tracks_the_canonical(flat_repo: Path, make_plugin):
+    """Editing the canonical must reach every copy on the next stamp."""
+    workbench = _vault_fixture(flat_repo, make_plugin)
+    stamp.stamp(flat_repo)
+
+    canonical = workbench / "shared" / "vault-operating-principles.md"
+    canonical.write_text(canonical.read_text() + "\nA newly added rule.\n")
+    stamp.stamp(flat_repo)
+
+    copy = workbench / "skills" / "vault-beta" / "references" / "vault-operating-principles.md"
+    assert "A newly added rule." in copy.read_text()
 
 
 # --------------------------------------------------------------------------

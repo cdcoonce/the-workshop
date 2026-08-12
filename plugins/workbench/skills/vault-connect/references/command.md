@@ -25,7 +25,7 @@ timer; it only ever **appends `## Related` links** — never edits prose.
 
 ## Process
 
-1. **Candidates.** Run `uv run .claude/scripts/graph_cli.py --gaps --top <N>` (default N=12) — or, in
+1. **Candidates.** Run `uv run "<engine>/graph_cli.py" --gaps --top <N>` (default N=12) — or, in
    **`--bridges` ("thicken") mode**, `--gaps --near-bridges --top <N>` to prioritize connections for
    **structurally-siloed** notes (those reachable only via a single bridge — the under-integrated
    periphery). Same loop either way; bridges only *target* where to look, never force a link. These are
@@ -57,7 +57,7 @@ timer; it only ever **appends `## Related` links** — never edits prose.
    touched notes to confirm **no broken links introduced**), append-only (never alter existing prose).
 
 5. **Resolve + report.**
-   - **Deselected** pairs → run `uv run .claude/scripts/graph_cli.py --dismiss "<a>" "<b>"` per pair.
+   - **Deselected** pairs → run `uv run "<engine>/graph_cli.py" --dismiss "<a>" "<b>"` per pair.
      This records a **content-aware** dismissal (fingerprints both notes) in `.claude/data/connect-dismissed.json`
      — it auto-expires and the pair re-surfaces if *either note later changes*, so a "no" is only as
      permanent as the notes that justified it. Never blocks a manual link; only suppresses the suggestion.
