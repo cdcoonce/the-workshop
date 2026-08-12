@@ -1,3 +1,13 @@
+"""Scope predicates over a vault tree, exercised against the shipped surface.
+
+Imports from ``vault_scope_defaults`` — the module that actually defines these
+predicates. The engine used to carry a ``vault_scope`` module that re-exported
+them, which is what this file imported before; it was removed in #691 because
+shipping it let it shadow a vault owner's real config on ``sys.path``. Owner
+overrides are covered in ``test_vault_scope_resolved.py``; what is under test
+here is the default behaviour of the predicates themselves.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -6,7 +16,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from vault_scope import (  # noqa: E402
+from vault_scope_defaults import (  # noqa: E402
     is_governed_markdown_note,
     is_graph_markdown_note,
     is_transient_note,
