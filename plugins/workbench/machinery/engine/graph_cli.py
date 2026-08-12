@@ -4,9 +4,11 @@
 # ///
 """Vault graph CLI — the reintegration seam.
 
-Invoke with ``uv run .claude/scripts/graph_cli.py ...`` so uv honors this
-file's inline script dependencies. Running it through plain ``python`` or
-``uv run python`` skips those dependencies and can fail to import graphmark.
+Invoke with ``uv run <engine>/graph_cli.py ...`` so uv honors this file's
+inline script dependencies. Running it through plain ``python`` or ``uv run
+python`` skips those dependencies and can fail to import graphmark. Skills
+resolve ``<engine>`` from their announced base directory; see
+``shared/vault-operating-principles.md``.
 
 Delegates the graph algorithm to the published **graphmark** package (extracted and hardened
 from the former `.claude/scripts/brain_map.py`), while keeping the vault-specific pieces here:

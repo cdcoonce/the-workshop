@@ -80,7 +80,6 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-upgrade` | `workbench` | Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. |
 | `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, and git sync workflow. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | `workbench` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |
@@ -516,12 +515,6 @@ Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-b
 *`workbench` plugin*
 
 Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
-
-### `/vault-upgrade`
-
-*`workbench` plugin*
-
-Run Charles's vault (The Vault) /vault-upgrade workflow to re-vendor the vault's managed machinery from the-workshop with strict drift checks and per-file refusal triage. Trigger when Charles invokes /vault-upgrade, mentions /vault-upgrade, or asks to upgrade the vault's vendored machinery.
 
 ### `/vault-wrap-up`
 

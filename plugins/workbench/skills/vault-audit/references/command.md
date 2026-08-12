@@ -7,7 +7,7 @@ Perform a full structural audit of the vault. This is a deeper check than /wrap-
 0. **Run the executable audit first**:
 
    ```bash
-   uv run python .claude/scripts/vault_audit.py
+   uv run python "<engine>/vault_audit.py"
    ```
 
    Use `--json` for machine-readable output or `--limit N` to control the number of Markdown rows per category. The script is read-only and uses the shared `vault_scope.py` policy.

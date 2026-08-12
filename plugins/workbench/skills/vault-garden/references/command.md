@@ -16,7 +16,7 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
 ## Process
 
 1. **Acquire the apply-lock.** Run
-   `uv run python .claude/scripts/graph_gardener.py --acquire-lock`. This writes `.brain/.garden-lock`
+   `uv run python "<engine>/graph_gardener.py" --acquire-lock`. This writes `.brain/.garden-lock`
    so the gardener's detached Stop-hook workers **bail instead of regenerating the queue** while you
    apply — without it, a worker can overwrite `.brain/gardener-<context>.md` mid-pass (the
    producer/consumer race; see `thinking/2026-06-27-gardener-apply-lock-race-fix-design.md`). The lock
@@ -72,11 +72,11 @@ branches` is absent. Per branch, show the net-new file(s) and offer:
        `.claude/data/gardener-dismissed.json` (a branch kept on purpose).
      - **Skip** → leave in the queue.
    - **Orphans.** The note links to nothing. Run its text/description through the semantic engine —
-     `uv run --script .claude/scripts/semantic_index.py search "<note topic>"` — present the top link
+     `uv run --script "<engine>/semantic_index.py" search "<note topic>"` — present the top link
      targets, Charles picks one or more, then `Edit` the note to add the `[[link]](s)` in a natural spot.
 
 3b. **Weak connections (live semantic pass).** A _pull_ lane — generated now, not from the producer
-queue. Run `uv run .claude/scripts/graph_cli.py --gaps --top 10` (graphmark's
+queue. Run `uv run "<engine>/graph_cli.py" --gaps --top 10` (graphmark's
 similar-but-unlinked pairs, in the 0.6–0.92 band, transient task-logs + dismissed pairs already
 filtered). **No-op** if it returns `[]` or the semantic index is absent. For each pair `{a, b, score, sig}`,
 show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
@@ -84,7 +84,7 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
 - **Link** → pick the better-fit note, draft `- [[B]] — <one-line reason>` under its `## Related`
   section (create the section if absent), drawing the reason from both notes. Show the exact edit;
   apply on confirm. One direction suffices (Obsidian backlinks). Validate frontmatter + wikilinks.
-- **Dismiss** → run `uv run .claude/scripts/graph_cli.py --dismiss "<a>" "<b>"` (same store /connect
+- **Dismiss** → run `uv run "<engine>/graph_cli.py" --dismiss "<a>" "<b>"` (same store /connect
   uses — graphmark's content-hash store in `.claude/data/connect-dismissed.json`, which is what
   `--gaps` actually filters against; a sig appended to `gardener-dismissed.json` would never
   suppress anything here).
@@ -117,7 +117,7 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
    zero wikilink edits (dismiss/skip-only passes can't regress it).
 
 7. **Release the apply-lock.** Run
-   `uv run python .claude/scripts/graph_gardener.py --release-lock`. This is the **last action of every
+   `uv run python "<engine>/graph_gardener.py" --release-lock`. This is the **last action of every
    exit path** — the normal end, the "nothing pending" early-exit (step 2), and any error/abort.
    Leaving it set blocks queue regeneration until the 30-min TTL clears. Releasing also **stamps
    "last gardened"** (`last_applied_ts`), which drives the escalating session-start / `/standup` nudge —
