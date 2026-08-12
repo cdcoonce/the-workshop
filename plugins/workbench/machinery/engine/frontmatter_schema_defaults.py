@@ -1,11 +1,18 @@
 """Shipped default note-type schema for frontmatter validation.
 
-Managed tier: upgrade owns this file. It is the fallback only — the
-note-type schema a vault actually validates against lives in the
-scaffolded ``frontmatter_schema.json`` (``scaffold/frontmatter_schema.json.tmpl``),
-which init writes once and upgrade never touches. frontmatter_engine prefers
-that config and falls back here when it is absent, so a vault vendored
-before the config existed keeps identical validation behavior.
+Managed tier: upgrade owns this file. It is the table every vault validates
+against unless its owner has written one of their own, by hand, at
+``<vault>/.vault/config/frontmatter_schema.json``. ``frontmatter_engine``
+resolves that path from the vault root and prefers it wholesale; this module
+is the fallback for the two states where there is nothing to prefer — no
+vault, and a vault whose owner wrote no schema.
+
+Nothing scaffolds the owner's file. It was once rendered at init from
+``scaffold/frontmatter_schema.json.tmpl``, which is why this docstring used to
+describe it as the schema a vault "actually" validates against; #687 removed
+that template, and #696 found that the engine had been looking for the file
+next to its own source — inside the installed plugin, where no owner writes —
+so the override was unreachable for as long as it was documented.
 """
 
 from __future__ import annotations

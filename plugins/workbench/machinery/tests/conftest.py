@@ -41,19 +41,34 @@ def _clear_owner_scope_cache() -> None:
         vault_scope_resolved._owner_config = unset
 
 
+def _clear_type_fields_cache() -> None:
+    """Reset the frontmatter engine's note-type cache if it has one.
+
+    Tolerant for the same reason as ``_clear_owner_scope_cache``: an engine
+    that had lost its lazy resolution would otherwise turn every test in this
+    suite into a fixture error that says nothing about note-type schemas.
+    """
+    import frontmatter_engine
+
+    if hasattr(frontmatter_engine, "_TYPE_FIELDS_CACHE"):
+        frontmatter_engine._TYPE_FIELDS_CACHE = None
+
+
 @pytest.fixture(autouse=True)
 def _reset_owner_scope_cache():
-    """Drop the resolver's owner-config cache around every test.
+    """Drop the resolvers' owner-config caches around every test.
 
-    The resolver caches per process so that attribute access does not re-stat
-    and re-execute the owner's file on every lookup. Tests share a process, so
-    without this a vault installed by one test would leak into the next.
-    Reset on both sides: a test that never touches scope still must not inherit
-    a cached module from the one before it.
+    Both resolvers cache per process so that a lookup does not re-stat and
+    re-read the owner's files every time. Tests share a process, so without
+    this a vault installed by one test would leak into the next. Reset on both
+    sides: a test that never touches owner config still must not inherit a
+    cached value from the one before it.
     """
     _clear_owner_scope_cache()
+    _clear_type_fields_cache()
     yield
     _clear_owner_scope_cache()
+    _clear_type_fields_cache()
 
 
 @pytest.fixture

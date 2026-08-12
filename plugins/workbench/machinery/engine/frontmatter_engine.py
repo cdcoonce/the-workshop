@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 
-from vault_utils import WIKILINK_RE, find_vault_root
+from vault_utils import WIKILINK_RE, find_vault_root, find_vault_root_from_env
 from vault_scope_resolved import is_governed_markdown_note, is_transient_note
 
 
@@ -47,23 +47,63 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 UNIVERSAL_FIELDS = ("date", "description", "tags")
 
 class FrontmatterSchemaError(Exception):
-    """Raised when a scaffolded frontmatter_schema.json is malformed.
+    """Raised when an owner's frontmatter_schema.json is malformed.
 
-    Fails closed on purpose: silently ignoring a broken schema file would
-    validate every custom note type against nothing.
+    Fails closed on purpose, and deliberately unlike ``vault_scope_resolved``,
+    which degrades to shipped defaults and reports. A hook must not die on a
+    typo in the owner's *scope* config; but silently ignoring a broken *schema*
+    would validate every custom note type against nothing, which from the
+    outside is indistinguishable from a clean vault.
     """
+
+
+# The owner's config lives under the vault root, resolved by path — never by a
+# directory relative to this module's own ``__file__``. Before the flat reorg
+# those were the same place, because the engine was vendored into the vault.
+# Now the engine ships inside the installed plugin, so a ``__file__``-relative
+# lookup resolves into the plugin's own payload: a directory no owner writes
+# to, where the file can never exist (#696). Same class as #691 — owner config
+# the runtime cannot reach after the engine moved, failing silently to
+# defaults.
+_OWNER_SCHEMA = (".vault", "config", "frontmatter_schema.json")
+
+
+def _owner_schema_path() -> Path | None:
+    """Where this vault's owner schema would live, or None outside a vault."""
+    root = find_vault_root_from_env()
+    return None if root is None else root.joinpath(*_OWNER_SCHEMA)
 
 
 def load_note_type_schemas(config_dir: Path | None = None) -> dict[str, list[str]]:
-    """Load the note-type schema: scaffolded config first, shipped defaults else.
+    """Load the note-type schema: owner config first, shipped defaults else.
 
-    The scaffold-rendered ``frontmatter_schema.json`` (owner-editable, written
-    once at init) replaces the shipped table wholesale when present. A missing
-    file falls back to ``frontmatter_schema_defaults.NOTE_TYPE_SCHEMAS``; a
-    malformed one raises ``FrontmatterSchemaError`` naming the problem.
+    The owner's ``<vault>/.vault/config/frontmatter_schema.json`` replaces the
+    shipped table wholesale when present. Two states legitimately fall back to
+    ``frontmatter_schema_defaults.NOTE_TYPE_SCHEMAS`` — no vault, and a vault
+    with no owner schema. A malformed file raises ``FrontmatterSchemaError``
+    naming the path, so "exists but broken" never looks like "absent".
+
+    Parameters
+    ----------
+    config_dir
+        Read ``frontmatter_schema.json`` from this directory instead of
+        resolving the vault root. For unit-testing the PARSING only. Whether
+        the owner's file is *found* cannot be tested through this argument —
+        passing an explicit path is precisely the input that cannot separate
+        "the lookup works" from "the caller was told where to look", which is
+        how #696 stayed green while production found nothing. That question is
+        answered by ``tests/test_frontmatter_schema_resolution.py``, which
+        arranges a real vault and a real subprocess.
     """
-    directory = Path(__file__).resolve().parent if config_dir is None else config_dir
-    path = directory / "frontmatter_schema.json"
+    if config_dir is not None:
+        path = config_dir / "frontmatter_schema.json"
+    else:
+        resolved = _owner_schema_path()
+        if resolved is None:
+            from frontmatter_schema_defaults import NOTE_TYPE_SCHEMAS
+
+            return dict(NOTE_TYPE_SCHEMAS)
+        path = resolved
     if not path.exists():
         from frontmatter_schema_defaults import NOTE_TYPE_SCHEMAS
 
@@ -93,8 +133,36 @@ def load_note_type_schemas(config_dir: Path | None = None) -> dict[str, list[str
 
 
 # Type-specific required fields (detected by tag presence). Sourced from the
-# scaffolded config when present, shipped defaults otherwise.
-TYPE_FIELDS: dict[str, list[str]] = load_note_type_schemas()
+# owner's config when present, shipped defaults otherwise.
+#
+# Resolved lazily and cached per process, not at import. The answer depends on
+# locating a vault, which depends on `CLAUDE_PROJECT_DIR` and the working
+# directory; binding it at import time would freeze whatever those happened to
+# be when the module was first pulled in — by a hook, by a CLI, or incidentally
+# by something that imports this module for `generate()` alone. Lazy also means
+# importing the engine outside any vault, or beside a broken schema, no longer
+# raises at import: the failure surfaces when the table is actually used.
+_TYPE_FIELDS_CACHE: dict[str, list[str]] | None = None
+
+
+def _type_fields() -> dict[str, list[str]]:
+    """The resolved note-type table, loaded once per process."""
+    global _TYPE_FIELDS_CACHE
+    if _TYPE_FIELDS_CACHE is None:
+        _TYPE_FIELDS_CACHE = load_note_type_schemas()
+    return _TYPE_FIELDS_CACHE
+
+
+def __getattr__(name: str):
+    """Serve ``TYPE_FIELDS`` lazily to importers that read it as a constant.
+
+    PEP 562 module ``__getattr__`` fires only for attribute access on the
+    module object, so this is the external door; code inside this module calls
+    ``_type_fields()`` directly.
+    """
+    if name == "TYPE_FIELDS":
+        return _type_fields()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 MIN_WIKILINK_LENGTH = 300  # notes longer than this must have a wikilink
 
@@ -145,8 +213,9 @@ def _detect_note_type(fm: dict[str, Any]) -> str | None:
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",")]
 
+    type_fields = _type_fields()
     for tag in tags:
-        if tag in TYPE_FIELDS:
+        if tag in type_fields:
             return tag
     return None
 
@@ -234,8 +303,9 @@ def validate(file_path: str | Path, vault_root: str | Path | None = None) -> lis
 
     # --- Type-specific validation ---
     note_type = _detect_note_type(fm)  # fm is guaranteed non-None here (guarded + returned above)
-    if note_type and note_type in TYPE_FIELDS:
-        for req_field in TYPE_FIELDS[note_type]:
+    type_fields = _type_fields()
+    if note_type and note_type in type_fields:
+        for req_field in type_fields[note_type]:
             val = fm.get(req_field)
             if val is None or (isinstance(val, str) and val.strip() == ""):
                 errors.append(ValidationError(rel_name, req_field,
@@ -272,8 +342,9 @@ def generate(note_type: str, fields: dict[str, Any] | None = None) -> str:
     }
 
     # Add type-specific fields with defaults
-    if note_type in TYPE_FIELDS:
-        for req_field in TYPE_FIELDS[note_type]:
+    type_fields = _type_fields()
+    if note_type in type_fields:
+        for req_field in type_fields[note_type]:
             fm[req_field] = fields.get(req_field, "")
 
     yaml_str = yaml.dump(fm, default_flow_style=False, sort_keys=False, allow_unicode=True)
