@@ -357,3 +357,132 @@ def test_dist_counts_only_when_it_names_this_repos_tree() -> None:
     real = "rebuilds every preset into dist/ and regenerates the marketplace"
     assert REPO_DIST.search(real) and not GENERIC_ARTIFACTS.search(real)
     assert REPO_DIST.search("never edit dist/ or an installed plugin cache")
+
+
+# `$CLAUDE_PLUGIN_ROOT` is exported into the HOOK environment and nowhere else.
+# In the shell a skill runs commands in it is unset, so a skill that builds a
+# path from it builds that path from an empty string:
+# `"$CLAUDE_PLUGIN_ROOT/skills/x/scripts/y"` collapses to `/skills/x/scripts/y`
+# at the filesystem root, and the command dies on a missing file (#686).
+#
+# The guard is keyed to PATH CONSTRUCTION -- the name followed by a slash -- and
+# that narrowness is load-bearing in both directions:
+#   * 26 vault skills ship `vault-operating-principles.md`, whose whole purpose
+#     at that line is to say `$CLAUDE_PLUGIN_ROOT` is unusable in a skill. That
+#     paragraph is the documentation that prevents this bug. A guard matching
+#     the bare name would condemn it, and rewriting it to satisfy the lint would
+#     delete the warning.
+#   * `add-the-workshop-hook` names it while teaching HOOK authoring, which is
+#     the one environment where it genuinely is defined.
+# Only a path built from it can fail, so only a path built from it is a defect.
+PLUGIN_ROOT_PATH = re.compile(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/")
+
+# Model-facing instruction surfaces: what a session is told to run. `hooks/` is
+# deliberately absent -- that is the environment where the variable is defined,
+# and `run-hook.sh` resolving itself through it is correct.
+INSTRUCTION_DIRS = ("skills", "agents")
+
+
+def _instruction_files(plugin: str) -> list[Path]:
+    """Every model-facing instruction file in a plugin, as the guard sees them.
+
+    Split out from the scan so the scan's REACH is assertable. A guard that
+    walks an empty tree reports success having read nothing, which is the
+    failure mode this whole file exists to prevent -- and unlike an
+    always-empty regex, no assertion about pattern behaviour would catch it.
+    """
+    files: list[Path] = []
+    for directory in INSTRUCTION_DIRS:
+        root = REPO_ROOT / "plugins" / plugin / directory
+        if not root.is_dir():
+            continue
+        files.extend(
+            path
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+            and path.suffix in TEXT_SUFFIXES
+            and "__pycache__" not in path.parts
+        )
+    return files
+
+
+def _scan_plugin_root(plugin: str) -> list[str]:
+    """Return `path:line: text` for every path built from `$CLAUDE_PLUGIN_ROOT`."""
+    findings: list[str] = []
+    for path in _instruction_files(plugin):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if PLUGIN_ROOT_PATH.search(line):
+                rel = path.relative_to(REPO_ROOT)
+                findings.append(f"{rel}:{lineno}: {line.strip()[:120]}")
+    return findings
+
+
+def test_the_plugin_root_scan_actually_reaches_shipped_instructions() -> None:
+    """The scan must read real files, not silently walk nothing.
+
+    Pins reach in two ways a directory rename or a suffix-set edit would break:
+    both scanned plugins contribute files, and the specific skill that carried
+    #686 is among them.
+    """
+    for plugin in SCANNED_PLUGINS:
+        assert _instruction_files(plugin), f"scanned nothing under plugins/{plugin}"
+
+    scanned = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for plugin in SCANNED_PLUGINS
+        for path in _instruction_files(plugin)
+    }
+    assert "plugins/workbench/skills/gitlab-mr-create/SKILL.md" in scanned
+
+
+def test_no_skill_builds_a_path_from_claude_plugin_root() -> None:
+    """No shipped skill may reach its own files through `$CLAUDE_PLUGIN_ROOT`.
+
+    This is #686, the same family as #679: an instruction that reads
+    authoritative and cannot run. The variable is hook-only, so the path
+    collapses to the filesystem root and the command fails on a missing file --
+    and because a skill's scripts are its documented, mandatory entry point
+    (`gitlab-mr-create` says "Do not invoke `glab mr create` directly"), the
+    session is left to improvise the path it was supposed to be given.
+
+    A skill can only anchor on the absolute base directory its loader
+    announces, expanded inline while composing the command. It cannot be a
+    shell variable of any kind: each command runs in a fresh shell, so an
+    assignment made in one does not survive into the next.
+    """
+    findings: list[str] = []
+    for plugin in SCANNED_PLUGINS:
+        findings.extend(_scan_plugin_root(plugin))
+
+    assert not findings, (
+        f"{len(findings)} shipped instruction(s) build a path from "
+        "`$CLAUDE_PLUGIN_ROOT`, which is unset outside the hook environment. "
+        "Resolve the script from the skill's announced base directory, "
+        "expanded inline:\n  " + "\n  ".join(findings)
+    )
+
+
+def test_plugin_root_guard_fires_on_paths_and_spares_prose() -> None:
+    """Pin both directions -- the guard must not pass by matching nothing.
+
+    The bare name appears 27 times in shipped content and every one of those is
+    correct: 26 copies of the paragraph warning that the variable is unusable in
+    a skill, plus hook-authoring guidance where it IS defined. A guard that
+    condemned those would be rewriting the very documentation that prevents the
+    bug. Only path construction fails, so only path construction fires.
+    """
+    # The defect: a path built from the variable.
+    assert PLUGIN_ROOT_PATH.search(
+        'bash "$CLAUDE_PLUGIN_ROOT/skills/gitlab-mr-create/scripts/create-mr" \\'
+    )
+    assert PLUGIN_ROOT_PATH.search("${CLAUDE_PLUGIN_ROOT}/scripts/run.sh")
+
+    # Correct: the warning that this variable cannot be used in a skill.
+    assert not PLUGIN_ROOT_PATH.search(
+        "`$CLAUDE_PLUGIN_ROOT` is unusable here for the same family of reason. It is"
+    )
+    # Correct: hook-authoring guidance, where the variable is defined.
+    assert not PLUGIN_ROOT_PATH.search(
+        "(`$CLAUDE_PLUGIN_ROOT` fallback via `BASH_SOURCE` resolution), and avoid"
+    )
