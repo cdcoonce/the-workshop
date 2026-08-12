@@ -68,10 +68,9 @@ names them; do not guess.
 
 Run, in order, repairing until every one passes:
 
-1. `make docs`
-2. `make build`
-3. `uv run python -m scripts.smoke_test <preset>` for every affected preset
-4. `make test`
+1. `make stamp` — the one build component; it regenerates every generated file
+2. `uv run python -m scripts.smoke_test <plugin>` for every affected plugin
+3. `make test`
 
 Never commit on a red gate.
 

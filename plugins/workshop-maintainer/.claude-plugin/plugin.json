@@ -1,6 +1,6 @@
 {
   "name": "workshop-maintainer",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries",
   "conventions": [
     "Inventory before reorganizing",

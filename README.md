@@ -8,7 +8,7 @@ A **portable AI development environment** — skills, methodology docs, agents, 
 **78 skills · 19 agents · 22 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
-> The counts and every component table below are generated from source by `scripts/build_docs.py`. Do not edit them by hand — run `make docs`. Deep reference lives in [`docs/reference/`](docs/reference/).
+> The counts and every component table below are generated from source by `scripts/stamp.py`. Do not edit them by hand — run `make stamp`. Deep reference lives in [`docs/reference/`](docs/reference/).
 
 ---
 
@@ -182,7 +182,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
 | **`workbench`** | `5.3.1` | 69 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `2.1.0` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workshop-maintainer`** | `2.1.1` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, what preset-specific overrides to layer on top, and the `conventions` shown above. See the [presets reference](docs/reference/presets.md) for the skills, agents, and hooks each one ships.
@@ -482,11 +482,11 @@ flowchart LR
 
 The reference docs and the README component tables are **generated from source**, not hand-maintained, so they can't drift from the components as the repo evolves.
 
-- `make docs` runs `scripts/build_docs.py`, which reads SKILL.md/AGENT.md frontmatter, hook docstrings, settings wiring, and preset manifests, then writes the `docs/reference/` catalogs and rewrites the `<!-- BEGIN/END GENERATED -->` regions of this README and `docs/reference/build-and-wiring.md`.
-- `make build` regenerates the marketplace index and rebuilds every preset into `dist/`.
-- `make test` runs the suites **and** the drift gate: it runs `build_docs --check`, rebuilds `dist/`, and fails if any generated output differs from what's committed. The same gate runs in CI.
+- `make stamp` runs `scripts/stamp.py`, the repo's only build component. It reads SKILL.md/AGENT.md frontmatter and each hook script's own `WORKSHOP_HOOK` declaration, then writes every generated file from its fixed path map: the `docs/reference/` catalogs, each plugin's platform manifests, README, and `conventions.json`, plus the `<!-- BEGIN/END GENERATED -->` regions of this README and `docs/reference/build-and-wiring.md`.
+- `make stamp-check` renders the same map in memory and fails, naming the file and printing a diff, on anything committed stale.
+- `make test` runs the suites **and** two gates: `stamp-check` for generated-file drift, and the version-bump gate, which fails a plugin whose hand-authored content changed without a new version. The same gates run in CI.
 
-When you add or change a skill, hook, agent, or preset, run `make docs && make build && make test` and commit the regenerated docs and `dist/` alongside your change. The maintainer skills (`workshop-skill-creator`, `add-the-workshop-hook`) end with this step; `create-hook` remains the general-purpose hook workflow.
+When you add or change a skill, hook, or agent, run `make stamp && make test`, commit the regenerated output alongside your change, and bump the version of every plugin you touched — without that bump `claude plugin update` offers nothing and the change reaches nobody. The maintainer skills (`workshop-skill-creator`, `land-skill-candidate`) end with this step; `create-hook` remains the general-purpose hook workflow.
 
 ### Folder Structure
 
@@ -514,16 +514,17 @@ the-workshop/
 
 ### Scripts Reference
 
-| Command                                                       | Description                                                      |
-| ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `make docs`                                                   | Regenerate `docs/reference/` and the README's generated tables   |
-| `make build`                                                  | Regenerate the marketplace and rebuild every preset into `dist/` |
-| `make test`                                                   | Run the suites plus the docs+dist drift gate                     |
-| `uv run python -m scripts.build_docs [--check]`               | Generate docs, or check for staleness (`--check`)                |
-| `uv run python -m scripts.build_preset <preset>`              | Assemble core + preset into `dist/<preset>/`                     |
-| `uv run python -m scripts.build_marketplace`                  | Regenerate `.claude-plugin/marketplace.json`                     |
-| `uv run python -m scripts.smoke_test <preset>`                | Validate internal consistency of a built preset                  |
-| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions  |
+| Command                                                       | Description                                                     |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `make stamp`                                                  | Regenerate every generated file from hand-written source        |
+| `make stamp-check`                                            | Check for generated-file drift without writing                  |
+| `make lint`                                                   | Ruff over `scripts`, `tests`, and `plugins`                     |
+| `make test`                                                   | Run every suite plus the drift and version-bump gates           |
+| `make verify-versions`                                        | Version-bump gate alone, against the release branch             |
+| `uv run python -m scripts.stamp [--check]`                    | Stamp generated files, or check for staleness (`--check`)       |
+| `uv run python -m scripts.check_version_bumps`                | Fail a plugin whose shipped content changed without a bump      |
+| `uv run python -m scripts.smoke_test <plugin>`                | Validate internal consistency of a source plugin directory      |
+| `uv run python -m scripts.dev_cycle_validate docs/dev-cycle/` | Validate dev-cycle state file frontmatter and phase transitions |
 
 ### Running Tests
 
@@ -542,12 +543,13 @@ uv run pytest --cov=scripts --cov-report=term-missing
 
 ## Troubleshooting
 
-| Symptom                                         | Likely Cause                                                                            | Fix                                                                    |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `build_preset.py` fails with "skill not found"  | Manifest references a skill that doesn't exist in `core/skills/` or `presets/*/skills/` | Check `manifest.json` `preset_skills` array against actual directories |
-| `make test` fails with "Documentation is stale" | A component changed but docs/dist weren't regenerated                                   | Run `make docs && make build` and commit the regenerated output        |
-| Smoke test reports missing hook                 | Hook listed in `hooks.json` but script not in `hooks/scripts/`                          | Add the hook script or remove from settings                            |
-| Dev-cycle state file validation fails           | Frontmatter schema mismatch or phase transition error                                   | Check `schema_version: 1` and that phases follow strict order          |
+| Symptom                                          | Likely Cause                                                      | Fix                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `make stamp` refuses to overwrite a file         | The target lacks the generation marker, so it may be hand-written | Confirm the path belongs in the stamper's map before forcing anything   |
+| `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
+| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Bump `plugins/<name>/.claude-plugin/plugin.json`; see Plugin Versioning |
+| Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
+| Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 
 ---
 

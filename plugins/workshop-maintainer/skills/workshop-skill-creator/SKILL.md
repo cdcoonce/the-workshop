@@ -63,10 +63,9 @@ baseline required by [pressure-testing.md](references/pressure-testing.md).
 Apply every check in [quality-criteria.md](references/quality-criteria.md). Fix failures
 before continuing. Then run, in order:
 
-1. `make docs`
-2. `make build`
-3. `uv run python -m scripts.smoke_test <preset>` for every affected preset
-4. `make test`
+1. `make stamp` — the one build component; it regenerates every generated file
+2. `uv run python -m scripts.smoke_test <plugin>` for every affected plugin
+3. `make test`
 
 Repair source, wiring, generated artifacts, or tests until every gate passes. Never
 report a partially propagated skill as complete.
