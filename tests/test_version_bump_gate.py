@@ -11,7 +11,13 @@ the kind of discipline that holds until the once it doesn't.
 
 Compares `plugins/<name>` — the real served directory under the flat plugin
 tree, there is no `dist/` any more — against a base ref, with every
-stamper-owned path (`scripts.stamp.owned_paths()`) and `machinery/` excluded.
+stamper-owned path (`scripts.stamp.owned_paths()`) excluded and nothing else.
+
+`machinery/` used to be excluded too, which hid every engine-only change from
+the gate: unlike stamper output, the engine is hand-authored and has no source
+elsewhere in the tree to trip the gate on its behalf, so excluding it removed
+the only signal there was (#694). `TestExclusionsDeriveFromTheStamperMap` is
+what keeps a second hand-kept list from growing back.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import check_version_bumps
 from scripts.check_version_bumps import find_level_violations, find_missing_bumps
 from scripts.stamp import owned_paths
 
@@ -53,6 +60,21 @@ def _skill(repo: Path, plugin: str, skill: str, body: str) -> None:
         repo / "plugins" / plugin / "skills" / skill / "SKILL.md",
         f"---\nname: {skill}\ndescription: exercises {skill} for the gate tests\n"
         f"---\n{body}",
+    )
+
+
+def _hook(repo: Path, plugin: str, name: str, body: str) -> None:
+    """Write a hook script with a real WORKSHOP_HOOK declaration.
+
+    A plugin that ships hook scripts is the only kind for which the stamper
+    owns `hooks/hooks.json` — which puts a generated file in the *same
+    directory tree* as the hand-authored scripts that produced it, so the
+    generated/hand-authored split cannot be made by top-level directory.
+    """
+    _write(
+        repo / "plugins" / plugin / "hooks" / "scripts" / f"{name}.py",
+        f'"""{name}."""\n\nWORKSHOP_HOOK = {{"event": "Stop", "matcher": "never"}}\n'
+        f"\n{body}",
     )
 
 
@@ -163,18 +185,42 @@ class TestMissingBumps:
 
         assert find_missing_bumps(repo, "main") == []
 
-    def test_machinery_only_change_needs_no_bump(self, repo: Path) -> None:
-        """plugins/<name>/machinery is engine payload, not owner-facing surface."""
+    def test_engine_only_change_demands_a_bump(self, repo: Path) -> None:
+        """`machinery/engine` is hand-authored and shipped — nothing else covers it.
+
+        The stamper exclusion is safe because generated content is a pure
+        function of hand-authored content, so the source always appears in the
+        diff too. `machinery/engine` has no such upstream inside this repo: it
+        IS the source. Excluding it removed the only signal there was, and an
+        engine fix could merge green, promote green, and reach zero installed
+        vaults — the exact failure the gate exists to prevent (#694).
+        """
         _write(
             repo / "plugins" / "advisor" / "machinery" / "engine" / "vault_utils.py",
-            "# synced engine module\n",
+            "# a real engine fix\n",
         )
-        commit(repo, "sync machinery payload")
+        commit(repo, "fix the engine, forget the bump")
+
+        assert find_missing_bumps(repo, "main") == ["advisor"]
+
+    def test_engine_change_with_a_bump_passes(self, repo: Path) -> None:
+        _write(
+            repo / "plugins" / "advisor" / "machinery" / "engine" / "vault_utils.py",
+            "# a real engine fix\n",
+        )
+        _manifest(repo, "advisor", "0.1.1")
+        commit(repo, "fix the engine and bump")
 
         assert find_missing_bumps(repo, "main") == []
 
     def test_machinery_change_does_not_mask_a_real_change(self, repo: Path) -> None:
-        """A skill edit alongside machinery churn still requires a bump."""
+        """A skill edit alongside an engine edit is still one report, not two.
+
+        Both halves now demand a bump on their own (see
+        `test_engine_only_change_demands_a_bump`), so what this pins is that
+        the plugin is named once — the exclusion's removal must not turn a
+        two-file diff into a duplicated line.
+        """
         _write(
             repo / "plugins" / "advisor" / "machinery" / "engine" / "vault_utils.py",
             "# synced engine module\n",
@@ -224,6 +270,128 @@ class TestMissingBumps:
         commit(repo, "edit hand-written plugin.json description, no bump")
 
         assert find_missing_bumps(repo, "main") == ["advisor"]
+
+
+@pytest.fixture
+def repo_with_hooks(tmp_path: Path) -> Path:
+    """A released plugin shipping a hook script *and* its generated hooks.json.
+
+    This puts a stamper-owned file (`hooks/hooks.json`) and hand-authored
+    payload (`hooks/scripts/guard.py`) under one directory. A fix that split
+    generated from hand-authored by top-level directory would pass every other
+    test here and fail this one.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    _manifest(repo, "advisor", "0.1.0")
+    _skill(repo, "advisor", "advisor-skill", "# v1\n")
+    _hook(repo, "advisor", "guard", "pass\n")
+    _write(repo / "plugins" / "advisor" / "hooks" / "hooks.json", '{"hooks": {}}\n')
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "release")
+    git(repo, "checkout", "-q", "-b", "work")
+    return repo
+
+
+class TestGeneratedOutputStillExcluded:
+    """Narrowing the exclusion must not swallow the reason it existed.
+
+    Generated content is a pure function of hand-authored content, so a real
+    change already trips the gate through its source; demanding a bump for the
+    re-rendered bytes too would make a cosmetic `stamp.py` tweak require nine
+    simultaneous bumps for zero semantic change.
+    """
+
+    def test_generated_output_beside_hand_authored_payload_needs_no_bump(
+        self, repo_with_hooks: Path
+    ) -> None:
+        """`hooks/hooks.json` is generated; `hooks/scripts/` beside it is not."""
+        _write(
+            repo_with_hooks / "plugins" / "advisor" / "hooks" / "hooks.json",
+            '{"hooks": {"Stop": []}}\n',
+        )
+        commit(repo_with_hooks, "re-render hooks.json only")
+
+        assert find_missing_bumps(repo_with_hooks, "main") == []
+
+    def test_the_hand_authored_script_in_that_same_directory_does_demand_one(
+        self, repo_with_hooks: Path
+    ) -> None:
+        """The discriminating half: same directory, opposite answer.
+
+        Without this, `test_generated_output_beside_hand_authored_payload_...`
+        would still pass if the fix excluded all of `hooks/`.
+        """
+        _hook(repo_with_hooks, "advisor", "guard", "pass  # now with a real fix\n")
+        commit(repo_with_hooks, "change the hook script only")
+
+        assert find_missing_bumps(repo_with_hooks, "main") == ["advisor"]
+
+    def test_a_plugin_changed_in_both_categories_is_reported_once(
+        self, repo_with_hooks: Path
+    ) -> None:
+        """One plugin, one line — a diff spanning both must not double-count."""
+        _write(
+            repo_with_hooks / "plugins" / "advisor" / "hooks" / "hooks.json",
+            '{"hooks": {"Stop": []}}\n',
+        )
+        _hook(repo_with_hooks, "advisor", "guard", "pass  # real fix\n")
+        _write(
+            repo_with_hooks
+            / "plugins"
+            / "advisor"
+            / "machinery"
+            / "engine"
+            / "vault_utils.py",
+            "# engine fix too\n",
+        )
+        commit(repo_with_hooks, "change generated and hand-authored together")
+
+        assert find_missing_bumps(repo_with_hooks, "main") == ["advisor"]
+
+
+class TestExclusionsDeriveFromTheStamperMap:
+    """The exclusion set must BE the stamper's path map, not a copy of it.
+
+    A second literal list — `:(exclude)plugins/<n>/machinery` was one — is
+    exactly how this drifts back: it excludes paths the stamper never claimed,
+    silently and with the gate still reporting success.
+    """
+
+    def test_the_gate_applies_no_exclusion_the_stamper_does_not_own(
+        self, repo_with_hooks: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Captured from the real `git diff` invocation, not from reading source.
+
+        Re-adding any hardcoded `:(exclude)` pathspec turns this red, because
+        the added path is not one `owned_paths()` returns.
+        """
+        captured: list[str] = []
+        real_run_git = check_version_bumps.run_git
+
+        def spy(repo: Path, *args: str) -> subprocess.CompletedProcess:
+            if args and args[0] == "diff":
+                captured.extend(args)
+            return real_run_git(repo, *args)
+
+        monkeypatch.setattr(check_version_bumps, "run_git", spy)
+        find_missing_bumps(repo_with_hooks, "main")
+
+        applied = {
+            arg.removeprefix(":(exclude)")
+            for arg in captured
+            if arg.startswith(":(exclude)")
+        }
+        owned = {
+            path.relative_to(repo_with_hooks).as_posix()
+            for path in owned_paths(repo_with_hooks)
+        }
+
+        assert applied, "the gate applied no exclusions at all — spy never fired"
+        assert applied <= owned
 
 
 class TestStamperExclusionIsWired:
