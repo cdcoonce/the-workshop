@@ -9,7 +9,7 @@ import pytest
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-import vault_scope
+import vault_scope_defaults
 import vault_utils
 from vault_utils import (
     DEFAULT_BATCH_MODEL,
@@ -153,35 +153,38 @@ class TestReadVaultContext:
 
 
 # ---------------------------------------------------------------------------
-# read_batch_model — scaffold-owned vault_scope.BATCH_MODEL (#431)
+# read_batch_model — owner-owned vault_scope.BATCH_MODEL (#431)
+#
+# The owner's value arrives through a real config file in a real vault, not
+# through a module injected under the name `vault_scope` (#691) — see this
+# suite's conftest for why the injected form proved nothing.
 # ---------------------------------------------------------------------------
 class TestReadBatchModel:
-    def test_reads_scaffold_value(self):
-        assert read_batch_model() == vault_scope.BATCH_MODEL
+    def test_reads_shipped_value_when_no_owner_config(self, no_owner_scope):
+        assert read_batch_model() == vault_scope_defaults.BATCH_MODEL
 
-    def test_reads_custom_model(self, monkeypatch):
-        monkeypatch.setattr(vault_scope, "BATCH_MODEL", "claude-opus-5")
+    def test_reads_custom_model(self, owner_scope):
+        owner_scope(BATCH_MODEL="claude-opus-5")
         assert read_batch_model() == "claude-opus-5"
 
-    def test_absent_value_falls_back_to_default(self, monkeypatch):
-        monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+    def test_absent_value_falls_back_to_default(self, owner_scope):
+        # A config that defines something, but not this name.
+        owner_scope(TASKS_DIR="custom/tasks")
         assert read_batch_model() == DEFAULT_BATCH_MODEL
 
-    def test_non_string_value_falls_back_to_default(self, monkeypatch):
-        monkeypatch.setattr(vault_scope, "BATCH_MODEL", 5)
+    def test_non_string_value_falls_back_to_default(self, owner_scope):
+        owner_scope(BATCH_MODEL=5)
         assert read_batch_model() == DEFAULT_BATCH_MODEL
 
-    def test_empty_value_falls_back_to_default(self, monkeypatch):
-        monkeypatch.setattr(vault_scope, "BATCH_MODEL", "")
+    def test_empty_value_falls_back_to_default(self, owner_scope):
+        owner_scope(BATCH_MODEL="")
         assert read_batch_model() == DEFAULT_BATCH_MODEL
 
-    def test_explicit_default_is_the_last_resort(self, monkeypatch):
-        # #464 layering: scaffold value → shipped default → caller's default.
+    def test_explicit_default_is_the_last_resort(self, owner_scope, monkeypatch):
+        # #464 layering: owner value → shipped default → caller's default.
         # The shipped surface (vault_scope_defaults) interposes before the
         # param, so the param only applies when the name is unknown to both.
-        import vault_scope_defaults
-
-        monkeypatch.delattr(vault_scope, "BATCH_MODEL")
+        owner_scope(TASKS_DIR="custom/tasks")
         assert read_batch_model(default="claude-sonnet-5") == DEFAULT_BATCH_MODEL
 
         monkeypatch.delattr(vault_scope_defaults, "BATCH_MODEL")

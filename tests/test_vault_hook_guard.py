@@ -20,6 +20,7 @@ invocation to a file; the test reads that file.
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -244,17 +245,38 @@ def test_machinery_declares_its_own_dependencies() -> None:
         assert dep in text, f"{dep} is imported by the engine but not declared"
 
 
-def test_owner_config_dir_is_importable_by_the_engine(tmp_path: Path) -> None:
+ENGINE = REPO_ROOT / "plugins" / "workbench" / "machinery" / "engine"
+
+# An owner `context_paths.py`. Both names are required: the engine imports them
+# in one `from context_paths import A, B`, so a config missing either falls back
+# wholesale. The value is deliberately unlike any shipped default, so a passing
+# assertion can only mean the owner's file was the source.
+_OWNER_CONTEXT_PATHS = """\
+COMMON_NOTE_PATHS = {"sentinel": "sentinel/owner-note.md"}
+CONTEXT_NOTE_PATHS = {}
+"""
+
+
+def test_owner_config_dir_is_exported_onto_pythonpath(tmp_path: Path) -> None:
     """`.vault/config/` must be on PYTHONPATH, or owner overrides vanish silently.
 
-    `vault_scope.py` is scaffold-owned config; the engine reads it through
-    `vault_scope_resolved.py`, which does `try: import vault_scope / except
-    ImportError: fall back to shipped defaults`. That fallback is SILENT. If the
-    runner does not put the owner's config dir on the path, every override -- a
-    vault that added "school" to GOVERNED_NOTE_DIRS, say -- reverts to defaults
-    with nothing logged and nothing failing.
+    Three owner-config modules -- `context_paths`, `content_routing`, and
+    `budget_burn_config` -- are still resolved by bare name inside a
+    `try: import / except ImportError: use shipped default`, and this export is
+    the only thing that makes them findable. That fallback is SILENT, so a
+    runner that drops the export reverts every one of those overrides with
+    nothing logged and nothing failing.
 
-    Asserted through the spy: PYTHONPATH is exported into the child's env.
+    `vault_scope` is deliberately no longer in that list: it anchors on the
+    vault root instead, because the export alone could never deliver it while
+    the engine shipped a module of the same name (#691).
+
+    Asserted through the spy: PYTHONPATH is exported into the child's env. That
+    is all this test can see -- whether the export then does its job is
+    `test_owner_config_actually_reaches_the_engine` below, and the two are
+    separate on purpose. An earlier version of this test asserted only the
+    export while claiming to protect `vault_scope` overrides, and passed for as
+    long as those overrides were in fact being discarded.
     """
     vault = _make_vault(tmp_path / "the-vault")
     (vault / ".vault" / "config").mkdir(parents=True, exist_ok=True)
@@ -278,6 +300,48 @@ def test_owner_config_dir_is_importable_by_the_engine(tmp_path: Path) -> None:
     )
     recorded = "\n".join(_spawns(tmp_path))
     assert str(vault / ".vault" / "config") in recorded, (
-        "the owner config dir is not on PYTHONPATH, so vault_scope overrides "
-        f"would silently fall back to shipped defaults: {recorded!r}"
+        "the owner config dir is not on PYTHONPATH, so the name-imported owner "
+        f"config modules would silently fall back to shipped defaults: {recorded!r}"
+    )
+
+
+def test_owner_config_actually_reaches_the_engine(tmp_path: Path) -> None:
+    """The export must deliver a value, not merely be present in the environment.
+
+    This is the assertion the previous guard was missing. It checked that
+    PYTHONPATH carried the config dir and stopped there -- an input that cannot
+    separate "the override arrived" from "the override was shadowed by a
+    shipped module of the same name", so it passed under both.
+
+    Arranged exactly as a vault hook does: the engine directory prepended to
+    `sys.path` (which is what put it ahead of PYTHONPATH and caused #691), the
+    owner config directory on PYTHONPATH. Run as a real subprocess, because in
+    this process the engine modules are already imported and module caching,
+    not path ordering, would decide the result.
+    """
+    vault = _make_vault(tmp_path / "the-vault")
+    config_dir = vault / ".vault" / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "context_paths.py").write_text(_OWNER_CONTEXT_PATHS)
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(config_dir)
+    env["CLAUDE_PROJECT_DIR"] = str(vault)
+    probe = (
+        f"import sys; sys.path.insert(0, {str(ENGINE)!r})\n"
+        "import context_loader\n"
+        "print(context_loader.COMMON_NOTE_PATHS)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(vault),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "sentinel/owner-note.md" in result.stdout, (
+        "the owner's context_paths override did not reach the engine; the "
+        f"config dir is on PYTHONPATH but something outranks it: {result.stdout!r}"
     )
