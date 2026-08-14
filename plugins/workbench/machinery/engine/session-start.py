@@ -40,9 +40,13 @@ def main() -> int:
     session_id = ""
     raw_event: dict = {}
     try:
-        raw_event = json.load(sys.stdin)
-        source = raw_event.get("source", "startup")
-        session_id = raw_event.get("session_id", "")
+        loaded = json.load(sys.stdin)
+        # A JSON value that is not an object (null, string, list) is as
+        # unusable as unparseable stdin — treat both as "no payload".
+        if isinstance(loaded, dict):
+            raw_event = loaded
+            source = raw_event.get("source", "startup")
+            session_id = raw_event.get("session_id", "")
     except (json.JSONDecodeError, ValueError):
         pass
 
@@ -52,13 +56,16 @@ def main() -> int:
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
     vault_root = find_vault_root(Path(project_dir) if project_dir else None)
     if vault_root is None:
+        # Not-a-vault is an informational no-op, not an error: hooks fail
+        # open (tests/test_hooks_fail_open.py), and a nonzero exit would
+        # also make Claude Code discard the context printed above.
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
                 "additionalContext": "⚠️ Not in a vault directory (no CLAUDE.md found)."
             }
         }))
-        return 1
+        return 0
 
     # Debug: log raw event to confirm hook_event_name on /clear.
     hook_event_name = raw_event.get("hook_event_name", "")
@@ -209,6 +216,10 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception:
+        # Fail open: the wrapper hook re-raises SystemExit, so an exit code
+        # set here is the hook's exit code. A crash is a real defect worth
+        # seeing (traceback on stderr, notice in context) but must never
+        # block the session — and only exit 0 gets the notice injected.
         traceback.print_exc(file=sys.stderr)
         print(json.dumps({
             "hookSpecificOutput": {
@@ -216,4 +227,4 @@ if __name__ == "__main__":
                 "additionalContext": "⚠️ Session start hook crashed. Check stderr."
             }
         }))
-        sys.exit(1)
+        sys.exit(0)
