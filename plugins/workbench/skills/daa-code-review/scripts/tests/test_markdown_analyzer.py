@@ -281,6 +281,25 @@ class TestMarkdownAnalyzerLinks:
         ]
         assert len(link_issues) == 0
 
+    def test_code_span_link_text_is_not_empty(self):
+        """Link text that is entirely a code span is real text, not empty.
+
+        Inline-code masking runs before link parsing, so [`code`](url) used to
+        blank the text to spaces and trip a false MD054 "empty text" warning.
+        """
+        content = (
+            "# Title\n"
+            "\n"
+            "[`src/value_engine.py`](../../src/value_engine.py)\n"
+            "[`Example`](https://example.com)\n"
+        )
+        result = analyze_markdown(content)
+
+        link_issues = [
+            i for i in result.issues if i.rule_id in ("MD042", "MD054", "MD055")
+        ]
+        assert link_issues == []
+
     def test_broken_relative_link(self):
         """Test detection of broken relative links."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -293,6 +312,33 @@ class TestMarkdownAnalyzerLinks:
             md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
             assert len(md055_issues) == 1
             assert "not found" in md055_issues[0].message.lower()
+
+    def test_link_wholly_inside_inline_code_is_not_flagged(self):
+        """A link shown inside an inline code span is an example, not a live
+        link. Guards the suppression that span-recovery must not undo: the
+        whole `[text](url)` is blanked, so LINK_PATTERN never matches it.
+        """
+        content = "# Title\n\nUse the `[label](missing-target.md)` syntax.\n"
+        result = analyze_markdown(content)
+
+        link_issues = [
+            i for i in result.issues if i.rule_id in ("MD042", "MD054", "MD055")
+        ]
+        assert link_issues == []
+
+    def test_broken_link_finding_context_shows_real_text(self):
+        """Findings on a code-span-text link report the real link, not the
+        blanks left by masking."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md_file = tmppath / "test.md"
+            md_file.write_text("# Title\n\n[`gone`](missing.md)\n")
+
+            result = analyze_markdown_file(md_file)
+
+            md055_issues = [i for i in result.issues if i.rule_id == "MD055"]
+            assert len(md055_issues) == 1
+            assert md055_issues[0].context == "[`gone`](missing.md)"
 
     def test_titled_link_to_existing_file_is_not_broken(self):
         """Test that a link title suffix doesn't cause a false-positive broken link."""
@@ -400,6 +446,17 @@ class TestMarkdownAnalyzerImages:
 
         alt_issues = [i for i in result.issues if i.rule_id == "MD045"]
         assert len(alt_issues) == 0
+
+    def test_code_span_alt_text_is_not_missing(self):
+        """Alt text that is entirely a code span is real text, not missing.
+
+        Same masking bug as the MD054 link case: ![`diagram`](url) blanked
+        the alt text and tripped a false MD045 warning.
+        """
+        content = "# Title\n\n![`diagram`](https://example.com/d.png)\n"
+        result = analyze_markdown(content)
+
+        assert [i for i in result.issues if i.rule_id == "MD045"] == []
 
     def test_image_only_document_has_no_link_findings(self):
         """Test that image syntax isn't re-flagged by the link checker."""
