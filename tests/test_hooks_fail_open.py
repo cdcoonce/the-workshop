@@ -12,6 +12,7 @@ on a *well-formed* payload (protect-files, verify-tests-before-stop) keep that
 behaviour — it is covered by their own suites.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -80,7 +81,18 @@ def test_library_modules_are_not_scanned_as_hooks() -> None:
 def test_hook_fails_open_on_unusable_input(
     hook: Path, label: str, tmp_path: Path
 ) -> None:
-    """Unusable stdin makes the hook a no-op that exits 0."""
+    """Unusable stdin makes the hook a no-op that exits 0.
+
+    ``CLAUDE_PROJECT_DIR`` is pinned to the scratch dir rather than inherited:
+    Claude Code always sets it when dispatching a real hook, and the vault
+    hooks branch on it. Inheriting it made this suite environment-dependent —
+    unset (CI, plain shells) the vault wrappers failed open before ever
+    reaching the engine, while inside a Claude Code session the engine ran
+    against the *session's* project dir, wrote its breadcrumb into that real
+    repo, and its not-a-vault exit code escaped. Pinning to an empty scratch
+    dir exercises the "hook fired outside any vault" path deterministically
+    everywhere and keeps hook side effects in tmp.
+    """
     result = subprocess.run(
         [sys.executable, str(hook)],
         input=UNUSABLE_PAYLOADS[label],
@@ -88,6 +100,7 @@ def test_hook_fails_open_on_unusable_input(
         text=True,
         timeout=30,
         cwd=tmp_path if label in PAYLOAD_LESS_LABELS else REPO_ROOT,
+        env=os.environ | {"CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
     assert result.returncode == 0, (
         f"{hook.name} exited {result.returncode} on {label} input; hooks must "
