@@ -511,7 +511,11 @@ class MarkdownAnalyzer:
         issues: list[Issue] = []
 
         # Mask code blocks/spans so example links shown inside fenced code
-        # aren't parsed as live document links.
+        # aren't parsed as live document links. Masking preserves offsets
+        # (see _blank_match), so each match span maps 1:1 onto `content` —
+        # the link text is read back from the unmasked original, because a
+        # text that is entirely a `code` span is blanked in the masked copy
+        # and must not be mistaken for empty (MD054).
         masked_content = self._mask_code_regions(content)
 
         for match in LINK_PATTERN.finditer(masked_content):
@@ -521,8 +525,11 @@ class MarkdownAnalyzer:
             if match.start() > 0 and masked_content[match.start() - 1] == "!":
                 continue
 
-            link_text = match.group(1)
+            link_text = content[match.start(1) : match.end(1)]
             link_url = match.group(2)
+            # Context likewise comes from the original, so findings show the
+            # real link rather than the blanked copy.
+            link_context = content[match.start() : match.end()]
             line_num = self._find_line_number(masked_content, match.start())
 
             # Check for empty link text
@@ -535,7 +542,7 @@ class MarkdownAnalyzer:
                         location=Location(file_path=file_path, line_start=line_num),
                         rule_id="MD054",
                         source="markdown-analyzer",
-                        context=match.group(0),
+                        context=link_context,
                     )
                 )
 
@@ -549,7 +556,7 @@ class MarkdownAnalyzer:
                         location=Location(file_path=file_path, line_start=line_num),
                         rule_id="MD042",
                         source="markdown-analyzer",
-                        context=match.group(0),
+                        context=link_context,
                     )
                 )
 
@@ -576,7 +583,7 @@ class MarkdownAnalyzer:
                                 ),
                                 rule_id="MD055",
                                 source="markdown-analyzer",
-                                context=match.group(0),
+                                context=link_context,
                             )
                         )
 
@@ -604,12 +611,16 @@ class MarkdownAnalyzer:
         issues: list[Issue] = []
 
         # Mask code blocks/spans so example images shown inside fenced code
-        # aren't parsed as live document images.
+        # aren't parsed as live document images. As in _check_links, masking
+        # preserves offsets, so alt text and context are read back from the
+        # unmasked original — alt text that is entirely a `code` span must
+        # not be mistaken for missing (MD045).
         masked_content = self._mask_code_regions(content)
 
         for match in IMAGE_PATTERN.finditer(masked_content):
-            alt_text = match.group(1)
+            alt_text = content[match.start(1) : match.end(1)]
             image_url = match.group(2)
+            image_context = content[match.start() : match.end()]
             line_num = self._find_line_number(masked_content, match.start())
 
             # Check for missing alt text
@@ -622,7 +633,7 @@ class MarkdownAnalyzer:
                         location=Location(file_path=file_path, line_start=line_num),
                         rule_id="MD045",
                         source="markdown-analyzer",
-                        context=match.group(0),
+                        context=image_context,
                     )
                 )
 
@@ -642,7 +653,7 @@ class MarkdownAnalyzer:
                             location=Location(file_path=file_path, line_start=line_num),
                             rule_id="MD056",
                             source="markdown-analyzer",
-                            context=match.group(0),
+                            context=image_context,
                         )
                     )
 
