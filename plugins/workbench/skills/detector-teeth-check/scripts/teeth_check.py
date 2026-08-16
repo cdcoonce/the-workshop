@@ -19,6 +19,11 @@ version of this loop gets them wrong:
 3. **"Not computed" is not "nothing found."** Without a collect command the
    never-killed list is unknown, and is reported as unknown rather than as an
    empty all-clear.
+4. **A run that named no failing test scored nothing.** A mutant that does not
+   compile, or a test command that aborts before collection, exits non-zero
+   with no ``FAILED`` line anywhere. That is the harness breaking, not an
+   assertion catching the defect, so it is reported ``unscored`` rather than
+   counted as a kill. Absence of a failure signal is never evidence of one.
 
 The source file is restored in a `finally`, so a crash mid-run cannot leave
 mutated code on disk.
@@ -63,7 +68,7 @@ class Spec:
 @dataclass
 class MutantResult:
     label: str
-    status: str  # "killed" | "survived" | "not-applied"
+    status: str  # "killed" | "survived" | "not-applied" | "unscored"
     killed_by: list[str] = field(default_factory=list)
     detail: str = ""
 
@@ -80,6 +85,10 @@ class Report:
     def unapplied(self) -> list[MutantResult]:
         """Mutants whose anchor did not match — broken spec, not weak tests."""
         return [m for m in self.mutants if m.status == "not-applied"]
+
+    def unscored(self) -> list[MutantResult]:
+        """Mutants whose run produced no readable verdict — measured nothing."""
+        return [m for m in self.mutants if m.status == "unscored"]
 
 
 def parse_failed_tests(output: str) -> set[str]:
@@ -161,6 +170,22 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
             results.append(MutantResult(mutant.label, "not-applied", detail=str(exc)))
             continue
 
+        # A mutant that cannot compile reds the suite by breaking the import,
+        # not by tripping an assertion. Catch it here rather than letting the
+        # run report a kill nothing actually earned.
+        if mutant.path.suffix == ".py":
+            try:
+                compile(mutated, str(mutant.path), "exec")
+            except SyntaxError as exc:
+                results.append(
+                    MutantResult(
+                        mutant.label,
+                        "unscored",
+                        detail=f"mutant does not compile: {exc}",
+                    )
+                )
+                continue
+
         try:
             mutant.path.write_text(mutated, encoding="utf-8")
             code, out = run(spec.test_command)
@@ -171,10 +196,25 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
 
         if code == 0:
             results.append(MutantResult(mutant.label, "survived"))
-        else:
-            failed = sorted(parse_failed_tests(out))
-            killers.update(normalize_test_id(t) for t in failed)
-            results.append(MutantResult(mutant.label, "killed", killed_by=failed))
+            continue
+
+        failed = sorted(parse_failed_tests(out))
+        if not failed:
+            # Non-zero with nothing named: the command aborted before it could
+            # collect (an unrecognised flag, a missing plugin, an import error).
+            # Scoring this as a kill would credit teeth to a run that never
+            # evaluated an assertion.
+            results.append(
+                MutantResult(
+                    mutant.label,
+                    "unscored",
+                    detail=f"run exited {code} naming no failing test",
+                )
+            )
+            continue
+
+        killers.update(normalize_test_id(t) for t in failed)
+        results.append(MutantResult(mutant.label, "killed", killed_by=failed))
 
     never_killed = (
         None
@@ -214,10 +254,23 @@ def render(report: Report) -> str:
         lines.append("SPEC ERROR — these anchors did not match; not a test weakness:")
         lines += [f"  {m.label}: {m.detail}" for m in report.unapplied()]
 
+    if report.unscored():
+        lines.append("")
+        lines.append(
+            "UNSCORED — these runs named no failing test, so they measured "
+            "nothing.\nFix the mutant or the test command and re-run; do NOT "
+            "read them as kills."
+        )
+        lines += [f"  {m.label}: {m.detail}" for m in report.unscored()]
+
     if report.survivors():
         lines.append("")
         lines.append("SURVIVORS — no test caught these; each names an untested property:")
         lines += [f"  {m.label}" for m in report.survivors()]
+        lines.append(
+            "  (Before hunting for a missing test, confirm each mutant actually "
+            "changes\n  behaviour — a semantic no-op survives everything.)"
+        )
 
     lines.append("")
     if report.never_killed is None:
@@ -262,8 +315,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(render(report))
 
-    # Non-zero when the suite lacks teeth somewhere, so CI can gate on it.
-    return 1 if report.survivors() or report.unapplied() else 0
+    # Non-zero when the suite lacks teeth somewhere, or when any row failed to
+    # produce a verdict — an unscored run is not a pass.
+    return 1 if report.survivors() or report.unapplied() or report.unscored() else 0
 
 
 if __name__ == "__main__":
