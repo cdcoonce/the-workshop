@@ -172,6 +172,75 @@ def test_an_unapplied_mutation_is_not_a_survivor(target: Path) -> None:
     assert report.survivors() == []
 
 
+def test_a_mutant_that_does_not_compile_is_unscored(target: Path) -> None:
+    """A syntactically invalid mutant measures nothing, and must not read as a kill.
+
+    The suite goes red because the module stopped importing, not because an
+    assertion noticed the defect. Scored as "killed" it manufactures a teeth
+    signal for a property that may well be untested.
+    """
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        if cmd == ["pytest", "--collect-only", "-q"]:
+            return 0, ""
+        return 0, "2 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(target, Mutation("broken", target, "LIMIT = 25", "LIMIT = = 25")),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["unscored"]
+    assert report.survivors() == []
+    assert "compile" in report.mutants[0].detail
+    assert target.read_text() == "LIMIT = 25\nGUARD = True\n"
+
+
+def test_a_nonzero_run_naming_no_failing_test_is_unscored(target: Path) -> None:
+    """The broken-runner case: absence of a failure line is not evidence of one.
+
+    A test command that aborts before collection — an unrecognised argument, a
+    missing plugin, an import error from the mutant — exits non-zero with no
+    FAILED line anywhere. Reading that as a kill reports teeth the run never
+    demonstrated.
+    """
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "2 passed in 0.1s\n"
+        return 4, "ERROR: unrecognized arguments: --timeout=120\n"
+
+    report = run_teeth_check(
+        _spec(target, Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["unscored"]
+    assert report.mutants[0].killed_by == []
+    assert report.survivors() == []
+
+
+def test_unscored_rows_are_reported_separately_from_survivors(target: Path) -> None:
+    """An unscored row is a question about the harness, not about the tests."""
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        return 0, "2 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("guard", target, "GUARD = True", "GUARD = False"),
+            Mutation("broken", target, "LIMIT = 25", "LIMIT = = 25"),
+        ),
+        runner=runner,
+    )
+
+    assert [m.label for m in report.survivors()] == ["guard"]
+    assert [m.label for m in report.unscored()] == ["broken"]
+
+
 def test_restores_the_file_after_each_mutant(target: Path) -> None:
     original = target.read_text()
 
