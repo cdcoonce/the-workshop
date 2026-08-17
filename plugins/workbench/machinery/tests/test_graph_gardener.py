@@ -468,50 +468,33 @@ def test_path_link_with_alias_resolves(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Index-drift false-positive filter (Defect 3) — already-indexed notes aren't drift
+# Index drift is REMOVED (#715). The category asked a model to judge index
+# membership without ever showing it an index, and `note_in_index` — the guard
+# meant to catch that — was fail-soft on a missing index file, so an invented
+# index path rendered as a proposal. Index membership is already enforced by
+# /wrap-up's index-sync audit and ci/vault_health.py.
 # ---------------------------------------------------------------------------
 
-def test_note_in_index_bare_link(tmp_path):
+def test_lane_b_prompt_omits_index_drift():
+    prompt = gg.build_lane_b_prompt([("personal/x.md", "body text")])
+    assert "INDEX DRIFT" not in prompt
+    assert "index_drift" not in prompt
+
+
+def test_write_queue_omits_index_drift_section(tmp_path):
     repo = _init_repo(tmp_path)
-    (repo / "personal" / "Index.md").write_text("- [[hex-custom-ui]] — a note\n", encoding="utf-8")
-    assert gg.note_in_index("personal/hex-custom-ui.md", "personal/Index.md", repo) is True
-
-
-def test_note_in_index_aliased_link(tmp_path):
-    repo = _init_repo(tmp_path)
-    (repo / "personal" / "Index.md").write_text("- [[hex-custom-ui|Hex UI]] — a note\n", encoding="utf-8")
-    assert gg.note_in_index("personal/hex-custom-ui.md", "personal/Index.md", repo) is True
-
-
-def test_note_in_index_path_qualified_link(tmp_path):
-    repo = _init_repo(tmp_path)
-    (repo / "personal" / "Index.md").write_text("- [[personal/learning/hex-custom-ui|x]]\n", encoding="utf-8")
-    assert gg.note_in_index("personal/learning/hex-custom-ui.md", "personal/Index.md", repo) is True
-
-
-def test_note_in_index_absent(tmp_path):
-    repo = _init_repo(tmp_path)
-    (repo / "personal" / "Index.md").write_text("- [[something-else]] — x\n", encoding="utf-8")
-    assert gg.note_in_index("personal/hex-custom-ui.md", "personal/Index.md", repo) is False
-
-
-def test_note_in_index_missing_index_file(tmp_path):
-    repo = _init_repo(tmp_path)
-    assert gg.note_in_index("personal/x.md", "personal/Nope.md", repo) is False
-
-
-def test_write_queue_filters_already_indexed_drift(tmp_path):
-    repo = _init_repo(tmp_path)
-    (repo / "personal" / "Index.md").write_text("- [[hex-custom-ui]] — a note\n", encoding="utf-8")
-    lane_b = {"missing_links": [], "orphans": [], "index_drift": [
-        {"note": "personal/hex-custom-ui.md", "index": "personal/Index.md", "rationale": "r"}
-    ]}
-    gg.write_queue(repo, "personal", gg.LaneAResult(), lane_b)
+    gg.write_queue(repo, "personal", gg.LaneAResult(), {"missing_links": [], "orphans": []})
     out = (repo / ".brain" / "gardener-personal.md").read_text(encoding="utf-8")
-    assert "personal/hex-custom-ui.md` → `personal/Index.md" not in out  # filtered as false positive
+    assert "Index drift" not in out
 
 
-def test_write_queue_keeps_genuine_drift(tmp_path):
+def test_write_queue_ignores_stale_index_drift_payload(tmp_path):
+    """A model still emitting index_drift must not reach the queue.
+
+    Same payload the removed `test_write_queue_keeps_genuine_drift` asserted was
+    rendered, inverted: removal has to hold at the renderer, not just the prompt,
+    or a cached/hallucinated response walks straight through.
+    """
     repo = _init_repo(tmp_path)
     (repo / "personal" / "Index.md").write_text("- [[something-else]] — x\n", encoding="utf-8")
     lane_b = {"missing_links": [], "orphans": [], "index_drift": [
@@ -519,7 +502,8 @@ def test_write_queue_keeps_genuine_drift(tmp_path):
     ]}
     gg.write_queue(repo, "personal", gg.LaneAResult(), lane_b)
     out = (repo / ".brain" / "gardener-personal.md").read_text(encoding="utf-8")
-    assert "personal/newnote.md` → `personal/Index.md" in out  # genuine drift kept
+    assert "personal/newnote.md" not in out
+    assert "Index drift" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +681,7 @@ def _profile(repo, name):
     (d / f"{name}.md").write_text("x", encoding="utf-8")
 
 
-_EMPTY_LANE_B = {"missing_links": [], "orphans": [], "index_drift": []}
+_EMPTY_LANE_B = {"missing_links": [], "orphans": []}
 
 
 def test_detect_unprofiled_finds_name_without_profile(tmp_path):
@@ -898,7 +882,7 @@ def test_write_queue_unprofiled_suppressed_when_dismissed(tmp_path):
 # from a module injected under the name `vault_scope`.
 # ---------------------------------------------------------------------------
 
-_LANE_B_STDOUT = '{"missing_links": [], "orphans": [], "index_drift": []}'
+_LANE_B_STDOUT = '{"missing_links": [], "orphans": []}'
 
 
 def _capture_claude_argv(monkeypatch, captured):
