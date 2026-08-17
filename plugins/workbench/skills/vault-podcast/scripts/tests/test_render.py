@@ -659,3 +659,22 @@ def test_live_end_to_end(tmp_path: Path) -> None:
     assert code == 0
     assert (episode_dir / "episode.m4a").exists()
     assert (episode_dir / "meta.json").exists()
+
+
+def test_voices_defaults_to_andrew_and_ava() -> None:
+    args = render.build_arg_parser().parse_args(["0001-defaults"])
+    assert args.voices == {
+        "A": "en-US-AndrewMultilingualNeural",
+        "B": "en-US-AvaMultilingualNeural",
+    }
+
+
+def test_relative_episode_dir_resolves_before_slug_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    episode = tmp_path / "0001-dot-invocation"
+    episode.mkdir()
+    monkeypatch.chdir(episode)
+    args = render.build_arg_parser().parse_args(["."])
+    assert args.episode_dir.name == "0001-dot-invocation"
+    render.validate_episode_slug(args.episode_dir)

@@ -437,11 +437,19 @@ def _parse_voices_arg(spec: str) -> dict[str, str]:
         voices[speaker] = voice
     return voices
 
+DEFAULT_VOICES_SPEC = "A=en-US-AndrewMultilingualNeural,B=en-US-AvaMultilingualNeural"
+
+
+def _resolved_path(raw: str) -> Path:
+    """Resolve before slug validation so `.` names its real directory."""
+    return Path(raw).resolve()
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render a two-voice podcast episode.")
-    parser.add_argument("episode_dir", type=Path)
+    parser.add_argument("episode_dir", type=_resolved_path)
     parser.add_argument("--source", dest="sources", action="append", default=[])
-    parser.add_argument("--voices", type=_parse_voices_arg, required=True)
+    parser.add_argument("--voices", type=_parse_voices_arg, default=DEFAULT_VOICES_SPEC)
     parser.add_argument("--rate", default="+0%")
     parser.add_argument("--style", default="")
     parser.add_argument("--allow-sensitive", action="store_true")
