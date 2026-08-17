@@ -100,16 +100,51 @@ voices: "Andrew, Ava"
 Audio cannot carry wikilinks, so the show note is where grounding lives: every
 substantive claim in the script gets a cited row under Key claims.
 
+## Writing the script
+
+The failure mode to design against is **narrated markdown**: a script that
+walks the source's sections in order, reciting its sentences with host labels
+attached. That reads as a document, not a show. Rules:
+
+1. **Plan the conversation before touching the source.** Decide the hook (a
+   puzzle, a surprise, a stake — never "today we're covering note X"), the 2–3
+   beats, and the payoff; only then pull facts in. If the script's beat order
+   matches the source's section order, start over.
+2. **Knowledge asymmetry.** Host A is the listener's proxy: curious, asks what
+   a smart newcomer would ask, pushes back, occasionally summarizes wrong so B
+   can correct it. Host B explains from first principles and lands the sourced
+   numbers. A never lectures; B never interviews.
+3. **Explain before naming.** The concept in plain words first, the term after
+   ("…so you're paid on the promise and settled on the miss — that's the
+   two-settlement construct").
+4. **Required dialogue moves, every episode:** one genuine pushback ("wait —
+   why would anyone…?"), one wrong-summary-corrected, one concrete scenario
+   walked live with numbers, one callback to an earlier beat. Vary turn length;
+   nobody speaks in paragraphs twice in a row.
+5. **Banned:** document-speak ("the note says", "this section", "as mentioned
+   above", bullet cadence); any turn that could be pasted back into the source
+   as a paragraph; covering everything — an episode explains ONE idea well, not
+   a document completely.
+6. **Grounding, precisely:** every factual claim and number comes from the
+   sources and lands in the show note's Key claims. Explanatory devices —
+   analogies, hypothetical framings ("imagine you promised…") — are the hosts'
+   own voice and are encouraged, but must stay clearly illustrative and never
+   smuggle in an unsourced fact.
+
 ## Styles
 
-- **deep-dive** — two hosts narrate one or more notes: cold open, 3–4 segments,
-  a closing takeaway. Host A frames and asks; host B explains and lands specifics.
-- **lesson** — reads the teach workspace (`MISSION.md`, `GLOSSARY.md`,
-  `learning-records/`, the lesson) and targets the current open edge. Use
-  glossary terms correctly. Retrieval-practice beat: host A poses a scenario
-  question, `PAUSE|3`, host B works the answer. **Degrade gracefully**: a young
-  workspace without learning-records still gets an episode covering the latest
-  lesson — skip mastery targeting, never error.
+- **deep-dive** — open with the most surprising thing in the sources, not the
+  chronology; the episode argues why it matters and closes with the takeaway.
+- **lesson** — a tutor conversation, never a lesson reading. Read `MISSION.md`,
+  `GLOSSARY.md`, `learning-records/`, and the lesson, then give host A the
+  learner's _recorded_ state: A makes the documented mistakes (the named
+  recurring errors from learning-records) mid-conversation so B corrects them
+  live. Use promoted glossary terms correctly; don't treat held-back terms as
+  mastered. Retrieval beat: A poses the scenario to the listener, `PAUSE|3`,
+  then A attempts it imperfectly and B refines — the listener checks themselves
+  against both. Anchor why the concept matters in the mission. **Degrade
+  gracefully**: a young workspace without learning-records still gets an
+  episode teaching the latest lesson — skip the learner modeling, never error.
 
 ## Troubleshooting
 
