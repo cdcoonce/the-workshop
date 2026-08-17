@@ -16,11 +16,12 @@ Each topic gets a folder: `personal/learning/<topic-slug>/`. It **is** the learn
 
 Files (all markdown notes carry vault frontmatter — `date`, `description`, `tags: [learning, teach]` — and link into the graph):
 
-- **`MISSION.md`** — the *why*. The concrete real-world goal driving this. Grounds every teaching decision. If vague, **interview before writing** — a bad mission is worse than none. Tie to [[North Star]] where it maps to a stated goal. Keep it to a screen.
-- **`GLOSSARY.md`** — the canonical, opinionated language for the topic. Add a term only once Charles can *use* it correctly (compression = evidence of understanding). Tight one-line definitions; pick the best word, list aliases to avoid.
+- **`MISSION.md`** — the _why_. The concrete real-world goal driving this. Grounds every teaching decision. If vague, **interview before writing** — a bad mission is worse than none. Tie to [[North Star]] where it maps to a stated goal. Keep it to a screen.
+- **`GLOSSARY.md`** — the canonical, opinionated language for the topic. Add a term only once Charles can _use_ it correctly (compression = evidence of understanding). Tight one-line definitions; pick the best word, list aliases to avoid.
 - **`learning-records/NNNN-slug.md`** — ADR-style, decision-grade insights (sequential numbering). Write one when: genuine understanding is demonstrated (sets a new floor), prior knowledge is disclosed, a misconception is corrected, or the mission shifts. Not a journal — coverage ≠ learning. Mark superseded records rather than deleting.
 - **`RESOURCES.md`** — curated, high-trust sources, split **Knowledge** (books, primary sources, expert articles) and **Wisdom** (communities to test skills in the real world). Annotate every entry with "use for…". Never teach from parametric guessing — ground in these. Note a `## Gaps` section for missing areas.
 - **`lessons/NNNN-slug.md`** — the primary unit of teaching. One self-contained lesson per file, teaching **ONE thing** tied to the mission, completable fast for a tangible win. Littered with citations to `RESOURCES.md`. Markdown vault notes (graph-linked); offer to render a lesson to a styled printable HTML on request.
+- **`episodes/NNNN-slug.md`** — show notes for audio renders of lessons. On request, offer a two-host audio episode via the `/podcast` skill (`--style lesson`): the episode note lives here (numbered per-workspace, wikilinked to its lesson) and the audio stays machine-local under `~/.workshop/vault-podcast/`.
 - **`NOTES.md`** — scratchpad for Charles's teaching preferences and working notes.
 
 ## Philosophy — Knowledge, Skills, Wisdom
