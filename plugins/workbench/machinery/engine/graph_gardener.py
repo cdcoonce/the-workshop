@@ -12,8 +12,8 @@ notes touched this session only (never a full-vault sweep):
         mean?" hints in proposals — never auto-repairs.
 
     Lane B — headless cheap-model propose pass.
-        Over the same touched notes, ask the batch model to suggest new links,
-        flag orphans (>300 chars, no [[link]]), and note index drift.
+        Over the same touched notes, ask the batch model to suggest new links
+        and flag orphans (>300 chars, no [[link]]).
         Follows the notebook-distill.py headless pattern exactly.
 
 Output: ``.brain/gardener-<context>.md`` (gitignored) with an Applied
@@ -598,7 +598,7 @@ def collect_touched_notes(
     Source 3 (targeted): up to BROKEN_BATCH notes graphmark says have broken links.
 
     Sources 2 and 3 are complementary on purpose. The round-robin trickle gives every
-    lane (index drift, orphans, people profiles) eventual vault-wide coverage, so it must
+    lane (orphans, people profiles) eventual vault-wide coverage, so it must
     not be narrowed; the targeted source just stops Lane A from waiting for the cursor to
     reach the ~15% of notes that actually have a broken link.
 
@@ -690,27 +690,6 @@ def _normalize(text: str) -> str:
     return text
 
 
-def note_in_index(note_rel: str, index_rel: str, vault_root: Path) -> bool:
-    """True if the index file already wikilinks the note (by normalized basename).
-
-    Used to drop index-drift false positives: Lane B may flag a note as "missing
-    from an index" when it is in fact already linked there. Matches by the note's
-    normalized stem against each index wikilink's basename (alias/heading/path
-    stripped). Fail-soft: a missing or unreadable index → False.
-    """
-    try:
-        text = (vault_root / index_rel).read_text(encoding="utf-8")
-    except OSError:
-        return False
-    target_stem = _normalize(Path(note_rel).stem)
-    for m in WIKILINK_CAPTURE_RE.finditer(text):
-        link = m.group(1).split("|")[0].split("#")[0].strip()
-        base = link.split("/")[-1]
-        if _normalize(base) == target_stem:
-            return True
-    return False
-
-
 def _code_spans(text: str) -> list[tuple[int, int]]:
     """Char ranges covered by Markdown code — fenced blocks and inline spans.
 
@@ -751,8 +730,6 @@ def proposal_signature(kind: str, note_rel: str, key: str = "") -> str:
                      key = "<prose>-><target>" (target may include [[ ]]; stripped here)
       orphan       → ``orphan|<note_rel>``
                      key unused
-      index-drift  → ``drift|<note_rel>|<index_file>``
-                     key = the index file name/path (not normalized)
     """
     if kind == "broken":
         return f"broken|{note_rel}|{_normalize(key)}"
@@ -769,8 +746,6 @@ def proposal_signature(kind: str, note_rel: str, key: str = "") -> str:
         return f"missing|{note_rel}|{_normalize(prose_part)}->{_normalize(target_part)}"
     if kind == "orphan":
         return f"orphan|{note_rel}"
-    if kind == "drift":
-        return f"drift|{note_rel}|{key}"
     if kind == "branch":
         # key = branch short name (slashes preserved); the branch IS the unit of decision
         return f"branch|{key}"
@@ -1084,10 +1059,6 @@ You are a vault graph reviewer. Review these recently-changed notes and suggest:
 2. ORPHAN FLAGS — notes longer than {ORPHAN_MIN_CHARS} chars that have NO [[wikilinks]]
    at all. List the note path and a one-line reason it needs linking.
 
-3. INDEX DRIFT — if a note title, status, or project seems like it should appear in
-   an index (work/Index.md, personal/Index.md, brain/Memories.md) but likely doesn't
-   yet, flag it briefly.
-
 OUTPUT FORMAT — respond with valid JSON only, no preamble, no code fences:
 {{
   "missing_links": [
@@ -1096,10 +1067,6 @@ OUTPUT FORMAT — respond with valid JSON only, no preamble, no code fences:
   ],
   "orphans": [
     {{"note": "<rel_path>", "rationale": "one line"}},
-    ...
-  ],
-  "index_drift": [
-    {{"note": "<rel_path>", "index": "<index file>", "rationale": "one line"}},
     ...
   ]
 }}
@@ -1151,7 +1118,7 @@ def run_lane_b(
     skip: bool = False,
 ) -> dict:
     """Run the headless Lane B pass.  Returns structured dict or empty on skip/failure."""
-    empty: dict = {"missing_links": [], "orphans": [], "index_drift": []}
+    empty: dict = {"missing_links": [], "orphans": []}
     if skip or not notes:
         return empty
 
@@ -1357,32 +1324,6 @@ def write_queue(
     else:
         lines.append("_(none)_")
 
-    lines += ["", "### Index drift", ""]
-    drift = lane_b.get("index_drift", [])
-    if drift:
-        rendered_drift = []
-        for item in drift:
-            note = item.get("note", "?")
-            index = item.get("index", "?")
-            rationale = item.get("rationale", "")
-            sig = proposal_signature("drift", note, index)
-            if sig in dismissed:
-                continue
-            # Drop false positives: the note is already wikilinked in the index.
-            if note_in_index(note, index, vault_root):
-                continue
-            rendered_drift.append(
-                f"- `{note}` → `{index}`"
-                + (f" — {rationale}" if rationale else "")
-                + f" <!-- gsig: {sig} -->"
-            )
-        if rendered_drift:
-            lines.extend(rendered_drift)
-        else:
-            lines.append("_(none)_")
-    else:
-        lines.append("_(none)_")
-
     lines.append("")
     content = "\n".join(lines)
 
@@ -1567,7 +1508,7 @@ def run_gardener(
     n_applied = len(lane_a.applied)
     n_proposals = len(lane_a.proposals) + len(stranded) + sum(
         len(lane_b.get(k, []))
-        for k in ("missing_links", "orphans", "index_drift")
+        for k in ("missing_links", "orphans")
     )
     log(
         vault_root,

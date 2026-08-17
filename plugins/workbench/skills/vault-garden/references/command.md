@@ -29,7 +29,7 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
    auto-fixed); they're for transparency, nothing to do.
 
 3. **Walk the `## Proposed` subsections, easiest → hardest:** broken links → unprofiled people →
-   auto-memory drift → missing links → index drift → stranded branches → orphans. For each non-empty
+   auto-memory drift → missing links → stranded branches → orphans. For each non-empty
    subsection, present the items and use **`AskUserQuestion` (multiSelect)** to let Charles choose
    **Apply / Dismiss / Skip** per item (batch within the category). Then act:
 
@@ -59,8 +59,6 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
      - **Skip** → leave in the queue.
    - **Missing links.** Show the exact prose and the suggested `[[Target]]`. On confirm → `Edit` the
      note, wrapping that exact prose in `[[Target]]` (preserve surrounding text exactly).
-   - **Index drift.** Show the note and the target index. On confirm → append the appropriate entry to
-     that index file (follow the index's existing line format).
    - **Stranded branches.** A git branch holding net-new notes not on `main`. No-op if `### Stranded
 branches` is absent. Per branch, show the net-new file(s) and offer:
      - **Port** → `git checkout <branch> -- <files>`, then verify each file is truly absent from / not
