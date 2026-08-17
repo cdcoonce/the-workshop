@@ -16,7 +16,7 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `5.4.0` | 69 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `5.5.0` | 70 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `2.1.1` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 
 ## Details
@@ -91,7 +91,7 @@ Socratic thinking partner — sharp questions and decision-sharpening over answe
 
 ### `workbench`
 
-*v5.4.0 · `plugins/workbench`*
+*v5.5.0 · `plugins/workbench`*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.
 
@@ -103,7 +103,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 - Conventional commits; stage explicitly, never git add .
 - Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured
 
-**Skills (69):** `adversarial-review`, `blueprint`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `data-discovery`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `drain-queue`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-cold-read`, `vault-connect`, `vault-context-then-delegate`, `vault-debrief`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-link`, `vault-mr-review-packet`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`
+**Skills (70):** `adversarial-review`, `blueprint`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `data-discovery`, `dbt-expert`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `drain-queue`, `finish-branch`, `github-cli`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-reference-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-cold-read`, `vault-connect`, `vault-context-then-delegate`, `vault-debrief`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-link`, `vault-mr-review-packet`, `vault-podcast`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`
 
 **Agents (13):** `analysis-builder`, `api-builder`, `backend-builder`, `brag-spotter`, `code-reviewer`, `cross-linker`, `data-quality-reviewer`, `frontend-builder`, `people-profiler`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 
