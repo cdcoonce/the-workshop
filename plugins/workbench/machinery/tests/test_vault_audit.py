@@ -188,6 +188,54 @@ def test_operating_files_are_resolvable_link_targets(tmp_path: Path) -> None:
     assert report["issues"]["broken_links"] == []
 
 
+def test_existing_pdf_attachment_link_is_not_broken(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    pdf = tmp_path / "assets" / "Corp Org Chart 2026-04-21.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    _write(
+        tmp_path,
+        "org/Org Chart.md",
+        _note("Org Chart", body="See [[assets/Corp Org Chart 2026-04-21.pdf]]."),
+    )
+
+    report = audit(tmp_path)
+
+    assert report["issues"]["broken_links"] == []
+
+
+def test_missing_pdf_attachment_link_is_still_broken(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "org/Org Chart.md",
+        _note("Org Chart", body="See [[assets/Nonexistent Chart.pdf]]."),
+    )
+
+    report = audit(tmp_path)
+
+    assert any(
+        "Nonexistent Chart.pdf" in issue["detail"]
+        for issue in report["issues"]["broken_links"]
+    )
+
+
+def test_bare_pdf_attachment_name_resolves_via_assets_dir(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    pdf = tmp_path / "assets" / "Corp Org Chart 2026-04-21.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    _write(
+        tmp_path,
+        "org/Org Chart.md",
+        _note("Org Chart", body="See [[Corp Org Chart 2026-04-21.pdf]]."),
+    )
+
+    report = audit(tmp_path)
+
+    assert report["issues"]["broken_links"] == []
+
+
 def test_skill_name_frontmatter_resolves_wikilinks(tmp_path: Path) -> None:
     _write(tmp_path, "CLAUDE.md", "# Vault")
     _write(

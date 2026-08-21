@@ -130,6 +130,15 @@ def _resolve(target: str, exact: dict[str, Path], normalized: dict[str, list[Pat
     return normalized.get(_norm_title(Path(target).name), [])
 
 
+def _attachment_exists(target: str, vault_root: Path) -> bool:
+    """Whether a non-markdown link target (e.g. a PDF) exists on disk."""
+    suffix = Path(target).suffix
+    if not suffix or suffix.lower() == ".md":
+        return False
+    candidates = (vault_root / target, vault_root / "assets" / target)
+    return any(candidate.is_file() for candidate in candidates)
+
+
 def _code_spans(text: str) -> list[tuple[int, int]]:
     spans = [(m.start(), m.end()) for m in FENCED_CODE_RE.finditer(text)]
     spans.extend((m.start(), m.end()) for m in INLINE_CODE_RE.finditer(text))
@@ -196,7 +205,8 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
             if len(matches) == 1:
                 incoming[matches[0]].add(path)
             elif len(matches) == 0:
-                broken_links.append(Issue(rel, f"broken [[{target}]]"))
+                if not _attachment_exists(target, vault_root):
+                    broken_links.append(Issue(rel, f"broken [[{target}]]"))
             else:
                 sample = ", ".join(rel_posix(m, vault_root) or str(m) for m in matches[:3])
                 ambiguous_links.append(Issue(rel, f"ambiguous [[{target}]] -> {sample}"))
