@@ -49,7 +49,7 @@
     },
     {
       "name": "workbench",
-      "version": "5.5.3",
+      "version": "5.5.4",
       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
       "source": "./plugins/workbench"
     },
