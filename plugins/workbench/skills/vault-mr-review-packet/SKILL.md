@@ -1,7 +1,7 @@
 ---
 name: vault-mr-review-packet
 description: >
-  Run Charles's vault (The Vault) /mr-review-packet workflow to generate a self-guided reviewer packet for a large merge request. Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
+  Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). Trigger when Charles invokes /mr-review-packet, mentions /mr-review-packet, or asks for a review packet / reviewer walkthrough for a big MR.
 ---
 
 # Vault MR Review Packet
