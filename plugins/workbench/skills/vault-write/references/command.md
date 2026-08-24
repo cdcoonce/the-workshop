@@ -58,7 +58,8 @@ Drafts should read like Charles wrote them, not like a model did. The em dash (r
 
 - Short messages: just prose. Skip the section headers.
 - Multi-topic replies: a brief opener, then one short paragraph per topic. Tag the relevant person if it helps them find their item. No bullet-point dumps where prose reads more naturally.
-- Sign off simply ("Thanks," / "Best,").
+- **Teams and chat messages are shorter and more casual than email.** A chat ping is the ask plus the one fact that makes it land, usually two or three sentences. Lean further into the casual register than email allows ("mind flipping that on when you get a chance?"), and let supporting detail wait for the reply instead of front-loading it. A chat draft that grows past one short paragraph either shrinks or becomes an email.
+- Email signs off simply ("Thanks," / "Best,"). Teams and chat messages skip the greeting and sign-off entirely and just start talking.
 
 ## Apologies specifically
 
@@ -66,7 +67,7 @@ Apologies are where over-writing shows up hardest, because there's an instinct t
 
 ## Process
 
-1. Identify the audience and what they already know. Strip anything they don't need.
+1. Identify the audience, the channel (email vs Teams/chat), and what they already know. Strip anything they don't need, and size the draft to the channel before writing.
 2. Draft following the rules above.
 3. Re-read once specifically to: delete em dashes (including the greeting dash); rewrite any clipped fragment as a full sentence; cut any word or clause that does no work (without going clipped); replace inflated LLM vocabulary with the plain word; delete empty hedge preambles, enthusiasm openers, and filler triples; delete any sentence that only performs enthusiasm, restates the reader's own words, or restates a fact the draft already stated; delete dramatic self-narration; check for a duplicated apology/acknowledgment (one is enough).
 4. Present the draft for review before anything is sent. Offer to save longer drafts to `thinking/`.
