@@ -1,6 +1,6 @@
 {
   "name": "workbench",
-  "version": "5.5.8",
+  "version": "5.6.0",
   "description": "The complete Workshop toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
   "conventions": [
     "Test-driven development: write the failing test first",
