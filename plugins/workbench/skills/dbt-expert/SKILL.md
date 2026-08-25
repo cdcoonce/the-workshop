@@ -59,3 +59,12 @@ For every question, identify which reference file(s) are relevant using the inde
 - [Documentation](./references/docs.md) — dbt docs generate, dbt docs serve, llms.txt, markdown URL convention
 
 <!-- END GENERATED INDEX -->
+
+## Reading an existing project
+
+This skill covers authoring dbt. To answer structural questions about a project
+that already exists — how many models or tests it has, what grain a model
+declares, which models a seed actually feeds, or whether anything references a
+given seed — use `dbt-manifest-facts`, which reads those facts out of
+`target/manifest.json` instead of inferring them from model SQL.
+
