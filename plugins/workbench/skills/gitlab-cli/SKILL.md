@@ -79,6 +79,10 @@ Prefer `glab auth login`; reserve a raw token for non-interactive CI, and inject
 
 Confirm any pipeline-watching loop returns something on its **first** pass before trusting its silence.
 
+### `glab mr merge` does not always merge
+
+Two results that read as success and are not. **A 405 right after creating the MR is a timing artifact** — GitLab has not attached a head pipeline yet, and the MR already reports `mergeable` with no conflicts; wait ~30–45 seconds and retry rather than chasing permissions. **With a pipeline running, `--yes` sets auto-merge and returns immediately** (`✓ Will auto-merge`) instead of blocking until merged. Poll the MR's `state` before reporting it landed — taking the command's exit for a merge is how a queue of MRs gets declared done while several are still open.
+
 ### Multi-line descriptions with Markdown
 
 When updating issues or MRs with long markdown descriptions (code blocks, backticks), avoid heredocs — shell interpretation can mangle them. Write the description to a file and source it instead:

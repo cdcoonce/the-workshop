@@ -210,7 +210,7 @@ glab mr revoke
 
 ```bash
 glab mr merge 45                          # Interactive merge
-glab mr merge 45 --yes                    # Skip confirmation
+glab mr merge 45 --yes                    # Skip confirmation prompts
 
 # Merge strategies
 glab mr merge 45 --squash                 # Squash commits
@@ -224,6 +224,14 @@ glab mr merge 45 --when-pipeline-succeeds # Merge when CI passes
 # Current branch's MR
 glab mr merge
 ```
+
+**`--yes` skips the prompt; it does not guarantee an immediate merge.** With a pipeline still running, glab sets auto-merge and returns success right away (`✓ Will auto-merge`) — the MR merges later, when CI goes green. Poll the state before reporting it landed:
+
+```bash
+glab api "projects/:id/merge_requests/45" --jq '.state'
+```
+
+**A 405 immediately after creating the MR is a timing artifact, not a permissions problem.** GitLab has not attached a head pipeline yet, so the merge endpoint refuses even though the MR already reports `mergeable` with no conflicts. Wait ~30–45 seconds and retry instead of chasing access levels.
 
 ### glab mr rebase
 
