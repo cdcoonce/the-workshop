@@ -22,6 +22,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/dagster-expert` | `workbench` | Expert guidance for working with Dagster and the dg CLI. |
 | `/data-discovery` | `workbench` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
 | `/dbt-expert` | `workbench` | Expert guidance for working with dbt Core. |
+| `/dbt-manifest-facts` | `workbench` | Answers structural questions about a dbt project from its parsed manifest.json rather |
 | `/design-an-interface` | `workbench` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
 | `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
 | `/dev-cycle` | `workbench` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
@@ -168,6 +169,12 @@ Generate a handoff-ready data discovery document for a Snowflake schema or dbt p
 *`workbench` plugin*
 
 Expert guidance for working with dbt Core. ALWAYS use before doing any task that requires knowledge specific to dbt, including building or modifying models, writing SQL transformations, configuring tests, running dbt CLI commands, or working with dbt project structure. Common triggers include references to dbt, models, ref(), source(), materializations, seeds, snapshots, dbt build/run/test, YAML schema files, or analytics engineering patterns.
+
+### `/dbt-manifest-facts`
+
+*`workbench` plugin*
+
+Answers structural questions about a dbt project from its parsed manifest.json rather
 
 ### `/design-an-interface`
 

@@ -27,6 +27,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. |
 | `/data-discovery` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
 | `/dbt-expert` | Expert guidance for working with dbt Core. |
+| `/dbt-manifest-facts` | Answers structural questions about a dbt project from its parsed manifest.json rather |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
 | `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
 | `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
