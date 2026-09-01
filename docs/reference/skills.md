@@ -30,6 +30,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/drain-queue` | `workbench` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. |
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
+| `/gitlab-ci-watch` | `workbench` | Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
@@ -218,11 +219,17 @@ Use when implementation is complete, all tests pass, and you need to decide how 
 
 GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. Use when Claude needs to create, list, view, or update GitHub issues; create draft branches and pull requests; make commits and push changes; review pull request diffs and changes; approve or merge PRs; manage GitHub Actions workflows; or work with GitHub repositories without switching to a browser. Requires gh CLI installed and authenticated.
 
+### `/gitlab-ci-watch`
+
+*`workbench` plugin*
+
+Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. Use after any push to a work GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or flips to auto-merge, or when post-merge CI on dev must be confirmed green. For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
+
 ### `/gitlab-cli`
 
 *`workbench` plugin*
 
-GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. Use when Claude needs to create, list, view, or update GitLab issues; push branches; review merge request diffs; approve or merge MRs; or inspect and retry pipelines and job logs. Requires the glab CLI installed and authenticated. For CREATING a merge request, use the gitlab-mr-create skill instead.
+GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. Use when Claude needs to create, list, view, or update GitLab issues; push branches; review merge request diffs; approve or merge MRs; or inspect and retry pipelines and job logs. Requires the glab CLI installed and authenticated. For CREATING a merge request, use the gitlab-mr-create skill instead; for WATCHING CI to completion after a push or merge, use the gitlab-ci-watch skill instead.
 
 ### `/gitlab-mr-create`
 

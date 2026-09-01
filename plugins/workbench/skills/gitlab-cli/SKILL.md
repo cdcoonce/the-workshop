@@ -6,7 +6,8 @@ description: >
   list, view, or update GitLab issues; push branches; review merge request diffs;
   approve or merge MRs; or inspect and retry pipelines and job logs. Requires the
   glab CLI installed and authenticated. For CREATING a merge request, use the
-  gitlab-mr-create skill instead.
+  gitlab-mr-create skill instead; for WATCHING CI to completion after a push or
+  merge, use the gitlab-ci-watch skill instead.
 ---
 
 # GitLab CLI (glab) Skill
@@ -34,7 +35,7 @@ Before pushing, opening an MR, or merging, read the repository's project instruc
 
 **Branch creation:** always `git fetch origin` and cut new branches from `origin/<integration-branch>` — never a bare `git checkout -b` from whatever HEAD happens to be, which drags unmerged commits into the MR and can bypass merge gates.
 
-**After pushing:** watch the pipeline for the pushed SHA and confirm every job is green before declaring the work done. Never walk away from a red pipeline.
+**After pushing:** confirm CI green with the `gitlab-ci-watch` skill, which backgrounds a watch on the pushed SHA and reports every job — do not hand-roll a poll loop here. Never walk away from a red pipeline; use this skill's commands to inspect and retry what the watcher reported.
 
 ## Core Workflows
 
@@ -77,11 +78,11 @@ Prefer `glab auth login`; reserve a raw token for non-interactive CI, and inject
 
 `glab ci list --sha` requires the **full** 40-character SHA — an abbreviated one matches nothing. `glab ci get` takes `--pipeline-id`, not `--sha`. Neither errors on the wrong argument; both return empty, which reads exactly like "still running" and can strand a watcher indefinitely.
 
-Confirm any pipeline-watching loop returns something on its **first** pass before trusting its silence.
+When querying interactively, confirm the first result is non-empty before trusting silence. (The `gitlab-ci-watch` script expands SHAs itself — another reason to use it instead of a hand-rolled loop.)
 
 ### `glab mr merge` does not always merge
 
-Two results that read as success and are not. **A 405 right after creating the MR is a timing artifact** — GitLab has not attached a head pipeline yet, and the MR already reports `mergeable` with no conflicts; wait ~30–45 seconds and retry rather than chasing permissions. **With a pipeline running, `--yes` sets auto-merge and returns immediately** (`✓ Will auto-merge`) instead of blocking until merged. Poll the MR's `state` before reporting it landed — taking the command's exit for a merge is how a queue of MRs gets declared done while several are still open.
+Two results that read as success and are not. **A 405 right after creating the MR is a timing artifact** — GitLab has not attached a head pipeline yet, and the MR already reports `mergeable` with no conflicts; wait ~30–45 seconds and retry rather than chasing permissions. **With a pipeline running, `--yes` sets auto-merge and returns immediately** (`✓ Will auto-merge`) instead of blocking until merged. Poll the MR's `state` before reporting it landed — taking the command's exit for a merge is how a queue of MRs gets declared done while several are still open. The `gitlab-ci-watch` skill's `mr` mode owns this poll: it waits out the merge, then watches the merge commit's pipeline.
 
 ### Multi-line descriptions with Markdown
 
