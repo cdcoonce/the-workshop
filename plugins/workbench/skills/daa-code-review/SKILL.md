@@ -37,7 +37,7 @@ For Mermaid diagrams, combine Claude's understanding with a web search for curre
 5. **Save report** - Write markdown report to `docs/code_reviews/{YYYY-MM-DD}_{file_name}.md` (create directory if needed)
 6. **Review fixes** - Present suggested fixes to user
 7. **Apply fixes** - With user approval; see [fix-workflow.md](references/fix-workflow.md) for approval modes and examples
-8. **Check README** - Before pushing, verify README.md reflects current changes (new features, modified APIs, updated dependencies, changed configuration)
+8. **Check README** - Before pushing, verify README.md reflects current changes (new features, modified APIs, updated dependencies, changed configuration). Structural doc work (a new how-to, a README past its landing bar, a doc in the wrong mode) is `repo-docs`'s job; hand it there rather than editing docs/ here
 
 ## Analysis Capabilities
 

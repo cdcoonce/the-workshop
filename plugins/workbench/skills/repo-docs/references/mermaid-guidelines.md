@@ -1,12 +1,12 @@
 # Mermaid Diagram Guidelines
 
-Mermaid diagrams are one of the most valuable parts of a good README. They make complex systems, data flows, and processes immediately understandable in a way that paragraphs of text cannot. Use them generously — if something involves flow, sequence, or relationships between components, a mermaid diagram is almost always better than a written description.
+Mermaid diagrams are one of the most valuable parts of a good reference set. They make complex systems, data flows, and processes immediately understandable in a way that paragraphs of text cannot. Diagrams live in `docs/reference/` (architecture, data flow, schema); the root README carries at most one small overview and links to the rest. If something involves flow, sequence, or relationships between components, a diagram in the doc that describes that machinery is almost always better than a written description.
 
 ## When to Use Mermaid Diagrams
 
 Include a diagram for any of these situations that apply to the project:
 
-- **System architecture** — how components connect (almost every README should have at least one)
+- **System architecture** — how components connect (`docs/reference/architecture.md` carries it; the README may keep one small overview)
 - **Data flow / pipelines** — how data moves through the system from source to destination
 - **Request/response sequences** — what happens when a user takes an action (`sequenceDiagram`)
 - **Decision trees / workflows** — multi-step processes with branches (e.g. "Adding a new X")
@@ -15,7 +15,7 @@ Include a diagram for any of these situations that apply to the project:
 - **State machines** — entities with multiple states and transitions
 - **UI layout** — dashboard/page structure showing how sections relate
 
-A typical comprehensive README should have **3-6 mermaid diagrams**. Complex projects (data pipelines, multi-service systems) might have **6-10+**. Don't hold back — if a diagram would help someone understand something, include it.
+A reference set for a typical project has **3-6 diagrams** across its docs. Complex projects (data pipelines, multi-service systems) might have **6-10+**. Each earns its place: if a diagram would help someone understand something, include it in the doc that describes that machinery.
 
 ## Best Practices
 
@@ -109,3 +109,13 @@ permanent check.
 1. Architecture diagram — how the CLI interacts with external systems
 2. Command flow — what happens when key commands are run
 3. Configuration resolution — how config is loaded from files, env vars, and defaults
+
+---
+
+## Without node
+
+The validation harness needs node and jsdom. When neither is available (a fresh
+machine, Codex, Cortex), still write the diagram. State in the change description
+that the diagram is unvalidated and name the harness so the next person with node
+can run it. Never block a doc on a missing toolchain, and never ask the user to
+install node to finish a doc.

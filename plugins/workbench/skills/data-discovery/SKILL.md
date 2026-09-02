@@ -14,6 +14,8 @@ description: >
 
 Generate a handoff-ready data discovery document from a Snowflake schema or dbt project.
 
+The document is reference-mode. When it is committed into a repository's `docs/`, its placement and provenance footer belong to `repo-docs`; this skill only produces the content.
+
 ## Required Reading
 
 1. Read [command.md](references/command.md) for the full workflow.
