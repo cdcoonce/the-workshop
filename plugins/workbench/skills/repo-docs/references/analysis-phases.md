@@ -1,6 +1,6 @@
 # Codebase Analysis Methodology Reference
 
-The deep version of the analysis in [analysis-method.md](analysis-method.md). Use it when a repo needs more than an orienting sweep — an unfamiliar codebase, a full doc set from scratch, or a README that has to be right about dependencies, commands, and environment variables.
+The deep version of the analysis in [workflow.md](workflow.md). Use it when a repo needs more than an orienting sweep — an unfamiliar codebase, a full doc set from scratch, or a README that has to be right about dependencies, commands, and environment variables.
 
 This methodology is tailored for **Python** projects in **analytics engineering** and **data engineering** — the common tools include uv, Polars, Streamlit, dagster, dbt, dlt, Snowflake, openpyxl, loguru, and pytest.
 
@@ -29,6 +29,17 @@ Apply tags inline next to each recorded fact:
 ```
 
 ---
+
+## Where each record lands
+
+| Phase            | Lands in                                                                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 metadata       | README Getting started and its `covers`; environment variables and commands in `docs/reference/conventions.md`                               |
+| 2 architecture   | `docs/reference/architecture.md` (one diagram) and `docs/reference/module-map.md`                                                            |
+| 3 modules        | `docs/reference/module-map.md` and `docs/reference/data-flow.md`; design notes go to `docs/explanation/<topic>.md`, never into a reference doc |
+| 4 infrastructure | `docs/reference/conventions.md` (test markers, CI); failure symptoms become `docs/how-to/troubleshoot-<area>.md`, never a README table       |
+
+Mentions of "the README" in the phases below predate the landing-page rule; read them as the doc named in this table.
 
 ## Phase 1: Project Metadata Scan
 
@@ -652,7 +663,7 @@ Common data engineering troubleshooting categories to look for:
 
 ### Phase 4 Record Template
 
-```markdown
+````markdown
 ## Phase 4 Record — Supporting Infrastructure
 
 ### Test-to-Module Mapping
@@ -697,7 +708,7 @@ BaseError
 | Error message / symptom | Cause | Resolution |
 |---|---|---|
 | | | |
-```
+````
 
 ---
 

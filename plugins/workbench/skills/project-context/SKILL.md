@@ -10,7 +10,7 @@ description: >
 
 # Project Context Generator
 
-Create or update `.claude/docs/project.md` — the concise project reference that Claude loads every conversation. Unlike a README (written for humans), project.md is written for Claude: dense, factual, no marketing prose.
+Create or update `.claude/docs/project.md` — the concise project reference that Claude loads every conversation. Unlike a README (written for humans), project.md is written for Claude: dense, factual, no marketing prose. The human-facing README and `docs/` belong to `repo-docs`; this skill links to them and never writes them.
 
 ## Why this skill exists
 
