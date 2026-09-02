@@ -45,7 +45,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/prd-to-plan` | `workbench` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. |
 | `/project-context` | `workbench` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. |
 | `/react-ui-ux` | `workbench` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. |
-| `/repo-reference-docs` | `workbench` | Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). |
+| `/repo-docs` | `workbench` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
 | `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/setup-pre-commit` | `workbench` | Set up pre-commit hooks for the current repo. |
@@ -309,11 +309,11 @@ Generate or update the `.claude/docs/project.md` file that gives Claude project-
 
 Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. Use when building or editing React components, pages, or layouts (.tsx/.jsx), especially new UI generation in Tailwind/shadcn/Framer-Motion projects.
 
-### `/repo-reference-docs`
+### `/repo-docs`
 
 *`workbench` plugin*
 
-Create and maintain a repository's human-readable documentation — the root README.md front door and, when the repo warrants it, a deep reference set under docs/reference/ (architecture, module map, data flow, conventions). Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", or wants deep repo documentation, an architecture doc, a "where does X live" module map, a data-flow write-up, or a staleness check of existing docs against the code. Not for the Claude-facing project.md (use project-context).
+Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", wants a runbook, how-to guide, operations guide, tutorial, architecture doc, module map, data-flow write-up, or a "where does X live" doc, asks which kind of doc something is or whether a page is a how-to or reference, wants docs restructured or migrated under docs/, or wants a staleness or link check of existing docs against the code. Not for the Claude-facing project.md (use project-context) or docs/plans/ (use prd-to-plan).
 
 ### `/request-refactor-plan`
 

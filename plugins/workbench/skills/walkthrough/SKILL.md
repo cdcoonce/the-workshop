@@ -165,13 +165,14 @@ The walkthrough skill is **stateful and resumable**. All state persists to `.wor
 
 1. **Visuals are not optional.** Every walkthrough MUST include at least one rendered HTML visual. Text-only explanations defeat the purpose of this skill.
 2. **Explain, don't critique.** This is not a review skill. The goal is understanding, not judgment. State what things ARE, not whether they're good or bad.
-3. **Let the user steer.** After the overview, the user chooses what to explore. Don't impose a fixed order.
-4. **Stay concrete.** Reference specific files, lines, tables, fields, sentences. Abstract explanations without grounding are useless.
-5. **Depth adapts to the artifact.** Don't over-explain an email. Don't under-explain a database schema.
-6. **Produce the summary.** Every walkthrough ends with a persistent markdown note saved to `.workbench/walkthrough/<slug>/summary.md`.
-7. **Use `AskUserQuestion` for navigation.** Don't ask "what do you want to explore?" as plain text. Use the tool with concrete options derived from the artifact's structure.
-8. **State is sacred.** Write `state.json` at every transition. A crash between sessions must not lose progress.
-9. **Resume gracefully.** On re-invocation, check for existing state and offer to continue. Never silently overwrite an in-progress walkthrough.
+3. **Ephemeral by design.** Output lives under gitignored `.workbench/walkthrough/`. When the user wants a committed tutorial file in the repo's `docs/tutorials/`, hand off to `repo-docs`; do not write into `docs/` from here.
+4. **Let the user steer.** After the overview, the user chooses what to explore. Don't impose a fixed order.
+5. **Stay concrete.** Reference specific files, lines, tables, fields, sentences. Abstract explanations without grounding are useless.
+6. **Depth adapts to the artifact.** Don't over-explain an email. Don't under-explain a database schema.
+7. **Produce the summary.** Every walkthrough ends with a persistent markdown note saved to `.workbench/walkthrough/<slug>/summary.md`.
+8. **Use `AskUserQuestion` for navigation.** Don't ask "what do you want to explore?" as plain text. Use the tool with concrete options derived from the artifact's structure.
+9. **State is sacred.** Write `state.json` at every transition. A crash between sessions must not lose progress.
+10. **Resume gracefully.** On re-invocation, check for existing state and offer to continue. Never silently overwrite an in-progress walkthrough.
 
 ## When to Stop
 
