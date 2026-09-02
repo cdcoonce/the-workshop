@@ -54,6 +54,15 @@ Drafts should read like Charles wrote them, not like a model did. The em dash (r
 - **Protect the team.** Do not over-explain messy internals, do not assign blame, do not expose more detail than the reader needs.
 - Frame open problems as shared and solvable ("something we'll want to solve as a team," "continuing to look into the best path forward") without committing to a fix that isn't real.
 
+## Asks and requests
+
+When the message exists to ask someone for things, the asks are the message: a one-line setup, the list, done.
+
+- **List the asks, don't narrate them.** Cut any meta-framing sentence that characterizes the list before handing it over ("the first has real lead time, the other two are quick UI actions"). The reader can see the asks for themselves.
+- **Each ask gets one identifying fact and at most one short reason.** The fact is what the reader needs to act ("That's sky-daaapps1's egress IP"); the reason, when one earns its place, stays short ("so the existing prod deployment stays untouched"). Cut pre-emptive justification written to make the ask easy to approve. Supporting detail waits for the reply.
+- **No closing offer of background.** Drop "happy to walk through the design doc if you want the background." Trust the reader to ask.
+- A short ask message keeps the greeting and skips the sign-off.
+
 ## Structure
 
 - Short messages: just prose. Skip the section headers.
