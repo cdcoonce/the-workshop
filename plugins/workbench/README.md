@@ -89,6 +89,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. |
 | `/worktree-audit` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
+| `/xlsx-template-row-edit` | Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. |
 
 ## Agents
 

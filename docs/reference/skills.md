@@ -90,6 +90,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/workshop-skill-creator` | `workshop-maintainer` | Creates and revises skills owned by The Workshop repository. |
 | `/worktree-audit` | `workbench` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
 | `/write-a-prd` | `workbench` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
+| `/xlsx-template-row-edit` | `workbench` | Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. |
 
 ## Full descriptions
 
@@ -578,3 +579,9 @@ Inventory git worktrees across one repo or a whole directory of repos and classi
 *`workbench` plugin*
 
 Use when user wants to write a PRD, create a product requirements document, or plan a new feature. Produces a PRD via user interview, codebase exploration, and module design, submitted as a GitHub issue.
+
+### `/xlsx-template-row-edit`
+
+*`workbench` plugin*
+
+Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. Use before changing any .xlsx template that code writes into, and before trusting tests that pass after such a change.
