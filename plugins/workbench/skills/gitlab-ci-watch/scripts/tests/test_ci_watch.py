@@ -133,8 +133,15 @@ def run_watch(
     )
 
 
-def pipeline(status: str, pid: int = 101) -> dict:
-    return {"id": pid, "status": status, "web_url": f"https://gitlab.com/p/{pid}"}
+def pipeline(status: str, pid: int = 101, ref: str = "dev") -> dict:
+    # Real listings always carry `ref`; the default matches the mr/branch-mode
+    # tests that watch dev, so only tests about ref selection name it.
+    return {
+        "id": pid,
+        "status": status,
+        "ref": ref,
+        "web_url": f"https://gitlab.com/p/{pid}",
+    }
 
 
 def job(name: str, status: str, allow_failure: bool = False) -> dict:
@@ -281,8 +288,8 @@ def test_malformed_pipeline_entry_is_a_skipped_tick(repo, fake_glab):
 
 
 def test_newest_pipeline_wins(repo, fake_glab):
-    """The API returns newest first; a retried pipeline's fresh run is the
-    verdict, not the old red one."""
+    """The API returns newest first; a retried pipeline's fresh run on the
+    same ref is the verdict, not the old red one."""
     script_responses(
         fake_glab,
         pipelines=[{"stdout": [pipeline("success", pid=202), pipeline("failed", pid=101)]}],
@@ -360,6 +367,125 @@ def test_sha_defaults_to_head(repo, fake_glab):
     result = run_watch(repo, fake_glab, "sha")
     assert result.returncode == 0, result.stderr
     assert any(f"sha={full}" in c[1] for c in calls(fake_glab))
+
+
+# --- multiple pipelines per SHA -----------------------------------------------
+
+
+def test_green_mr_pipeline_does_not_mask_red_branch_pipeline(repo, fake_glab):
+    """One SHA can carry an MR-head pipeline AND a branch pipeline. Latching
+    onto whichever the API lists first exits 0 on the green MR pipeline while
+    the branch pipeline is red — the verdict must span every ref's newest."""
+    script_responses(
+        fake_glab,
+        pipelines=[
+            {
+                "stdout": [
+                    pipeline("success", pid=202, ref="refs/merge-requests/5/head"),
+                    pipeline("failed", pid=101, ref="dev"),
+                ]
+            }
+        ],
+        jobs=[{"stdout": GREEN_JOBS}, {"stdout": GREEN_JOBS + [job("test", "failed")]}],
+    )
+    result = run_watch(repo, fake_glab, "sha")
+    assert result.returncode == 1
+    assert any("pipelines/101/jobs" in c[1] for c in calls(fake_glab))
+
+
+def test_two_green_pipelines_on_different_refs_exit_zero(repo, fake_glab):
+    script_responses(
+        fake_glab,
+        pipelines=[
+            {
+                "stdout": [
+                    pipeline("success", pid=202, ref="refs/merge-requests/5/head"),
+                    pipeline("success", pid=101, ref="dev"),
+                ]
+            }
+        ],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+    result = run_watch(repo, fake_glab, "sha")
+    assert result.returncode == 0, result.stderr
+
+
+def test_ref_flag_filters_out_other_refs_client_side(repo, fake_glab):
+    """--ref must hold even when the server ignores the query parameter: a
+    pipeline on another ref is never part of this ref's verdict."""
+    script_responses(
+        fake_glab,
+        pipelines=[
+            {
+                "stdout": [
+                    pipeline("success", pid=202, ref="refs/merge-requests/5/head"),
+                    pipeline("failed", pid=101, ref="dev"),
+                ]
+            }
+        ],
+        jobs=[{"stdout": GREEN_JOBS + [job("test", "failed")]}],
+    )
+    result = run_watch(repo, fake_glab, "sha", "--ref", "dev")
+    assert result.returncode == 1
+    fetched = [c[1] for c in calls(fake_glab) if "/jobs" in c[1]]
+    assert fetched and all("pipelines/101/jobs" in q for q in fetched)
+
+
+def test_sha_waits_for_every_refs_pipeline_to_reach_terminal(repo, fake_glab):
+    """A terminal green on one ref must not end the watch while another ref's
+    pipeline is still running — that running pipeline is the one that can
+    still turn the verdict red."""
+    mr_pipe = pipeline("success", pid=202, ref="refs/merge-requests/5/head")
+    script_responses(
+        fake_glab,
+        pipelines=[
+            {"stdout": [mr_pipe, pipeline("running", pid=101, ref="dev")]},
+            {"stdout": [mr_pipe, pipeline("failed", pid=101, ref="dev")]},
+        ],
+        jobs=[{"stdout": GREEN_JOBS}, {"stdout": GREEN_JOBS + [job("test", "failed")]}],
+    )
+    result = run_watch(repo, fake_glab, "sha")
+    assert result.returncode == 1
+    pipeline_queries = [c for c in calls(fake_glab) if "pipelines?sha=" in c[1]]
+    assert len(pipeline_queries) >= 2, "watcher must re-poll while any ref is pending"
+
+
+# --- pipeline mode ------------------------------------------------------------
+
+
+def test_pipeline_mode_watches_the_given_id(repo, fake_glab):
+    """A SHA with several pipelines needs a way to target exactly one — the
+    pipeline mode polls that id until terminal with the same job report."""
+    detail = dict(pipeline("running", pid=555), sha="e" * 40)
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": detail}, {"stdout": dict(detail, status="success")}],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+    result = run_watch(repo, fake_glab, "pipeline", "555")
+    assert result.returncode == 0, result.stderr
+    detail_queries = [c[1] for c in calls(fake_glab) if c[1].endswith("pipelines/555")]
+    assert len(detail_queries) >= 2, "watcher must poll the id until terminal"
+    for name in ("lint", "test", "build"):
+        assert name in result.stdout
+
+
+def test_pipeline_mode_red_job_exits_one(repo, fake_glab):
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": dict(pipeline("failed", pid=555), sha="e" * 40)}],
+        jobs=[{"stdout": GREEN_JOBS + [job("test", "failed")]}],
+    )
+    result = run_watch(repo, fake_glab, "pipeline", "555")
+    assert result.returncode == 1
+    assert "failed" in result.stdout
+
+
+def test_pipeline_mode_unknown_id_is_indeterminate(repo, fake_glab):
+    """A 404 on the pipeline id is "could not verify", never a red verdict."""
+    script_responses(fake_glab, pipelines=[{"exit": 1, "stderr": "404 Not Found\n"}])
+    result = run_watch(repo, fake_glab, "pipeline", "999")
+    assert result.returncode == 2
 
 
 # --- MR mode ------------------------------------------------------------------
@@ -468,7 +594,7 @@ def test_branch_ref_with_slash_is_urlencoded(repo, fake_glab, tmp_path):
     git(repo, "push", "-q", "origin", "main:release/1.0")
     script_responses(
         fake_glab,
-        pipelines=[{"stdout": [pipeline("success")]}],
+        pipelines=[{"stdout": [pipeline("success", ref="release/1.0")]}],
         jobs=[{"stdout": GREEN_JOBS}],
     )
     result = run_watch(
