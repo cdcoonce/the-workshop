@@ -36,11 +36,12 @@ repository, which does not contain this skill.
 
 ## Modes
 
-| Mode                       | When                                                           | Behavior                                                                                                    |
-| -------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `sha [COMMIT] [--ref REF]` | after any push                                                 | Watches pipelines for the commit (default `HEAD`), expanded to the full 40-char SHA                         |
-| `mr IID`                   | after `glab mr merge` did not provably merge (405, auto-merge) | Polls the MR state, bails loudly if it is closed, then watches the merge commit on the target branch        |
-| `branch NAME`              | post-merge integration check                                   | Resolves the **remote** head via `git ls-remote` (the local clone may be behind) and watches it on that ref |
+| Mode                       | When                                                               | Behavior                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sha [COMMIT] [--ref REF]` | after any push                                                     | Watches **every** pipeline for the commit (default `HEAD`, expanded to the full 40-char SHA) — newest per ref — and is green only when all of them are |
+| `mr IID`                   | after `glab mr merge` did not provably merge (405, auto-merge)     | Polls the MR state, bails loudly if it is closed, then watches the merge commit on the target branch                                                   |
+| `branch NAME`              | post-merge integration check                                       | Resolves the **remote** head via `git ls-remote` (the local clone may be behind) and watches it on that ref                                            |
+| `pipeline ID`              | one specific pipeline is the question (e.g. a SHA carries several) | Watches that pipeline id until terminal, with the same per-job report and exit contract                                                                |
 
 Common flags — placed **after** the mode, not before it: `--remote NAME`
 (default `origin`), `--project GROUP/PROJECT` (override when the remote URL
@@ -73,7 +74,11 @@ job listings paginate past 100 jobs and include trigger jobs (bridges), so a
 red downstream pipeline cannot pass as green; a pipeline stuck on a manual
 job terminates the watch instead of holding it for the full timeout; on a
 merged MR the merge commit is watched (the squash commit only when the merge
-fast-forwarded), with a fresh timeout budget for the post-merge watch.
+fast-forwarded), with a fresh timeout budget for the post-merge watch; a SHA
+carrying both an MR-head pipeline and a branch pipeline is judged across every
+ref's newest pipeline, with `--ref` enforced on the response as well as the
+query — a green MR pipeline cannot mask a red branch pipeline on the same
+commit (a retried run on the same ref still supersedes the old one).
 
 ## Relaying the result
 
