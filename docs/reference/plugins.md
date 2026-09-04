@@ -17,7 +17,7 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
 | **`workbench`** | `6.2.0` | 72 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `2.1.1` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workshop-maintainer`** | `2.1.2` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 
 ## Details
 
@@ -111,7 +111,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*v2.1.1 · `plugins/workshop-maintainer`*
+*v2.1.2 · `plugins/workshop-maintainer`*
 
 Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries
 

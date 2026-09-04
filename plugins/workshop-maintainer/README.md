@@ -20,7 +20,7 @@ Tools for auditing and maintaining The Workshop's skills, plugins, and distribut
 | `/land-skill-candidate` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. |
 | `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
 | `/skill-inventory` | Audits agent skills and their package boundaries. |
-| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. |
+| `/sync-gitlab-dev` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
 | `/workshop-skill-creator` | Creates and revises skills owned by The Workshop repository. |
 
 ## Agents

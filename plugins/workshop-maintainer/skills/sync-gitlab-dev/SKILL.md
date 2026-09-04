@@ -3,7 +3,7 @@ name: sync-gitlab-dev
 description: >
   Push this repo's GitHub dev to GitLab as a reviewable merge request into
   GitLab dev, since GitLab is a manually-updated downstream copy (no
-  auto-mirror bot) with its own 1-approval dev gate. Use when GitHub dev or
+  auto-mirror bot) whose dev MRs merge on CI green. Use when GitHub dev or
   main has moved and GitLab hasn't been updated yet, or when the user asks to
   sync, push, or update GitLab for the-workshop.
 ---
@@ -14,7 +14,7 @@ GitHub is this repo's own integration point and is untouched by this skill.
 GitLab is a separate downstream copy, updated only when asked — this skill
 does that update the right way: through a branch and an MR, never a direct
 push to GitLab `dev`, because a direct push (even by a Maintainer) bypasses
-the GitLab approval rule entirely. That happened once by mistake; this skill
+the MR-and-CI gate entirely. That happened once by mistake; this skill
 exists so it doesn't happen again.
 
 ## Repository Guard
@@ -79,9 +79,10 @@ the `origin/dev` SHA it carries.
 
 ## 6. Report
 
-State the MR URL, that it needs 1 approval per the GitLab approval rule
-before merge, and that `dev` → `main` promotion on GitLab is a separate,
-later step this skill does not perform.
+State the MR URL, that it is mergeable once CI is green (dev-targeted MRs
+need no approval), and that `dev` → `main` promotion on GitLab — the step
+that carries the 1-approval gate — is a separate, later step this skill
+does not perform.
 
 ## Boundaries
 
