@@ -55,7 +55,7 @@
     },
     {
       "name": "workshop-maintainer",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "description": "Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries",
       "source": "./plugins/workshop-maintainer"
     }

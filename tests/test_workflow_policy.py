@@ -30,7 +30,8 @@ def test_workshop_declares_dev_first_promotion_path() -> None:
     assert "Promote `dev` → `main`" in instructions
     assert "never push to it directly" in instructions
     assert "no longer kept in sync by an automated mirror job" in instructions
-    assert "1 approval required" in instructions
+    assert "mergeable once CI is green — no approval required" in instructions
+    assert "requires 1 approval before merge" in instructions
 
 
 def test_router_requires_policy_resolution_and_afk_mode() -> None:

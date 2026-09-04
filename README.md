@@ -182,7 +182,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
 | **`workbench`** | `6.2.0` | 72 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `2.1.1` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workshop-maintainer`** | `2.1.2` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, what preset-specific overrides to layer on top, and the `conventions` shown above. See the [presets reference](docs/reference/presets.md) for the skills, agents, and hooks each one ships.
@@ -238,7 +238,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/skill-inventory` | `workshop-maintainer` | Audits agent skills and their package boundaries. |
 | `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
 | `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
-| `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. |
+| `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
 | `/tdd` | `workbench` | Test-driven development with red-green-refactor loop. |
 | `/transcript-notes` | `workbench` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
 | `/triage-issue` | `workbench` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
