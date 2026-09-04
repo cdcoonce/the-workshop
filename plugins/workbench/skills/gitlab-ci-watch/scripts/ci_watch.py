@@ -2,9 +2,10 @@
 """Watch GitLab CI until terminal and report per-job status.
 
 Modes:
-  ci_watch.py sha [SHA]      watch pipelines for a pushed commit (default HEAD)
+  ci_watch.py sha [SHA]      watch every pipeline for a pushed commit (default HEAD)
   ci_watch.py mr IID         poll an MR until merged, then watch the merge commit
   ci_watch.py branch NAME    watch the remote head of an integration branch
+  ci_watch.py pipeline ID    watch one specific pipeline until terminal
 
 Exit contract (the verdict a session must relay, per verify-ci-green):
   0  pipeline succeeded AND every job green
@@ -162,6 +163,33 @@ def report(project: str, pipe: dict, sha: str, interval: float) -> int:
     return INDETERMINATE
 
 
+def newest_per_ref(data: list, ref: str | None) -> list[dict] | None:
+    """Select the pipelines whose verdicts matter, in listing order.
+
+    One SHA can carry several pipelines at once — an MR-head pipeline and a
+    branch pipeline — and a green one on one ref must never stand in for a
+    red one on another, so every ref's newest pipeline (the API lists newest
+    first) is selected; a retried run still supersedes its predecessor on the
+    same ref. With `ref`, entries on other refs (or with no provable ref) are
+    dropped even if the server ignored the query parameter. A malformed entry
+    poisons the whole listing (None): selecting around noise could silently
+    drop the red pipeline.
+    """
+    selected: list[dict] = []
+    seen_refs: set[str | None] = set()
+    for pipe in data:
+        if not isinstance(pipe, dict) or "id" not in pipe:
+            return None
+        pipe_ref = pipe.get("ref")
+        if ref is not None and pipe_ref != ref:
+            continue
+        if pipe_ref in seen_refs:
+            continue
+        seen_refs.add(pipe_ref)
+        selected.append(pipe)
+    return selected
+
+
 def watch_pipeline(
     project: str, sha: str, ref: str | None, interval: float, deadline: float
 ) -> int:
@@ -169,41 +197,73 @@ def watch_pipeline(
     if ref:
         query += f"&ref={urllib.parse.quote(ref, safe='')}"
     failures = 0
-    last_status: str | None = None
+    last_status: dict[int, str] = {}
+    waiting_announced = False
     while True:
         if time.time() > deadline:
             say(f"timed out waiting on a terminal pipeline for {sha}")
             return INDETERMINATE
         data = glab_api(query)
-        if not isinstance(data, list):
+        pipes = newest_per_ref(data, ref) if isinstance(data, list) else None
+        if pipes is None:
             failures += 1
             if failures >= MAX_CONSECUTIVE_FAILURES:
                 say(f"{failures} consecutive API failures — giving up, re-query needed")
                 return INDETERMINATE
             time.sleep(interval)
             continue
-        if not data:
-            failures = 0
-            if last_status is None:
-                say(f"no pipeline for {sha} yet — waiting")
-                last_status = "absent"
+        failures = 0
+        if not pipes:
+            if not waiting_announced:
+                target = f"{sha} on {ref}" if ref else sha
+                say(f"no pipeline for {target} yet — waiting")
+                waiting_announced = True
             time.sleep(interval)
             continue
-        pipe = data[0]
-        if not isinstance(pipe, dict) or "id" not in pipe:
+        for pipe in pipes:
+            status = pipe.get("status", "unknown")
+            if last_status.get(pipe["id"]) != status:
+                say(f"pipeline {pipe['id']} ({pipe.get('ref', '?')}): {status}")
+                last_status[pipe["id"]] = status
+        if any(pipe.get("status") in PENDING_STATUSES for pipe in pipes):
+            time.sleep(interval)
+            continue
+        if len(pipes) > 1:
+            say(f"{len(pipes)} pipelines for {sha} — every one is part of the verdict")
+        verdicts = [report(project, pipe, sha, interval) for pipe in pipes]
+        if RED in verdicts:
+            return RED
+        if INDETERMINATE in verdicts:
+            return INDETERMINATE
+        return GREEN
+
+
+def watch_pipeline_by_id(
+    project: str, pipeline_id: str, interval: float, deadline: float
+) -> int:
+    """Watch one specific pipeline — the direct escape hatch when a SHA
+    carries several pipelines and exactly one of them is the question."""
+    failures = 0
+    last_status: str | None = None
+    while True:
+        if time.time() > deadline:
+            say(f"timed out waiting on pipeline {pipeline_id} to reach a terminal state")
+            return INDETERMINATE
+        data = glab_api(f"projects/{project}/pipelines/{pipeline_id}")
+        if not isinstance(data, dict) or "id" not in data:
             failures += 1
             if failures >= MAX_CONSECUTIVE_FAILURES:
-                say("API keeps returning malformed pipelines — giving up, re-query needed")
+                say(f"{failures} consecutive API failures — giving up, re-query needed")
                 return INDETERMINATE
             time.sleep(interval)
             continue
         failures = 0
-        status = pipe.get("status", "unknown")
+        status = data.get("status", "unknown")
         if status != last_status:
-            say(f"pipeline {pipe['id']}: {status}")
+            say(f"pipeline {pipeline_id}: {status}")
             last_status = status
         if status not in PENDING_STATUSES:
-            return report(project, pipe, sha, interval)
+            return report(project, data, data.get("sha", "?"), interval)
         time.sleep(interval)
 
 
@@ -282,6 +342,10 @@ def main() -> int:
         "branch", parents=[common], help="watch the remote head of a branch"
     )
     branch_cmd.add_argument("name")
+    pipeline_cmd = sub.add_parser(
+        "pipeline", parents=[common], help="watch one specific pipeline id"
+    )
+    pipeline_cmd.add_argument("id")
     args = parser.parse_args()
 
     project = resolve_project(args.remote, args.project)
@@ -290,6 +354,8 @@ def main() -> int:
         return watch_pipeline(project, resolve_sha(args.commit), args.ref, args.interval, deadline)
     if args.mode == "mr":
         return watch_mr(project, args.iid, args.interval, args.timeout)
+    if args.mode == "pipeline":
+        return watch_pipeline_by_id(project, args.id, args.interval, deadline)
     head = resolve_branch_head(args.remote, args.name)
     return watch_pipeline(project, head, args.name, args.interval, deadline)
 
