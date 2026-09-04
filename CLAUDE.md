@@ -118,10 +118,10 @@ This repo **integrates on GitHub**.
 
 GitLab is no longer kept in sync by an automated mirror job — `git push gitlab
 <branch>` by hand when an update is wanted, there is no scheduled or
-push-triggered sync. Once pushed, GitLab-side promotion mirrors the standard
-work-repo pattern used elsewhere: branch → MR → `dev` (1 approval required,
-enforced by a GitLab approval rule scoped to the `dev` protected branch), then
-`dev` → `main` is a solo CI-green merge — no extra approval gate. GitLab CI
+push-triggered sync. Once pushed, GitLab-side promotion runs branch → MR →
+`dev`, mergeable once CI is green — no approval required — then `dev` → `main`
+requires 1 approval before merge (a GitLab approval rule on the `main`
+protected branch carries the only approval gate). GitLab CI
 (`.gitlab-ci.yml`) runs the same `make test` gate on `dev`, `main`, and every
 merge request.
 

@@ -53,7 +53,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/skill-inventory` | `workshop-maintainer` | Audits agent skills and their package boundaries. |
 | `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
 | `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
-| `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. |
+| `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
 | `/tdd` | `workbench` | Test-driven development with red-green-refactor loop. |
 | `/transcript-notes` | `workbench` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
 | `/triage-issue` | `workbench` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
@@ -361,7 +361,7 @@ Use before acting on any recorded artifact — an issue, a review finding, a "do
 
 *`workshop-maintainer` plugin*
 
-Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) with its own 1-approval dev gate. Use when GitHub dev or main has moved and GitLab hasn't been updated yet, or when the user asks to sync, push, or update GitLab for the-workshop.
+Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. Use when GitHub dev or main has moved and GitLab hasn't been updated yet, or when the user asks to sync, push, or update GitLab for the-workshop.
 
 ### `/tdd`
 
