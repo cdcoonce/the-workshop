@@ -246,6 +246,162 @@ def test_no_pipeline_yet_keeps_polling(repo, fake_glab):
     assert result.returncode == 0, result.stderr
 
 
+# --- refs that can never produce a pipeline -----------------------------------
+
+MR_ONLY_WORKFLOW = """\
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+lint:
+  script:
+    - echo lint
+"""
+
+
+def on_branch(repo: Path, name: str, ci_yaml: str | None = None) -> None:
+    """Check out a branch, optionally writing a .gitlab-ci.yml first."""
+    if ci_yaml is not None:
+        (repo / ".gitlab-ci.yml").write_text(ci_yaml)
+        git(repo, "add", ".gitlab-ci.yml")
+        git(repo, "commit", "-q", "-m", "ci")
+    git(repo, "checkout", "-q", "-b", name)
+
+
+def test_unreachable_ref_exits_indeterminate_instead_of_waiting(repo, fake_glab):
+    """workflow.rules that cannot match a branch push is not "still pending".
+
+    A feature-branch push under MR-only rules creates no pipeline at all, and
+    the watcher used to print the same "waiting" line it prints for a queued
+    pipeline, then burn its full timeout. Waiting forever and waiting briefly
+    must not look identical.
+    """
+    on_branch(repo, "feature/x", MR_ONLY_WORKFLOW)
+    script_responses(fake_glab, pipelines=[{"stdout": []}])
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 2, result.stdout
+    assert "workflow.rules" in result.stdout
+    assert "feature/x" in result.stdout
+
+
+def test_ref_the_rules_allow_keeps_polling(repo, fake_glab):
+    """The same config on dev must behave exactly as before."""
+    on_branch(repo, "dev", MR_ONLY_WORKFLOW)
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": []}, {"stdout": [pipeline("success")]}],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_pipeline_arriving_late_is_never_called_unreachable(repo, fake_glab):
+    """Guards the MR-creation race.
+
+    A feature branch with an open MR *does* get a pipeline, so an empty first
+    poll is a creation race, not an unreachable ref. Concluding on the first
+    empty response would turn that race into a false verdict.
+    """
+    on_branch(repo, "feature/x", MR_ONLY_WORKFLOW)
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": []}, {"stdout": [pipeline("success", ref="feature/x")]}],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_no_workflow_block_keeps_polling(repo, fake_glab):
+    """No workflow gate means branch pipelines run — no opinion to offer.
+
+    Stays empty past ``UNREACHABLE_CONFIRM_POLLS`` on purpose: handing back a
+    pipeline on the second poll would let this pass without the detector ever
+    running, which is exactly how it passed while the evaluator wrongly called
+    a missing workflow block an empty rule set.
+    """
+    on_branch(repo, "feature/x", "lint:\n  script:\n    - echo lint\n")
+    script_responses(
+        fake_glab,
+        pipelines=[
+            *({"stdout": []},) * (ci_watch.UNREACHABLE_CONFIRM_POLLS + 1),
+            {"stdout": [pipeline("success", ref="feature/x")]},
+        ],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_rules_it_cannot_evaluate_keep_polling(repo, fake_glab):
+    """Fail open: an unparsed rule must never become a confident verdict."""
+    on_branch(
+        repo,
+        "feature/x",
+        'workflow:\n  rules:\n    - if: $CI_COMMIT_BRANCH =~ /^feature/\n',
+    )
+    script_responses(
+        fake_glab,
+        pipelines=[
+            *({"stdout": []},) * (ci_watch.UNREACHABLE_CONFIRM_POLLS + 1),
+            {"stdout": [pipeline("success", ref="feature/x")]},
+        ],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_ci_config_without_a_workflow_block_yields_no_opinion(tmp_path):
+    """A .gitlab-ci.yml with no `workflow:` does not restrict branch pipelines.
+
+    Most repos look like this, so reading "no workflow block" as "no rules
+    matched" would call every one of them unreachable.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text("lint:\n  script:\n    - echo lint\n")
+
+    assert ci_watch.branch_pipeline_reachable(tmp_path, "feature/x") is None
+
+
+def test_absent_ci_config_yields_no_opinion(tmp_path):
+    assert ci_watch.branch_pipeline_reachable(tmp_path, "feature/x") is None
+
+
+@pytest.mark.parametrize(
+    "rules,ref,expected",
+    [
+        (['- if: $CI_COMMIT_BRANCH == "dev"'], "dev", True),
+        (['- if: $CI_COMMIT_BRANCH == "dev"'], "feature/x", False),
+        (["- if: $CI_COMMIT_BRANCH"], "anything", True),
+        (["- if: $CI_COMMIT_TAG"], "feature/x", False),
+        (['- if: $CI_PIPELINE_SOURCE == "merge_request_event"'], "feature/x", False),
+        (['- if: $CI_PIPELINE_SOURCE == "push"'], "feature/x", True),
+        (["- if: $CI_COMMIT_BRANCH\n      when: never"], "feature/x", False),
+        (['- if: $CI_COMMIT_BRANCH =~ /^feat/'], "feature/x", None),
+        (['- if: $CUSTOM_VAR == "1"'], "feature/x", None),
+    ],
+)
+def test_branch_pipeline_reachability(tmp_path, rules, ref, expected):
+    """First matching rule decides; anything unrecognised yields no opinion."""
+    body = "workflow:\n  rules:\n" + "\n".join(f"    {r}" for r in rules) + "\n"
+    (tmp_path / ".gitlab-ci.yml").write_text(body)
+
+    assert ci_watch.branch_pipeline_reachable(tmp_path, ref) is expected
+
+
 def test_jobs_fetch_failure_marks_requery_needed(repo, fake_glab):
     """Per-job green unverified is not success: report the roll-up, mark the
     gap, exit indeterminate."""
