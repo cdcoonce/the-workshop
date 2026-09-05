@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+from pathlib import Path
 from typing import NoReturn
 
 GREEN = 0
@@ -47,6 +48,10 @@ PENDING_STATUSES = {
 }
 RED_STATUSES = {"failed", "canceled"}
 MAX_CONSECUTIVE_FAILURES = 15
+# An empty pipeline list is ambiguous: a ref the rules exclude looks exactly
+# like one whose pipeline has not been created yet. Confirm across several
+# polls so an open MR's pipeline arriving late is never called unreachable.
+UNREACHABLE_CONFIRM_POLLS = 3
 JOB_FETCH_RETRIES = 3
 MAX_JOB_PAGES = 10
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -190,6 +195,147 @@ def newest_per_ref(data: list, ref: str | None) -> list[dict] | None:
     return selected
 
 
+def _workflow_rules(root: Path) -> list[tuple[str, str]] | None:
+    """``workflow.rules`` from .gitlab-ci.yml as (if-expression, when) pairs.
+
+    Deliberately a small line scanner rather than a YAML dependency: this
+    script is stdlib-only and invoked as plain ``python3``. Anything it cannot
+    read confidently returns None, which the caller treats as "no opinion".
+    """
+    path = root / ".gitlab-ci.yml"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+
+    body: list[str] = []
+    inside = False
+    for line in lines:
+        if not inside:
+            if line.rstrip() == "workflow:":
+                inside = True
+            continue
+        if line.strip() and not line.startswith((" ", "\t")):
+            break  # dedented back to a new top-level key
+        body.append(line)
+    if not inside:
+        return None  # no workflow gate: branch pipelines are not restricted
+
+    rules: list[tuple[str, str]] = []
+    in_rules = False
+    for line in body:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "rules:":
+            in_rules = True
+            continue
+        if not in_rules:
+            continue
+        if stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if not item.startswith("if:"):
+                return None  # a rule shape this scanner does not model
+            rules.append((item[len("if:"):].strip(), "on_success"))
+        elif stripped.startswith("when:") and rules:
+            expression, _ = rules[-1]
+            rules[-1] = (expression, stripped[len("when:"):].strip())
+        elif stripped.startswith("if:") and rules:
+            return None  # continuation shape not modelled
+    return rules or None
+
+
+def _atom_matches_branch_push(atom: str, ref: str) -> bool | None:
+    """Evaluate one ``if:`` atom against a branch pipeline on ``ref``."""
+    atom = atom.strip().strip("()").strip()
+    equality = re.match(
+        r'^\$(\w+)\s*(==|!=)\s*[\'"]([^\'"]*)[\'"]$', atom
+    )
+    if equality:
+        name, operator, value = equality.groups()
+        if name == "CI_COMMIT_BRANCH":
+            actual: str | None = ref
+        elif name == "CI_PIPELINE_SOURCE":
+            actual = "push"
+        elif name in {"CI_COMMIT_TAG", "CI_MERGE_REQUEST_IID"}:
+            actual = None
+        else:
+            return None
+        result = (actual == value) if operator == "==" else (actual != value)
+        return result
+    bare = re.match(r"^\$(\w+)$", atom)
+    if bare:
+        name = bare.group(1)
+        if name == "CI_COMMIT_BRANCH":
+            return True
+        if name in {"CI_COMMIT_TAG", "CI_MERGE_REQUEST_IID", "CI_OPEN_MERGE_REQUESTS"}:
+            # A tag ref is not this ref; MR variables are absent on a branch
+            # push. CI_OPEN_MERGE_REQUESTS is unknowable from here, but it only
+            # ever appears in suppression rules, so treating it as absent
+            # cannot turn a reachable ref into an unreachable verdict.
+            return False
+        return None
+    return None
+
+
+def _expression_matches_branch_push(expression: str, ref: str) -> bool | None:
+    """Evaluate an ``if:`` expression; None whenever any atom is unmodelled."""
+    if "||" in expression:
+        parts = [_atom_matches_branch_push(a, ref) for a in expression.split("||")]
+        if None in parts:
+            return None
+        return any(parts)
+    if "&&" in expression:
+        parts = [_atom_matches_branch_push(a, ref) for a in expression.split("&&")]
+        if None in parts:
+            return None
+        return all(parts)
+    return _atom_matches_branch_push(expression, ref)
+
+
+def branch_pipeline_reachable(root: Path, ref: str) -> bool | None:
+    """Can a plain push to ``ref`` create a pipeline at all?
+
+    True/False when ``workflow.rules`` answers it confidently, None when this
+    scanner cannot tell — the caller must keep waiting on None, because a
+    wrong "unreachable" is a false verdict and waiting is merely slow.
+    """
+    rules = _workflow_rules(root)
+    if rules is None:
+        return None
+    for expression, when in rules:
+        matched = _expression_matches_branch_push(expression, ref)
+        if matched is None:
+            return None  # cannot know which rule wins; offer no opinion
+        if matched:
+            return when != "never"  # first match decides
+    return False  # every rule evaluated and none matched
+
+
+def repo_root() -> Path | None:
+    code, out, _stderr = run(["git", "rev-parse", "--show-toplevel"])
+    return Path(out) if code == 0 and out else None
+
+
+def current_branch() -> str | None:
+    code, out, _stderr = run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    return out if code == 0 and out and out != "HEAD" else None
+
+
+def unreachable_reason(ref: str | None) -> str | None:
+    """Message explaining why ``ref`` can never produce a pipeline, or None."""
+    root = repo_root()
+    if root is None or not ref:
+        return None
+    if branch_pipeline_reachable(root, ref) is not False:
+        return None
+    return (
+        f"no pipeline will be created for {ref!r}: .gitlab-ci.yml workflow.rules "
+        "excludes a plain push to this ref. Opening a merge request is what runs "
+        "CI here — nothing to watch until then."
+    )
+
+
 def watch_pipeline(
     project: str, sha: str, ref: str | None, interval: float, deadline: float
 ) -> int:
@@ -199,6 +345,8 @@ def watch_pipeline(
     failures = 0
     last_status: dict[int, str] = {}
     waiting_announced = False
+    empty_polls = 0
+    rules_ref = ref or current_branch()
     while True:
         if time.time() > deadline:
             say(f"timed out waiting on a terminal pipeline for {sha}")
@@ -214,12 +362,19 @@ def watch_pipeline(
             continue
         failures = 0
         if not pipes:
+            empty_polls += 1
             if not waiting_announced:
                 target = f"{sha} on {ref}" if ref else sha
                 say(f"no pipeline for {target} yet — waiting")
                 waiting_announced = True
+            if empty_polls >= UNREACHABLE_CONFIRM_POLLS:
+                reason = unreachable_reason(rules_ref)
+                if reason:
+                    say(reason)
+                    return INDETERMINATE
             time.sleep(interval)
             continue
+        empty_polls = 0
         for pipe in pipes:
             status = pipe.get("status", "unknown")
             if last_status.get(pipe["id"]) != status:

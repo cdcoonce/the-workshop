@@ -58,9 +58,12 @@ The verdict is the exit code, never the report's tone:
   the work done; investigate the failing job.
 - **exit 2** — indeterminate: the watch could not start (wrong cwd, missing
   remote) or crashed, timeout, the MR was closed, the pipeline is blocked on
-  a manual job, repeated API failures, or per-job status could not be fetched
-  (the report says `re-query needed`). Treat as "not verified", never as a
-  pass — and never as a red pipeline.
+  a manual job, repeated API failures, per-job status could not be fetched
+  (the report says `re-query needed`), or **the ref cannot produce a pipeline
+  at all** — `.gitlab-ci.yml`'s `workflow.rules` excludes a plain push to it,
+  so there is nothing to wait for and opening a merge request is what runs CI
+  there. Treat as "not verified", never as a pass — and never as a red
+  pipeline.
 
 ## What the script already handles
 
@@ -72,7 +75,13 @@ forever); the project path is derived from the remote URL and passed
 explicitly, so glab's alphabetical multi-remote inference is never consulted;
 job listings paginate past 100 jobs and include trigger jobs (bridges), so a
 red downstream pipeline cannot pass as green; a pipeline stuck on a manual
-job terminates the watch instead of holding it for the full timeout; on a
+job terminates the watch instead of holding it for the full timeout; a ref
+whose `workflow.rules` cannot match a branch push ends the watch with that
+reason instead of printing the same "waiting" line a queued pipeline prints
+and then burning the full timeout — confirmed across several empty polls
+first, so an open MR's pipeline arriving late is never called unreachable,
+and any rule shape the check cannot evaluate confidently leaves the previous
+waiting behaviour exactly as it was; on a
 merged MR the merge commit is watched (the squash commit only when the merge
 fast-forwarded), with a fresh timeout budget for the post-merge watch; a SHA
 carrying both an MR-head pipeline and a branch pipeline is judged across every
