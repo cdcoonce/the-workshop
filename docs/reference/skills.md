@@ -37,21 +37,17 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
-| `/land-skill-candidate` | `workshop-maintainer` | Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. |
 | `/mr-merge-order` | `workbench` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. |
 | `/mr-review-fixes` | `workbench` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. |
-| `/persona-builder` | `workshop-maintainer` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
+| `/persona-builder` | `workbench` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
 | `/plan-ceo-review` | `workbench` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
-| `/prd-to-issues` | `workbench` | Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. |
-| `/prd-to-plan` | `workbench` | Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. |
+| `/prd-to-issues` | `workbench` | Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). |
 | `/project-context` | `workbench` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. |
 | `/react-ui-ux` | `workbench` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. |
 | `/repo-docs` | `workbench` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
 | `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
-| `/setup-pre-commit` | `workbench` | Set up pre-commit hooks for the current repo. |
 | `/shared-tree-safety` | `workbench` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
-| `/skill-inventory` | `workshop-maintainer` | Audits agent skills and their package boundaries. |
 | `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
 | `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
 | `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
@@ -64,7 +60,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-budget` | `workbench` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. |
 | `/vault-clickup-task-sync` | `workbench` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. |
 | `/vault-cold-read` | `workbench` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. |
-| `/vault-connect` | `workbench` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. |
+| `/vault-connect` | `workbench` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits, including a manual `--term` mode for finding or inserting the right wikilink for a note. |
 | `/vault-context-then-delegate` | `workbench` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. |
 | `/vault-debrief` | `workbench` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. |
 | `/vault-dispatch` | `workbench` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. |
@@ -76,7 +72,6 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-grill` | `workbench` | Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. |
 | `/vault-handoff` | `workbench` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. |
 | `/vault-init` | `workbench` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. |
-| `/vault-link` | `workbench` | Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. |
 | `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
 | `/vault-podcast` | `workbench` | Run Charles's vault (The Vault) /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes (deep-dive) or teach lesson workspaces (lesson). |
 | `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
@@ -263,12 +258,6 @@ Interview the user relentlessly about a plan or design until reaching shared und
 
 Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR.
 
-### `/land-skill-candidate`
-
-*`workshop-maintainer` plugin*
-
-Take an already-identified skill candidate — a named gap or improvement surfaced against a skill this repo owns, often from a /wrap-up session or similar review elsewhere — and ship it into The Workshop: locate the canonical source, apply the smallest fix, run the full gate sequence, and land it via branch to PR to dev on GitHub. Use when a user hands you a candidate (name, gap, evidence) and wants it built, not just drafted as a stub in reference/skills/drafts/.
-
 ### `/mr-merge-order`
 
 *`workbench` plugin*
@@ -283,7 +272,7 @@ Use when a user says an MR, PR, merge request, or pull request has review feedba
 
 ### `/persona-builder`
 
-*`workshop-maintainer` plugin*
+*`workbench` plugin*
 
 Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
 
@@ -297,13 +286,7 @@ CEO/founder-mode review that rethinks a plan to find the 10-star product. Use wh
 
 *`workbench` plugin*
 
-Break a PRD into independently-grabbable GitHub issues using tracer-bullet vertical slices, with executor-ready issue bodies an autonomous agent can build from directly. Use when user wants to convert a PRD to issues, create implementation tickets, or break down a PRD into work items.
-
-### `/prd-to-plan`
-
-*`workbench` plugin*
-
-Turn a PRD into a multi-phase implementation plan using tracer-bullet vertical slices, saved as a local Markdown file in docs/plans/. Use when user wants to break down a PRD, create an implementation plan, plan phases from a PRD, or mentions "tracer bullets".
+Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). Use when user wants to convert a PRD to issues, create implementation tickets, break down a PRD into work items, break down a PRD into an implementation plan, plan phases from a PRD, or mentions "tracer bullets".
 
 ### `/project-context`
 
@@ -321,7 +304,7 @@ Applies deliberate design taste to React UI generation — adjustable dials (var
 
 *`workbench` plugin*
 
-Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", wants a runbook, how-to guide, operations guide, tutorial, architecture doc, module map, data-flow write-up, or a "where does X live" doc, asks which kind of doc something is or whether a page is a how-to or reference, wants docs restructured or migrated under docs/, or wants a staleness or link check of existing docs against the code. Not for the Claude-facing project.md (use project-context) or docs/plans/ (use prd-to-plan).
+Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", wants a runbook, how-to guide, operations guide, tutorial, architecture doc, module map, data-flow write-up, or a "where does X live" doc, asks which kind of doc something is or whether a page is a how-to or reference, wants docs restructured or migrated under docs/, or wants a staleness or link check of existing docs against the code. Not for the Claude-facing project.md (use project-context) or docs/plans/ (use prd-to-issues --plan).
 
 ### `/request-refactor-plan`
 
@@ -335,23 +318,11 @@ Use when user wants to plan a refactor, create a refactoring RFC, break a refact
 
 Security code review for vulnerabilities with confidence-based reporting. Use when the user asks for "security review", "find vulnerabilities", "check for security issues", "audit security", "OWASP review", or to review code for injection, XSS, authentication, authorization, or cryptography issues.
 
-### `/setup-pre-commit`
-
-*`workbench` plugin*
-
-Set up pre-commit hooks for the current repo. Use when user wants to add pre-commit hooks, configure commit-time linting, formatting, type checking, or testing. Triggers on "pre-commit", "git hooks", "linting hooks", or /setup-pre-commit.
-
 ### `/shared-tree-safety`
 
 *`workbench` plugin*
 
 Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
-
-### `/skill-inventory`
-
-*`workshop-maintainer` plugin*
-
-Audits agent skills and their package boundaries. Use when the user asks to inventory skills, find duplicate or overlapping skills, consolidate skills, group capabilities, reorganize presets, or decide where a skill belongs.
 
 ### `/sql-deploy-precheck`
 
@@ -429,7 +400,7 @@ Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dis
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
+Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits, including a manual `--term` mode for finding or inserting the right wikilink for a note. Trigger when Charles invokes /connect, mentions /connect or --term, asks to find the right wikilink for something, or asks for this vault workflow by name.
 
 ### `/vault-context-then-delegate`
 
@@ -496,12 +467,6 @@ Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped 
 *`workbench` plugin*
 
 Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. Trigger when Charles invokes /vault-init, mentions /vault-init, or asks to create, bootstrap, or stand up a new vault for himself or someone else.
-
-### `/vault-link`
-
-*`workbench` plugin*
-
-Run Charles's vault (The Vault) /link helper to find notes and suggest or insert correct Obsidian wikilinks. Trigger when Charles invokes /link, mentions /link, or asks for this vault workflow by name.
 
 ### `/vault-mr-review-packet`
 

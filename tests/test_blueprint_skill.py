@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SLUG = "blueprint"
 SKILL_DIR = REPO_ROOT / "plugins" / "workbench" / "skills" / SLUG
 
-SIBLING_PLANNERS = ("brainstorm", "grill-me", "write-a-prd", "prd-to-plan")
+SIBLING_PLANNERS = ("brainstorm", "grill-me", "write-a-prd", "prd-to-issues")
 
 # The vault-linkage prose names Index headings that the vault's session-start
 # digest scrapes by exact name (DIGEST_BUCKETS). Both sides live in this repo,

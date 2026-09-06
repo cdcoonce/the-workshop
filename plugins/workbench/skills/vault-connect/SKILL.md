@@ -1,7 +1,7 @@
 ---
 name: vault-connect
 description: >
-  Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits. Trigger when Charles invokes /connect, mentions /connect, or asks for this vault workflow by name.
+  Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits, including a manual `--term` mode for finding or inserting the right wikilink for a note. Trigger when Charles invokes /connect, mentions /connect or --term, asks to find the right wikilink for something, or asks for this vault workflow by name.
 ---
 
 # Vault Connect

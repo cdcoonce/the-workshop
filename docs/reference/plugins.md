@@ -16,8 +16,8 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `6.7.0` | 74 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `2.1.2` | 7 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workbench`** | `7.0.0` | 72 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workshop-maintainer`** | `3.0.0` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 
 ## Details
 
@@ -91,7 +91,7 @@ Socratic thinking partner — sharp questions and decision-sharpening over answe
 
 ### `workbench`
 
-*v6.7.0 · `plugins/workbench`*
+*v7.0.0 · `plugins/workbench`*
 
 The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.
 
@@ -103,7 +103,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 - Conventional commits; stage explicitly, never git add .
 - Repo artifacts stay in-repo; machine-local skill output defaults to ~/.workshop/<skill>/ unless a destination is configured
 
-**Skills (74):** `adversarial-review`, `blueprint`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `data-discovery`, `dbt-expert`, `dbt-manifest-facts`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `drain-queue`, `drill-me`, `finish-branch`, `github-cli`, `gitlab-ci-watch`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `plan-ceo-review`, `prd-to-issues`, `prd-to-plan`, `project-context`, `react-ui-ux`, `repo-docs`, `request-refactor-plan`, `security-review`, `setup-pre-commit`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-cold-read`, `vault-connect`, `vault-context-then-delegate`, `vault-debrief`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-link`, `vault-mr-review-packet`, `vault-podcast`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`, `xlsx-template-row-edit`
+**Skills (72):** `adversarial-review`, `blueprint`, `brainstorm`, `chart-taste`, `commit`, `create-hook`, `daa-code-review`, `dagster-expert`, `data-discovery`, `dbt-expert`, `dbt-manifest-facts`, `design-an-interface`, `detector-teeth-check`, `dev-cycle`, `dignified-python`, `drain-queue`, `drill-me`, `finish-branch`, `github-cli`, `gitlab-ci-watch`, `gitlab-cli`, `gitlab-mr-create`, `gitlab-promotion-flow`, `grill-me`, `mr-merge-order`, `mr-review-fixes`, `persona-builder`, `plan-ceo-review`, `prd-to-issues`, `project-context`, `react-ui-ux`, `repo-docs`, `request-refactor-plan`, `security-review`, `shared-tree-safety`, `sql-deploy-precheck`, `stale-artifact-sweep`, `tdd`, `transcript-notes`, `triage-issue`, `triage-quarantine`, `using-workflow`, `vault-audit`, `vault-budget`, `vault-clickup-task-sync`, `vault-cold-read`, `vault-connect`, `vault-context-then-delegate`, `vault-debrief`, `vault-dispatch`, `vault-dump`, `vault-essay`, `vault-find`, `vault-fix-issue`, `vault-garden`, `vault-grill`, `vault-handoff`, `vault-init`, `vault-mr-review-packet`, `vault-podcast`, `vault-pulse`, `vault-recall`, `vault-standup`, `vault-sync`, `vault-teach`, `vault-wrap-up`, `vault-write`, `walkthrough`, `warehouse-sql-test-harness`, `worktree-audit`, `write-a-prd`, `xlsx-template-row-edit`
 
 **Agents (13):** `analysis-builder`, `api-builder`, `backend-builder`, `brag-spotter`, `code-reviewer`, `cross-linker`, `data-quality-reviewer`, `frontend-builder`, `people-profiler`, `pipeline-builder`, `security-reviewer`, `tdd-implementer`, `ux-reviewer`
 
@@ -111,7 +111,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 ### `workshop-maintainer`
 
-*v2.1.2 · `plugins/workshop-maintainer`*
+*v3.0.0 · `plugins/workshop-maintainer`*
 
 Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries
 
@@ -121,6 +121,6 @@ Tools for auditing and maintaining The Workshop's skills, plugins, and distribut
 - One plugin per slug — a second copy of a skill is a defect, not a distribution choice
 - Run `make stamp` after changing any component
 
-**Skills (7):** `add-the-workshop-hook`, `improve-skill`, `land-skill-candidate`, `persona-builder`, `skill-inventory`, `sync-gitlab-dev`, `workshop-skill-creator`
+**Skills (4):** `add-the-workshop-hook`, `improve-skill`, `sync-gitlab-dev`, `workshop-skill-creator`
 
 **Agents (6):** `qa-tester`, `skill-analyst`, `skill-builder`, `skill-reviewer`, `skill-writer`, `strategy`

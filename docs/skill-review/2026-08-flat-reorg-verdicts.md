@@ -36,8 +36,8 @@ never rules.
 | plan-ceo-review            | keep       | planning-shaping | 4 files; 2026-07-18                        | distinct from grill-me/adversarial-review                                                    |
 | prd-to-issues | keep (absorbs prd-to-plan) | planning-shaping | 1 file; 2026-07-25 | merged skill gains a `--plan` output mode; final slug decided in Phase 2 |
 | prd-to-plan | **consolidate-into-prd-to-issues** | n/a | 0 files; 2026-07-18 | near-verbatim shared slicing methodology; only output format differed |
-| project-context            | keep       | routing-infra    | 0 files; 2026-07-18                        | machine-facing; complementary to repo-reference-docs                                         |
-| repo-reference-docs        | keep       | daily-workflow   | 0 files; 2026-07-31                        | human-facing counterpart to project-context                                                  |
+| project-context            | keep       | routing-infra    | 0 files; 2026-07-18                        | machine-facing; complementary to repo-docs                                                   |
+| repo-docs                  | keep       | daily-workflow   | 0 files; 2026-07-31                        | human-facing counterpart to project-context; graded as `repo-reference-docs`, renamed in 846e158 |
 | request-refactor-plan      | keep       | planning-shaping | 0 files; 2026-07-23                        | refactor-specific framework; not generic PRD shaping                                         |
 | security-review            | keep       | quality-review   | 0 files; 2026-07-23                        | role boundary vs daa-code-review self-documented                                             |
 | setup-pre-commit           | **retire** | n/a              | 0 files ever; 2026-03-22                   | abandoned one-off predating the modern era; nothing references it                            |

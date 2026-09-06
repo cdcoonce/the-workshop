@@ -10,7 +10,7 @@ description: >
   "where does X live" doc, asks which kind of doc something is or whether a page is a
   how-to or reference, wants docs restructured or migrated under docs/, or wants a
   staleness or link check of existing docs against the code. Not for the Claude-facing
-  project.md (use project-context) or docs/plans/ (use prd-to-plan).
+  project.md (use project-context) or docs/plans/ (use prd-to-issues --plan).
 ---
 
 # Repo docs
@@ -37,19 +37,19 @@ format: [compass.md](references/compass.md).
 - Inside The Vault (a `.vault/vault.json` or `.vault-context` up the tree): stop. The
   vault has its own note rules.
 - `.claude/docs/project.md` belongs to `project-context`; `docs/plans/` to
-  `prd-to-plan`. Link to them, never write them.
+  `prd-to-issues --plan`. Link to them, never write them.
 - A conversational "teach me this repo" goes to `walkthrough` (ephemeral) or, where installed, `repo-crash-course` (persistent tutor). Write a tutorial file only when asked for one and the compass agrees the content serves study.
 
 ## Pick the job
 
-| Job                     | Do                                                                                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| README only             | The landing page per [readme-structure.md](references/readme-structure.md). Only when the ask was a README; a repo with nothing gets the next row.                                                   |
+| Job                     | Do                                                                                                                                                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| README only             | The landing page per [readme-structure.md](references/readme-structure.md). Only when the ask was a README; a repo with nothing gets the next row.                                                                                                              |
 | README + reference pass | The one grounded multi-doc pass: README plus `docs/reference/` from source, per [mode-reference.md](references/mode-reference.md). A repo with no docs and no named need starts here; a named need (a runbook, a why-question) is written first as one new doc. |
-| One new doc             | Compass the request, write from its mode guide, one file, from an identified need.                                                                                  |
-| Classify and fix        | Verdict on an existing doc plus exactly one next action, applied after approval.                                                                                    |
-| Migrate                 | Move a repo's existing docs into mode directories, one repo per MR: [workflow.md](references/workflow.md#migration).                                                |
-| Check                   | Read-only: `scripts/check_docs.py` from this skill's base directory. Exit 1 on any finding, so CI can gate on it.                                                   |
+| One new doc             | Compass the request, write from its mode guide, one file, from an identified need.                                                                                                                                                                              |
+| Classify and fix        | Verdict on an existing doc plus exactly one next action, applied after approval.                                                                                                                                                                                |
+| Migrate                 | Move a repo's existing docs into mode directories, one repo per MR: [workflow.md](references/workflow.md#migration).                                                                                                                                            |
+| Check                   | Read-only: `scripts/check_docs.py` from this skill's base directory. Exit 1 on any finding, so CI can gate on it.                                                                                                                                               |
 
 ## Workflow
 
@@ -87,4 +87,3 @@ format: [compass.md](references/compass.md).
 
 - `daa-code-review` checks that a README reflects a change; structural doc work comes here.
 - `data-discovery` produces a reference-mode document; placement under `docs/` and its footer are this skill's.
-

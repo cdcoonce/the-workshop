@@ -69,7 +69,7 @@ Same shape as the hub: grouped, introduced, linked.
 
 ## Process directories
 
-`docs/plans/` (prd-to-plan), `docs/archive/`, `docs/dev-cycle/`, code, security, and
+`docs/plans/` (prd-to-issues --plan), `docs/archive/`, `docs/dev-cycle/`, code, security, and
 MR review directories are not documentation in the Diátaxis sense. The skill never
 classifies, moves, or stamps them, and the checker skips them. Add repo-specific ones
 with `--exempt`.
