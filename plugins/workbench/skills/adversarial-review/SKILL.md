@@ -91,6 +91,18 @@ complete. Get the shape right:
 - ❌ A reproduction limit filed under one finding and nowhere else. Not being able
   to run it is a fact about your coverage, not about that finding.
 
+## When the work is one pull request
+
+The steps above run as written for a single reviewer. When a PR will merge without
+a second human, run them as 3-4 parallel lenses — each given one narrow lens, a
+`file:line` bar, and permission to return nothing — then send every finding to
+three refuters who default to refuted.
+It costs roughly 4-9 agents per PR, so say so before dispatching.
+[references/pr-lens-review.md](references/pr-lens-review.md) has the lens sets,
+the prompts, the inverted bias for credential findings, and the two rules that
+runs get wrong: freeze the tree before dispatch, and never report zero findings
+without checking the run journal that every lens actually returned.
+
 ## Not this skill
 
 - `plan-ceo-review` — challenges a plan **before** implementation. This runs after work claims to be done.
