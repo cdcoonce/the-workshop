@@ -27,7 +27,7 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 
 # Skills that produce or police repo documentation and must hand structural
 # doc work to repo-docs rather than teach their own layout.
-CONSUMERS = ("daa-code-review", "data-discovery", "prd-to-plan", "project-context", "walkthrough")
+CONSUMERS = ("daa-code-review", "data-discovery", "prd-to-issues", "project-context", "walkthrough")
 # Skills repo-docs must name as its own hand-offs (teach-me requests, the
 # Claude-facing project.md).
 HANDOFFS = ("walkthrough", "repo-crash-course", "project-context")

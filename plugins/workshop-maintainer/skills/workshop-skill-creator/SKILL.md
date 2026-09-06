@@ -20,7 +20,11 @@ workflow.
 
 - For benchmark-driven revision, invoke `improve-skill` and follow it.
 - For creation or ordinary revision, continue below.
-- For package reorganization or broad consolidation, run `skill-inventory` first.
+- For a pre-scoped candidate — target skill and evidence already in hand, from
+  `/wrap-up`, `improve-skill`, or an external review rather than a user
+  interview — take the intake path in [landing.md](references/landing.md). A
+  candidate with no target skill and no evidence is not ready to land; route
+  it back to the user or to `grill-me`.
 
 Before every change, perform a targeted inventory: locate related trigger phrases,
 adjacent capabilities, which plugin owns the slug, and any installed cache copies.

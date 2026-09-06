@@ -17,7 +17,7 @@ Decision records are explanation by alias and stay exactly where they are. The s
 
 
 
-Plans under `docs/plans/` are process files owned by `prd-to-plan`; the skill links to a plan's decisions section and never classifies it. Brainstorm write-ups are classified like any other doc.
+Plans under `docs/plans/` are process files owned by `prd-to-issues --plan`; the skill links to a plan's decisions section and never classifies it. Brainstorm write-ups are classified like any other doc.
 
 Explanation is the usual destination of an extraction. The paragraph in a reference doc that says why, and the digression in a tutorial, both move here; see [mode-reference.md](mode-reference.md) and [mode-tutorial.md](mode-tutorial.md) for what each of those modes keeps.
 
