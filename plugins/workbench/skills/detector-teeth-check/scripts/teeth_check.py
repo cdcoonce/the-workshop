@@ -7,7 +7,7 @@ re-runs the suite, and reports which tests — if any — went red. A mutant tha
 nothing catches names an untested property. A test that catches no mutant is
 carrying no weight.
 
-Three distinctions the tool exists to keep straight, because a hand-rolled
+Five distinctions the tool exists to keep straight, because a hand-rolled
 version of this loop gets them wrong:
 
 1. **An unapplied mutation is not a surviving mutation.** If the anchor text
@@ -24,6 +24,13 @@ version of this loop gets them wrong:
    with no ``FAILED`` line anywhere. That is the harness breaking, not an
    assertion catching the defect, so it is reported ``unscored`` rather than
    counted as a kill. Absence of a failure signal is never evidence of one.
+5. **Cached bytecode is not the code on disk.** CPython validates a ``.pyc``
+   against the source's byte size and its mtime truncated to whole seconds,
+   neither of which a same-length replacement written inside that second
+   disturbs — so the interpreter loads the old bytecode and the mutation never
+   runs. Every run purges the mutated module's cache and executes with
+   bytecode writing disabled, because a mutant that never executed is reported
+   as a survivor and reads exactly like a real gap.
 
 The source file is restored in a `finally`, so a crash mid-run cannot leave
 mutated code on disk.
@@ -33,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -134,8 +142,28 @@ def apply_mutation(text: str, find: str, replace: str) -> str:
     return text.replace(find, replace, 1)
 
 
+def _purge_cached_bytecode(path: Path) -> None:
+    """Drop cached bytecode for *path* so a mutation cannot run stale.
+
+    Only ``__pycache__`` entries for this exact module are removed, and only
+    files inside it — never the directory, never a sibling module's cache.
+    Bytecode is a regenerable artifact, so unlike a checkout this cannot
+    destroy work.
+    """
+    if path.suffix != ".py":
+        return
+    cache_dir = path.parent / "__pycache__"
+    if not cache_dir.is_dir():
+        return
+    for stale in cache_dir.glob(f"{path.stem}.*.pyc"):
+        stale.unlink(missing_ok=True)
+
+
 def _default_runner(cmd: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # Purging before the run is not enough on its own: without this, each run
+    # writes the cache the *next* row would have to survive.
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
     return proc.returncode, proc.stdout + proc.stderr
 
 
@@ -151,6 +179,12 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
     if spec.collect_command is not None:
         _, out = run(spec.collect_command)
         collected = parse_collected_tests(out)
+
+    # A cache left from an earlier aborted run can carry mutated bytecode into
+    # the baseline, where it passes unnoticed and every row after it is scored
+    # against code that is not on disk.
+    for mutant in spec.mutants:
+        _purge_cached_bytecode(mutant.path)
 
     code, out = run(spec.test_command)
     if code != 0:
@@ -188,11 +222,15 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
 
         try:
             mutant.path.write_text(mutated, encoding="utf-8")
+            _purge_cached_bytecode(mutant.path)
             code, out = run(spec.test_command)
         finally:
             # Restore before anything else can fail. A crash here would leave
             # deliberately-broken code in the working tree.
             mutant.path.write_text(original, encoding="utf-8")
+            # Then drop the cache again: bytecode built from the mutant would
+            # otherwise stay live and a *later* row would score this mutation.
+            _purge_cached_bytecode(mutant.path)
 
         if code == 0:
             results.append(MutantResult(mutant.label, "survived"))
