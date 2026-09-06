@@ -54,7 +54,7 @@ def test_skill_is_owned_by_workbench() -> None:
     twins = [
         p
         for p in REPO_ROOT.glob(f"plugins/*/skills/{SLUG}/SKILL.md")
-        if "worktrees" not in p.parts
+        if "worktrees" not in p.relative_to(REPO_ROOT).parts
     ]
     assert len(twins) == 1, f"slug {SLUG} shipped by {len(twins)} plugins"
 
