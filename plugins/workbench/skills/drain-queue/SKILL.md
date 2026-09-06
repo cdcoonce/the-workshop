@@ -27,6 +27,10 @@ group the overlaps. **Sequential is the default.** Run workers concurrently only
 you have enumerated as disjoint — eyeballing disjointness is how two workers end up in one
 file, and a worktree does not protect a file two workers both edit.
 
+Splitting a slice store-first (below) usually buys parallelism rather than spending it: the
+store primitive lands as one slice, and the two slices that read it — the feed and the
+consumer — no longer share a file. Enumerate the footprints after a split, not before.
+
 ## The loop, per issue
 
 **1. Gate the spec cold.** Dispatch a fresh reader using
@@ -68,6 +72,20 @@ cd <worktree> && <repo gate command> \
 
 Confirm the issue actually closed. A linked-issue keyword that silently failed to fire leaves
 the ticket open and the queue miscounted. The next issue starts from the newly fetched tip.
+
+## The store-first size lie
+
+The size lie that recurs is a slice that persists through a store API nobody opened. "Persist
+via the existing `ledger` public API." "Writes the plan file in the ledger's schema." The
+module is real and it imports fine; the write function the sentence leans on is not there. The
+slice is two slices, and it was budgeted as one.
+
+The budget line is the tell. "~1 unit · one module, one concern" describes the feature, not
+the footprint — nothing in the sentence is false, it is simply counting one layer. Detectors 5
+and 8 supply the evidence, the store's complete public surface and every dependency the
+behavior implies; detector 6 renders the verdict. The remedy is a re-split, not a rescope: the
+store primitive as its own slice with its schema pinned inline, then the consumer built
+against it.
 
 ## Iron rules
 

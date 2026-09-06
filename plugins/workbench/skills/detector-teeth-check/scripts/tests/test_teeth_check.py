@@ -25,6 +25,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from teeth_check import (  # noqa: E402
     BaselineNotGreen,
+    _default_runner,
     Mutation,
     Spec,
     apply_mutation,
@@ -347,3 +348,92 @@ def test_never_killed_survives_differing_test_id_roots(target: Path) -> None:
 
     assert report.mutants[0].status == "killed"
     assert report.never_killed == ["deep/nested/tests/test_a.py::test_idle"]
+
+
+# ---------------------------------------------------------------------------
+# Stale bytecode
+# ---------------------------------------------------------------------------
+
+
+def test_default_runner_disables_bytecode_writing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Otherwise every run leaves behind the .pyc the next row has to survive.
+
+    The ambient environment must not be able to satisfy this. When this suite
+    runs under the harness itself the variable is already set in the parent, so
+    a child that merely inherits it reads the same as one the runner
+    configured — and the assertion passes either way. Clearing it first is what
+    gives the test teeth.
+    """
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+
+    code, out = _default_runner(
+        [
+            sys.executable,
+            "-c",
+            "import os; print(os.environ.get('PYTHONDONTWRITEBYTECODE'))",
+        ]
+    )
+
+    assert code == 0
+    assert out.strip() == "1"
+
+
+def test_purges_cached_bytecode_before_each_run(target: Path) -> None:
+    """An equal-length mutation can otherwise run bytecode built from the original.
+
+    CPython validates a cached ``.pyc`` on the source's byte size and its mtime
+    truncated to whole seconds — neither of which a same-length replacement
+    written inside that second disturbs. The mutant never executes and the row
+    reads ``survived``, which is indistinguishable from a real gap.
+    """
+    cache = target.parent / "__pycache__"
+    cache.mkdir()
+    stale = cache / f"{target.stem}.cpython-313.pyc"
+    stale.write_bytes(b"bytecode from the unmutated source")
+    unrelated = cache / "other.cpython-313.pyc"
+    unrelated.write_bytes(b"a different module")
+
+    present_during_run: list[bool] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        present_during_run.append(stale.exists())
+        # A real run caches bytecode, so the next row starts with a cache to
+        # clear. Without this the baseline purge alone satisfies the assertion
+        # and dropping the per-mutant purge changes nothing.
+        stale.write_bytes(b"bytecode written by this run")
+        return 0, "2 passed in 0.1s\n"
+
+    run_teeth_check(
+        # Equal length on purpose: "GUARD = True" and "GUARD = Fals" are both
+        # 12 bytes, so the size half of the check cannot save us here.
+        _spec(target, Mutation("guard", target, "GUARD = True", "GUARD = Fals")),
+        runner=runner,
+    )
+
+    assert present_during_run == [False, False]
+    assert unrelated.exists(), "purge must not touch another module's bytecode"
+
+
+def test_purges_cached_bytecode_after_restoring(target: Path) -> None:
+    """The worse direction: a restore that leaves the mutant's bytecode live.
+
+    A later row then executes the previous row's mutation, so the matrix
+    credits a kill to the wrong defect — a lie about which property is guarded,
+    not merely a missing one.
+    """
+    cache = target.parent / "__pycache__"
+    cache.mkdir()
+    stale = cache / f"{target.stem}.cpython-313.pyc"
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        stale.write_bytes(b"bytecode from the mutated source")
+        return 0, "2 passed in 0.1s\n"
+
+    run_teeth_check(
+        _spec(target, Mutation("guard", target, "GUARD = True", "GUARD = Fals")),
+        runner=runner,
+    )
+
+    assert not stale.exists()

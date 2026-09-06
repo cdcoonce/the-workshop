@@ -48,7 +48,10 @@ noun or criterion you checked. "Looks fine" is not a result.
    behavior an over-eager builder would plausibly "improve", and check whether it is forbidden.
 5. Unresolvable evidence — every path, issue, and symbol the body names resolves. Classify
    each path as evidence or destination and resolve it individually; destination paths need
-   an existing parent directory. <detector tails>
+   an existing parent directory. If the slice persists, reads, or writes state, open the
+   named store module and list its COMPLETE public surface — resolving the symbol name is
+   not enough, because the package exists and imports fine while the one function the slice
+   needs is missing. <detector tails>
 6. Size lie — list the files the proposed behavior actually touches. A new module, a new
    mechanism, or persistence outside the stated footprint is never a single-slice change.
 7. Unauthorized decision — any fork where the builder must invent policy (naming, error
@@ -56,7 +59,9 @@ noun or criterion you checked. "Looks fine" is not a result.
 8. Unverified behavioral claim — for every "X does Y" sentence about existing code, name the
    line that makes it true. Reading the function is required; resolving the symbol is not
    enough. Start with sentences opening "Since" or "Because", and any claim about what a
-   function returns, carries, or clamps. <detector tails>
+   function returns, carries, or clamps. Confirm every dependency the behavior implies is
+   already present — a TOML writer, an HTTP client, a date library. `tomllib` is read-only,
+   so "we already parse TOML" is not evidence the slice can emit it. <detector tails>
 
 Every finding carries a default, formatted exactly:
 **[detector] <what is ambiguous>.** Default: I'll <specific choice> because <reason>. Say
