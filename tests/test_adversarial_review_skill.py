@@ -74,9 +74,17 @@ def test_no_other_plugin_also_ships_it() -> None:
 
 
 def test_skill_md_stays_under_the_line_budget() -> None:
-    """Progressive disclosure: the invocation-loaded file stays readable."""
+    """Progressive disclosure: the invocation-loaded file stays readable.
+
+    The budget was 100 and the file sat at 99, so the PR-scoped section had no
+    room. It was raised rather than paid for by deleting guidance, because the
+    guard protects an intent — SKILL.md routes, it does not accumulate — and the
+    added section routes: eleven lines that hand the reader to
+    `references/pr-lens-review.md`. Raising it to buy room for a section that
+    inlined the pattern instead would defeat the guard while still passing it.
+    """
     line_count = len(_skill_text().splitlines())
-    assert line_count < 100, f"SKILL.md is {line_count} lines"
+    assert line_count < 115, f"SKILL.md is {line_count} lines"
 
 
 def test_description_is_trigger_only() -> None:
@@ -178,4 +186,127 @@ def test_ships_pressure_scenarios_with_a_recorded_red_baseline() -> None:
     assert "discarded" in tests_md, (
         "scenarios the no-skill baseline already passed must be recorded as "
         "discarded, or someone re-derives them"
+    )
+
+
+# --- PR-scoped multi-lens pattern -------------------------------------------
+#
+# Nine slices drained by hand produced the same review shape six times, written
+# from scratch each time: 3-4 narrow lenses over one PR against its binding
+# spec, then three refuters per finding defaulting to refuted. It caught real
+# defects on five of seven PRs, including a failed re-write that truncated a
+# valid data file to zero bytes. Two failure modes are what the reference has to
+# carry, because both produce a confident clean report: a run contaminated by a
+# mid-review commit into the same worktree, where a correct finding and its
+# unanimous refutation described different trees; and a zero-findings result
+# that is indistinguishable from a lens that died on dispatch.
+
+PR_LENS_REFERENCE = SKILL_DIR / "references" / "pr-lens-review.md"
+
+
+def _pr_lens_text() -> str:
+    return PR_LENS_REFERENCE.read_text()
+
+
+def test_general_method_stays_primary() -> None:
+    """The PR pattern is an added instantiation, not a replacement.
+
+    The skill's value is that it attacks any finished work — a claim, a result,
+    a plan. A concrete PR recipe is the kind of addition that quietly becomes
+    the whole skill, so the general spine is pinned here explicitly.
+    """
+    text = _skill_text()
+    for heading in (
+        "## 1. Build the claim ledger",
+        "## 2. Attack each claim",
+        "## 3. Grade on evidence, not conviction",
+        "## 4. Report — every slot REQUIRED",
+    ):
+        assert heading in text, f"general method lost its section: {heading}"
+    assert text.index("## 1. Build the claim ledger") < text.index(
+        "## When the work is one pull request"
+    ), "the PR section must follow the general method, not precede it"
+
+
+def test_skill_routes_to_the_pr_lens_reference() -> None:
+    """A reader on a PR gets handed the pattern instead of reinventing it."""
+    assert PR_LENS_REFERENCE.is_file(), f"{PR_LENS_REFERENCE} is missing"
+    assert "references/pr-lens-review.md" in _skill_text()
+
+
+def test_lens_pass_contract_is_pinned() -> None:
+    """Narrow lenses, evidence-backed defects, and a real empty-list option.
+
+    A lens told to report defects with no stated empty-list option invents one
+    to look useful, which is the noise the refutation pass then has to absorb.
+    """
+    text = _pr_lens_text().lower()
+    assert "binding spec" in text, "findings are scored against the issue body"
+    assert "file:line" in text, "every finding needs a location"
+    assert "failure scenario" in text, "every finding needs a concrete trigger"
+    assert "empty" in text, "an empty findings list must be named as expected"
+    for lens in ("domain correctness", "test veracity", "spec conformance", "credential"):
+        assert lens in text, f"lens set must name {lens}"
+
+
+def test_refutation_bias_and_threshold_are_pinned() -> None:
+    """Three refuters, default refuted, >=2 upheld — inverted for secrets."""
+    text = _pr_lens_text().lower()
+    assert "three independent refuters" in text, "one refuter is not a vote"
+    assert "refuted=true" in text, "refuters default to refuted when uncertain"
+    assert "two or more upheld" in text, "the confirmation threshold must be explicit"
+    assert "invert the bias" in text, (
+        "credential and live-network findings must invert the default bias"
+    )
+
+
+def test_structured_output_uses_the_workflow_schema_option() -> None:
+    """Parsing prose is where a hedged sentence becomes a dropped defect."""
+    assert "schema" in _pr_lens_text().lower()
+
+
+def test_tree_must_be_frozen_before_dispatch() -> None:
+    """A finding and its refutation have to describe the same tree."""
+    text = _pr_lens_text().lower()
+    assert "freeze the head before dispatch" in text
+    assert "frozen head" in text, (
+        "a mid-run edit means re-running against a frozen head, not reasoning "
+        "about which agent saw which state"
+    )
+
+
+def test_zero_findings_requires_reading_the_journal() -> None:
+    """A dead lens and a clean lens hand the conductor the same result."""
+    text = _pr_lens_text()
+    assert "journal.jsonl" in text, "a clean result is checked against the journal"
+    assert "one result record per lens" in text.lower(), (
+        "the journal check must name what it confirms"
+    )
+    assert "Could not verify" in text, (
+        "a missing lens record belongs in the report's coverage slot"
+    )
+
+
+def test_cost_is_stated_before_dispatch() -> None:
+    """A reader spending 4-9 agents cannot make that call blind."""
+    text = _pr_lens_text().lower()
+    assert "4-9 agents" in text, "name the real scale of a per-PR run"
+
+
+def test_workflow_script_backtick_gotcha_is_recorded() -> None:
+    """Raw backticks in a JS template literal break the script parse."""
+    text = _pr_lens_text().lower()
+    assert "template literal" in text, "name where the backticks break"
+    assert "join" in text, "give the fix: join an array of plain strings"
+
+
+def test_sibling_boundaries_are_cross_referenced_not_duplicated() -> None:
+    """drain-queue owns the queue loop; detector-teeth-check owns mutation."""
+    text = _pr_lens_text()
+    assert "drain-queue" in text, "the queue loop belongs to drain-queue"
+    assert "detector-teeth-check" in text, (
+        "mutation mechanics belong to detector-teeth-check"
+    )
+    assert "does not replace" in text or "does not substitute" in text, (
+        "the reference must defer to its siblings, not absorb them"
     )
