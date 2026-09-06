@@ -88,7 +88,7 @@ tracker exists.
 - brainstorm — single-session shaping of a fuzzy idea into a committed
   direction; no persistent map, no frontier.
 - grill-me — one interrogation; blueprint _invokes_ it inside tickets.
-- write-a-prd / prd-to-plan — the way is already clear enough to spec or
+- write-a-prd / prd-to-issues — the way is already clear enough to spec or
   slice; blueprint is what runs while it isn't.
 - Dispatch and slicing flows — consume the map's resolved decisions at its
   edge; blueprint never files build issues itself.

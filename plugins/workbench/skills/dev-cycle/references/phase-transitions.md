@@ -23,7 +23,7 @@ Every one of these is a rationalization for skipping mandatory work, not a legit
 ## Brainstorm → Plan
 
 - **Validate:** GitHub issue URL (PRD) is present and accessible via `gh issue view`
-- **Handoff:** Pass issue URL to `prd-to-plan`, which reads the PRD and breaks it into vertical slices
+- **Handoff:** Pass issue URL to `prd-to-issues --plan`, which reads the PRD and breaks it into vertical slices
 - **Record:** Plan file path in artifacts table
 - **Failure:** If `gh` is not authenticated or issue is 404, set phase to `blocked`, suggest resolution
 

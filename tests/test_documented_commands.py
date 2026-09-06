@@ -1,9 +1,10 @@
 """Every `make` target this repo tells anyone to run must actually exist.
 
-Shipped skills are executed literally. `workshop-skill-creator` and
-`land-skill-candidate` both *end* on `make docs` / `make build`, so the last
-thing either skill did was fail with "No rule to make target" — and the reader
-was out of instructions at exactly the point they needed one (#703).
+Shipped skills are executed literally. `workshop-skill-creator` and the
+`land-skill-candidate` flow it later absorbed (#659) both *end* on `make docs` /
+`make build`, so the last thing the skill did was fail with "No rule to make
+target" — and the reader was out of instructions at exactly the point they
+needed one (#703).
 
 The dead targets are reorg residue. `make docs` rendered the reference catalogs
 and `make build` composed every preset into `dist/`; #650/#656 deleted `dist/`
@@ -186,7 +187,7 @@ def test_the_scan_reaches_shipped_skills_and_repo_docs() -> None:
     scanned = {path.relative_to(REPO_ROOT).as_posix() for path in _scanned_files()}
 
     assert "README.md" in scanned
-    assert "plugins/workshop-maintainer/skills/land-skill-candidate/SKILL.md" in scanned
+    assert "plugins/workshop-maintainer/skills/workshop-skill-creator/SKILL.md" in scanned
     assert "docs/reference/build-and-wiring.md" in scanned
     # The freshness failure message lives here — a Python string, not markup.
     assert "tests/test_machinery_wiring.py" in scanned

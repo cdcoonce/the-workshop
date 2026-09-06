@@ -79,7 +79,7 @@ The compass never classifies these. README.md gets mode=landing and its own rule
 - README.md and any other landing page (mode=landing): a front door that points into the four modes, exempt from the one-mode rule.
 - CONTRIBUTING.md, CHANGELOG.md, LICENSE.
 - `.claude/docs/project.md`: owned by `project-context`. CLAUDE.md: exempt, not this skill's to classify or write.
-- `docs/plans/`: owned by `prd-to-plan`.
+- `docs/plans/`: owned by `prd-to-issues --plan`.
 - `docs/archive/`, `docs/dev-cycle/`, and any review or security-review directory.
 
 ## Verdict format
