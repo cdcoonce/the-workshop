@@ -148,10 +148,12 @@ already correct.
   mutant never runs. Compile-checking the mutated _text_ does not catch this —
   it proves the mutant is valid Python, not that it executed. Worse in
   reverse: a restore landing in the same second can leave the previous
-  mutant's bytecode live, so a _later_ row scores the wrong mutation. Fix:
-  prefer a replacement of a different byte length, so the size field
-  invalidates the cache whatever the clock did; otherwise clear `__pycache__`
-  and run with `PYTHONDONTWRITEBYTECODE=1`.
+  mutant's bytecode live, so a _later_ row scores the wrong mutation.
+  `teeth_check.py` closes both by purging the mutated module's cache around
+  every run and running with bytecode writing disabled. Mutating by hand, do
+  the same — and delete the `.pyc` rather than relying on
+  `PYTHONDONTWRITEBYTECODE=1`, which stops the cache being written, not read,
+  so the stale one already on disk still wins.
 - **Confirm red, don't assume it.** Read the pytest summary line. A grep for
   assertion text can match an unrelated test's output, or a collection error
   that scored nothing at all.
@@ -171,7 +173,9 @@ Absence of a failure signal is never evidence of a pass. Three cases refuse:
 ## Safety
 
 Files are edited in place and restored from saved bytes in a `finally` — never
-by `git checkout`, which would destroy uncommitted work. Commit before running
+by `git checkout`, which would destroy uncommitted work. The only files it
+deletes are `__pycache__` entries for the modules it mutates: regenerable
+bytecode, never source. Commit before running
 anyway: `git status` is then an independent check that everything was restored.
 
 ## Related
