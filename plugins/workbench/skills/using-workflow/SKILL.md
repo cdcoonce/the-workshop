@@ -53,6 +53,17 @@ policy. Branch history must never authorize vendor or agent prefixes.
 Apply the same repository policy in both modes; AFK changes _how_ work is
 executed, not its integration target, quality gate, or authorization boundary.
 
+## Workflow-Dispatched Builds
+
+A build dispatched through the Workflow tool is not done when its builder
+stage goes green. Give every build-shaped workflow three stages: the
+orchestrator writes a file-level build spec, a builder agent executes it
+test-first, and a second, adversarial agent runs a teeth stage per
+`detector-teeth-check` — re-inject one representative defect per named
+test, require the suite to go red on the predicted test for every
+mutation, and revert cleanly after each. A mutation the suite survives is
+a vacuous guard and fails the build review.
+
 ## Trigger Floor
 
 If there is even a small chance a listed skill applies to what you're doing,
