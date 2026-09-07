@@ -103,10 +103,7 @@ def test_bare_hook_invocation_never_commits(vault: Path) -> None:
 
 
 class TestVaultHealthCheck:
-    """`_vault_health_check` gates the auto-sync push — see sync_manager.push's
-    `pre_push_check`. It must never be able to block sync on its own account
-    (missing script, timeout, crash), only on a real reported regression.
-    """
+    """The configured health gate fails closed at the durability boundary."""
 
     def test_no_health_script_is_a_pass(self, tmp_path: Path) -> None:
         ok, detail = session_stop._vault_health_check(tmp_path)
@@ -124,6 +121,9 @@ class TestVaultHealthCheck:
             ok, detail = session_stop._vault_health_check(tmp_path)
         assert ok is True
         assert detail == ""
+        assert mock_run.call_args.args[0] == [
+            "uv", "run", "--script", str(ci / "vault_health.py")
+        ]
 
     def test_failing_script_blocks_with_detail(self, tmp_path: Path) -> None:
         ci = tmp_path / "ci"
@@ -138,13 +138,24 @@ class TestVaultHealthCheck:
         assert ok is False
         assert "max_unresolved_links" in detail
 
-    def test_timeout_fails_open(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(
+        ("failure", "expected"),
+        [
+            (subprocess.TimeoutExpired("uv", 30), "timed out"),
+            (FileNotFoundError("uv"), "not available"),
+            (OSError("cannot spawn"), "could not run"),
+        ],
+    )
+    def test_existing_health_script_execution_failure_blocks_sync(
+        self, tmp_path: Path, failure: Exception, expected: str
+    ) -> None:
         ci = tmp_path / "ci"
         ci.mkdir()
         (ci / "vault_health.py").write_text("", encoding="utf-8")
-        with patch("session_stop.subprocess.run", side_effect=subprocess.TimeoutExpired("uv", 30)):
+        with patch("session_stop.subprocess.run", side_effect=failure):
             ok, detail = session_stop._vault_health_check(tmp_path)
-        assert ok is True  # a hung/unavailable checker must never block sync
+        assert ok is False
+        assert expected in detail.lower()
 
     def test_push_is_called_with_health_check_gate(
         self, vault: Path, monkeypatch: pytest.MonkeyPatch

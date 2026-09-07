@@ -33,21 +33,24 @@ from vault_utils import find_vault_root_from_env
 def _vault_health_check(cwd: Path) -> tuple[bool, str]:
     """Run ``ci/vault_health.py`` as a pre-push gate, if the vault has one.
 
-    Not every consumer of this vendored engine ships that script, and a missing
-    or misbehaving checker must never be able to block sync — so absence, a
-    timeout, or any other failure to run it is treated as a pass (fail-open).
-    Only an actual regression reported by the script blocks the push.
+    Not every consumer of this vendored engine ships that script, so absence is
+    compatible and passes. Once a repository configures the script, inability
+    to execute it fails closed: an unverified graph is not safe to commit.
     """
     script = cwd / "ci" / "vault_health.py"
     if not script.exists():
         return True, ""
     try:
         result = subprocess.run(
-            ["uv", "run", str(script)],
+            ["uv", "run", "--script", str(script)],
             cwd=cwd, capture_output=True, text=True, check=False, timeout=30,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return True, ""
+    except subprocess.TimeoutExpired:
+        return False, "Vault health check timed out; changes were not committed."
+    except FileNotFoundError:
+        return False, "Vault health check could not run: uv is not available."
+    except OSError as exc:
+        return False, f"Vault health check could not run: {exc}"
     if result.returncode == 0:
         return True, ""
     detail = result.stderr.strip() or result.stdout.strip()
@@ -110,9 +113,8 @@ def main() -> int:
         capture_output=True, text=True, check=False, timeout=10,
     ).stdout.strip()
 
-    # Push changes — gated on vault health so a regression (e.g. a broken
-    # wikilink from /garden, /connect, or a manual edit) is committed locally
-    # but never pushed to the shared remote unvetted.
+    # Push changes — gated on vault health before staging, so a regression
+    # (e.g. a broken wikilink) remains editable and never enters durable history.
     result = push(vault_root, pre_push_check=_vault_health_check)
     if result.success:
         lines.append(f"✓ Git: {result.message}")

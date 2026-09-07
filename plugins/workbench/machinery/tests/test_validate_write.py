@@ -262,17 +262,58 @@ class TestUnpromotedMemoryLane:
         assert "some-durable-lesson" in output
         assert "auto-memory" in output
 
-    def test_link_naming_no_memory_stays_silent(
+    def test_generic_unresolved_link_warns_without_blocking(
         self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A plain unresolved link is the existing lane's business, not this one."""
+        """A plain forward reference is visible now but remains non-blocking."""
         monkeypatch.setenv("HOME", self._fake_home(tmp_path, vault, "some-durable-lesson"))
         note = vault / "work" / "note.md"
         note.write_text(VALID_FRONTMATTER, encoding="utf-8")  # links [[Something]]
+        self._stub_resolver(
+            vault,
+            {
+                "work/note.md": [
+                    {"display": "Something", "reason": "missing", "candidates": []}
+                ],
+                "work/unrelated.md": [
+                    {"display": "Unrelated", "reason": "missing", "candidates": []}
+                ],
+            },
+        )
 
         result = _run_hook(note)
 
-        assert result.returncode == 0, result.stderr
+        assert result.returncode == 2, result.stderr
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "[[Something]]" in output
+        assert "Unrelated" not in output
+        assert "forward reference" in output.lower()
+        assert "before commit or sync" in output.lower()
+
+    def test_auto_memory_warning_is_not_duplicated_as_generic(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", self._fake_home(tmp_path, vault, "some-durable-lesson"))
+        note = vault / "work" / "decisions.md"
+        note.write_text(
+            VALID_FRONTMATTER.replace("[[Something]]", "[[some-durable-lesson]]"),
+            encoding="utf-8",
+        )
+        self._stub_resolver(
+            vault,
+            {
+                "work/decisions.md": [
+                    {"display": "some-durable-lesson", "reason": "missing", "candidates": []}
+                ]
+            },
+        )
+
+        result = _run_hook(note)
+
+        assert result.returncode == 2, result.stderr
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "auto-memory" in output
+        assert "unresolved forward reference" not in output.lower()
 
     def test_fires_on_a_note_outside_frontmatter_governance(
         self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -5,15 +5,15 @@ Called by Claude Code after Write/Edit tool completions.
 Reads hook event JSON from stdin, validates the target file, and outputs
 structured feedback via hookSpecificOutput.
 
-Also warns — never blocks — when the write cites an auto-memory that was never
-promoted into the vault (see ``unpromoted_memory``). That lane is advisory by
-design: a forward reference, where the target note is written moments later, is
-ordinary practice, so blocking it would make the correct workflow impossible.
+Also warns — never blocks — when the edited file contains an unresolved wikilink.
+That lane is advisory by design: a forward reference, where the target note is
+written moments later, is ordinary practice. Auto-memory links retain their more
+specific promotion diagnostic and are not repeated as generic warnings.
 
 Exit codes:
     0 — validation passed (or file excluded)
     1 — blocking validation errors found
-    2 — non-blocking warnings only (YAML parse errors, unpromoted memory links)
+    2 — non-blocking warnings only (YAML parse errors, unresolved links)
 """
 
 from __future__ import annotations
@@ -28,27 +28,58 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import validate, ValidationError
+from graph_gardener import _graphmark_broken, _normalize
 import vault_utils
 
 
-def _unpromoted_memory_lines(file_path: Path, vault_root: Path) -> list[str]:
-    """Advisory lines for auto-memories cited but never promoted. Never raises.
+def _link_advisory_lines(file_path: Path, vault_root: Path) -> list[str]:
+    """Advisories for unresolved links in this edited file. Never raises.
 
-    Import is deferred and the whole lane is wrapped: it reaches graphmark through a
-    subprocess, and no failure there may cost the author their frontmatter feedback.
-    The cheap pre-filter runs first so the ordinary write pays no subprocess at all.
+    A cheap link-presence pre-filter keeps non-linking writes off the resolver path.
+    One graphmark scan then powers both the specific auto-memory diagnosis and the
+    generic forward-reference warning, scoped strictly to the edited note.
     """
     try:
         from unpromoted_memory import (
             format_warning,
-            has_candidate_memory_link,
             unpromoted_memory_links,
         )
 
-        if not has_candidate_memory_link(file_path, vault_root):
+        text = file_path.read_text(encoding="utf-8")
+        if not vault_utils.WIKILINK_CAPTURE_RE.search(text):
             return []
         rel = str(file_path.resolve().relative_to(vault_root.resolve()))
-        return format_warning(unpromoted_memory_links(vault_root, rel))
+        raw = _graphmark_broken(vault_root)
+        if raw is None:
+            return []
+        entries = raw.get(rel, [])
+        displays = list(dict.fromkeys(
+            entry["display"]
+            for entry in entries
+            if isinstance(entry, dict) and isinstance(entry.get("display"), str)
+        ))
+        if not displays:
+            return []
+
+        broken = {
+            rel: displays,
+        }
+        memory_findings = unpromoted_memory_links(vault_root, rel, broken=broken)
+        memory_keys = {_normalize(display) for display, _filename in memory_findings}
+        generic = [display for display in displays if _normalize(display) not in memory_keys]
+
+        lines = format_warning(memory_findings)
+        if generic:
+            if lines:
+                lines.append("")
+            lines.append("⚠️ Unresolved forward reference pending:")
+            lines.extend(f"  • [[{display}]]" for display in generic)
+            lines.append("")
+            lines.append(
+                "Forward references are allowed while editing, but resolve these targets "
+                "before commit or sync; the durability-boundary health gate will block them."
+            )
+        return lines
     except Exception:
         traceback.print_exc(file=sys.stderr)
         return []
@@ -105,7 +136,7 @@ def main() -> int:
     # subject to the second, so gating on it silenced the check on notes that can
     # still fail vault_health. graphmark is the authority — a file outside graph
     # scope never appears in its broken map, so no gate is needed here.
-    memory_lines = _unpromoted_memory_lines(file_path, vault_root)
+    memory_lines = _link_advisory_lines(file_path, vault_root)
 
     if not errors and not memory_lines:
         return 0

@@ -335,7 +335,61 @@ class TestPullRetry:
 # ---------------------------------------------------------------------------
 
 class TestPush:
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._run_git")
+    def test_changed_paths_parses_deletions_renames_and_spaces(
+        self, mock_git, tmp_path: Path
+    ) -> None:
+        mock_git.return_value = _make_result(
+            stdout=(
+                " M notes/changed file.md\0"
+                " D notes/deleted.md\0"
+                "R  notes/new name.md\0notes/old name.md\0"
+                "?? notes/untracked file.md\0"
+            )
+        )
+
+        assert sm._changed_paths(tmp_path) == [
+            "notes/changed file.md",
+            "notes/deleted.md",
+            "notes/new name.md",
+            "notes/old name.md",
+            "notes/untracked file.md",
+        ]
+        mock_git.assert_called_once_with(
+            ["status", "--porcelain=v1", "-z", "--untracked-files=all"], tmp_path
+        )
+
+    @patch(
+        "sync_manager._changed_paths",
+        return_value=[
+            "notes/changed file.md",
+            "notes/deleted.md",
+            "notes/new name.md",
+            "notes/old name.md",
+        ],
+    )
+    @patch("sync_manager._has_remote", return_value=True)
+    @patch("sync_manager._run_git")
+    def test_push_stages_each_changed_path_explicitly(
+        self, mock_git, _remote, _paths, tmp_path: Path
+    ) -> None:
+        """Spaces, deletions, and both sides of renames survive as argv entries."""
+        mock_git.return_value = _make_result(stdout="main")
+
+        result = push(tmp_path)
+
+        assert result.success is True
+        stage_args = mock_git.call_args_list[0].args[0]
+        assert stage_args == [
+            "add", "-A", "--",
+            "notes/changed file.md",
+            "notes/deleted.md",
+            "notes/new name.md",
+            "notes/old name.md",
+        ]
+        assert ["add", "."] not in [call.args[0] for call in mock_git.call_args_list]
+
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_success(self, mock_git, _remote, _changes, tmp_path: Path) -> None:
@@ -344,7 +398,7 @@ class TestPush:
         assert result.success is True
         assert "committed" in result.message.lower() or "pushed" in result.message.lower()
 
-    @patch("sync_manager._has_changes", return_value=False)
+    @patch("sync_manager._changed_paths", return_value=[])
     @patch("sync_manager._has_remote", return_value=True)
     def test_push_no_changes(self, _remote, _changes, tmp_path: Path) -> None:
         result = push(tmp_path)
@@ -357,7 +411,7 @@ class TestPush:
         assert result.success is True
         assert "No remote" in result.message
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_commit_fails(self, mock_git, _remote, _changes, tmp_path: Path) -> None:
@@ -368,7 +422,7 @@ class TestPush:
         result = push(tmp_path)
         assert result.success is False
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_push_fails(self, mock_git, _remote, _changes, tmp_path: Path) -> None:
@@ -385,7 +439,7 @@ class TestPush:
         assert result.success is False
         assert "pull" in result.message.lower()
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_uses_custom_message(self, mock_git, _remote, _changes, tmp_path: Path) -> None:
@@ -395,31 +449,22 @@ class TestPush:
         commit_call = mock_git.call_args_list[1]  # second call is commit
         assert "custom: test message" in str(commit_call)
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
-    def test_push_pre_push_check_blocks_push_but_keeps_commit(
+    def test_push_pre_push_check_blocks_before_staging_or_commit(
         self, mock_git, _remote, _changes, tmp_path: Path
     ) -> None:
-        """A failing gate must stop the push without undoing the local commit.
-
-        The commit already happened by the time the gate runs — a regression
-        (e.g. a broken wikilink) is captured locally, never lost, but must not
-        reach the shared remote unvetted.
-        """
-        mock_git.side_effect = [
-            _make_result(),  # add
-            _make_result(),  # commit
-        ]
+        """A failing durability gate leaves the working tree wholly uncommitted."""
         check = lambda cwd: (False, "max_unresolved_links: 1 exceeds limit 0")  # noqa: E731
         result = push(tmp_path, pre_push_check=check)
         assert result.success is False
-        assert "commit kept locally" in result.message.lower()
+        assert "changes left uncommitted" in result.message.lower()
         assert "max_unresolved_links" in result.message
-        # Only add + commit ran — no pull, no push attempted.
-        assert mock_git.call_count == 2
+        # No add, commit, pull, or push may happen before the gate passes.
+        mock_git.assert_not_called()
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_pre_push_check_passing_still_pushes(
@@ -431,7 +476,7 @@ class TestPush:
         assert result.success is True
         assert "pushed" in result.message.lower() or "committed" in result.message.lower()
 
-    @patch("sync_manager._has_changes", return_value=True)
+    @patch("sync_manager._changed_paths", return_value=["note.md"])
     @patch("sync_manager._has_remote", return_value=True)
     @patch("sync_manager._run_git")
     def test_push_receives_repo_path_in_pre_push_check(
