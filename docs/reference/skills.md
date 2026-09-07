@@ -47,6 +47,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/repo-docs` | `workbench` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
 | `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
+| `/session-orchestrator` | `workbench` | Supervises user-visible worker sessions across projects and platforms. |
 | `/shared-tree-safety` | `workbench` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
 | `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
 | `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
@@ -317,6 +318,12 @@ Use when user wants to plan a refactor, create a refactoring RFC, break a refact
 *`workbench` plugin*
 
 Security code review for vulnerabilities with confidence-based reporting. Use when the user asks for "security review", "find vulnerabilities", "check for security issues", "audit security", "OWASP review", or to review code for injection, XSS, authentication, authorization, or cryptography issues.
+
+### `/session-orchestrator`
+
+*`workbench` plugin*
+
+Supervises user-visible worker sessions across projects and platforms. Use when a controller must create, coordinate, monitor, redirect, integrate, or retire multiple Codex, Claude Code, or Cortex Code worker tasks.
 
 ### `/shared-tree-safety`
 
