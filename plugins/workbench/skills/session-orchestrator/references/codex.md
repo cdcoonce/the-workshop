@@ -1,0 +1,18 @@
+# Codex Adapter
+
+Use the Codex desktop task tools when available. CLI commands do not imply parity.
+
+| Operation | Supported procedure |
+| --- | --- |
+| Create | Resolve a saved project, then create a project task; default git repositories to an isolated worktree unless the owner asks for the saved checkout. |
+| Verify attachment | Only a returned `threadId` is addressable. A queued `clientThreadId` remains `provisioning` and must never be passed to task tools. Verify with a controller message. |
+| Message | Send a follow-up to the exact `threadId`/`hostId`. |
+| Wait/monitor | Prefer cursor-based task waiting; use deliberate reads for investigation. Preserve cursors and stay quiet on unchanged timeout snapshots. |
+| Interrupt | General task interruption is unsupported. A handoff may interrupt as a side effect but is not a stop API. |
+| Complete | Verify the final report and repository evidence independently. |
+| Archive/reopen | Archive only after integration/handoff; list archived tasks and set archived false to reopen the same identity. |
+| Worktree/integration | Creation may provision a Codex worktree; handoff may move another task's git state. Neither proves the commit reached the repository's integration target. |
+
+Queued recovery has no documented `clientThreadId` status API. Reconcile listings
+and filesystem/git evidence without retrying creation blindly. If a task exists but
+cannot be addressed, preserve its worktree and use the shared handoff path.

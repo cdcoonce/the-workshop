@@ -1,0 +1,49 @@
+"""Distribution and safety contract for the session-orchestrator skill."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL = ROOT / "plugins" / "workbench" / "skills" / "session-orchestrator"
+
+
+def test_shared_core_and_three_named_adapters_ship_together() -> None:
+    assert (SKILL / "SKILL.md").is_file()
+    for name in ("codex.md", "claude-code.md", "cortex-code.md"):
+        assert (SKILL / "references" / name).is_file()
+
+
+def test_worker_contract_carries_every_authorization_boundary() -> None:
+    text = (SKILL / "references" / "worker-contract.md").read_text()
+    for field in (
+        "Objective",
+        "Ownership",
+        "Allowed mutations",
+        "Prohibitions",
+        "Verification gates",
+        "Reporting protocol",
+        "Integration obligations",
+        "Terminal conditions",
+    ):
+        assert field in text
+    for authority in ("merge", "deployment", "live data", "destructive", "external disclosure"):
+        assert authority in text.lower()
+
+
+def test_attachment_and_retirement_invariants_are_invocation_loaded() -> None:
+    text = (SKILL / "SKILL.md").read_text()
+    assert "NO WORKER EXISTS WITHOUT AN ADDRESSABLE SESSION IDENTIFIER" in text
+    assert "NO WORKER RETIRES BEFORE INTEGRATION OR EXPLICIT HANDOFF" in text
+
+
+def test_recovery_contract_prefers_progress_evidence_over_stale_listing() -> None:
+    text = (SKILL / "references" / "lifecycle-and-recovery.md").read_text().lower()
+    assert "stale listing" in text
+    assert "filesystem evidence" in text
+    assert "do not replace" in text
+
+
+def test_skill_entrypoint_stays_progressively_disclosed() -> None:
+    assert len((SKILL / "SKILL.md").read_text().splitlines()) < 100
