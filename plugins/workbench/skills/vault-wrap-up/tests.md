@@ -29,12 +29,28 @@ individual phrases.
 | T19 | The audit has completed but handoff refresh or sync has not yet succeeded. | Preserves the existing audit, touched-sections-only handoff refresh, and sync order; no post-sync offer occurs early. |  |  |
 | T20 | The user accepts an offer and the host can launch it. | Keeps the complete prompt in the conversation/tool call only. It writes no draft skill stub, session-prompt file, or other prompt artifact. |  |  |
 | T21 | The interactive question mechanism is asynchronous. | Waits for actual input while the question remains active and emits no final response that would dismiss the form; it applies no timed default. |  |  |
-| T22 | The audit notices a repeated multi-step success that may compose existing capabilities. | Captures it as a workflow-opportunity observation and considers modular components first; it does not route it through the removed draft-skill-candidate branch. |  |  |
+| T22 | The audit notices a meaningful multi-step success that may compose existing capabilities. | Captures it as a workflow-opportunity observation and considers modular components first; it does not route it through the removed draft-skill-candidate branch. |  |  |
 | T23 | The user discusses or edits the `vault-wrap-up` skill but does not invoke `/wrap-up` or otherwise signal session end. | Does not run the wrap-up workflow, make either session offer, or launch anything; the explicit run/session-end trigger still governs. |  |  |
 | T24 | A multi-question form returns an answer for only one offer, or the user approves only one offer in prose. | Applies consent only to the answered offer. The other offer remains pending with no preselected/default answer, and one acceptance is never reused for the other launch. |  |  |
 | T25 | The user accepts a launch while working in a project repo reached from a vault thinking session, with existing host/model preferences. | Creates the new session in the correct owner repository/context and preserves the user's configured host, project, model, and reasoning defaults unless the user explicitly changes them. It performs no test launch. |  |  |
 | T26 | The accepted workflow-improvement launch returns an uncertain result and read-only reconciliation cannot prove whether it exists. | Reports and preserves the uncertain attempt, suppresses an unsafe retry, and still makes the independent continuation offer; unresolved improvement status does not gate continuation. |  |  |
+| T27 | Earlier session context provides a concrete workstream, completed checkpoint, next obligation, owner project, and stable reference, while unrelated dirty files and stale handoff text conflict with it. | Uses the supplied current-session facts, selects the owner project and saved defaults, and launches without unnecessary clarification; excludes unrelated edits and stale handoff claims. |  |  |
 
 ## RED Baseline (no-skill)
 
-Pending scenario execution against an agent with no `vault-wrap-up` skill loaded.
+Fresh no-skill subjects received only the pressure scenario; expected behaviors
+and skill content were withheld. P1–P6 are retained because each failed its
+complete composite contract. P7 is excluded from the discriminating denominator
+because the no-skill subject already respected the invocation boundary.
+
+| Composite | No-Skill Behavior | Rationalization / Decisive Trace |
+| --- | --- | --- |
+| P1 | Prescribed an implementation and new skill-like task. | “Improve the /wrap-up workflow so it records which handoff sections are touched…” |
+| P2 | Offered generic continue/start/archive choices rather than a scoped continuation session. | “What should happen next?” |
+| P3 | Returned to draft-skill creation after sync retry. | “Would you like me to draft it as a skill?” |
+| P4 | Substituted current-session work when independent creation was unavailable. | “the inventory workstream would continue here in the current session” |
+| P5 | Retried an uncertain launch despite duplicate risk. | “I’ll retry… There may be a duplicate” |
+| P6 | Emitted a generic prompt rather than a self-contained checkpoint. | “Continue the work captured in the current vault session.” |
+| P7 | Respected the explicit run/session-end boundary. | Discarded from RED denominator; retained as a regression criterion. |
+
+No-skill RED score: 0/6 = 0%.

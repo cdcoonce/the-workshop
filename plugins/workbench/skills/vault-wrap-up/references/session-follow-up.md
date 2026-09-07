@@ -19,9 +19,9 @@ prompt file or a draft skill.
 ## Consent Rules
 
 The workflow-improvement session and continuation session are independent
-offers. Ask them separately and apply each answer only to its own offer. An
-acceptance of one never authorizes the other; a decline of one never suppresses
-the other.
+offers. Ask them one at a time, never in the same form, and apply each answer
+only to its own offer. An acceptance of one never authorizes the other; a
+decline of one never suppresses the other.
 
 Ask before generating the complete prompt or starting a session. Once the user
 accepts, that answer authorizes prompt generation and one launch attempt; do not
@@ -48,8 +48,12 @@ After acceptance, generate an observation-and-context-only prompt containing:
 - the relevant session and repository context; and
 - a request to investigate the opportunity.
 
-Leave diagnosis, scope, and design to the receiving agent. Do not prescribe a
-fix, supply an implementation-ready plan, or assume the outcome is a new skill.
+Leave diagnosis, scope, design, and the decision to change anything to the
+receiving agent. The prompt must stop at observation, evidence, context, and a
+request to investigate. Do not tell the receiver to fix, implement, update,
+create, preserve a proposed behavior, validate a change, or assume the outcome
+is a new skill. A suitable closing sentence is: "Investigate what this
+observation means for the workflow; you own diagnosis, scope, and design."
 Launch or display the prompt using **Launch Protocol** below. After the accepted
 offer is launched or its result is reported, continue to Offer 2 even when the
 improvement launch remains uncertain; preserve that attempt and suppress unsafe
@@ -57,15 +61,18 @@ retries without letting its unresolved status gate continuation. A decline also
 continues to Offer 2. If the question remains unanswered, keep it active and do
 nothing dependent on it.
 
-If no meaningful opportunity exists, skip Offer 1 and continue to Offer 2.
+If no meaningful opportunity exists, do not ask an improvement question. Skip
+Offer 1 entirely and proceed directly to Offer 2.
 
 ## Offer 2: Continue Current Work
 
-Offer a separate new session to continue the current work. If the session had
-one workstream, name it in the offer. If it had several, first ask whether the
-user wants a continuation session; after acceptance, ask which single
+Offer a separate **new session** to continue the current work. This is not a
+question about whether the current session should remain active. If the session
+had one workstream, name it in the offer. If it had several, first ask whether
+the user wants a new continuation session; after acceptance, ask which single
 workstream to continue. Generate no continuation prompt until those answers are
-received.
+received. Keep each unanswered question active under the consent rules above;
+do not replace it with a final status message.
 
 The accepted prompt includes only the selected workstream and is self-contained:
 
@@ -77,7 +84,16 @@ The accepted prompt includes only the selected workstream and is self-contained:
 Do not rely only on the mutable rolling handoff. Select the project or
 repository that owns the workstream, which may differ from the vault where the
 thinking session began. Ask a focused follow-up after acceptance if ownership is
-ambiguous.
+ambiguous. Before generating the prompt, verify that it can name the selected
+workstream or task, the completed checkpoint, and the specific next unresolved
+obligation in concrete terms, plus an actual stable reference when one exists.
+Reuse details already known from this session. If the conversation or evidence
+does not supply a required detail, ask one focused follow-up after
+acceptance and wait; never emit a generic prompt with placeholders such as
+"selected workstream," "linked project work," "verified commit," or "next
+obligation." A workstream label alone does not supply its checkpoint or next
+obligation: do not infer either from the label. Do not demand a Git commit or
+file reference when the work has no such artifact, and never invent one.
 
 ## Launch Protocol
 
