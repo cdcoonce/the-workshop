@@ -4,7 +4,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 ## Process
 
-1. **Identify session changes**: Use `git diff --name-only` and `git status` to find all notes created or modified this session.
+1. **Identify session changes**: Build the session scope from the current conversation and its tool results, including work committed earlier in this session. Use `git diff --name-only`, `git status`, and relevant commits as supporting evidence. Do not claim unrelated pre-existing edits merely because they are dirty now.
 
 2. **Validate each note**:
    - Check frontmatter: date, description, tags, type-specific fields
@@ -24,13 +24,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 6. **Harvest decisions**: Review the session for significant decisions — architecture choices, tooling selections, process or convention changes, anything whose _why_ you'd want to recover months later. For each one not already recorded, draft an entry for `brain/Key Decisions.md`: what was decided, the context/why, alternatives considered, and the date. Link it (`[[wikilink]]`) to the notes, projects, or people it affects. This is the durable hand-off that keeps the vault self-sufficient — decisions live in the graph, never only in chat or auto-memory. Confirm net-new entries with the user before writing if the decision is ambiguous.
 
-7. **Extract skill candidates**: Scan the session for repeatable patterns that aren't yet a skill. Look for:
-   - Workflows Claude had to figure out from scratch that would benefit from codified instructions
-   - Moments a skill was invoked but felt limited or incomplete (like today's `repo-crash-course` map structure fix)
-   - New task types handled well enough to be reusable
-   - Repeated multi-step sequences that could be a single `/command`
-
-   For each candidate: write a one-line description and a suggested skill name. Present the list and ask the user to approve before creating anything. Approved candidates go to `reference/skills/drafts/<skill-name>/SKILL.md` as stubs for later refinement. Dismissed candidates are dropped. **Never auto-create a skill without user approval.**
+7. **Observe workflow opportunities**: Scan this session for concrete friction worth investigating or a reusable success worth preserving. One meaningful example is enough when the evidence is specific. Prefer opportunities to compose modular capabilities into a workflow; do not assume the result should be a new skill, name a skill, prescribe a fix, or create a draft. If several candidates exist, retain only the strongest, with its example and evidence pointers, for the post-sync offer.
 
 8. **Fix obvious issues in-place**: missing date from git history, trivial frontmatter gaps, a missing wikilink with an obvious target. Fix silently; only ask about ambiguous cases.
 
@@ -38,9 +32,11 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. Replace each touched section's content wholesale (it reflects current state, not a running log); leave untouched sections as they are. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
 
-10. **Commit & push** (`/sync`): commit the audited fixes, the harvested decisions/wins, and the refreshed handoff, then push — so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state.
+10. **Commit & push** (`/sync`): commit the audited fixes, the harvested decisions/wins, and the refreshed handoff, then push — so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
 
-11. **Report**:
+11. **Offer independent follow-up sessions after successful sync**: Follow [session-follow-up.md](session-follow-up.md). The workflow-improvement offer and current-work continuation offer require separate consent. No improvement candidate does not suppress the continuation offer.
+
+12. **Report**:
 
 - For each note audited, report: ✓ (pass) or ✗ (issue found + what it is)
 - Confirm the handoff was refreshed and the session pushed
@@ -68,19 +64,24 @@ Audit all notes created or modified during this session. Validate quality, fix m
 ### Decisions Harvested
 - "Adopted workspace-scoped CLAUDE.md" → drafted entry in brain/Key Decisions.md
 
-### Skill Candidates
-- `repo-map-mermaid` — skill for generating Mermaid-based repo maps → approved, stub created
-- `snowflake-cortex-query` — pattern for ad-hoc Cortex queries from Claude sessions → dismissed
+### Workflow Opportunity
+- Repeatedly reconstructed touched handoff sections → offered a focused investigation using commit `8bfcb0e` and the command reference as evidence
 
 ### Project Status Updates
 - work/active/amrt/asset-management-reporting-tool.md — refreshed ## Current Status: generation harmonization workstream findings
 
 ### Actions Taken
 - Added date field to thinking/draft.md from git history
+
+### Follow-up Sessions
+- Workflow improvement: declined
+- Continue pipeline redesign: opened task `<verified-id>`
 ```
 
 ## Constraints
 
 - Fix obvious issues silently; only ask about ambiguous cases
 - Never delete notes during audit
+- Never create draft skills or session-prompt files during wrap-up
+- Never make either follow-up offer until handoff refresh and sync are confirmed successful
 - If vault is empty/new, say so and suggest `/dump` to start
