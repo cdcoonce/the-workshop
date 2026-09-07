@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Local code-review reports from one-off review sessions. Canonical review
+# artifacts live in PRs or tracked docs when deliberately added.
+docs/code_reviews/*_pr-*.md
+
 # Python package archives. Nothing here builds one any more — the plugins are
 # served from source — but a stray local build must never become a commit.
 dist/
