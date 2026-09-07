@@ -99,14 +99,22 @@ file reference when the work has no such artifact, and never invent one.
 
 After acceptance, use a native tool that creates an independent, user-owned
 session or task when the host provides one. Follow its schema and preserve the
-user's saved host, project, model, and reasoning defaults. Resolve the owner
-project from the prompt's work, not from the current directory alone. Do not
-substitute a subagent, fork, background process, or assumed portable CLI.
+user's saved host, project, model, and reasoning defaults. For vault-governed
+work, The Vault remains the owner context even when the next action requires
+visiting another repository. Create the session in the saved Vault project, and
+write the prompt so the receiving agent starts from the vault handoff/project
+note before visiting the external repo path for execution. Do not create a
+projectless task merely because the visited repository is not a saved project.
+For non-vault work, resolve the owner project from the prompt's work, not from
+the current directory alone. Do not substitute a subagent, fork, background
+process, or assumed portable CLI.
 
 In Codex, resolve the saved owner project with `list_projects`, then call
-`create_thread` once. Use the project environment required by that tool and
-omit `model` and `thinking` unless the user explicitly asked to override them.
-Only report a task ID returned by the tool.
+`create_thread` once. When the current workflow is running inside The Vault,
+choose the saved Vault project and include the external repository path as a
+visited execution target inside the prompt. Use the project environment required
+by that tool and omit `model` and `thinking` unless the user explicitly asked
+to override them. Only report a task ID returned by the tool.
 
 If the host has no native independent-session tool, explain that after
 acceptance and show the complete manual-launch prompt in the current
