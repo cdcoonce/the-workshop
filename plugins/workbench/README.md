@@ -51,6 +51,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/repo-docs` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. |
+| `/session-orchestrator` | Supervises user-visible worker sessions across projects and platforms. |
 | `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
 | `/sql-deploy-precheck` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
 | `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
