@@ -14,11 +14,12 @@ Manually trigger git synchronization. Useful when switching machines or wanting 
 
 ### Push (default)
 
-1. Run `git add .` to stage all changes
-2. Generate a descriptive commit message from the changes
-3. Run `git commit` with the message
-4. **`git pull --rebase` first** — the vault syncs across two machines, so the remote has often moved since this session started. Rebase onto it _before_ pushing instead of letting the push get rejected. If the rebase conflicts: abort it, list the conflicting files, alert the user — never auto-resolve.
-5. Run `git push` to sync with remote
+1. **Run the vault-health durability gate immediately before staging:** `uv run --script ci/vault_health.py`. If the configured script fails, times out, or cannot run, stop: leave all edits uncommitted and do not pull or push. A vault without this script remains compatible and may proceed.
+2. Stage the intended changes explicitly
+3. Generate a descriptive commit message from the changes
+4. Run `git commit` with the message
+5. **`git pull --rebase` first** — the vault syncs across two machines, so the remote has often moved since this session started. Rebase onto it _before_ pushing instead of letting the push get rejected. If the rebase conflicts: abort it, list the conflicting files, alert the user — never auto-resolve.
+6. Run `git push` to sync with remote
 
 ### Pull
 
@@ -35,6 +36,7 @@ Manually trigger git synchronization. Useful when switching machines or wanting 
 
 - Never auto-resolve merge conflicts
 - Never force-push
+- Forward references are allowed during editing, but every wikilink must resolve before the health gate permits commit/sync. "Banked as/in `[[X]]`" means `X` exists or is created, linked, and indexed in the same durability transaction.
 - Push always rebases onto the remote first (see step 4) — don't rely on the reactive "pull if rejected" path
 - **Never let an accumulating/derived artifact into the synced vault.** Counters, indexes, caches, and frequency maps (e.g. a term-frequency tally) conflict on every two-machine sync because git can't merge two diverged counters. They're regenerable state, not source of truth — keep them machine-local (gitignored) and let each machine rebuild. If a conflict keeps recurring on the same generated file, that file should be untracked, not repeatedly merged. See `brain/Gotchas.md`.
 - Show clear error messages on failure
