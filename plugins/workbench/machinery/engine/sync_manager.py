@@ -129,10 +129,39 @@ def _has_remote(cwd: Path) -> bool:
 
 def _has_changes(cwd: Path) -> bool:
     """Check if there are any uncommitted changes."""
-    result = _run_git(["status", "--porcelain"], cwd)
+    return bool(_changed_paths(cwd))
+
+
+def _changed_paths(cwd: Path) -> list[str]:
+    """Return every changed path from porcelain-v1's NUL-delimited format.
+
+    ``-z`` preserves spaces and other shell-sensitive characters verbatim. Rename
+    and copy records contain a second NUL-delimited path; include both sides so
+    ``git add -A -- <paths>`` stages the addition and deletion explicitly.
+    """
+    result = _run_git(
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd
+    )
     if result.returncode != 0:
         raise GitCommandError("status", result.stderr)
-    return result.stdout.strip() != ""
+
+    records = result.stdout.split("\0")
+    paths: list[str] = []
+    index = 0
+    while index < len(records):
+        record = records[index]
+        index += 1
+        if not record:
+            continue
+        if len(record) < 4 or record[2] != " ":
+            continue
+        status = record[:2]
+        paths.append(record[3:])
+        if "R" in status or "C" in status:
+            if index < len(records) and records[index]:
+                paths.append(records[index])
+            index += 1
+    return list(dict.fromkeys(paths))
 
 
 def _parse_conflict_files(output: str) -> list[str]:
@@ -282,13 +311,12 @@ def push(
     Args:
         vault_path: Path to the vault root directory.
         message: Commit message.
-        pre_push_check: Optional gate run after commit, before pull/push. Takes
+        pre_push_check: Optional durability gate run before staging or committing. Takes
             the repo path and returns ``(ok, detail)``; a caller-supplied check
             (e.g. a vault-health gate) so this module stays generic — most
             consumers of this vendored engine have no such check to run. On
-            failure the commit is kept locally (never lost) and the push is
-            skipped, leaving a human to fix and re-sync rather than shipping a
-            regression straight to the shared remote.
+            failure all edits remain uncommitted and pull/push are skipped, leaving
+            a human to fix the working tree before it becomes durable history.
 
     Returns:
         SyncResult with success status and message.
@@ -309,19 +337,33 @@ def push(
 
     # Check for changes
     try:
-        has_changes = _has_changes(cwd)
+        changed_paths = _changed_paths(cwd)
     except GitCommandError as e:
         return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
     except subprocess.TimeoutExpired:
         return SyncResult(success=False, message="Git operation timed out.")
     except FileNotFoundError:
         return SyncResult(success=False, message="Git is not installed or not on PATH.")
-    if not has_changes:
+    if not changed_paths:
         return SyncResult(success=True, message="No changes to commit.")
+
+    # Validate the complete working tree before it becomes durable history. A
+    # failing graph or policy gate must not be captured in a local commit, and
+    # must not reach pull/rebase or push.
+    if pre_push_check is not None:
+        check_ok, check_detail = pre_push_check(cwd)
+        if not check_ok:
+            return SyncResult(
+                success=False,
+                message=(
+                    "Pre-push check failed — changes left uncommitted; sync skipped.\n"
+                    f"{check_detail}"
+                ),
+            )
 
     # Stage all changes
     try:
-        result = _run_git(["add", "."], cwd)
+        result = _run_git(["add", "-A", "--", *changed_paths], cwd)
         if result.returncode != 0:
             return SyncResult(success=False, message=f"Git add failed: {result.stderr.strip()}")
 
@@ -329,20 +371,6 @@ def push(
         result = _run_git(["commit", "-m", message], cwd)
         if result.returncode != 0:
             return SyncResult(success=False, message=f"Git commit failed: {result.stderr.strip()}")
-
-        # Gate the push (not the commit) on the caller's check — the commit above already
-        # happened, so a regression is captured locally rather than lost, but never reaches
-        # the shared remote unvetted.
-        if pre_push_check is not None:
-            check_ok, check_detail = pre_push_check(cwd)
-            if not check_ok:
-                return SyncResult(
-                    success=False,
-                    message=(
-                        "Pre-push check failed — commit kept locally, push skipped.\n"
-                        f"{check_detail}"
-                    ),
-                )
 
         # Rebase-pull before pushing — integrate the other machine's commits first
         # (the vault syncs across two machines; CLAUDE.md requires rebase-first). Never
