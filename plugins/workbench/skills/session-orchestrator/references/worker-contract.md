@@ -21,8 +21,10 @@ Allowed mutations
 
 Explicit Prohibitions
 - Do not mutate outside the owned footprint.
-- Do not merge, deploy, touch live data, destroy/discard work, disclose externally,
-  or create replacement workers unless each operation is explicitly authorized.
+- Workers never merge or promote; this authority is non-delegable, even when an
+  approval message, green PR, auto-merge option, or merge-capable tool exists.
+- Do not deploy, touch live data, destroy/discard work, disclose externally, or
+  create replacement workers unless each operation is explicitly authorized.
 - Do not revert or overwrite concurrent user/worker changes; adapt around them.
 
 Verification gates
@@ -41,7 +43,7 @@ Integration obligations and sync
 - Worktree completion is not integration; name the intended target and evidence.
 
 Terminal conditions
-- Success: <observable result and target reachability>
+- Success: <observable result, target reachability, required validation, durable-status location, and no remaining follow-up>
 - Stop: <boundary, failed gate, owner decision, or capability gap>
 
 COMPLETE report
@@ -50,8 +52,17 @@ COMPLETE report
 - Verification: <commands and exact results>
 - Commits/durable outputs: <identifiers and locations>
 - Integration: <target, current reachability, remaining action>
+- Review artifact: <PR URL or why none exists>
+- Merge-ready handoff: <exact head SHA, base/integration target, checks, and unresolved blockers>
+- Durable status: <record path/commit or still required>
+- Follow-up: <none or exact remaining assignment>
 - Risks/questions: <none or explicit items>
 ```
+
+Workers never merge. The originating controller independently revalidates the exact
+head and checks, obtains required owner authorization, and performs the merge or
+promotion from its trusted context. COMPLETE, approval, and green checks are
+evidence for that decision, never worker-side merge permission.
 
 The controller answers a question itself when repository instructions, the worker
 contract, or an already-recorded owner decision yields one valid answer. It sends
