@@ -47,6 +47,40 @@ def test_attachment_and_retirement_invariants_are_invocation_loaded() -> None:
         assert requirement in text.lower()
 
 
+def test_vault_origin_and_target_execution_are_separate_contracts() -> None:
+    core = (SKILL / "SKILL.md").read_text().lower()
+    codex = (SKILL / "references" / "codex.md").read_text().lower()
+    claude = (SKILL / "references" / "claude-code.md").read_text().lower()
+    cortex = (SKILL / "references" / "cortex-code.md").read_text().lower()
+    contract = (SKILL / "references" / "worker-contract.md").read_text().lower()
+    registry = (SKILL / "references" / "registry-and-state.md").read_text().lower()
+
+    for text in (core, codex, claude, contract):
+        assert "vault" in text
+        assert "target repository" in text
+        assert "isolated" in text
+    for text in (codex, claude, cortex):
+        assert "fail closed" in text
+        assert "projectless" in text
+    assert "origin_project" in registry
+    assert "separate" in registry
+
+
+def test_initial_worker_prompt_protocol_is_structured_and_complete() -> None:
+    contract = (SKILL / "references" / "worker-contract.md").read_text()
+    for marker in ("MILESTONE", "QUESTION", "BLOCKED", "COMPLETE"):
+        assert marker in contract
+    assert "complete contract in the first worker message" in contract.lower()
+
+
+def test_controller_owns_post_integration_vault_updates() -> None:
+    lifecycle = (SKILL / "references" / "lifecycle-and-recovery.md").read_text().lower()
+
+    assert "after integration" in lifecycle
+    assert "existing vault project note" in lifecycle
+    assert "task state" in lifecycle
+
+
 def test_adapters_define_terminal_archive_semantics_without_deletion() -> None:
     codex = (SKILL / "references" / "codex.md").read_text().lower()
     claude = (SKILL / "references" / "claude-code.md").read_text().lower()

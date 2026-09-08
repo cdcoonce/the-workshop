@@ -5,7 +5,7 @@ subcommand help because availability can differ by installed version.
 
 | Operation | Supported procedure |
 | --- | --- |
-| Create | Start a background agent with explicit name, cwd/workspace, permissions, and prompt. Parse the returned session ID. |
+| Create | Require an existing user-visible Vault project task before starting the background agent. Fail closed if the Vault task cannot be created or addressed; do not substitute a projectless Claude session. Start the agent with explicit target repository, isolated cwd/workspace, permissions, and complete contract. Parse the returned session ID. |
 | Verify attachment | Confirm the ID through agent listing or logs. A launch without a recognized ID is not attached. |
 | Message | Live controller-to-running-worker injection is unsupported by the documented CLI. Interactive attach is manual. Stop plus identity-confirmed resume may redirect only when authorized. |
 | Wait/monitor | No documented cursor wait; poll JSON listing/logs with bounded backoff and report only meaningful changes. |

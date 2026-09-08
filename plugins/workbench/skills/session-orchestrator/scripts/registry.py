@@ -26,13 +26,17 @@ class SessionRegistry:
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
-            return {"version": 2, "workers": {}, "archived_workers": {}}
+            return {"version": 3, "workers": {}, "archived_workers": {}}
         data = json.loads(self.path.read_text(encoding="utf-8"))
         data.setdefault("archived_workers", {})
         for name, worker in list(data.get("workers", {}).items()):
             if worker.get("state") == "retired":
                 data["archived_workers"][name] = data["workers"].pop(name)
         for worker in (*data.get("workers", {}).values(), *data["archived_workers"].values()):
+            if "origin_project" not in worker:
+                worker["origin_project"] = worker.pop("project", "")
+            else:
+                worker.pop("project", None)
             worker.setdefault("pending_follow_up", "")
             worker.setdefault("manual_identity_evidence", "")
             worker.setdefault("platform_retirement_action", "")
@@ -41,7 +45,7 @@ class SessionRegistry:
             worker.setdefault("status_recorded", False)
             worker.setdefault("validation_evidence", "")
             worker.setdefault("validation_passed", False)
-        data["version"] = 2
+        data["version"] = 3
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
@@ -68,14 +72,21 @@ class SessionRegistry:
         self,
         name: str,
         *,
-        project: str,
+        origin_project: str = "",
         adapter: str,
         repository: str = "",
         workspace: str = "",
         client_id: str = "",
         dependencies: list[str] | None = None,
+        project: str | None = None,
     ) -> None:
         """Add a uniquely named worker in provisioning state."""
+        if project is not None:
+            if origin_project and origin_project != project:
+                raise RegistryError("origin project and legacy project must match")
+            origin_project = project
+        if not origin_project.strip():
+            raise RegistryError("origin project cannot be empty")
         data = self._load()
         if name in data["workers"] or name in data["archived_workers"]:
             raise RegistryError(f"worker {name!r} already exists")
@@ -94,7 +105,7 @@ class SessionRegistry:
             "pending_follow_up": "",
             "platform_retirement_action": "",
             "platform_retirement_evidence": "",
-            "project": project,
+            "origin_project": origin_project,
             "recovery_attempts": 0,
             "repository": repository,
             "session_id": "",
@@ -381,7 +392,7 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     add = sub.add_parser("add")
     add.add_argument("name")
-    add.add_argument("--project", required=True)
+    add.add_argument("--origin-project", "--project", dest="origin_project", required=True)
     add.add_argument("--adapter", required=True, choices=("codex", "claude-code", "cortex-code"))
     add.add_argument("--repository", default="")
     add.add_argument("--workspace", default="")
@@ -451,7 +462,7 @@ def main() -> int:
     args = _parser().parse_args()
     registry = SessionRegistry(args.registry)
     if args.command == "add":
-        registry.add(args.name, project=args.project, adapter=args.adapter, repository=args.repository, workspace=args.workspace, client_id=args.client_id, dependencies=args.depends_on)
+        registry.add(args.name, origin_project=args.origin_project, adapter=args.adapter, repository=args.repository, workspace=args.workspace, client_id=args.client_id, dependencies=args.depends_on)
     elif args.command == "session":
         registry.set_session_id(args.name, args.session_id)
     elif args.command == "attach":
