@@ -4,13 +4,16 @@ Default machine-local state to `~/.workshop/session-orchestrator/registry.json`.
 An explicit destination is authoritative. Do not put central run state in a target
 repository; only that project's durable artifacts belong there.
 
-Schema v2 separates active `workers` from retained `archived_workers`. Monitor only
+Schema v3 separates active `workers` from retained `archived_workers`. It also names
+the user-visible Vault origin explicitly instead of overloading `project` for the
+target repository. A v1/v2 `project` field is migrated to `origin_project` on load.
+Monitor only
 the active map. A v1 retired record is normalized into the archive on load and the
-v2 shape is persisted on the next mutation. Each unique task name records:
+v3 shape is persisted on the next mutation. Each unique task name records:
 
 | Field | Meaning |
 | --- | --- |
-| `project`, `repository`, `workspace` | Ownership and exact execution location |
+| `origin_project`, `repository`, `workspace` | User-visible Vault task identity, target repository, and exact isolated execution location |
 | `adapter` | `codex`, `claude-code`, or `cortex-code` |
 | `session_id`, `client_id` | Addressable identity versus provisional receipt |
 | `state` | `provisioning`, `running`, `waiting`, `blocked`, `completed`, `retired`, `lost` |
@@ -31,7 +34,7 @@ duplicate names, refuses attachment without both a session ID and verified excha
 and atomically archives only a fully terminal worker.
 
 ```bash
-python scripts/registry.py add ledger --project household-ledger --adapter codex
+python scripts/registry.py add ledger --origin-project the-vault --repository /repo --workspace /repo/.worktrees/ledger --adapter codex
 python scripts/registry.py session ledger thread-123
 python scripts/registry.py attach ledger --message-verified
 # Cortex manual-only: manual-attach cortex "exact Sessions UI evidence" --message-verified

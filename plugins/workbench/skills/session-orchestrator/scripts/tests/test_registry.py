@@ -126,7 +126,7 @@ def test_v1_retired_record_migrates_out_of_active_registry(tmp_path: Path) -> No
 
     data = SessionRegistry(path)._load()
 
-    assert data["version"] == 2
+    assert data["version"] == 3
     assert data["workers"] == {}
     assert data["archived_workers"]["ledger"]["session_id"] == "thread-123"
 
@@ -136,6 +136,44 @@ def test_duplicate_human_name_is_rejected(tmp_path: Path) -> None:
     registry.add("ledger", project="one", adapter="codex")
     with pytest.raises(RegistryError, match="already exists"):
         registry.add("ledger", project="two", adapter="claude-code")
+
+
+def test_legacy_project_field_migrates_to_explicit_origin_project(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    path.write_text(
+        '{"version": 2, "workers": {"ledger": '
+        '{"project": "the-vault", "state": "provisioning"}}}\n'
+    )
+
+    worker = SessionRegistry(path).get("ledger")
+
+    assert worker["origin_project"] == "the-vault"
+    assert "project" not in worker
+
+
+def test_origin_project_is_required(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+
+    with pytest.raises(RegistryError, match="origin project"):
+        registry.add("ledger", adapter="codex")
+
+
+def test_registry_separates_vault_origin_from_target_repository_and_workspace(
+    tmp_path: Path,
+) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+    registry.add(
+        "ledger",
+        origin_project="the-vault",
+        repository="/Users/Charles.Coonce/Dev/the-workshop",
+        workspace="/Users/Charles.Coonce/Dev/the-workshop/.claude/worktrees/ledger",
+        adapter="codex",
+    )
+
+    worker = registry.get("ledger")
+    assert worker["origin_project"] == "the-vault"
+    assert worker["repository"] == "/Users/Charles.Coonce/Dev/the-workshop"
+    assert worker["workspace"].endswith("/.claude/worktrees/ledger")
 
 
 def test_lifecycle_state_dependencies_and_recovery_are_durable(tmp_path: Path) -> None:
