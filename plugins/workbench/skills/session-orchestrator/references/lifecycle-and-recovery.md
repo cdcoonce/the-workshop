@@ -40,13 +40,35 @@ On `COMPLETE`, independently verify:
 5. preservation of unrelated user work.
 
 If results exist only in the worker worktree, state is `completed` with integration
-`pending`, not retired. Integrate through the authorized repository workflow or
-record an explicit handoff containing the worktree, branch, commit IDs, gates, and
-next owner. Cleanup remains forbidden until reachability is proven.
+`pending`, not retired. Workers never merge: they may push and open the review
+artifact allowed by their contract, then record a merge-ready handoff containing
+the worktree, PR URL, branch, exact head, target, checks, and blockers. The
+originating controller independently revalidates that exact head and checks,
+obtains required owner authorization, and alone merges. An open or approved PR,
+green checks, auto-merge availability, and `handed-off` status are not durable
+integration. Promotion is a separate controller-owned gate. Cleanup remains
+forbidden until target reachability is proven.
+
+## Terminal retirement
+
+A worker final response begins verification; it does not retire the task. In order:
+
+1. prove the authorized deliverable is reachable from its intended integration target;
+2. run and record every required validation gate;
+3. write the durable project/controller status and record its location;
+4. confirm no follow-up, dependency, or human decision remains assigned;
+5. perform the adapter's non-destructive archive/stop-retain operation and confirm it;
+6. atomically move the worker from active monitoring/registry to retained history.
+
+Any failed or unresolved gate leaves the worker active. In particular, explicit
+handoff is not durable integration, and `waiting`, `blocked`, or `lost` workers are
+not terminal. If platform archival fails, record the failure and keep the completed
+worker active. If platform archival succeeds but registry archival fails, reconcile
+the same retained identity; never create a replacement or delete its history.
 
 ## Archived/stopped workers
 
 Reopen the same retained identity when a durable update belongs to its history.
 Send and verify the update, then re-archive/stop only after its new output is
-integrated or handed off. If the platform cannot reopen, append the update to the
+integrated and every terminal gate passes again. If the platform cannot reopen, append the update to the
 controller registry and project record; do not fabricate a new worker identity.
