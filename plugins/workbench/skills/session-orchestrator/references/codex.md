@@ -4,7 +4,7 @@ Use the Codex desktop task tools when available. CLI commands do not imply parit
 
 | Operation | Supported procedure |
 | --- | --- |
-| Create | Resolve a saved project, then create a project task; default git repositories to an isolated worktree unless the owner asks for the saved checkout. |
+| Create | Resolve the existing Vault saved project and create the user-visible worker task there. Fail closed if the Vault project cannot be resolved or task creation is unavailable; never silently fall back to a projectless or target-repository task. Put the target repository and exact isolated workspace in the registry and complete contract. |
 | Verify attachment | Only a returned `threadId` is addressable. A queued `clientThreadId` remains `provisioning` and must never be passed to task tools. Verify with a controller message. |
 | Message | Send a follow-up to the exact `threadId`/`hostId`. |
 | Wait/monitor | Prefer cursor-based task waiting; use deliberate reads for investigation. Preserve cursors and stay quiet on unchanged timeout snapshots. |

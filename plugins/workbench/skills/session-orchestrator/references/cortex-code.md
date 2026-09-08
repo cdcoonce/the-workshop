@@ -5,7 +5,7 @@ does not expose a controller-addressable chat identifier or lifecycle API.
 
 | Operation | Status |
 | --- | --- |
-| Create | Manual/user-visible chat launch is available, but automated creation cannot satisfy attachment. |
+| Create | Require an existing user-visible Vault project task first. Manual/user-visible chat launch is available, but automated creation cannot satisfy attachment; fail closed if the Vault task cannot be created or addressed. |
 | Verify attachment | Automated attachment is unsupported. A manually controlled session may attach only after the owner/controller identifies the exact retained Sessions UI record and verifies a manual message exchange. Window/process IDs are not chat identities. |
 | Message | Unsupported for an existing chat. |
 | Wait/monitor | Unsupported: no documented event, log, or structured status interface. |
@@ -16,7 +16,8 @@ does not expose a controller-addressable chat identifier or lifecycle API.
 | Worktree/integration | No documented session-worktree lifecycle. Inspect git/filesystem directly and apply the shared integration gate. |
 
 Fail attachment preflight and offer a manual handoff when Cortex is the required
-platform unless exact manual session identity and exchange evidence are available.
+platform unless exact manual session identity and exchange evidence are available;
+never silently substitute a projectless chat.
 Record that evidence with `manual-attach`; do not invent a native ID or emulate
 missing operations through GUI window IDs, process IDs,
 edit-history traces, or another platform's API.

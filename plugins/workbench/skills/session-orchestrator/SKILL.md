@@ -9,7 +9,9 @@ description: >
 # Session Orchestrator
 
 Coordinate durable, user-visible workers after `using-workflow` has resolved each
-project's policy. This skill owns orchestration, not process routing.
+project's policy. Vault-originated workers are created under the existing Vault
+project; their target repository and isolated workspace are separate contract
+fields. This skill owns orchestration, not process routing.
 
 ## Iron Laws
 
@@ -26,7 +28,9 @@ completion.
 ## Start
 
 1. Resolve each repository's instructions, integration target, authorization
-   boundary, current worktrees, status, log, and reflog.
+   boundary, current worktrees, status, log, and reflog. Resolve the existing
+   Vault project/task destination for the user-visible worker; fail closed if it
+   cannot be created or addressed.
 2. Read [worker-contract.md](references/worker-contract.md) and issue one complete
    contract per worker. Parallelize only disjoint projects or explicitly disjoint
    ownership; serialize shared footprints and dependencies.
@@ -37,7 +41,8 @@ completion.
    [Cortex Code](references/cortex-code.md). Never substitute another platform's
    operations.
 5. Mark `running` only after the adapter yields a real session ID and a verified
-   message exchange. Unsupported attachment stops automated dispatch.
+   message exchange. Unsupported attachment stops automated dispatch. A queued
+   receipt, target repository, or worktree alone never satisfies attachment.
 
 ## Control Loop
 

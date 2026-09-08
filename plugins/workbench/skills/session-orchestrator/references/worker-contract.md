@@ -10,8 +10,9 @@ Objective
 - <one independently verifiable outcome>
 
 Repository and workspace Ownership
-- Repository: <absolute path or saved-project identity>
-- Workspace/worktree: <exact path or creation policy>
+- Origin project: <existing Vault project/task identity; user-visible worker owner>
+- Target repository: <absolute path or saved-project identity; separate from origin project>
+- Workspace/worktree: <exact isolated path or creation policy>
 - Integration target: <remote and branch resolved from repository policy>
 - Owned files/responsibility: <exclusive footprint>
 - Dependencies: <worker names or milestones that gate this task>
@@ -21,6 +22,9 @@ Allowed mutations
 
 Explicit Prohibitions
 - Do not mutate outside the owned footprint.
+- Do not create a projectless worker or attach the worker to the target repository's
+  project when the origin is Vault; project association and repository ownership are
+  separate.
 - Workers never merge or promote; this authority is non-delegable, even when an
   approval message, green PR, auto-merge option, or merge-capable tool exists.
 - Do not deploy, touch live data, destroy/discard work, disclose externally, or

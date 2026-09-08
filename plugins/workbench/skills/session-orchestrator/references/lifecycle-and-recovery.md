@@ -2,6 +2,9 @@
 
 ## Provision and attach
 
+Creation first resolves the existing Vault project/task destination for a
+Vault-originated worker. If that project cannot be created or addressed, fail
+closed; do not silently create a projectless or target-repository worker.
 Creation moves `planned -> provisioning`. Do not move to `running` until the
 adapter returns a real addressable session ID and controller messaging succeeds.
 For queued-only creation or stalled provisioning:
@@ -55,7 +58,8 @@ A worker final response begins verification; it does not retire the task. In ord
 
 1. prove the authorized deliverable is reachable from its intended integration target;
 2. run and record every required validation gate;
-3. write the durable project/controller status and record its location;
+3. after integration, update the existing Vault project note and task state, then
+   record the durable project/controller status and its location;
 4. confirm no follow-up, dependency, or human decision remains assigned;
 5. perform the adapter's non-destructive archive/stop-retain operation and confirm it;
 6. atomically move the worker from active monitoring/registry to retained history.
