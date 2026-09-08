@@ -15,7 +15,9 @@ project's policy. This skill owns orchestration, not process routing.
 
 **NO WORKER EXISTS WITHOUT AN ADDRESSABLE SESSION IDENTIFIER.**
 
-**NO WORKER RETIRES BEFORE INTEGRATION OR EXPLICIT HANDOFF.**
+**NO WORKER RETIRES BEFORE EVERY TERMINAL GATE PASSES.**
+
+**WORKERS NEVER MERGE OR PROMOTE.**
 
 A queued record, process, window, or worktree is evidence of provisioning, not an
 attached worker. A worker's completion claim is evidence to verify, not project
@@ -44,7 +46,10 @@ completion.
 - Answer routine questions from established project policy. Escalate genuine
   owner decisions without broadening the worker's scope meanwhile.
 - Scope expansion requires a new explicit contract amendment. Workers never infer
-  merge, deployment, live-data, destructive, or external-disclosure authority.
+  deployment, live-data, destructive, or external-disclosure authority. They may
+  implement, test, adversarially review, push, open PRs, and produce an exact
+  merge-ready handoff; the originating controller independently revalidates the
+  exact head and checks, obtains required owner authorization, and performs merges.
 - On completion, independently inspect commits, durable outputs, verification
   gates, and reachability from the intended integration target.
 - Read [lifecycle-and-recovery.md](references/lifecycle-and-recovery.md) for
@@ -53,10 +58,12 @@ completion.
 
 ## Retirement
 
-Stop monitoring and archive/retain a worker only after its outputs are integrated
-or explicitly handed off with exact evidence and ownership. Destructive cleanup
-is a separate authorized action; preserving a stopped worker is preferable to
-discarding unintegrated work.
+Archive, never delete. Retire only when the deliverable is durably integrated,
+required validation passed, durable status is recorded, no follow-up remains, and
+the adapter confirms archival or stop-and-retain. Then remove the worker from
+active monitoring and the active registry while preserving its addressable history.
+A final response alone is never terminal. Blocked, lost, integration-pending, or
+awaiting-human-gate workers stay active and quietly monitored.
 
 ## Counter-Rationalization
 
@@ -65,6 +72,7 @@ discarding unintegrated work.
 | "The worktree proves creation worked" | It proves files exist, not that the controller can address the worker. |
 | "The listing is empty, so replace it" | Listings can be stale; inspect filesystem and git evidence first. |
 | "The worker said done" | Worktree completion says nothing about integration reachability. |
+| "Its final response closes the task" | Validation, status, follow-up, and platform archival are separate gates. |
 | "Deployment is the natural next step" | Natural sequencing is not authorization. |
 
 Red flags: duplicate launches without identity reconciliation; polling commentary
