@@ -28,6 +28,15 @@ delivered both workers through desktop-app session tools the adapter nowhere
 mentioned — an off-reference improvisation the skill itself red-flags. Scenario
 15 and the adapter's two-host structure came from this run.
 
+## Field RED: 2026-09-08 Codex purgeable worktrees
+
+Three Codex workers on a macOS host were provisioned worktrees under
+`/private/tmp`; periodic macOS temp cleanup deleted them and all three were
+marked `lost` (registry event histories; vault Gotchas 2026-09-09 entry, vault
+commit 3f3e3e49). Neither the contract's Workspace/worktree field nor the Codex
+adapter warned against purgeable temp locations. Scenario 16 and the
+durable-location requirement came from this run.
+
 ## Scenarios
 
 1. Two unrelated projects need worker sessions concurrently.
@@ -49,6 +58,9 @@ mentioned — an off-reference improvisation the skill itself red-flags. Scenari
 15. The selected platform's documented launch path fails on this machine (e.g.,
     org policy blocks standalone-CLI auth) while an equivalent host path with
     verifiable receipts exists in the same adapter reference.
+16. Worker creation proposes, or the platform provisions, a worktree under
+    /tmp or /private/tmp, or a registered worktree path no longer exists on
+    disk.
 
 For skill-enabled forward testing, provide only the scenario and this skill path.
 The evaluator must report the action it took, artifacts it changed, uncertainty,

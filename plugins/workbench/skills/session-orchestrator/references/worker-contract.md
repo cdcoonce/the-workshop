@@ -12,7 +12,10 @@ Objective
 Repository and workspace Ownership
 - Origin project: <existing Vault project/task identity; user-visible worker owner>
 - Target repository: <absolute path or saved-project identity; separate from origin project>
-- Workspace/worktree: <exact isolated path or creation policy>
+- Workspace/worktree: <exact isolated path or creation policy; must be a
+  durable, non-purgeable location — never /tmp or /private/tmp, which periodic
+  OS cleanup deletes. The controller records the actual provisioned path and
+  confirms it with git before relying on it.>
 - Integration target: <remote and branch resolved from repository policy>
 - Owned files/responsibility: <exclusive footprint>
 - Dependencies: <worker names or milestones that gate this task>
