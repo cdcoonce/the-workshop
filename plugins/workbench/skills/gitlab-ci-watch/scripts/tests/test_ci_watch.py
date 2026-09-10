@@ -716,6 +716,51 @@ def test_mr_merge_prefers_merge_commit_over_squash(repo, fake_glab):
     assert watched and all(f"sha={merge_sha}" in q for q in watched)
 
 
+def test_mr_merge_ff_only_falls_back_to_source_head_sha(repo, fake_glab):
+    """A `merge_method: ff` project creates no merge commit and is never
+    squashed, so both fields come back null on a merged MR — reproduced
+    2026-09-10 against a live ff-only repo across three separate merges. The
+    target branch's new tip is, by definition of a fast-forward, the source
+    branch's head at merge time (the MR's own `sha`), so that is what must be
+    watched instead of bailing out with an indeterminate the caller cannot
+    act on."""
+    ff_sha = "d" * 40
+    script_responses(
+        fake_glab,
+        mr=[
+            {
+                "stdout": {
+                    "state": "merged",
+                    "iid": 7,
+                    "squash_commit_sha": None,
+                    "merge_commit_sha": None,
+                    "sha": ff_sha,
+                    "target_branch": "dev",
+                }
+            }
+        ],
+        pipelines=[{"stdout": [pipeline("success")]}],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+    result = run_watch(repo, fake_glab, "mr", "7")
+    assert result.returncode == 0, result.stderr
+    watched = [c[1] for c in calls(fake_glab) if "sha=" in c[1]]
+    assert watched and all(f"sha={ff_sha}" in q for q in watched)
+
+
+def test_mr_merge_with_no_sha_anywhere_is_still_indeterminate(repo, fake_glab):
+    """When even `sha` is absent there is truly nothing to watch — the
+    fallback must not invent a commit, so this stays a named, actionable
+    indeterminate."""
+    script_responses(
+        fake_glab,
+        mr=[{"stdout": {"state": "merged", "iid": 7, "target_branch": "dev"}}],
+    )
+    result = run_watch(repo, fake_glab, "mr", "7")
+    assert result.returncode == 2
+    assert "no merge commit" in result.stdout.lower()
+
+
 # --- branch mode --------------------------------------------------------------
 
 
