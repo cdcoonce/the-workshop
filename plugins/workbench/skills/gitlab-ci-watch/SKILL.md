@@ -82,8 +82,10 @@ and then burning the full timeout — confirmed across several empty polls
 first, so an open MR's pipeline arriving late is never called unreachable,
 and any rule shape the check cannot evaluate confidently leaves the previous
 waiting behaviour exactly as it was; on a
-merged MR the merge commit is watched (the squash commit only when the merge
-fast-forwarded), with a fresh timeout budget for the post-merge watch; a SHA
+merged MR the merge commit is watched (the squash commit when the merge was
+squashed instead, and the MR's own diff-head SHA when it was fast-forwarded —
+a `merge_method: ff` project creates neither a merge nor a squash commit),
+with a fresh timeout budget for the post-merge watch; a SHA
 carrying both an MR-head pipeline and a branch pipeline is judged across every
 ref's newest pipeline, with `--ref` enforced on the response as well as the
 query — a green MR pipeline cannot mask a red branch pipeline on the same

@@ -448,9 +448,19 @@ def watch_mr(project: str, iid: str, interval: float, timeout: float) -> int:
             return INDETERMINATE
         if state == "merged":
             # The merge commit heads the target branch and is what its branch
-            # pipeline runs on; the squash commit only heads it after a
-            # fast-forward merge, where merge_commit_sha is null.
-            sha = data.get("merge_commit_sha") or data.get("squash_commit_sha")
+            # pipeline runs on; the squash commit heads it instead when the
+            # merge was squashed. A `merge_method: ff` project creates
+            # neither — no merge commit, and squash is off — so both fields
+            # come back null. A fast-forward is defined as making the target
+            # branch's tip exactly the source branch's tip, and `sha` (the
+            # MR's own diff-head SHA) is already that commit, known the
+            # instant the merge lands — no `git ls-remote` guess, and no
+            # race with something else landing on the target branch after.
+            sha = (
+                data.get("merge_commit_sha")
+                or data.get("squash_commit_sha")
+                or data.get("sha")
+            )
             if not sha:
                 say(f"MR !{iid} merged but reports no merge commit — re-query needed")
                 return INDETERMINATE
