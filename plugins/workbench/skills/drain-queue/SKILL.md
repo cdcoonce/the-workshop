@@ -60,6 +60,30 @@ spec (judge it — a good deviation is a spec bug worth keeping, not an automati
 a new test that passes for the wrong reason. Then re-run the repository's full gate yourself,
 in the worker's worktree, with your own hands. A worker reporting green is a claim.
 
+**Specialist pre-reads.** Before you start the manual review, check the diff's footprint
+against the table below and dispatch every matching specialist via the Agent tool
+(`subagent_type` = the agent name). Present each specialist's findings under a **"Specialist
+pre-reads"** heading alongside the diff, for you to read before or during your own pass. The
+advisory contract: the human review remains the gate; a clean specialist report never
+substitutes for reading the diff; a specialist finding never auto-blocks — it is input to the
+human reviewer.
+
+| Diff touches                       | Specialist              |
+| ---------------------------------- | ----------------------- |
+| auth/session/secrets/API surface   | `security-reviewer`     |
+| pipelines, SQL, dbt/dagster assets | `data-quality-reviewer` |
+| frontend components/styles         | `ux-reviewer`           |
+
+Detection is by path/content heuristics: paths under a frontend directory, `*.sql` files or
+dbt models, or diffs touching auth or secret-handling modules.
+
+Worked dispatch (a diff touching `pipelines/ingest/loader.py` and a `.sql` model): use the
+Agent tool with `subagent_type=data-quality-reviewer` and a prompt such as "Read the diff for
+issue #<N> in `<worktree>`, focused on `pipelines/ingest/loader.py` and
+`models/staging/orders.sql`. Report correctness, completeness, and reliability findings per
+`plugins/workbench/docs/agent-laws.md`. This is advisory input to my manual review, not a
+gate — I will read the full diff myself regardless of your findings."
+
 **4. Land and tear down.**
 
 ```bash
