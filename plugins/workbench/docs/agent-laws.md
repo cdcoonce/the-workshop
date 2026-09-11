@@ -5,5 +5,5 @@ Operational rules every dispatched agent in this fleet follows, regardless of ro
 - Write the failing test first; a guard the suite survives when its defect is re-injected is vacuous.
 - Pass `model` explicitly on any nested dispatch (omitting it does not pick a tier).
 - Conventional commits; stage explicitly; never `git add .`; no attribution trailers.
-- Branch from freshly fetched `origin/main`, never from a stale local ref.
+- Branch from the repo's declared integration branch, freshly fetched — never from a stale local ref or an assumed hosting default.
 - Report status honestly: failing tests are reported with output, skipped steps named as skipped.

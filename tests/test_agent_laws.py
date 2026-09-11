@@ -25,7 +25,7 @@ _SEED_LAWS = (
     "Write the failing test first",
     "Pass `model` explicitly on any nested dispatch",
     "Conventional commits; stage explicitly; never `git add .`",
-    "Branch from freshly fetched `origin/main`",
+    "Branch from the repo's declared integration branch, freshly fetched",
     "Report status honestly",
 )
 
