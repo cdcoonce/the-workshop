@@ -207,6 +207,259 @@ def test_manual_pipeline_is_terminal_indeterminate(repo, fake_glab):
     assert result.returncode == 2
 
 
+# --- manual gates -------------------------------------------------------------
+
+# A dev branch pipeline resting on its promotion button. A `when: manual` job
+# declared under `rules:` without `allow_failure: true` is blocking, so GitLab
+# reports the whole pipeline as `manual` while every automatic job is green.
+PARKED_DEV_JOBS = [
+    job("version_dev", "success"),
+    job("typecheck", "success"),
+    job("build", "success"),
+    job("test", "success"),
+    job("deploy_dev", "success"),
+    job("promote_to_prod", "manual"),
+]
+
+
+def verdict_line(stdout: str) -> str:
+    lines = [line for line in stdout.splitlines() if line.startswith("verdict:")]
+    assert len(lines) == 1, stdout
+    return lines[0]
+
+
+def test_ref_watch_passes_the_gated_branch_pipeline_not_the_promotion_mr_listed_first(
+    repo, fake_glab
+):
+    """The check a merge queue gates on, in the listing's real shape.
+
+    An open dev→main promotion MR has `dev` as its source branch, so every dev
+    push also starts an MR pipeline on the same SHA — and GitLab's
+    `pipelines?ref=dev` filter returns it, listed first, with `ref` set to
+    `refs/merge-requests/<iid>/head` (reproduced 2026-09-11). A hand-rolled
+    guard that took the first result verified that MR pipeline instead of the
+    dev pipeline. It was hand-rolled because the dev pipeline parks on its
+    promotion button, and on that the watcher could only exit 2.
+    """
+    promotion_mr = dict(
+        pipeline("success", pid=202, ref="refs/merge-requests/7/head"),
+        source="merge_request_event",
+    )
+    dev_push = dict(pipeline("manual", pid=101, ref="dev"), source="push")
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [promotion_mr, dev_push]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(
+        repo, fake_glab, "sha", "--ref", "dev", "--manual-gate", "promote_to_prod"
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    fetched = [c[1] for c in calls(fake_glab) if "/jobs" in c[1]]
+    assert fetched and all("pipelines/101/jobs" in q for q in fetched)
+    assert "promote_to_prod" in verdict_line(result.stdout)
+
+
+def test_manual_gate_does_not_pass_a_blocking_job_it_was_not_given(repo, fake_glab):
+    """Naming one gate is not a pass for every manual pipeline: a second
+    blocking manual job is unrun work nobody declared expected, and the
+    verdict must name it so the caller knows what is holding the pipeline."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS + [job("approve_migration", "manual")]}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 2, result.stdout
+    assert "approve_migration" in verdict_line(result.stdout)
+
+
+def test_manual_gate_never_outranks_a_red_job(repo, fake_glab):
+    """A job can fail beside a waiting gate — same stage, or a separate DAG
+    branch — and GitLab still reports the pipeline as `manual`. A named gate
+    must never turn that red job into a pass."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[
+            {
+                "stdout": [
+                    job("version_dev", "success"),
+                    job("test", "failed"),
+                    job("promote_to_prod", "manual"),
+                ]
+            }
+        ],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 1, result.stdout
+
+
+def test_manual_gate_is_not_a_pass_while_automatic_work_remains(repo, fake_glab):
+    """A delayed job starts by itself when its timer fires: a pipeline waiting
+    on the gate *and* on that timer still has automatic work to run, so it is
+    not green yet."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS + [job("post_deploy_smoke", "scheduled")]}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 2, result.stdout
+    assert "post_deploy_smoke" in verdict_line(result.stdout)
+
+
+def test_jobs_behind_the_gate_do_not_block_its_pass(repo, fake_glab):
+    """Stage order parks every later job behind a blocking manual job as
+    `created`. With every blocking job a named gate and nothing else in
+    flight, those can only start once a human plays the gate — the pipeline
+    is green up to it, and the verdict says what has not run."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS + [job("tag_release", "created")]}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 0, result.stdout
+    assert "tag_release" in verdict_line(result.stdout)
+
+
+def test_optional_manual_jobs_need_no_naming(repo, fake_glab):
+    """A manual job with `allow_failure: true` never blocks — it already sits
+    fine in a green pipeline, so it must not make a gated one indeterminate
+    or need a --manual-gate of its own."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[
+            {
+                "stdout": PARKED_DEV_JOBS
+                + [job("rebuild_cache", "manual", allow_failure=True)]
+            }
+        ],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_mr_mode_carries_the_gate_into_the_post_merge_watch(repo, fake_glab):
+    """After a fast-forward merge, `mr` mode watches the MR's own head on the
+    target branch — the dev pipeline that rests on the promotion button — so
+    unless the gate reaches that watch, the post-merge check can only exit 2."""
+    script_responses(
+        fake_glab,
+        mr=[
+            {
+                "stdout": {
+                    "state": "merged",
+                    "iid": 7,
+                    "merge_commit_sha": None,
+                    "squash_commit_sha": None,
+                    "sha": "d" * 40,
+                    "target_branch": "dev",
+                }
+            }
+        ],
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "mr", "7", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_pipeline_mode_honours_the_manual_gate(repo, fake_glab):
+    """`pipeline ID` is how a caller targets one pipeline on a crowded SHA;
+    that pipeline resting on its gate must get the same verdict."""
+    detail = dict(pipeline("manual", pid=555), sha="e" * 40)
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": detail}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(
+        repo, fake_glab, "pipeline", "555", "--manual-gate", "promote_to_prod"
+    )
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_branch_mode_honours_the_manual_gate(repo, fake_glab, tmp_path):
+    """`branch NAME` watches the remote head on that ref — the same parked dev
+    pipeline — so the gate has to reach that watch too."""
+    bare = tmp_path / "bare.git"
+    subprocess.run(
+        ["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True
+    )
+    git(repo, "remote", "set-url", "origin", str(bare))
+    git(repo, "push", "-q", "origin", "main:dev")
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(
+        repo,
+        fake_glab,
+        "branch",
+        "dev",
+        "--project",
+        "group/project",
+        "--manual-gate",
+        "promote_to_prod",
+    )
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_manual_pipeline_without_a_gate_names_the_job_holding_it(repo, fake_glab):
+    """With no gate named, a parked pipeline stays exit 2 — but the verdict
+    must name the job it rests on, so the caller can tell a promotion button
+    from an unexpected block, and knows what --manual-gate would take."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 2, result.stdout
+    line = verdict_line(result.stdout)
+    assert "promote_to_prod" in line
+    assert "--manual-gate" in line
+
+
+def test_manual_gate_needs_its_gate_actually_waiting(repo, fake_glab):
+    """Jobs left `created` are only "behind the gate" while a named gate is
+    what holds them. A pipeline reporting `manual` with no job waiting on a
+    human (its status moved on mid-check) proves nothing about them."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": GREEN_JOBS + [job("tag_release", "created")]}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--manual-gate", "promote_to_prod")
+
+    assert result.returncode == 2, result.stdout
+
+
 # --- resilience ---------------------------------------------------------------
 
 

@@ -227,7 +227,7 @@ GitHub CLI (gh) integration for managing issues, pull requests, branches, commit
 
 *`workbench` plugin*
 
-Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. Use after any push to a work GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or flips to auto-merge, or when post-merge CI on dev must be confirmed green. For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
+Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. Use after any push to a work GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or flips to auto-merge, or when post-merge CI on dev must be confirmed green — even when it parks on a manual promotion job. For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
 
 ### `/gitlab-cli`
 
@@ -245,7 +245,7 @@ Create GitLab merge requests with `glab` using the `HEAD` conventional-commit su
 
 *`workbench` plugin*
 
-Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening a merge request into dev, promoting dev to main, or releasing to production in one of these repos.
+Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening or merging a merge request into dev, promoting dev to main, or releasing to production in one of these repos.
 
 ### `/grill-me`
 
