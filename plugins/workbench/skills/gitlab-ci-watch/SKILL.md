@@ -5,9 +5,8 @@ description: >
   integration branch head reaches a terminal state, reporting every job's
   status — roll-up success is never the report. Use after any push to a work
   GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or
-  flips to auto-merge, or when post-merge CI on dev must be confirmed green —
-  even when it parks on a manual promotion job. For browsing pipelines, jobs,
-  or logs interactively, use gitlab-cli.
+  flips to auto-merge, or when post-merge CI on dev must be confirmed green.
+  For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
 ---
 
 # GitLab CI watch
@@ -49,9 +48,7 @@ repository, which does not contain this skill.
 Common flags — placed **after** the mode, not before it: `--remote NAME`
 (default `origin`), `--project GROUP/PROJECT` (override when the remote URL
 should not be trusted — e.g. multiple gitlab.com remotes), `--interval
-SECONDS` (default 20), `--timeout SECONDS` (default 2700), and `--manual-gate
-JOB`, repeatable: a manual job the pipeline is expected to rest on, such as a
-`dev` pipeline's promote-to-prod button.
+SECONDS` (default 20), `--timeout SECONDS` (default 2700).
 
 On a branch a release bot pushes `ci.skip` commits to, the head never gets a
 pipeline, so `branch` would wait out its timeout there — watch the merged MR
@@ -61,16 +58,16 @@ with `mr IID` instead. `gitlab-promotion-flow` has the whole landing sequence.
 
 The verdict is the exit code, never the report's tone:
 
-- **exit 0** — pipeline succeeded and every job is green; or, with
-  `--manual-gate`, all that is left is a named gate and the jobs queued behind
-  it, and every job that ran is green. Report and move on.
+- **exit 0** — pipeline succeeded and every job is green. Report and move on.
 - **exit 1** — red: the pipeline failed or was canceled, or any job failed —
   including a failed `allow_failure` job under a green roll-up. Do not declare
   the work done; investigate the failing job.
 - **exit 2** — indeterminate: the watch could not start (wrong cwd, missing
   remote) or crashed, timeout, the MR was closed, the pipeline is blocked on
-  a manual job `--manual-gate` did not name (the verdict names it), repeated
-  API failures, per-job status could not be fetched (the report says
+  a manual job (the verdict names it, and the fix belongs in the job: one
+  declared under `rules:` holds every pipeline on its branch unless it also
+  sets `allow_failure: true`), repeated API failures, per-job status could not
+  be fetched (the report says
   `re-query needed`), or **the ref cannot produce a pipeline at all** —
   `.gitlab-ci.yml`'s `workflow.rules` excludes a plain push to it, so there is
   nothing to wait for and opening a merge request is what runs CI there. Treat
@@ -88,6 +85,4 @@ several pipelines are all built in and tested — see
 
 When the background task completes, relay the per-job lines to the user and
 state the verdict from the exit code. On exit 1 or 2, the next step is
-investigation (`gitlab-cli` — job logs, retry), not a re-run of the watcher —
-unless an exit 2 verdict names a manual job you expect the pipeline to rest
-on; then re-watch with `--manual-gate` for it.
+investigation (`gitlab-cli` — job logs, retry), not a re-run of the watcher.

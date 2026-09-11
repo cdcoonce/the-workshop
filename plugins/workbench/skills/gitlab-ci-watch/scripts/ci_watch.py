@@ -8,12 +8,11 @@ Modes:
   ci_watch.py pipeline ID    watch one specific pipeline until terminal
 
 Exit contract (the verdict a session must relay, per verify-ci-green):
-  0  pipeline succeeded AND every job green — or, with --manual-gate JOB,
-     it rests only on named gates and every job that ran is green
+  0  pipeline succeeded AND every job green
   1  red — pipeline failed/canceled, or any job failed/canceled (roll-up
      success with a failed allow_failure job is still red)
   2  indeterminate — setup failure (wrong cwd, missing remote), crash,
-     timeout, MR closed, blocked on a manual job no --manual-gate named,
+     timeout, MR closed, blocked on a manual job (the verdict names it),
      repeated API failures, or per-job status unverifiable
 
 Every glab call is guarded: stderr noise, empty stdout, or a nonzero exit is
@@ -48,9 +47,6 @@ PENDING_STATUSES = {
     "canceling",
 }
 RED_STATUSES = {"failed", "canceled"}
-# Job statuses a pipeline parked on its manual gates may hold: finished, the
-# gates themselves (or optional manual jobs), and jobs queued behind a gate.
-PARKED_STATUSES = {"success", "skipped", "manual", "created"}
 MAX_CONSECUTIVE_FAILURES = 15
 # An empty pipeline list is ambiguous: a ref the rules exclude looks exactly
 # like one whose pipeline has not been created yet. Confirm across several
@@ -140,13 +136,15 @@ def fetch_listing(
     return None
 
 
-def manual_verdict(entries: list[dict], manual_gates: frozenset[str]) -> int:
-    """Verdict for a pipeline GitLab reports as `manual`, with no job red.
+def manual_verdict(entries: list[dict]) -> int:
+    """Name the job holding a pipeline GitLab reports as `manual`.
 
-    Blocking manual jobs (`when: manual` without `allow_failure: true`) are
-    what hold it there. It passes only when each one is a named gate and one
-    of them is actually waiting, with nothing else able to run on its own —
-    jobs still `created` can then start only once a human plays a gate.
+    A `when: manual` job declared under `rules:` blocks unless it also sets
+    `allow_failure: true`, so one promote-style button parks every pipeline on
+    its branch. The verdict names it and says where the fix belongs: in the
+    job. Passing the parked pipeline instead would leave the button in place —
+    and a button that pushes with the CI job token starts no pipeline on its
+    target branch, so it cannot deploy at all.
     """
     waiting = sorted(
         e.get("name", "?")
@@ -154,37 +152,17 @@ def manual_verdict(entries: list[dict], manual_gates: frozenset[str]) -> int:
         if e.get("status") == "manual" and not e.get("allow_failure")
     )
     if not waiting:
-        say("verdict: pipeline reports manual but no job waits on a human — re-query needed")
+        say("verdict: pipeline is manual — needs attention, not a pass")
         return INDETERMINATE
-    ungated = [name for name in waiting if name not in manual_gates]
-    if ungated:
-        flags = " ".join(f"--manual-gate {name}" for name in ungated)
-        say(
-            f"verdict: blocked on manual job(s) {', '.join(ungated)} — not a pass;"
-            f" if that is an expected gate, add {flags}"
-        )
-        return INDETERMINATE
-    unfinished = sorted(
-        f"{e.get('name', '?')} ({e.get('status', 'unknown')})"
-        for e in entries
-        if e.get("status") not in PARKED_STATUSES
+    say(
+        f"verdict: blocked on manual job(s) {', '.join(waiting)} — not a pass;"
+        " a manual job that should not hold its pipeline needs"
+        " `allow_failure: true`, or removing"
     )
-    if unfinished:
-        say(f"verdict: automatic work remains — {', '.join(unfinished)} — not a pass")
-        return INDETERMINATE
-    behind = sorted(e.get("name", "?") for e in entries if e.get("status") == "created")
-    held = f"; not run behind it: {', '.join(behind)}" if behind else ""
-    say(f"verdict: every job green up to manual gate {', '.join(waiting)}{held}")
-    return GREEN
+    return INDETERMINATE
 
 
-def report(
-    project: str,
-    pipe: dict,
-    sha: str,
-    interval: float,
-    manual_gates: frozenset[str] = frozenset(),
-) -> int:
+def report(project: str, pipe: dict, sha: str, interval: float) -> int:
     """Print the per-job report for a terminal pipeline and return the verdict.
 
     Trigger jobs live on /bridges, not /jobs — a red downstream pipeline is
@@ -214,7 +192,7 @@ def report(
         say("verdict: every job green")
         return GREEN
     if status == "manual":
-        return manual_verdict(entries, manual_gates)
+        return manual_verdict(entries)
     say(f"verdict: pipeline is {status} — needs attention, not a pass")
     return INDETERMINATE
 
@@ -388,12 +366,7 @@ def unreachable_reason(ref: str | None) -> str | None:
 
 
 def watch_pipeline(
-    project: str,
-    sha: str,
-    ref: str | None,
-    interval: float,
-    deadline: float,
-    manual_gates: frozenset[str] = frozenset(),
+    project: str, sha: str, ref: str | None, interval: float, deadline: float
 ) -> int:
     query = f"projects/{project}/pipelines?sha={sha}"
     if ref:
@@ -441,7 +414,7 @@ def watch_pipeline(
             continue
         if len(pipes) > 1:
             say(f"{len(pipes)} pipelines for {sha} — every one is part of the verdict")
-        verdicts = [report(project, pipe, sha, interval, manual_gates) for pipe in pipes]
+        verdicts = [report(project, pipe, sha, interval) for pipe in pipes]
         if RED in verdicts:
             return RED
         if INDETERMINATE in verdicts:
@@ -450,11 +423,7 @@ def watch_pipeline(
 
 
 def watch_pipeline_by_id(
-    project: str,
-    pipeline_id: str,
-    interval: float,
-    deadline: float,
-    manual_gates: frozenset[str] = frozenset(),
+    project: str, pipeline_id: str, interval: float, deadline: float
 ) -> int:
     """Watch one specific pipeline — the direct escape hatch when a SHA
     carries several pipelines and exactly one of them is the question."""
@@ -478,17 +447,11 @@ def watch_pipeline_by_id(
             say(f"pipeline {pipeline_id}: {status}")
             last_status = status
         if status not in PENDING_STATUSES:
-            return report(project, data, data.get("sha", "?"), interval, manual_gates)
+            return report(project, data, data.get("sha", "?"), interval)
         time.sleep(interval)
 
 
-def watch_mr(
-    project: str,
-    iid: str,
-    interval: float,
-    timeout: float,
-    manual_gates: frozenset[str] = frozenset(),
-) -> int:
+def watch_mr(project: str, iid: str, interval: float, timeout: float) -> int:
     deadline = time.time() + timeout
     failures = 0
     last_state: str | None = None
@@ -533,9 +496,7 @@ def watch_mr(
             ref = data.get("target_branch")
             say(f"MR !{iid} merged as {sha} — watching {ref}")
             # Fresh budget: a slow merge must not leave zero time for the watch.
-            return watch_pipeline(
-                project, sha, ref, interval, time.time() + timeout, manual_gates
-            )
+            return watch_pipeline(project, sha, ref, interval, time.time() + timeout)
         time.sleep(interval)
 
 
@@ -564,12 +525,6 @@ def main() -> int:
     common.add_argument("--project", help="override group/project derived from the remote")
     common.add_argument("--interval", type=float, default=20.0)
     common.add_argument("--timeout", type=float, default=2700.0)
-    common.add_argument(
-        "--manual-gate",
-        action="append",
-        metavar="JOB",
-        help="a manual job the pipeline is expected to park on; repeatable",
-    )
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="mode", required=True)
     sha_cmd = sub.add_parser("sha", parents=[common], help="watch pipelines for a commit")
@@ -589,17 +544,14 @@ def main() -> int:
 
     project = resolve_project(args.remote, args.project)
     deadline = time.time() + args.timeout
-    gates = frozenset(args.manual_gate or ())
     if args.mode == "sha":
-        return watch_pipeline(
-            project, resolve_sha(args.commit), args.ref, args.interval, deadline, gates
-        )
+        return watch_pipeline(project, resolve_sha(args.commit), args.ref, args.interval, deadline)
     if args.mode == "mr":
-        return watch_mr(project, args.iid, args.interval, args.timeout, gates)
+        return watch_mr(project, args.iid, args.interval, args.timeout)
     if args.mode == "pipeline":
-        return watch_pipeline_by_id(project, args.id, args.interval, deadline, gates)
+        return watch_pipeline_by_id(project, args.id, args.interval, deadline)
     head = resolve_branch_head(args.remote, args.name)
-    return watch_pipeline(project, head, args.name, args.interval, deadline, gates)
+    return watch_pipeline(project, head, args.name, args.interval, deadline)
 
 
 if __name__ == "__main__":

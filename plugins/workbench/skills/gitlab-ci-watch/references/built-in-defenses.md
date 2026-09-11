@@ -15,11 +15,11 @@ thing to be wrong.
   so a red downstream pipeline cannot pass as green, and a listing that could
   not be fetched completely never counts as "every job green".
 - **A pipeline stuck on a manual job** ends the watch instead of holding it for
-  the full timeout, and the verdict names the job holding it. With
-  `--manual-gate JOB`, a pipeline resting on named gates passes — but never
-  while a job is red, a blocking manual job is left unnamed, no named gate is
-  actually waiting, or automatic work (pending, running, scheduled) remains.
-  Jobs still `created` behind a waiting gate are listed as not run.
+  the full timeout, and the verdict names the blocking job — a `when: manual`
+  job declared under `rules:` holds every pipeline on its branch unless it also
+  sets `allow_failure: true`. That is a defect in the job, not something the
+  watcher passes: fix it there, or drop a button that cannot work anyway (a
+  job-token push starts no pipeline on the target branch, so it never deploys).
 - **A ref whose `workflow.rules` cannot match a branch push** ends the watch
   with that reason instead of waiting out the timeout — confirmed across
   several empty polls first, so an open MR's pipeline arriving late is never

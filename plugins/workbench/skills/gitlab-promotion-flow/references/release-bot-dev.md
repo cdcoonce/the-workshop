@@ -17,11 +17,12 @@ things follow:
   commit, and GitLab's `pipelines?ref=dev` returns that one too — listed first.
   A check that trusts the first pipeline listed for a SHA verifies the wrong
   pipeline; the watcher matches each pipeline's own `ref` instead.
-- **The `dev` pipeline can rest on a manual job for good.** A promote button
-  declared under `rules:` with `when: manual` and no `allow_failure: true`
-  blocks, leaving the pipeline `manual` with every other job done. Pass that job
-  to each `dev` watch as `--manual-gate <job>`; without it the watch exits 2,
-  and its verdict names the job.
+- **A promote button parks every `dev` pipeline.** Declared under `rules:` with
+  `when: manual` and no `allow_failure: true`, it blocks, so the pipeline rests
+  at `manual` with every other job done and no watch can pass it. Fix the job
+  rather than the watch: `allow_failure: true`, or remove it — a button that
+  pushes with the CI job token starts no pipeline on `main`, so it cannot
+  deploy at all. Promote by merge request instead.
 
 ## Per MR, in queue order
 
@@ -39,10 +40,9 @@ same path URL-encoded (`group%2Fproject`). Stop at any step that fails.
    `glab mr merge <iid> --sha <sha> --auto-merge=false --yes -R <repo>`. A head
    that moved after step 2 is refused rather than merged, and so is an MR that
    `dev` moved past again; both go back to step 1.
-4. **`dev` green up to the gate.** `<ci_watch> mr <iid> --manual-gate <job>`
-   exits 0 (drop the flag where `dev` pipelines finish on their own). That
-   verdict also proves the release commit landed, so the next MR starts at
-   step 1 with nothing else to wait for.
+4. **`dev` green.** `<ci_watch> mr <iid>` exits 0. That verdict also proves the
+   release commit landed, so the next MR starts at step 1 with nothing else to
+   wait for.
 
 ## After the queue
 
