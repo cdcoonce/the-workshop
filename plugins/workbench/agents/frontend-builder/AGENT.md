@@ -2,6 +2,7 @@
 name: frontend-builder
 description: Builds frontend components with React, TypeScript, and modern CSS
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit, react-ui-ux]
   remove: []

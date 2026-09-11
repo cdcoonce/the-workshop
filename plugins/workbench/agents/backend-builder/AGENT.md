@@ -2,6 +2,7 @@
 name: backend-builder
 description: Builds backend services with Node.js, databases, and APIs
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit]
   remove: []

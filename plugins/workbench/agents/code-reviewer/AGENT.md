@@ -2,6 +2,7 @@
 name: code-reviewer
 description: Reviews code for quality, structure, and correctness
 role: reviewer
+model: sonnet
 skills:
   add: [daa-code-review, dignified-python]
   remove: []

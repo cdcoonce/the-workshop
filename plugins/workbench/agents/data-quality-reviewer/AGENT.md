@@ -2,6 +2,7 @@
 name: data-quality-reviewer
 description: Reviews data pipelines for correctness, completeness, and reliability
 role: reviewer
+model: sonnet
 skills:
   add: [daa-code-review, dagster-expert, dbt-expert, dignified-python]
   remove: []

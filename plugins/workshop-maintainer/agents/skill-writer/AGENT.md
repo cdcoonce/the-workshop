@@ -2,6 +2,7 @@
 name: skill-writer
 description: Rewrites Claude Code skills to fix failing test cases. Use when improving a SKILL.md based on annotated failure analysis from a QA Tester.
 role: skill-writer
+model: sonnet
 skills:
   add: []
   remove: []

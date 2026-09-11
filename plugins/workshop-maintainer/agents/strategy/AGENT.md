@@ -2,6 +2,7 @@
 name: strategy
 description: Analyzes stalled skill improvement runs and proposes a concrete rewrite strategy. Use when a skill improvement loop has not improved for 2+ consecutive iterations.
 role: strategy
+model: opus
 skills:
   add: []
   remove: []

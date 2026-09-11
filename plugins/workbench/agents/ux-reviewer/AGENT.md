@@ -2,6 +2,7 @@
 name: ux-reviewer
 description: Reviews frontend code for UX quality, accessibility, and consistency
 role: reviewer
+model: sonnet
 skills:
   add: [daa-code-review]
   remove: []

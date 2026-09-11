@@ -2,6 +2,7 @@
 name: pipeline-builder
 description: Builds data pipelines with ETL/ELT patterns and orchestration
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit, dagster-expert, dbt-expert, dignified-python]
   remove: []

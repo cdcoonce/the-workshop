@@ -2,6 +2,7 @@
 name: security-reviewer
 description: Reviews Python APIs for security vulnerabilities and auth issues
 role: reviewer
+model: opus
 skills:
   add: [daa-code-review]
   remove: []
