@@ -13,8 +13,10 @@ description: >
 
 **Scope:** watch-until-terminal only. This skill owns the poll loop that was
 previously hand-rolled per session; do not compose your own `while`/`sleep`
-watcher. Interactive inspection and retries (`glab ci list | get | trace |
-retry`) stay with `gitlab-cli`.
+watcher, nor a pipeline query of your own when its verdict is not the one you
+need — GitLab's `pipelines?ref=` also returns MR pipelines whose source branch
+is that ref, listed first. Interactive inspection and retries (`glab ci list |
+get | trace | retry`) stay with `gitlab-cli`.
 
 ## Invocation
 
@@ -48,6 +50,10 @@ Common flags — placed **after** the mode, not before it: `--remote NAME`
 should not be trusted — e.g. multiple gitlab.com remotes), `--interval
 SECONDS` (default 20), `--timeout SECONDS` (default 2700).
 
+On a branch a release bot pushes `ci.skip` commits to, the head never gets a
+pipeline, so `branch` would wait out its timeout there — watch the merged MR
+with `mr IID` instead. `gitlab-promotion-flow` has the whole landing sequence.
+
 ## Exit contract
 
 The verdict is the exit code, never the report's tone:
@@ -58,38 +64,22 @@ The verdict is the exit code, never the report's tone:
   the work done; investigate the failing job.
 - **exit 2** — indeterminate: the watch could not start (wrong cwd, missing
   remote) or crashed, timeout, the MR was closed, the pipeline is blocked on
-  a manual job, repeated API failures, per-job status could not be fetched
-  (the report says `re-query needed`), or **the ref cannot produce a pipeline
-  at all** — `.gitlab-ci.yml`'s `workflow.rules` excludes a plain push to it,
-  so there is nothing to wait for and opening a merge request is what runs CI
-  there. Treat as "not verified", never as a pass — and never as a red
-  pipeline.
+  a manual job (the verdict names it, and the fix belongs in the job: one
+  declared under `rules:` holds every pipeline on its branch unless it also
+  sets `allow_failure: true`), repeated API failures, per-job status could not
+  be fetched (the report says
+  `re-query needed`), or **the ref cannot produce a pipeline at all** —
+  `.gitlab-ci.yml`'s `workflow.rules` excludes a plain push to it, so there is
+  nothing to wait for and opening a merge request is what runs CI there. Treat
+  as "not verified", never as a pass — and never as a red pipeline.
 
 ## What the script already handles
 
-Do not wrap the invocation in extra defenses — these are built in and tested:
-transient `glab` failures (stderr noise, empty stdout, nonzero exits) skip a
-tick instead of killing the watcher; abbreviated SHAs are expanded before
-querying (an abbreviated `pipelines?sha=` matches nothing and reads as pending
-forever); the project path is derived from the remote URL and passed
-explicitly, so glab's alphabetical multi-remote inference is never consulted;
-job listings paginate past 100 jobs and include trigger jobs (bridges), so a
-red downstream pipeline cannot pass as green; a pipeline stuck on a manual
-job terminates the watch instead of holding it for the full timeout; a ref
-whose `workflow.rules` cannot match a branch push ends the watch with that
-reason instead of printing the same "waiting" line a queued pipeline prints
-and then burning the full timeout — confirmed across several empty polls
-first, so an open MR's pipeline arriving late is never called unreachable,
-and any rule shape the check cannot evaluate confidently leaves the previous
-waiting behaviour exactly as it was; on a
-merged MR the merge commit is watched (the squash commit when the merge was
-squashed instead, and the MR's own diff-head SHA when it was fast-forwarded —
-a `merge_method: ff` project creates neither a merge nor a squash commit),
-with a fresh timeout budget for the post-merge watch; a SHA
-carrying both an MR-head pipeline and a branch pipeline is judged across every
-ref's newest pipeline, with `--ref` enforced on the response as well as the
-query — a green MR pipeline cannot mask a red branch pipeline on the same
-commit (a retried run on the same ref still supersedes the old one).
+Do not wrap the invocation in extra defenses: transient `glab` failures,
+abbreviated SHAs, multi-remote inference, job pagination and trigger jobs,
+manual and unreachable pipelines, merge-commit resolution, and SHAs that carry
+several pipelines are all built in and tested — see
+[references/built-in-defenses.md](references/built-in-defenses.md).
 
 ## Relaying the result
 
