@@ -2,6 +2,7 @@
 name: skill-builder
 description: Builds Claude Code skills, hooks, and MCP server integrations
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit]
   remove: []

@@ -2,6 +2,7 @@
 name: qa-tester
 description: Evaluates skill instructions against a test suite. Use when scoring a skill's compliance with its test cases, filling Result and Reason columns in a tests.md table.
 role: qa-tester
+model: sonnet
 skills:
   add: []
   remove: []

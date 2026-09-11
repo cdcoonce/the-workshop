@@ -2,6 +2,7 @@
 name: analysis-builder
 description: Builds data analysis notebooks and scripts with pandas, SQL, and visualization
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit]
   remove: []

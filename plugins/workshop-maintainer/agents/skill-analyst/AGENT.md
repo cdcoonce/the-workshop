@@ -2,6 +2,7 @@
 name: skill-analyst
 description: Analyzes skill instructions for weaknesses across surface, behavioral, and adversarial tiers. Use when building or improving a test suite for a skill.
 role: analyst
+model: opus
 skills:
   add: []
   remove: []

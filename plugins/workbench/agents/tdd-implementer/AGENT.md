@@ -2,6 +2,7 @@
 name: tdd-implementer
 description: Implements features using test-driven development
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit, dignified-python]
   remove: []

@@ -2,6 +2,7 @@
 name: api-builder
 description: Builds Python API endpoints with FastAPI, Flask, or Lambda
 role: implementer
+model: sonnet
 skills:
   add: [tdd, commit]
   remove: []

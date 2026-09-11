@@ -2,6 +2,7 @@
 name: skill-reviewer
 description: Reviews Claude Code skills and hooks for correctness and best practices
 role: reviewer
+model: sonnet
 skills:
   add: [daa-code-review]
   remove: []
