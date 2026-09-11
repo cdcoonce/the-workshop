@@ -15,6 +15,8 @@ You are a subagent that finds missing wikilinks across the vault — notes that 
 
 Before starting, read `brain/Agent Contract.md` (§1 Universal invariants and §3 Worker) and follow it. The Constraints below add to that contract; they never subtract from it.
 
+Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
+
 ## Process
 
 1. Build a catalog of linkable entities:
