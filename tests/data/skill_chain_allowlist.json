@@ -1,0 +1,55 @@
+{
+  "_comment": "Mention sites of explicit-invoke (disable-model-invocation) skills that are informational — a boundary line, a related-skill pointer, a recommendation to Charles — not an actual routing chain. Seeded from the 2026-09-13 grill's flag_plan.json `allowlist_informational`, plus entries found while running the chain guard against the real tree. `in` is a path relative to plugins/workbench/skills/.",
+  "entries": [
+    {
+      "target": "vault-dispatch",
+      "in": "vault-cold-read/references/command.md",
+      "reason": "gate-contract description; cold-read never runs /dispatch"
+    },
+    {
+      "target": "vault-dispatch",
+      "in": "vault-debrief/references/command.md",
+      "reason": "boundary table + boundary line — points at where a fix belongs, not an invocation"
+    },
+    {
+      "target": "vault-connect",
+      "in": "vault-garden/references/command.md",
+      "reason": "'same store /connect' — shared data store, no invocation"
+    },
+    {
+      "target": "vault-garden",
+      "in": "vault-connect/references/command.md",
+      "reason": "describes /garden as the interactive counterpart"
+    },
+    {
+      "target": "vault-garden",
+      "in": "vault-standup/references/command.md",
+      "reason": "surfaces a nudge telling Charles to run /garden"
+    },
+    {
+      "target": "vault-grill",
+      "in": "vault-cold-read/references/command.md",
+      "reason": "recommendation to Charles, not an invocation"
+    },
+    { "target": "vault-pulse", "in": "vault-debrief/references/command.md", "reason": "boundary/comparison table" },
+    {
+      "target": "vault-standup",
+      "in": "vault-recall/references/command.md",
+      "reason": "timing advice: run before /standup"
+    },
+    { "target": "vault-standup", "in": "vault-wrap-up/references/command.md", "reason": "mentions the /standup nudge" },
+    { "target": "vault-standup", "in": "vault-garden/references/command.md", "reason": "mentions the /standup nudge" },
+    { "target": "vault-teach", "in": "vault-grill/references/command.md", "reason": "inverse-of comparison" },
+    {
+      "target": "vault-teach",
+      "in": "vault-podcast/references/command.md",
+      "reason": "describes /teach as opt-in; related link"
+    },
+    {
+      "target": "vault-write",
+      "in": "vault-essay/references/command.md",
+      "reason": "boundary line between /write and /essay"
+    },
+    { "target": "vault-budget", "in": "vault-pulse/references/command.md", "reason": "related-skill pointer" }
+  ]
+}

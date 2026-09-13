@@ -2,6 +2,7 @@
 name: vault-standup
 description: >
   Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. Trigger when Charles invokes /standup, mentions /standup, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Standup

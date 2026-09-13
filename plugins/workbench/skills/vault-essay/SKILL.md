@@ -2,6 +2,7 @@
 name: vault-essay
 description: >
   Draft long-form prose (essays and posts) in Charles's voice using The Vault's /essay writing rules. Trigger when Charles invokes /essay, mentions /essay, or asks to draft an essay or post in his voice.
+disable-model-invocation: true
 ---
 
 # Vault Essay

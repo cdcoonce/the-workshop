@@ -4,6 +4,7 @@ description: >
   Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python
   scripts. Use when user wants to create a hook, add a pre-edit check,
   post-edit formatter, block file edits, or automate responses to tool use.
+disable-model-invocation: true
 ---
 
 # Create Hook

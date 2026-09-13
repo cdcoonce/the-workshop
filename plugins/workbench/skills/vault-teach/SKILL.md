@@ -2,6 +2,7 @@
 name: vault-teach
 description: >
   Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. Trigger when Charles invokes /teach, mentions /teach, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Teach

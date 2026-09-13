@@ -2,6 +2,7 @@
 name: vault-grill
 description: >
   Run Charles's vault (The Vault) /grill active knowledge-extraction interview and route the result into the vault graph. Trigger when Charles invokes /grill, mentions /grill, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Grill
