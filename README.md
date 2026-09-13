@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; plugin-level hooks execute on all three (trust-gated on Codex, env caveats on Cortex), while personas activate on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**79 skills · 19 agents · 21 hooks · 9 plugins**
+**79 skills · 19 agents · 22 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/stamp.py`. Do not edit them by hand — run `make stamp`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.0.1` | 73 | 13 | 16 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.1.0` | 73 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.2` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -332,6 +332,7 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
 | `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
 | `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
 | `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
 | `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: commits and syncs the vault. |
@@ -497,7 +498,7 @@ the-workshop/
 | `make stamp-check`                                            | Check for generated-file drift without writing                  |
 | `make lint`                                                   | Ruff over `scripts`, `tests`, and `plugins`                     |
 | `make test`                                                   | Run every suite plus the drift and version-bump gates           |
-| `make verify-versions`                                        | Version-bump gate alone, against `VERSION_BASE` (origin/main)   |
+| `make verify-versions`                                        | Version-bump gate alone, against the release branch             |
 | `uv run python -m scripts.stamp [--check]`                    | Stamp generated files, or check for staleness (`--check`)       |
 | `uv run python -m scripts.check_version_bumps`                | Fail a plugin whose shipped content changed without a bump      |
 | `uv run python -m scripts.smoke_test <plugin>`                | Validate internal consistency of a source plugin directory      |
@@ -525,7 +526,6 @@ uv run pytest --cov=scripts --cov-report=term-missing
 | `make stamp` refuses to overwrite a file         | The target lacks the generation marker, so it may be hand-written | Confirm the path belongs in the stamper's map before forcing anything   |
 | `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
 | `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Bump `plugins/<name>/.claude-plugin/plugin.json`; see Plugin Versioning |
-| `make test` passes locally, PR CI fails the gate | `dev` already carries a bump; bare `make test` compares to `main` | Bump above `dev`; reproduce with `VERSION_BASE=origin/dev make test`    |
 | Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
 | Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 

@@ -2,6 +2,7 @@
 name: vault-garden
 description: >
   Run Charles's vault (The Vault) /garden graph-gardener apply workflow for queued link, profile, memory, index, and orphan repairs. Trigger when Charles invokes /garden, mentions /garden, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Garden

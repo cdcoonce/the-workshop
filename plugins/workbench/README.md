@@ -122,6 +122,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
 | `vault-pre-compact.py` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | — | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
 | `vault-stop-1-notebook-update.py` | — | Stop hook: updates the session notebook. |
 | `vault-stop-2-graph-gardener.py` | — | Stop hook: queues link, profile, and index repairs. |
 | `vault-stop-3-session-sync.py` | — | Stop hook: commits and syncs the vault. |

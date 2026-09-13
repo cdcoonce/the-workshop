@@ -23,6 +23,7 @@ Lifecycle hooks and the events they run on. The event column is read back out of
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
 | `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
 | `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
 | `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
 | `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: commits and syncs the vault. |
@@ -116,6 +117,12 @@ PreCompact hook: preserves session state before compaction.
 *`workbench` plugin · events: not currently wired · matcher: —*
 
 SessionStart hook: pulls from remote and injects vault context.
+
+### `vault-skill-alias.py`
+
+*`workbench` plugin · events: not currently wired · matcher: —*
+
+UserPromptSubmit hook: route a short alias for an explicit-invoke skill.
 
 ### `vault-stop-1-notebook-update.py`
 

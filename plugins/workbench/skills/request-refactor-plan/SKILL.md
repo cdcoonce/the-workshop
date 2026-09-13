@@ -1,6 +1,7 @@
 ---
 name: request-refactor-plan
 description: Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). Produces a detailed refactor plan with tiny commits, filed as a GitHub issue.
+disable-model-invocation: true
 ---
 
 # Request Refactor Plan

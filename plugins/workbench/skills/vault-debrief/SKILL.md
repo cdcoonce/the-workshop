@@ -2,6 +2,7 @@
 name: vault-debrief
 description: >
   Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. Trigger when Charles invokes /debrief, mentions /debrief, asks how much of the autonomous work needed his hands, asks whether /cold-read is actually earning its cost, or asks which stage keeps producing rework.
+disable-model-invocation: true
 ---
 
 # Vault Debrief

@@ -2,6 +2,7 @@
 name: vault-clickup-task-sync
 description: >
   Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. Trigger when Charles invokes /clickup-task-sync, mentions /clickup-task-sync, or asks to sync action items / a 1:1 recap into ClickUp.
+disable-model-invocation: true
 ---
 
 # Vault ClickUp Task Sync

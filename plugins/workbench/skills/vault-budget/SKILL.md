@@ -2,6 +2,7 @@
 name: vault-budget
 description: >
   Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. Trigger when Charles invokes /budget, mentions /budget, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Budget
