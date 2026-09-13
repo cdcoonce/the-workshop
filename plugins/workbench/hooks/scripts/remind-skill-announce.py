@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """PostToolUse hook: remind Claude to announce a skill it just invoked.
 
-The using-workflow router's Announce Convention ("Before following a skill,
-announce it: 'Using [skill] to [purpose].'") is prose the model must choose
-to obey every turn, and it loses that choice under an active terse/no-preamble
-persona, which reads the announce line as exactly the preamble it was told to
-cut. Transcript audits of real sessions confirm the miss: `Skill` tool calls
-land with no announce-line text anywhere nearby.
+The rule ("Before following a skill, announce it: 'Using [skill] to
+[purpose].' If the skill defines a checklist, create one todo per checklist
+item and track them.") is prose the model must choose to obey every turn, and
+it loses that choice under an active terse/no-preamble persona, which reads
+the announce line as exactly the preamble it was told to cut. Transcript
+audits of real sessions confirm the miss: `Skill` tool calls land with no
+announce-line text anywhere nearby.
 
-This hook fires after every `Skill` tool call and re-asserts the convention as
+This hook fires after every `Skill` tool call and re-asserts the rule as
 `additionalContext` on the next model turn, naming the specific skill that ran
 and stating explicitly that the announce line is a protocol marker exempt from
-any terse-persona rule — the same exemption added to the router's SKILL.md,
-restated here so the reminder survives even if the router body scrolled out of
-context. A prompt-level fix cannot be verified to hold on every turn; this
-hook is the deterministic backstop.
+any terse-persona rule. The reminder is self-contained — it restates the rule
+rather than pointing at a router section by name — so it keeps working even
+if that section is edited, moved, or deleted. A prompt-level fix cannot be
+verified to hold on every turn; this hook is the deterministic backstop.
 
 Only fires when `tool_input.skill` is a non-empty string — there is no skill
 name to announce otherwise. Fails open on anything else: malformed stdin, a
@@ -54,11 +55,13 @@ print(
             "hookSpecificOutput": {
                 "hookEventName": "PostToolUse",
                 "additionalContext": (
-                    f'You just invoked the "{skill}" skill. Per the '
-                    "using-workflow Announce Convention, state "
-                    f'"Using {skill} to [purpose]" in your next reply. This '
-                    "is a protocol marker, not preamble — it applies even "
-                    "under a terse/no-preamble persona."
+                    f'You just invoked the "{skill}" skill. Before following '
+                    'a skill, announce it: "Using [skill] to [purpose]" — '
+                    f'state "Using {skill} to [purpose]" in your next reply. '
+                    "This is a protocol marker, not preamble — it applies "
+                    "even under a terse/no-preamble persona. If the skill "
+                    "defines a checklist, create one todo per checklist "
+                    "item and track them as you go."
                 ),
             }
         }

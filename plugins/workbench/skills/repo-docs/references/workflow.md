@@ -49,13 +49,14 @@ four-phase method in [analysis-phases.md](analysis-phases.md), then synthesize.
 When docs exist, stamped or not, do not regenerate. Human edits must survive. An update touches only the sections the change affects; the template shapes new docs and never re-shapes existing ones. Re-shaping a hand-written README is its own proposal, shown as a diff and approved first.
 
 1. Read each footer for `baseline` and `covers`.
-2. Per doc, `git diff --name-only <baseline>..HEAD -- <covers…>`. Nothing changed,
-   nothing touched.
-3. Where covered paths changed, re-read them and revise only the affected sections.
+2. Run the checker (`scripts/check_docs.py --repo-root .`). Its `changed-source`
+   findings already diff each doc's `covers` paths against its `baseline` — the
+   docs it names are the ones whose covered paths changed since the baseline.
+   No finding for a doc means nothing changed, nothing touched.
+3. Where a doc has a `changed-source` finding, re-read the named paths and
+   revise only the affected sections.
 4. Re-stamp: new `baseline`, `covers` extended if the doc now describes new paths,
    and a `mode` if the old footer had none.
-
-
 
 ## Classify and fix
 
@@ -117,13 +118,13 @@ error. It reads only the repo and git, so it works in CI and on a fresh clone. R
 The law is one sentence and has no exceptions: **no document serves two modes.**
 Landing pages are a separate, bounded carve-out, not an exception to the law.
 
-| Excuse                                                            | Reality                                                                                                                    |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| "It is three quick steps; they belong next to the architecture."  | That is how a 400-line runbook ends up inside `docs/reference/`. Three steps are a how-to with a link from the reference.  |
-| "The reader will want the why right here."                        | The reader at work wants the fact; the reader at study wants the why. One paragraph in `docs/explanation/`, one link here. |
-| "Splitting this README now will break links."                     | In-repo links are rewritten in the same change and the checker proves it. Outside links were accepted breakage in advance. |
-| "Create all four directories now so people know where things go." | Empty structure teaches nothing and Diátaxis forbids it. The first file creates the directory; ask which doc is needed first and write that.                             |
-| "A tear-down and rewrite is faster than one extraction."                   | A tear-down is how two tested sentences vanished. One extraction, guard, checker, approval.                             |
+| Excuse                                                            | Reality                                                                                                                                      |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| "It is three quick steps; they belong next to the architecture."  | That is how a 400-line runbook ends up inside `docs/reference/`. Three steps are a how-to with a link from the reference.                    |
+| "The reader will want the why right here."                        | The reader at work wants the fact; the reader at study wants the why. One paragraph in `docs/explanation/`, one link here.                   |
+| "Splitting this README now will break links."                     | In-repo links are rewritten in the same change and the checker proves it. Outside links were accepted breakage in advance.                   |
+| "Create all four directories now so people know where things go." | Empty structure teaches nothing and Diátaxis forbids it. The first file creates the directory; ask which doc is needed first and write that. |
+| "A tear-down and rewrite is faster than one extraction."          | A tear-down is how two tested sentences vanished. One extraction, guard, checker, approval.                                                  |
 
 Red flags that the law is already broken:
 
