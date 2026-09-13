@@ -2,6 +2,7 @@
 name: vault-audit
 description: >
   Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. Trigger when Charles invokes /vault-audit, mentions /vault-audit, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Vault Audit

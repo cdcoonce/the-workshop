@@ -65,6 +65,18 @@ Phases 1–3 delegate directly per the table above; record each artifact (issue 
 
 Invoke `daa-code-review` against all changed files on the feature branch. If blocking issues found → fix, re-run. Loop until clean. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
 
+**Specialist fan-out (additive on the `daa-code-review` pass above).** Check the branch's diff footprint against the table below. Every match dispatches the named specialist as an additional reviewer alongside `daa-code-review`; its findings gate Phase 6 the same way any `daa-code-review` finding does — blocking findings must be fixed and the pass re-run.
+
+| Diff touches                       | Specialist              |
+| ---------------------------------- | ----------------------- |
+| auth/session/secrets/API surface   | `security-reviewer`     |
+| pipelines, SQL, dbt/dagster assets | `data-quality-reviewer` |
+| frontend components/styles         | `ux-reviewer`           |
+
+Detection is by path/content heuristics: paths under a frontend directory, `*.sql` files or dbt models, or diffs touching auth or secret-handling modules.
+
+Worked dispatch (a diff modifying `src/api/auth/session.py`): use the Agent tool with `subagent_type=security-reviewer` and a prompt such as "Review the diff on this branch touching `src/api/auth/session.py` for security vulnerabilities, auth/session handling correctness, and adherence to `plugins/workbench/docs/agent-laws.md`. Report blocking findings the way `daa-code-review` does — they gate Phase 6 the same way."
+
 ### Phase 7: PR
 
 Invoke `commit` for a conventional commit, then hand off to `finish-branch`, which presents its four-option menu (merge locally, push + open PR, keep as-is, discard) and owns its own test-gate around any rebase or merge it performs. See [references/phase-transitions.md](references/phase-transitions.md) for recording rules per option and the required post-rebase/merge re-test.

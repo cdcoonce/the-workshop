@@ -2,6 +2,7 @@
 name: vault-write
 description: >
   Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. Trigger when Charles invokes /write, mentions /write, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Write

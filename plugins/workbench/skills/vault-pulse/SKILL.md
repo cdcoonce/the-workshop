@@ -2,6 +2,7 @@
 name: vault-pulse
 description: >
   Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. Trigger when Charles invokes /pulse, mentions /pulse, or asks whether his work output or attention is trending up or down.
+disable-model-invocation: true
 ---
 
 # Vault Pulse

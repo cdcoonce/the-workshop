@@ -20,8 +20,10 @@ lint:
 
 # Delivery gate: a plugin whose shipped content changed must also declare a new
 # version, or `claude plugin update` offers nothing and the change reaches
-# nobody who has it installed. Compares against the release branch, so one bump
-# covers everything that lands on dev between promotions.
+# nobody who has it installed. Defaults to the release branch, which is what a
+# push to dev or main wants. CI overrides it with the PR's target branch on pull
+# requests (#568), so a PR into dev must out-version dev itself: run
+# `VERSION_BASE=origin/dev make test` before opening one.
 .PHONY: verify-versions
 verify-versions:
 	uv run python -m scripts.check_version_bumps --base $(VERSION_BASE)

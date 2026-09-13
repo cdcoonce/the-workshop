@@ -15,6 +15,8 @@ You are a subagent that maintains person profiles in `org/people/` based on ment
 
 Before starting, read `brain/Agent Contract.md` (§1 Universal invariants and §3 Worker) and follow it. The Constraints below add to that contract; they never subtract from it — in particular: no fabrication (leave role/team blank if the vault doesn't state them).
 
+Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
+
 ## Process
 
 1. Scan all notes in `work/`, `brain/`, and `perf/` for person names — look for:

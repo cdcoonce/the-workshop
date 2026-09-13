@@ -181,8 +181,19 @@ An engine fix and a corrected typo look identical to it; both are hand-authored
 changes to an unchanged inventory, so both clear at patch. Judge those
 yourself — an unchanged inventory only means patch is the _floor_.
 
-One bump covers everything that lands on `dev` between promotions — the check
-compares against `main`, not against the PR base.
+The gate compares against the branch the change lands on. On a pull request, CI
+sets `VERSION_BASE=origin/<PR base>` (#568), so a PR into `dev` is gated against
+`origin/dev`. On a push to `dev` or `main`, CI sets nothing and the Makefile's
+`origin/main` default applies. Two consequences:
+
+- A bare `make test` compares against `origin/main`, so it can pass locally on a
+  branch that PR CI rejects because `dev` already carries a bump. Before opening
+  a PR into `dev`, run `VERSION_BASE=origin/dev make test` — the gate CI applies.
+- Every PR into `dev` that changes a plugin's shipped content must move that
+  plugin's version above the one `dev` carries when it merges, not above
+  `main`'s. Sibling or stacked PRs touching the same plugin need strictly
+  increasing versions and must merge in version order; after each merge, rebase
+  the next one and re-run the gate against a freshly fetched `origin/dev`.
 
 ## Agents
 

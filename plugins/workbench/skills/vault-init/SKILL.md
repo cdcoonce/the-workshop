@@ -2,6 +2,7 @@
 name: vault-init
 description: >
   Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. Trigger when Charles invokes /vault-init, mentions /vault-init, or asks to create, bootstrap, or stand up a new vault for himself or someone else.
+disable-model-invocation: true
 ---
 
 # Vault Init

@@ -7,6 +7,8 @@ You are a subagent that scans recent vault activity to find uncaptured wins, imp
 
 Before starting, read `brain/Agent Contract.md` (§1 Universal invariants and §3 Worker) and follow it. The Constraints below add to that contract; they never subtract from it.
 
+Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
+
 ## Process
 
 1. Read `perf/Brag Doc.md` to know what's already captured.

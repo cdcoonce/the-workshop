@@ -382,6 +382,21 @@ def _parse_agent(agent_dir: Path, plugin: str) -> AgentDoc:
         raise StampError(f"Agent '{agent_dir.name}' has no AGENT.md at {agent_md}")
     frontmatter = _load_frontmatter(agent_md, "Agent")
     label = f"Agent '{agent_dir.name}/AGENT.md'"
+    # #852: every AGENT.md in the two agent-laws plugins carries a one-line
+    # pointer to its own plugin's local agent-laws.md copy — progressive
+    # disclosure, the pointer rather than the content lives in the body. A
+    # hand-kept convention with no check would silently rot as agents are
+    # added, so this fails the stamp by name rather than trusting it holds.
+    if plugin in _AGENT_LAWS_PLUGINS:
+        expected_pointer = f"plugins/{plugin}/docs/{_AGENT_LAWS_DOC}"
+        body_text = agent_md.read_text(encoding="utf-8")
+        if expected_pointer not in body_text:
+            raise StampError(
+                f"{label} is missing the shared operational-laws pointer "
+                f"('{expected_pointer}'); every AGENT.md in "
+                f"{_AGENT_LAWS_SOURCE_PLUGIN!r} and {_AGENT_LAWS_COPY_PLUGIN!r} "
+                "must reference its own plugin's local agent-laws.md copy."
+            )
     skills_config = frontmatter.get("skills", {})
     skills_add: tuple[str, ...] = ()
     if isinstance(skills_config, dict):
@@ -772,7 +787,12 @@ def build_model(root: Path) -> StampModel:
         if not docs_dir.exists():
             continue
         for doc_path in sorted(docs_dir.glob("*.md")):
-            if doc_path.name == _PROJECT_DOC:
+            # project.md is not methodology; agent-laws.md is an agent-body
+            # pointer target (#852), not a methodology doc, and — for the
+            # rendered copy specifically — including it here would need a
+            # second `make stamp` run to converge, since the copy does not
+            # exist on disk until this run writes it.
+            if doc_path.name in (_PROJECT_DOC, _AGENT_LAWS_DOC):
                 continue
             model.methodology.append(_parse_methodology(doc_path, plugin_dir.name))
     model.methodology.sort(key=lambda d: (d.filename, d.plugin))
@@ -1003,6 +1023,30 @@ def is_vault_skill(slug: str) -> bool:
     new skill silently shipping no principles at all.
     """
     return slug.startswith(_VAULT_SKILL_PREFIX)
+
+
+# Every AGENT.md in these two plugins points at the same shared operational
+# laws (#852). Unlike the vault principles above, this is not a naming-
+# convention rule across an open-ended set of components: there are exactly
+# two agent-bearing plugins today, named explicitly. The canonical is
+# hand-maintained in place at its own shipped location in the source plugin —
+# workbench's own agents read it there directly, so only the *other* plugin
+# needs a stamped copy.
+_AGENT_LAWS_DOC = "agent-laws.md"
+_AGENT_LAWS_SOURCE_PLUGIN = "workbench"
+_AGENT_LAWS_COPY_PLUGIN = "workshop-maintainer"
+_AGENT_LAWS_PLUGINS = frozenset({_AGENT_LAWS_SOURCE_PLUGIN, _AGENT_LAWS_COPY_PLUGIN})
+
+
+def agent_laws_template(root: Path) -> Path:
+    """Where the canonical shared operational-laws doc lives."""
+    return root / "plugins" / _AGENT_LAWS_SOURCE_PLUGIN / "docs" / _AGENT_LAWS_DOC
+
+
+def render_agent_laws(root: Path) -> str:
+    """Render the agent-laws copy shipped by the non-source plugin."""
+    body = agent_laws_template(root).read_text(encoding="utf-8")
+    return f"{_MD_MARKER}\n\n{body}"
 
 
 def render_persona_settings(root: Path) -> str:
@@ -1511,6 +1555,19 @@ def _render(root: Path) -> tuple[dict[Path, str], set[Path]]:
                 outputs[
                     directory / "skills" / skill.slug / "references" / _VAULT_PRINCIPLES
                 ] = principles
+
+        if directory.name == _AGENT_LAWS_COPY_PLUGIN:
+            # Losing the canonical must not quietly un-own the copy every
+            # AGENT.md in this plugin already points at — same reasoning as
+            # the vault-principles guard above.
+            if not agent_laws_template(root).exists():
+                raise StampError(
+                    f"'{agent_laws_template(root)}' is missing, but "
+                    f"'{_AGENT_LAWS_COPY_PLUGIN}' ships agents whose shared "
+                    "laws file is rendered from it. Restore the canonical, "
+                    f"or remove '{_AGENT_LAWS_COPY_PLUGIN}''s agents."
+                )
+            outputs[directory / "docs" / _AGENT_LAWS_DOC] = render_agent_laws(root)
 
     outputs[root / ".claude-plugin" / "marketplace.json"] = render_marketplace(model)
     outputs[root / ".agents" / "plugins" / "marketplace.json"] = render_codex_marketplace(model)

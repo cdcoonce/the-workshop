@@ -2,6 +2,7 @@
 name: vault-fix-issue
 description: >
   Run Charles's vault (The Vault) /fix-issue workflow to resolve a filed issue under TDD + mutation-teeth-check + review-before-commit discipline. Trigger when Charles invokes /fix-issue, mentions /fix-issue, or asks to fix/resolve a specific filed issue with test rigor.
+disable-model-invocation: true
 ---
 
 # Vault Fix Issue

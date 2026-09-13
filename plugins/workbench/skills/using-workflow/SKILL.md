@@ -84,12 +84,6 @@ skills run after:
 Example: "write a PRD for X" → `write-a-prd` first, then `commit` once the
 PRD is filed.
 
-## Announce Convention
-
-Before following a skill, announce it: "Using [skill] to [purpose]." If the
-skill defines a checklist, create one todo per checklist item before starting
-work, and track them as you go.
-
 ## Subagent Opt-Out
 
 <SUBAGENT-STOP>

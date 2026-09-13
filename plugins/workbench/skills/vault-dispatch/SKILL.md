@@ -2,6 +2,7 @@
 name: vault-dispatch
 description: >
   Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. Trigger when Charles invokes /dispatch, mentions /dispatch, or asks for this vault workflow by name.
+disable-model-invocation: true
 ---
 
 # Vault Dispatch
