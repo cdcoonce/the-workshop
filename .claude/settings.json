@@ -46,6 +46,7 @@
     ]
   },
   "enabledPlugins": {
-    "workbench@the-workshop": true
+    "workbench@the-workshop": true,
+    "workshop-maintainer@the-workshop": true
   }
 }
