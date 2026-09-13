@@ -190,20 +190,28 @@ def _vault_wiring() -> dict[str, list[str]]:
     return out
 
 
-def test_all_seven_vault_hooks_are_wired() -> None:
+def test_remaining_vault_hooks_are_wired() -> None:
     """The vault ran seven hooks before the cutover; it must run seven after.
 
     Sourced from the vault's own settings.json at the time of #667. A hook that
     silently fails to move is the failure mode this whole issue exists to
     prevent, and it is invisible until someone notices a thing stopped working.
+
+    The UserPromptSubmit classifier (`vault-user-prompt-classify.py`) was later
+    removed outright: it fired on every prompt with no confidence floor,
+    including system and background-task notifications. So that event is
+    checked for absence, not membership -- and the rest are checked as a
+    subset the vault still needs wired, not an exact count, so an unrelated
+    future hook does not fail this test.
     """
     wiring = _vault_wiring()
     assert wiring.get("SessionStart") == ["vault-session-start.py"]
-    assert wiring.get("UserPromptSubmit") == ["vault-user-prompt-classify.py"]
+    assert "vault-user-prompt-classify.py" not in wiring.get("UserPromptSubmit", []), (
+        "prompt classifier hook should have been removed, not re-wired"
+    )
     assert wiring.get("PreCompact") == ["vault-pre-compact.py"]
     assert wiring.get("PostToolUse") == ["vault-validate-write.py"]
     assert len(wiring.get("Stop", [])) == 3
-    assert sum(len(v) for v in wiring.values()) == 7
 
 
 def test_session_sync_runs_last_on_stop() -> None:
