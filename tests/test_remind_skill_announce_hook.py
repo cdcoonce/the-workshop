@@ -90,7 +90,28 @@ def test_emits_additional_context_naming_the_skill() -> None:
     output = payload["hookSpecificOutput"]
     assert output["hookEventName"] == "PostToolUse"
     assert "vault-sync" in output["additionalContext"]
-    assert "Announce Convention" in output["additionalContext"]
+
+
+def test_reminder_is_self_contained_and_states_announce_instruction() -> None:
+    """The hook must restate the announce rule itself rather than pointing at
+    a router section by name — a router section can be edited or deleted
+    without this hook's text going stale."""
+    result = run({"tool_name": "Skill", "tool_input": {"skill": "vault-sync"}})
+    payload = json.loads(result.stdout)
+    context = payload["hookSpecificOutput"]["additionalContext"]
+    assert "Using [skill] to [purpose]" in context
+    assert "before following" in context.lower()
+    assert "Announce Convention" not in context
+    assert "using-workflow" not in context.lower()
+    assert "router" not in context.lower()
+
+
+def test_reminder_states_checklist_instruction() -> None:
+    result = run({"tool_name": "Skill", "tool_input": {"skill": "vault-sync"}})
+    payload = json.loads(result.stdout)
+    context = payload["hookSpecificOutput"]["additionalContext"]
+    assert "checklist" in context.lower()
+    assert "todo per checklist item" in context.lower()
 
 
 def test_reminder_names_terse_persona_exemption() -> None:
