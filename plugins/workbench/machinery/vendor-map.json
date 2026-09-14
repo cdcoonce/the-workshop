@@ -193,6 +193,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/cold_read_evidence.py",
+      "target": ".claude/scripts/cold_read_evidence.py"
+    },
+    {
+      "kind": "file",
       "source": "tools/machinery_check.py",
       "target": ".claude/scripts/machinery_check.py"
     },
