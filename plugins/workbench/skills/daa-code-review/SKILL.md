@@ -1,6 +1,9 @@
 ---
 name: daa-code-review
-description: AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. Use when the user asks for a "code review" or "quality check"; when Python files need checking for PEP8 violations, unused code, missing type hints, docstring problems, complexity issues, or potential runtime errors; when Markdown documentation needs validation for broken links, heading structure, or formatting; when Mermaid diagram syntax needs validation; or when the user pastes code snippets for analysis.
+description: >
+  AI-powered code quality review for Python, Markdown, and Mermaid. Use when
+  the user asks for a "code review" or "quality check", or pastes code for
+  analysis. Not vulnerabilities — see security-review.
 ---
 
 # DAA Code Review Skill

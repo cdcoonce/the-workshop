@@ -1,9 +1,9 @@
 ---
 name: dagster-expert
-description:
-  Expert guidance for working with Dagster and the dg CLI. ALWAYS use before doing any task that requires
-  knowledge specific to Dagster, or that references assets, materialization, components, data tools or data pipelines.
-  Common tasks may include creating a new project, adding new definitions, understanding the current project structure, answering general questions about the codebase (finding asset, schedule, sensor, component or job definitions), debugging issues, or providing deep information about a specific Dagster concept.
+description: >
+  Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors,
+  jobs. Use before tasks referencing Dagster, materialization, or data pipelines,
+  including creating a project or finding definitions.
 ---
 
 ## Core Dagster Concepts
@@ -73,4 +73,5 @@ For every question, identify which reference file(s) are relevant using the inde
 - [Creating State-Backed Components](./references/components/state-backed/creating.md) — building a component that fetches and caches external state
 - [Using State-Backed Components](./references/components/state-backed/using.md) — managing state-backed components in production, CI/CD, or refreshing state
 - [Integration libraries index for 40+ tools and technologies (dbt, Fivetran, Snowflake, AWS, etc.).](./references/integrations/INDEX.md) — integration, external tool, dagster-\*; dbt, fivetran, airbyte, snowflake, bigquery, sling, aws, gcp
+
 <!-- END GENERATED INDEX -->

@@ -1,11 +1,9 @@
 ---
 name: dbt-expert
-description:
-  Expert guidance for working with dbt Core. ALWAYS use before doing any task that requires
-  knowledge specific to dbt, including building or modifying models, writing SQL transformations,
-  configuring tests, running dbt CLI commands, or working with dbt project structure.
-  Common triggers include references to dbt, models, ref(), source(), materializations,
-  seeds, snapshots, dbt build/run/test, YAML schema files, or analytics engineering patterns.
+description: >
+  Expert guidance for building dbt Core models, sources, tests, and snapshots. Use
+  before tasks referencing dbt, ref()/source(), materializations, YAML schema, or dbt
+  build/run/test. Not project auditing — use dbt-manifest-facts.
 ---
 
 ## Core dbt Concepts
@@ -67,4 +65,3 @@ that already exists — how many models or tests it has, what grain a model
 declares, which models a seed actually feeds, or whether anything references a
 given seed — use `dbt-manifest-facts`, which reads those facts out of
 `target/manifest.json` instead of inferring them from model SQL.
-

@@ -1,12 +1,9 @@
 ---
 name: blueprint
 description: >
-  Charts an effort too big for one agent session as a shared map of decision
-  tickets on the repo's issue tracker, worked one at a time until the way to
-  the destination is clear. Use when the user explicitly invokes /blueprint,
-  says "chart a map" or "work the map", names an existing map issue to
-  continue, or asks to plan something too large and foggy to spec in one
-  sitting. Planning only — it produces decisions, not build slices.
+  Charts an effort too big for one session as a map of decision tickets,
+  worked one ticket at a time. Use when invoking /blueprint, saying "chart a
+  map" or "work the map", or planning work too large to spec at once.
 ---
 
 # Blueprint

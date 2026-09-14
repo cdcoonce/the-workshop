@@ -10,59 +10,59 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | Skill | Plugin | Summary |
 | --- | --- | --- |
 | `/add-the-workshop-hook` | `workshop-maintainer` | Design and ship a new hook in this repo (the-workshop) — fetch the exact event schema, write a stdlib-only fail-open script, TDD it against real subprocess+git behavior, declare its wiring so the stamper picks it up, and push to both GitHub and GitLab. |
-| `/adversarial-review` | `workbench` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
+| `/adversarial-review` | `workbench` | Attacks finished work by trying to disprove what it claims, reporting what survives with evidence. |
 | `/advisor-product-design` | `advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. |
 | `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
-| `/blueprint` | `workbench` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. |
+| `/blueprint` | `workbench` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
-| `/chart-taste` | `workbench` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
-| `/commit` | `workbench` | Git commit workflow with enforced conventional commit style. |
+| `/chart-taste` | `workbench` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
+| `/commit` | `workbench` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
-| `/daa-code-review` | `workbench` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. |
-| `/dagster-expert` | `workbench` | Expert guidance for working with Dagster and the dg CLI. |
-| `/data-discovery` | `workbench` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
-| `/dbt-expert` | `workbench` | Expert guidance for working with dbt Core. |
-| `/dbt-manifest-facts` | `workbench` | Answers structural questions about a dbt project from its parsed manifest.json rather |
+| `/daa-code-review` | `workbench` | AI-powered code quality review for Python, Markdown, and Mermaid. |
+| `/dagster-expert` | `workbench` | Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors, jobs. |
+| `/data-discovery` | `workbench` | Generates a data discovery doc for a Snowflake schema or dbt project: table inventory, coverage, ER diagram, and runnable queries. |
+| `/dbt-expert` | `workbench` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |
+| `/dbt-manifest-facts` | `workbench` | Answers structural questions about a dbt project from its manifest.json, not comments or memory. |
 | `/design-an-interface` | `workbench` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
-| `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
-| `/dev-cycle` | `workbench` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
-| `/dignified-python` | `workbench` | Production Python coding standards with automatic version detection (3.10-3.13). |
-| `/drain-queue` | `workbench` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. |
+| `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. |
+| `/dev-cycle` | `workbench` | Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. |
+| `/dignified-python` | `workbench` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
+| `/drain-queue` | `workbench` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
 | `/drill-me` | `workbench` | Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. |
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
-| `/github-cli` | `workbench` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
-| `/gitlab-ci-watch` | `workbench` | Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. |
-| `/gitlab-cli` | `workbench` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. |
+| `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
+| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
-| `/mr-merge-order` | `workbench` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. |
-| `/mr-review-fixes` | `workbench` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. |
-| `/persona-builder` | `workbench` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
+| `/mr-merge-order` | `workbench` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
+| `/mr-review-fixes` | `workbench` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
+| `/persona-builder` | `workbench` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
 | `/plan-ceo-review` | `workbench` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
-| `/prd-to-issues` | `workbench` | Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). |
-| `/project-context` | `workbench` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. |
-| `/react-ui-ux` | `workbench` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. |
-| `/repo-docs` | `workbench` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
+| `/prd-to-issues` | `workbench` | Breaks a PRD into tracer-bullet vertical slices as executor-ready GitHub issues, or a phased plan under docs/plans/ with `--plan`. |
+| `/project-context` | `workbench` | Generates or updates `.claude/docs/project.md`, the dense project reference Claude loads every session. |
+| `/react-ui-ux` | `workbench` | Applies design taste to React UI generation using variance/motion/density dials, stopping components from the generic shadcn/Tailwind look. |
+| `/repo-docs` | `workbench` | Writes and maintains a repo's README and docs/ (tutorials, how-to, reference, explanation). |
 | `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/session-orchestrator` | `workbench` | Supervises user-visible worker sessions across projects and platforms. |
-| `/shared-tree-safety` | `workbench` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
-| `/sql-deploy-precheck` | `workbench` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
-| `/stale-artifact-sweep` | `workbench` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
+| `/shared-tree-safety` | `workbench` | Protect work when a git tree may be shared with a live autonomous agent or another session. |
+| `/sql-deploy-precheck` | `workbench` | Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. |
+| `/stale-artifact-sweep` | `workbench` | Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or blocker against current reality, with evidence. |
 | `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
 | `/tdd` | `workbench` | Test-driven development with red-green-refactor loop. |
-| `/transcript-notes` | `workbench` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
+| `/transcript-notes` | `workbench` | Turns a YouTube lecture or transcript (VTT, SRT, text) into a structured Obsidian study note with reconstructed math and flagged visuals. |
 | `/triage-issue` | `workbench` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
 | `/triage-quarantine` | `workbench` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. |
 | `/using-workflow` | `workbench` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/vault-audit` | `workbench` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. |
 | `/vault-budget` | `workbench` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. |
 | `/vault-clickup-task-sync` | `workbench` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. |
-| `/vault-cold-read` | `workbench` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. |
+| `/vault-cold-read` | `workbench` | Run Charles's vault /cold-read gate — an adversarial read of an issue's SPEC before promotion to the afk executor. |
 | `/vault-connect` | `workbench` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits, including a manual `--term` mode for finding or inserting the right wikilink for a note. |
-| `/vault-context-then-delegate` | `workbench` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. |
+| `/vault-context-then-delegate` | `workbench` | Runs Charles's vault /context-then-delegate workflow, resolving email/SharePoint/Slack ambiguity before writing a prompt. |
 | `/vault-debrief` | `workbench` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. |
 | `/vault-dispatch` | `workbench` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. |
 | `/vault-dump` | `workbench` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. |
@@ -74,7 +74,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-handoff` | `workbench` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. |
 | `/vault-init` | `workbench` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. |
 | `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
-| `/vault-podcast` | `workbench` | Run Charles's vault (The Vault) /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes (deep-dive) or teach lesson workspaces (lesson). |
+| `/vault-podcast` | `workbench` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
 | `/vault-recall` | `workbench` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
@@ -82,12 +82,12 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
 | `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
-| `/walkthrough` | `workbench` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |
-| `/warehouse-sql-test-harness` | `workbench` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. |
+| `/walkthrough` | `workbench` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
+| `/warehouse-sql-test-harness` | `workbench` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |
 | `/workshop-skill-creator` | `workshop-maintainer` | Creates and revises skills owned by The Workshop repository. |
-| `/worktree-audit` | `workbench` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
+| `/worktree-audit` | `workbench` | Inventory git worktrees across one repo or many, classifying each reapable, keep, or too-recent with evidence. |
 | `/write-a-prd` | `workbench` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
-| `/xlsx-template-row-edit` | `workbench` | Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. |
+| `/xlsx-template-row-edit` | `workbench` | Edits a committed .xlsx report template — inserting, deleting, or restyling rows — and verifies it mechanically, since openpyxl never recalculates and tests miss a mis-pointed formula or dropped fill. |
 
 ## Full descriptions
 
@@ -101,7 +101,7 @@ Design and ship a new hook in this repo (the-workshop) — fetch the exact event
 
 *`workbench` plugin*
 
-Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. Use when the user says "adversarial review", "attack this", "try to break this", "poke holes in this", "prove me wrong", "be skeptical", or wants a hostile pass over work that is claimed done — before declaring it finished, shipping it, merging it, or trusting a result.
+Attacks finished work by trying to disprove what it claims, reporting what survives with evidence. Use when the user says "attack this" or "try to break this", or wants a hostile pass before shipping, merging, or trusting a claimed-done result.
 
 ### `/advisor-product-design`
 
@@ -119,7 +119,7 @@ Product-strategy sounding board and coach for a design+PM hybrid at an early-sta
 
 *`workbench` plugin*
 
-Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. Use when the user explicitly invokes /blueprint, says "chart a map" or "work the map", names an existing map issue to continue, or asks to plan something too large and foggy to spec in one sitting. Planning only — it produces decisions, not build slices.
+Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. Use when invoking /blueprint, saying "chart a map" or "work the map", or planning work too large to spec at once.
 
 ### `/brainstorm`
 
@@ -131,13 +131,13 @@ Shape a fuzzy idea into a committed direction before any plan, PRD, or code exis
 
 *`workbench` plugin*
 
-Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. Use when building charts or data visualizations with Recharts, Nivo, or similar React charting libraries.
+Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. Use when building charts with Recharts, Nivo, or similar libraries. Not container chrome — use react-ui-ux.
 
 ### `/commit`
 
 *`workbench` plugin*
 
-Git commit workflow with enforced conventional commit style. Use when Claude needs to stage and commit changes, craft commit messages, or the user asks to commit, make a commit, or save their work. Ensures consistent commit message format, proper scoping, and atomic commits across the project.
+Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. Use when Claude needs to craft a commit message or the user asks to commit, make a commit, or save their work.
 
 ### `/create-hook`
 
@@ -149,31 +149,31 @@ Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python script
 
 *`workbench` plugin*
 
-AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. Use when the user asks for a "code review" or "quality check"; when Python files need checking for PEP8 violations, unused code, missing type hints, docstring problems, complexity issues, or potential runtime errors; when Markdown documentation needs validation for broken links, heading structure, or formatting; when Mermaid diagram syntax needs validation; or when the user pastes code snippets for analysis.
+AI-powered code quality review for Python, Markdown, and Mermaid. Use when the user asks for a "code review" or "quality check", or pastes code for analysis. Not vulnerabilities — see security-review.
 
 ### `/dagster-expert`
 
 *`workbench` plugin*
 
-Expert guidance for working with Dagster and the dg CLI. ALWAYS use before doing any task that requires knowledge specific to Dagster, or that references assets, materialization, components, data tools or data pipelines. Common tasks may include creating a new project, adding new definitions, understanding the current project structure, answering general questions about the codebase (finding asset, schedule, sensor, component or job definitions), debugging issues, or providing deep information about a specific Dagster concept.
+Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors, jobs. Use before tasks referencing Dagster, materialization, or data pipelines, including creating a project or finding definitions.
 
 ### `/data-discovery`
 
 *`workbench` plugin*
 
-Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. Produces a single markdown file with table inventory, coverage summary, Mermaid relationship diagram, and runnable discovery queries with plain English headers. Adaptive depth for engineers or analysts. Use when: onboarding someone to a dataset, documenting available data, creating a data walkthrough, exploring what's in a schema. Triggers: data discovery, discover data, what data is available, document this schema, data walkthrough, schema handoff, onboard to dataset, what tables exist, explore this data.
+Generates a data discovery doc for a Snowflake schema or dbt project: table inventory, coverage, ER diagram, and runnable queries. Use when onboarding to a dataset or asking what data exists. Not dbt structure — use dbt-manifest-facts.
 
 ### `/dbt-expert`
 
 *`workbench` plugin*
 
-Expert guidance for working with dbt Core. ALWAYS use before doing any task that requires knowledge specific to dbt, including building or modifying models, writing SQL transformations, configuring tests, running dbt CLI commands, or working with dbt project structure. Common triggers include references to dbt, models, ref(), source(), materializations, seeds, snapshots, dbt build/run/test, YAML schema files, or analytics engineering patterns.
+Expert guidance for building dbt Core models, sources, tests, and snapshots. Use before tasks referencing dbt, ref()/source(), materializations, YAML schema, or dbt build/run/test. Not project auditing — use dbt-manifest-facts.
 
 ### `/dbt-manifest-facts`
 
 *`workbench` plugin*
 
-Answers structural questions about a dbt project from its parsed manifest.json rather
+Answers structural questions about a dbt project from its manifest.json, not comments or memory. Use when counting models/tests/seeds, auditing a repo, or tracing what feeds a model. Not dbt-expert or data-discovery.
 
 ### `/design-an-interface`
 
@@ -185,31 +185,31 @@ Generate multiple radically different interface designs for a module using paral
 
 *`workbench` plugin*
 
-Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. Use after writing tests for a security boundary, a validator, a detector, or any guard whose failure mode is silent — and before trusting a green suite as evidence.
+Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. Use after writing tests for a validator or guard whose failure mode is silent, before trusting a green suite.
 
 ### `/dev-cycle`
 
 *`workbench` plugin*
 
-Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. This is the interactive lane — for greenfield work, skill-building, or changes too coupled to delegate.
+Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. Use when the user says "dev cycle", "development workflow", or "full development pipeline", or invokes /dev-cycle.
 
 ### `/dignified-python`
 
 *`workbench` plugin*
 
-Production Python coding standards with automatic version detection (3.10-3.13). Use when writing,
+Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. Use when writing, reviewing, or refactoring Python in any project, not only Dagster.
 
 ### `/drain-queue`
 
 *`workbench` plugin*
 
-Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. Use when several ready issues must be built and merged as a batch, when an unattended executor is unavailable and its backlog still has to move, or when the user says "work the queue", "drain the backlog", "land these tickets", or "build these by hand".
+Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. Use when ready issues must ship as a batch, or the user says "work the queue", "drain the backlog", or "build these by hand".
 
 ### `/drill-me`
 
 *`workbench` plugin*
 
-Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. Use when Charles invokes /drill-me, or asks to be drilled, quizzed, or tested on material — "quiz me", "drill me", "test me on this", "exam-style practice" — especially before an assessment.
+Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. Use when Charles invokes /drill-me or asks to be drilled, quizzed, or tested on material — especially before an assessment.
 
 ### `/finish-branch`
 
@@ -221,19 +221,19 @@ Use when implementation is complete, all tests pass, and you need to decide how 
 
 *`workbench` plugin*
 
-GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. Use when Claude needs to create, list, view, or update GitHub issues; create draft branches and pull requests; make commits and push changes; review pull request diffs and changes; approve or merge PRs; manage GitHub Actions workflows; or work with GitHub repositories without switching to a browser. Requires gh CLI installed and authenticated.
+GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. Use to create, list, or update GitHub issues, open or review pull requests, or manage Actions without a browser.
 
 ### `/gitlab-ci-watch`
 
 *`workbench` plugin*
 
-Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. Use after any push to a work GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or flips to auto-merge, or when post-merge CI on dev must be confirmed green. For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
+Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. Use after pushing to GitLab, on a `glab mr merge` 405, or to confirm post-merge CI on dev. For browsing, use gitlab-cli.
 
 ### `/gitlab-cli`
 
 *`workbench` plugin*
 
-GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. Use when Claude needs to create, list, view, or update GitLab issues; push branches; review merge request diffs; approve or merge MRs; or inspect and retry pipelines and job logs. Requires the glab CLI installed and authenticated. For CREATING a merge request, use the gitlab-mr-create skill instead; for WATCHING CI to completion after a push or merge, use the gitlab-ci-watch skill instead.
+GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. Use to create, list, or update GitLab issues, review or merge MRs, or inspect pipelines and logs. For MR creation use gitlab-mr-create; for CI watching use gitlab-ci-watch.
 
 ### `/gitlab-mr-create`
 
@@ -245,7 +245,7 @@ Create GitLab merge requests with `glab` using the `HEAD` conventional-commit su
 
 *`workbench` plugin*
 
-Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening a merge request into dev, promoting dev to main, or releasing to production in one of these repos.
+Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening an MR into dev, promoting dev to main, or releasing to production in these repos.
 
 ### `/grill-me`
 
@@ -263,19 +263,19 @@ Use when user says "improve skill", "benchmark skill", "make skill better", or i
 
 *`workbench` plugin*
 
-Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. Computes a pairwise conflict matrix with git merge-tree and recommends an order by rebase cost. Read-only. Covers GitLab and GitHub.
+Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. Use when several MRs or PRs target the same branch and the user asks which to merge first or how to order a queue. Read-only.
 
 ### `/mr-review-fixes`
 
 *`workbench` plugin*
 
-Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. Covers reading review threads, triaging findings, landing the fix, and replying to the reviewer in-thread on GitLab and GitHub.
+Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. Use when an MR or PR has review feedback, changes requested, or an approval blocker, or asks what needs fixing after review.
 
 ### `/persona-builder`
 
 *`workbench` plugin*
 
-Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
+Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. Use when asked to create a persona, coach, sounding board, or advisor for someone.
 
 ### `/plan-ceo-review`
 
@@ -287,25 +287,25 @@ CEO/founder-mode review that rethinks a plan to find the 10-star product. Use wh
 
 *`workbench` plugin*
 
-Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). Use when user wants to convert a PRD to issues, create implementation tickets, break down a PRD into work items, break down a PRD into an implementation plan, plan phases from a PRD, or mentions "tracer bullets".
+Breaks a PRD into tracer-bullet vertical slices as executor-ready GitHub issues, or a phased plan under docs/plans/ with `--plan`. Use to convert a PRD to issues, or break a PRD into work items or tickets, or mentions "tracer bullets".
 
 ### `/project-context`
 
 *`workbench` plugin*
 
-Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. Use this skill when the user asks to create, update, regenerate, or refresh project context, or says things like "update project.md", "generate project context", "this repo needs a project.md", or "Claude doesn't know about this project". Also trigger when onboarding Claude to a new repository for the first time.
+Generates or updates `.claude/docs/project.md`, the dense project reference Claude loads every session. Use when asked to create, update, or regenerate project context, or says "update project.md". Not the README — see repo-docs.
 
 ### `/react-ui-ux`
 
 *`workbench` plugin*
 
-Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. Use when building or editing React components, pages, or layouts (.tsx/.jsx), especially new UI generation in Tailwind/shadcn/Framer-Motion projects.
+Applies design taste to React UI generation using variance/motion/density dials, stopping components from the generic shadcn/Tailwind look. Use when building or editing React components/pages. Not charts — use chart-taste.
 
 ### `/repo-docs`
 
 *`workbench` plugin*
 
-Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. Use when someone asks to write, generate, update, improve, or refresh a README, says "this repo needs a README", wants a runbook, how-to guide, operations guide, tutorial, architecture doc, module map, data-flow write-up, or a "where does X live" doc, asks which kind of doc something is or whether a page is a how-to or reference, wants docs restructured or migrated under docs/, or wants a staleness or link check of existing docs against the code. Not for the Claude-facing project.md (use project-context) or docs/plans/ (use prd-to-issues --plan).
+Writes and maintains a repo's README and docs/ (tutorials, how-to, reference, explanation). Use when asked to write or refresh a README, runbook, or architecture doc, explain where X lives, or check docs for staleness. Not project.md or docs/plans.
 
 ### `/request-refactor-plan`
 
@@ -317,7 +317,7 @@ Use when user wants to plan a refactor, create a refactoring RFC, break a refact
 
 *`workbench` plugin*
 
-Security code review for vulnerabilities with confidence-based reporting. Use when the user asks for "security review", "find vulnerabilities", "check for security issues", "audit security", "OWASP review", or to review code for injection, XSS, authentication, authorization, or cryptography issues.
+Security code review for vulnerabilities with confidence-based reporting. Use when the user asks for "security review", "find vulnerabilities", or an OWASP audit. Not general code quality — see daa-code-review.
 
 ### `/session-orchestrator`
 
@@ -329,19 +329,19 @@ Supervises user-visible worker sessions across projects and platforms. Use when 
 
 *`workbench` plugin*
 
-Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
+Protect work when a git tree may be shared with a live autonomous agent or another session. Use before `reset --hard`, force-checkout, or `clean` on any tree an agent might be using, or when taking over a directory mid-task.
 
 ### `/sql-deploy-precheck`
 
 *`workbench` plugin*
 
-Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. Use when about to run a .sql file at a warehouse, after any ALTER TABLE, before re-running a views file, or when a deploy half-applied and left objects inconsistent. Skip for local-only or fixture SQL.
+Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. Use when about to run a .sql file or after an ALTER TABLE. Not fixtures — use warehouse-sql-test-harness.
 
 ### `/stale-artifact-sweep`
 
 *`workbench` plugin*
 
-Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. Re-verifies each against current reality and classifies it with evidence. Read-only.
+Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or blocker against current reality, with evidence. Use before acting on an old claim that something is blocked, broken, or still needed. Read-only.
 
 ### `/sync-gitlab-dev`
 
@@ -359,7 +359,7 @@ Test-driven development with red-green-refactor loop. Use when user wants to bui
 
 *`workbench` plugin*
 
-Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. Trigger when the user gives a YouTube URL/video id to ingest, or uploads/pastes a transcript and wants it made readable ("ingest this talk", "clean up this transcript", "turn this lecture into notes"). Handles lectures, talks, webinars, interviews, and panels. Do NOT trigger to summarize (this skill never summarizes), to quiz/drill, or to typeset non-transcript prose.
+Turns a YouTube lecture or transcript (VTT, SRT, text) into a structured Obsidian study note with reconstructed math and flagged visuals. Use when given a YouTube URL or a transcript to make readable. Not summarizing or quizzing.
 
 ### `/triage-issue`
 
@@ -371,7 +371,7 @@ Use when user reports a bug, wants to file an issue, mentions "triage", or wants
 
 *`workbench` plugin*
 
-Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. Use when an unattended agent slice quarantines or asks a question, a nightly agent run exits nonzero, a background agent's work was rejected by a gate or reviewer, or the user asks why an automated run failed or what to do with parked work.
+Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. Use when a slice quarantines, exits nonzero, or gets rejected by a gate.
 
 ### `/using-workflow`
 
@@ -401,7 +401,7 @@ Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. Trigger when Charles invokes /cold-read, mentions /cold-read, asks whether an issue is buildable cold, or is about to promote a `proposed` issue.
+Run Charles's vault /cold-read gate — an adversarial read of an issue's SPEC before promotion to the afk executor. Trigger when Charles invokes /cold-read, asks if an issue is buildable cold, or is about to promote a `proposed` issue.
 
 ### `/vault-connect`
 
@@ -413,7 +413,7 @@ Run Charles's vault (The Vault) /connect autonomous graph connection pass with p
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+Runs Charles's vault /context-then-delegate workflow, resolving email/SharePoint/Slack ambiguity before writing a prompt. Trigger: Charles invokes /context-then-delegate, or is about to write a delegated prompt with unresolved domain ambiguity.
 
 ### `/vault-debrief`
 
@@ -485,7 +485,7 @@ Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guide
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes (deep-dive) or teach lesson workspaces (lesson). Trigger when Charles invokes /podcast, mentions /podcast, or asks for a podcast or audio episode of vault content.
+Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. Trigger when Charles invokes /podcast or asks for a podcast or audio episode of vault content.
 
 ### `/vault-pulse`
 
@@ -533,13 +533,13 @@ Draft Outlook or Teams messages in Charles's voice using The Vault's /write comm
 
 *`workbench` plugin*
 
-Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals in the browser, and lets the user drill down interactively until understanding is complete. Produces a summary note at the end. Stateful — persists progress to .workbench/walkthrough/ and can resume across sessions. Use when: user says "walk me through", "walkthrough this repo", "walk me through this MR", "walk me through this email", "walk me through this project", "walk me through this database", "explain this repo/MR/project to me".
+Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. Use when the user says "walk me through" or asks to have one explained interactively.
 
 ### `/warehouse-sql-test-harness`
 
 *`workbench` plugin*
 
-Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. Use when changing warehouse SQL that has no executing tests, when a repo has sql/ but no tests/sql/, when a review says a view layer has zero coverage, or when you catch yourself asserting a SQL string contains a substring.
+Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. Use when SQL has no executing tests. Not drift — use sql-deploy-precheck.
 
 ### `/workshop-skill-creator`
 
@@ -551,7 +551,7 @@ Creates and revises skills owned by The Workshop repository. Use when the user a
 
 *`workbench` plugin*
 
-Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. Use when `git worktree list` has become noise, when a repo or agent system is leaking worktrees or session branches, before cleaning up any worktree, or when asked to tidy or audit worktrees.
+Inventory git worktrees across one repo or many, classifying each reapable, keep, or too-recent with evidence. Use when `git worktree list` is noise or worktrees are leaking. Not live-tree takeover safety — see shared-tree-safety.
 
 ### `/write-a-prd`
 
@@ -563,4 +563,4 @@ Use when user wants to write a PRD, create a product requirements document, or p
 
 *`workbench` plugin*
 
-Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. Use before changing any .xlsx template that code writes into, and before trusting tests that pass after such a change.
+Edits a committed .xlsx report template — inserting, deleting, or restyling rows — and verifies it mechanically, since openpyxl never recalculates and tests miss a mis-pointed formula or dropped fill. Use before changing such a template.

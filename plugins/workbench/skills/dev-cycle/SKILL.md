@@ -1,10 +1,9 @@
 ---
 name: dev-cycle
 description: >
-  Use when user says "dev cycle", "development workflow", "full development
-  pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from
-  brainstorm through a merged PR. This is the interactive lane — for
-  greenfield work, skill-building, or changes too coupled to delegate.
+  Takes a GitHub-issues-driven feature from brainstorm through a merged PR,
+  interactively. Use when the user says "dev cycle", "development workflow",
+  or "full development pipeline", or invokes /dev-cycle.
 ---
 
 # Dev Cycle Orchestrator

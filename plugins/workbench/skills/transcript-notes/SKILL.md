@@ -1,6 +1,9 @@
 ---
 name: transcript-notes
-description: 'Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. Trigger when the user gives a YouTube URL/video id to ingest, or uploads/pastes a transcript and wants it made readable ("ingest this talk", "clean up this transcript", "turn this lecture into notes"). Handles lectures, talks, webinars, interviews, and panels. Do NOT trigger to summarize (this skill never summarizes), to quiz/drill, or to typeset non-transcript prose.'
+description: >
+  Turns a YouTube lecture or transcript (VTT, SRT, text) into a structured Obsidian
+  study note with reconstructed math and flagged visuals. Use when given a YouTube
+  URL or a transcript to make readable. Not summarizing or quizzing.
 ---
 
 # Transcript Notes

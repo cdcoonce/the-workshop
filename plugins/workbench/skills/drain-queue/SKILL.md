@@ -1,6 +1,10 @@
 ---
 name: drain-queue
-description: Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. Use when several ready issues must be built and merged as a batch, when an unattended executor is unavailable and its backlog still has to move, or when the user says "work the queue", "drain the backlog", "land these tickets", or "build these by hand".
+description: >
+  Works a queue of specced issues by hand, one worker per issue, with a spec
+  gate and review before landing. Use when ready issues must ship as a batch,
+  or the user says "work the queue", "drain the backlog", or "build these by
+  hand".
 ---
 
 # Drain Queue

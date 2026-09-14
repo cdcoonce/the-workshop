@@ -1,14 +1,9 @@
 ---
 name: walkthrough
 description: >
-  Interactive visual walkthrough of any artifact — repos, merge requests, emails,
-  projects, or databases. Detects artifact type, generates rich Mermaid + D3 visuals
-  in the browser, and lets the user drill down interactively until understanding is
-  complete. Produces a summary note at the end. Stateful — persists progress to
-  .workbench/walkthrough/ and can resume across sessions.
-  Use when: user says "walk me through", "walkthrough this repo", "walk me through
-  this MR", "walk me through this email", "walk me through this project",
-  "walk me through this database", "explain this repo/MR/project to me".
+  Interactive visual walkthrough of a repo, MR, email, project, or database using
+  Mermaid/D3 visuals the user drills into. Use when the user says "walk me through" or
+  asks to have one explained interactively.
 ---
 
 # Walkthrough — Interactive Visual Explanation
@@ -23,13 +18,13 @@ The agent is the **explainer**. The user is the **learner**. The conversation is
 
 When invoked, identify the artifact type from context:
 
-| Signal | Type | Reference |
-|--------|------|-----------|
-| User is in a git repo, mentions "this repo", or asks about codebase structure | **Repository** | [references/repo.md](references/repo.md) |
-| User provides an MR/PR URL, mentions a branch, or asks about a diff | **Merge Request** | [references/mr.md](references/mr.md) |
-| User pastes or references an email, Slack message, or Teams chat | **Email/Message** | [references/email.md](references/email.md) |
-| User asks about a project, initiative, or workstream holistically | **Project** | [references/project.md](references/project.md) |
-| User asks about tables, schemas, ERDs, data lineage, or a database | **Database** | [references/database.md](references/database.md) |
+| Signal                                                                        | Type              | Reference                                        |
+| ----------------------------------------------------------------------------- | ----------------- | ------------------------------------------------ |
+| User is in a git repo, mentions "this repo", or asks about codebase structure | **Repository**    | [references/repo.md](references/repo.md)         |
+| User provides an MR/PR URL, mentions a branch, or asks about a diff           | **Merge Request** | [references/mr.md](references/mr.md)             |
+| User pastes or references an email, Slack message, or Teams chat              | **Email/Message** | [references/email.md](references/email.md)       |
+| User asks about a project, initiative, or workstream holistically             | **Project**       | [references/project.md](references/project.md)   |
+| User asks about tables, schemas, ERDs, data lineage, or a database            | **Database**      | [references/database.md](references/database.md) |
 
 Load the matching reference file for type-specific guidance on what to explain and how to structure the visual.
 
@@ -177,6 +172,7 @@ The walkthrough skill is **stateful and resumable**. All state persists to `.wor
 ## When to Stop
 
 The walkthrough is complete when:
+
 - The user selects "I understand enough — wrap up" or equivalent.
 - The summary note has been produced and saved to `.workbench/walkthrough/<slug>/summary.md`.
 - `state.json` shows `status: "complete"`.

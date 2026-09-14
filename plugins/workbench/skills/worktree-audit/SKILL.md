@@ -1,6 +1,10 @@
 ---
 name: worktree-audit
-description: Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. Use when `git worktree list` has become noise, when a repo or agent system is leaking worktrees or session branches, before cleaning up any worktree, or when asked to tidy or audit worktrees.
+description: >
+  Inventory git worktrees across one repo or many, classifying each reapable,
+  keep, or too-recent with evidence. Use when `git worktree list` is noise or
+  worktrees are leaking. Not live-tree takeover safety — see
+  shared-tree-safety.
 ---
 
 # Worktree Audit

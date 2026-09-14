@@ -1,10 +1,9 @@
 ---
 name: commit
 description: >
-  Git commit workflow with enforced conventional commit style. Use when Claude
-  needs to stage and commit changes, craft commit messages, or the user asks to
-  commit, make a commit, or save their work. Ensures consistent commit message
-  format, proper scoping, and atomic commits across the project.
+  Stages and commits changes using enforced conventional commit style with
+  atomic, well-scoped commits. Use when Claude needs to craft a commit message
+  or the user asks to commit, make a commit, or save their work.
 ---
 
 # Commit Skill

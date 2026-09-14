@@ -1,6 +1,9 @@
 ---
 name: xlsx-template-row-edit
-description: Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. Use before changing any .xlsx template that code writes into, and before trusting tests that pass after such a change.
+description: >
+  Edits a committed .xlsx report template — inserting, deleting, or restyling rows —
+  and verifies it mechanically, since openpyxl never recalculates and tests miss a
+  mis-pointed formula or dropped fill. Use before changing such a template.
 ---
 
 # Editing an .xlsx report template
@@ -11,7 +14,7 @@ to a passing Python suite:
 
 - **`openpyxl` never recalculates.** A formula re-pointed at the wrong rows is
   still syntactically valid, and the cells it lands on still hold numbers, so
-  no error string appears and every value assertion reads what the *writer*
+  no error string appears and every value assertion reads what the _writer_
   wrote rather than what Excel would compute.
 - **Styling is per cell across the full used width.** A style copy that stops
   at the data columns silently drops fills and borders in the columns flanking
@@ -39,7 +42,7 @@ were, still naming their pre-shift rows. `=D19-D20` after a three-row deletion
 silently subtracts whatever slid into rows 19 and 20.
 
 An earlier deletion elsewhere in the same file may look like precedent for a
-bare `delete_rows`. Check where it sits: a block *below* every formula shifts
+bare `delete_rows`. Check where it sits: a block _below_ every formula shifts
 nothing and is a special case, not a pattern.
 
 The safe sequence:
@@ -50,7 +53,7 @@ The safe sequence:
 3. translate each surviving formula by the number of deleted rows above it,
    with `openpyxl.formula.translate.Translator`
 
-Uniform translation is correct only when no deleted row falls *between* a
+Uniform translation is correct only when no deleted row falls _between_ a
 formula and a cell it references, so delete whole labelled blocks and a
 formula moves with its operands. Absolute references (`$D$19`) are deliberately
 not shifted by `Translator` and break the same way — check for them first.

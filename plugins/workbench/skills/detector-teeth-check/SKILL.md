@@ -1,6 +1,10 @@
 ---
 name: detector-teeth-check
-description: Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. Use after writing tests for a security boundary, a validator, a detector, or any guard whose failure mode is silent — and before trusting a green suite as evidence.
+description: >
+  Verify a test suite would actually catch the bug it claims to prevent, by
+  re-injecting the defect and checking it goes red. Use after writing tests
+  for a validator or guard whose failure mode is silent, before trusting a
+  green suite.
 ---
 
 # Detector teeth check
