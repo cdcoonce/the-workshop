@@ -1,6 +1,6 @@
 ---
 name: warehouse-sql-test-harness
-description: Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. Use when changing warehouse SQL that has no executing tests, when a repo has sql/ but no tests/sql/, when a review says a view layer has zero coverage, or when you catch yourself asserting a SQL string contains a substring.
+description: Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. Use when SQL has no executing tests. Not drift — use sql-deploy-precheck.
 ---
 
 # Warehouse SQL test harness

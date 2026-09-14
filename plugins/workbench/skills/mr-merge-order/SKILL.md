@@ -1,6 +1,10 @@
 ---
 name: mr-merge-order
-description: Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. Computes a pairwise conflict matrix with git merge-tree and recommends an order by rebase cost. Read-only. Covers GitLab and GitHub.
+description: >
+  Computes a pairwise conflict matrix with git merge-tree and recommends a
+  merge order by rebase cost. Use when several MRs or PRs target the same
+  branch and the user asks which to merge first or how to order a queue.
+  Read-only.
 ---
 
 # MR Merge Order

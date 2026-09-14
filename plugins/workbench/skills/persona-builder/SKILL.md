@@ -1,6 +1,9 @@
 ---
 name: persona-builder
-description: Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. Interviews the owner (grill + audition rounds), deep-researches their field into curated knowledge packs, assembles a three-layer persona package as an advisor-* preset, and delivers it via PR. Use when the user wants to create a persona, coach, sounding board, advisor, or expert companion for themselves or someone else.
+description: >
+  Builds an installable, self-tuning coach/advisor persona for a named owner via
+  interviews, field research, and a three-layer package delivered by PR. Use when
+  asked to create a persona, coach, sounding board, or advisor for someone.
 ---
 
 # Persona Builder

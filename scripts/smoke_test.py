@@ -258,9 +258,11 @@ def _parse_frontmatter(text: str) -> dict | None:
                 current_key = key
                 block_scalar = True
             elif value:
+                # A plain scalar may continue on indented lines; YAML folds them
+                # into the value exactly like a block scalar.
                 result[key] = _strip_quotes(value)
-                current_key = None
-                block_scalar = False
+                current_key = key
+                block_scalar = True
             else:
                 result[key] = {}
                 current_key = key

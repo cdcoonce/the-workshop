@@ -2,9 +2,8 @@
 name: security-review
 description: >
   Security code review for vulnerabilities with confidence-based reporting.
-  Use when the user asks for "security review", "find vulnerabilities", "check
-  for security issues", "audit security", "OWASP review", or to review code
-  for injection, XSS, authentication, authorization, or cryptography issues.
+  Use when the user asks for "security review", "find vulnerabilities", or an
+  OWASP audit. Not general code quality — see daa-code-review.
 ---
 
 <!-- Reference content based on OWASP Cheat Sheet Series (CC BY-SA 4.0) https://cheatsheetseries.owasp.org/ -->

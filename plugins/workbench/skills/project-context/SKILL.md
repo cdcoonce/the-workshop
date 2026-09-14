@@ -1,11 +1,10 @@
 ---
 name: project-context
 description: >
-  Generate or update the `.claude/docs/project.md` file that gives Claude project-specific
-  context. Use this skill when the user asks to create, update, regenerate, or refresh
-  project context, or says things like "update project.md", "generate project context",
-  "this repo needs a project.md", or "Claude doesn't know about this project". Also trigger
-  when onboarding Claude to a new repository for the first time.
+  Generates or updates `.claude/docs/project.md`, the dense project reference
+  Claude loads every session. Use when asked to create, update, or regenerate
+  project context, or says "update project.md". Not the README — see
+  repo-docs.
 ---
 
 # Project Context Generator

@@ -1,13 +1,10 @@
 ---
 name: gitlab-cli
 description: >
-  GitLab CLI (glab) integration for managing issues, branches, merge request
-  review, and CI/CD pipelines from the terminal. Use when Claude needs to create,
-  list, view, or update GitLab issues; push branches; review merge request diffs;
-  approve or merge MRs; or inspect and retry pipelines and job logs. Requires the
-  glab CLI installed and authenticated. For CREATING a merge request, use the
-  gitlab-mr-create skill instead; for WATCHING CI to completion after a push or
-  merge, use the gitlab-ci-watch skill instead.
+  GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. Use to create,
+  list, or update GitLab issues, review or merge MRs, or inspect pipelines and
+  logs. For MR creation use gitlab-mr-create; for CI watching use
+  gitlab-ci-watch.
 ---
 
 # GitLab CLI (glab) Skill

@@ -1,7 +1,10 @@
 ---
 name: vault-context-then-delegate
 description: >
-  Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. Trigger when Charles invokes /context-then-delegate, mentions /context-then-delegate, or is about to write a delegated prompt for a task with unresolved domain ambiguity.
+  Runs Charles's vault /context-then-delegate workflow, resolving
+  email/SharePoint/Slack ambiguity before writing a prompt. Trigger: Charles
+  invokes /context-then-delegate, or is about to write a delegated prompt
+  with unresolved domain ambiguity.
 ---
 
 # Vault Context Then Delegate

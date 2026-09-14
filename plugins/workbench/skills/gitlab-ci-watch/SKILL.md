@@ -1,12 +1,10 @@
 ---
 name: gitlab-ci-watch
 description: >
-  Watch GitLab CI in the background until a pushed commit, a merging MR, or an
-  integration branch head reaches a terminal state, reporting every job's
-  status — roll-up success is never the report. Use after any push to a work
-  GitLab repo (the verify-ci-green rule), after `glab mr merge` returns 405 or
-  flips to auto-merge, or when post-merge CI on dev must be confirmed green.
-  For browsing pipelines, jobs, or logs interactively, use gitlab-cli.
+  Watches GitLab CI until a pushed commit, MR, or integration branch reaches a
+  terminal state, reporting every job's status. Use after pushing to GitLab, on
+  a `glab mr merge` 405, or to confirm post-merge CI on dev. For browsing, use
+  gitlab-cli.
 ---
 
 # GitLab CI watch

@@ -1,12 +1,9 @@
 ---
 name: dbt-manifest-facts
-description: Answers structural questions about a dbt project from its parsed manifest.json rather
-  than from model comments, README prose, or memory. Use when stating or checking how many
-  models, tests, seeds, or marts a project has; when documenting or auditing a dbt repo;
-  when asking which models a seed or source actually feeds, or what a model really depends
-  on; when hunting for seeds and models that nothing references; when confirming what key
-  or grain a model declares; or when a claim about a dbt project's structure needs evidence
-  behind it.
+description: >
+  Answers structural questions about a dbt project from its manifest.json, not
+  comments or memory. Use when counting models/tests/seeds, auditing a repo, or
+  tracing what feeds a model. Not dbt-expert or data-discovery.
 ---
 
 # dbt manifest facts

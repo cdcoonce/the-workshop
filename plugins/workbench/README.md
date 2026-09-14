@@ -17,55 +17,55 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 
 | Skill | Summary |
 | --- | --- |
-| `/adversarial-review` | Attacks finished work by trying to disprove what it claims, and reports what survives with the evidence. |
-| `/blueprint` | Charts an effort too big for one agent session as a shared map of decision tickets on the repo's issue tracker, worked one at a time until the way to the destination is clear. |
+| `/adversarial-review` | Attacks finished work by trying to disprove what it claims, reporting what survives with evidence. |
+| `/blueprint` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
-| `/chart-taste` | Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. |
-| `/commit` | Git commit workflow with enforced conventional commit style. |
+| `/chart-taste` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
+| `/commit` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
-| `/daa-code-review` | AI-powered code quality analysis for Python, Markdown, and Mermaid diagrams. |
-| `/dagster-expert` | Expert guidance for working with Dagster and the dg CLI. |
-| `/data-discovery` | Generate a handoff-ready data discovery document for a Snowflake schema or dbt project. |
-| `/dbt-expert` | Expert guidance for working with dbt Core. |
-| `/dbt-manifest-facts` | Answers structural questions about a dbt project from its parsed manifest.json rather |
+| `/daa-code-review` | AI-powered code quality review for Python, Markdown, and Mermaid. |
+| `/dagster-expert` | Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors, jobs. |
+| `/data-discovery` | Generates a data discovery doc for a Snowflake schema or dbt project: table inventory, coverage, ER diagram, and runnable queries. |
+| `/dbt-expert` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |
+| `/dbt-manifest-facts` | Answers structural questions about a dbt project from its manifest.json, not comments or memory. |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
-| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking the suite goes red. |
-| `/dev-cycle` | Use when user says "dev cycle", "development workflow", "full development pipeline", or invokes /dev-cycle to take a GitHub-issues-driven feature from brainstorm through a merged PR. |
-| `/dignified-python` | Production Python coding standards with automatic version detection (3.10-3.13). |
-| `/drain-queue` | Build a queue of filed, specced issues to empty by hand, one isolated worker per issue, with an adversarial spec gate before each build and a review of every diff before it lands. |
+| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. |
+| `/dev-cycle` | Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. |
+| `/dignified-python` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
+| `/drain-queue` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
 | `/drill-me` | Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
-| `/github-cli` | GitHub CLI (gh) integration for managing issues, pull requests, branches, commits, and code reviews directly from the terminal. |
-| `/gitlab-ci-watch` | Watch GitLab CI in the background until a pushed commit, a merging MR, or an integration branch head reaches a terminal state, reporting every job's status — roll-up success is never the report. |
-| `/gitlab-cli` | GitLab CLI (glab) integration for managing issues, branches, merge request review, and CI/CD pipelines from the terminal. |
+| `/github-cli` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
+| `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-cli` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
-| `/mr-merge-order` | Use when several MRs or PRs are open against the same branch and the user asks which to merge first, whether one blocks another, why merging one breaks another, or in what order to land a queue. |
-| `/mr-review-fixes` | Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. |
-| `/persona-builder` | Build an installable, portable, self-tuning coach/sounding-board persona for a named owner. |
+| `/mr-merge-order` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
+| `/mr-review-fixes` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
+| `/persona-builder` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
-| `/prd-to-issues` | Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). |
-| `/project-context` | Generate or update the `.claude/docs/project.md` file that gives Claude project-specific context. |
-| `/react-ui-ux` | Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. |
-| `/repo-docs` | Creates, classifies, and maintains a repository's human-facing documentation as one Diátaxis-shaped set: the root README landing page and docs/ split into tutorials, how-to guides, reference, and explanation, with a provenance footer and a drift, link, and mode checker. |
+| `/prd-to-issues` | Breaks a PRD into tracer-bullet vertical slices as executor-ready GitHub issues, or a phased plan under docs/plans/ with `--plan`. |
+| `/project-context` | Generates or updates `.claude/docs/project.md`, the dense project reference Claude loads every session. |
+| `/react-ui-ux` | Applies design taste to React UI generation using variance/motion/density dials, stopping components from the generic shadcn/Tailwind look. |
+| `/repo-docs` | Writes and maintains a repo's README and docs/ (tutorials, how-to, reference, explanation). |
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/session-orchestrator` | Supervises user-visible worker sessions across projects and platforms. |
-| `/shared-tree-safety` | Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. |
-| `/sql-deploy-precheck` | Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. |
-| `/stale-artifact-sweep` | Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. |
+| `/shared-tree-safety` | Protect work when a git tree may be shared with a live autonomous agent or another session. |
+| `/sql-deploy-precheck` | Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. |
+| `/stale-artifact-sweep` | Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or blocker against current reality, with evidence. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
-| `/transcript-notes` | Turn a YouTube lecture/talk or a raw transcript (VTT, SRT, or plain text) into a readable Obsidian-markdown study note — imposed structure, reconstructed LaTeX with plain-word glosses, flagged missing visuals, and per-section reading prompts. |
+| `/transcript-notes` | Turns a YouTube lecture or transcript (VTT, SRT, text) into a structured Obsidian study note with reconstructed math and flagged visuals. |
 | `/triage-issue` | Use when user reports a bug, wants to file an issue, mentions "triage", or wants to investigate and plan a fix for a problem. |
 | `/triage-quarantine` | Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. |
 | `/using-workflow` | Use when starting any conversation or task in this project — establishes precedence between instructions and skills, requires invoking any skill that might apply, and sets the order skills run in before any response or action. |
 | `/vault-audit` | Run Charles's vault (The Vault) /vault-audit structural audit across frontmatter, wikilinks, indexes, stale notes, duplicates, and templates. |
 | `/vault-budget` | Run Charles's vault (The Vault) /budget spend and subscription-value meter from local Claude transcripts. |
 | `/vault-clickup-task-sync` | Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action items into ClickUp without duplicating tasks. |
-| `/vault-cold-read` | Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. |
+| `/vault-cold-read` | Run Charles's vault /cold-read gate — an adversarial read of an issue's SPEC before promotion to the afk executor. |
 | `/vault-connect` | Run Charles's vault (The Vault) /connect autonomous graph connection pass with preview-gated wikilink edits, including a manual `--term` mode for finding or inserting the right wikilink for a note. |
-| `/vault-context-then-delegate` | Run Charles's vault (The Vault) /context-then-delegate workflow to resolve real-world ambiguity (email/SharePoint/Slack) before writing a coding-agent prompt. |
+| `/vault-context-then-delegate` | Runs Charles's vault /context-then-delegate workflow, resolving email/SharePoint/Slack ambiguity before writing a prompt. |
 | `/vault-debrief` | Run Charles's vault (The Vault) /debrief retrospective over recent afk builds. |
 | `/vault-dispatch` | Run Charles's vault (The Vault) /dispatch workflow to turn a shaped idea into an afk-managed issue linked back into the vault. |
 | `/vault-dump` | Run Charles's vault (The Vault) /dump capture workflow for routing freeform input into durable vault notes, tasks, indexes, and wikilinks. |
@@ -77,7 +77,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/vault-handoff` | Run Charles's vault (The Vault) /handoff workflow to refresh the machine-scoped rolling handoff digest. |
 | `/vault-init` | Run Charles's vault (The Vault) /vault-init workflow to scaffold a brand-new second-brain vault from the-workshop's vault-ops machinery. |
 | `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
-| `/vault-podcast` | Run Charles's vault (The Vault) /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes (deep-dive) or teach lesson workspaces (lesson). |
+| `/vault-podcast` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
 | `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
@@ -85,11 +85,11 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
 | `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
-| `/walkthrough` | Interactive visual walkthrough of any artifact — repos, merge requests, emails, projects, or databases. |
-| `/warehouse-sql-test-harness` | Stand up an in-process harness that executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot, so views and MERGE statements are proved by running them rather than by asserting on their text. |
-| `/worktree-audit` | Inventory git worktrees across one repo or a whole directory of repos and classify each as reapable, keep, or too-recent, with the evidence that decided it. |
+| `/walkthrough` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
+| `/warehouse-sql-test-harness` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |
+| `/worktree-audit` | Inventory git worktrees across one repo or many, classifying each reapable, keep, or too-recent with evidence. |
 | `/write-a-prd` | Use when user wants to write a PRD, create a product requirements document, or plan a new feature. |
-| `/xlsx-template-row-edit` | Edit a committed binary .xlsx report template — insert, delete or restyle rows — and verify the result mechanically, because a green Python suite cannot see a mis-pointed formula or a dropped fill. |
+| `/xlsx-template-row-edit` | Edits a committed .xlsx report template — inserting, deleting, or restyling rows — and verifies it mechanically, since openpyxl never recalculates and tests miss a mis-pointed formula or dropped fill. |
 
 ## Agents
 

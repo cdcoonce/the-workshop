@@ -205,6 +205,39 @@ class TestParseFrontmatterBlockScalar:
         }
 
 
+class TestParseFrontmatterPlainMultilineScalar:
+    """A plain scalar that starts on the key line and continues on indented
+    lines folds like YAML does. Dropping the continuation silently undercounts
+    a description (tests/test_skill_description_budget.py measured 85 chars
+    for a 539-char description).
+    """
+
+    def test_indented_continuation_lines_fold_into_the_value(self) -> None:
+        text = (
+            "---\n"
+            "name: dbt-manifest-facts\n"
+            "description: Answers structural questions about a dbt project\n"
+            "  from its parsed manifest.json. Use when counting models,\n"
+            "  tests, or seeds.\n"
+            "---\n"
+        )
+        assert _parse_frontmatter(text) == {
+            "name": "dbt-manifest-facts",
+            "description": (
+                "Answers structural questions about a dbt project "
+                "from its parsed manifest.json. Use when counting models, "
+                "tests, or seeds."
+            ),
+        }
+
+    def test_continuation_with_a_colon_stays_part_of_the_value(self) -> None:
+        text = "---\ndescription: Guidance for\n  Python: modern types\nrole: x\n---\n"
+        assert _parse_frontmatter(text) == {
+            "description": "Guidance for Python: modern types",
+            "role": "x",
+        }
+
+
 class TestParseFrontmatterClosingDelimiterLineAnchored:
     """The closing ``---`` must be matched on its own line, not as a
     substring inside a field value (e.g. an em-dash-style separator).

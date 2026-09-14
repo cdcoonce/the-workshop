@@ -1,6 +1,9 @@
 ---
 name: triage-quarantine
-description: Diagnose and resolve a failed, quarantined, or question-parked autonomous agent run, reusing its preserved work instead of rebuilding. Use when an unattended agent slice quarantines or asks a question, a nightly agent run exits nonzero, a background agent's work was rejected by a gate or reviewer, or the user asks why an automated run failed or what to do with parked work.
+description: >
+  Diagnose and resolve a failed, quarantined, or question-parked autonomous
+  agent run, reusing its preserved work instead of rebuilding. Use when a
+  slice quarantines, exits nonzero, or gets rejected by a gate.
 ---
 
 # Triage Quarantine
