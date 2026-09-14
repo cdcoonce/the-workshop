@@ -81,6 +81,20 @@ test-machinery:
 test-wrap-up-gate-parity:
 	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
 
+# Same graphmark version-matrix parity target, for the cold-read evidence
+# resolver's wikilink resolution (plugins/workbench/machinery/engine/
+# cold_read_evidence.py, via graph_cli.diagnose). command.md pins
+# graphmark>=0.7,<0.8 for this script too. Same shadow-bug reasoning as
+# test-wrap-up-gate-parity above: deliberately NOT `cd
+# plugins/workbench/machinery` first, or the `--with 'graphmark>=0.7,<0.8'`
+# overlay silently imports that directory's own pinned 0.6.0 `.venv`
+# instead — confirmed the same way, by printing
+# `importlib.metadata.version("graphmark")` inside the pytest process
+# (test_graphmark_07_wikilink_resolution_matches_06).
+.PHONY: test-cold-read-evidence-wikilink-parity
+test-cold-read-evidence-wikilink-parity:
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
+
 # Full gate: the root suite, every skill-script suite, and the machinery suite.
 # Skill-script suites live in isolated subtrees with a sibling `scripts` package
 # and bare imports, so they run in their OWN rootdir (a separate pytest
@@ -95,5 +109,6 @@ test:
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) test-machinery
 	$(MAKE) test-wrap-up-gate-parity
+	$(MAKE) test-cold-read-evidence-wikilink-parity
 	$(MAKE) stamp-check
 	$(MAKE) verify-versions

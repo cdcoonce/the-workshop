@@ -40,7 +40,25 @@ Run all ten. Each has a test that returns yes or no — record which ones you ra
    → Test: name one adjacent file or behavior an over-eager executor would plausibly "improve." If the body does not forbid it, that is the finding.
 
 5. **Unresolvable evidence.** Every path the body names resolves, in either role it plays: as **evidence** (cited as proof of existing state — a file, an issue/PR number, a vault note) or as a **destination** (named as where the slice will create something new — a test file, a module, a fixture).
-   → Test: for each path in the body, classify it evidence or destination, then resolve it — one unpiped command each. An evidence path must exist as named: file paths exist, issue/PR numbers open, vault notes are real. A destination path need not exist itself, but its parent directory must; the file is what the slice is about to create, but the directory it lands in is a claim about the repo right now. Example: an AC saying a test lands in `scripts/tests/` is a destination claim — that path resolves only if `scripts/tests/` exists at repo root. It doesn't; the directory shape it's borrowing lives one level down inside individual skills (`plugins/workbench/skills/adversarial-review/scripts/tests/`, among others), and the repo's real suite is `tests/`, which does exist and is the parent the AC should have named. A citation or destination that does not resolve is either stale, invented, or the wrong path; all three are blocking (precedent: #568).
+   → Test: run `uv run --with 'graphmark>=0.7,<0.8' --with pyyaml python "<engine>/cold_read_evidence.py" --repo <repo> --repo-dir <local checkout> --issue <N> --json` (add `--vault-root <absolute vault path>` when the body has `[[wikilinks]]`). It resolves every path, issue/PR number, commit SHA and `[[wikilink]]` the script can extract from the body against the target repo's default branch — never every citation, and never a SHA the body pins: the script reads no such pin from the body text. If the body pins a SHA (`at commit abc1234`, a specific tag), pass `--ref <that sha>` yourself; the resolved-ref line in the output tells you which ref it actually checked.
+
+   Text-only resolution cannot rule out a subtree-relative path, a cross-repo citation, or a bare branch name, so no verdict here is a flat pass/fail. The output separates what it trusts from what it doesn't:
+
+   - **`rows` (severity CHECK) are hints, not findings.** Verify each with one unpiped command before writing it up — the row names the token, its class, and why the resolver couldn't trust it, but it can be wrong in either direction (a subtree-relative path, a branch name, a citation into a different repo can all read CHECK on a good body).
+   - **The OK list is exact — everything else is CHECK:**
+     - a path/directory that resolves exactly, or a bare **file** basename resolving by an unambiguous suffix match (a directory match, or any `/`-bearing token matched only by suffix, is `EXISTS_ELSEWHERE` — a CHECK naming the path(s) found);
+     - a symbol found in a non-doc/non-test code file, including inside a comment or string literal (whether it does what the body claims is detector 8's concern);
+     - a commit reachable from the resolved ref itself (reachable only from another branch is `COMMIT_ON_OTHER_BRANCH`, a CHECK naming that branch);
+     - an issue/PR ref with a real state (open, closed, merged);
+     - a wikilink that resolves;
+     - a `REF`/`REPO` token (branch, tag, `owner/repo`) confirmed against git or GitHub.
+
+     Everything else — including a glob/templated pattern whose literal prefix resolves — is CHECK: only the prefix was checked, never its members.
+
+   - **`evidence_lines` still need the line-text-vs-claim read.** A resolved `path:line` citation is OK severity but appears here with up to 8 lines of the actual text; a longer range is marked `truncated: true` and needs reading by hand. It blocks only when the line no longer supports the claim.
+   - **`assumed_repo_refs` need no further check.** A bare `#N` is resolved against `--repo` by default; the script already promotes it into `rows` with a CHECK once the body names another repo — by `owner/repo#N`, a GitHub URL, a backticked `owner/name`, an `alias#N` shorthand, or the bare name of any sibling repo, anywhere in the prose. Whatever is left in `assumed_repo_refs` had none of those signals.
+   - **`INCOMPLETE`:** classes under `not_run` (no gh auth, a non-404 gh failure, missing graphmark with wikilinks present, a bad `--vault-root`, a failed sibling-repo lookup) and reasons under `input_errors` (bad `--repo-dir`, an origin mismatch, a bad `--ref`, a fetch failure, an empty body, zero extractable tokens) resolve by hand, the old one-command-each way.
+   - **What the script cannot see is still the reader's job:** prose too far from any "lines N-M" citation to pair with it (`PROSE_LINE_CITATION`, always CHECK), or a claim about what a line of code _does_ (detector 8's concern) — the script resolves existence, never behavior.
 
 6. **Size lie.** The `afk-sized` claim survives the footprint the body actually implies.
    → Test: list the files the proposed behavior touches. A new module, a new mechanism, or changes persisting outside the issue's footprint is never `afk-sized` (precedent: afk#324, quarantined on scope after 4 attempts). If the implied slice count exceeds the Budget line, the Budget is the bug.
@@ -67,17 +85,18 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
 
 ## Procedure
 
-1. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
-2. **Run all ten detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
-3. **Resolve every path the body names** — one unpiped command each, evidence and destination alike (detector 5). Do not batch into a pipeline whose failure you cannot attribute to a specific path.
-4. **Assign a verdict:**
+1. **Before dispatching the subagent:** expand `<engine>` — the same placeholder `vault-audit` and `vault-wrap-up` use — and the local checkout path into real absolute paths in detector 5's procedure text; the subagent cannot resolve `<engine>` itself. Add `--vault-root <absolute vault path>` when the body has `[[wikilinks]]`, and include `--with pyyaml` alongside `--with 'graphmark>=0.7,<0.8'` in the command line. State plainly, in the dispatch, that this expansion was done; a subagent handed the literal placeholder cannot run the script.
+2. **Fetch the issue cold.** `gh issue view <N> --repo <repo> --comments` — a prior cold read's findings live in the comments. Note existing labels.
+3. **Run all ten detectors** against the body. Record per-detector: ran / found N / found none, with the specific noun or criterion you checked. A detector you skipped is reported as skipped, not as clean.
+4. **Resolve every path the body names** — evidence and destination alike (detector 5) — with the single `cold_read_evidence.py` invocation described there. Verify each `CHECK` row with one unpiped command before writing it up as a finding; `evidence_lines` show up to 8 lines per citation (`truncated: true` beyond that) and still need the line-text-vs-claim read; anything left in `assumed_repo_refs` had no cross-repo signal and needs no further check. Only a class listed under its `not_run`, or a reason under `input_errors`, falls back to resolving that evidence by hand.
+5. **Assign a verdict:**
    - **BUILD** — zero blocking findings. Non-blocking defaults may still be listed; they do not gate.
    - **REWRITE** — findings exist and are fixable by editing the issue body. This is the common case. Produce the exact replacement text for each affected section, not a description of it.
    - **NOT-DISPATCH-READY** — the idea is not executor-implementable as scoped: a size lie, or ambiguity only Charles can resolve. Recommend `decompose:ready`, `daytime-only`, or back to `/grill`.
-5. **Write the findings back to the issue** as a comment titled `## Cold read — <verdict>`. The ticket is the memory store; a cold read that lives only in this chat did not happen. Include the per-detector record so a later reader can tell a clean pass from a lazy one.
-6. **Apply the label:** `cold-read:pass` on BUILD, `cold-read:rewrite` on REWRITE, `cold-read:blocked` on NOT-DISPATCH-READY. Skip silently if the repo lacks the label — the comment carries the verdict either way.
-7. **On REWRITE:** edit the issue body with the replacement text, then say plainly that the body changed and re-state the verdict as BUILD. Do not re-run the cold read on your own edit — you are no longer cold to it. A second pass, if wanted, is a fresh subagent.
-8. **Digest:** verdict, findings count by detector, whether the reader was truly cold or degraded, the label applied, and the promote command — or the reason promotion is withheld.
+6. **Write the findings back to the issue** as a comment titled `## Cold read — <verdict>`. The ticket is the memory store; a cold read that lives only in this chat did not happen. Include the per-detector record so a later reader can tell a clean pass from a lazy one.
+7. **Apply the label:** `cold-read:pass` on BUILD, `cold-read:rewrite` on REWRITE, `cold-read:blocked` on NOT-DISPATCH-READY. Skip silently if the repo lacks the label — the comment carries the verdict either way.
+8. **On REWRITE:** edit the issue body with the replacement text, then say plainly that the body changed and re-state the verdict as BUILD. Do not re-run the cold read on your own edit — you are no longer cold to it. A second pass, if wanted, is a fresh subagent.
+9. **Digest:** verdict, findings count by detector, whether the reader was truly cold or degraded, the label applied, and the promote command — or the reason promotion is withheld.
 
 ## Gate contract with /dispatch
 
