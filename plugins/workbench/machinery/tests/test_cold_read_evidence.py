@@ -291,8 +291,11 @@ def test_breakroom17_path_buckets(tmp_path: Path, fake_gh) -> None:
     rows = {r["token"]: r["result"] for r in report["rows"]}
     assert rows["chronicle/"] == "UNRESOLVED"
     assert rows["src/breakroom/chronicle.py"] == "PARENT_ONLY"
-    counted = report["counts"].get("PATH:RESOLVES", 0)
-    assert counted >= 1  # chronicles/ resolves and is OK (not a row, just a count)
+    # chronicles/ has no directory component of its own ("chronicles" has no
+    # "/"), so it resolves via the bare-basename search, not a direct
+    # ls-tree hit -- RESOLVES_BY_BASENAME, still OK severity, still no row.
+    counted = report["counts"].get("PATH:RESOLVES_BY_BASENAME", 0)
+    assert counted >= 1
     assert report["verdict"] == "BLOCKING"
     assert report["exit_code"] == 1
 
@@ -387,6 +390,157 @@ def test_referenced_only_requires_quoted_literal_not_bare_substring(tmp_path: Pa
 
 
 # =========================================================================== #
+# Bare-basename resolution — a PATH/PATH_LINE token with no directory
+# component resolves across the whole tree at <ref>, not just the repo root
+# (breakroom#17 current-body precision-check finding round 2: `tick.py:42-50`
+# cites the file by its bare basename, the dominant real-spec citation
+# style — secret_scan.py:57-64, norms.py:171, executor.py:386-392 — and the
+# old root-only check false-blocked it even though the human's round-5 cold
+# read re-verified it as real).
+# =========================================================================== #
+
+def _make_basename_fixture(tmp_path: Path):
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "basenametest")
+    _write(upstream, "src/pkg/tick.py", "line one\nsecond line\nthird line\nfourth line\n")
+    _write(upstream, "docs/a/notes.md", "a\n")
+    _write(upstream, "docs/b/notes.md", "b\n")
+    _write(upstream, "src/pkg/chronicles/log.md", "x\n")
+    _write(upstream, "data/x.toml", "y = 1\n")
+    _commit_all(upstream, "basename fixture")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    return upstream, checkout, repo
+
+
+def test_bare_basename_path_line_resolves_uniquely(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "See `tick.py:2-3` for the fix."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename1.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "tick.py:2-3")
+    assert row["result"] == "RESOLVES_BY_BASENAME"
+    assert row["line_text"] == ["second line", "third line"]
+    assert row["severity"] == "JUDGMENT"  # still needs the line-text-vs-claim read
+
+
+def test_bare_basename_path_line_out_of_range(tmp_path: Path, fake_gh) -> None:
+    """The basename-matched path still runs the LINE_OUT_OF_RANGE check --
+    the same code path as a direct match, not a separate unchecked one."""
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "See `tick.py:9999` for the fix."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename_oor.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "tick.py:9999")
+    assert row["result"] == "LINE_OUT_OF_RANGE"
+    assert row["severity"] == "BLOCKING"
+
+
+def test_bare_basename_path_ambiguous(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "See `notes.md` for context."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename2.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "notes.md")
+    assert row["result"] == "AMBIGUOUS_BASENAME"
+    assert row["severity"] == "JUDGMENT"
+    assert "docs/a/notes.md" in row["detail"]
+    assert "docs/b/notes.md" in row["detail"]
+    assert "2" in row["detail"]  # candidate count
+
+
+def test_bare_basename_zero_matches_falls_through_to_unresolved(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "See `nope.py` for the fix."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename3.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "nope.py")
+    assert row["result"] == "UNRESOLVED"
+    assert row["severity"] == "BLOCKING"
+
+
+def test_bare_basename_directory_resolves(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "Digests write to `chronicles/` today."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename4.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    # RESOLVES_BY_BASENAME is OK severity for PATH -> no row, just a count.
+    assert not any(r["token"] == "chronicles/" for r in report["rows"])
+    assert report["counts"].get("PATH:RESOLVES_BY_BASENAME", 0) >= 1
+
+
+def test_bare_basename_directory_shaped_does_not_match_a_file(tmp_path: Path, fake_gh) -> None:
+    """`tick/` (directory-shaped: trailing slash) must not match the FILE
+    `src/pkg/tick.py` -- files and directories are separate basename tables,
+    never cross-matched."""
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "See `tick/` for the fix."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename5.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "tick/")
+    assert row["result"] == "UNRESOLVED"
+
+
+def test_brace_placeholder_no_directory_prefix(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "Digests are named `day-{day:04d}.md`, one per tick."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename6.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert not any(r["token"] == "day-{day:04d}.md" for r in report["rows"])
+    assert report["counts"].get("TEMPLATED:TEMPLATED_NO_PREFIX", 0) >= 1
+
+
+def test_brace_placeholder_with_directory_prefix(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "Config lives at `data/{name}.toml`."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename7.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert report["counts"].get("TEMPLATED:PREFIX_RESOLVES", 0) >= 1
+
+
+def test_brace_placeholder_with_unresolved_directory_prefix(tmp_path: Path, fake_gh) -> None:
+    _, checkout, repo = _make_basename_fixture(tmp_path)
+    body = "Config lives at `nosuchdir/{name}.toml`."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_basename8.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "nosuchdir/{name}.toml")
+    assert row["result"] == "PREFIX_UNRESOLVED"
+    assert row["severity"] == "BLOCKING"
+
+
+def test_brace_token_with_quotes_is_not_templated() -> None:
+    """A code snippet with a brace and a quote (f"{x}", {"check": POLICY})
+    must not be misread as a templated filename convention."""
+    assert classify_token('f"{x}"') != "TEMPLATED"
+    assert classify_token('{"check": POLICY}') == "SKIP_COMMAND"  # whitespace wins first
+
+
+# =========================================================================== #
 # resolution buckets — breakroom#59 (symbols)
 # =========================================================================== #
 
@@ -477,7 +631,10 @@ def test_afk1380_templated_and_skip_command(tmp_path: Path, fake_gh) -> None:
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
     assert report["counts"].get("SKIP_COMMAND:(none)", 0) >= 1
-    assert report["counts"].get("TEMPLATED:PREFIX_RESOLVES", 0) >= 1
+    # <project>/.afk/last-cycle.json has nothing before its placeholder
+    # (<project> IS the placeholder) -> TEMPLATED_NO_PREFIX, not
+    # PREFIX_RESOLVES (there is no literal directory prefix to have checked).
+    assert report["counts"].get("TEMPLATED:TEMPLATED_NO_PREFIX", 0) >= 1
     # Neither is a blocking/judgment row.
     tokens_in_rows = {r["token"] for r in report["rows"]}
     assert "afk-driver --fleet-health" not in tokens_in_rows
@@ -628,10 +785,12 @@ def test_path_added_upstream_after_local_head_resolves_once_fetched(tmp_path: Pa
         body_file=_write(tmp_path, "bodyupstream.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
-    # RESOLVES is OK severity -> no row emitted; a row here would mean it
-    # was (wrongly) UNRESOLVED or PARENT_ONLY instead.
+    # RESOLVES(_BY_BASENAME) is OK severity -> no row emitted; a row here
+    # would mean it was (wrongly) UNRESOLVED or PARENT_ONLY instead.
+    # new_upstream.py has no directory component, so it resolves via
+    # basename search (root-level is still a valid basename match).
     assert not any(r["token"] == "new_upstream.py" for r in report["rows"])
-    assert report["counts"].get("PATH:RESOLVES", 0) >= 1
+    assert report["counts"].get("PATH:RESOLVES_BY_BASENAME", 0) >= 1
 
 
 def test_default_branch_read_from_remote_not_local_head(tmp_path: Path, fake_gh) -> None:

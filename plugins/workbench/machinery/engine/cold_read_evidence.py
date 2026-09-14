@@ -54,6 +54,7 @@ PATH_EXTENSIONS = (
 )
 WHITESPACE_RE = re.compile(r"\s")
 TEMPLATE_RE = re.compile(r"<[^<>]*>")
+BRACE_RE = re.compile(r"\{[^{}]*\}")
 GLOB_CHARS = frozenset("*?[")
 PATH_LINE_RE = re.compile(r"^(?P<path>.+):(?P<start>\d+)(?:-(?P<end>\d+))?$")
 SYMBOL_RE = re.compile(r"^[A-Za-z_][\w.]*$")
@@ -89,6 +90,16 @@ def classify_token(token: str) -> str:
     if token.startswith("~/") or token.startswith("/"):
         return "LOCAL"
     if TEMPLATE_RE.search(token):
+        return "TEMPLATED"
+    if BRACE_RE.search(token) and '"' not in token and "'" not in token:
+        # A brace placeholder in a filename convention (`day-{day:04d}.md`,
+        # `{name}.toml`) is TEMPLATED like `<...>`. Excluded when the token
+        # carries a quote character: that is a code/string-literal snippet
+        # (`f"{x}"`, `{"check": POLICY}`), not a path convention, and must
+        # fall through to SYMBOL/SKIP_OTHER instead. A token with actual
+        # whitespace (`{"check": POLICY}`) is already routed to
+        # SKIP_COMMAND above this check, so the quote guard here is only
+        # load-bearing for the no-whitespace case (`f"{x}"`).
         return "TEMPLATED"
     if any(c in GLOB_CHARS for c in token):
         return "GLOB"
@@ -304,8 +315,99 @@ def _referenced_only_detail(repo_dir: Path, ref: str, token: str) -> str | None:
     return detail[:MAX_LINE_TEXT_CHARS]
 
 
-def _resolve_path(repo_dir: Path, ref: str, token: str) -> tuple[str, str | None]:
-    """Returns (result, detail). detail is set only for REFERENCED_ONLY."""
+# --------------------------------------------------------------------------- #
+# bare-basename resolution — one tree listing per invocation, cached
+# --------------------------------------------------------------------------- #
+
+class TreeIndex:
+    """Every tracked path at <ref>, indexed by basename — files and the
+    directories implied by their parents. Built once per ``collect()`` call
+    (only when a no-slash PATH/PATH_LINE token actually needs it) and reused
+    for every such token, never one ``git`` call per token."""
+
+    __slots__ = ("files_by_basename", "dirs_by_basename")
+
+    def __init__(self, files_by_basename: dict[str, list[str]], dirs_by_basename: dict[str, list[str]]) -> None:
+        self.files_by_basename = files_by_basename
+        self.dirs_by_basename = dirs_by_basename
+
+
+def _build_tree_index(repo_dir: Path, ref: str) -> TreeIndex | None:
+    result = _run_git(repo_dir, ["ls-tree", "-r", "-z", "--name-only", ref])
+    if result is None or result[0] != 0:
+        return None
+    files = [p for p in result[1].split("\0") if p]
+
+    files_by_basename: dict[str, list[str]] = {}
+    dirs_by_basename: dict[str, list[str]] = {}
+    seen_dirs: set[str] = set()
+    for f in files:
+        name = f.rsplit("/", 1)[-1]
+        files_by_basename.setdefault(name, []).append(f)
+        parts = f.split("/")
+        for i in range(1, len(parts)):
+            d = "/".join(parts[:i])
+            if d in seen_dirs:
+                continue
+            seen_dirs.add(d)
+            dirs_by_basename.setdefault(parts[i - 1], []).append(d)
+
+    for lst in files_by_basename.values():
+        lst.sort()
+    for lst in dirs_by_basename.values():
+        lst.sort()
+    return TreeIndex(files_by_basename, dirs_by_basename)
+
+
+def _resolve_by_basename(
+    tree_index: TreeIndex, name: str, is_dir_shaped: bool,
+) -> tuple[str, Any] | None:
+    """Returns (result, detail_payload), or None for zero matches (fall
+    through to the caller's existing resolution logic unchanged).
+
+    ``detail_payload`` is the single matching path for RESOLVES_BY_BASENAME,
+    or ``(total_count, candidate_paths[:5])`` for AMBIGUOUS_BASENAME.
+    """
+    table = tree_index.dirs_by_basename if is_dir_shaped else tree_index.files_by_basename
+    matches = table.get(name)
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return "RESOLVES_BY_BASENAME", matches[0]
+    return "AMBIGUOUS_BASENAME", (len(matches), matches[:5])
+
+
+def _format_ambiguous_detail(count: int, candidates: list[str]) -> str:
+    return f"{count} candidates: " + ", ".join(candidates)
+
+
+def _basename_eligible(token: str) -> str | None:
+    """The bare name to search for, or None if *token* has a directory
+    component and so is not eligible for basename search at all (it already
+    names its own directory — existing resolution handles it unchanged)."""
+    bare = token.rstrip("/") if token.endswith("/") else token
+    if not bare or "/" in bare:
+        return None
+    return bare
+
+
+def _resolve_path(
+    repo_dir: Path, ref: str, token: str, tree_index: TreeIndex | None = None,
+) -> tuple[str, str | None]:
+    """Returns (result, detail). detail is set for REFERENCED_ONLY and
+    AMBIGUOUS_BASENAME (a formatted string); None otherwise."""
+    if tree_index is not None:
+        name = _basename_eligible(token)
+        if name is not None:
+            basename_result = _resolve_by_basename(tree_index, name, _is_directory_shaped(token))
+            if basename_result is not None:
+                result, payload = basename_result
+                if result == "AMBIGUOUS_BASENAME":
+                    count, candidates = payload
+                    return result, _format_ambiguous_detail(count, candidates)
+                return result, payload  # RESOLVES_BY_BASENAME: payload is the full path
+            # Zero matches anywhere in the tree: fall through unchanged below.
+
     is_dir_token = token.endswith("/")
     bare = token.rstrip("/")
     if not is_dir_token and _file_exists(repo_dir, ref, token):
@@ -336,36 +438,66 @@ def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> list[str] | Non
     return result[1].splitlines()
 
 
-def _resolve_path_line(
-    repo_dir: Path, ref: str, path: str, start: int, end: int | None,
-) -> tuple[str, list[str] | None]:
-    base, _base_detail = _resolve_path(repo_dir, ref, path)
-    if base != "RESOLVES":
-        return base, None
+def _extract_line_result(
+    repo_dir: Path, ref: str, path: str, start: int, end: int | None, resolved_result: str,
+) -> tuple[str, list[str] | None, str | None]:
+    """Shared by the direct-path and basename-matched RESOLVES cases: slice
+    the requested line range out of *path* at *ref*, or report
+    LINE_OUT_OF_RANGE. ``resolved_result`` is the success bucket name to
+    report (RESOLVES or RESOLVES_BY_BASENAME)."""
     lines = _read_ref_file_lines(repo_dir, ref, path)
     if lines is None:
-        return "UNRESOLVED", None
+        return "UNRESOLVED", None, None
     n = len(lines)
     real_end = end if end is not None else start
     if start < 1 or real_end > n or start > real_end:
-        return "LINE_OUT_OF_RANGE", None
+        return "LINE_OUT_OF_RANGE", None, None
     selected = lines[start - 1:real_end][:MAX_LINE_TEXT_ROWS]
     trimmed = [line[:MAX_LINE_TEXT_CHARS] for line in selected]
-    return "RESOLVES", trimmed
+    return resolved_result, trimmed, None
+
+
+def _resolve_path_line(
+    repo_dir: Path, ref: str, path: str, start: int, end: int | None,
+    tree_index: TreeIndex | None = None,
+) -> tuple[str, list[str] | None, str | None]:
+    """Returns (result, line_text, detail). line_text is set only on a
+    resolved (possibly basename-matched) file; detail carries the
+    AMBIGUOUS_BASENAME candidate list when that applies."""
+    if tree_index is not None:
+        name = _basename_eligible(path)
+        if name is not None:
+            basename_result = _resolve_by_basename(tree_index, name, _is_directory_shaped(path))
+            if basename_result is not None:
+                result, payload = basename_result
+                if result == "AMBIGUOUS_BASENAME":
+                    count, candidates = payload
+                    return result, None, _format_ambiguous_detail(count, candidates)
+                return _extract_line_result(repo_dir, ref, payload, start, end, "RESOLVES_BY_BASENAME")
+
+    base, _base_detail = _resolve_path(repo_dir, ref, path, tree_index)
+    if base != "RESOLVES":
+        return base, None, None
+    return _extract_line_result(repo_dir, ref, path, start, end, "RESOLVES")
 
 
 def _first_special_index(token: str) -> int:
-    indices = [token.index(c) for c in ("<", "*", "?", "[") if c in token]
+    indices = [token.index(c) for c in ("<", "{", "*", "?", "[") if c in token]
     return min(indices) if indices else len(token)
 
 
-def _prefix_resolves(repo_dir: Path, ref: str, token: str) -> bool:
+def _prefix_resolves(repo_dir: Path, ref: str, token: str) -> tuple[bool, bool]:
+    """Returns (prefix_exists, no_prefix). no_prefix is True when there is
+    nothing before the first placeholder/glob character to check at all
+    (e.g. `day-{day:04d}.md`, `<project>/...`'s own leading `<project>`) —
+    the caller decides what bucket that becomes; this function only reports
+    the fact."""
     idx = _first_special_index(token)
     prefix = token[:idx]
     dir_prefix = prefix.rsplit("/", 1)[0] if "/" in prefix else ""
     if dir_prefix == "":
-        return True  # empty prefix = repo root, which trivially exists at a resolved ref
-    return _dir_exists(repo_dir, ref, dir_prefix)
+        return True, True
+    return _dir_exists(repo_dir, ref, dir_prefix), False
 
 
 def _grep_word(repo_dir: Path, ref: str, term: str) -> bool:
@@ -575,13 +707,23 @@ _SEVERITY: dict[tuple[str, str], str] = {
     ("PATH", "PARENT_ONLY"): "JUDGMENT",
     ("PATH", "UNRESOLVED"): "BLOCKING",
     ("PATH", "REFERENCED_ONLY"): "JUDGMENT",
+    # Bare-basename PATH match: a single hit anywhere in the tree is as good
+    # as a direct RESOLVES (OK, no row); two or more needs the reader's pick.
+    ("PATH", "RESOLVES_BY_BASENAME"): "OK",
+    ("PATH", "AMBIGUOUS_BASENAME"): "JUDGMENT",
     ("PATH_LINE", "RESOLVES"): "JUDGMENT",
     ("PATH_LINE", "PARENT_ONLY"): "JUDGMENT",
     ("PATH_LINE", "UNRESOLVED"): "BLOCKING",
     ("PATH_LINE", "REFERENCED_ONLY"): "JUDGMENT",
     ("PATH_LINE", "LINE_OUT_OF_RANGE"): "BLOCKING",
+    # Unlike plain PATH, a basename-matched PATH_LINE still needs the
+    # reader's line-text-vs-claim comparison (the whole point of PATH_LINE
+    # ever being JUDGMENT, not OK) — a basename match doesn't exempt it.
+    ("PATH_LINE", "RESOLVES_BY_BASENAME"): "JUDGMENT",
+    ("PATH_LINE", "AMBIGUOUS_BASENAME"): "JUDGMENT",
     ("TEMPLATED", "PREFIX_RESOLVES"): "OK",
     ("TEMPLATED", "PREFIX_UNRESOLVED"): "BLOCKING",
+    ("TEMPLATED", "TEMPLATED_NO_PREFIX"): "OK",
     ("GLOB", "PREFIX_RESOLVES"): "OK",
     ("GLOB", "PREFIX_UNRESOLVED"): "BLOCKING",
     ("SYMBOL", "FOUND"): "OK",
@@ -720,6 +862,22 @@ def collect(
     issue_tokens = [t for t in unique_tokens if t["cls"] == "ISSUE_REF"]
     wikilink_tokens = [t for t in unique_tokens if t["cls"] == "WIKILINK"]
 
+    # Bare-basename resolution needs one `git ls-tree -r` listing of the
+    # whole tree, built at most once per invocation (never once per token)
+    # and only when a PATH/PATH_LINE token actually has no directory
+    # component to check directly.
+    def _token_needs_tree_index(t: dict[str, Any]) -> bool:
+        if t["cls"] == "PATH":
+            return _basename_eligible(t["text"]) is not None
+        if t["cls"] == "PATH_LINE":
+            m = PATH_LINE_RE.match(t["text"])
+            return m is not None and _basename_eligible(m.group("path")) is not None
+        return False
+
+    tree_index: TreeIndex | None = None
+    if any(_token_needs_tree_index(t) for t in unique_tokens):
+        tree_index = _build_tree_index(repo_dir, resolved_ref)
+
     issue_results: dict[tuple[str | None, int], str | None] = {}
     if issue_tokens:
         first = issue_tokens[0]
@@ -749,7 +907,7 @@ def collect(
             continue
 
         if cls == "PATH":
-            result, path_detail = _resolve_path(repo_dir, resolved_ref, text)
+            result, path_detail = _resolve_path(repo_dir, resolved_ref, text, tree_index)
             detail = path_detail if path_detail is not None else (result if result != "RESOLVES" else None)
             _emit(token, cls, result, detail=detail)
             continue
@@ -759,14 +917,17 @@ def collect(
             path = m.group("path")
             start = int(m.group("start"))
             end = int(m.group("end")) if m.group("end") else None
-            result, line_text = _resolve_path_line(repo_dir, resolved_ref, path, start, end)
-            detail = None if line_text is not None else result
+            result, line_text, extra_detail = _resolve_path_line(repo_dir, resolved_ref, path, start, end, tree_index)
+            detail = extra_detail if extra_detail is not None else (None if line_text is not None else result)
             _emit(token, cls, result, detail=detail, line_text=line_text)
             continue
 
         if cls in ("TEMPLATED", "GLOB"):
-            ok = _prefix_resolves(repo_dir, resolved_ref, text)
-            result = "PREFIX_RESOLVES" if ok else "PREFIX_UNRESOLVED"
+            ok, no_prefix = _prefix_resolves(repo_dir, resolved_ref, text)
+            if no_prefix and cls == "TEMPLATED":
+                result = "TEMPLATED_NO_PREFIX"
+            else:
+                result = "PREFIX_RESOLVES" if ok else "PREFIX_UNRESOLVED"
             _emit(token, cls, result, detail=None if ok else f"literal prefix not found at {resolved_ref}")
             continue
 
