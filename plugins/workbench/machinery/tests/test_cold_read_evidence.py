@@ -298,6 +298,95 @@ def test_breakroom17_path_buckets(tmp_path: Path, fake_gh) -> None:
 
 
 # =========================================================================== #
+# REFERENCED_ONLY — a directory git never records but code establishes
+# (breakroom#17 precision-check finding: chronicles/ is created at runtime
+# by `(world / "chronicles").mkdir(...)`, never committed, so plain
+# git-tree PATH resolution false-blocks the exact path a human cold read
+# confirmed as correct)
+# =========================================================================== #
+
+def test_referenced_only_bucket(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(
+        upstream, "src/breakroom/init.py",
+        'from pathlib import Path\n\n'
+        'def make_world(root: Path) -> None:\n'
+        '    (root / "chronicles").mkdir(parents=True, exist_ok=True)\n',
+    )
+    _write(
+        upstream, "src/breakroom/tick.py",
+        'def write_chronicle(world, day):\n'
+        '    return world / "chronicles" / f"day-{day:04d}.md"\n',
+    )
+    # chronicles.py deliberately NOT written: it must stay a missing file,
+    # untouched by the REFERENCED_ONLY directory check.
+    _commit_all(upstream, "runtime-created chronicles/, never committed")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = (
+        "Digests write to `chronicles/`. The stale name `chronicle/` is wrong. "
+        "The helper is `write_chronicle` (not a path). "
+        "A destination `chronicles.py` doesn't exist yet."
+    )
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "body_refonly.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    rows = {r["token"]: r for r in report["rows"]}
+
+    # chronicles/ -> REFERENCED_ONLY, with the init.py evidence line.
+    assert rows["chronicles/"]["result"] == "REFERENCED_ONLY"
+    assert rows["chronicles/"]["severity"] == "JUDGMENT"
+    assert "init.py" in rows["chronicles/"]["detail"]
+    assert "chronicles" in rows["chronicles/"]["detail"]
+
+    # chronicle/ (singular) has no quoted-literal occurrence anywhere ->
+    # still a flat UNRESOLVED, still BLOCKING. The recall case must survive.
+    assert rows["chronicle/"]["result"] == "UNRESOLVED"
+    assert rows["chronicle/"]["severity"] == "BLOCKING"
+
+    # `write_chronicle` is a SYMBOL token (identifier-shaped, no '/'), not a
+    # PATH token -- it is exercised as its own class, not as a directory
+    # substring match. Confirm it resolves as SYMBOL:FOUND (grep -w finds
+    # the def), never contaminating the PATH REFERENCED_ONLY check.
+    assert "write_chronicle" not in rows  # FOUND is OK severity -> no row
+    assert report["counts"].get("SYMBOL:FOUND", 0) >= 1
+
+    # chronicles.py is a file token (has an extension) -> unaffected by
+    # REFERENCED_ONLY; PARENT_ONLY since its parent (repo root) is not a
+    # named directory, matching the pre-existing rule for a root-level file.
+    assert rows["chronicles.py"]["result"] in ("PARENT_ONLY", "UNRESOLVED")
+
+    assert report["verdict"] == "BLOCKING"  # chronicle/ alone still blocks
+
+
+def test_referenced_only_requires_quoted_literal_not_bare_substring(tmp_path: Path, fake_gh) -> None:
+    """A directory name that only occurs as a substring of a longer
+    identifier (never quoted on its own) must NOT get REFERENCED_ONLY --
+    that would demote an unrelated / wrong directory just because some
+    function happens to share a word with it."""
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(
+        upstream, "src/breakroom/tick.py",
+        'def write_chronicle(world, day):\n'
+        '    return world / "chronicles" / f"day-{day:04d}.md"\n',
+    )
+    _commit_all(upstream, "only an identifier, no quoted 'chronicle' literal")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "Digests write to `chronicle/` today."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "body_substr.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "chronicle/")
+    assert row["result"] == "UNRESOLVED"
+    assert row["severity"] == "BLOCKING"
+
+
+# =========================================================================== #
 # resolution buckets — breakroom#59 (symbols)
 # =========================================================================== #
 

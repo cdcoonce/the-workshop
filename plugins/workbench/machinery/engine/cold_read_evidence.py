@@ -251,17 +251,82 @@ def _dir_exists(repo_dir: Path, ref: str, dir_path: str) -> bool:
     return result is not None and result[0] == 0 and result[1].strip() != ""
 
 
-def _resolve_path(repo_dir: Path, ref: str, token: str) -> str:
+_GENERIC_EXTENSION_RE = re.compile(r"\.[A-Za-z0-9]{1,10}$")
+
+
+def _is_directory_shaped(token: str) -> bool:
+    """True when *token* names a directory rather than a file.
+
+    Either it ends with ``/`` outright, or its last path segment carries no
+    file-extension-shaped suffix at all (a generic ``.ext`` check, not the
+    PATH classifier's known-extension list — REFERENCED_ONLY is about
+    "does this look like a file", not "is this a recognized file type").
+    """
+    if token.endswith("/"):
+        return True
+    basename = token.rsplit("/", 1)[-1]
+    return not _GENERIC_EXTENSION_RE.search(basename)
+
+
+def _last_segment_name(token: str) -> str:
+    return token.rstrip("/").rsplit("/", 1)[-1]
+
+
+def _referenced_only_detail(repo_dir: Path, ref: str, token: str) -> str | None:
+    """The REFERENCED_ONLY evidence line, or None if *token*'s name is never
+    quoted as a string literal (single or double) in tracked files at *ref*.
+
+    Quoted literals only — ``-F`` fixed-string search for ``"<name>"`` and
+    ``'<name>'`` specifically, never a bare substring search. A bare
+    substring would also demote an unrelated directory whose name merely
+    appears inside a longer identifier (``chronicle`` inside
+    ``write_chronicle``), which is exactly the false-recall failure this
+    rule must not introduce.
+    """
+    name = _last_segment_name(token)
+    if not name:
+        return None
+    result = _run_git(
+        repo_dir, ["grep", "-n", "-F", "-e", f'"{name}"', "-e", f"'{name}'", ref],
+    )
+    if result is None or result[0] != 0:
+        return None
+    lines = [line for line in result[1].splitlines() if line]
+    if not lines:
+        return None
+    # git grep <rev> emits "<rev>:<path>:<lineno>:<text>"; report path:line: text.
+    parts = lines[0].split(":", 3)
+    if len(parts) == 4:
+        _rev, path, lineno, text = parts
+        detail = f"{path}:{lineno}: {text.strip()}"
+    else:
+        detail = lines[0]
+    return detail[:MAX_LINE_TEXT_CHARS]
+
+
+def _resolve_path(repo_dir: Path, ref: str, token: str) -> tuple[str, str | None]:
+    """Returns (result, detail). detail is set only for REFERENCED_ONLY."""
     is_dir_token = token.endswith("/")
     bare = token.rstrip("/")
     if not is_dir_token and _file_exists(repo_dir, ref, token):
-        return "RESOLVES"
+        return "RESOLVES", None
     if bare and _dir_exists(repo_dir, ref, bare):
-        return "RESOLVES"
+        return "RESOLVES", None
+    # Neither a file nor a directory exists at <ref>. A directory-shaped
+    # token gets one more check before falling to PARENT_ONLY/UNRESOLVED:
+    # is its name established as a quoted string literal in code, typically
+    # a runtime `.mkdir()` target that git's tree never records? That is
+    # real evidence the path is correct, not absent — the reader still has
+    # to weigh it (severity JUDGMENT), but it must not read as a flat
+    # UNRESOLVED/BLOCKING the way an invented or stale path does.
+    if _is_directory_shaped(token):
+        detail = _referenced_only_detail(repo_dir, ref, bare)
+        if detail is not None:
+            return "REFERENCED_ONLY", detail
     parent = posixpath.dirname(bare)
     if parent and _dir_exists(repo_dir, ref, parent):
-        return "PARENT_ONLY"
-    return "UNRESOLVED"
+        return "PARENT_ONLY", None
+    return "UNRESOLVED", None
 
 
 def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> list[str] | None:
@@ -274,7 +339,7 @@ def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> list[str] | Non
 def _resolve_path_line(
     repo_dir: Path, ref: str, path: str, start: int, end: int | None,
 ) -> tuple[str, list[str] | None]:
-    base = _resolve_path(repo_dir, ref, path)
+    base, _base_detail = _resolve_path(repo_dir, ref, path)
     if base != "RESOLVES":
         return base, None
     lines = _read_ref_file_lines(repo_dir, ref, path)
@@ -509,9 +574,11 @@ _SEVERITY: dict[tuple[str, str], str] = {
     ("PATH", "RESOLVES"): "OK",
     ("PATH", "PARENT_ONLY"): "JUDGMENT",
     ("PATH", "UNRESOLVED"): "BLOCKING",
+    ("PATH", "REFERENCED_ONLY"): "JUDGMENT",
     ("PATH_LINE", "RESOLVES"): "JUDGMENT",
     ("PATH_LINE", "PARENT_ONLY"): "JUDGMENT",
     ("PATH_LINE", "UNRESOLVED"): "BLOCKING",
+    ("PATH_LINE", "REFERENCED_ONLY"): "JUDGMENT",
     ("PATH_LINE", "LINE_OUT_OF_RANGE"): "BLOCKING",
     ("TEMPLATED", "PREFIX_RESOLVES"): "OK",
     ("TEMPLATED", "PREFIX_UNRESOLVED"): "BLOCKING",
@@ -682,8 +749,9 @@ def collect(
             continue
 
         if cls == "PATH":
-            result = _resolve_path(repo_dir, resolved_ref, text)
-            _emit(token, cls, result, detail=result if result != "RESOLVES" else None)
+            result, path_detail = _resolve_path(repo_dir, resolved_ref, text)
+            detail = path_detail if path_detail is not None else (result if result != "RESOLVES" else None)
+            _emit(token, cls, result, detail=detail)
             continue
 
         if cls == "PATH_LINE":
