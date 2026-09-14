@@ -130,6 +130,12 @@ class FakeGh:
         self.issue_bodies: dict[tuple[str, int], str] = {}
         self.issues: dict[str, dict] = {}
         self.custom: dict[str, tuple[int, str, str]] = {}
+        # owner -> list of repo names `gh repo list <owner> ...` returns.
+        # Defaults to empty (no siblings) so existing tests that don't care
+        # about the cross-repo signal 5 check get a clean, deterministic
+        # "no signal" answer instead of an unexpected-call crash.
+        self.owner_repos: dict[str, list[str]] = {}
+        self.owner_repos_unavailable = False
         self.unavailable = False
 
     def __call__(self, args: list[str], timeout: int = 30):
@@ -145,6 +151,12 @@ class FakeGh:
             import json as _json
 
             return (0, _json.dumps({"body": body}), "")
+        if args[:2] == ["repo", "list"]:
+            if self.owner_repos_unavailable:
+                return (1, "", "gh: authentication required")
+            owner = args[2]
+            names = self.owner_repos.get(owner, [])
+            return (0, "\n".join(names) + ("\n" if names else ""), "")
         if args[0] == "api":
             path = args[1]
             if path in self.custom:
@@ -489,6 +501,12 @@ def test_bare_basename_zero_matches_falls_through_to_unresolved(tmp_path: Path, 
 
 
 def test_bare_basename_directory_resolves(tmp_path: Path, fake_gh) -> None:
+    """Round 5 (HIGH 2): a directory-shaped token that isn't found exactly
+    never resolves by suffix to OK, bare or not -- command.md's own #568
+    example is exactly this shape (a destination directory that doesn't
+    exist at the claimed location, found only because a same-named
+    directory exists somewhere else). `chronicles/` matched only by
+    basename search is EXISTS_ELSEWHERE, CHECK."""
     _, checkout, repo = _make_basename_fixture(tmp_path)
     body = "Digests write to `chronicles/` today."
     report = collect(
@@ -496,9 +514,9 @@ def test_bare_basename_directory_resolves(tmp_path: Path, fake_gh) -> None:
         body_file=_write(tmp_path, "b_basename4.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
-    # RESOLVES_BY_SUFFIX is OK severity for PATH -> no row, just a count.
-    assert not any(r["token"] == "chronicles/" for r in report["rows"])
-    assert report["counts"].get("PATH:RESOLVES_BY_SUFFIX", 0) >= 1
+    row = next(r for r in report["rows"] if r["token"] == "chronicles/")
+    assert row["result"] == "EXISTS_ELSEWHERE"
+    assert row["severity"] == "CHECK"
 
 
 def test_bare_basename_directory_shaped_does_not_match_a_file(tmp_path: Path, fake_gh) -> None:
@@ -524,7 +542,11 @@ def test_brace_placeholder_no_directory_prefix(tmp_path: Path, fake_gh) -> None:
         body_file=_write(tmp_path, "b_basename6.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
-    assert not any(r["token"] == "day-{day:04d}.md" for r in report["rows"])
+    # Round 5: TEMPLATED_NO_PREFIX is CHECK now (a pattern's prefix is
+    # never fully verified, so "nothing to check" is a hint, not a trust).
+    row = next(r for r in report["rows"] if r["token"] == "day-{day:04d}.md")
+    assert row["result"] == "TEMPLATED_NO_PREFIX"
+    assert row["severity"] == "CHECK"
     assert report["counts"].get("TEMPLATED:TEMPLATED_NO_PREFIX", 0) >= 1
 
 
@@ -618,23 +640,31 @@ def test_breakroom40_path_line_and_out_of_range(tmp_path: Path, fake_gh) -> None
     assert report["verdict"] == "CHECK_REQUIRED"  # LINE_OUT_OF_RANGE still needs a CHECK
 
 
-def test_path_line_caps_at_three_lines_and_160_chars(tmp_path: Path, fake_gh) -> None:
+def test_path_line_caps_at_eight_lines_and_160_chars(tmp_path: Path, fake_gh) -> None:
+    """Round 5: up to MAX_LINE_TEXT_ROWS=8 lines are shown (was 3); a range
+    beyond that is flagged truncated: true, not silently cut."""
     upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
     long_line = "x" * 300
-    text = "\n".join([long_line] * 10) + "\n"
+    text = "\n".join([long_line] * 20) + "\n"
     _write(upstream, "big.py", text)
     _commit_all(upstream, "add big.py")
     _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
 
-    body = "See `big.py:1-5` please."
+    body = "See `big.py:1-5` and `big.py:1-12` please."
     report = collect(
         repo=repo, repo_dir=checkout, issue=None,
         body_file=_write(tmp_path, "bodybig.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
-    row = next(r for r in report["evidence_lines"] if r["token"] == "big.py:1-5")
-    assert len(row["line_text"]) == 3
-    assert all(len(line) <= 160 for line in row["line_text"])
+    evidence = {r["token"]: r for r in report["evidence_lines"]}
+    short = evidence["big.py:1-5"]
+    assert len(short["line_text"]) == 5
+    assert all(len(line) <= 160 for line in short["line_text"])
+    assert not short.get("truncated")
+
+    long_range = evidence["big.py:1-12"]
+    assert len(long_range["line_text"]) == 8
+    assert long_range["truncated"] is True
 
 
 # =========================================================================== #
@@ -654,13 +684,13 @@ def test_afk1380_templated_and_skip_command(tmp_path: Path, fake_gh) -> None:
     )
     assert report["counts"].get("SKIP_COMMAND:(none)", 0) >= 1
     # <project>/.afk/last-cycle.json has nothing before its placeholder
-    # (<project> IS the placeholder) -> TEMPLATED_NO_PREFIX, not
-    # PREFIX_RESOLVES (there is no literal directory prefix to have checked).
-    assert report["counts"].get("TEMPLATED:TEMPLATED_NO_PREFIX", 0) >= 1
-    # Neither is a blocking/judgment row.
+    # (<project> IS the placeholder) -> TEMPLATED_NO_PREFIX. Round 5: this
+    # is CHECK now (a pattern's prefix is never fully verified), so it IS
+    # a row -- only the command stays uncounted noise.
+    row = next(r for r in report["rows"] if r["token"] == "<project>/.afk/last-cycle.json")
+    assert row["result"] == "TEMPLATED_NO_PREFIX"
     tokens_in_rows = {r["token"] for r in report["rows"]}
     assert "afk-driver --fleet-health" not in tokens_in_rows
-    assert "<project>/.afk/last-cycle.json" not in tokens_in_rows
 
 
 def test_local_and_glob_prefix(tmp_path: Path, fake_gh) -> None:
@@ -1031,12 +1061,19 @@ def test_path_with_unicode_name_round_trips(tmp_path: Path, fake_gh) -> None:
     assert row["line_text"][0] == "la ligne deux"
 
 
-def test_path_with_space_in_token_is_skip_command_not_path(tmp_path: Path, fake_gh) -> None:
-    """A literal space inside a backticked token always wins as SKIP_COMMAND
-    (classify_token's whitespace rule is first and unconditional), even when
-    the token also looks path-shaped. This is a corpus rule, not a gap: paths
-    the resolver must check never contain spaces in the 12-issue corpus."""
-    assert classify_token("docs/has space/plan.md") == "SKIP_COMMAND"
+def test_path_with_space_directory_and_known_extension_is_path() -> None:
+    """Round 5 (MEDIUM 4) reverses the earlier corpus-only rule: a real
+    citation CAN contain a space in a directory or file name (ws#852:
+    `brain/Agent Contract.md`) -- a backticked token with whitespace AND a
+    "/" AND a known extension is PATH now, not SKIP_COMMAND. A command
+    (whitespace, no "/") must still read as SKIP_COMMAND."""
+    assert classify_token("brain/Agent Contract.md") == "PATH"
+    assert classify_token("docs/has space/plan.md") == "PATH"
+    assert classify_token("afk-driver --fleet-health") == "SKIP_COMMAND"
+    assert classify_token("git ls-remote origin") == "SKIP_COMMAND"
+    # Whitespace + "/" but NO known extension still reads as a command --
+    # both conditions are required, not just the "/".
+    assert classify_token("scripts/run some tests") == "SKIP_COMMAND"
 
 
 # =========================================================================== #
@@ -1138,12 +1175,14 @@ def test_severity_table_is_only_ok_or_check() -> None:
     [
         ("PATH", "RESOLVES", "OK"),
         ("PATH", "RESOLVES_BY_SUFFIX", "OK"),
+        ("PATH", "EXISTS_ELSEWHERE", "CHECK"),
         ("PATH", "PARENT_ONLY", "CHECK"),
         ("PATH", "UNRESOLVED", "CHECK"),
         ("PATH", "REFERENCED_ONLY", "CHECK"),
         ("PATH", "AMBIGUOUS_SUFFIX", "CHECK"),
         ("PATH_LINE", "RESOLVES", "OK"),
         ("PATH_LINE", "RESOLVES_BY_SUFFIX", "OK"),
+        ("PATH_LINE", "EXISTS_ELSEWHERE", "CHECK"),
         ("PATH_LINE", "LINE_OUT_OF_RANGE", "CHECK"),
         ("PATH_LINE", "DIRECTORY_NOT_FILE", "CHECK"),
         ("PATH_LINE", "BINARY_FILE", "CHECK"),
@@ -1151,6 +1190,7 @@ def test_severity_table_is_only_ok_or_check() -> None:
         ("SYMBOL", "FOUND_IN_DOCS_OR_TESTS", "CHECK"),
         ("SYMBOL", "ABSENT", "CHECK"),
         ("SHA", "COMMIT_EXISTS", "OK"),
+        ("SHA", "COMMIT_ON_OTHER_BRANCH", "CHECK"),
         ("SHA", "COMMIT_EXISTS_UNREACHABLE", "CHECK"),
         ("SHA", "COMMIT_MISSING", "CHECK"),
         ("ISSUE_REF", "OPEN", "OK"),
@@ -1165,8 +1205,11 @@ def test_severity_table_is_only_ok_or_check() -> None:
         ("REF", "REF_UNRESOLVED", "CHECK"),
         ("REPO", "REPO_RESOLVES", "OK"),
         ("REPO", "REPO_UNRESOLVED", "CHECK"),
-        ("TEMPLATED", "TEMPLATED_NO_PREFIX", "OK"),
+        ("TEMPLATED", "TEMPLATED_NO_PREFIX", "CHECK"),
+        ("TEMPLATED", "PREFIX_RESOLVES", "CHECK"),
         ("TEMPLATED", "PREFIX_UNRESOLVED", "CHECK"),
+        ("GLOB", "PREFIX_RESOLVES", "CHECK"),
+        ("GLOB", "PREFIX_UNRESOLVED", "CHECK"),
     ],
 )
 def test_severity_table_key_buckets(cls: str, result: str, expected: str) -> None:
@@ -1311,20 +1354,22 @@ def test_limit_never_elides_check_rows(tmp_path: Path, fake_gh) -> None:
     assert report["elided"] == 0
 
 
-def test_limit_elides_evidence_lines_not_rows(tmp_path: Path, fake_gh) -> None:
+def test_limit_never_elides_evidence_lines(tmp_path: Path, fake_gh) -> None:
+    """Round 5 (MEDIUM 5): --limit elides nothing now -- afk#1378-shaped:
+    all evidence_lines are shown regardless of --limit."""
     upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
-    for i in range(10):
+    for i in range(25):
         _write(upstream, f"f{i}.py", "a\nb\nc\n")
     _commit_all(upstream, "add many files")
     _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
-    body = " ".join(f"`f{i}.py:1`" for i in range(10))
+    body = " ".join(f"`f{i}.py:1`" for i in range(25))
     report = collect(
         repo=repo, repo_dir=checkout, issue=None,
         body_file=_write(tmp_path, "b_manyevidence.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=3,
     )
-    assert len(report["evidence_lines"]) == 3
-    assert report["evidence_elided"] == 7
+    assert len(report["evidence_lines"]) == 25
+    assert report["evidence_elided"] == 0
 
 
 def test_run_git_sets_literal_pathspecs_env(tmp_path: Path, monkeypatch, fake_gh) -> None:
@@ -1479,10 +1524,13 @@ def test_dotted_symbol_through_builtin_looking_segment_still_resolves() -> None:
     assert classify_token("os.path") == "SYMBOL"
 
 
-def test_subtree_relative_path_resolves_by_suffix(tmp_path: Path, fake_gh) -> None:
-    """C: path-suffix resolution generalizes the round-3 basename rule --
-    `engine/sync_manager.py` matches a file several directories deeper,
-    not just a bare basename."""
+def test_subtree_relative_path_is_exists_elsewhere_not_ok(tmp_path: Path, fake_gh) -> None:
+    """Round 5 (HIGH 2): a multi-segment ("/"-bearing) suffix match is no
+    longer trusted outright -- a subtree-relative citation that lands on
+    the wrong subtree (ws#563-style) must surface for the reader, not
+    silently read OK. `engine/sync_manager.py` matches a file several
+    directories deeper -> EXISTS_ELSEWHERE, CHECK, detail names the real
+    path found."""
     upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
     _write(upstream, "tools/vault-ops/machinery/engine/sync_manager.py", "x = 1\n")
     _commit_all(upstream, "add nested engine file")
@@ -1494,8 +1542,39 @@ def test_subtree_relative_path_resolves_by_suffix(tmp_path: Path, fake_gh) -> No
         body_file=_write(tmp_path, "b_suffix.md", body),
         ref=None, no_fetch=False, vault_root=None, limit=20,
     )
-    assert not any(r["token"] == "engine/sync_manager.py" for r in report["rows"])
-    assert report["counts"].get("PATH:RESOLVES_BY_SUFFIX", 0) >= 1
+    row = next(r for r in report["rows"] if r["token"] == "engine/sync_manager.py")
+    assert row["result"] == "EXISTS_ELSEWHERE"
+    assert row["severity"] == "CHECK"
+    assert "tools/vault-ops/machinery/engine/sync_manager.py" in row["detail"]
+    assert report["counts"].get("PATH:EXISTS_ELSEWHERE", 0) >= 1
+
+
+def test_568_fixture_destination_and_citation_both_check(tmp_path: Path, fake_gh) -> None:
+    """command.md's own #568 example, empirically: a fixture with only
+    `plugins/x/scripts/tests/test_a.py`. The destination `scripts/tests/`
+    and the citation `tests/test_a.py` both read EXISTS_ELSEWHERE (CHECK);
+    the bare basename `test_a.py` stays OK; a bare directory `tests/`
+    (no "/" in the search name, but still directory-shaped) is CHECK too."""
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, "plugins/x/scripts/tests/test_a.py", "x = 1\n")
+    _commit_all(upstream, "the #568 fixture")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = (
+        "A test lands in `scripts/tests/`. See `tests/test_a.py` and `test_a.py` "
+        "and the `tests/` directory."
+    )
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_568.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    rows = {r["token"]: r for r in report["rows"]}
+    assert rows["scripts/tests/"]["result"] == "EXISTS_ELSEWHERE"
+    assert rows["tests/test_a.py"]["result"] == "EXISTS_ELSEWHERE"
+    assert rows["tests/"]["result"] == "EXISTS_ELSEWHERE"
+    assert not any(r["token"] == "test_a.py" for r in report["rows"])
+    assert report["counts"].get("PATH:RESOLVES_BY_SUFFIX", 0) >= 1  # test_a.py, OK
 
 
 def test_suffix_does_not_match_a_different_file_with_same_ending() -> None:
@@ -1783,3 +1862,316 @@ def test_x1_wikilinks_without_vault_root_is_not_run(tmp_path: Path, fake_gh) -> 
     )
     assert report["verdict"] == "INCOMPLETE"
     assert any(nr["class"] == "wikilink" for nr in report["not_run"])
+
+
+# =========================================================================== #
+# Round 5 — HIGH 1: bare #N resolved against the wrong repo
+# =========================================================================== #
+
+def test_cross_repo_signal_1_owner_repo_hash_n_promotes_bare_ref(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+    fake_gh.issues["cdcoonce/breakroom#18"] = {"state": "open"}
+
+    body = "See cdcoonce/breakroom#18 and also #10 for context."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_signal1.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "#10")
+    assert "cdcoonce/breakroom" in row["detail"]
+    assert not any(r["token"] == "#10" for r in report["assumed_repo_refs"])
+
+
+def test_cross_repo_signal_2_github_url_promotes_bare_ref(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+    fake_gh.issues["cdcoonce/breakroom#18"] = {"state": "open"}
+
+    body = "https://github.com/cdcoonce/breakroom/issues/18 and #10 too."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_signal2.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "#10")
+    assert row["class"] == "ISSUE_REF"
+
+
+def test_cross_repo_signal_3_backticked_owner_name_promotes_bare_ref(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+
+    body = "`cdcoonce/breakroom` #10, #18, #21 all exist and are OPEN."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_signal3.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "#10")
+    assert "cdcoonce/breakroom" in row["detail"]
+
+
+def test_cross_repo_signal_4_alias_hash_n_promotes_bare_ref(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+
+    body = "See bms#235 and also #10 for the related work."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_signal4.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "#10")
+    assert row["class"] == "ISSUE_REF"
+
+
+def test_cross_repo_signal_5_sibling_repo_name_in_prose_promotes_bare_ref(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.owner_repos["testowner"] = ["afk-agent-system", "household-bms"]
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+
+    body = "This work depends on household-bms changes. See #10 for context."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_signal5.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "#10")
+    assert "household-bms" in row["detail"]
+    assert any(c[:2] == ["repo", "list"] for c in fake_gh.calls)
+
+
+def test_no_cross_repo_signal_leaves_bare_ref_assumed(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.owner_repos["testowner"] = []  # no siblings, no signal
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+
+    body = "#10 is cited, nothing else in the body concerns another repo."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_nosignal.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert not any(r["token"] == "#10" for r in report["rows"])
+    assert any(r["token"] == "#10" for r in report["assumed_repo_refs"])
+
+
+def test_owner_repo_list_gh_failure_gives_incomplete(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "afk-agent-system")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+    fake_gh.owner_repos_unavailable = True
+    fake_gh.issues[f"{repo}#10"] = {"state": "open"}
+
+    body = "#10 is cited, no other cross-repo signal in the body."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_repolistfail.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert report["verdict"] == "INCOMPLETE"
+    assert any(nr["class"] == "repo_list" for nr in report["not_run"])
+
+
+# =========================================================================== #
+# Round 5 — MEDIUM 2: SHA reachable only from another remote-tracking branch
+# =========================================================================== #
+
+def test_sha_reachable_only_from_other_branch(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _run(["git", "-C", str(upstream), "checkout", "-q", "-b", "feature"], tmp_path)
+    _write(upstream, "feature.py", "x = 1\n")
+    _commit_all(upstream, "feature-only commit")
+    sha = _run(["git", "-C", str(upstream), "rev-parse", "HEAD"], tmp_path).stdout.strip()
+    _run(["git", "-C", str(upstream), "checkout", "-q", "main"], tmp_path)
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = f"Commit `{sha}` fixed it."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_otherbranch.md", body),
+        ref=None, no_fetch=True, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == sha)
+    assert row["result"] == "COMMIT_ON_OTHER_BRANCH"
+    assert "origin/feature" in row["detail"]
+
+
+# =========================================================================== #
+# Round 5 — MEDIUM 3: dotfiles resolve as PATH, not SKIP_BARE_EXTENSION
+# =========================================================================== #
+
+@pytest.mark.parametrize("dotfile", [".gitignore", ".afk", ".claude", ".env"])
+def test_dotfile_classifies_as_path(dotfile: str) -> None:
+    assert classify_token(dotfile) == "PATH"
+
+
+def test_bare_extension_still_skipped_for_known_extensions() -> None:
+    assert classify_token(".py") == "SKIP_BARE_EXTENSION"
+    assert classify_token(".sql") == "SKIP_BARE_EXTENSION"
+
+
+def test_gitignore_resolves_directly(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, ".gitignore", "*.pyc\n")
+    _commit_all(upstream, "add gitignore")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "See `.gitignore` for the ignore rules."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_gitignore.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert not any(r["token"] == ".gitignore" for r in report["rows"])
+    assert report["counts"].get("PATH:RESOLVES", 0) >= 1
+
+
+# =========================================================================== #
+# Round 5 — MEDIUM 6: prose line-citation anchor within 40 chars
+# =========================================================================== #
+
+def test_prose_citation_within_distance_pairs_with_preceding_token() -> None:
+    body = "See `mod.py` (lines 5-10) for it."
+    tokens = extract_tokens(body)
+    assert any(t["cls"] == "PATH_LINE" and t["text"] == "mod.py:5-10" for t in tokens)
+
+
+def test_prose_citation_too_far_from_anchor_has_no_path() -> None:
+    body = (
+        "`mod.py` is old news, superseded a long while back by a much later rewrite "
+        "that nobody has fully documented yet, and the important part is lines 100-110."
+    )
+    tokens = extract_tokens(body)
+    prose = [t for t in tokens if t["cls"] == "PROSE_LINE_CITATION"]
+    assert prose
+    assert prose[0]["symbol"] is None
+    assert not any(t["cls"] == "PATH_LINE" and t["text"].startswith("mod.py") for t in tokens)
+
+
+def test_p7_nearest_preceding_anchor_not_a_later_token() -> None:
+    body = "Compare `mod.py` against lines 5-10, unrelated to `lines.py` mentioned after."
+    tokens = extract_tokens(body)
+    assert any(t["cls"] == "PATH_LINE" and t["text"] == "mod.py:5-10" for t in tokens)
+    assert not any(t["cls"] == "PATH_LINE" and t["text"].startswith("lines.py") for t in tokens)
+
+
+def test_br59_c2_symbol_anchored_citation_is_not_an_evidence_line(tmp_path: Path, fake_gh) -> None:
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, "src/secrets.py", "def _reveal_safe_secrets():\n    pass\n")
+    _commit_all(upstream, "add secrets.py")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "`_reveal_safe_secrets` (lines 100) is the relevant function."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_br59c2.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    assert not any(r["token"].startswith("_reveal_safe_secrets") for r in report["evidence_lines"])
+    row = next(r for r in report["rows"] if r["class"] == "PROSE_LINE_CITATION")
+    assert "_reveal_safe_secrets" in row["detail"]
+
+
+# =========================================================================== #
+# Round 5 — MEDIUM 7: reviewer survivors
+# =========================================================================== #
+
+def test_o2b_basename_dict_lookup_is_exact_not_substring(tmp_path: Path, fake_gh) -> None:
+    """o2b: a bare basename match must be an exact dict key, never a
+    segment-boundary-free substring -- `notes.md` must not match
+    `mynotes.md`."""
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, "docs/mynotes.md", "x\n")
+    _commit_all(upstream, "add mynotes.md only")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "See `notes.md` for context."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_o2b.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "notes.md")
+    assert row["result"] == "UNRESOLVED"
+
+
+def test_o3b_symbol_found_only_in_docs_or_tests_stays_check(tmp_path: Path, fake_gh) -> None:
+    """o3b: FOUND (OK) requires at least one CODE file match; a symbol
+    found only in docs/*.md or tests/ stays FOUND_IN_DOCS_OR_TESTS (CHECK)."""
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, "docs/design.md", "See `only_in_docs` for details.\n")
+    _commit_all(upstream, "add docs-only mention")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "`only_in_docs` is cited."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_o3b.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    row = next(r for r in report["rows"] if r["token"] == "only_in_docs")
+    assert row["result"] == "FOUND_IN_DOCS_OR_TESTS"
+
+
+def test_o10b_evidence_line_text_present_in_markdown_output(tmp_path: Path, fake_gh) -> None:
+    """o10b: render_markdown must not drop line_text for an evidence_lines row."""
+    import cold_read_evidence as cre
+
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "breakroom")
+    _write(upstream, "norms.py", "a\nunique_marker_line\nc\n")
+    _commit_all(upstream, "add norms.py")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "See `norms.py:2` for it."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_o10b.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    rendered = cre.render_markdown(report)
+    assert "unique_marker_line" in rendered
+
+
+def test_o12b_short_legitimate_symbol_not_treated_as_keyword() -> None:
+    """o12b: the keyword/builtin skip must not widen to "any short token"
+    -- a short but real identifier that is NEITHER a keyword nor a
+    builtin (`ok`, `rc`) must still classify SYMBOL, distinguishing the
+    correct rule (an exact keyword/builtin name check) from a broken
+    `len(token) <= 2` stand-in that would also skip these."""
+    assert classify_token("ok") == "SYMBOL"
+    assert classify_token("rc") == "SYMBOL"
+
+
+def test_o12c_bare_extension_regex_not_overly_wide() -> None:
+    """o12c: only the fixed known-extension list is skipped -- `.pyc` (not
+    in the list) must not be treated as a bare-extension fragment."""
+    assert classify_token(".pyc") != "SKIP_BARE_EXTENSION"
+
+
+def test_s6_stray_backtick_same_line_does_not_drop_a_later_real_span() -> None:
+    """S6: a same-LINE stray backtick RUN (here a double-backtick, so it
+    has no same-length partner anywhere on the line -- a single backtick
+    would always find a same-length partner in the later pair and
+    genuinely isn't "unpaired" under CommonMark's own rule) must not
+    swallow a later, properly paired single-backtick span on that same
+    line (distinct from round 4's cross-line Cc case)."""
+    body = "A `` stray unpaired double mark then `real.py` continues on the same line."
+    texts = [t["text"] for t in extract_tokens(body)]
+    assert "real.py" in texts
+
+
+def test_o14b_error_severity_not_in_table() -> None:
+    """o14b: no ("ERROR", "ERROR") entry in _SEVERITY -- _emit_error sets
+    severity directly and never consults the table, so an entry there
+    would be dead code."""
+    import cold_read_evidence as cre
+
+    assert ("ERROR", "ERROR") not in cre._SEVERITY

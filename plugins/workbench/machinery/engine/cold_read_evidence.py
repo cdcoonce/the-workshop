@@ -79,13 +79,17 @@ SHA_CANDIDATE_RE = re.compile(r"\b[0-9a-fA-F]{7,40}\b")
 
 PATH_EXTENSIONS = (
     ".py", ".md", ".toml", ".json", ".yml", ".yaml", ".sh", ".sql",
-    ".txt", ".cfg", ".ini", ".ts", ".tsx", ".js",
+    ".txt", ".cfg", ".ini", ".ts", ".tsx", ".js", ".csv",
 )
-# A bare extension with nothing else: a leading dot, no slash, no other dot
-# (`.py`, `.sql`) — a real citation never names evidence this way; it is a
-# fragment of prose ("rename the .py file") the extractor must not treat as
-# a path. Checked before the general PATH rule.
-BARE_EXTENSION_RE = re.compile(r"^\.[A-Za-z0-9]{1,10}$")
+# A bare extension with nothing else, and ONLY when the name after the dot is
+# a real extension from the fixed list above (`.py`, `.sql`) — a real
+# citation never names evidence this way; it is a fragment of prose ("rename
+# the .py file") the extractor must not treat as a path. A dotfile whose name
+# is not a recognized extension (`.gitignore`, `.afk`, `.claude`, `.env`) is
+# NOT a bare-extension fragment — it is the file/directory itself, handled by
+# the dotfile-PATH rule below. Derived from PATH_EXTENSIONS, not a separate
+# list, so the two can never drift apart.
+BARE_EXTENSION_NAMES = frozenset(ext[1:] for ext in PATH_EXTENSIONS)
 WHITESPACE_RE = re.compile(r"\s")
 TEMPLATE_RE = re.compile(r"<[^<>]*>")
 BRACE_RE = re.compile(r"\{[^{}]*\}")
@@ -111,8 +115,12 @@ SHA_LETTERS = frozenset("abcdefABCDEF")
 PROSE_LINE_RE = re.compile(r"\blines?\s+(\d+)(?:\s*-\s*(\d+))?\b|\bL(\d+)-L?(\d+)\b", re.IGNORECASE)
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n{2,}")
 
-MAX_LINE_TEXT_ROWS = 3
+MAX_LINE_TEXT_ROWS = 8
 MAX_LINE_TEXT_CHARS = 160
+# Nearest-preceding-backtick-token window for prose line citations
+# ("lines N-M"): only pair within this many characters. Beyond it, the
+# citation is too far from any specific token to trust the pairing.
+PROSE_ANCHOR_MAX_DISTANCE = 40
 MAX_AMBIGUOUS_CANDIDATES = 5
 
 
@@ -150,9 +158,22 @@ def normalize_backtick_token(raw: str) -> str:
     return TRAILING_PUNCT_RE.sub("", raw)
 
 
+def _is_bare_extension(token: str) -> bool:
+    if "/" in token or not token.startswith("."):
+        return False
+    return token[1:].lower() in BARE_EXTENSION_NAMES
+
+
 def classify_token(token: str) -> str:
     """Classify one backticked token per the corpus rule table. First match wins."""
     if WHITESPACE_RE.search(token):
+        # A path with a space in its name (`brain/Agent Contract.md`) is
+        # still evidence, not a shell command -- but only when it also has
+        # a directory component AND a known extension; `afk-driver
+        # --fleet-health` and `git ls-remote origin` (whitespace, no "/")
+        # must still read as commands.
+        if "/" in token and _has_known_extension(token):
+            return "PATH"
         return "SKIP_COMMAND"
     if token.startswith("-"):
         return "SKIP_FLAG"
@@ -172,8 +193,13 @@ def classify_token(token: str) -> str:
         return "TEMPLATED"
     if any(c in GLOB_CHARS for c in token):
         return "GLOB"
-    if BARE_EXTENSION_RE.match(token):
+    if _is_bare_extension(token):
         return "SKIP_BARE_EXTENSION"
+    if token.startswith(".") and len(token) > 1:
+        # A dotfile/dot-directory that survived the bare-extension check
+        # above (".gitignore", ".afk", ".claude", ".env") IS the evidence,
+        # not a fragment of prose about some other file's extension.
+        return "PATH"
     m = PATH_LINE_COL_RE.match(token) or HASH_L_LINE_RE.match(token) or PATH_LINE_RE.match(token)
     if m:
         path_part = m.group("path")
@@ -443,15 +469,27 @@ def extract_tokens(body: str) -> list[dict[str, Any]]:
         if not prose_matches:
             continue
         candidates = [t for t in backtick_tokens if sent_start <= t["_start"] < sent_end]
-        if not candidates:
-            continue
-        anchor = candidates[-1]
         for pm in prose_matches:
             if pm.group(1) is not None:
                 start_n, end_n = int(pm.group(1)), (int(pm.group(2)) if pm.group(2) else None)
             else:
                 start_n, end_n = int(pm.group(3)), int(pm.group(4))
-            line = _line_no(masked, sent_start + pm.start())
+            abs_start = sent_start + pm.start()
+            line = _line_no(masked, abs_start)
+            # Only the NEAREST preceding backtick token, and only within
+            # PROSE_ANCHOR_MAX_DISTANCE characters -- a citation far from
+            # any specific token (or with nothing preceding it at all in
+            # the sentence) is not confidently paired with one.
+            preceding = [t for t in candidates if t["_end"] <= abs_start]
+            anchor = max(preceding, key=lambda t: t["_end"]) if preceding else None
+            if anchor is not None and abs_start - anchor["_end"] > PROSE_ANCHOR_MAX_DISTANCE:
+                anchor = None
+            if anchor is None:
+                tokens.append({
+                    "text": f"(lines {start_n}" + (f"-{end_n})" if end_n else ")"),
+                    "cls": "PROSE_LINE_CITATION", "line": line, "symbol": None,
+                })
+                continue
             if anchor["cls"] == "PATH":
                 pl_text = f"{anchor['text']}:{start_n}" + (f"-{end_n}" if end_n else "")
                 tokens.append({"text": pl_text, "cls": "PATH_LINE", "line": line, "_prose": True})
@@ -742,6 +780,24 @@ def _suffix_eligible(token: str) -> str | None:
     return bare or None
 
 
+def _suffix_match_is_uncertain(name: str, is_dir_shaped: bool) -> bool:
+    """True when a single suffix/basename match must be reported as
+    EXISTS_ELSEWHERE (CHECK), not trusted outright (OK).
+
+    Only a bare FILE basename (no "/" in the search name, and not
+    directory-shaped) stays a trusted RESOLVES_BY_SUFFIX — that is the
+    dominant real citation style (`tick.py`, `secret_scan.py:57-64`) and a
+    unique match anywhere in the tree is strong evidence. Anything else —
+    a directory match (command.md's own #568: `scripts/tests/` is not
+    `tests/` just because a file with that suffix exists somewhere else),
+    or a multi-segment path match (a subtree-relative citation that landed
+    on the WRONG subtree, e.g. `engine/sync_manager.py` matching a
+    completely different `engine/` than the one the body meant) — is not
+    strong enough to trust without the reader looking at the found path.
+    """
+    return is_dir_shaped or "/" in name
+
+
 def _path_kind_at_ref(repo_dir: Path, ref: str, path: str) -> str | None:
     """'file', 'dir', or None (neither exists at <ref>)."""
     if _file_exists(repo_dir, ref, path):
@@ -767,13 +823,19 @@ def _resolve_path(
     if tree_index is not None:
         name = _suffix_eligible(token)
         if name is not None:
-            suffix_result = _resolve_by_suffix(tree_index, name, _is_directory_shaped(token))
+            is_dir_shaped = _is_directory_shaped(token)
+            suffix_result = _resolve_by_suffix(tree_index, name, is_dir_shaped)
             if suffix_result is not None:
                 result, payload = suffix_result
                 if result == "AMBIGUOUS_SUFFIX":
                     count, candidates = payload
                     return result, _format_ambiguous_detail(count, candidates)
-                return result, payload  # RESOLVES_BY_SUFFIX: payload is the full path
+                # RESOLVES_BY_SUFFIX (single match). A bare file basename
+                # match is trusted; a directory match or a multi-segment
+                # path match is not -- EXISTS_ELSEWHERE, CHECK.
+                if _suffix_match_is_uncertain(name, is_dir_shaped):
+                    return "EXISTS_ELSEWHERE", payload
+                return result, payload
 
     # Neither a file nor a directory exists at <ref>, and no suffix match.
     # A directory-shaped token gets one more check before falling to
@@ -806,40 +868,45 @@ def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> tuple[list[str]
 
 def _extract_line_result(
     repo_dir: Path, ref: str, path: str, start: int, end: int | None, resolved_result: str,
-) -> tuple[str, list[str] | None, str | None]:
+) -> tuple[str, list[str] | None, str | None, bool]:
     """Shared by the direct-path and suffix-matched RESOLVES cases: slice
     the requested line range out of *path* at *ref*, or report
     LINE_OUT_OF_RANGE / BINARY_FILE. ``resolved_result`` is the success
-    bucket name to report (RESOLVES or RESOLVES_BY_SUFFIX)."""
+    bucket name to report (RESOLVES, RESOLVES_BY_SUFFIX, or
+    EXISTS_ELSEWHERE). Returns (result, line_text, detail, truncated) —
+    at most MAX_LINE_TEXT_ROWS lines are shown; ``truncated`` is True when
+    the cited range is longer than that."""
     kind = _path_kind_at_ref(repo_dir, ref, path)
     if kind == "dir":
-        return "DIRECTORY_NOT_FILE", None, None
+        return "DIRECTORY_NOT_FILE", None, None, False
     lines, is_binary = _read_ref_file_lines(repo_dir, ref, path)
     if is_binary:
-        return "BINARY_FILE", None, None
+        return "BINARY_FILE", None, None, False
     if lines is None:
-        return "UNRESOLVED", None, None
+        return "UNRESOLVED", None, None, False
     n = len(lines)
     real_end = end if end is not None else start
     if start < 1 or real_end > n or start > real_end:
-        return "LINE_OUT_OF_RANGE", None, None
-    selected = lines[start - 1:real_end][:MAX_LINE_TEXT_ROWS]
+        return "LINE_OUT_OF_RANGE", None, None, False
+    full_range = lines[start - 1:real_end]
+    selected = full_range[:MAX_LINE_TEXT_ROWS]
     trimmed = [line[:MAX_LINE_TEXT_CHARS] for line in selected]
-    return resolved_result, trimmed, None
+    truncated = len(full_range) > MAX_LINE_TEXT_ROWS
+    return resolved_result, trimmed, None, truncated
 
 
 def _resolve_path_line(
     repo_dir: Path, ref: str, path: str, start: int, end: int | None,
     tree_index: TreeIndex | None = None,
-) -> tuple[str, list[str] | None, str | None]:
-    """Returns (result, line_text, detail). line_text is set only on a
-    resolved (possibly suffix-matched) file; detail carries the
+) -> tuple[str, list[str] | None, str | None, bool]:
+    """Returns (result, line_text, detail, truncated). line_text is set
+    only on a resolved (possibly suffix-matched) file; detail carries the
     AMBIGUOUS_SUFFIX candidate list when that applies."""
     kind = _path_kind_at_ref(repo_dir, ref, path)
     if kind == "file":
         return _extract_line_result(repo_dir, ref, path, start, end, "RESOLVES")
     if kind == "dir":
-        return "DIRECTORY_NOT_FILE", None, None
+        return "DIRECTORY_NOT_FILE", None, None, False
 
     if tree_index is not None:
         name = _suffix_eligible(path)
@@ -849,11 +916,17 @@ def _resolve_path_line(
                 result, payload = suffix_result
                 if result == "AMBIGUOUS_SUFFIX":
                     count, candidates = payload
-                    return result, None, _format_ambiguous_detail(count, candidates)
-                return _extract_line_result(repo_dir, ref, payload, start, end, "RESOLVES_BY_SUFFIX")
+                    return result, None, _format_ambiguous_detail(count, candidates), False
+                # A bare basename match (no "/" in name) stays trusted
+                # (RESOLVES_BY_SUFFIX, OK -> evidence_lines); a
+                # multi-segment suffix match is EXISTS_ELSEWHERE (CHECK) —
+                # still shows line_text so the reader can weigh it, just
+                # not silently trusted.
+                bucket = "EXISTS_ELSEWHERE" if "/" in name else "RESOLVES_BY_SUFFIX"
+                return _extract_line_result(repo_dir, ref, payload, start, end, bucket)
 
     base, _base_detail = _resolve_path(repo_dir, ref, path, tree_index)
-    return base, None, None
+    return base, None, None, False
 
 
 def _first_special_index(token: str) -> int:
@@ -911,9 +984,12 @@ def _resolve_symbol(repo_dir: Path, ref: str, token: str) -> tuple[str, str | No
 
 def _resolve_sha(repo_dir: Path, sha: str, ref: str) -> tuple[str | None, str | None]:
     """Returns (result, detail). None result means "could not check"
-    (not_run). A commit that exists but is reachable from neither <ref> nor
-    any remote-tracking ref is COMMIT_EXISTS_UNREACHABLE (CHECK) — the
-    object is real, but not evidence this repo state actually contains it."""
+    (not_run). OK only when the commit is reachable from <ref> itself.
+    Reachable only from some OTHER remote-tracking branch is
+    COMMIT_ON_OTHER_BRANCH (CHECK, names the branch) — real evidence
+    somewhere, just not at the ref this citation is checked against. A
+    commit that exists but is reachable from nothing real is
+    COMMIT_EXISTS_UNREACHABLE (CHECK)."""
     result = _run_git(repo_dir, ["cat-file", "-e", f"{sha}^{{commit}}"])
     if result is None:
         return None, None
@@ -932,7 +1008,7 @@ def _resolve_sha(repo_dir: Path, sha: str, ref: str) -> tuple[str | None, str | 
                 continue
             anc2 = _run_git(repo_dir, ["merge-base", "--is-ancestor", sha, refname])
             if anc2 is not None and anc2[0] == 0:
-                return "COMMIT_EXISTS", f"reachable from {refname}, not {ref}"
+                return "COMMIT_ON_OTHER_BRANCH", f"reachable from {refname}, not {ref}"
 
     return "COMMIT_EXISTS_UNREACHABLE", f"not reachable from {ref} or any remote-tracking ref"
 
@@ -1198,13 +1274,18 @@ _SEVERITY: dict[tuple[str, str], str] = {
     ("PATH", "PARENT_ONLY"): "CHECK",
     ("PATH", "UNRESOLVED"): "CHECK",
     ("PATH", "REFERENCED_ONLY"): "CHECK",
+    # A bare FILE basename match is the only suffix match still trusted
+    # outright; a directory match or a multi-segment path match is
+    # EXISTS_ELSEWHERE (see _suffix_match_is_uncertain).
     ("PATH", "RESOLVES_BY_SUFFIX"): "OK",
+    ("PATH", "EXISTS_ELSEWHERE"): "CHECK",
     ("PATH", "AMBIGUOUS_SUFFIX"): "CHECK",
     ("PATH", "OUTSIDE_REPO"): "CHECK",
-    # PATH_LINE success buckets are OK but routed to `evidence_lines`, not
+    # A resolved PATH_LINE is OK but routed to `evidence_lines`, not
     # `rows` — the reader still skims line_text, just not as a CHECK item.
     ("PATH_LINE", "RESOLVES"): "OK",
     ("PATH_LINE", "RESOLVES_BY_SUFFIX"): "OK",
+    ("PATH_LINE", "EXISTS_ELSEWHERE"): "CHECK",
     ("PATH_LINE", "PARENT_ONLY"): "CHECK",
     ("PATH_LINE", "UNRESOLVED"): "CHECK",
     ("PATH_LINE", "REFERENCED_ONLY"): "CHECK",
@@ -1213,15 +1294,19 @@ _SEVERITY: dict[tuple[str, str], str] = {
     ("PATH_LINE", "DIRECTORY_NOT_FILE"): "CHECK",
     ("PATH_LINE", "BINARY_FILE"): "CHECK",
     ("PATH_LINE", "OUTSIDE_REPO"): "CHECK",
-    ("TEMPLATED", "PREFIX_RESOLVES"): "OK",
+    # A glob/templated pattern is never fully checked -- only its literal
+    # directory prefix is -- so even a resolving prefix is a hint, not
+    # trusted evidence that every member of the pattern is real.
+    ("TEMPLATED", "PREFIX_RESOLVES"): "CHECK",
     ("TEMPLATED", "PREFIX_UNRESOLVED"): "CHECK",
-    ("TEMPLATED", "TEMPLATED_NO_PREFIX"): "OK",
-    ("GLOB", "PREFIX_RESOLVES"): "OK",
+    ("TEMPLATED", "TEMPLATED_NO_PREFIX"): "CHECK",
+    ("GLOB", "PREFIX_RESOLVES"): "CHECK",
     ("GLOB", "PREFIX_UNRESOLVED"): "CHECK",
     ("SYMBOL", "FOUND"): "OK",
     ("SYMBOL", "FOUND_IN_DOCS_OR_TESTS"): "CHECK",
     ("SYMBOL", "ABSENT"): "CHECK",
     ("SHA", "COMMIT_EXISTS"): "OK",
+    ("SHA", "COMMIT_ON_OTHER_BRANCH"): "CHECK",
     ("SHA", "COMMIT_EXISTS_UNREACHABLE"): "CHECK",
     ("SHA", "COMMIT_MISSING"): "CHECK",
     ("ISSUE_REF", "OPEN"): "OK",
@@ -1239,7 +1324,9 @@ _SEVERITY: dict[tuple[str, str], str] = {
     ("PROSE_LINE_CITATION", "PROSE_LINE_CITATION"): "CHECK",
     ("UNKNOWN_REPO_ALIAS", "UNKNOWN_REPO_ALIAS"): "CHECK",
     ("OUTSIDE_REPO_TOKEN", "OUTSIDE_REPO"): "CHECK",
-    ("ERROR", "ERROR"): "CHECK",
+    # No ("ERROR", "ERROR") entry: _emit_error sets severity CHECK
+    # directly and never consults this table (o14b) — an entry here would
+    # be dead code implying a lookup that never happens.
 }
 
 
@@ -1275,18 +1362,50 @@ def _incomplete_report(
     }
 
 
-def _other_repos_mentioned(body: str, default_repo: str) -> bool:
-    """True if the body names any owner/repo other than --repo (an
-    explicit issue-URL/owner-repo#N reference, or a bare `owner/name`
-    backtick token) — the signal that promotes a bare #N to CHECK, since a
-    multi-repo body makes "assume --repo" a real guess, not a safe default."""
-    for m in OWNER_REPO_ISSUE_RE.finditer(body):
+def _cheap_cross_repo_signals(body: str, default_repo: str) -> set[str]:
+    """Signals 1-4 (no gh call needed): an explicit `owner/repo#N`, a
+    GitHub issue/PR/repo URL for another repo, a backticked `owner/name`
+    token, or an `alias#N` shorthand (`bms#235`) — each is direct evidence
+    the body concerns more than one repo, the condition under which every
+    bare `#N` gets promoted to CHECK rather than silently assumed against
+    `--repo`. Runs on fence/HTML-comment-masked text so a code sample
+    never counts as a signal."""
+    masked = _mask_all(body)
+    signals: set[str] = set()
+    for m in OWNER_REPO_ISSUE_RE.finditer(masked):
         if m.group(1).lower() != default_repo.lower():
-            return True
-    for m in ISSUE_URL_RE.finditer(body):
+            signals.add(m.group(1))
+    for m in ISSUE_URL_RE.finditer(masked):
         if m.group(1).lower() != default_repo.lower():
-            return True
-    return False
+            signals.add(m.group(1))
+    for _start, _end, content in find_backtick_spans(masked):
+        content = normalize_backtick_token(content)
+        if (
+            _OWNER_REPO_SHAPE_RE.match(content)
+            and content.count("/") == 1
+            and not _has_known_extension(content)
+            and content.lower() != default_repo.lower()
+        ):
+            signals.add(content)
+    for m in ALIAS_ISSUE_RE.finditer(masked):
+        signals.add(m.group(1))
+    return signals
+
+
+def _sibling_repo_signals(body: str, default_repo: str, sibling_names: list[str]) -> set[str]:
+    """Signal 5: the bare name of any OTHER repo owned by --repo's owner,
+    appearing as a whole word anywhere in the (masked) body — prose
+    included. Hyphenated names match as a whole (`household-bms`); the
+    owner's OWN repo name is excluded."""
+    owner, this_name = default_repo.split("/", 1)
+    masked = _mask_all(body)
+    found: set[str] = set()
+    for other in sibling_names:
+        if other.lower() == this_name.lower():
+            continue
+        if re.search(r"\b" + re.escape(other) + r"\b", masked, re.IGNORECASE):
+            found.add(f"{owner}/{other}")
+    return found
 
 
 def collect(
@@ -1352,7 +1471,23 @@ def collect(
         return _incomplete_report(input_errors, not_run, resolved_ref, resolved_sha, repo, repo_dir, limit)
 
     unique_tokens = tokens
-    other_repos = _other_repos_mentioned(body, repo)
+    cross_repo_signals = _cheap_cross_repo_signals(body, repo)
+    has_bare_issue_ref = any(t["cls"] == "ISSUE_REF" and t.get("repo") is None for t in unique_tokens)
+    if not cross_repo_signals and has_bare_issue_ref:
+        # Signals 1-4 found nothing; check signal 5 (a sibling repo's bare
+        # name in prose) before trusting a bare #N against --repo. This is
+        # the only place cross-repo detection needs gh, so it is skipped
+        # entirely when 1-4 already settled the question.
+        owner = repo.split("/", 1)[0]
+        sib_result = _run_gh(["repo", "list", owner, "--limit", "200", "--json", "name", "--jq", ".[].name"])
+        if sib_result is None or sib_result[0] != 0:
+            not_run.append({
+                "class": "repo_list",
+                "reason": f"gh repo list {owner} failed; cannot confirm whether the body references a sibling repo",
+            })
+        else:
+            sibling_names = [line.strip() for line in sib_result[1].splitlines() if line.strip()]
+            cross_repo_signals |= _sibling_repo_signals(body, repo, sibling_names)
 
     # --- resolution ---
     counts: dict[str, int] = {}
@@ -1371,18 +1506,22 @@ def collect(
         return row
 
     def _emit(token: dict[str, Any], cls: str, result: str, detail: str | None = None,
-               line_text: list[str] | None = None) -> None:
+               line_text: list[str] | None = None, truncated: bool = False) -> None:
         _count(cls, result)
         severity = _SEVERITY.get((cls, result), "CHECK")
         if severity == "OK":
             if line_text is not None:
                 r = _row(token, cls, result, detail)
                 r["line_text"] = line_text
+                if truncated:
+                    r["truncated"] = True
                 evidence_lines.append(r)
             return
         row = _row(token, cls, result, detail)
         if line_text is not None:
             row["line_text"] = line_text
+            if truncated:
+                row["truncated"] = True
         row["severity"] = "CHECK"
         check_rows.append(row)
 
@@ -1473,9 +1612,11 @@ def collect(
                     _emit(token, cls, "UNRESOLVED", detail="could not parse path:line")
                     continue
                 path, start, end = parsed
-                result, line_text, extra_detail = _resolve_path_line(repo_dir, resolved_ref, path, start, end, tree_index)
+                result, line_text, extra_detail, truncated = _resolve_path_line(
+                    repo_dir, resolved_ref, path, start, end, tree_index,
+                )
                 detail = extra_detail if extra_detail is not None else (None if line_text is not None else result)
-                _emit(token, cls, result, detail=detail, line_text=line_text)
+                _emit(token, cls, result, detail=detail, line_text=line_text, truncated=truncated)
                 continue
 
             if cls == "OUTSIDE_REPO_TOKEN":
@@ -1498,9 +1639,14 @@ def collect(
                 ok, no_prefix = _prefix_resolves(repo_dir, resolved_ref, text)
                 if no_prefix and cls == "TEMPLATED":
                     result = "TEMPLATED_NO_PREFIX"
+                    hint = "pattern; no directory to check"
+                elif ok:
+                    result = "PREFIX_RESOLVES"
+                    hint = "pattern; prefix exists, members unchecked"
                 else:
-                    result = "PREFIX_RESOLVES" if ok else "PREFIX_UNRESOLVED"
-                _emit(token, cls, result, detail=None if ok else f"literal prefix not found at {resolved_ref}")
+                    result = "PREFIX_UNRESOLVED"
+                    hint = f"literal prefix not found at {resolved_ref}"
+                _emit(token, cls, result, detail=hint)
                 continue
 
             if cls == "SYMBOL":
@@ -1537,14 +1683,20 @@ def collect(
                     continue  # gh failure already recorded in not_run above
                 display_repo = token.get("repo") or repo
                 if is_bare and result != "NOT_FOUND":
-                    assumed_repo_refs.append({
-                        "token": text, "state": result, "detail": f"resolved against {repo}",
-                    })
-                    if other_repos:
-                        row = _row(token, cls, result, detail="body mentions other repos; confirm target")
+                    if cross_repo_signals:
+                        # ANY cross-repo signal promotes EVERY bare #N —
+                        # "assume --repo" is a real guess once the body is
+                        # known to concern more than one repo, not a safe
+                        # default for this one either.
+                        names = ", ".join(sorted(cross_repo_signals))
+                        row = _row(token, cls, result, detail=f"body references other repos: {names}; confirm target")
                         row["severity"] = "CHECK"
                         check_rows.append(row)
                         counts[f"{cls}:{result}"] = counts.get(f"{cls}:{result}", 0) + 1
+                    else:
+                        assumed_repo_refs.append({
+                            "token": text, "state": result, "detail": f"resolved against {repo}",
+                        })
                     continue
                 _emit(token, cls, result, detail=None if result != "NOT_FOUND" else f"{display_repo}#{token['number']} not found")
                 continue
@@ -1572,14 +1724,11 @@ def collect(
     else:
         verdict = "ALL_RESOLVED"
 
-    # `--limit` applies only to OK/evidence listings; CHECK rows are never
-    # elided (afk#1378: a real finding at row 26 of 36 must never disappear
-    # behind a default --limit 20).
-    capped_evidence, evidence_elided = (
-        (evidence_lines, 0) if limit <= 0 or len(evidence_lines) <= limit
-        else (evidence_lines[:limit], len(evidence_lines) - limit)
-    )
-
+    # `--limit` elides nothing now: CHECK rows never were elided
+    # (afk#1378), and evidence_lines no longer are either — the only
+    # thing --limit could still apply to is the OK listing, which was
+    # never printed as rows in the first place. Kept as an accepted (now
+    # inert) CLI argument rather than a breaking removal.
     return {
         "verdict": verdict,
         "exit_code": VERDICT_EXIT_CODES[verdict],
@@ -1591,10 +1740,10 @@ def collect(
         "not_run": not_run,
         "counts": counts,
         "rows": check_rows,
-        "evidence_lines": capped_evidence,
+        "evidence_lines": evidence_lines,
         "assumed_repo_refs": assumed_repo_refs,
         "elided": 0,
-        "evidence_elided": evidence_elided,
+        "evidence_elided": 0,
         "limit": limit,
     }
 
@@ -1630,6 +1779,8 @@ def render_markdown(report: dict[str, Any]) -> str:
             detail = r.get("detail") or ""
             if r.get("line_text"):
                 detail = " | ".join(r["line_text"])
+                if r.get("truncated"):
+                    detail += " [truncated]"
             lines.append(f"- `{r['token']}` | {r['class']} | {r['result']} | line {r['line']} | {detail}")
         lines.append("")
 
@@ -1637,9 +1788,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append("### Evidence Lines — compare against the claim")
         for r in report["evidence_lines"]:
             text = " | ".join(r.get("line_text") or [])
+            if r.get("truncated"):
+                text += " [truncated]"
             lines.append(f"- `{r['token']}` | line {r['line']} | {text}")
-        if report.get("evidence_elided"):
-            lines.append(f"- ... {report['evidence_elided']} more")
         lines.append("")
 
     if report.get("assumed_repo_refs"):
@@ -1674,7 +1825,7 @@ def _main(argv: list[str] | None) -> int:
     parser.add_argument("--no-fetch", action="store_true", help="Skip 'git fetch origin' before resolving.")
     parser.add_argument("--vault-root", type=Path, default=None, help="Vault root for wikilink resolution.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
-    parser.add_argument("--limit", type=int, default=20, help="Max evidence-line rows in output (CHECK rows are never limited).")
+    parser.add_argument("--limit", type=int, default=20, help="Accepted for CLI compatibility; no output is elided by it (CHECK rows and evidence_lines are both always shown in full).")
     args = parser.parse_args(argv)
 
     vault_root = args.vault_root.resolve() if args.vault_root else find_vault_root()
