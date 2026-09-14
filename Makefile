@@ -56,6 +56,17 @@ stamp-check:
 test-machinery:
 	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.6,<0.7' python -m pytest -q tests
 
+# graphmark version-matrix parity: the rest of the machinery suite runs under
+# graphmark 0.6 (graph_cli's own pinned floor), but command.md and the
+# vault's own ci/vault_health.py gate both pin graphmark>=0.7,<0.8 — the
+# wrap-up collector's `gate` check (plugins/workbench/machinery/engine/
+# wrap_up_audit.py) reads graphmark.config.CheckPolicy and graphmark.check,
+# and 0.6/0.7 can disagree on edge fixtures. Runs only that one suite, under
+# 0.7, so a real disagreement fails loudly here instead of shipping unnoticed.
+.PHONY: test-wrap-up-gate-parity
+test-wrap-up-gate-parity:
+	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q tests/test_wrap_up_audit.py
+
 # Full gate: the root suite, every skill-script suite, and the machinery suite.
 # Skill-script suites live in isolated subtrees with a sibling `scripts` package
 # and bare imports, so they run in their OWN rootdir (a separate pytest
@@ -69,5 +80,6 @@ test:
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) test-machinery
+	$(MAKE) test-wrap-up-gate-parity
 	$(MAKE) stamp-check
 	$(MAKE) verify-versions
