@@ -13,22 +13,24 @@ Audit all notes created or modified during this session. Validate quality, fix m
    ```
 
    Quote each path (a name with a space, split unquoted, resolves to nothing
-   and the collector reports it as an error rather than guessing). Add
-   `--base <ref>` set to the commit before this session's first commit —
-   required for `new_orphans` to mean anything — otherwise it defaults to
-   `HEAD`. Its `checks` **are** steps 2 (`frontmatter`, `no_wikilinks`), 3
-   (`index_membership`) and 4 (`orphans`, `new_orphans`) — do not re-check
-   them by hand — **together with** two vault-wide checks the scoped ones
-   can't see: `unresolved_links` (a rename in this session can break a link
-   in a note the session never touched) and `gate`, which replays the
-   vault's own `ci/vault_health.py` policy and enforces its limit — narrower
-   than `new_orphans`, since a regression that stays under the limit passes
-   `gate` but still shows up there. `gate` does not replace step 10:
-   `ci/vault_health.py` itself still runs immediately before commit as the
-   authority. `verdict: INCOMPLETE` means the checks listed under `not_run`
-   still need doing by hand; it is never equivalent to `CLEAN`, so don't
-   report a clean audit on the strength of an incomplete one. Still check by
-   hand: folder placement (is the note in the right directory for its type?).
+   and the collector reports it as an error rather than guessing). The
+   default `--base HEAD` is correct when this session's edits are all
+   uncommitted; pass `--base <commit before this session's first commit>`
+   when the session already committed. Its `checks` **are** steps 2
+   (`frontmatter`, `no_wikilinks`), 3 (`index_membership`) and 4 (`orphans`,
+   `new_orphans`) — do not re-check them by hand — **together with** two
+   vault-wide checks the scoped ones can't see: `unresolved_links` (a rename
+   in this session can break a link in a note the session never touched) and
+   `gate`, which replays the vault's own `ci/vault_health.py` policy and
+   enforces its limit — narrower than `new_orphans`, since a regression that
+   stays under the limit passes `gate` but still shows up there. `gate`
+   reads that policy statically and fails closed on an unusual gate-file
+   shape, but it is not a substitute for step 10's real `ci/vault_health.py`
+   run — that still executes immediately before commit as the authority.
+   `verdict: INCOMPLETE` means the checks listed under `not_run` still need
+   doing by hand; it is never equivalent to `CLEAN`, so don't report a clean
+   audit on the strength of an incomplete one. Still check by hand: folder
+   placement (is the note in the right directory for its type?).
 
 3. **Check index synchronization**: `index_membership` above covers this
    session's notes under the fixed `work/` and `personal/` prefixes against
@@ -39,11 +41,14 @@ Audit all notes created or modified during this session. Validate quality, fix m
    - Scan `brain/Key Decisions.md` — were any decisions made today that aren't recorded?
 
 4. **Orphan notes**: the collector's `orphans` check covers this session's
-   claimed notes; `new_orphans` covers orphans this session's edits created
-   vault-wide, relative to `--base` (e.g. a note that was the only link into
-   another note, now removed) — even when the newly-orphaned note itself is
-   out of scope, and even when the vault stays under its orphan limit, which
-   is what `gate` alone would miss. Don't re-scan by hand.
+   claimed notes. `new_orphans` measures every vault-wide note that is an
+   orphan in the working tree now but wasn't at `--base` — not only ones
+   this session's claimed notes caused: it can also surface another
+   session's untracked or gitignored notes, or a commit pulled since
+   `--base`. Each finding carries `in_scope`; check that before attributing
+   a row to this session, and don't re-scan for orphans by hand — `gate`
+   alone would miss a regression that stays under the vault's limit, which
+   is exactly what `new_orphans` is for.
 
 5. **Surface uncaptured wins**: Review today's work for impact statements, completed milestones, or positive outcomes not yet in the Brag Doc.
 
