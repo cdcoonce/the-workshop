@@ -188,6 +188,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/wrap_up_audit.py",
+      "target": ".claude/scripts/wrap_up_audit.py"
+    },
+    {
+      "kind": "file",
       "source": "tools/machinery_check.py",
       "target": ".claude/scripts/machinery_check.py"
     },

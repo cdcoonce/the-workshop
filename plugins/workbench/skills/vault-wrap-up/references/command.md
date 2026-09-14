@@ -6,19 +6,28 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 1. **Identify session changes**: Build the session scope from the current conversation and its tool results, including work committed earlier in this session. Use `git diff --name-only`, `git status`, and relevant commits as supporting evidence. Do not claim unrelated pre-existing edits merely because they are dirty now.
 
-2. **Validate each note**:
-   - Check frontmatter: date, description, tags, type-specific fields
-   - Check wikilinks: notes >300 chars must have at least one `[[link]]`
-   - Check folder placement: is the note in the right directory for its type?
+2. **Validate each note**: Run the collector first —
 
-3. **Check index synchronization**:
-   - Scan `work/Index.md` — are all active work notes listed?
-   - Scan `personal/Index.md` — are all personal notes listed?
+   ```bash
+   uv run --with 'graphmark>=0.7,<0.8' python "<engine>/wrap_up_audit.py" --files <the session's notes> --json
+   ```
+
+   Its `checks` **are** steps 2 (`frontmatter`, `no_wikilinks`), 3 (`index_membership`)
+   and 4 (`orphans`) — do not re-check them by hand. `verdict: INCOMPLETE` means
+   the checks listed under `not_run` still need doing by hand; it is never
+   equivalent to `CLEAN`, so don't report a clean audit on the strength of an
+   incomplete one. `unresolved_links` is vault-wide (a rename in this session
+   can break a link in a note the session never touched) — treat those the
+   same as any other finding. Still check by hand: folder placement (is the
+   note in the right directory for its type?).
+
+3. **Check index synchronization**: `index_membership` and `orphans` above
+   cover `work/Index.md` and `personal/Index.md`. Still check by hand:
    - Scan `perf/Brag Doc.md` — were any wins captured today?
    - Scan `brain/Memories.md` — does it need updating?
    - Scan `brain/Key Decisions.md` — were any decisions made today that aren't recorded?
 
-4. **Find orphan notes**: Notes without any incoming or outgoing wikilinks.
+4. **Orphan notes**: covered by the collector's `orphans` check above — don't re-scan by hand.
 
 5. **Surface uncaptured wins**: Review today's work for impact statements, completed milestones, or positive outcomes not yet in the Brag Doc.
 
@@ -30,7 +39,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 8.5. **Refresh per-project status sections**: For every note carrying a `status:` frontmatter field (any status value, any of `work/`, `personal/`, `perf/`) that this session touched — edited directly, or discussed/decided-on even without a file diff — rewrite its `## Current Status` section with 1–3 sentences of prose describing where the project was left: what happened this session, what's blocking, what's next. Link (`[[wikilink]]`) to the session's key notes. Replace the section wholesale each time; it reflects current state, not a running log — history lives in git blame. If the note doesn't have a `## Current Status` section yet, create one (placed after the intro/context, before other content sections). This is distinct from the handoff below: the handoff is a short-lived cross-project digest refreshed section-by-section each run, while `## Current Status` is the durable, per-project memory that outlives any one session. Do this silently, same as step 8.
 
-9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. Replace each touched section's content wholesale (it reflects current state, not a running log); leave untouched sections as they are. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
+9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. The collector's `handoff_sections.touched` (from step 2) is the evidence for which sections those are — use it instead of re-deriving it by eye. Replace each touched section's content wholesale (it reflects current state, not a running log); leave untouched sections as they are. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
 
 10. **Validate, commit & push** (`/sync`): immediately before staging, run `uv run --script ci/vault_health.py`. The gate must pass before any audited fixes, harvested decisions/wins, or refreshed handoff are committed. If it fails, times out, or cannot run, leave edits uncommitted, repair the graph, and retry; do not pull or push an unverified tree. Forward references are allowed while editing, but must resolve at this durability boundary. Then commit and push so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
 
