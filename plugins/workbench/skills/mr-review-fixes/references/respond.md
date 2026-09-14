@@ -65,14 +65,26 @@ around: an individual note was never a review thread.
 ### The CI check that gates all of the above
 
 ```bash
-git rev-parse HEAD                      # the SHA the replies will cite
-glab ci list --sha "$(git rev-parse HEAD)"   # FULL sha; short sha silently returns nothing
-glab ci get --pipeline-id <id>          # per-job status; --sha is not a valid flag here
+git rev-parse HEAD                                             # the SHA the replies will cite
+git ls-remote origin "refs/heads/$(git branch --show-current)" # must print that same SHA
 ```
 
-`glab ci list` returning nothing means "no pipeline for this SHA" — usually an
-unpushed commit — never "green". Confirm the query returns something on its first
-pass before treating silence as success.
+Use `ls-remote`, not `origin/<branch>` — a remote-tracking ref can be stale.
+If it doesn't match, push first. Don't start the watch on an unpushed
+commit: the watcher has no fast-fail for a missing pipeline, it waits out
+the full timeout instead.
+
+```bash
+python3 "<gitlab-ci-watch skill base directory>/scripts/ci_watch.py" sha
+```
+
+Run with Bash `run_in_background: true` (foreground `sleep` is blocked) and
+`cwd` set to the target repo. This is `gitlab-ci-watch`'s watcher, not a
+one-shot query — it owns watch-until-terminal so you don't hand-poll `glab ci
+list`/`get` yourself. Exit 0 is green (every job green); exit 1 is red; exit 2
+is indeterminate — timeout, repeated API failures, a manual-blocked pipeline,
+or a ref whose workflow.rules can never build a pipeline — never green. Reply
+and resolve only after exit 0 for the exact SHA from `rev-parse HEAD`.
 
 ## GitHub
 
