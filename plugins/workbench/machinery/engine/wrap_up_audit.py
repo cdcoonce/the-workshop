@@ -8,16 +8,26 @@ against fixed rules. This script runs those checks once, deterministically,
 and returns a compact verdict (CLEAN / FINDINGS / INCOMPLETE) so the model
 stops re-deriving them by hand every run.
 
-Read-only. Never writes to the vault. Import graphmark lazily (inside
-``_run_graph_checks``) so the frontmatter/wikilink/index checks still run
-when graphmark is not importable — the graph checks alone degrade to
-``not_run`` rather than the whole script failing.
+Read-only. Never writes to the vault. graphmark, frontmatter_engine,
+vault_audit, and vault_scope_resolved-derived names are all imported lazily
+(inside the functions that need them, after ``_pin_vault_root`` has anchored
+scope resolution to the vault root in play) so:
+
+- a vault without graphmark still gets the frontmatter/wikilink/index/scope
+  checks; only the graph-backed checks (unresolved_links, orphans, gate)
+  degrade to ``not_run``.
+- ``--vault-root`` (not the process cwd) is authoritative for which owner
+  scope config (``.vault/config/vault_scope.py``) applies, including in a
+  single long-lived process that audits more than one vault root (this
+  module's own test suite included).
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import os
 import re
 import subprocess
 import sys
@@ -28,34 +38,57 @@ from typing import Any
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from frontmatter_engine import validate as fm_validate  # noqa: E402
-from vault_audit import (  # noqa: E402
-    PERSONAL_INDEX_PREFIXES,
-    WORK_INDEX_PREFIXES,
-    _body,
-    _index_links,
-    _indexed,
-    _is_transient,
-    _links,
-)
-from vault_scope_resolved import (  # noqa: E402
-    is_governed_markdown_note,
-    is_graph_markdown_note,
-    is_operating_file,
-)
 from vault_utils import find_vault_root, read_vault_context  # noqa: E402
 
 HEADING_RE = re.compile(r"^## (.+?)\s*$")
-HUNK_RE = re.compile(r"^@@ -(?:\d+)(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+FENCE_RE = re.compile(r"^(```|~~~)")
+HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 PREAMBLE = "(preamble)"
 
-CHECK_NAMES = (
-    "frontmatter",
-    "no_wikilinks",
-    "unresolved_links",
-    "orphans",
-    "index_membership",
-)
+VERDICT_EXIT_CODES = {"CLEAN": 0, "FINDINGS": 1, "INCOMPLETE": 2}
+
+
+# ---------------------------------------------------------------------------
+# vault-root pinning (item 4)
+# ---------------------------------------------------------------------------
+
+def _pin_vault_root(vault_root: Path) -> str:
+    """Anchor vault_scope_resolved's owner-config resolution to *vault_root*.
+
+    ``vault_scope_resolved._find_vault_root()`` walks up from
+    ``CLAUDE_PROJECT_DIR`` (falling back to cwd) — so a caller running from
+    outside the vault, or a ``--vault-root`` the cwd doesn't agree with,
+    would otherwise silently get the shipped defaults, which have no
+    owner-added directories (e.g. ``school``). Setting ``CLAUDE_PROJECT_DIR``
+    here, before this process resolves any vault_scope_resolved-derived name,
+    makes ``--vault-root`` authoritative.
+
+    ``vault_scope_resolved`` caches its owner-config resolution for the life
+    of the process, and ``frontmatter_engine``/``vault_audit``/``graph_cli``
+    each bind their own ``from vault_scope_resolved import ...`` names once
+    at their own first import — so a later ``collect()`` call for a
+    DIFFERENT vault_root would otherwise keep reading the first vault's
+    config. There is no public reset API, so this evicts the cached modules
+    directly: harmless in a fresh process (nothing cached yet) and necessary
+    in a long-lived one — this test suite included — that audits more than
+    one vault root.
+
+    Returns a human-readable description of the resolved scope-config
+    source, for the report header.
+    """
+    os.environ["CLAUDE_PROJECT_DIR"] = str(vault_root)
+    for name in (
+        "vault_scope", "vault_scope_resolved", "vault_scope_defaults",
+        "frontmatter_engine", "vault_audit", "graph_cli",
+    ):
+        sys.modules.pop(name, None)
+
+    import vault_scope_resolved  # noqa: PLC0415
+
+    owner = vault_scope_resolved._owner_scope()  # noqa: SLF001
+    if owner is not None and getattr(owner, "__file__", None):
+        return owner.__file__
+    return "shipped defaults (vault_scope_defaults.py)"
 
 
 # ---------------------------------------------------------------------------
@@ -79,49 +112,84 @@ def _git(vault_root: Path, args: list[str]) -> str | None:
     return result.stdout
 
 
-def _parse_porcelain(text: str) -> set[str]:
+def _parse_nul_list(raw: str) -> set[str]:
+    return {t for t in raw.split("\0") if t}
+
+
+def _parse_porcelain_z(raw: str) -> set[str]:
+    """Parse ``git status --porcelain=v1 -z`` output.
+
+    -z uses NUL separators (no C-quoting of non-ASCII names) and, for the
+    default porcelain-v1 shape, splits a rename/copy into two consecutive
+    NUL-terminated records: the new path (with its XY status prefix) then
+    the bare original path. Both are added to the result.
+    """
+    if not raw:
+        return set()
+    tokens = raw.split("\0")
+    if tokens and tokens[-1] == "":
+        tokens = tokens[:-1]
     paths: set[str] = set()
-    for line in text.splitlines():
-        if not line:
-            continue
-        rest = line[3:] if len(line) >= 3 else line.lstrip()
-        if " -> " in rest:
-            rest = rest.split(" -> ", 1)[1]
-        rest = rest.strip()
-        if rest.startswith('"') and rest.endswith('"'):
-            rest = rest[1:-1]
-        if rest:
-            paths.add(rest)
+    i = 0
+    while i < len(tokens):
+        record = tokens[i]
+        if len(record) >= 3:
+            status = record[:2]
+            path = record[3:]
+            paths.add(path)
+            if status[0] in "RC" or status[1] in "RC":
+                i += 1
+                if i < len(tokens):
+                    paths.add(tokens[i])
+        i += 1
     return paths
 
 
 def _git_evidence_paths(vault_root: Path, base: str) -> tuple[set[str], bool, list[str]]:
     """Union of dirty (status) and base-diff paths. (paths, ok, warnings).
 
-    ``ok`` is False only when BOTH git invocations fail outright (git missing,
-    or this isn't a git repo at all) — a partial failure (e.g. a bad --base
-    ref) still yields the evidence the other command produced, with a warning.
+    ``--untracked-files=all`` expands a wholly-new directory to its
+    individual files instead of collapsing it to one directory line; ``-z``
+    avoids C-quoting non-ASCII names and disables the ``->`` rename arrow in
+    favor of two separate records (handled in ``_parse_porcelain_z``).
+
+    ``ok`` is False only when BOTH git invocations fail outright (git
+    missing, or this isn't a git repo at all) — a partial failure (e.g. a
+    bad --base ref) still yields the evidence the other command produced,
+    with a warning.
     """
-    status_out = _git(vault_root, ["status", "--porcelain"])
-    diff_out = _git(vault_root, ["diff", "--name-only", base])
+    status_out = _git(vault_root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+    diff_out = _git(vault_root, ["diff", "--name-only", "-z", base])
     warnings: list[str] = []
     if status_out is None and diff_out is None:
         return set(), False, ["git status and git diff both failed"]
 
     paths: set[str] = set()
     if status_out is not None:
-        paths |= _parse_porcelain(status_out)
+        paths |= _parse_porcelain_z(status_out)
     else:
         warnings.append("git status --porcelain failed")
     if diff_out is not None:
-        paths |= {line.strip() for line in diff_out.splitlines() if line.strip()}
+        paths |= _parse_nul_list(diff_out)
     else:
         warnings.append(f"git diff --name-only {base} failed (bad --base ref?)")
     return paths, True, warnings
 
 
+def _git_deleted_paths(vault_root: Path, base: str) -> set[str]:
+    """Paths git confirms as deleted: committed-since-base, or deleted-but-staged/unstaged."""
+    deleted: set[str] = set()
+    diff_out = _git(vault_root, ["diff", "--name-only", "--diff-filter=D", "-z", base])
+    if diff_out:
+        deleted |= _parse_nul_list(diff_out)
+    ls_out = _git(vault_root, ["ls-files", "--deleted", "-z"])
+    if ls_out:
+        deleted |= _parse_nul_list(ls_out)
+    return deleted
+
+
 # ---------------------------------------------------------------------------
-# scope
+# scope (items 2, 5)
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -131,77 +199,156 @@ class ScopeResult:
     warnings: list[str] = field(default_factory=list)
     skipped: list[dict[str, str]] = field(default_factory=list)
     unclaimed_dirty: list[str] = field(default_factory=list)
+    errors: list[dict[str, str]] = field(default_factory=list)
     git_ok: bool = True
 
 
-def _to_rel(raw: str, vault_root: Path) -> str | None:
+def _case_correct(rel_str: str, vault_root: Path) -> str:
+    """Correct each path segment's case to match the real on-disk entry.
+
+    macOS/APFS is case-insensitive but case-preserving: ``Path.exists()``
+    finds a file regardless of the case given, but the literal string stays
+    as typed — and graphmark's node keys are the exact on-disk names. Walk
+    the path one directory at a time, matching each component against its
+    parent's real entries case-insensitively.
+    """
+    parts = Path(rel_str).parts
+    current = vault_root
+    corrected: list[str] = []
+    for part in parts:
+        try:
+            entries = {e.name.lower(): e.name for e in current.iterdir()}
+        except OSError:
+            corrected.append(part)
+            current = current / part
+            continue
+        real_name = entries.get(part.lower(), part)
+        corrected.append(real_name)
+        current = current / real_name
+    return Path(*corrected).as_posix()
+
+
+def _resolve_explicit_entry(
+    raw: str, vault_root: Path, cwd: Path, deleted_paths: set[str]
+) -> tuple[str, str, str | None]:
+    """Resolve one --files entry. Returns (kind, value, reason).
+
+    kind == "claim": value is the case-corrected vault-relative posix path.
+    kind == "skip":  value is the vault-relative posix path (a confirmed git deletion).
+    kind == "error": value is the raw entry as given; reason explains why.
+
+    Resolution order: absolute paths are used as-is; otherwise cwd-relative
+    is tried first, then vault-relative. ``.resolve()`` then normalizes
+    ``..`` and equivalent-but-different-string roots (e.g. ``/tmp`` vs
+    ``/private/tmp`` on macOS).
+    """
     p = Path(raw)
     if p.is_absolute():
-        try:
-            return p.relative_to(vault_root).as_posix()
-        except ValueError:
-            pass
-        try:
-            return p.resolve().relative_to(vault_root.resolve()).as_posix()
-        except ValueError:
-            return None
-    return p.as_posix()
+        candidate = p
+    else:
+        cwd_candidate = cwd / p
+        vault_candidate = vault_root / p
+        candidate = cwd_candidate if cwd_candidate.exists() else vault_candidate
+
+    try:
+        resolved = candidate.resolve()
+    except OSError as exc:
+        return "error", raw, f"could not resolve: {exc}"
+
+    try:
+        vault_root_resolved = vault_root.resolve()
+    except OSError:
+        vault_root_resolved = vault_root
+
+    try:
+        rel = resolved.relative_to(vault_root_resolved)
+    except ValueError:
+        return "error", raw, f"resolves outside the vault: {resolved}"
+
+    rel_str = rel.as_posix()
+
+    if resolved.exists():
+        return "claim", _case_correct(rel_str, vault_root_resolved), None
+
+    if rel_str in deleted_paths:
+        return "skip", rel_str, "git deletion"
+
+    return "error", raw, f"does not exist and is not a known git deletion: {rel_str}"
 
 
-def _classify_candidates(candidates: list[str], vault_root: Path) -> tuple[list[str], list[dict[str, str]]]:
-    claimed: list[str] = []
-    skipped: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for rel in candidates:
-        if rel in seen:
-            continue
-        seen.add(rel)
-        full = vault_root / rel
-        if not full.exists():
-            skipped.append({"file": rel, "reason": "does not exist (deleted?)"})
-            continue
-        if full.suffix.lower() != ".md":
-            skipped.append({"file": rel, "reason": "not a markdown note"})
-            continue
-        if is_operating_file(full):
-            skipped.append({"file": rel, "reason": "operating file"})
-            continue
-        claimed.append(rel)
-    return sorted(claimed), skipped
+def _classify_note(rel: str, vault_root: Path) -> tuple[str, str | None]:
+    """kind in {"claim", "skip"}; reason set when skipped."""
+    from vault_scope_resolved import (  # noqa: PLC0415
+        is_governed_markdown_note,
+        is_graph_markdown_note,
+        is_operating_file,
+    )
+
+    full = vault_root / rel
+    if not full.exists():
+        return "skip", "does not exist (deleted?)"
+    if full.suffix.lower() != ".md":
+        return "skip", "not a markdown note"
+    if is_operating_file(full):
+        return "skip", "operating file"
+    if not (is_governed_markdown_note(full, vault_root) or is_graph_markdown_note(full, vault_root)):
+        return "skip", "not a governed/graph markdown note"
+    return "claim", None
 
 
 def _compute_scope(vault_root: Path, files: list[str] | None, base: str) -> ScopeResult:
+    from vault_scope_resolved import is_graph_markdown_note  # noqa: PLC0415
+
     git_paths, git_ok, git_warnings = _git_evidence_paths(vault_root, base)
+    deleted_paths = _git_deleted_paths(vault_root, base) if git_ok else set()
 
     warnings: list[str] = []
+    errors: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+    pre_claim: list[str] = []
+
     if files is not None:
         source = "explicit"
-        candidates: list[str] = []
+        if len(files) == 0:
+            errors.append({"file": "", "reason": "--files was given but empty"})
+        cwd = Path.cwd()
         for raw in files:
-            rel = _to_rel(raw, vault_root)
-            if rel is None:
-                warnings.append(f"--files entry outside vault root ignored: {raw}")
-                continue
-            candidates.append(rel)
+            kind, value, reason = _resolve_explicit_entry(raw, vault_root, cwd, deleted_paths)
+            if kind == "error":
+                errors.append({"file": raw, "reason": reason or "unresolvable"})
+            elif kind == "skip":
+                skipped.append({"file": value, "reason": reason or "skipped"})
+            else:
+                pre_claim.append(value)
     else:
         source = "git"
         if git_ok:
-            candidates = sorted(git_paths)
             warnings.append(
                 "scope_source is git: no --files was given, so scope is git status/diff "
                 "evidence, which may include edits unrelated to this session"
             )
             warnings.extend(git_warnings)
+            pre_claim.extend(sorted(git_paths))
         else:
-            candidates = []
             warnings.append("git evidence unavailable; scope could not be determined")
             warnings.extend(git_warnings)
+            errors.append({"file": "", "reason": "git evidence unavailable; scope could not be determined"})
 
-    claimed, skipped = _classify_candidates(candidates, vault_root)
+    final_claimed: list[str] = []
+    seen: set[str] = set()
+    for rel in pre_claim:
+        if rel in seen:
+            continue
+        seen.add(rel)
+        kind, reason = _classify_note(rel, vault_root)
+        if kind == "claim":
+            final_claimed.append(rel)
+        else:
+            skipped.append({"file": rel, "reason": reason or "skipped"})
 
     unclaimed_dirty: list[str] = []
     if git_ok:
-        claimed_set = set(claimed)
+        claimed_set = set(final_claimed)
         for rel in sorted(git_paths):
             if rel in claimed_set:
                 continue
@@ -212,11 +359,12 @@ def _compute_scope(vault_root: Path, files: list[str] | None, base: str) -> Scop
                 unclaimed_dirty.append(rel)
 
     return ScopeResult(
-        claimed=claimed,
+        claimed=sorted(final_claimed),
         source=source,
         warnings=warnings,
         skipped=skipped,
         unclaimed_dirty=unclaimed_dirty,
+        errors=errors,
         git_ok=git_ok,
     )
 
@@ -226,6 +374,18 @@ def _compute_scope(vault_root: Path, files: list[str] | None, base: str) -> Scop
 # ---------------------------------------------------------------------------
 
 def _scoped_checks(vault_root: Path, claimed: list[str]) -> dict[str, list[dict[str, Any]]]:
+    from frontmatter_engine import validate as fm_validate  # noqa: PLC0415
+    from vault_audit import (  # noqa: PLC0415
+        PERSONAL_INDEX_PREFIXES,
+        WORK_INDEX_PREFIXES,
+        _body,
+        _index_links,
+        _indexed,
+        _is_transient,
+        _links,
+    )
+    from vault_scope_resolved import is_governed_markdown_note, is_graph_markdown_note  # noqa: PLC0415
+
     frontmatter: list[dict[str, Any]] = []
     no_wikilinks: list[dict[str, Any]] = []
     index_membership: list[dict[str, Any]] = []
@@ -278,11 +438,120 @@ def _scoped_checks(vault_root: Path, claimed: list[str]) -> dict[str, list[dict[
 
 
 # ---------------------------------------------------------------------------
-# checks 3, 4 — unresolved_links, orphans (vault-wide, graphmark-backed)
+# gate policy parsing (item 1) — static, never imports/execs the gate file
+# ---------------------------------------------------------------------------
+
+def _parse_gate_policy(vault_root: Path) -> tuple[dict[str, int] | None, str | None]:
+    """Statically parse ``<vault_root>/ci/vault_health.py``'s POLICY assignment.
+
+    Never imports or execs the gate file: it requires graphmark>=0.7 (this
+    process may only have 0.6) and running it as a module executes real vault
+    code (``VaultConfig(...)``, ``graphmark.build(...)``) as a side effect of
+    import. Parses with ``ast`` instead and reads only the module-level
+    ``POLICY = CheckPolicy(...)`` call's keyword arguments, each of which
+    must be an int literal.
+
+    Returns (kwargs, None) on success, or (None, reason) when the file is
+    missing, unparseable, or POLICY's keywords aren't all int literals.
+    """
+    gate_path = vault_root / "ci" / "vault_health.py"
+    if not gate_path.is_file():
+        return None, f"{gate_path} does not exist"
+
+    try:
+        source = gate_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(gate_path))
+    except (OSError, SyntaxError, UnicodeDecodeError) as exc:
+        return None, f"could not parse {gate_path}: {exc}"
+
+    policy_call: ast.Call | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "POLICY" for t in node.targets):
+            continue
+        if isinstance(node.value, ast.Call):
+            policy_call = node.value
+        break
+
+    if policy_call is None:
+        return None, f"no module-level POLICY = CheckPolicy(...) assignment found in {gate_path}"
+
+    func = policy_call.func
+    func_name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+    if func_name != "CheckPolicy":
+        return None, "POLICY is not assigned from a CheckPolicy(...) call"
+
+    if policy_call.args:
+        return None, "POLICY's CheckPolicy(...) call uses positional arguments, which is not supported"
+
+    kwargs: dict[str, int] = {}
+    for kw in policy_call.keywords:
+        if kw.arg is None:
+            return None, "POLICY's CheckPolicy(...) call uses **kwargs, which is not supported"
+        try:
+            value = ast.literal_eval(kw.value)
+        except ValueError:
+            return None, f"POLICY keyword {kw.arg!r} is not a literal"
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None, f"POLICY keyword {kw.arg!r} is not an int literal"
+        kwargs[kw.arg] = value
+
+    return kwargs, None
+
+
+def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], claimed_set: set[str]) -> dict[str, Any]:
+    """Replay the vault's own CI policy against the already-built graph.
+
+    Reuses the same graph/config graph_cli.build() produced for
+    unresolved_links/orphans, and the same orphan set check 4 already
+    computed — only the policy differs, applied the same way
+    ``ci/vault_health.py`` applies it (``check=`` on the VaultConfig).
+    """
+    kwargs, error = _parse_gate_policy(vault_root)
+    if error is not None:
+        return {"not_run": error, "pass": None, "policy": None, "breach_lines": [], "orphans": []}
+
+    import dataclasses  # noqa: PLC0415
+    from graphmark.check import breach_lines, run_check  # noqa: PLC0415
+    from graphmark.config import CheckPolicy  # noqa: PLC0415
+
+    try:
+        policy = CheckPolicy(**kwargs)
+    except TypeError as exc:
+        return {
+            "not_run": f"CheckPolicy(**{kwargs!r}) failed: {exc}",
+            "pass": None, "policy": None, "breach_lines": [], "orphans": [],
+        }
+
+    gate_cfg = dataclasses.replace(cfg, check=policy)
+    report = run_check(graph, gate_cfg)
+
+    lines: list[str] = [] if report["pass"] else breach_lines(report)
+    orphans: list[dict[str, Any]] = []
+    if not report["pass"]:
+        for check in report["checks"]:
+            if check["name"] == "max_orphans" and not check["pass"]:
+                orphans = [
+                    {"file": rel, "in_scope": rel in claimed_set}
+                    for rel in sorted(orphan_paths)
+                ]
+
+    return {
+        "not_run": None,
+        "pass": report["pass"],
+        "policy": kwargs,
+        "breach_lines": lines,
+        "orphans": orphans,
+    }
+
+
+# ---------------------------------------------------------------------------
+# checks 3, 4, gate — unresolved_links, orphans, gate (vault-wide, graphmark)
 # ---------------------------------------------------------------------------
 
 def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]:
-    """Build the vault graph and derive unresolved_links / orphans findings.
+    """Build the vault graph and derive unresolved_links / orphans / gate findings.
 
     Reuses ``graph_cli.build(vault_root)`` (plugins/workbench/machinery/engine/
     graph_cli.py:68-78) for the VaultConfig — same shape as the CI gate
@@ -293,8 +562,8 @@ def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]
 
     Imported here rather than at module scope: ``graph_cli`` imports
     ``graphmark`` eagerly at ITS module level, so a vault without graphmark
-    installed must not lose the frontmatter/wikilink/index checks over it —
-    only this function's result degrades to ``not_run``.
+    installed must not lose the frontmatter/wikilink/index/scope checks over
+    it — only this function's result degrades to ``not_run``.
     """
     import graph_cli  # noqa: PLC0415
 
@@ -318,23 +587,42 @@ def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]
         if rel in claimed_set
     ]
 
+    gate = _run_gate(vault_root, graph, cfg, orphan_paths, claimed_set)
+
     return {
         "unresolved_links": unresolved_findings,
         "orphans": orphan_findings,
         "orphans_vault_wide_count": len(orphan_paths),
+        "gate": gate,
     }
 
 
 # ---------------------------------------------------------------------------
-# check 6 — handoff_sections (not pass/fail; evidence for step 9)
+# check 6 — handoff_sections (not pass/fail; evidence, never the deciding step)
 # ---------------------------------------------------------------------------
 
 def _extract_headings(text: str) -> list[tuple[int, str]]:
+    """``## `` headings by 1-indexed line number, ignoring fenced code blocks."""
     headings: list[tuple[int, str]] = []
+    in_fence = False
+    fence_marker = ""
     for i, line in enumerate(text.splitlines(), start=1):
-        m = HEADING_RE.match(line)
+        stripped = line.strip()
+        m = FENCE_RE.match(stripped)
         if m:
-            headings.append((i, m.group(1)))
+            marker = m.group(1)
+            if not in_fence:
+                in_fence = True
+                fence_marker = marker
+            elif stripped.startswith(fence_marker):
+                in_fence = False
+                fence_marker = ""
+            continue
+        if in_fence:
+            continue
+        hm = HEADING_RE.match(line)
+        if hm:
+            headings.append((i, hm.group(1)))
     return headings
 
 
@@ -348,42 +636,51 @@ def _nearest_heading_at_or_before(headings: list[tuple[int, str]], line_no: int)
     return result
 
 
-def _parse_diff_new_line_numbers(diff_text: str) -> list[int]:
-    lines_out: list[int] = []
+def _parse_diff_hunks(diff_text: str) -> tuple[list[int], list[int]]:
+    """Returns (new_side_lines, old_side_lines) touched by this -U0 diff.
+
+    A pure addition (old_count==0) contributes only new-side lines; a pure
+    deletion (new_count==0) contributes only old-side lines (mapped through
+    the BASE file's headings by the caller); a replacement contributes both.
+    """
+    new_lines: list[int] = []
+    old_lines: list[int] = []
     for line in diff_text.splitlines():
         m = HUNK_RE.match(line)
         if not m:
             continue
-        new_start = int(m.group(1))
-        new_count = int(m.group(2)) if m.group(2) is not None else 1
-        if new_count == 0:
-            # Pure deletion: anchor on the insertion point in the new file.
-            lines_out.append(new_start)
-        else:
-            lines_out.extend(range(new_start, new_start + new_count))
-    return lines_out
+        old_start = int(m.group(1))
+        old_count = int(m.group(2)) if m.group(2) is not None else 1
+        new_start = int(m.group(3))
+        new_count = int(m.group(4)) if m.group(4) is not None else 1
+        if new_count > 0:
+            new_lines.extend(range(new_start, new_start + new_count))
+        if old_count > 0:
+            old_lines.extend(range(old_start, old_start + old_count))
+    return new_lines, old_lines
 
 
 def _handoff_sections(vault_root: Path, base: str) -> dict[str, Any]:
     ctx = read_vault_context(vault_root)
+    if ctx == "unknown":
+        return {
+            "file": None,
+            "present": [],
+            "touched": [],
+            "not_run": "'.vault-context' is missing or invalid; cannot determine the handoff context",
+        }
+
     handoff_rel = f".brain/handoff-{ctx}.md"
     handoff_path = vault_root / handoff_rel
-    result: dict[str, Any] = {
-        "file": handoff_rel,
-        "present": [],
-        "touched": [],
-        "not_run": None,
-    }
+    result: dict[str, Any] = {"file": handoff_rel, "present": [], "touched": [], "not_run": None}
 
     if not handoff_path.exists():
-        # No handoff has ever been written for this context — a legitimate
-        # state (e.g. a fresh vault), not a failure: nothing to report as
-        # touched, and this is not a reason to go INCOMPLETE.
+        result["not_run"] = f"{handoff_rel} does not exist"
         return result
 
     text = handoff_path.read_text(encoding="utf-8", errors="replace")
-    headings = _extract_headings(text)
-    result["present"] = [h for _, h in headings]
+    new_headings = _extract_headings(text)
+    result["present"] = [h for _, h in new_headings]
 
     tracked = _git(vault_root, ["ls-files", "--error-unmatch", handoff_rel]) is not None
     if not tracked:
@@ -398,12 +695,39 @@ def _handoff_sections(vault_root: Path, base: str) -> dict[str, Any]:
         result["touched"] = []
         return result
 
-    touched_lines = _parse_diff_new_line_numbers(diff_out)
-    touched_set = {
-        _nearest_heading_at_or_before(headings, line_no) or PREAMBLE
-        for line_no in touched_lines
-    }
-    order = [PREAMBLE] + [h for _, h in headings]
+    base_text = _git(vault_root, ["show", f"{base}:{handoff_rel}"])
+    base_headings = _extract_headings(base_text) if base_text is not None else []
+
+    new_lines, old_lines = _parse_diff_hunks(diff_out)
+    new_file_lines = text.splitlines()
+    base_file_lines = base_text.splitlines() if base_text is not None else []
+
+    def _has_content(line_no: int, source_lines: list[str]) -> bool:
+        # A blank separator line adjacent to a deleted/added heading maps
+        # ambiguously to whichever section it is geometrically closer to
+        # (e.g. the blank line right before a fully-deleted last section is
+        # "nearest-at-or-before" the section ABOVE it) even though the
+        # meaningful change is the section below. Ignoring content-free
+        # lines avoids attributing the change to the wrong neighbor.
+        idx = line_no - 1
+        if 0 <= idx < len(source_lines):
+            return source_lines[idx].strip() != ""
+        return True
+
+    touched_set: set[str] = set()
+    for line_no in new_lines:
+        if not _has_content(line_no, new_file_lines):
+            continue
+        touched_set.add(_nearest_heading_at_or_before(new_headings, line_no) or PREAMBLE)
+    for line_no in old_lines:
+        if not _has_content(line_no, base_file_lines):
+            continue
+        touched_set.add(_nearest_heading_at_or_before(base_headings, line_no) or PREAMBLE)
+
+    order = [PREAMBLE] + [h for _, h in new_headings]
+    for h in [h for _, h in base_headings]:
+        if h not in order:
+            order.append(h)
     result["touched"] = [h for h in order if h in touched_set]
     return result
 
@@ -419,17 +743,17 @@ def _cap(findings: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any
 
 
 def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit: int = 20) -> dict[str, Any]:
+    scope_config_source = _pin_vault_root(vault_root)
+
     scope = _compute_scope(vault_root, files, base)
     claimed_set = set(scope.claimed)
     not_run: list[dict[str, str]] = []
 
-    if scope.source == "git" and not scope.git_ok:
-        reason = "scope undetermined: git evidence unavailable"
-        for name in ("frontmatter", "no_wikilinks", "index_membership"):
-            not_run.append({"check": name, "reason": reason})
-        scoped = {"frontmatter": [], "no_wikilinks": [], "index_membership": []}
-    else:
-        scoped = _scoped_checks(vault_root, scope.claimed)
+    for err in scope.errors:
+        label = f"{err['file']}: {err['reason']}" if err["file"] else err["reason"]
+        not_run.append({"check": "scope", "reason": label})
+
+    scoped = _scoped_checks(vault_root, scope.claimed)
 
     graph_error: str | None = None
     try:
@@ -442,13 +766,18 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
         reason = f"graphmark unavailable: {graph_error}"
         not_run.append({"check": "unresolved_links", "reason": reason})
         not_run.append({"check": "orphans", "reason": reason})
+        not_run.append({"check": "gate", "reason": reason})
         unresolved_findings: list[dict[str, Any]] = []
         orphan_findings: list[dict[str, Any]] = []
         orphans_vault_wide_count = None
+        gate = {"not_run": reason, "pass": None, "policy": None, "breach_lines": [], "orphans": []}
     else:
         unresolved_findings = graph_results["unresolved_links"]
         orphan_findings = graph_results["orphans"]
         orphans_vault_wide_count = graph_results["orphans_vault_wide_count"]
+        gate = graph_results["gate"]
+        if gate.get("not_run"):
+            not_run.append({"check": "gate", "reason": gate["not_run"]})
 
     handoff = _handoff_sections(vault_root, base)
     if handoff.get("not_run"):
@@ -460,12 +789,15 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
     unresolved_capped, unresolved_elided = _cap(unresolved_findings, limit)
     orphan_capped, orphan_elided = _cap(orphan_findings, limit)
 
+    gate_breach = bool(graph_results is not None and gate.get("pass") is False)
+
     total_findings = (
         len(scoped["frontmatter"])
         + len(scoped["no_wikilinks"])
         + len(unresolved_findings)
         + len(orphan_findings)
         + len(scoped["index_membership"])
+        + (1 if gate_breach else 0)
     )
 
     if not_run:
@@ -476,16 +808,18 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
         verdict = "CLEAN"
 
     skipped_capped, skipped_elided = _cap(scope.skipped, limit)
-    unclaimed_capped = scope.unclaimed_dirty[:limit]
+    unclaimed_capped = scope.unclaimed_dirty[:limit] if limit > 0 else scope.unclaimed_dirty
     unclaimed_elided = max(0, len(scope.unclaimed_dirty) - limit) if limit > 0 else 0
 
     return {
         "verdict": verdict,
         "vault_root": str(vault_root),
+        "scope_config_source": scope_config_source,
         "scope": {
             "source": scope.source,
             "files": scope.claimed,
             "warnings": scope.warnings,
+            "errors": scope.errors,
             "skipped": skipped_capped,
             "skipped_count": len(scope.skipped),
             "skipped_elided": skipped_elided,
@@ -520,6 +854,7 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
                 "findings": index_findings,
                 "elided": index_elided,
             },
+            "gate": gate,
             "handoff_sections": handoff,
         },
         "not_run": not_run,
@@ -549,6 +884,8 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         f"## Wrap-Up Audit — {report['verdict']}",
         "",
+        f"- scope config: {report['scope_config_source']}",
+        "",
         "### Scope",
         f"- source: {report['scope']['source']}",
         f"- files ({len(report['scope']['files'])}): "
@@ -556,6 +893,11 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     for w in report["scope"]["warnings"]:
         lines.append(f"- warning: {w}")
+    if report["scope"]["errors"]:
+        lines.append(f"- errors ({len(report['scope']['errors'])}):")
+        for e in report["scope"]["errors"]:
+            label = e["file"] or "(--files)"
+            lines.append(f"  - `{label}`: {e['reason']}")
     if report["scope"]["skipped_count"]:
         lines.append(f"- skipped ({report['scope']['skipped_count']}):")
         for s in report["scope"]["skipped"]:
@@ -582,6 +924,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     orphans_title = "Orphans (in-scope)" + (f" — {vw} vault-wide" if vw is not None else "")
     _render_check(lines, orphans_title, orphans_node)
     _render_check(lines, "Index Membership", checks["index_membership"])
+
+    gate = checks["gate"]
+    if gate.get("not_run"):
+        lines.append(f"- Gate: not run ({gate['not_run']})")
+    elif gate["pass"]:
+        lines.append(f"- Gate: pass ({gate['policy']})")
+    else:
+        lines.append(f"- Gate: FAIL ({gate['policy']}):")
+        for bl in gate["breach_lines"]:
+            lines.append(f"  - {bl}")
+        for o in gate["orphans"]:
+            lines.append(f"  - orphan `{o['file']}` (in_scope: {str(o['in_scope']).lower()})")
     lines.append("")
 
     handoff = checks["handoff_sections"]
@@ -607,17 +961,14 @@ def render_markdown(report: dict[str, Any]) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
-VERDICT_EXIT_CODES = {"CLEAN": 0, "FINDINGS": 1, "INCOMPLETE": 2}
-
-
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(
         description="Deterministic /wrap-up audit collector — returns a session VERDICT."
     )
     parser.add_argument("--vault-root", type=Path)
     parser.add_argument(
         "--files", nargs="*", default=None,
-        help="The session's claimed files (vault-relative or absolute). "
+        help="The session's claimed files (vault-relative or absolute; quote each one). "
              "Omit to fall back to git status/diff evidence.",
     )
     parser.add_argument("--base", default="HEAD", help="Git ref to diff against (default HEAD).")
@@ -637,6 +988,22 @@ def main(argv: list[str] | None = None) -> int:
         print(render_markdown(report))
 
     return VERDICT_EXIT_CODES[report["verdict"]]
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Wraps ``_main`` so any uncaught exception exits 2 (INCOMPLETE), never 1 (FINDINGS).
+
+    A crash silently read as "the audit ran and found issues" is worse than
+    a crash read as "the audit didn't finish" — the caller must not treat
+    the two the same way.
+    """
+    try:
+        return _main(argv)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - last-resort guard; report and degrade, never crash-as-FINDINGS
+        print(f"ERROR: wrap_up_audit crashed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return VERDICT_EXIT_CODES["INCOMPLETE"]
 
 
 if __name__ == "__main__":
