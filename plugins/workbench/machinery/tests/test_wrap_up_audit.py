@@ -1,14 +1,38 @@
 from __future__ import annotations
 
 import builtins
+import importlib.metadata
+import os
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
+
+import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from wrap_up_audit import VERDICT_EXIT_CODES, collect, main  # noqa: E402
+
+
+def _graphmark_at_least_0_7() -> bool:
+    try:
+        ver = importlib.metadata.version("graphmark")
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    parts = ver.split(".")
+    try:
+        major, minor = int(parts[0]), int(parts[1])
+    except (IndexError, ValueError):
+        return False
+    return (major, minor) >= (0, 7)
+
+
+NEEDS_GRAPHMARK_07 = pytest.mark.skipif(
+    not _graphmark_at_least_0_7(),
+    reason="requires graphmark>=0.7 (see make test-wrap-up-gate-parity)",
+)
 
 
 def _write(root: Path, rel: str, text: str) -> Path:
@@ -31,13 +55,24 @@ def _note(title: str, tags: str = "reference", body: str = "Short body.") -> str
     )
 
 
-PERMISSIVE_GATE_POLICY = (
-    "from graphmark.config import CheckPolicy\n\n"
-    "POLICY = CheckPolicy(\n"
-    "    max_unresolved_links=1000,\n"
-    "    max_orphans=1000,\n"
-    ")\n"
-)
+def _gate_file(max_unresolved_links: int = 0, max_orphans: int = 3) -> str:
+    """A gate file shaped like the real ci/vault_health.py: one module-level
+    POLICY, applied via check=POLICY inside a function — not just a bare
+    POLICY assignment with nothing ever reading it.
+    """
+    return (
+        "from graphmark.config import CheckPolicy\n\n"
+        "POLICY = CheckPolicy(\n"
+        f"    max_unresolved_links={max_unresolved_links},\n"
+        f"    max_orphans={max_orphans},\n"
+        ")\n\n"
+        "def main():\n"
+        "    config = dict(check=POLICY)\n"
+        "    return config\n"
+    )
+
+
+PERMISSIVE_GATE_POLICY = _gate_file(max_unresolved_links=1000, max_orphans=1000)
 
 
 def _git_init(repo: Path) -> None:
@@ -83,13 +118,7 @@ def _handoff_text() -> str:
     )
 
 
-GATE_POLICY_3_0 = (
-    "from graphmark.config import CheckPolicy\n\n"
-    "POLICY = CheckPolicy(\n"
-    "    max_unresolved_links=0,\n"
-    "    max_orphans=3,\n"
-    ")\n"
-)
+GATE_POLICY_3_0 = _gate_file(max_unresolved_links=0, max_orphans=3)
 
 GATE_POLICY_NON_LITERAL = (
     "from graphmark.config import CheckPolicy\n\n"
@@ -97,7 +126,61 @@ GATE_POLICY_NON_LITERAL = (
     "POLICY = CheckPolicy(\n"
     "    max_unresolved_links=0,\n"
     "    max_orphans=_max,\n"
-    ")\n"
+    ")\n\n"
+    "def main():\n"
+    "    config = dict(check=POLICY)\n"
+    "    return config\n"
+)
+
+GATE_POLICY_BOOL_KEYWORD = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(\n"
+    "    max_unresolved_links=True,\n"
+    "    max_orphans=3,\n"
+    ")\n\n"
+    "def main():\n"
+    "    config = dict(check=POLICY)\n"
+    "    return config\n"
+)
+
+# MEDIUM-B variants: each currently gives a FALSE CLEAN — the naive parser
+# grabs a policy that isn't the one actually applied at runtime. All must
+# now be INCOMPLETE.
+
+GATE_TWO_ASSIGNMENTS = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=1000)\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    config = dict(check=POLICY)\n"
+    "    return config\n"
+)
+
+GATE_IF_BLOCK_POLICY = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=1000)\n\n"
+    "if True:\n"
+    "    POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    config = dict(check=POLICY)\n"
+    "    return config\n"
+)
+
+GATE_UNUSED_POLICY = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    config = dict(check=CheckPolicy(max_unresolved_links=0, max_orphans=1000))\n"
+    "    return config\n"
+)
+
+GATE_REPLACE_POLICY = (
+    "from graphmark.config import CheckPolicy\n"
+    "import dataclasses\n\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    config = dict(check=dataclasses.replace(POLICY, max_orphans=1000))\n"
+    "    return config\n"
 )
 
 
@@ -1032,12 +1115,19 @@ def test_failing_handoff_git_diff_gives_incomplete(tmp_path: Path) -> None:
 
 
 def test_undetermined_git_scope_not_a_repo_gives_incomplete(tmp_path: Path) -> None:
-    # X9 (no git init at all)
+    # X9 (no git init at all) — WITH a gate file and handoff (written directly,
+    # no git needed) so git failure is the ONLY not_run reason, not an
+    # incidental missing fixture.
+    _write(tmp_path, "ci/vault_health.py", PERMISSIVE_GATE_POLICY)
+    _write(tmp_path, ".vault-context", "personal")
+    _write(tmp_path, ".brain/handoff-personal.md", "## Resume From Here\nNothing yet.\n")
     _write(tmp_path, "brain/A.md", _note("A"))
 
     report = collect(tmp_path, files=None, base="HEAD")
 
     assert report["verdict"] == "INCOMPLETE"
+    not_run_checks = {nr["check"] for nr in report["not_run"]}
+    assert not_run_checks == {"scope"}
 
 
 def test_transient_note_in_files_skipped_for_index_checks(tmp_path: Path) -> None:
@@ -1086,3 +1176,469 @@ def test_absolute_files_path_is_honored(tmp_path: Path) -> None:
     report = collect(tmp_path, files=[abs_path], base="HEAD")
 
     assert "brain/A.md" in report["scope"]["files"]
+
+
+# ===========================================================================
+# round 3 — MEDIUM-A: order-dependent leak. collect() must restore process
+# state (CLAUDE_PROJECT_DIR, sys.modules) it changed, on both success and
+# exception, so it cannot poison an unrelated test/caller running later in
+# the same process.
+# ===========================================================================
+
+def test_collect_restores_process_state_on_success(tmp_path: Path) -> None:
+    prior_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    prior_objs = {
+        name: sys.modules.get(name)
+        for name in ("vault_scope_resolved", "vault_scope_defaults", "frontmatter_engine", "vault_audit")
+    }
+
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _git_commit_all(tmp_path, "init")
+
+    collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert os.environ.get("CLAUDE_PROJECT_DIR") == prior_env
+    for name, obj in prior_objs.items():
+        assert sys.modules.get(name) is obj, name
+
+
+def test_collect_restores_process_state_on_exception(tmp_path: Path, monkeypatch) -> None:
+    import wrap_up_audit  # noqa: PLC0415
+
+    prior_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    prior_obj = sys.modules.get("vault_scope_resolved")
+
+    def boom(*_a, **_k):
+        raise RuntimeError("forced failure after pinning")
+
+    monkeypatch.setattr(wrap_up_audit, "_compute_scope", boom)
+
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A"))
+    _git_commit_all(tmp_path, "init")
+
+    with pytest.raises(RuntimeError):
+        collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert os.environ.get("CLAUDE_PROJECT_DIR") == prior_env
+    assert sys.modules.get("vault_scope_resolved") is prior_obj
+
+
+def test_no_cross_test_leak_repro_in_one_process() -> None:
+    """The exact repro from the adversarial review: running the wrap-up
+    collector's test before a vault_utils test, in the SAME process, must
+    not change the vault_utils test's result. Runs pytest in a subprocess
+    (via sys.executable — the already-configured venv this suite itself
+    runs under) to get a fresh-process baseline for the assertion.
+    """
+    machinery_dir = SCRIPTS_DIR.parent
+    cmd = [
+        sys.executable, "-m", "pytest", "-q",
+        "tests/test_wrap_up_audit.py::test_clean_in_scope_note_is_clean",
+        "tests/test_vault_utils.py::TestReadBatchModel::test_explicit_default_is_the_last_resort",
+    ]
+    result = subprocess.run(cmd, cwd=machinery_dir, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ===========================================================================
+# round 3 — MEDIUM-B: POLICY parser must fail closed. Each variant below
+# currently gives a FALSE CLEAN under the naive (pre-round-3) parser: it
+# reads a policy that is not the one actually enforced at runtime.
+# ===========================================================================
+
+def test_gate_bool_keyword_gives_incomplete(tmp_path: Path) -> None:
+    # kills mutation m8
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_POLICY_BOOL_KEYWORD)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_two_assignments_gives_incomplete(tmp_path: Path) -> None:
+    # collector must not silently take "the first" (or "the last") — kills m9
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)  # 4 orphans, over the real 3 limit
+    _write(tmp_path, "ci/vault_health.py", GATE_TWO_ASSIGNMENTS)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_if_block_policy_gives_incomplete(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_IF_BLOCK_POLICY)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_unused_policy_gives_incomplete(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_UNUSED_POLICY)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_replace_policy_gives_incomplete(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_REPLACE_POLICY)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_real_vault_shaped_file_still_parses(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)  # 4 orphans, over limit 3
+    _write(tmp_path, "ci/vault_health.py", _gate_file(max_unresolved_links=0, max_orphans=3))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["checks"]["gate"]["not_run"] is None
+    assert report["checks"]["gate"]["pass"] is False
+
+
+def test_gate_checks_breakdown_present_even_when_passing(tmp_path: Path) -> None:
+    # LOW-4
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=False)  # gate passes
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    gate = report["checks"]["gate"]
+    assert gate["pass"] is True
+    names = {c["name"] for c in gate["checks"]}
+    assert {"max_orphans", "max_unresolved_links"} <= names
+    for c in gate["checks"]:
+        assert "actual" in c and "limit" in c
+
+
+def test_gate_orphans_breach_lists_vault_wide_orphan_paths(tmp_path: Path) -> None:
+    # m4
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)  # 4 orphans: B, O1, O2, O3
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    gate = report["checks"]["gate"]
+    assert gate["pass"] is False
+    orphan_files = {o["file"] for o in gate["orphans"]}
+    assert orphan_files == {"brain/B.md", "brain/O1.md", "brain/O2.md", "brain/O3.md"}
+    in_scope_map = {o["file"]: o["in_scope"] for o in gate["orphans"]}
+    assert in_scope_map["brain/B.md"] is False
+
+
+def test_gate_checkpolicy_exception_reported_without_dropping_other_checks(tmp_path: Path) -> None:
+    # LOW-3: CheckPolicy() with no thresholds set constructs fine but
+    # run_check() raises ValueError on it — must be reported as "gate policy
+    # rejected", never "graphmark unavailable", and must not drop the
+    # already-computed unresolved_links/orphans results.
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[Missing]]."))
+    _write(
+        tmp_path,
+        "ci/vault_health.py",
+        "from graphmark.config import CheckPolicy\n\n"
+        "POLICY = CheckPolicy()\n\n"
+        "def main():\n"
+        "    return dict(check=POLICY)\n",
+    )
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    gate = report["checks"]["gate"]
+    assert gate["not_run"] is not None
+    assert "gate policy rejected" in gate["not_run"]
+    assert "graphmark unavailable" not in gate["not_run"]
+    unresolved_files = {f["file"] for f in report["checks"]["unresolved_links"]["findings"]}
+    assert "brain/A.md" in unresolved_files
+    assert not any(nr["check"] == "unresolved_links" for nr in report["not_run"])
+    assert not any(nr["check"] == "orphans" for nr in report["not_run"])
+
+
+# ===========================================================================
+# round 3 — MEDIUM-C: new_orphans. `gate` alone only detects crossing the
+# vault's orphan LIMIT — a regression that stays under it is invisible to
+# gate but is still a regression this session caused.
+# ===========================================================================
+
+def test_new_orphans_findings_when_crossing_zero_to_one(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    # A stays linked to C throughout, so A itself never becomes an orphan —
+    # only removing the [[B]] link is under test.
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]] and [[C]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _write(tmp_path, "brain/C.md", _note("C"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[C]]. No longer linking to B."))
+    _git_commit_all(tmp_path, "remove link to B")
+
+    report = collect(tmp_path, files=["brain/A.md"], base=base_sha)
+
+    assert report["verdict"] == "FINDINGS"
+    new_orphan_files = {f["file"] for f in report["checks"]["new_orphans"]["findings"]}
+    assert "brain/B.md" in new_orphan_files
+    assert report["checks"]["orphans"]["vault_wide_count"] == 1
+    # The permissive gate seeded by _git_init (limit 1000) passes at 1 — the
+    # exact hole new_orphans exists to cover.
+    assert report["checks"]["gate"]["pass"] is True
+
+
+def test_new_orphans_excludes_pre_existing_orphan(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/AlreadyOrphan.md", _note("Already Orphan"))
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    _write(tmp_path, "brain/A.md", _note("A", body="No longer linking to B, unrelated edit."))
+    _git_commit_all(tmp_path, "remove link to B")
+
+    report = collect(tmp_path, files=["brain/A.md"], base=base_sha)
+
+    new_orphan_files = {f["file"] for f in report["checks"]["new_orphans"]["findings"]}
+    assert "brain/AlreadyOrphan.md" not in new_orphan_files
+    assert "brain/B.md" in new_orphan_files
+
+
+# ===========================================================================
+# round 3 — item 4: restored round-1 guard tests deleted by round 2's
+# handoff rewrite (T9, T10)
+# ===========================================================================
+
+def test_handoff_preamble_edit_maps_to_preamble(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/Anchor.md", _note("Anchor"))
+    _write(tmp_path, ".brain/handoff-personal.md", _handoff_text())
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    new_text = _handoff_text().replace("Preamble line.", "New preamble line.")
+    _write(tmp_path, ".brain/handoff-personal.md", new_text)
+    _git_commit_all(tmp_path, "update handoff preamble")
+
+    report = collect(tmp_path, files=["brain/Anchor.md"], base=base_sha)
+
+    handoff = report["checks"]["handoff_sections"]
+    assert handoff["touched"] == ["(preamble)"]
+
+
+def test_handoff_untracked_file_all_sections_touched(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/Anchor.md", _note("Anchor"))
+    (tmp_path / ".brain" / "handoff-personal.md").unlink()  # no handoff at base
+    _git_commit_all(tmp_path, "init")
+
+    _write(tmp_path, ".brain/handoff-personal.md", _handoff_text())
+    # left untracked deliberately
+
+    report = collect(tmp_path, files=["brain/Anchor.md"], base="HEAD")
+
+    handoff = report["checks"]["handoff_sections"]
+    assert handoff["present"] == ["Resume From Here", "Open Threads", "Notes"]
+    assert handoff["touched"] == handoff["present"]
+
+
+# ===========================================================================
+# round 3 — item 6 (T8b): a single hunk whose range crosses a heading
+# boundary must report every heading it touches, not just the one at its
+# first line. Kills a mutation that anchors only on new_start.
+# ===========================================================================
+
+def test_handoff_single_hunk_spans_two_sections_via_range(tmp_path: Path) -> None:
+    text = (
+        "Preamble line.\n\n"
+        "## Resume From Here\n"
+        "Old resume text.\n\n"
+        "## Open Threads\n"
+        "Old open threads text.\n"
+    )
+    _git_init(tmp_path)
+    _write(tmp_path, ".brain/handoff-personal.md", text)
+    _write(tmp_path, "brain/Anchor.md", _note("Anchor"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    new_text = (
+        "Preamble line.\n\n"
+        "## Resume From Here\n"
+        "Old resume text.\n"
+        "More resume content.\n\n"
+        "## Followups\n"
+        "Followup content.\n\n"
+        "## Open Threads\n"
+        "Old open threads text.\n"
+    )
+    _write(tmp_path, ".brain/handoff-personal.md", new_text)
+    _git_commit_all(tmp_path, "insert a new section in one hunk")
+
+    report = collect(tmp_path, files=["brain/Anchor.md"], base=base_sha)
+
+    handoff = report["checks"]["handoff_sections"]
+    assert "Resume From Here" in handoff["touched"]
+    assert "Followups" in handoff["touched"]
+
+
+# ===========================================================================
+# round 3 — item 8 (m7): git-mode rename puts the new path in scope
+# ===========================================================================
+
+def test_git_mode_rename_new_path_in_scope(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/Old Name.md", _note("Old Name", body="See [[Hub]]."))
+    _write(tmp_path, "brain/Hub.md", _note("Hub", body="See [[Old Name]]."))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    subprocess.run(["git", "mv", "brain/Old Name.md", "brain/New Name.md"], cwd=tmp_path, check=True)
+    _git_commit_all(tmp_path, "rename")
+
+    report = collect(tmp_path, files=None, base=base_sha)
+
+    assert "brain/New Name.md" in report["scope"]["files"]
+
+
+# ===========================================================================
+# round 3 — item 10 (j3): a committed non-ASCII filename in git mode
+# ===========================================================================
+
+def test_git_mode_committed_non_ascii_note_gives_findings(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/Anchor.md", _note("Anchor"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    bad = (
+        "---\n"
+        "date: 2026-07-08\n"
+        "tags:\n"
+        "  - reference\n"
+        "---\n\n"
+        "# Cafe\n\nMissing description.\n"
+    )
+    _write(tmp_path, "brain/Café Note.md", bad)
+    _git_commit_all(tmp_path, "add cafe note")
+
+    report = collect(tmp_path, files=None, base=base_sha)
+
+    assert "brain/Café Note.md" in report["scope"]["files"]
+    assert report["verdict"] == "FINDINGS"
+    frontmatter_files = {f["file"] for f in report["checks"]["frontmatter"]["findings"]}
+    assert "brain/Café Note.md" in frontmatter_files
+
+
+# ===========================================================================
+# round 3 — item 11: graphmark 0.7 parity fixtures. Each has a CONFIRMED
+# different result under graphmark 0.6 (verified directly against both
+# installed versions; see the round-3 report) — skipped under 0.6 rather
+# than asserting the wrong 0.6 behavior.
+# ===========================================================================
+
+@NEEDS_GRAPHMARK_07
+def test_graphmark_07_numeric_only_suffix_is_a_real_broken_link(tmp_path: Path) -> None:
+    # 0.6's _targets_non_note_file regex treats a numeric-only suffix like
+    # ".5" as a plausible file extension and suppresses the broken link;
+    # 0.7 requires at least one letter and correctly reports it.
+    _git_init(tmp_path)
+    _write(tmp_path, "ci/vault_health.py", _gate_file(max_unresolved_links=0, max_orphans=3))
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[Meeting 3.5]]."))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["checks"]["unresolved_links"]["count"] == 1
+    assert report["checks"]["gate"]["pass"] is False
+
+
+@NEEDS_GRAPHMARK_07
+def test_graphmark_07_path_suffix_needs_component_boundary(tmp_path: Path) -> None:
+    # 0.6 matches [[work/Tasks]] against homework/Tasks.md (raw endswith);
+    # 0.7 requires the match to land on a path-component boundary and
+    # correctly leaves the link unresolved.
+    _git_init(tmp_path)
+    _write(tmp_path, "ci/vault_health.py", _gate_file(max_unresolved_links=0, max_orphans=3))
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[work/Tasks]]."))
+    _write(tmp_path, "homework/Tasks.md", _note("Tasks"))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["checks"]["unresolved_links"]["count"] == 1
+    assert report["checks"]["gate"]["pass"] is False
+
+
+@NEEDS_GRAPHMARK_07
+def test_graphmark_07_nfd_filename_resolves_nfc_link(tmp_path: Path) -> None:
+    # 0.6 compares raw strings, so an NFD-normalized on-disk filename (as
+    # macOS/APFS stores it) never matches an NFC-typed [[Café]] link; 0.7
+    # composes both sides to NFC first and resolves it.
+    _git_init(tmp_path)
+    _write(tmp_path, "ci/vault_health.py", _gate_file(max_unresolved_links=0, max_orphans=3))
+    nfd_name = unicodedata.normalize("NFD", "Café") + ".md"
+    nfc_display = unicodedata.normalize("NFC", "Café")
+    _write(tmp_path, "brain/A.md", _note("A", body=f"See [[{nfc_display}]]."))
+    _write(tmp_path, f"brain/{nfd_name}", _note("Cafe note"))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["checks"]["unresolved_links"]["count"] == 0
+    assert report["checks"]["gate"]["pass"] is True
+
+
+# ===========================================================================
+# round 3 — LOW-1: explicit --files yielding zero claimed notes must not
+# read as CLEAN (nothing was actually audited)
+# ===========================================================================
+
+def test_files_only_directory_gives_incomplete(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A"))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert any("no claimed notes" in e["reason"] for e in report["scope"]["errors"])
+
+
+def test_files_only_non_note_gives_incomplete(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A"))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=[".brain/handoff-personal.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert any("no claimed notes" in e["reason"] for e in report["scope"]["errors"])

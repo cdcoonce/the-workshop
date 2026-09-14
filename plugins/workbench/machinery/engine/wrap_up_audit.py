@@ -26,14 +26,18 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -52,7 +56,13 @@ VERDICT_EXIT_CODES = {"CLEAN": 0, "FINDINGS": 1, "INCOMPLETE": 2}
 # vault-root pinning (item 4)
 # ---------------------------------------------------------------------------
 
-def _pin_vault_root(vault_root: Path) -> str:
+_PINNED_MODULE_NAMES = (
+    "vault_scope", "vault_scope_resolved", "vault_scope_defaults",
+    "frontmatter_engine", "vault_audit", "graph_cli",
+)
+
+
+def _pin_vault_root(vault_root: Path) -> tuple[str, Callable[[], None]]:
     """Anchor vault_scope_resolved's owner-config resolution to *vault_root*.
 
     ``vault_scope_resolved._find_vault_root()`` walks up from
@@ -69,26 +79,45 @@ def _pin_vault_root(vault_root: Path) -> str:
     at their own first import — so a later ``collect()`` call for a
     DIFFERENT vault_root would otherwise keep reading the first vault's
     config. There is no public reset API, so this evicts the cached modules
-    directly: harmless in a fresh process (nothing cached yet) and necessary
-    in a long-lived one — this test suite included — that audits more than
-    one vault root.
+    directly.
 
-    Returns a human-readable description of the resolved scope-config
-    source, for the report header.
+    This is process-global state, so the eviction (and the env var) must not
+    outlive one ``collect()`` call: a caller (this test suite included) that
+    imported one of these modules for its OWN purposes before ``collect()``
+    ran, or that reads ``CLAUDE_PROJECT_DIR`` itself, must see it unchanged
+    afterward. Returns ``(scope_config_source, restore)`` — the caller MUST
+    invoke ``restore()`` in a ``finally``, on both success and exception, to
+    put ``os.environ`` and ``sys.modules`` back exactly as found. Production
+    CLI runs are unaffected either way: each is its own fresh subprocess.
     """
+    had_env = "CLAUDE_PROJECT_DIR" in os.environ
+    prior_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    prior_modules = {name: sys.modules.get(name) for name in _PINNED_MODULE_NAMES}
+
     os.environ["CLAUDE_PROJECT_DIR"] = str(vault_root)
-    for name in (
-        "vault_scope", "vault_scope_resolved", "vault_scope_defaults",
-        "frontmatter_engine", "vault_audit", "graph_cli",
-    ):
+    for name in _PINNED_MODULE_NAMES:
         sys.modules.pop(name, None)
 
     import vault_scope_resolved  # noqa: PLC0415
 
     owner = vault_scope_resolved._owner_scope()  # noqa: SLF001
     if owner is not None and getattr(owner, "__file__", None):
-        return owner.__file__
-    return "shipped defaults (vault_scope_defaults.py)"
+        source = owner.__file__
+    else:
+        source = "shipped defaults (vault_scope_defaults.py)"
+
+    def _restore() -> None:
+        if had_env:
+            os.environ["CLAUDE_PROJECT_DIR"] = prior_env  # type: ignore[assignment]
+        else:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        for name, mod in prior_modules.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
+
+    return source, _restore
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +375,13 @@ def _compute_scope(vault_root: Path, files: list[str] | None, base: str) -> Scop
         else:
             skipped.append({"file": rel, "reason": reason or "skipped"})
 
+    # LOW-1: an explicit --files that resolved fine (no per-entry error) but
+    # left nothing claimed after note-type filtering — a directory, or only
+    # non-note files like the handoff — must not read as "nothing to
+    # validate, so CLEAN": nothing was actually audited.
+    if files is not None and len(files) > 0 and not final_claimed:
+        errors.append({"file": "", "reason": "no claimed notes after filtering"})
+
     unclaimed_dirty: list[str] = []
     if git_ok:
         claimed_set = set(final_claimed)
@@ -441,18 +477,64 @@ def _scoped_checks(vault_root: Path, claimed: list[str]) -> dict[str, list[dict[
 # gate policy parsing (item 1) — static, never imports/execs the gate file
 # ---------------------------------------------------------------------------
 
+def _find_policy_assign_nodes(tree: ast.Module) -> list[ast.stmt]:
+    """Every ``Assign``/``AnnAssign`` anywhere in the module that targets the bare name ``POLICY``."""
+    found: list[ast.stmt] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == "POLICY" for t in node.targets):
+                found.append(node)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "POLICY":
+                found.append(node)
+    return found
+
+
+def _find_check_kwarg_values(tree: ast.Module) -> list[ast.expr]:
+    """Every ``check=...`` keyword argument value on any Call node anywhere in the module."""
+    values: list[ast.expr] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg == "check":
+                    values.append(kw.value)
+    return values
+
+
 def _parse_gate_policy(vault_root: Path) -> tuple[dict[str, int] | None, str | None]:
-    """Statically parse ``<vault_root>/ci/vault_health.py``'s POLICY assignment.
+    """Statically parse ``<vault_root>/ci/vault_health.py``'s POLICY and confirm it's applied.
 
     Never imports or execs the gate file: it requires graphmark>=0.7 (this
     process may only have 0.6) and running it as a module executes real vault
     code (``VaultConfig(...)``, ``graphmark.build(...)``) as a side effect of
-    import. Parses with ``ast`` instead and reads only the module-level
-    ``POLICY = CheckPolicy(...)`` call's keyword arguments, each of which
-    must be an int literal.
+    import. Parses with ``ast`` instead.
 
-    Returns (kwargs, None) on success, or (None, reason) when the file is
-    missing, unparseable, or POLICY's keywords aren't all int literals.
+    Failing closed: a static read can be fooled by a file that LOOKS like it
+    declares one policy but actually enforces another at runtime (a second
+    reassignment of the name, a policy defined inside an ``if`` block instead
+    of at module level, or a ``check=`` argument that doesn't reference
+    ``POLICY`` at all). So this requires, together:
+
+    - exactly one assignment to the bare name ``POLICY`` anywhere in the
+      module (``ast.walk``, not just top-level statements — a second
+      assignment anywhere, even one Python itself would never reach, means
+      the file's real behavior can't be read off this one node with
+      confidence);
+    - that one assignment is a direct module-level statement (not nested in
+      a function, class, or ``if``/``for``/``try`` block);
+    - its value is a ``CheckPolicy(...)`` call with int-only literal
+      keywords (already the v1 rule);
+    - somewhere in the file, a ``check=`` keyword argument's value is the
+      bare ``Name`` ``POLICY`` (i.e. something is actually handed this
+      policy — matching how ``ci/vault_health.py`` builds its
+      ``VaultConfig(..., check=POLICY)``);
+    - no OTHER ``check=`` keyword argument appears anywhere with a different
+      value (an inline ``CheckPolicy(...)``, a ``dataclasses.replace(POLICY,
+      ...)``, or anything else) — that would mean the module can enforce a
+      policy this parser never saw.
+
+    Returns (kwargs, None) on success, or (None, reason) on any failure of
+    the above.
     """
     gate_path = vault_root / "ci" / "vault_health.py"
     if not gate_path.is_file():
@@ -464,18 +546,19 @@ def _parse_gate_policy(vault_root: Path) -> tuple[dict[str, int] | None, str | N
     except (OSError, SyntaxError, UnicodeDecodeError) as exc:
         return None, f"could not parse {gate_path}: {exc}"
 
-    policy_call: ast.Call | None = None
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(t, ast.Name) and t.id == "POLICY" for t in node.targets):
-            continue
-        if isinstance(node.value, ast.Call):
-            policy_call = node.value
-        break
+    assigns = _find_policy_assign_nodes(tree)
+    if len(assigns) != 1:
+        return None, (
+            f"expected exactly one POLICY assignment in {gate_path}, found {len(assigns)}"
+        )
+    policy_node = assigns[0]
+    if policy_node not in tree.body:
+        return None, f"POLICY is not assigned at module level in {gate_path}"
 
-    if policy_call is None:
-        return None, f"no module-level POLICY = CheckPolicy(...) assignment found in {gate_path}"
+    policy_value = getattr(policy_node, "value", None)
+    if not isinstance(policy_value, ast.Call):
+        return None, "POLICY is not assigned from a CheckPolicy(...) call"
+    policy_call = policy_value
 
     func = policy_call.func
     func_name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
@@ -497,6 +580,16 @@ def _parse_gate_policy(vault_root: Path) -> tuple[dict[str, int] | None, str | N
             return None, f"POLICY keyword {kw.arg!r} is not an int literal"
         kwargs[kw.arg] = value
 
+    check_values = _find_check_kwarg_values(tree)
+    policy_refs = [v for v in check_values if isinstance(v, ast.Name) and v.id == "POLICY"]
+    other_refs = [v for v in check_values if not (isinstance(v, ast.Name) and v.id == "POLICY")]
+    if not policy_refs:
+        return None, f"no check=POLICY keyword argument found anywhere in {gate_path}"
+    if other_refs:
+        return None, (
+            f"a check= keyword argument in {gate_path} does not reference the bare POLICY name"
+        )
+
     return kwargs, None
 
 
@@ -507,10 +600,17 @@ def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], c
     unresolved_links/orphans, and the same orphan set check 4 already
     computed — only the policy differs, applied the same way
     ``ci/vault_health.py`` applies it (``check=`` on the VaultConfig).
+
+    ``CheckPolicy(**kwargs)`` and ``run_check(...)`` are both caught broadly
+    (not just the specific exception each happens to raise today): a defect
+    here must degrade to "gate policy rejected" and let unresolved_links/
+    orphans keep their own already-computed results — it must never escape
+    to the caller's blanket ``except Exception`` around _run_graph_checks,
+    which would mislabel this as "graphmark unavailable" and drop those too.
     """
     kwargs, error = _parse_gate_policy(vault_root)
     if error is not None:
-        return {"not_run": error, "pass": None, "policy": None, "breach_lines": [], "orphans": []}
+        return {"not_run": error, "pass": None, "policy": None, "breach_lines": [], "orphans": [], "checks": []}
 
     import dataclasses  # noqa: PLC0415
     from graphmark.check import breach_lines, run_check  # noqa: PLC0415
@@ -518,14 +618,13 @@ def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], c
 
     try:
         policy = CheckPolicy(**kwargs)
-    except TypeError as exc:
+        gate_cfg = dataclasses.replace(cfg, check=policy)
+        report = run_check(graph, gate_cfg)
+    except Exception as exc:  # noqa: BLE001 - see docstring: must not masquerade as "graphmark unavailable"
         return {
-            "not_run": f"CheckPolicy(**{kwargs!r}) failed: {exc}",
-            "pass": None, "policy": None, "breach_lines": [], "orphans": [],
+            "not_run": f"gate policy rejected: {type(exc).__name__}: {exc}",
+            "pass": None, "policy": kwargs, "breach_lines": [], "orphans": [], "checks": [],
         }
-
-    gate_cfg = dataclasses.replace(cfg, check=policy)
-    report = run_check(graph, gate_cfg)
 
     lines: list[str] = [] if report["pass"] else breach_lines(report)
     orphans: list[dict[str, Any]] = []
@@ -543,15 +642,70 @@ def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], c
         "policy": kwargs,
         "breach_lines": lines,
         "orphans": orphans,
+        # actual vs limit per check, always — not only on a breach (LOW-4).
+        "checks": report["checks"],
     }
 
 
 # ---------------------------------------------------------------------------
-# checks 3, 4, gate — unresolved_links, orphans, gate (vault-wide, graphmark)
+# new_orphans (item 3, round 3) — orphans this session's edits newly created
 # ---------------------------------------------------------------------------
 
-def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]:
-    """Build the vault graph and derive unresolved_links / orphans / gate findings.
+def _git_bytes(vault_root: Path, args: list[str]) -> bytes | None:
+    """Like ``_git`` but returns raw bytes (for ``git archive``'s binary tar output)."""
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=vault_root, capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _build_base_orphans(vault_root: Path, base: str) -> set[str]:
+    """The vault-wide orphan set AT ``base`` (not the working tree).
+
+    Extracts the tree at ``base`` with ``git archive | tar`` into a throwaway
+    temp directory, then runs the SAME ``graph_cli.build`` used for the live
+    graph on that copy. Chose ``git archive`` over ``git worktree add``:
+    read-only against the real repo, no worktree registration (no risk of
+    colliding with a live agent's own worktree — see the vault's
+    git-worktree-hazards guidance), and no need to touch/restore HEAD.
+
+    Scope config: pinned to the LIVE vault's resolved scope config (already
+    in effect for the rest of this ``collect()`` call via ``_pin_vault_root``
+    — ``graph_cli`` resolves ``GRAPH_NOTE_DIRS`` etc. from
+    ``vault_scope_resolved`` at ITS import, not from anything under the
+    extracted tree), not the base snapshot's own ``.vault/config/``. The
+    question this check asks is "did this session's edits create a new
+    orphan under the policy that governs the vault TODAY" — a base commit
+    that predates an owner scope change (e.g. adding ``school/``) must not
+    silently compare against the stale rule set that was in effect back then.
+    """
+    import graph_cli  # noqa: PLC0415
+
+    archive = _git_bytes(vault_root, ["archive", base])
+    if archive is None:
+        raise RuntimeError(f"git archive {base} failed")
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="wrap_up_audit_base_"))
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tf:
+            tf.extractall(tmp_dir, filter="data")  # noqa: S202 - our own repo's own history
+        graph, cfg = graph_cli.build(tmp_dir)
+        return set(graph_cli.orphans(graph, cfg))
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# checks 3, 4, gate, new_orphans — vault-wide, graphmark-backed
+# ---------------------------------------------------------------------------
+
+def _run_graph_checks(vault_root: Path, claimed_set: set[str], base: str, attempt_new_orphans: bool) -> dict[str, Any]:
+    """Build the vault graph and derive unresolved_links / orphans / gate / new_orphans findings.
 
     Reuses ``graph_cli.build(vault_root)`` (plugins/workbench/machinery/engine/
     graph_cli.py:68-78) for the VaultConfig — same shape as the CI gate
@@ -564,6 +718,12 @@ def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]
     ``graphmark`` eagerly at ITS module level, so a vault without graphmark
     installed must not lose the frontmatter/wikilink/index/scope checks over
     it — only this function's result degrades to ``not_run``.
+
+    ``attempt_new_orphans`` is False when git itself is entirely unavailable
+    (the scope check has already gone ``not_run`` for that same root cause);
+    attempting — and failing — the base-tree build in that case would only
+    add a redundant second not_run entry for the identical underlying
+    problem, not new information.
     """
     import graph_cli  # noqa: PLC0415
 
@@ -589,11 +749,32 @@ def _run_graph_checks(vault_root: Path, claimed_set: set[str]) -> dict[str, Any]
 
     gate = _run_gate(vault_root, graph, cfg, orphan_paths, claimed_set)
 
+    new_orphans_findings: list[dict[str, Any]] = []
+    new_orphans_error: str | None = None
+    if attempt_new_orphans:
+        try:
+            base_orphans = _build_base_orphans(vault_root, base)
+        except Exception as exc:  # noqa: BLE001 - degrade to not_run, never crash the whole audit
+            new_orphans_error = f"could not build the base-tree graph at {base!r}: {type(exc).__name__}: {exc}"
+        else:
+            newly = set(orphan_paths) - base_orphans
+            new_orphans_findings = [
+                {
+                    "check": "new_orphans",
+                    "file": rel,
+                    "detail": "orphan now; not an orphan at --base",
+                    "in_scope": rel in claimed_set,
+                }
+                for rel in sorted(newly)
+            ]
+
     return {
         "unresolved_links": unresolved_findings,
         "orphans": orphan_findings,
         "orphans_vault_wide_count": len(orphan_paths),
         "gate": gate,
+        "new_orphans": new_orphans_findings,
+        "new_orphans_error": new_orphans_error,
     }
 
 
@@ -743,8 +924,16 @@ def _cap(findings: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any
 
 
 def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit: int = 20) -> dict[str, Any]:
-    scope_config_source = _pin_vault_root(vault_root)
+    scope_config_source, restore_pin = _pin_vault_root(vault_root)
+    try:
+        return _collect_inner(vault_root, files, base, limit, scope_config_source)
+    finally:
+        restore_pin()
 
+
+def _collect_inner(
+    vault_root: Path, files: list[str] | None, base: str, limit: int, scope_config_source: str
+) -> dict[str, Any]:
     scope = _compute_scope(vault_root, files, base)
     claimed_set = set(scope.claimed)
     not_run: list[dict[str, str]] = []
@@ -757,7 +946,7 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
 
     graph_error: str | None = None
     try:
-        graph_results = _run_graph_checks(vault_root, claimed_set)
+        graph_results = _run_graph_checks(vault_root, claimed_set, base, scope.git_ok)
     except Exception as exc:  # noqa: BLE001 - any import/build failure degrades to not_run
         graph_error = f"{type(exc).__name__}: {exc}"
         graph_results = None
@@ -769,8 +958,11 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
         not_run.append({"check": "gate", "reason": reason})
         unresolved_findings: list[dict[str, Any]] = []
         orphan_findings: list[dict[str, Any]] = []
+        new_orphans_findings: list[dict[str, Any]] = []
         orphans_vault_wide_count = None
-        gate = {"not_run": reason, "pass": None, "policy": None, "breach_lines": [], "orphans": []}
+        gate = {"not_run": reason, "pass": None, "policy": None, "breach_lines": [], "orphans": [], "checks": []}
+        # new_orphans depends on the same graph; if we couldn't build it at
+        # all, don't pile on a second near-identical not_run for it.
     else:
         unresolved_findings = graph_results["unresolved_links"]
         orphan_findings = graph_results["orphans"]
@@ -778,6 +970,9 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
         gate = graph_results["gate"]
         if gate.get("not_run"):
             not_run.append({"check": "gate", "reason": gate["not_run"]})
+        new_orphans_findings = graph_results["new_orphans"]
+        if graph_results.get("new_orphans_error"):
+            not_run.append({"check": "new_orphans", "reason": graph_results["new_orphans_error"]})
 
     handoff = _handoff_sections(vault_root, base)
     if handoff.get("not_run"):
@@ -788,6 +983,7 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
     index_findings, index_elided = _cap(scoped["index_membership"], limit)
     unresolved_capped, unresolved_elided = _cap(unresolved_findings, limit)
     orphan_capped, orphan_elided = _cap(orphan_findings, limit)
+    new_orphan_capped, new_orphan_elided = _cap(new_orphans_findings, limit)
 
     gate_breach = bool(graph_results is not None and gate.get("pass") is False)
 
@@ -797,6 +993,7 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
         + len(unresolved_findings)
         + len(orphan_findings)
         + len(scoped["index_membership"])
+        + len(new_orphans_findings)
         + (1 if gate_breach else 0)
     )
 
@@ -848,6 +1045,11 @@ def collect(vault_root: Path, files: list[str] | None, base: str = "HEAD", limit
                 "findings": orphan_capped,
                 "elided": orphan_elided,
                 "vault_wide_count": orphans_vault_wide_count,
+            },
+            "new_orphans": {
+                "count": len(new_orphans_findings),
+                "findings": new_orphan_capped,
+                "elided": new_orphan_elided,
             },
             "index_membership": {
                 "count": len(scoped["index_membership"]),
@@ -923,15 +1125,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     vw = orphans_node["vault_wide_count"]
     orphans_title = "Orphans (in-scope)" + (f" — {vw} vault-wide" if vw is not None else "")
     _render_check(lines, orphans_title, orphans_node)
+    _render_check(lines, "New Orphans (since --base)", checks["new_orphans"])
     _render_check(lines, "Index Membership", checks["index_membership"])
 
     gate = checks["gate"]
     if gate.get("not_run"):
         lines.append(f"- Gate: not run ({gate['not_run']})")
-    elif gate["pass"]:
-        lines.append(f"- Gate: pass ({gate['policy']})")
     else:
-        lines.append(f"- Gate: FAIL ({gate['policy']}):")
+        status = "pass" if gate["pass"] else "FAIL"
+        lines.append(f"- Gate: {status} ({gate['policy']}):")
+        for c in gate.get("checks", []):
+            mark = "ok" if c["pass"] else "FAIL"
+            lines.append(f"  - {mark} {c['name']}: {c['actual']} (limit {c['limit']})")
         for bl in gate["breach_lines"]:
             lines.append(f"  - {bl}")
         for o in gate["orphans"]:
