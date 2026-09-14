@@ -487,6 +487,35 @@ def test_bare_basename_path_ambiguous(tmp_path: Path, fake_gh) -> None:
     assert "2" in row["detail"]  # candidate count
 
 
+def test_o1b_ambiguous_basename_path_line_is_check_not_evidence(tmp_path: Path, fake_gh) -> None:
+    """o1b: `notes.md:1`, where several `notes.md` files exist, is a
+    PATH_LINE token that resolves to AMBIGUOUS_SUFFIX -- the resolver
+    cannot know which file's line 1 was meant, so the row must stay CHECK.
+    Guards the false-OK direction: flipping
+    ``("PATH_LINE", "AMBIGUOUS_SUFFIX")`` to "OK" would make this citation
+    vanish from `rows` and silently reappear (wrongly, as trusted) in
+    `evidence_lines` instead."""
+    upstream, checkout, repo = make_repo_pair(tmp_path, "testowner", "ambiguouspathline")
+    _write(upstream, "docs/a/notes.md", "a line one\na line two\n")
+    _write(upstream, "docs/b/notes.md", "b line one\nb line two\n")
+    _commit_all(upstream, "ambiguous notes.md fixture")
+    _run(["git", "-C", str(checkout), "fetch", "origin"], tmp_path)
+
+    body = "See `notes.md:1` for context."
+    report = collect(
+        repo=repo, repo_dir=checkout, issue=None,
+        body_file=_write(tmp_path, "b_ambig_path_line.md", body),
+        ref=None, no_fetch=False, vault_root=None, limit=20,
+    )
+    matching_rows = [r for r in report["rows"] if r["token"] == "notes.md:1"]
+    assert len(matching_rows) == 1
+    row = matching_rows[0]
+    assert row["result"] == "AMBIGUOUS_SUFFIX"
+    assert row["severity"] == "CHECK"
+    assert not any(r["token"] == "notes.md:1" for r in report["evidence_lines"])
+    assert report["verdict"] == "CHECK_REQUIRED"
+
+
 def test_bare_basename_zero_matches_falls_through_to_unresolved(tmp_path: Path, fake_gh) -> None:
     _, checkout, repo = _make_basename_fixture(tmp_path)
     body = "See `nope.py` for the fix."
@@ -1183,6 +1212,7 @@ def test_severity_table_is_only_ok_or_check() -> None:
         ("PATH_LINE", "RESOLVES", "OK"),
         ("PATH_LINE", "RESOLVES_BY_SUFFIX", "OK"),
         ("PATH_LINE", "EXISTS_ELSEWHERE", "CHECK"),
+        ("PATH_LINE", "AMBIGUOUS_SUFFIX", "CHECK"),
         ("PATH_LINE", "LINE_OUT_OF_RANGE", "CHECK"),
         ("PATH_LINE", "DIRECTORY_NOT_FILE", "CHECK"),
         ("PATH_LINE", "BINARY_FILE", "CHECK"),
