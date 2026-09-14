@@ -14,20 +14,20 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
    Quote each path (a name with a space, split unquoted, resolves to nothing
    and the collector reports it as an error rather than guessing). Add
-   `--base <ref>` when this session already committed earlier — otherwise it
-   defaults to `HEAD`. Its `checks` **are** steps 2 (`frontmatter`,
-   `no_wikilinks`), 3 (`index_membership`) and 4 (`orphans`) — do not
-   re-check them by hand — **together with** `gate`, which replays the
-   vault's own `ci/vault_health.py` policy against the whole graph and
-   catches vault-wide link/orphan regressions the scoped checks can't see
-   (e.g. a rename in this session breaking a link, or tipping the vault past
-   its orphan limit). `gate` does not replace step 10: `ci/vault_health.py`
-   itself still runs immediately before commit as the authority. `verdict:
-INCOMPLETE` means the checks listed under `not_run` still need doing by
-   hand; it is never equivalent to `CLEAN`, so don't report a clean audit on
-   the strength of an incomplete one. `unresolved_links` is vault-wide (a
-   rename in this session can break a link in a note the session never
-   touched) — treat those the same as any other finding. Still check by
+   `--base <ref>` set to the commit before this session's first commit —
+   required for `new_orphans` to mean anything — otherwise it defaults to
+   `HEAD`. Its `checks` **are** steps 2 (`frontmatter`, `no_wikilinks`), 3
+   (`index_membership`) and 4 (`orphans`, `new_orphans`) — do not re-check
+   them by hand — **together with** two vault-wide checks the scoped ones
+   can't see: `unresolved_links` (a rename in this session can break a link
+   in a note the session never touched) and `gate`, which replays the
+   vault's own `ci/vault_health.py` policy and enforces its limit — narrower
+   than `new_orphans`, since a regression that stays under the limit passes
+   `gate` but still shows up there. `gate` does not replace step 10:
+   `ci/vault_health.py` itself still runs immediately before commit as the
+   authority. `verdict: INCOMPLETE` means the checks listed under `not_run`
+   still need doing by hand; it is never equivalent to `CLEAN`, so don't
+   report a clean audit on the strength of an incomplete one. Still check by
    hand: folder placement (is the note in the right directory for its type?).
 
 3. **Check index synchronization**: `index_membership` above covers this
@@ -39,10 +39,11 @@ INCOMPLETE` means the checks listed under `not_run` still need doing by
    - Scan `brain/Key Decisions.md` — were any decisions made today that aren't recorded?
 
 4. **Orphan notes**: the collector's `orphans` check covers this session's
-   claimed notes; `gate` additionally catches orphans this session's edits
-   caused vault-wide (e.g. a note that was the only link into another note,
-   now removed) even when the newly-orphaned note itself is out of scope.
-   Don't re-scan by hand.
+   claimed notes; `new_orphans` covers orphans this session's edits created
+   vault-wide, relative to `--base` (e.g. a note that was the only link into
+   another note, now removed) — even when the newly-orphaned note itself is
+   out of scope, and even when the vault stays under its orphan limit, which
+   is what `gate` alone would miss. Don't re-scan by hand.
 
 5. **Surface uncaptured wins**: Review today's work for impact statements, completed milestones, or positive outcomes not yet in the Brag Doc.
 
