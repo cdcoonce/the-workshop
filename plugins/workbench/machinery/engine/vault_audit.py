@@ -43,6 +43,12 @@ OBSIDIAN_BASE_RECOMMENDATIONS = (
     "Stale Active Work.base",
 )
 
+# Index-membership prefixes: governed notes under these must be linked from
+# their index (work/Index.md, personal/Index.md). Shared with wrap_up_audit,
+# which reuses these constants rather than restating the rule.
+WORK_INDEX_PREFIXES = ("work/active/", "work/archive/", "work/decisions/", "work/incidents/", "work/1-1/")
+PERSONAL_INDEX_PREFIXES = ("personal/learning/", "personal/projects/", "personal/ideas/", "personal/decisions/")
+
 
 @dataclass
 class Issue:
@@ -234,17 +240,15 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
 
     work_index_links = _index_links(vault_root / "work" / "Index.md")
     personal_index_links = _index_links(vault_root / "personal" / "Index.md")
-    work_prefixes = ("work/active/", "work/archive/", "work/decisions/", "work/incidents/", "work/1-1/")
-    personal_prefixes = ("personal/learning/", "personal/projects/", "personal/ideas/", "personal/decisions/")
     work_not_indexed: list[Issue] = []
     personal_not_indexed: list[Issue] = []
     for path in governed:
         rel = rel_posix(path, vault_root) or ""
         if _is_transient(rel):
             continue
-        if rel.startswith(work_prefixes) and not _indexed(path, vault_root, work_index_links):
+        if rel.startswith(WORK_INDEX_PREFIXES) and not _indexed(path, vault_root, work_index_links):
             work_not_indexed.append(Issue(rel, "missing from work/Index.md"))
-        if rel.startswith(personal_prefixes) and not _indexed(path, vault_root, personal_index_links):
+        if rel.startswith(PERSONAL_INDEX_PREFIXES) and not _indexed(path, vault_root, personal_index_links):
             personal_not_indexed.append(Issue(rel, "missing from personal/Index.md"))
 
     stale_active: list[Issue] = []
