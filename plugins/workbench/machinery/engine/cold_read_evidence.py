@@ -5,24 +5,46 @@ Detector 5 requires every path, ref, SHA and note a spec names to resolve, in
 either role it plays: evidence (cited as proof of existing state) or
 destination (named as where the slice will create something new). Today that
 is "one unpiped command each" for every such token, run by hand. This script
-extracts those tokens from an issue body, resolves each against the target
-repo's git object store at a pinned ref (never the working tree) and, for
-wikilinks, against a vault via graphmark, and returns a compact verdict table
-so the /cold-read subagent judges only the rows that need judgment.
+extracts those tokens from an issue body and resolves each against the
+target repo's git object store at a pinned ref (never the working tree),
+plus GitHub for issue/PR/repo refs and a vault (via graphmark) for
+wikilinks, and returns a compact table so the /cold-read subagent verifies
+only the rows the resolver could not trust outright.
 
-Read-only: no repo or vault code is ever executed. Repo content is read
-through ``git cat-file`` / ``git ls-tree`` / ``git show`` / ``git grep``
-only; wikilinks are resolved via ``graph_cli.build`` exactly as
-``wrap_up_audit.py`` does, scope-pinned to ``--vault-root``.
+Read-only against the target repo: repo content is read through
+``git cat-file`` / ``git ls-tree`` / ``git show`` / ``git grep`` /
+``git merge-base`` only, never executed. Wikilink resolution DOES load
+vault code as data: ``graph_cli.build`` (via graphmark) reads
+``<vault>/.vault/config/vault_scope.py`` to resolve the vault's scope
+config, exactly as ``wrap_up_audit.py`` does, scope-pinned to
+``--vault-root``. That one file is imported, not executed as an action —
+no vault mutation ever happens — but it is not accurate to say "no vault
+code is ever executed" when a caller supplies an untrusted vault root.
 
 ``gh`` is called through the module-level ``_run_gh`` seam so tests can
 inject a fake runner with no network.
+
+Corpus review (2026-09-14, 41 real cold-read issues, pre-cold-read
+revisions): an earlier BLOCKING/JUDGMENT/OK severity model scored ~2%
+precision on BLOCKING (166 rows, ~3-4 real) — mostly path-resolution
+false positives a text-only resolver cannot rule out (subtree-relative
+paths, cross-repo citations, branch names, prose-only line citations,
+pytest node ids, and more). No rule set makes an authoritative BLOCKING
+trustworthy, so the model changed: **a hint the resolver is confident
+about becomes OK (trusted, no re-check); everything else becomes CHECK
+(the reader verifies with one command before it counts as a finding)**.
+The resolver is asymmetric by design — trusted in the direction where a
+positive match is strong evidence (a path really does exist at the
+pinned ref), never trusted to declare a negative authoritative.
 """
 
 from __future__ import annotations
 
 import argparse
+import builtins
 import json
+import keyword
+import os
 import posixpath
 import re
 import subprocess
@@ -35,34 +57,63 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from vault_utils import WIKILINK_CAPTURE_RE, find_vault_root  # noqa: E402
 
-VERDICT_EXIT_CODES = {"RESOLVED": 0, "NEEDS_JUDGMENT": 0, "BLOCKING": 1, "INCOMPLETE": 2}
+VERDICT_EXIT_CODES = {"ALL_RESOLVED": 0, "CHECK_REQUIRED": 1, "INCOMPLETE": 2}
 
 # --------------------------------------------------------------------------- #
 # extraction regexes
 # --------------------------------------------------------------------------- #
 
-FENCE_RE = re.compile(r"^(```|~~~)")
-BACKTICK_RE = re.compile(r"`([^`\n]+)`")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,})\s*\S*\s*$")
 ISSUE_URL_RE = re.compile(r"https://github\.com/([\w.-]+/[\w.-]+?)/(?:issues|pull)/(\d+)\b")
-OWNER_REPO_ISSUE_RE = re.compile(r"(?<![\w/.#])([\w.-]+/[\w.-]+)#(\d+)\b")
-BARE_ISSUE_RE = re.compile(r"(?<![\w#/.])#(\d+)\b")
+OWNER_REPO_ISSUE_RE = re.compile(r"(?<![\w/.#])([\w.-]+/[\w.-]+)#([1-9]\d*)\b")
+BARE_ISSUE_RE = re.compile(r"(?<![\w#/.])#([1-9]\d*)\b")
+# A short identifier immediately followed by #N, where the identifier is a
+# single segment (no "/") — the corpus shorthand `bms#235`. Applied only
+# after owner/repo#N and URL forms have already been extracted and masked,
+# so it never fires on those. `(?<![\w/])` keeps it off the tail of a real
+# owner/repo pair whose masking left residual characters, and off `#0`
+# (matched by requiring [1-9]\d*, same as the other issue-ref patterns).
+ALIAS_ISSUE_RE = re.compile(r"(?<![\w/.#])([A-Za-z][\w-]*)#([1-9]\d*)\b")
 SHA_CANDIDATE_RE = re.compile(r"\b[0-9a-fA-F]{7,40}\b")
 
 PATH_EXTENSIONS = (
     ".py", ".md", ".toml", ".json", ".yml", ".yaml", ".sh", ".sql",
     ".txt", ".cfg", ".ini", ".ts", ".tsx", ".js",
 )
+# A bare extension with nothing else: a leading dot, no slash, no other dot
+# (`.py`, `.sql`) — a real citation never names evidence this way; it is a
+# fragment of prose ("rename the .py file") the extractor must not treat as
+# a path. Checked before the general PATH rule.
+BARE_EXTENSION_RE = re.compile(r"^\.[A-Za-z0-9]{1,10}$")
 WHITESPACE_RE = re.compile(r"\s")
 TEMPLATE_RE = re.compile(r"<[^<>]*>")
 BRACE_RE = re.compile(r"\{[^{}]*\}")
 GLOB_CHARS = frozenset("*?[")
+# Trailing punctuation a sentence commonly appends to a citation: strip
+# before classifying so `norms.py:171,` and `secret_scan.py:57-64.` resolve
+# like their bare forms.
+TRAILING_PUNCT_RE = re.compile(r"[.,;:)]+$")
+# `path#L1-L2` / `path#L1` (GitHub permalink line-anchor style).
+HASH_L_LINE_RE = re.compile(r"^(?P<path>.+)#L(?P<start>\d+)(?:-L?(?P<end>\d+))?$")
+# `path:line:col` — the column is ignored, matched before the simpler
+# single-number PATH_LINE_RE so it isn't misread as a `path:line` with the
+# rest trailing.
+PATH_LINE_COL_RE = re.compile(r"^(?P<path>.+):(?P<start>\d+):(?P<col>\d+)$")
 PATH_LINE_RE = re.compile(r"^(?P<path>.+):(?P<start>\d+)(?:-(?P<end>\d+))?$")
+# pytest node id: `tests/x.py::test_y` (optionally `[param]`) -> PATH only.
+PYTEST_NODE_RE = re.compile(r"^(?P<path>[\w./-]+\.py)::[\w:\[\]-]+$")
 SYMBOL_RE = re.compile(r"^[A-Za-z_][\w.]*$")
 HEX_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 SHA_LETTERS = frozenset("abcdefABCDEF")
+# Prose line citations near a backtick token in the same sentence:
+# "lines 316-346" or "L316-346" / "L316-L346".
+PROSE_LINE_RE = re.compile(r"\blines?\s+(\d+)(?:\s*-\s*(\d+))?\b|\bL(\d+)-L?(\d+)\b", re.IGNORECASE)
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n{2,}")
 
 MAX_LINE_TEXT_ROWS = 3
 MAX_LINE_TEXT_CHARS = 160
+MAX_AMBIGUOUS_CANDIDATES = 5
 
 
 # --------------------------------------------------------------------------- #
@@ -79,6 +130,24 @@ def _is_sha_shaped(token: str) -> bool:
     has_digit = any(c.isdigit() for c in token)
     has_letter = any(c in SHA_LETTERS for c in token)
     return has_digit and has_letter
+
+
+_BUILTIN_NAMES = frozenset(dir(builtins))
+
+
+def _is_keyword_or_builtin(token: str) -> bool:
+    """True for a bare Python keyword or builtin name (`return`, `len`,
+    `None`) — never evidence, always noise if extracted as a bare SYMBOL.
+    Only applied to non-dotted tokens: `os.path` legitimately dots through
+    a builtin-shadowing-looking segment and must still resolve normally."""
+    return keyword.iskeyword(token) or token in _BUILTIN_NAMES
+
+
+def normalize_backtick_token(raw: str) -> str:
+    """Strip trailing sentence punctuation a citation commonly picks up
+    (`norms.py:171,` -> `norms.py:171`). Applied before classification so
+    every downstream rule sees the clean form."""
+    return TRAILING_PUNCT_RE.sub("", raw)
 
 
 def classify_token(token: str) -> str:
@@ -103,7 +172,9 @@ def classify_token(token: str) -> str:
         return "TEMPLATED"
     if any(c in GLOB_CHARS for c in token):
         return "GLOB"
-    m = PATH_LINE_RE.match(token)
+    if BARE_EXTENSION_RE.match(token):
+        return "SKIP_BARE_EXTENSION"
+    m = PATH_LINE_COL_RE.match(token) or HASH_L_LINE_RE.match(token) or PATH_LINE_RE.match(token)
     if m:
         path_part = m.group("path")
         if "/" in path_part or _has_known_extension(path_part):
@@ -113,38 +184,191 @@ def classify_token(token: str) -> str:
     if _is_sha_shaped(token):
         return "SHA"
     if SYMBOL_RE.match(token):
+        if "." not in token and _is_keyword_or_builtin(token):
+            return "SKIP_KEYWORD"
         return "SYMBOL"
     return "SKIP_OTHER"
+
+
+def parse_path_line_token(token: str) -> tuple[str, int, int | None] | None:
+    """Parse a PATH_LINE-classified token into (path, start, end),
+    normalizing the three citation shapes classify_token recognizes as
+    PATH_LINE: `path:N(-M)`, `path#LN(-LM)`, and `path:N:col` (column
+    dropped). Returns None if the token doesn't actually parse (shouldn't
+    happen for a token classify_token already called PATH_LINE)."""
+    m = PATH_LINE_COL_RE.match(token)
+    if m:
+        return m.group("path"), int(m.group("start")), None
+    m = HASH_L_LINE_RE.match(token)
+    if m:
+        end = int(m.group("end")) if m.group("end") else None
+        return m.group("path"), int(m.group("start")), end
+    m = PATH_LINE_RE.match(token)
+    if m:
+        end = int(m.group("end")) if m.group("end") else None
+        return m.group("path"), int(m.group("start")), end
+    return None
+
+
+def normalize_path_segments(path: str) -> tuple[str, bool]:
+    """Normalize `.` and `..` segments in a repo-relative path. Returns
+    (normalized_path, escapes_root) — escapes_root is True when a leading
+    `..` would walk above the repo root (`src/../../README.md`), which the
+    caller reports as OUTSIDE_REPO rather than silently resolving it (or
+    worse, handing it to git as a pathspec)."""
+    parts = path.split("/")
+    out: list[str] = []
+    for part in parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if out:
+                out.pop()
+            else:
+                return path, True
+        else:
+            out.append(part)
+    return "/".join(out), False
+
+
+# --------------------------------------------------------------------------- #
+# masking — fenced code, HTML comments, indented code blocks
+# --------------------------------------------------------------------------- #
+
+def _blank_line(line: str) -> str:
+    return ""
+
+
+def _mask_fenced_code(text: str) -> str:
+    """Blank fenced code block lines (delimiters included), preserving line
+    offsets. Supports ``` and ~~~ fences of 3+ characters; a fence closes
+    only on a run of the SAME character at least as long as the opener
+    (CommonMark), so a nested shorter/different-character run inside a
+    longer fence does not prematurely close it."""
+    lines = text.split("\n")
+    out: list[str] = []
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    for line in lines:
+        stripped = line.strip()
+        if not in_fence:
+            m = FENCE_OPEN_RE.match(stripped)
+            if m:
+                marker = m.group(1)
+                in_fence = True
+                fence_char = marker[0]
+                fence_len = len(marker)
+                out.append("")
+                continue
+            out.append(line)
+        else:
+            # Closing fence: a run of fence_char, length >= fence_len, and
+            # nothing else on the line (CommonMark: only whitespace allowed
+            # around a closing fence).
+            run = 0
+            for c in stripped:
+                if c == fence_char:
+                    run += 1
+                else:
+                    break
+            if run >= fence_len and run == len(stripped):
+                in_fence = False
+                out.append("")
+                continue
+            out.append("")
+    return "\n".join(out)
+
+
+def _mask_html_comments(text: str) -> str:
+    """Blank ``<!-- ... -->`` spans, preserving line offsets. ``<details>``
+    content is deliberately NOT masked here — it renders, and a citation
+    inside it is real evidence."""
+    return HTML_COMMENT_RE.sub(lambda m: _blank(m.group(0)), text)
+
+
+def _mask_indented_code_blocks(text: str) -> str:
+    """Approximate CommonMark's indented-code-block rule: a line indented
+    4+ spaces (or starting with a tab), directly following a blank line,
+    starts an indented code block that continues through further
+    4+-indented (or blank) lines. This is a conservative approximation —
+    it does not track list-item continuation context (CommonMark exempts
+    an indented line that is really a continuation of a list item's own
+    hanging indent), so a deeply indented continuation line inside a list
+    can be masked when it should not be. Tested both ways."""
+    lines = text.split("\n")
+    out: list[str] = []
+    in_block = False
+    prev_blank = True  # start-of-document counts as preceded by "blank"
+    for line in lines:
+        stripped = line.strip()
+        is_blank = stripped == ""
+        is_indented = line.startswith("    ") or line.startswith("\t")
+        if not in_block and is_indented and prev_blank and not is_blank:
+            in_block = True
+        elif in_block and not is_indented and not is_blank:
+            in_block = False
+        out.append("" if in_block else line)
+        prev_blank = is_blank
+    return "\n".join(out)
+
+
+def _mask_all(body: str) -> str:
+    masked = _mask_fenced_code(body)
+    masked = _mask_html_comments(masked)
+    masked = _mask_indented_code_blocks(masked)
+    return masked
+
+
+# --------------------------------------------------------------------------- #
+# backtick-span extraction — CommonMark run-length pairing
+# --------------------------------------------------------------------------- #
+
+def find_backtick_spans(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, content) for each single-line code span, pairing
+    backtick runs by CommonMark's rule: a run of N backticks opens; it
+    closes only at the next run of EXACTLY N backticks on the same line. A
+    run with no same-length partner on its line is not a delimiter at all
+    — skip past just that run and keep scanning; it must never swallow (or
+    shift the position of) a later, properly paired span."""
+    spans: list[tuple[int, int, str]] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] != "`":
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] == "`":
+            j += 1
+        run_len = j - i
+        line_end = text.find("\n", j)
+        if line_end == -1:
+            line_end = n
+        k = j
+        close_start = -1
+        while k < line_end:
+            if text[k] == "`":
+                m = k
+                while m < line_end and text[m] == "`":
+                    m += 1
+                if m - k == run_len:
+                    close_start = k
+                    break
+                k = m
+            else:
+                k += 1
+        if close_start == -1:
+            i = j
+            continue
+        spans.append((i, close_start + run_len, text[j:close_start]))
+        i = close_start + run_len
+    return spans
 
 
 # --------------------------------------------------------------------------- #
 # extraction
 # --------------------------------------------------------------------------- #
-
-def _mask_fenced_code(text: str) -> str:
-    """Blank fenced code block lines (delimiters included), preserving line offsets."""
-    lines = text.split("\n")
-    out: list[str] = []
-    in_fence = False
-    fence_marker = ""
-    for line in lines:
-        stripped = line.strip()
-        m = FENCE_RE.match(stripped)
-        if m:
-            marker = m.group(1)
-            if not in_fence:
-                in_fence = True
-                fence_marker = marker
-                out.append("")
-                continue
-            if stripped.startswith(fence_marker):
-                in_fence = False
-                fence_marker = ""
-                out.append("")
-                continue
-        out.append("" if in_fence else line)
-    return "\n".join(out)
-
 
 def _line_no(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
@@ -157,25 +381,88 @@ def _mask_span(text: str, start: int, end: int) -> str:
     return text[:start] + blanked + text[end:]
 
 
+def _blank(s: str) -> str:
+    return "".join(c if c == "\n" else " " for c in s)
+
+
+def _sentence_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) character ranges for each sentence, by the same
+    boundary SENTENCE_SPLIT_RE uses to join them back."""
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    for m in SENTENCE_SPLIT_RE.finditer(text):
+        spans.append((pos, m.start()))
+        pos = m.end()
+    spans.append((pos, len(text)))
+    return spans
+
+
 def extract_tokens(body: str) -> list[dict[str, Any]]:
-    """Extract evidence tokens per the four corpus extraction rules, in body order.
+    """Extract evidence tokens per the corpus extraction rules, in body order.
 
-    Each token dict carries ``text``, ``cls`` (bucket/class), ``line``, and —
-    for ``ISSUE_REF`` only — ``repo`` (explicit owner/repo, or None for
-    ``--repo``) and ``number``.
+    Each token dict carries ``text``, ``cls``, ``line``, and — for
+    ``ISSUE_REF``/``UNKNOWN_REPO_ALIAS`` — ``repo``/``alias`` and
+    ``number``.
     """
-    masked = _mask_fenced_code(body)
+    masked = _mask_all(body)
     tokens: list[dict[str, Any]] = []
+    backtick_tokens: list[dict[str, Any]] = []  # (start, end, cls, text) for prose-line pairing
 
-    # 1. backtick spans (classified via the rule table)
+    # 1. backtick spans (CommonMark-paired, normalized, classified via the
+    #    rule table)
     plain = masked
-    for m in BACKTICK_RE.finditer(masked):
-        content = m.group(1)
-        line = _line_no(masked, m.start())
-        tokens.append({"text": content, "cls": classify_token(content), "line": line})
-        plain = _mask_span(plain, m.start(), m.end())
+    for start, end, raw_content in find_backtick_spans(masked):
+        content = normalize_backtick_token(raw_content)
+        if not content:
+            continue
+        pytest_m = PYTEST_NODE_RE.match(content)
+        if pytest_m:
+            content = pytest_m.group("path")
+        norm_path, escapes = _maybe_normalize_path_component(content)
+        line = _line_no(masked, start)
+        if escapes:
+            tokens.append({"text": content, "cls": "OUTSIDE_REPO_TOKEN", "line": line})
+            plain = _mask_span(plain, start, end)
+            continue
+        content = norm_path
+        cls = classify_token(content)
+        tok = {"text": content, "cls": cls, "line": line, "_start": start, "_end": end}
+        tokens.append(tok)
+        if cls in ("PATH", "PATH_LINE", "SYMBOL"):
+            backtick_tokens.append(tok)
+        plain = _mask_span(plain, start, end)
 
-    # 2. wikilinks
+    # 2. prose line citations ("lines 316-346", "L316-346") paired with the
+    #    nearest preceding PATH/PATH_LINE/SYMBOL backtick token in the same
+    #    sentence. A PATH token gets synthesized into PATH_LINE evidence; a
+    #    SYMBOL token gets a PROSE_LINE_CITATION row (the resolver cannot
+    #    verify the range actually contains the symbol from text alone).
+    for sent_start, sent_end in _sentence_spans(masked):
+        sentence = masked[sent_start:sent_end]
+        prose_matches = list(PROSE_LINE_RE.finditer(sentence))
+        if not prose_matches:
+            continue
+        candidates = [t for t in backtick_tokens if sent_start <= t["_start"] < sent_end]
+        if not candidates:
+            continue
+        anchor = candidates[-1]
+        for pm in prose_matches:
+            if pm.group(1) is not None:
+                start_n, end_n = int(pm.group(1)), (int(pm.group(2)) if pm.group(2) else None)
+            else:
+                start_n, end_n = int(pm.group(3)), int(pm.group(4))
+            line = _line_no(masked, sent_start + pm.start())
+            if anchor["cls"] == "PATH":
+                pl_text = f"{anchor['text']}:{start_n}" + (f"-{end_n}" if end_n else "")
+                tokens.append({"text": pl_text, "cls": "PATH_LINE", "line": line, "_prose": True})
+            elif anchor["cls"] in ("PATH_LINE", "SYMBOL"):
+                tokens.append({
+                    "text": f"{anchor['text']} (lines {start_n}" + (f"-{end_n})" if end_n else ")"),
+                    "cls": "PROSE_LINE_CITATION", "line": line,
+                    "symbol": anchor["text"] if anchor["cls"] == "SYMBOL" else None,
+                })
+
+    # 3. wikilinks
     for m in WIKILINK_CAPTURE_RE.finditer(plain):
         raw = m.group(1)
         target = raw.split("|")[0].split("#")[0].strip()
@@ -185,7 +472,9 @@ def extract_tokens(body: str) -> list[dict[str, Any]]:
         tokens.append({"text": target, "cls": "WIKILINK", "line": line})
     plain = WIKILINK_CAPTURE_RE.sub(lambda m: _blank(m.group(0)), plain)
 
-    # 3. issue/PR refs — URL form, then owner/repo#N, then bare #N, masking as we go
+    # 4. issue/PR refs — URL form, then owner/repo#N, then bare #N, then
+    #    alias#N shorthand, masking as we go so later passes never
+    #    re-match already-claimed text.
     for m in ISSUE_URL_RE.finditer(plain):
         line = _line_no(plain, m.start())
         tokens.append({
@@ -210,26 +499,60 @@ def extract_tokens(body: str) -> list[dict[str, Any]]:
         })
     plain = BARE_ISSUE_RE.sub(lambda m: _blank(m.group(0)), plain)
 
-    # 4. bare commit SHAs
+    for m in ALIAS_ISSUE_RE.finditer(plain):
+        line = _line_no(plain, m.start())
+        tokens.append({
+            "text": m.group(0), "cls": "UNKNOWN_REPO_ALIAS", "line": line,
+            "alias": m.group(1), "number": int(m.group(2)),
+        })
+    plain = ALIAS_ISSUE_RE.sub(lambda m: _blank(m.group(0)), plain)
+
+    # 5. bare commit SHAs
     for m in SHA_CANDIDATE_RE.finditer(plain):
         candidate = m.group(0)
         if _is_sha_shaped(candidate):
             line = _line_no(plain, m.start())
             tokens.append({"text": candidate, "cls": "SHA", "line": line})
 
+    for t in tokens:
+        t.pop("_start", None)
+        t.pop("_end", None)
+
     tokens.sort(key=lambda t: t["line"])
     return _dedupe_tokens(tokens)
 
 
-def _blank(s: str) -> str:
-    return "".join(c if c == "\n" else " " for c in s)
+def _maybe_normalize_path_component(content: str) -> tuple[str, bool]:
+    """For a token that looks path-ish (contains `/` or `..`), normalize
+    `.`/`..` segments and report whether it escapes the repo root. Tokens
+    with no `/` at all are returned unchanged (nothing to normalize). A
+    LOCAL-shaped token (`~/...`, or an absolute `/...`) is left untouched —
+    normalize_path_segments treats a leading `/` as nothing to anchor to,
+    which would silently turn an absolute path into a relative-looking one
+    (and reclassify it away from LOCAL) instead of just cleaning `..`."""
+    if "/" not in content or content.startswith("/") or content.startswith("~/"):
+        return content, False
+    # Only normalize the path PORTION for a :line / #L / ::test suffix form;
+    # reuse the same parse the classifier will use.
+    base = content
+    suffix = ""
+    m = PATH_LINE_COL_RE.match(content) or HASH_L_LINE_RE.match(content) or PATH_LINE_RE.match(content)
+    if m and ("/" in m.group("path") or _has_known_extension(m.group("path"))):
+        base = m.group("path")
+        suffix = content[len(base):]
+    if ".." not in base and not re.search(r"(^|/)\.(/|$)", base):
+        return content, False
+    normalized, escapes = normalize_path_segments(base)
+    if escapes:
+        return content, True
+    return normalized + suffix, False
 
 
 def _dedupe_tokens(tokens: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[Any, ...]] = set()
     out: list[dict[str, Any]] = []
     for t in tokens:
-        key = (t["cls"], t["text"], t.get("repo"))
+        key = (t["cls"], t["text"], t.get("repo"), t.get("alias"))
         if key in seen:
             continue
         seen.add(key)
@@ -242,9 +565,15 @@ def _dedupe_tokens(tokens: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- #
 
 def _run_git(repo_dir: Path, args: list[str], timeout: int = 30) -> tuple[int, str, str] | None:
+    env = dict(os.environ)
+    # Quote every pathspec literally: a cited path beginning with `:`
+    # (rare, but real in some corpora) would otherwise be read as git
+    # pathspec magic instead of a literal path.
+    env["GIT_LITERAL_PATHSPECS"] = "1"
     try:
         result = subprocess.run(
-            ["git", *args], cwd=repo_dir, capture_output=True, text=True, timeout=timeout,
+            ["git", *args], cwd=repo_dir, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout, env=env,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -252,8 +581,15 @@ def _run_git(repo_dir: Path, args: list[str], timeout: int = 30) -> tuple[int, s
 
 
 def _file_exists(repo_dir: Path, ref: str, path: str) -> bool:
-    result = _run_git(repo_dir, ["cat-file", "-e", f"{ref}:{path}"])
-    return result is not None and result[0] == 0
+    """True only for a real blob (file) at <ref>:<path>. `cat-file -e`
+    alone is not enough: it succeeds for ANY valid object at that path,
+    tree (directory) included, so a bare directory citation without a
+    trailing slash (`docs/design`, no `/`) would otherwise register as a
+    file match instead of falling through to the directory check —
+    exactly the confusion PATH_LINE's DIRECTORY_NOT_FILE check exists to
+    report. `cat-file -t` and checking the type is "blob" is the fix."""
+    result = _run_git(repo_dir, ["cat-file", "-t", f"{ref}:{path}"])
+    return result is not None and result[0] == 0 and result[1].strip() == "blob"
 
 
 def _dir_exists(repo_dir: Path, ref: str, dir_path: str) -> bool:
@@ -305,7 +641,6 @@ def _referenced_only_detail(repo_dir: Path, ref: str, token: str) -> str | None:
     lines = [line for line in result[1].splitlines() if line]
     if not lines:
         return None
-    # git grep <rev> emits "<rev>:<path>:<lineno>:<text>"; report path:line: text.
     parts = lines[0].split(":", 3)
     if len(parts) == 4:
         _rev, path, lineno, text = parts
@@ -316,18 +651,24 @@ def _referenced_only_detail(repo_dir: Path, ref: str, token: str) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# bare-basename resolution — one tree listing per invocation, cached
+# path-suffix resolution — one tree listing per invocation, cached
 # --------------------------------------------------------------------------- #
 
 class TreeIndex:
-    """Every tracked path at <ref>, indexed by basename — files and the
-    directories implied by their parents. Built once per ``collect()`` call
-    (only when a no-slash PATH/PATH_LINE token actually needs it) and reused
-    for every such token, never one ``git`` call per token."""
+    """Every tracked path at <ref>: the flat file list (for suffix
+    matching) plus basename indexes for files and the directories implied
+    by their parents. Built once per ``collect()`` call (only when a
+    no-slash, or otherwise unresolved, PATH/PATH_LINE token needs it) and
+    reused for every such token, never one ``git`` call per token."""
 
-    __slots__ = ("files_by_basename", "dirs_by_basename")
+    __slots__ = ("files", "dirs", "files_by_basename", "dirs_by_basename")
 
-    def __init__(self, files_by_basename: dict[str, list[str]], dirs_by_basename: dict[str, list[str]]) -> None:
+    def __init__(
+        self, files: list[str], dirs: list[str],
+        files_by_basename: dict[str, list[str]], dirs_by_basename: dict[str, list[str]],
+    ) -> None:
+        self.files = files
+        self.dirs = dirs
         self.files_by_basename = files_by_basename
         self.dirs_by_basename = dirs_by_basename
 
@@ -356,71 +697,90 @@ def _build_tree_index(repo_dir: Path, ref: str) -> TreeIndex | None:
         lst.sort()
     for lst in dirs_by_basename.values():
         lst.sort()
-    return TreeIndex(files_by_basename, dirs_by_basename)
+    return TreeIndex(files, sorted(seen_dirs), files_by_basename, dirs_by_basename)
 
 
-def _resolve_by_basename(
+def _suffix_matches(paths: list[str], suffix: str) -> list[str]:
+    """Segment-boundary suffix match: *suffix* must align with whole path
+    segments (`sync_manager.py` matches `.../engine/sync_manager.py` but
+    `_manager.py` does not)."""
+    needle = "/" + suffix if not suffix.startswith("/") else suffix
+    return [p for p in paths if p == suffix or p.endswith(needle)]
+
+
+def _resolve_by_suffix(
     tree_index: TreeIndex, name: str, is_dir_shaped: bool,
 ) -> tuple[str, Any] | None:
-    """Returns (result, detail_payload), or None for zero matches (fall
-    through to the caller's existing resolution logic unchanged).
+    """Generalizes the basename match to any segment-boundary suffix —
+    `engine/sync_manager.py` matches `plugins/foo/machinery/engine/
+    sync_manager.py`, not just a bare basename. Returns (result,
+    detail_payload) or None for zero matches (fall through unchanged).
 
-    ``detail_payload`` is the single matching path for RESOLVES_BY_BASENAME,
-    or ``(total_count, candidate_paths[:5])`` for AMBIGUOUS_BASENAME.
+    ``detail_payload`` is the single matching path for RESOLVES_BY_SUFFIX,
+    or ``(total_count, candidate_paths[:5])`` for AMBIGUOUS_SUFFIX.
     """
-    table = tree_index.dirs_by_basename if is_dir_shaped else tree_index.files_by_basename
-    matches = table.get(name)
+    if "/" not in name:
+        table = tree_index.dirs_by_basename if is_dir_shaped else tree_index.files_by_basename
+        matches = table.get(name) or []
+    else:
+        pool = tree_index.dirs if is_dir_shaped else tree_index.files
+        matches = _suffix_matches(pool, name)
     if not matches:
         return None
     if len(matches) == 1:
-        return "RESOLVES_BY_BASENAME", matches[0]
-    return "AMBIGUOUS_BASENAME", (len(matches), matches[:5])
+        return "RESOLVES_BY_SUFFIX", matches[0]
+    return "AMBIGUOUS_SUFFIX", (len(matches), matches[:MAX_AMBIGUOUS_CANDIDATES])
 
 
 def _format_ambiguous_detail(count: int, candidates: list[str]) -> str:
     return f"{count} candidates: " + ", ".join(candidates)
 
 
-def _basename_eligible(token: str) -> str | None:
-    """The bare name to search for, or None if *token* has a directory
-    component and so is not eligible for basename search at all (it already
-    names its own directory — existing resolution handles it unchanged)."""
+def _suffix_eligible(token: str) -> str | None:
+    """The name/suffix to search for, or None if *token* is empty."""
     bare = token.rstrip("/") if token.endswith("/") else token
-    if not bare or "/" in bare:
-        return None
-    return bare
+    return bare or None
+
+
+def _path_kind_at_ref(repo_dir: Path, ref: str, path: str) -> str | None:
+    """'file', 'dir', or None (neither exists at <ref>)."""
+    if _file_exists(repo_dir, ref, path):
+        return "file"
+    if _dir_exists(repo_dir, ref, path):
+        return "dir"
+    return None
 
 
 def _resolve_path(
     repo_dir: Path, ref: str, token: str, tree_index: TreeIndex | None = None,
 ) -> tuple[str, str | None]:
     """Returns (result, detail). detail is set for REFERENCED_ONLY and
-    AMBIGUOUS_BASENAME (a formatted string); None otherwise."""
-    if tree_index is not None:
-        name = _basename_eligible(token)
-        if name is not None:
-            basename_result = _resolve_by_basename(tree_index, name, _is_directory_shaped(token))
-            if basename_result is not None:
-                result, payload = basename_result
-                if result == "AMBIGUOUS_BASENAME":
-                    count, candidates = payload
-                    return result, _format_ambiguous_detail(count, candidates)
-                return result, payload  # RESOLVES_BY_BASENAME: payload is the full path
-            # Zero matches anywhere in the tree: fall through unchanged below.
-
+    AMBIGUOUS_SUFFIX (a formatted string); None otherwise."""
     is_dir_token = token.endswith("/")
     bare = token.rstrip("/")
+
     if not is_dir_token and _file_exists(repo_dir, ref, token):
         return "RESOLVES", None
     if bare and _dir_exists(repo_dir, ref, bare):
         return "RESOLVES", None
-    # Neither a file nor a directory exists at <ref>. A directory-shaped
-    # token gets one more check before falling to PARENT_ONLY/UNRESOLVED:
-    # is its name established as a quoted string literal in code, typically
-    # a runtime `.mkdir()` target that git's tree never records? That is
-    # real evidence the path is correct, not absent — the reader still has
-    # to weigh it (severity JUDGMENT), but it must not read as a flat
-    # UNRESOLVED/BLOCKING the way an invented or stale path does.
+
+    if tree_index is not None:
+        name = _suffix_eligible(token)
+        if name is not None:
+            suffix_result = _resolve_by_suffix(tree_index, name, _is_directory_shaped(token))
+            if suffix_result is not None:
+                result, payload = suffix_result
+                if result == "AMBIGUOUS_SUFFIX":
+                    count, candidates = payload
+                    return result, _format_ambiguous_detail(count, candidates)
+                return result, payload  # RESOLVES_BY_SUFFIX: payload is the full path
+
+    # Neither a file nor a directory exists at <ref>, and no suffix match.
+    # A directory-shaped token gets one more check before falling to
+    # PARENT_ONLY/UNRESOLVED: is its name established as a quoted string
+    # literal in code, typically a runtime `.mkdir()` target that git's
+    # tree never records? That is real evidence the path is correct, not
+    # absent.
     if _is_directory_shaped(token):
         detail = _referenced_only_detail(repo_dir, ref, bare)
         if detail is not None:
@@ -431,21 +791,32 @@ def _resolve_path(
     return "UNRESOLVED", None
 
 
-def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> list[str] | None:
+def _read_ref_file_lines(repo_dir: Path, ref: str, path: str) -> tuple[list[str] | None, bool]:
+    """Returns (lines, is_binary). lines is None if the show itself failed;
+    is_binary is True when the content contains a NUL byte (a real binary
+    file misread as text under errors="replace" corrupts, but never
+    crashes, the decode — NUL detection catches the case cleanly)."""
     result = _run_git(repo_dir, ["show", f"{ref}:{path}"])
     if result is None or result[0] != 0:
-        return None
-    return result[1].splitlines()
+        return None, False
+    if "\x00" in result[1]:
+        return None, True
+    return result[1].splitlines(), False
 
 
 def _extract_line_result(
     repo_dir: Path, ref: str, path: str, start: int, end: int | None, resolved_result: str,
 ) -> tuple[str, list[str] | None, str | None]:
-    """Shared by the direct-path and basename-matched RESOLVES cases: slice
+    """Shared by the direct-path and suffix-matched RESOLVES cases: slice
     the requested line range out of *path* at *ref*, or report
-    LINE_OUT_OF_RANGE. ``resolved_result`` is the success bucket name to
-    report (RESOLVES or RESOLVES_BY_BASENAME)."""
-    lines = _read_ref_file_lines(repo_dir, ref, path)
+    LINE_OUT_OF_RANGE / BINARY_FILE. ``resolved_result`` is the success
+    bucket name to report (RESOLVES or RESOLVES_BY_SUFFIX)."""
+    kind = _path_kind_at_ref(repo_dir, ref, path)
+    if kind == "dir":
+        return "DIRECTORY_NOT_FILE", None, None
+    lines, is_binary = _read_ref_file_lines(repo_dir, ref, path)
+    if is_binary:
+        return "BINARY_FILE", None, None
     if lines is None:
         return "UNRESOLVED", None, None
     n = len(lines)
@@ -462,23 +833,27 @@ def _resolve_path_line(
     tree_index: TreeIndex | None = None,
 ) -> tuple[str, list[str] | None, str | None]:
     """Returns (result, line_text, detail). line_text is set only on a
-    resolved (possibly basename-matched) file; detail carries the
-    AMBIGUOUS_BASENAME candidate list when that applies."""
+    resolved (possibly suffix-matched) file; detail carries the
+    AMBIGUOUS_SUFFIX candidate list when that applies."""
+    kind = _path_kind_at_ref(repo_dir, ref, path)
+    if kind == "file":
+        return _extract_line_result(repo_dir, ref, path, start, end, "RESOLVES")
+    if kind == "dir":
+        return "DIRECTORY_NOT_FILE", None, None
+
     if tree_index is not None:
-        name = _basename_eligible(path)
+        name = _suffix_eligible(path)
         if name is not None:
-            basename_result = _resolve_by_basename(tree_index, name, _is_directory_shaped(path))
-            if basename_result is not None:
-                result, payload = basename_result
-                if result == "AMBIGUOUS_BASENAME":
+            suffix_result = _resolve_by_suffix(tree_index, name, False)  # PATH_LINE always targets a file
+            if suffix_result is not None:
+                result, payload = suffix_result
+                if result == "AMBIGUOUS_SUFFIX":
                     count, candidates = payload
                     return result, None, _format_ambiguous_detail(count, candidates)
-                return _extract_line_result(repo_dir, ref, payload, start, end, "RESOLVES_BY_BASENAME")
+                return _extract_line_result(repo_dir, ref, payload, start, end, "RESOLVES_BY_SUFFIX")
 
     base, _base_detail = _resolve_path(repo_dir, ref, path, tree_index)
-    if base != "RESOLVES":
-        return base, None, None
-    return _extract_line_result(repo_dir, ref, path, start, end, "RESOLVES")
+    return base, None, None
 
 
 def _first_special_index(token: str) -> int:
@@ -500,30 +875,129 @@ def _prefix_resolves(repo_dir: Path, ref: str, token: str) -> tuple[bool, bool]:
     return _dir_exists(repo_dir, ref, dir_prefix), False
 
 
-def _grep_word(repo_dir: Path, ref: str, term: str) -> bool:
-    result = _run_git(repo_dir, ["grep", "-w", "-F", "-q", term, ref])
-    return result is not None and result[0] == 0
+def _is_doc_or_test_path(path: str) -> bool:
+    return (
+        path.lower().endswith(".md")
+        or path.startswith(("docs/", "tests/", "test/"))
+        or "/tests/" in path or "/test/" in path
+    )
 
 
-def _resolve_symbol(repo_dir: Path, ref: str, token: str) -> str:
+def _resolve_symbol(repo_dir: Path, ref: str, token: str) -> tuple[str, str | None]:
+    """Returns (result, detail). A symbol found ONLY in docs/*.md/tests is
+    a weak positive (a spec can say a name without the code existing) —
+    CHECK, with the file shown; found in real code is OK. Scoping is done
+    in Python over ``git grep -l``'s file list rather than a git magic
+    exclude-pathspec, since ``_run_git`` forces GIT_LITERAL_PATHSPECS=1 for
+    every call (citation paths must never be read as pathspec magic), which
+    would otherwise defeat an exclude pattern like `:!docs/**` too."""
     parts = token.split(".")
     last = parts[-1]
-    if _grep_word(repo_dir, ref, last):
-        return "FOUND"
+    result = _run_git(repo_dir, ["grep", "-w", "-F", "-l", last, ref])
+    if result is not None and result[0] == 0 and result[1].strip():
+        files = [line.split(":", 1)[-1] for line in result[1].splitlines() if line]
+        code_files = [f for f in files if not _is_doc_or_test_path(f)]
+        if code_files:
+            return "FOUND", None
+        return "FOUND_IN_DOCS_OR_TESTS", files[0]
     if len(parts) > 1:
         joined = "/".join(parts)
         candidates = [f"{joined}.py", f"{joined}/__init__.py", f"src/{joined}.py", f"src/{joined}/__init__.py"]
         for c in candidates:
             if _file_exists(repo_dir, ref, c):
-                return "FOUND"
-    return "ABSENT"
+                return "FOUND", None
+    return "ABSENT", None
 
 
-def _resolve_sha(repo_dir: Path, sha: str) -> str | None:
+def _resolve_sha(repo_dir: Path, sha: str, ref: str) -> tuple[str | None, str | None]:
+    """Returns (result, detail). None result means "could not check"
+    (not_run). A commit that exists but is reachable from neither <ref> nor
+    any remote-tracking ref is COMMIT_EXISTS_UNREACHABLE (CHECK) — the
+    object is real, but not evidence this repo state actually contains it."""
     result = _run_git(repo_dir, ["cat-file", "-e", f"{sha}^{{commit}}"])
     if result is None:
+        return None, None
+    if result[0] != 0:
+        return "COMMIT_MISSING", None
+
+    anc = _run_git(repo_dir, ["merge-base", "--is-ancestor", sha, ref])
+    if anc is not None and anc[0] == 0:
+        return "COMMIT_EXISTS", None
+
+    refs_result = _run_git(repo_dir, ["for-each-ref", "--format=%(refname)", "refs/remotes/"])
+    if refs_result is not None and refs_result[0] == 0:
+        for refname in refs_result[1].splitlines():
+            refname = refname.strip()
+            if not refname:
+                continue
+            anc2 = _run_git(repo_dir, ["merge-base", "--is-ancestor", sha, refname])
+            if anc2 is not None and anc2[0] == 0:
+                return "COMMIT_EXISTS", f"reachable from {refname}, not {ref}"
+
+    return "COMMIT_EXISTS_UNREACHABLE", f"not reachable from {ref} or any remote-tracking ref"
+
+
+# --------------------------------------------------------------------------- #
+# REF / REPO — resolved as a second-chance reclassification when normal
+# PATH/SYMBOL resolution comes up empty, never as a competing classify_token
+# branch (a branch/tag name and a repo-relative path are shape-indistinguishable
+# from the token text alone; only asking git/gh disambiguates them).
+# --------------------------------------------------------------------------- #
+
+_OWNER_REPO_SHAPE_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
+
+
+def _list_remote_refs(repo_dir: Path) -> set[str] | None:
+    result = _run_git(repo_dir, ["ls-remote", "--heads", "--tags", "origin"])
+    if result is None or result[0] != 0:
         return None
-    return "COMMIT_EXISTS" if result[0] == 0 else "COMMIT_MISSING"
+    names: set[str] = set()
+    for line in result[1].splitlines():
+        parts = line.split("\t")
+        if len(parts) != 2:
+            continue
+        ref = parts[1]
+        if ref.startswith("refs/heads/"):
+            names.add(ref[len("refs/heads/"):])
+        elif ref.startswith("refs/tags/"):
+            names.add(ref[len("refs/tags/"):])
+    return names
+
+
+def _looks_like_ref_name(token: str) -> bool:
+    """Branch/tag name shape: no whitespace (already excluded upstream), no
+    leading '/', not obviously a file (known extension), and — critically —
+    no trailing '/'. A trailing slash is an explicit directory marker in
+    this corpus (`chronicle/`); real branch names are never written that
+    way in prose, and treating one as REF-eligible would silently
+    reclassify a genuine broken-directory citation as REF_UNRESOLVED
+    instead of UNRESOLVED, losing the distinction for no benefit."""
+    if token.endswith("/"):
+        return False
+    if _has_known_extension(token):
+        return False
+    return bool(re.match(r"^[\w][\w./-]*$", token))
+
+
+def _resolve_ref_name(remote_refs: set[str] | None, token: str) -> str | None:
+    if remote_refs is None:
+        return None
+    name = token[len("origin/"):] if token.startswith("origin/") else token
+    if name in remote_refs or token in remote_refs:
+        return "REF_RESOLVES"
+    return "REF_UNRESOLVED"
+
+
+def _resolve_repo_ref(default_repo: str, owner_name: str) -> str | None:
+    result = _run_gh(["api", f"repos/{owner_name}"])
+    if result is None:
+        return None
+    rc, _stdout, stderr = result
+    if rc == 0:
+        return "REPO_RESOLVES"
+    if "404" in stderr or "Not Found" in stderr:
+        return "REPO_UNRESOLVED"
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -533,7 +1007,8 @@ def _resolve_sha(repo_dir: Path, sha: str) -> str | None:
 def _run_gh(args: list[str], timeout: int = 30) -> tuple[int, str, str] | None:
     try:
         result = subprocess.run(
-            ["gh", *args], capture_output=True, text=True, timeout=timeout,
+            ["gh", *args], capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -557,26 +1032,30 @@ def _fetch_issue_body(repo: str, number: int) -> tuple[str | None, str | None]:
     return body, None
 
 
-def _resolve_issue_ref(default_repo: str, owner_repo: str | None, number: int) -> str | None:
+def _resolve_issue_ref(default_repo: str, owner_repo: str | None, number: int) -> tuple[str | None, str | None]:
+    """Returns (result, error). error is set (result None) for any non-404
+    gh failure — a rate limit, an auth error, a 403/410/500 — which must
+    never be read as NOT_FOUND (a 404 cannot even distinguish "private"
+    from "does not exist," so it is itself a hint, never authoritative)."""
     repo = owner_repo or default_repo
     result = _run_gh(["api", f"repos/{repo}/issues/{number}"])
     if result is None:
-        return None
+        return None, "gh api call could not be invoked"
     rc, stdout, stderr = result
     if rc == 0:
         try:
             data = json.loads(stdout)
-        except json.JSONDecodeError:
-            return None
+        except json.JSONDecodeError as exc:
+            return None, f"gh api returned invalid JSON: {exc}"
         pr = data.get("pull_request")
         if pr:
             if pr.get("merged_at"):
-                return "MERGED"
-            return "OPEN" if data.get("state") == "open" else "CLOSED"
-        return "OPEN" if data.get("state") == "open" else "CLOSED"
+                return "MERGED", None
+            return ("OPEN" if data.get("state") == "open" else "CLOSED"), None
+        return ("OPEN" if data.get("state") == "open" else "CLOSED"), None
     if "404" in stderr or "Not Found" in stderr:
-        return "NOT_FOUND"
-    return None
+        return "NOT_FOUND", None
+    return None, f"gh api repos/{repo}/issues/{number} failed (not a 404): {stderr.strip() or rc}"
 
 
 # --------------------------------------------------------------------------- #
@@ -601,8 +1080,6 @@ def _pin_vault_root(vault_root: Path) -> Callable[[], None]:
     poison another vault root's later resolution in the same process (this
     test suite included).
     """
-    import os  # noqa: PLC0415
-
     had_env = "CLAUDE_PROJECT_DIR" in os.environ
     prior_env = os.environ.get("CLAUDE_PROJECT_DIR")
     prior_modules = {name: sys.modules.get(name) for name in _PINNED_MODULE_NAMES}
@@ -625,8 +1102,19 @@ def _pin_vault_root(vault_root: Path) -> Callable[[], None]:
     return _restore
 
 
+def _looks_like_vault_root(vault_root: Path) -> bool:
+    """The same marker ``vault_utils.find_vault_root`` walks up for. A
+    caller-supplied ``--vault-root`` that isn't actually a vault must go to
+    ``not_run`` (INCOMPLETE), never silently build an empty graph and
+    report every wikilink NOTE_UNRESOLVED."""
+    return (vault_root / ".vault" / "vault.json").is_file()
+
+
 def _resolve_wikilinks(vault_root: Path, displays: list[str]) -> tuple[dict[str, str], str | None]:
     """Returns ({display: bucket}, error). On error the dict is empty."""
+    if not _looks_like_vault_root(vault_root):
+        return {}, f"{vault_root} does not look like a vault (no .vault/vault.json)"
+
     restore = _pin_vault_root(vault_root)
     try:
         import graph_cli  # noqa: PLC0415
@@ -639,6 +1127,8 @@ def _resolve_wikilinks(vault_root: Path, displays: list[str]) -> tuple[dict[str,
                 results[display] = "NOTE_RESOLVES"
             elif diag.reason == "ambiguous":
                 results[display] = "NOTE_AMBIGUOUS"
+            elif diag.reason == "out-of-scope-note":
+                results[display] = "OUTSIDE_GRAPH_SCOPE"
             else:
                 results[display] = "NOTE_UNRESOLVED"
         return results, None
@@ -699,44 +1189,57 @@ def _resolve_ref_sha(repo_dir: Path, ref: str) -> tuple[str | None, str | None]:
 
 
 # --------------------------------------------------------------------------- #
-# severity
+# severity — OK (trusted, no re-check) or CHECK (verify with one command
+# before it counts as a detector-5 finding)
 # --------------------------------------------------------------------------- #
 
 _SEVERITY: dict[tuple[str, str], str] = {
     ("PATH", "RESOLVES"): "OK",
-    ("PATH", "PARENT_ONLY"): "JUDGMENT",
-    ("PATH", "UNRESOLVED"): "BLOCKING",
-    ("PATH", "REFERENCED_ONLY"): "JUDGMENT",
-    # Bare-basename PATH match: a single hit anywhere in the tree is as good
-    # as a direct RESOLVES (OK, no row); two or more needs the reader's pick.
-    ("PATH", "RESOLVES_BY_BASENAME"): "OK",
-    ("PATH", "AMBIGUOUS_BASENAME"): "JUDGMENT",
-    ("PATH_LINE", "RESOLVES"): "JUDGMENT",
-    ("PATH_LINE", "PARENT_ONLY"): "JUDGMENT",
-    ("PATH_LINE", "UNRESOLVED"): "BLOCKING",
-    ("PATH_LINE", "REFERENCED_ONLY"): "JUDGMENT",
-    ("PATH_LINE", "LINE_OUT_OF_RANGE"): "BLOCKING",
-    # Unlike plain PATH, a basename-matched PATH_LINE still needs the
-    # reader's line-text-vs-claim comparison (the whole point of PATH_LINE
-    # ever being JUDGMENT, not OK) — a basename match doesn't exempt it.
-    ("PATH_LINE", "RESOLVES_BY_BASENAME"): "JUDGMENT",
-    ("PATH_LINE", "AMBIGUOUS_BASENAME"): "JUDGMENT",
+    ("PATH", "PARENT_ONLY"): "CHECK",
+    ("PATH", "UNRESOLVED"): "CHECK",
+    ("PATH", "REFERENCED_ONLY"): "CHECK",
+    ("PATH", "RESOLVES_BY_SUFFIX"): "OK",
+    ("PATH", "AMBIGUOUS_SUFFIX"): "CHECK",
+    ("PATH", "OUTSIDE_REPO"): "CHECK",
+    # PATH_LINE success buckets are OK but routed to `evidence_lines`, not
+    # `rows` — the reader still skims line_text, just not as a CHECK item.
+    ("PATH_LINE", "RESOLVES"): "OK",
+    ("PATH_LINE", "RESOLVES_BY_SUFFIX"): "OK",
+    ("PATH_LINE", "PARENT_ONLY"): "CHECK",
+    ("PATH_LINE", "UNRESOLVED"): "CHECK",
+    ("PATH_LINE", "REFERENCED_ONLY"): "CHECK",
+    ("PATH_LINE", "LINE_OUT_OF_RANGE"): "CHECK",
+    ("PATH_LINE", "AMBIGUOUS_SUFFIX"): "CHECK",
+    ("PATH_LINE", "DIRECTORY_NOT_FILE"): "CHECK",
+    ("PATH_LINE", "BINARY_FILE"): "CHECK",
+    ("PATH_LINE", "OUTSIDE_REPO"): "CHECK",
     ("TEMPLATED", "PREFIX_RESOLVES"): "OK",
-    ("TEMPLATED", "PREFIX_UNRESOLVED"): "BLOCKING",
+    ("TEMPLATED", "PREFIX_UNRESOLVED"): "CHECK",
     ("TEMPLATED", "TEMPLATED_NO_PREFIX"): "OK",
     ("GLOB", "PREFIX_RESOLVES"): "OK",
-    ("GLOB", "PREFIX_UNRESOLVED"): "BLOCKING",
+    ("GLOB", "PREFIX_UNRESOLVED"): "CHECK",
     ("SYMBOL", "FOUND"): "OK",
-    ("SYMBOL", "ABSENT"): "JUDGMENT",
+    ("SYMBOL", "FOUND_IN_DOCS_OR_TESTS"): "CHECK",
+    ("SYMBOL", "ABSENT"): "CHECK",
     ("SHA", "COMMIT_EXISTS"): "OK",
-    ("SHA", "COMMIT_MISSING"): "BLOCKING",
+    ("SHA", "COMMIT_EXISTS_UNREACHABLE"): "CHECK",
+    ("SHA", "COMMIT_MISSING"): "CHECK",
     ("ISSUE_REF", "OPEN"): "OK",
     ("ISSUE_REF", "CLOSED"): "OK",
     ("ISSUE_REF", "MERGED"): "OK",
-    ("ISSUE_REF", "NOT_FOUND"): "BLOCKING",
+    ("ISSUE_REF", "NOT_FOUND"): "CHECK",
     ("WIKILINK", "NOTE_RESOLVES"): "OK",
-    ("WIKILINK", "NOTE_AMBIGUOUS"): "JUDGMENT",
-    ("WIKILINK", "NOTE_UNRESOLVED"): "BLOCKING",
+    ("WIKILINK", "NOTE_AMBIGUOUS"): "CHECK",
+    ("WIKILINK", "NOTE_UNRESOLVED"): "CHECK",
+    ("WIKILINK", "OUTSIDE_GRAPH_SCOPE"): "CHECK",
+    ("REF", "REF_RESOLVES"): "OK",
+    ("REF", "REF_UNRESOLVED"): "CHECK",
+    ("REPO", "REPO_RESOLVES"): "OK",
+    ("REPO", "REPO_UNRESOLVED"): "CHECK",
+    ("PROSE_LINE_CITATION", "PROSE_LINE_CITATION"): "CHECK",
+    ("UNKNOWN_REPO_ALIAS", "UNKNOWN_REPO_ALIAS"): "CHECK",
+    ("OUTSIDE_REPO_TOKEN", "OUTSIDE_REPO"): "CHECK",
+    ("ERROR", "ERROR"): "CHECK",
 }
 
 
@@ -764,9 +1267,26 @@ def _incomplete_report(
         "not_run": not_run,
         "counts": {},
         "rows": [],
+        "evidence_lines": [],
+        "assumed_repo_refs": [],
         "elided": 0,
+        "evidence_elided": 0,
         "limit": limit,
     }
+
+
+def _other_repos_mentioned(body: str, default_repo: str) -> bool:
+    """True if the body names any owner/repo other than --repo (an
+    explicit issue-URL/owner-repo#N reference, or a bare `owner/name`
+    backtick token) — the signal that promotes a bare #N to CHECK, since a
+    multi-repo body makes "assume --repo" a real guess, not a safe default."""
+    for m in OWNER_REPO_ISSUE_RE.finditer(body):
+        if m.group(1).lower() != default_repo.lower():
+            return True
+    for m in ISSUE_URL_RE.finditer(body):
+        if m.group(1).lower() != default_repo.lower():
+            return True
+    return False
 
 
 def collect(
@@ -788,7 +1308,7 @@ def collect(
         body, err = _fetch_issue_body(repo, issue)
     else:
         try:
-            body = body_file.read_text(encoding="utf-8") if body_file else None
+            body = body_file.read_text(encoding="utf-8", errors="replace") if body_file else None
             err = None if body_file else "neither --issue nor --body-file was given"
         except OSError as exc:
             body, err = None, f"--body-file {body_file} could not be read: {exc}"
@@ -831,63 +1351,78 @@ def collect(
         input_errors.append("body has no extractable tokens")
         return _incomplete_report(input_errors, not_run, resolved_ref, resolved_sha, repo, repo_dir, limit)
 
-    unique_tokens = _dedupe_tokens(tokens)
+    unique_tokens = tokens
+    other_repos = _other_repos_mentioned(body, repo)
 
     # --- resolution ---
     counts: dict[str, int] = {}
-    rows: list[dict[str, Any]] = []
+    check_rows: list[dict[str, Any]] = []
+    evidence_lines: list[dict[str, Any]] = []
+    assumed_repo_refs: list[dict[str, Any]] = []
 
     def _count(cls: str, result: str) -> None:
         key = f"{cls}:{result}"
         counts[key] = counts.get(key, 0) + 1
 
+    def _row(token: dict[str, Any], cls: str, result: str, detail: str | None = None) -> dict[str, Any]:
+        row: dict[str, Any] = {"token": token["text"], "class": cls, "result": result, "line": token["line"]}
+        if detail is not None:
+            row["detail"] = detail
+        return row
+
     def _emit(token: dict[str, Any], cls: str, result: str, detail: str | None = None,
                line_text: list[str] | None = None) -> None:
         _count(cls, result)
-        severity = _SEVERITY.get((cls, result), "OK")
+        severity = _SEVERITY.get((cls, result), "CHECK")
         if severity == "OK":
+            if line_text is not None:
+                r = _row(token, cls, result, detail)
+                r["line_text"] = line_text
+                evidence_lines.append(r)
             return
-        row: dict[str, Any] = {
-            "token": token["text"], "class": cls, "result": result,
-            "line": token["line"], "severity": severity,
-        }
-        if detail is not None:
-            row["detail"] = detail
+        row = _row(token, cls, result, detail)
         if line_text is not None:
             row["line_text"] = line_text
-        rows.append(row)
+        row["severity"] = "CHECK"
+        check_rows.append(row)
+
+    def _emit_error(token: dict[str, Any], cls: str, exc: Exception) -> None:
+        counts["ERROR:ERROR"] = counts.get("ERROR:ERROR", 0) + 1
+        row = _row(token, cls, "ERROR", f"{type(exc).__name__}: {exc}")
+        row["severity"] = "CHECK"
+        check_rows.append(row)
 
     # Batch by class so gh/graphmark failures degrade the whole class once,
     # rather than retrying a doomed call per token.
     issue_tokens = [t for t in unique_tokens if t["cls"] == "ISSUE_REF"]
     wikilink_tokens = [t for t in unique_tokens if t["cls"] == "WIKILINK"]
 
-    # Bare-basename resolution needs one `git ls-tree -r` listing of the
-    # whole tree, built at most once per invocation (never once per token)
-    # and only when a PATH/PATH_LINE token actually has no directory
-    # component to check directly.
     def _token_needs_tree_index(t: dict[str, Any]) -> bool:
         if t["cls"] == "PATH":
-            return _basename_eligible(t["text"]) is not None
+            return True
         if t["cls"] == "PATH_LINE":
-            m = PATH_LINE_RE.match(t["text"])
-            return m is not None and _basename_eligible(m.group("path")) is not None
+            return parse_path_line_token(t["text"]) is not None
         return False
 
     tree_index: TreeIndex | None = None
     if any(_token_needs_tree_index(t) for t in unique_tokens):
         tree_index = _build_tree_index(repo_dir, resolved_ref)
 
+    issue_gh_failed = False
     issue_results: dict[tuple[str | None, int], str | None] = {}
-    if issue_tokens:
-        first = issue_tokens[0]
-        first_result = _resolve_issue_ref(repo, first.get("repo"), first["number"])
-        if first_result is None:
-            not_run.append({"class": "issue_ref", "reason": "gh api call failed or gh is unavailable"})
-        else:
-            issue_results[(first.get("repo"), first["number"])] = first_result
-            for t in issue_tokens[1:]:
-                issue_results[(t.get("repo"), t["number"])] = _resolve_issue_ref(repo, t.get("repo"), t["number"])
+    for t in issue_tokens:
+        key = (t.get("repo"), t["number"])
+        if key in issue_results:
+            continue
+        result, err_reason = _resolve_issue_ref(repo, t.get("repo"), t["number"])
+        if result is None:
+            issue_gh_failed = True
+            not_run.append({"class": "issue_ref", "reason": err_reason or "gh api call failed or gh is unavailable"})
+            break
+        issue_results[key] = result
+
+    remote_refs: set[str] | None = None
+    repo_gh_failed = False
 
     wikilink_results: dict[str, str] = {}
     if wikilink_tokens:
@@ -901,78 +1436,149 @@ def collect(
     for token in unique_tokens:
         cls = token["cls"]
         text = token["text"]
-
-        if cls in ("SKIP_COMMAND", "SKIP_FLAG", "SKIP_OTHER", "LOCAL"):
-            counts[f"{cls}:(none)"] = counts.get(f"{cls}:(none)", 0) + 1
-            continue
-
-        if cls == "PATH":
-            result, path_detail = _resolve_path(repo_dir, resolved_ref, text, tree_index)
-            detail = path_detail if path_detail is not None else (result if result != "RESOLVES" else None)
-            _emit(token, cls, result, detail=detail)
-            continue
-
-        if cls == "PATH_LINE":
-            m = PATH_LINE_RE.match(text)
-            path = m.group("path")
-            start = int(m.group("start"))
-            end = int(m.group("end")) if m.group("end") else None
-            result, line_text, extra_detail = _resolve_path_line(repo_dir, resolved_ref, path, start, end, tree_index)
-            detail = extra_detail if extra_detail is not None else (None if line_text is not None else result)
-            _emit(token, cls, result, detail=detail, line_text=line_text)
-            continue
-
-        if cls in ("TEMPLATED", "GLOB"):
-            ok, no_prefix = _prefix_resolves(repo_dir, resolved_ref, text)
-            if no_prefix and cls == "TEMPLATED":
-                result = "TEMPLATED_NO_PREFIX"
-            else:
-                result = "PREFIX_RESOLVES" if ok else "PREFIX_UNRESOLVED"
-            _emit(token, cls, result, detail=None if ok else f"literal prefix not found at {resolved_ref}")
-            continue
-
-        if cls == "SYMBOL":
-            result = _resolve_symbol(repo_dir, resolved_ref, text)
-            _emit(token, cls, result, detail=None if result == "FOUND" else "not found via grep or module path")
-            continue
-
-        if cls == "SHA":
-            result = _resolve_sha(repo_dir, text)
-            if result is None:
-                not_run.append({"class": "sha", "reason": f"could not check commit {text}"})
+        try:
+            if cls in ("SKIP_COMMAND", "SKIP_FLAG", "SKIP_OTHER", "LOCAL", "SKIP_BARE_EXTENSION", "SKIP_KEYWORD"):
+                counts[f"{cls}:(none)"] = counts.get(f"{cls}:(none)", 0) + 1
                 continue
-            _emit(token, cls, result, detail=None if result == "COMMIT_EXISTS" else "no such commit at this ref")
+
+            if cls == "PATH":
+                result, path_detail = _resolve_path(repo_dir, resolved_ref, text, tree_index)
+                if (
+                    result == "UNRESOLVED" and _OWNER_REPO_SHAPE_RE.match(text)
+                    and "." not in text and not text.startswith("origin/")
+                ):
+                    repo_result = _resolve_repo_ref(repo, text)
+                    if repo_result is None:
+                        repo_gh_failed = True
+                        not_run.append({"class": "repo_ref", "reason": f"gh api repos/{text} could not be invoked"})
+                    else:
+                        _emit(token, "REPO", repo_result, detail=None if repo_result == "REPO_RESOLVES" else f"{text} not found on GitHub")
+                        continue
+                bare_no_slash = "/" not in text.rstrip("/")
+                looks_like_origin_ref = text.startswith("origin/") and "/" not in text[len("origin/"):]
+                if result == "UNRESOLVED" and _looks_like_ref_name(text) and (bare_no_slash or looks_like_origin_ref):
+                    if remote_refs is None:
+                        remote_refs = _list_remote_refs(repo_dir)
+                    ref_result = _resolve_ref_name(remote_refs, text)
+                    if ref_result is not None:
+                        _emit(token, "REF", ref_result, detail=None if ref_result == "REF_RESOLVES" else "not a remote branch or tag")
+                        continue
+                detail = path_detail if path_detail is not None else (result if result != "RESOLVES" else None)
+                _emit(token, cls, result, detail=detail)
+                continue
+
+            if cls == "PATH_LINE":
+                parsed = parse_path_line_token(text)
+                if parsed is None:
+                    _emit(token, cls, "UNRESOLVED", detail="could not parse path:line")
+                    continue
+                path, start, end = parsed
+                result, line_text, extra_detail = _resolve_path_line(repo_dir, resolved_ref, path, start, end, tree_index)
+                detail = extra_detail if extra_detail is not None else (None if line_text is not None else result)
+                _emit(token, cls, result, detail=detail, line_text=line_text)
+                continue
+
+            if cls == "OUTSIDE_REPO_TOKEN":
+                _emit(token, "PATH", "OUTSIDE_REPO", detail="path segments escape the repo root")
+                continue
+
+            if cls == "PROSE_LINE_CITATION":
+                hint = (
+                    f"verify the cited range contains {token['symbol']}" if token.get("symbol")
+                    else "verify the cited range supports the claim"
+                )
+                _emit(token, cls, cls, detail=hint)
+                continue
+
+            if cls == "UNKNOWN_REPO_ALIAS":
+                _emit(token, cls, cls, detail=f"alias '{token['alias']}' is not a known owner/repo; resolve by hand")
+                continue
+
+            if cls in ("TEMPLATED", "GLOB"):
+                ok, no_prefix = _prefix_resolves(repo_dir, resolved_ref, text)
+                if no_prefix and cls == "TEMPLATED":
+                    result = "TEMPLATED_NO_PREFIX"
+                else:
+                    result = "PREFIX_RESOLVES" if ok else "PREFIX_UNRESOLVED"
+                _emit(token, cls, result, detail=None if ok else f"literal prefix not found at {resolved_ref}")
+                continue
+
+            if cls == "SYMBOL":
+                # Deliberately no REF fallback here (unlike the PATH
+                # branch): a bare branch name's shape (word chars, dots,
+                # dashes) overlaps almost completely with a Python
+                # identifier's, so checking every ABSENT symbol against
+                # remote_refs would misclassify ordinary absent symbols
+                # (`_expense_fraud`) as REF_UNRESOLVED far more often than
+                # it would ever correctly catch a real branch name typed
+                # bare. A branch name written as `origin/<branch>` is
+                # already PATH-classified (has a "/") and gets the REF
+                # check there; a bare branch name with no `origin/` prefix
+                # stays ABSENT here -- same CHECK severity either way.
+                result, sym_detail = _resolve_symbol(repo_dir, resolved_ref, text)
+                detail = sym_detail if sym_detail is not None else (
+                    "not found via grep or module path" if result == "ABSENT" else None
+                )
+                _emit(token, cls, result, detail=detail)
+                continue
+
+            if cls == "SHA":
+                result, sha_detail = _resolve_sha(repo_dir, text, resolved_ref)
+                if result is None:
+                    not_run.append({"class": "sha", "reason": f"could not check commit {text}"})
+                    continue
+                _emit(token, cls, result, detail=sha_detail)
+                continue
+
+            if cls == "ISSUE_REF":
+                is_bare = token.get("repo") is None
+                result = issue_results.get((token.get("repo"), token["number"]))
+                if result is None:
+                    continue  # gh failure already recorded in not_run above
+                display_repo = token.get("repo") or repo
+                if is_bare and result != "NOT_FOUND":
+                    assumed_repo_refs.append({
+                        "token": text, "state": result, "detail": f"resolved against {repo}",
+                    })
+                    if other_repos:
+                        row = _row(token, cls, result, detail="body mentions other repos; confirm target")
+                        row["severity"] = "CHECK"
+                        check_rows.append(row)
+                        counts[f"{cls}:{result}"] = counts.get(f"{cls}:{result}", 0) + 1
+                    continue
+                _emit(token, cls, result, detail=None if result != "NOT_FOUND" else f"{display_repo}#{token['number']} not found")
+                continue
+
+            if cls == "WIKILINK":
+                result = wikilink_results.get(text)
+                if result is None:
+                    continue  # already recorded as not_run above
+                _emit(token, cls, result, detail=None if result == "NOTE_RESOLVES" else f"graphmark: {result}")
+                continue
+        except Exception as exc:  # noqa: BLE001 - one token's crash becomes a CHECK row, never a whole-run crash
+            _emit_error(token, cls, exc)
             continue
 
-        if cls == "ISSUE_REF":
-            result = issue_results.get((token.get("repo"), token["number"]))
-            if result is None:
-                continue  # already recorded as not_run above
-            display_repo = token.get("repo") or repo
-            _emit(token, cls, result, detail=None if result != "NOT_FOUND" else f"{display_repo}#{token['number']} not found")
-            continue
+    check_rows.sort(key=lambda r: r["line"])
+    evidence_lines.sort(key=lambda r: r["line"])
 
-        if cls == "WIKILINK":
-            result = wikilink_results.get(text)
-            if result is None:
-                continue  # already recorded as not_run above
-            _emit(token, cls, result, detail=None if result == "NOTE_RESOLVES" else f"graphmark: {result}")
-            continue
-
-    blocking = [r for r in rows if r["severity"] == "BLOCKING"]
-    judgment = [r for r in rows if r["severity"] == "JUDGMENT"]
+    if issue_gh_failed or repo_gh_failed:
+        pass  # already in not_run
 
     if not_run:
         verdict = "INCOMPLETE"
-    elif blocking:
-        verdict = "BLOCKING"
-    elif judgment:
-        verdict = "NEEDS_JUDGMENT"
+    elif check_rows:
+        verdict = "CHECK_REQUIRED"
     else:
-        verdict = "RESOLVED"
+        verdict = "ALL_RESOLVED"
 
-    rows.sort(key=lambda r: r["line"])
-    capped_rows, elided = (rows, 0) if limit <= 0 or len(rows) <= limit else (rows[:limit], len(rows) - limit)
+    # `--limit` applies only to OK/evidence listings; CHECK rows are never
+    # elided (afk#1378: a real finding at row 26 of 36 must never disappear
+    # behind a default --limit 20).
+    capped_evidence, evidence_elided = (
+        (evidence_lines, 0) if limit <= 0 or len(evidence_lines) <= limit
+        else (evidence_lines[:limit], len(evidence_lines) - limit)
+    )
 
     return {
         "verdict": verdict,
@@ -984,8 +1590,11 @@ def collect(
         "input_errors": input_errors,
         "not_run": not_run,
         "counts": counts,
-        "rows": capped_rows,
-        "elided": elided,
+        "rows": check_rows,
+        "evidence_lines": capped_evidence,
+        "assumed_repo_refs": assumed_repo_refs,
+        "elided": 0,
+        "evidence_elided": evidence_elided,
         "limit": limit,
     }
 
@@ -1016,14 +1625,27 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append("")
 
     if report["rows"]:
-        lines.append("### Findings (BLOCKING and JUDGMENT only)")
+        lines.append("### CHECK — verify each with one command before treating it as a finding")
         for r in report["rows"]:
             detail = r.get("detail") or ""
             if r.get("line_text"):
                 detail = " | ".join(r["line_text"])
             lines.append(f"- `{r['token']}` | {r['class']} | {r['result']} | line {r['line']} | {detail}")
-        if report["elided"]:
-            lines.append(f"- ... {report['elided']} more")
+        lines.append("")
+
+    if report.get("evidence_lines"):
+        lines.append("### Evidence Lines — compare against the claim")
+        for r in report["evidence_lines"]:
+            text = " | ".join(r.get("line_text") or [])
+            lines.append(f"- `{r['token']}` | line {r['line']} | {text}")
+        if report.get("evidence_elided"):
+            lines.append(f"- ... {report['evidence_elided']} more")
+        lines.append("")
+
+    if report.get("assumed_repo_refs"):
+        lines.append("### Assumed Repo Refs — bare #N resolved against --repo")
+        for r in report["assumed_repo_refs"]:
+            lines.append(f"- `{r['token']}`: {r['state']} ({r['detail']})")
         lines.append("")
 
     if report["not_run"]:
@@ -1052,7 +1674,7 @@ def _main(argv: list[str] | None) -> int:
     parser.add_argument("--no-fetch", action="store_true", help="Skip 'git fetch origin' before resolving.")
     parser.add_argument("--vault-root", type=Path, default=None, help="Vault root for wikilink resolution.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
-    parser.add_argument("--limit", type=int, default=20, help="Max finding rows in output.")
+    parser.add_argument("--limit", type=int, default=20, help="Max evidence-line rows in output (CHECK rows are never limited).")
     args = parser.parse_args(argv)
 
     vault_root = args.vault_root.resolve() if args.vault_root else find_vault_root()
@@ -1076,12 +1698,12 @@ def _main(argv: list[str] | None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Wraps ``_main`` so any uncaught exception exits 2 (INCOMPLETE), never 1 (BLOCKING)."""
+    """Wraps ``_main`` so any uncaught exception exits 2 (INCOMPLETE), never 1 (CHECK_REQUIRED)."""
     try:
         return _main(argv)
     except SystemExit:
         raise
-    except Exception as exc:  # noqa: BLE001 - last-resort guard; report and degrade, never crash-as-BLOCKING
+    except Exception as exc:  # noqa: BLE001 - last-resort guard; report and degrade, never crash-as-CHECK_REQUIRED
         print(f"ERROR: cold_read_evidence crashed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return VERDICT_EXIT_CODES["INCOMPLETE"]
 
