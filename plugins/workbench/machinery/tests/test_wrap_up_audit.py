@@ -684,15 +684,33 @@ def test_scope_dotdot_normalizes_gives_findings(tmp_path: Path) -> None:
     assert "brain/Lonely Two.md" in report["scope"]["files"]
 
 
+def _filesystem_is_case_insensitive(directory: Path) -> bool:
+    probe = directory / "CaseProbe.tmp"
+    probe.write_text("x", encoding="utf-8")
+    try:
+        return (directory / "caseprobe.tmp").exists()
+    finally:
+        probe.unlink()
+
+
 def test_scope_case_variant_gives_findings(tmp_path: Path) -> None:
+    # Case correction only applies where the variant path actually exists, i.e.
+    # a case-insensitive filesystem (macOS APFS). On a case-sensitive one (Linux
+    # CI) `lonely two.md` is a distinct, nonexistent path, and guessing a match
+    # would be wrong where `a.md` and `A.md` can coexist, so it must fail closed.
     _git_init(tmp_path)
     _write(tmp_path, "brain/Lonely Two.md", _note("Lonely Two"))
     _git_commit_all(tmp_path, "init")
 
     report = collect(tmp_path, files=["brain/lonely two.md"], base="HEAD")
 
-    assert report["verdict"] == "FINDINGS"
-    assert "brain/Lonely Two.md" in report["scope"]["files"]
+    if _filesystem_is_case_insensitive(tmp_path / "brain"):
+        assert report["verdict"] == "FINDINGS"
+        assert "brain/Lonely Two.md" in report["scope"]["files"]
+    else:
+        assert report["verdict"] == "INCOMPLETE"
+        assert "brain/Lonely Two.md" not in report["scope"]["files"]
+        assert any("lonely two.md" in str(e) for e in report["scope"]["errors"])
 
 
 def test_scope_absolute_path_gives_findings(tmp_path: Path) -> None:
