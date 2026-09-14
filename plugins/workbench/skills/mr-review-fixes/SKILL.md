@@ -1,6 +1,9 @@
 ---
 name: mr-review-fixes
-description: Use when a user says an MR, PR, merge request, or pull request has review feedback, review comments, changes requested, an approval blocker, or asks to see what needs to be fixed, answered, or replied to after review. Covers reading review threads, triaging findings, landing the fix, and replying to the reviewer in-thread on GitLab and GitHub.
+description: >
+  Reads MR/PR review threads, triages findings, lands the fix, and replies to
+  the reviewer in-thread. Use when an MR or PR has review feedback, changes
+  requested, or an approval blocker, or asks what needs fixing after review.
 ---
 
 # MR Review Fixes

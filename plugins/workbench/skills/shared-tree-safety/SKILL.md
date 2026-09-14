@@ -1,6 +1,9 @@
 ---
 name: shared-tree-safety
-description: Protect work when a git working tree or worktree may be shared with a live autonomous agent or another session. Use before resetting, force-checkouting, or cleaning any tree an agent might be using, when a working tree changes unexpectedly mid-task, or when taking over a directory another process was working in.
+description: >
+  Protect work when a git tree may be shared with a live autonomous agent or
+  another session. Use before `reset --hard`, force-checkout, or `clean` on
+  any tree an agent might be using, or when taking over a directory mid-task.
 ---
 
 # Shared Tree Safety

@@ -1,6 +1,10 @@
 ---
 name: prd-to-issues
-description: Break a PRD into tracer-bullet vertical slices, output as either independently-grabbable GitHub issues with executor-ready bodies (default) or a phased implementation plan saved to docs/plans/ (`--plan`). Use when user wants to convert a PRD to issues, create implementation tickets, break down a PRD into work items, break down a PRD into an implementation plan, plan phases from a PRD, or mentions "tracer bullets".
+description: >
+  Breaks a PRD into tracer-bullet vertical slices as executor-ready GitHub
+  issues, or a phased plan under docs/plans/ with `--plan`. Use to convert a
+  PRD to issues, or break a PRD into work items or tickets, or mentions
+  "tracer bullets".
 ---
 
 # PRD to Issues

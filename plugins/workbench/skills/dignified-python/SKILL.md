@@ -1,9 +1,9 @@
 ---
 name: dignified-python
-description: Production Python coding standards with automatic version detection (3.10-3.13). Use when writing,
-  reviewing, or refactoring Python to ensure adherence to modern type syntax, LBYL exception
-  handling, pathlib operations, ABC-based interfaces, and production-tested patterns. Not
-  Dagster-specific - applies to any Python project.
+description: >
+  Production Python coding standards (3.10-3.13): modern type syntax, LBYL
+  exception handling, pathlib, ABC-based interfaces. Use when writing,
+  reviewing, or refactoring Python in any project, not only Dagster.
 ---
 
 # Dignified Python Coding Standards Skill

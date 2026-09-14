@@ -1,16 +1,10 @@
 ---
 name: repo-docs
 description: >
-  Creates, classifies, and maintains a repository's human-facing documentation as one
-  Diátaxis-shaped set: the root README landing page and docs/ split into tutorials,
-  how-to guides, reference, and explanation, with a provenance footer and a drift,
-  link, and mode checker. Use when someone asks to write, generate, update, improve,
-  or refresh a README, says "this repo needs a README", wants a runbook, how-to guide,
-  operations guide, tutorial, architecture doc, module map, data-flow write-up, or a
-  "where does X live" doc, asks which kind of doc something is or whether a page is a
-  how-to or reference, wants docs restructured or migrated under docs/, or wants a
-  staleness or link check of existing docs against the code. Not for the Claude-facing
-  project.md (use project-context) or docs/plans/ (use prd-to-issues --plan).
+  Writes and maintains a repo's README and docs/ (tutorials, how-to, reference,
+  explanation). Use when asked to write or refresh a README, runbook, or
+  architecture doc, explain where X lives, or check docs for staleness. Not
+  project.md or docs/plans.
 ---
 
 # Repo docs

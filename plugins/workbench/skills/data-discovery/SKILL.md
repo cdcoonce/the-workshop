@@ -1,13 +1,9 @@
 ---
 name: data-discovery
 description: >
-  Generate a handoff-ready data discovery document for a Snowflake schema or dbt project.
-  Produces a single markdown file with table inventory, coverage summary, Mermaid relationship
-  diagram, and runnable discovery queries with plain English headers. Adaptive depth for
-  engineers or analysts. Use when: onboarding someone to a dataset, documenting available data,
-  creating a data walkthrough, exploring what's in a schema. Triggers: data discovery, discover
-  data, what data is available, document this schema, data walkthrough, schema handoff,
-  onboard to dataset, what tables exist, explore this data.
+  Generates a data discovery doc for a Snowflake schema or dbt project: table
+  inventory, coverage, ER diagram, and runnable queries. Use when onboarding to a
+  dataset or asking what data exists. Not dbt structure — use dbt-manifest-facts.
 ---
 
 # Data Discovery

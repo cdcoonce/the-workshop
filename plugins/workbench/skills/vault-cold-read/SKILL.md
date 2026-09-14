@@ -1,7 +1,10 @@
 ---
 name: vault-cold-read
 description: >
-  Run Charles's vault (The Vault) /cold-read gate — an adversarial read of a dispatched issue's SPEC (not its code) before it is promoted to the afk executor. Trigger when Charles invokes /cold-read, mentions /cold-read, asks whether an issue is buildable cold, or is about to promote a `proposed` issue.
+  Run Charles's vault /cold-read gate — an adversarial read of an issue's
+  SPEC before promotion to the afk executor. Trigger when Charles invokes
+  /cold-read, asks if an issue is buildable cold, or is about to promote a
+  `proposed` issue.
 ---
 
 # Vault Cold Read

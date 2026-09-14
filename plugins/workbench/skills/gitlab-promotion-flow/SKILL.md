@@ -1,10 +1,10 @@
 ---
 name: gitlab-promotion-flow
 description: >
-  Integration and promotion policy for Clearway GitLab data repos (Dagster,
-  dbt, ingestion). Use when starting work, choosing a branch or merge target,
-  opening a merge request into dev, promoting dev to main, or releasing to
-  production in one of these repos.
+  Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt,
+  ingestion). Use when starting work, choosing a branch or merge target, opening
+  an MR into dev, promoting dev to main, or releasing to production in these
+  repos.
 ---
 
 # GitLab promotion flow

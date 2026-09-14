@@ -1,6 +1,6 @@
 ---
 name: sql-deploy-precheck
-description: Compile-check committed warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying it, catching column drift and views that will not build. Use when about to run a .sql file at a warehouse, after any ALTER TABLE, before re-running a views file, or when a deploy half-applied and left objects inconsistent. Skip for local-only or fixture SQL.
+description: Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. Use when about to run a .sql file or after an ALTER TABLE. Not fixtures — use warehouse-sql-test-harness.
 ---
 
 # SQL deploy precheck

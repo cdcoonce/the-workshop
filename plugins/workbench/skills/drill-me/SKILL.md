@@ -2,9 +2,8 @@
 name: drill-me
 description: >
   Closed-book multiple-choice drilling that tells a recall gap apart from a
-  comprehension gap. Use when Charles invokes /drill-me, or asks to be drilled,
-  quizzed, or tested on material — "quiz me", "drill me", "test me on this",
-  "exam-style practice" — especially before an assessment.
+  comprehension gap. Use when Charles invokes /drill-me or asks to be
+  drilled, quizzed, or tested on material — especially before an assessment.
 ---
 
 # Drill Me

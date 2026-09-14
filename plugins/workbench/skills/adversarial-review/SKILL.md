@@ -1,11 +1,10 @@
 ---
 name: adversarial-review
 description: >
-  Attacks finished work by trying to disprove what it claims, and reports what
-  survives with the evidence. Use when the user says "adversarial review",
-  "attack this", "try to break this", "poke holes in this", "prove me wrong",
-  "be skeptical", or wants a hostile pass over work that is claimed done —
-  before declaring it finished, shipping it, merging it, or trusting a result.
+  Attacks finished work by trying to disprove what it claims, reporting what
+  survives with evidence. Use when the user says "attack this" or "try to break
+  this", or wants a hostile pass before shipping, merging, or trusting a
+  claimed-done result.
 ---
 
 # Adversarial Review

@@ -1,6 +1,9 @@
 ---
 name: react-ui-ux
-description: Applies deliberate design taste to React UI generation — adjustable dials (variance, motion, density) and explicit anti-genericness rules to stop AI-generated components from defaulting to the generic shadcn/Tailwind look. Use when building or editing React components, pages, or layouts (.tsx/.jsx), especially new UI generation in Tailwind/shadcn/Framer-Motion projects.
+description: >
+  Applies design taste to React UI generation using variance/motion/density dials,
+  stopping components from the generic shadcn/Tailwind look. Use when building or
+  editing React components/pages. Not charts — use chart-taste.
 ---
 
 # React UI/UX Taste

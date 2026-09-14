@@ -1,13 +1,9 @@
 ---
 name: github-cli
 description: >
-  GitHub CLI (gh) integration for managing issues, pull requests, branches,
-  commits, and code reviews directly from the terminal. Use when Claude needs to
-  create, list, view, or update GitHub issues; create draft branches and
-  pull requests; make commits and push changes; review pull request diffs and
-  changes; approve or merge PRs; manage GitHub Actions workflows; or work with
-  GitHub repositories without switching to a browser. Requires gh CLI installed
-  and authenticated.
+  GitHub CLI (gh) integration for issues, pull requests, branches, commits, and
+  Actions workflows from the terminal. Use to create, list, or update GitHub
+  issues, open or review pull requests, or manage Actions without a browser.
 ---
 
 # GitHub CLI (gh) Skill

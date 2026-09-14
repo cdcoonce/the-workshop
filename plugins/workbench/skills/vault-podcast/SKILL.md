@@ -1,7 +1,10 @@
 ---
 name: vault-podcast
 description: >
-  Run Charles's vault (The Vault) /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes (deep-dive) or teach lesson workspaces (lesson). Trigger when Charles invokes /podcast, mentions /podcast, or asks for a podcast or audio episode of vault content.
+  Run Charles's vault /podcast workflow to render NotebookLM-style two-host
+  audio episodes from vault notes or teach lesson workspaces. Trigger when
+  Charles invokes /podcast or asks for a podcast or audio episode of vault
+  content.
 ---
 
 # Vault Podcast

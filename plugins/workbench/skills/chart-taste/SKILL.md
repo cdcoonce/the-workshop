@@ -1,6 +1,9 @@
 ---
 name: chart-taste
-description: Applies chart-design taste to React data visualization — a chart-type decision tree and adjustable dials (annotation density, complexity, color restraint) to stop charts from being technically-rendered-but-uninformative. Use when building charts or data visualizations with Recharts, Nivo, or similar React charting libraries.
+description: >
+  Applies chart-design taste to React data viz — a chart-type decision tree and dials
+  for density, complexity, color restraint. Use when building charts with Recharts,
+  Nivo, or similar libraries. Not container chrome — use react-ui-ux.
 ---
 
 # Chart Taste

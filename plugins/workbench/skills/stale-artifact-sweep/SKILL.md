@@ -1,6 +1,9 @@
 ---
 name: stale-artifact-sweep
-description: Use before acting on any recorded artifact — an issue, a review finding, a "do not merge" comment, a TODO or blocker doc, a plan prerequisite, a branch someone said still needs reviving. Re-verifies each against current reality and classifies it with evidence. Read-only.
+description: >
+  Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or
+  blocker against current reality, with evidence. Use before acting on an old
+  claim that something is blocked, broken, or still needed. Read-only.
 ---
 
 # Stale Artifact Sweep
@@ -27,13 +30,13 @@ that assumption.
 Every artifact gets exactly one, and every verdict carries the evidence that produced it. A bare
 verdict is the failure this skill exists to prevent — never emit one.
 
-| Verdict                | Meaning                                                              |
-| ---------------------- | -------------------------------------------------------------------- |
-| `STILL_VALID`          | Re-derived against current state and still true.                     |
-| `ALREADY_DONE`         | The work is present in the target already.                           |
-| `SUPERSEDED`           | Something else changed the ground under it; the record is now wrong. |
-| `NO_LONGER_REPRODUCES` | The check that produced it was re-run and passed.                    |
-| `UNVERIFIABLE`         | Could not be decided from available evidence. Say what is missing.   |
+| Verdict                | Meaning                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `STILL_VALID`          | Re-derived against current state and still true.                             |
+| `ALREADY_DONE`         | The work is present in the target already.                                   |
+| `SUPERSEDED`           | Something else changed the ground under it; the record is now wrong.         |
+| `NO_LONGER_REPRODUCES` | The check that produced it was re-run and passed.                            |
+| `UNVERIFIABLE`         | Could not be decided from available evidence. Say what is missing.           |
 | `REMEDY_UNSOUND`       | Reproduces exactly as written, but its diagnosis or prescribed fix is wrong. |
 
 `NO_LONGER_REPRODUCES` requires an **actual re-run**. "The fix probably landed" is
