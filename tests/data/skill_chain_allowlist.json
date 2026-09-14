@@ -31,6 +31,11 @@
       "in": "vault-cold-read/references/command.md",
       "reason": "recommendation to Charles, not an invocation"
     },
+    {
+      "target": "vault-audit",
+      "in": "vault-cold-read/references/command.md",
+      "reason": "names /audit only to point at the shared `<engine>` placeholder convention its command.md also uses; no invocation"
+    },
     { "target": "vault-pulse", "in": "vault-debrief/references/command.md", "reason": "boundary/comparison table" },
     {
       "target": "vault-standup",
