@@ -63,9 +63,23 @@ test-machinery:
 # wrap_up_audit.py) reads graphmark.config.CheckPolicy and graphmark.check,
 # and 0.6/0.7 can disagree on edge fixtures. Runs only that one suite, under
 # 0.7, so a real disagreement fails loudly here instead of shipping unnoticed.
+#
+# Deliberately NOT `cd plugins/workbench/machinery` first: that directory is
+# its own uv project (pyproject.toml pins graphmark>=0.6,<0.7) with a synced
+# `.venv/` already on disk. `uv run --with 'graphmark>=0.7,<0.8'` from
+# INSIDE it resolves 0.7.2 correctly but then silently imports 0.6.0 from
+# that pre-existing `.venv` anyway — verified with `uv run -v`, which shows
+# `Selecting: graphmark==0.7.2` immediately followed by an import from
+# `machinery/.venv/lib/.../graphmark/__init__.py` (0.6.0). `--no-project` and
+# `--isolated` do not change this. Running from the repo root instead (whose
+# own `.venv`/pyproject never mention graphmark) has no such shadow — the
+# `--with` overlay is what actually gets imported. Confirmed by literally
+# counting: this file collects 71 tests total, 3 of them gated
+# `@NEEDS_GRAPHMARK_07`; running the wrong way silently reports 68 passed +
+# 3 skipped, no error, looking like a clean run.
 .PHONY: test-wrap-up-gate-parity
 test-wrap-up-gate-parity:
-	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q tests/test_wrap_up_audit.py
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
 
 # Full gate: the root suite, every skill-script suite, and the machinery suite.
 # Skill-script suites live in isolated subtrees with a sibling `scripts` package
