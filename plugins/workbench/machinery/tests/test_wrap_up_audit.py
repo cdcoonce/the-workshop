@@ -183,6 +183,43 @@ GATE_REPLACE_POLICY = (
     "    return config\n"
 )
 
+# round 4 — n4/n4b/n4c: minimal fixtures isolating each individual guard in
+# _parse_gate_policy, one condition at a time (not bundled with the round-3
+# multi-assignment scenarios, which trip a DIFFERENT guard first).
+
+# n4: a single, valid, module-level POLICY — but check= is never used
+# anywhere, not even as dict(check=POLICY). This is the shape that existed
+# before round 3 and read as a valid policy despite nothing ever applying it.
+GATE_POLICY_NO_CHECK_USAGE = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(\n"
+    "    max_unresolved_links=0,\n"
+    "    max_orphans=3,\n"
+    ")\n"
+)
+
+# n4b: check=POLICY in one call, but ALSO check=CheckPolicy(...) with a
+# different value in another — the file really can enforce a policy this
+# parser never saw.
+GATE_POLICY_CONFLICTING_CHECK_USAGE = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    good = dict(check=POLICY)\n"
+    "    bad = dict(check=CheckPolicy(max_orphans=99))\n"
+    "    return good, bad\n"
+)
+
+# n4c: exactly one POLICY assignment — but it lives inside an `if` block,
+# not at module level, with check=POLICY present so n4/n4b's guards pass.
+GATE_POLICY_ONLY_IN_IF_BLOCK = (
+    "from graphmark.config import CheckPolicy\n\n"
+    "if True:\n"
+    "    POLICY = CheckPolicy(max_unresolved_links=0, max_orphans=3)\n\n"
+    "def main():\n"
+    "    return dict(check=POLICY)\n"
+)
+
 
 OWNER_VAULT_SCOPE_WITH_SCHOOL = '''
 from __future__ import annotations
@@ -1642,3 +1679,121 @@ def test_files_only_non_note_gives_incomplete(tmp_path: Path) -> None:
 
     assert report["verdict"] == "INCOMPLETE"
     assert any("no claimed notes" in e["reason"] for e in report["scope"]["errors"])
+
+
+# ===========================================================================
+# round 4 — n2: a failing base-graph build must never read as CLEAN
+# ===========================================================================
+
+def test_new_orphans_build_failure_never_reads_as_clean(tmp_path: Path) -> None:
+    # n2. A tracked absolute symlink makes `git archive | tarfile.extractall
+    # (..., filter="data")` raise AbsoluteLinkError (Python 3.12+ PEP 706),
+    # so _build_base_orphans fails while everything else (including the
+    # handoff diff, also git-backed) still succeeds. The session's only
+    # other edit (dropping A's link to B) is left UNCOMMITTED, so without
+    # new_orphans catching it, nothing else would flag it either.
+    _git_init(tmp_path)
+    # A stays linked to C throughout, so A itself never becomes an orphan —
+    # dropping the [[B]] link must be the ONLY thing new_orphans could catch.
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]] and [[C]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _write(tmp_path, "brain/C.md", _note("C"))
+    (tmp_path / "brain" / "link").symlink_to("/etc/hosts")
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[C]]. No longer linking to B."))
+    # left uncommitted deliberately
+
+    report = collect(tmp_path, files=["brain/A.md"], base=base_sha)
+
+    assert report["verdict"] == "INCOMPLETE"
+    not_run_checks = {nr["check"] for nr in report["not_run"]}
+    assert "new_orphans" in not_run_checks
+    assert report["checks"]["handoff_sections"]["not_run"] is None
+
+
+# ===========================================================================
+# round 4 — n4/n4b/n4c: individual _parse_gate_policy guards, isolated
+# ===========================================================================
+
+def test_gate_no_check_usage_gives_incomplete(tmp_path: Path) -> None:
+    # n4: `if not policy_refs:` guard
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)  # 4 orphans, over limit 3
+    _write(tmp_path, "ci/vault_health.py", GATE_POLICY_NO_CHECK_USAGE)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_conflicting_check_usage_gives_incomplete(tmp_path: Path) -> None:
+    # n4b: `if other_refs:` guard
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_POLICY_CONFLICTING_CHECK_USAGE)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+def test_gate_policy_only_inside_if_block_gives_incomplete(tmp_path: Path) -> None:
+    # n4c: `if policy_node not in tree.body:` guard
+    _git_init(tmp_path)
+    _write_gate_fixture(tmp_path, remove_b_link=True)
+    _write(tmp_path, "ci/vault_health.py", GATE_POLICY_ONLY_IN_IF_BLOCK)
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["checks"]["gate"]["not_run"] is not None
+
+
+# ===========================================================================
+# round 4 — n10: new_orphans' in_scope flag must reflect claimed_set, not
+# always be True
+# ===========================================================================
+
+def test_new_orphans_in_scope_flag_false_when_unclaimed(tmp_path: Path) -> None:
+    # n10: the existing 0->1 orphan case, where B is unclaimed.
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]] and [[C]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _write(tmp_path, "brain/C.md", _note("C"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[C]]. No longer linking to B."))
+    _git_commit_all(tmp_path, "remove link to B")
+
+    report = collect(tmp_path, files=["brain/A.md"], base=base_sha)
+
+    new_orphans = report["checks"]["new_orphans"]["findings"]
+    b_entry = next(f for f in new_orphans if f["file"] == "brain/B.md")
+    assert b_entry["in_scope"] is False
+
+
+def test_new_orphans_in_scope_flag_true_when_claimed(tmp_path: Path) -> None:
+    # n10 counterpart: same regression, but B itself is also claimed.
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]] and [[C]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _write(tmp_path, "brain/C.md", _note("C"))
+    _git_commit_all(tmp_path, "init")
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[C]]. No longer linking to B."))
+    _git_commit_all(tmp_path, "remove link to B")
+
+    report = collect(tmp_path, files=["brain/A.md", "brain/B.md"], base=base_sha)
+
+    new_orphans = report["checks"]["new_orphans"]["findings"]
+    b_entry = next(f for f in new_orphans if f["file"] == "brain/B.md")
+    assert b_entry["in_scope"] is True
