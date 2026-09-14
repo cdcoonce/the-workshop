@@ -15,6 +15,10 @@ SKILL_DIR = REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-ci-watch"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 SCRIPT = SKILL_DIR / "scripts/ci_watch.py"
 GITLAB_CLI = REPOSITORY_ROOT / "plugins/workbench/skills/gitlab-cli/SKILL.md"
+MR_REVIEW_FIXES_RESPOND = (
+    REPOSITORY_ROOT
+    / "plugins/workbench/skills/mr-review-fixes/references/respond.md"
+)
 
 
 def _normalized(path: Path) -> str:
@@ -71,3 +75,27 @@ def test_skill_warns_off_foreground_and_bare_paths() -> None:
     skill = _normalized(SKILL_MD)
     assert "run_in_background" in skill
     assert "base directory" in skill.lower()
+
+
+def test_mr_review_fixes_hands_ci_gate_to_the_watcher() -> None:
+    """The GitLab CI gate in mr-review-fixes used to teach a one-shot `glab ci
+    list --sha` / `glab ci get --pipeline-id` query, which the model re-ran by
+    hand until green — the same hand-rolled poll gitlab-ci-watch was carved
+    out to replace elsewhere. respond.md must route through the watcher
+    instead of re-teaching that loop."""
+    respond = _normalized(MR_REVIEW_FIXES_RESPOND)
+    assert "ci_watch.py" in respond
+    assert "glab ci list --sha" not in respond
+    assert "glab ci get --pipeline-id" not in respond
+
+
+def test_mr_review_fixes_confirms_the_push_before_watching() -> None:
+    """`watch_pipeline` does not fast-fail on a missing pipeline — it prints
+    "no pipeline ... yet — waiting" and polls until `unreachable_reason` fires
+    or the timeout (2700s default) elapses. The old one-shot query fast-failed
+    on an unpushed commit; losing that behind the watcher means an unpushed
+    commit now costs a 45-minute wait. respond.md must confirm the branch's
+    remote head matches HEAD (via `git ls-remote`, not a remote-tracking ref,
+    which can be stale) before starting the watch, restoring the fast-fail."""
+    respond = _normalized(MR_REVIEW_FIXES_RESPOND)
+    assert "git ls-remote" in respond
