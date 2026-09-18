@@ -301,3 +301,111 @@ def test_stale_active_uses_updated_or_mtime_not_creation_date(tmp_path: Path) ->
     stale_files = {issue["file"] for issue in report["issues"]["stale_active"]}
     assert "work/active/Long Running Project.md" not in stale_files
     assert "work/active/Explicitly Stale Project.md" in stale_files
+
+
+def test_audit_reports_a_date_inversion_in_an_accumulating_hub_file(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Key Decisions.md",
+        _note(
+            "Key Decisions",
+            tags="index",
+            body=(
+                "## Recent\n\n"
+                "### 2026-08-01 — newest, correctly on top\n\nBody.\n\n"
+                "### 2026-09-01 — appended at the bottom instead\n\nBody.\n"
+            ),
+        ),
+    )
+
+    report = audit(tmp_path)
+
+    inversions = report["issues"]["entry_order"]
+    assert len(inversions) == 1
+    assert inversions[0]["file"] == "brain/Key Decisions.md"
+    assert "2026-09-01" in inversions[0]["detail"]
+    assert "2026-08-01" in inversions[0]["detail"]
+
+
+def test_audit_reports_a_date_inversion_in_a_bulleted_hub_file(tmp_path: Path) -> None:
+    """The Brag Doc accumulates "- **YYYY-MM-DD" bullets, not "###" headings."""
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "perf/Brag Doc.md",
+        _note(
+            "Brag Doc",
+            tags="index",
+            body=(
+                "- **2026-08-01 — a win, correctly on top**\n\n"
+                "- **2026-09-01 — appended at the bottom instead**\n"
+            ),
+        ),
+    )
+
+    report = audit(tmp_path)
+
+    inversions = report["issues"]["entry_order"]
+    assert len(inversions) == 1
+    assert inversions[0]["file"] == "perf/Brag Doc.md"
+
+
+def test_audit_accepts_newest_first_entries_including_same_day_runs(tmp_path: Path) -> None:
+    """Several sessions can close on one day, so equal adjacent dates are legal."""
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Key Decisions.md",
+        _note(
+            "Key Decisions",
+            tags="index",
+            body=(
+                "## Recent\n\n"
+                "### 2026-09-02 — newest\n\nBody.\n\n"
+                "### 2026-09-01 — same day as the next\n\nBody.\n\n"
+                "### 2026-09-01 — second entry that day\n\nBody.\n\n"
+                "### 2026-08-30 — oldest\n\nBody.\n"
+            ),
+        ),
+    )
+
+    report = audit(tmp_path)
+
+    assert report["issues"]["entry_order"] == []
+
+
+def test_audit_reports_every_inversion_not_only_the_first(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Key Decisions.md",
+        _note(
+            "Key Decisions",
+            tags="index",
+            body=(
+                "## Recent\n\n"
+                "### 2026-08-01 — oldest\n\nBody.\n\n"
+                "### 2026-08-02 — appended\n\nBody.\n\n"
+                "### 2026-08-03 — appended\n\nBody.\n\n"
+                "### 2026-08-04 — appended\n\nBody.\n"
+            ),
+        ),
+    )
+
+    report = audit(tmp_path)
+
+    assert len(report["issues"]["entry_order"]) == 3
+
+
+def test_audit_ignores_a_hub_file_with_no_dated_entries(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Patterns.md",
+        _note("Patterns", tags="index", body="## Recent\n\nProse with no dated entries.\n"),
+    )
+
+    report = audit(tmp_path)
+
+    assert report["issues"]["entry_order"] == []
