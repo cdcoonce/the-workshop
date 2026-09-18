@@ -15,6 +15,7 @@ The test command is injected, so no real pytest subprocess runs here.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -28,9 +29,12 @@ from teeth_check import (  # noqa: E402
     _default_runner,
     Mutation,
     Spec,
+    SpecError,
     apply_mutation,
+    load_spec,
     parse_collected_tests,
     parse_failed_tests,
+    render,
     run_teeth_check,
 )
 
@@ -437,3 +441,129 @@ def test_purges_cached_bytecode_after_restoring(target: Path) -> None:
     )
 
     assert not stale.exists()
+
+
+# ---------------------------------------------------------------------------
+# Declared oracle — what actually executed the assertion
+#
+# A kill says the test is sensitive to a change in *our source*. It says
+# nothing about whether the assertion ran against the real dependency or
+# against a stand-in built from our own output. A recording double's oracle
+# IS the code under test, so a mutation of that code is killed by
+# construction — the kill is guaranteed, and its information content is zero.
+# The spec must therefore declare, per mutant, what scored it.
+# ---------------------------------------------------------------------------
+
+
+def _write_spec(tmp_path: Path, mutants: list[dict]) -> Path:
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps({"test_command": ["pytest", "-q"], "mutants": mutants})
+    )
+    return spec
+
+
+def _mutant(**over: object) -> dict:
+    base = {
+        "label": "cap",
+        "file": "mod.py",
+        "find": "LIMIT = 25",
+        "replace": "LIMIT = 999",
+        "oracle": "real",
+    }
+    base.update(over)
+    return base
+
+
+def test_load_spec_reads_the_declared_oracle(tmp_path: Path) -> None:
+    spec = load_spec(_write_spec(tmp_path, [_mutant(oracle="double")]))
+    assert spec.mutants[0].oracle == "double"
+
+
+def test_load_spec_refuses_a_mutant_with_no_declared_oracle(tmp_path: Path) -> None:
+    """Omission must refuse, not default. A silently-assumed oracle is exactly
+    the false confidence this field exists to remove."""
+    m = _mutant()
+    del m["oracle"]
+    with pytest.raises(SpecError, match="oracle"):
+        load_spec(_write_spec(tmp_path, [m]))
+
+
+def test_load_spec_refuses_an_oracle_it_does_not_recognise(tmp_path: Path) -> None:
+    with pytest.raises(SpecError, match="sort-of"):
+        load_spec(_write_spec(tmp_path, [_mutant(oracle="sort-of")]))
+
+
+def _killing_runner() -> object:
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:
+            return 0, "2 passed in 0.1s\n"
+        return 1, "FAILED tests/test_a.py::test_cap\n1 failed, 1 passed in 0.1s\n"
+
+    return runner
+
+
+def test_a_kill_against_a_double_is_reported_as_a_scoped_claim(target: Path) -> None:
+    """The load-bearing case. The mutant dies, and the report must still say
+    that nothing executed the real dependency."""
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("cap", target, "LIMIT = 25", "LIMIT = 999", oracle="double"),
+        ),
+        runner=_killing_runner(),
+    )
+    out = render(report)
+
+    assert report.mutants[0].status == "killed"
+    assert report.double_only_kills() == [report.mutants[0]]
+    assert "KILLED AGAINST A DOUBLE ONLY" in out
+    assert "0 against the real dependency" in out
+
+
+def test_a_kill_against_the_real_dependency_is_not_flagged(target: Path) -> None:
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("cap", target, "LIMIT = 25", "LIMIT = 999", oracle="real"),
+        ),
+        runner=_killing_runner(),
+    )
+    out = render(report)
+
+    assert report.double_only_kills() == []
+    assert "KILLED AGAINST A DOUBLE ONLY" not in out
+    assert "1 against the real dependency" in out
+
+
+def test_an_undeclared_oracle_never_reads_as_the_real_dependency(target: Path) -> None:
+    """A programmatic caller can skip the field; the report must say so rather
+    than silently counting it as executed — the collect_command rule."""
+    report = run_teeth_check(
+        _spec(target, Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")),
+        runner=_killing_runner(),
+    )
+    out = render(report)
+
+    assert "0 against the real dependency" in out
+    assert "1 undeclared" in out
+
+
+def test_a_survivor_is_not_counted_as_a_double_only_kill(target: Path) -> None:
+    """double_only_kills is about kills; a survivor is already its own finding."""
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        return 0, "2 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("guard", target, "GUARD = True", "GUARD = False", oracle="double"),
+        ),
+        runner=runner,
+    )
+    assert report.survivors() != []
+    assert report.double_only_kills() == []

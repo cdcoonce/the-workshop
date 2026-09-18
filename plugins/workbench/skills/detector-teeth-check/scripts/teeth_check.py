@@ -31,6 +31,13 @@ version of this loop gets them wrong:
    runs. Every run purges the mutated module's cache and executes with
    bytecode writing disabled, because a mutant that never executed is reported
    as a survivor and reads exactly like a real gap.
+6. **A kill is a claim about the test's oracle, not about reality.** A mutant
+   dying proves the test is sensitive to a change in *our source*. If the
+   assertion ran against a recording double, that double's oracle IS the code
+   under test, so the kill was guaranteed by construction and bounds only what
+   was passed — never that the real dependency accepts it. Each mutant
+   therefore declares its ``oracle``, and the report keeps the two kinds of
+   kill apart instead of summing them into one reassuring number.
 
 The source file is restored in a `finally`, so a crash mid-run cannot leave
 mutated code on disk.
@@ -58,12 +65,27 @@ class BaselineNotGreen(Exception):
     """Raised when the suite fails before any mutation is applied."""
 
 
+class SpecError(Exception):
+    """Raised when a spec is unreadable — a refusal, never a verdict."""
+
+
+#: What executed the assertion that scored a mutant.
+#:
+#: ``real`` — the actual dependency ran (a live client, a real database, the
+#: genuine library call). The kill bounds behaviour.
+#: ``double`` — a stand-in recorded the call. The kill bounds the argument that
+#: was passed and nothing else, because the double is built from the shape the
+#: code under test emits.
+ORACLES = ("real", "double")
+
+
 @dataclass(frozen=True)
 class Mutation:
     label: str
     path: Path
     find: str
     replace: str
+    oracle: str | None = None
 
 
 @dataclass
@@ -79,6 +101,7 @@ class MutantResult:
     status: str  # "killed" | "survived" | "not-applied" | "unscored"
     killed_by: list[str] = field(default_factory=list)
     detail: str = ""
+    oracle: str | None = None
 
 
 @dataclass
@@ -97,6 +120,15 @@ class Report:
     def unscored(self) -> list[MutantResult]:
         """Mutants whose run produced no readable verdict — measured nothing."""
         return [m for m in self.mutants if m.status == "unscored"]
+
+    def double_only_kills(self) -> list[MutantResult]:
+        """Kills scored solely against a stand-in.
+
+        Not a failure — a *scoped* claim. The mutation changed what the double
+        observed, which is guaranteed the moment the double records the code's
+        own output. Nothing here says the real collaborator accepts it.
+        """
+        return [m for m in self.mutants if m.status == "killed" and m.oracle == "double"]
 
 
 def parse_failed_tests(output: str) -> set[str]:
@@ -201,7 +233,14 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
         try:
             mutated = apply_mutation(original, mutant.find, mutant.replace)
         except ValueError as exc:
-            results.append(MutantResult(mutant.label, "not-applied", detail=str(exc)))
+            results.append(
+                MutantResult(
+                    mutant.label,
+                    "not-applied",
+                    detail=str(exc),
+                    oracle=mutant.oracle,
+                )
+            )
             continue
 
         # A mutant that cannot compile reds the suite by breaking the import,
@@ -216,6 +255,7 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                         mutant.label,
                         "unscored",
                         detail=f"mutant does not compile: {exc}",
+                        oracle=mutant.oracle,
                     )
                 )
                 continue
@@ -233,7 +273,9 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
             _purge_cached_bytecode(mutant.path)
 
         if code == 0:
-            results.append(MutantResult(mutant.label, "survived"))
+            results.append(
+                MutantResult(mutant.label, "survived", oracle=mutant.oracle)
+            )
             continue
 
         failed = sorted(parse_failed_tests(out))
@@ -247,12 +289,17 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                     mutant.label,
                     "unscored",
                     detail=f"run exited {code} naming no failing test",
+                    oracle=mutant.oracle,
                 )
             )
             continue
 
         killers.update(normalize_test_id(t) for t in failed)
-        results.append(MutantResult(mutant.label, "killed", killed_by=failed))
+        results.append(
+            MutantResult(
+                mutant.label, "killed", killed_by=failed, oracle=mutant.oracle
+            )
+        )
 
     never_killed = (
         None
@@ -260,6 +307,30 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
         else [t for t in collected if normalize_test_id(t) not in killers]
     )
     return Report(mutants=results, never_killed=never_killed)
+
+
+def _read_oracle(mutant: dict, label: str) -> str:
+    """Return a mutant's declared oracle, refusing anything else.
+
+    Omission refuses rather than defaulting. A mutant whose oracle is assumed
+    is the exact false confidence this field exists to remove: the author is
+    the only one who knows whether the predicted test drives the real
+    dependency or a stand-in, and guessing ``real`` on their behalf would
+    manufacture a guarantee nobody checked.
+    """
+    if "oracle" not in mutant:
+        raise SpecError(
+            f"mutant {label!r} declares no 'oracle'. Add one of {ORACLES}: "
+            "'real' if the predicted test drives the actual dependency, "
+            "'double' if a stand-in records the call. A kill against a double "
+            "proves the argument was passed, not that the behaviour works."
+        )
+    oracle = mutant["oracle"]
+    if oracle not in ORACLES:
+        raise SpecError(
+            f"mutant {label!r} declares oracle {oracle!r}; expected one of {ORACLES}"
+        )
+    return oracle
 
 
 def load_spec(path: Path) -> Spec:
@@ -275,6 +346,7 @@ def load_spec(path: Path) -> Spec:
                 path=(base / m["file"]).resolve(),
                 find=m["find"],
                 replace=m["replace"],
+                oracle=_read_oracle(m, m["label"]),
             )
             for m in data["mutants"]
         ],
@@ -282,10 +354,30 @@ def load_spec(path: Path) -> Spec:
 
 
 def render(report: Report) -> str:
-    lines = ["mutant                          status       killed by"]
+    lines = ["mutant                          status       oracle       killed by"]
     for m in report.mutants:
         who = ", ".join(m.killed_by) if m.killed_by else (m.detail or "-")
-        lines.append(f"{m.label[:30]:<31} {m.status:<12} {who}")
+        oracle = m.oracle or "undeclared"
+        lines.append(f"{m.label[:30]:<31} {m.status:<12} {oracle:<12} {who}")
+
+    kills = [m for m in report.mutants if m.status == "killed"]
+    if kills:
+        real = sum(1 for m in kills if m.oracle == "real")
+        doubles = sum(1 for m in kills if m.oracle == "double")
+        undeclared = len(kills) - real - doubles
+        tally = (
+            f"{len(kills)} killed — {real} against the real dependency, "
+            f"{doubles} against doubles"
+        )
+        if undeclared:
+            tally += f", {undeclared} undeclared"
+        lines.append("")
+        lines.append(tally)
+        if undeclared:
+            lines.append(
+                "  (Undeclared is not 'real'. Nobody said what executed those "
+                "assertions,\n  so nothing here bounds behaviour.)"
+            )
 
     if report.unapplied():
         lines.append("")
@@ -300,6 +392,18 @@ def render(report: Report) -> str:
             "read them as kills."
         )
         lines += [f"  {m.label}: {m.detail}" for m in report.unscored()]
+
+    if report.double_only_kills():
+        lines.append("")
+        lines.append(
+            "KILLED AGAINST A DOUBLE ONLY — these prove the argument was "
+            "passed, never\nthat the behaviour works. A recording double is "
+            "built from the shape the code\nunder test emits, so mutating that "
+            "code is killed by construction: the kill\nwas guaranteed before "
+            "the suite ran. Write the claim at that scope, or add a\nrow whose "
+            "oracle is the real dependency:"
+        )
+        lines += [f"  {m.label}" for m in report.double_only_kills()]
 
     if report.survivors():
         lines.append("")
@@ -336,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         report = run_teeth_check(load_spec(args.spec))
-    except BaselineNotGreen as exc:
+    except (BaselineNotGreen, SpecError) as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 

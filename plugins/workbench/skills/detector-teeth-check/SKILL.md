@@ -36,6 +36,7 @@ command works:
     {
       "label": "no upper bound on k",
       "file": "engine/thing.py",
+      "oracle": "real",
       "find": "k = min(k, MAX_RESULTS)",
       "replace": "k = k"
     }
@@ -50,7 +51,8 @@ python scripts/teeth_check.py spec.json
 Exit code is non-zero when any mutant survives or any row fails to score, so it
 can gate CI. `--json` emits the machine-readable form. `collect_command` is
 optional; without it the caught-no-mutant list reads _not computed_, not an
-empty all-clear.
+empty all-clear. `oracle` is required per mutant — see **Traps that fake a
+kill**.
 
 ## Choosing mutants
 
@@ -162,6 +164,55 @@ already correct.
   assertion text can match an unrelated test's output, or a collection error
   that scored nothing at all.
 
+## Traps that fake a kill
+
+Everything above is about a test that will not go red when it should. The
+opposite failure is quieter and costs more: **a mutant that dies while proving
+nothing.** The matrix reports teeth, the gate signs, and the property is
+unguarded.
+
+**The mirror.** A recording double is built from the shape the code under test
+emits. Mutate that code and the recording changes, so the assertion fails and
+the mutant dies — guaranteed, before the suite ever runs. Mutation testing
+perturbs our source; a recording double's oracle *is* our source. They share an
+oracle, so stacking them adds no coverage while presenting as two independent
+gates.
+
+This is the failure mode of the fix prescribed for **unpinned claim** above: "a
+recording double that asserts the request shape" is the right remedy for a
+double that ignores its arguments, and it is still blind to whether the real
+collaborator accepts them. A dlt landing converted from `replace` to a
+year-scoped `merge`; both named teeth for the schema-freeze contract scored
+against recording doubles, both mutants died, and dlt rejected the combination
+on **every** run for seven days. Re-run afterwards, the pre-fix suite went
+_green_ for the defect that broke 100% of materializations and _red_ for the
+one-line change that would have fixed it.
+
+So each mutant declares what executed the assertion:
+
+- `real` — the actual dependency ran. The kill bounds behaviour.
+- `double` — a stand-in recorded the call. The kill bounds the argument that
+  was passed, and nothing further.
+
+The harness refuses a spec that omits it, and keeps the two apart in the tally
+(`5 killed — 2 against the real dependency, 3 against doubles`) instead of
+summing them into one reassuring number. A `double` row is not a failure; it is
+a scoped claim that has to be _written_ at that scope. Judge by the assertion's
+subject, not by whether a fixture exists somewhere — a stand-in sitting upstream
+of the property under test still leaves that property really executed.
+
+**Mutations you cannot spell in source.** Find/replace says "the code is
+wrong". It cannot say "the destination was built by the previous version of
+this code" — and a conversion defect lives exactly there. Every fixture-building
+integration test is born *after* the change, so the first run after deploy is
+unreachable by construction: dlt grants a brand-new table a one-time schema
+grace, so the real-dlt round-trip test above executed the genuine dependency and
+*still* could not see it. For any change to a write disposition, schema
+contract, primary or merge key, partition scheme, or file layout, the tooth is a
+test that runs the **old** contract first and the new one second against the
+same destination. Nothing else reaches that state, and it is reachable exactly
+once per environment.
+
 ## What it refuses to score
 
 Absence of a failure signal is never evidence of a pass. Three cases refuse:
@@ -173,6 +224,9 @@ Absence of a failure signal is never evidence of a pass. Three cases refuse:
   command aborting before collection (unrecognised flag, missing plugin), exits
   non-zero with no `FAILED` line — the harness broke, no assertion caught
   anything. Python mutants are compile-checked first, catching it at the source.
+- **A mutant that declares no `oracle`.** Only the author knows whether the
+  predicted test drives the real dependency or a stand-in; guessing `real` on
+  their behalf would manufacture a guarantee nobody checked. Exits 2.
 
 ## Safety
 
@@ -186,4 +240,7 @@ anyway: `git status` is then an independent check that everything was restored.
 
 - `adversarial-review` — where blind teeth actually surface. A green matrix
   never reports one, so point a hostile pass at the tests, not just the code.
+- `warehouse-sql-test-harness` — the same mirror, one domain over: asserting on
+  SQL text rather than executing it. Reach for it when the dependency is a
+  warehouse.
 - `drain-queue` — gates the spec before a build; this gates the tests after.
