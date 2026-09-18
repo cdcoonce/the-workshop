@@ -27,5 +27,6 @@ Rewrite the machine-scoped handoff digest (`.brain/handoff-<context>.md`) so the
 ## Constraints
 
 - **Digest, not history.** If it grows past a screen, you're logging — cut it back.
+- **SessionStart injects this file condensed, not whole.** Sections are clipped to a share of a byte ceiling, so an oversized handoff reaches the next session trimmed. A `## Resume from here` written as a stack of `**▶ YYYY-MM-DD …` entries is the one shape that collapses instead of clipping — the newest entries survive intact and the rest are counted. Any other shape is clipped like every other section, and a resume section that grows past the budget is marked as un-condensed so the loss is visible rather than silent.
 - **`.brain/` is machine infrastructure**, hidden from Obsidian, synced via git. Never move the handoff into the Obsidian-visible tree.
 - **Keep it true.** The handoff is the resume contract; a stale handoff is worse than none because it sends the next session down the wrong path.

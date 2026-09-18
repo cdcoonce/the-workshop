@@ -455,6 +455,58 @@ class TestCondenseDigest:
         assert "## Where we are" in out
         assert "Mid-flight." in out
 
+    @staticmethod
+    def _handoff_bold_entries(section_chars: int = 12000) -> str:
+        """A handoff in the shape the live files use: bold paragraph entries
+        under "Resume from here" and no "**\u25b6" markers anywhere."""
+        body = "**Thread \u2014 status.** " + ("detail. " * (section_chars // 8))
+        return (
+            "# Handoff\n\n_Refreshed today._\n\n"
+            f"## Resume from here\n\n{body}\n\n"
+            "## Open issues\n\n- one\n\n"
+            "## Mode\n\nAutonomous.\n"
+        )
+
+    def test_over_ceiling_digest_without_entry_markers_keeps_every_section(self) -> None:
+        """A resume section the entry regex cannot split must not cost every section."""
+        out = condense_digest(self._handoff_bold_entries(), ".brain/handoff-work.md")
+
+        assert "## Resume from here" in out
+        assert "## Open issues" in out
+        assert "## Mode" in out
+
+    def test_reports_a_resume_section_it_could_not_split_into_entries(self) -> None:
+        """The silent half of the bug: nothing said the collapse had no effect."""
+        out = condense_digest(self._handoff_bold_entries(), ".brain/handoff-work.md")
+
+        assert "could not be condensed" in out
+
+    def test_stays_quiet_when_a_small_resume_section_has_no_entries(self) -> None:
+        """Only annotate a section the collapse was actually supposed to shrink."""
+        small = "# Handoff\n\n## Resume from here\n\n**Thread — status.** Short.\n"
+
+        assert condense_digest(small, ".brain/h.md").strip() == small.strip()
+
+    def test_respects_the_byte_ceiling_with_several_oversized_sections(self) -> None:
+        """One oversized section cannot distinguish a per-section budget from none."""
+        filler = "detail. " * 2000
+        src = (
+            "# Handoff\n\n_Refreshed today._\n\n"
+            f"## Resume from here\n\n{filler}\n\n"
+            f"## Open issues\n\n{filler}\n\n"
+            f"## Threads\n\n{filler}\n\n"
+            f"## Mode\n\n{filler}\n"
+        )
+
+        out = condense_digest(src, ".brain/h.md")
+
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES + 400
+
+    def test_is_idempotent_without_entry_markers(self) -> None:
+        once = condense_digest(self._handoff_bold_entries(), ".brain/h.md")
+
+        assert condense_digest(once, ".brain/h.md") == once
+
     def test_small_digest_round_trips(self) -> None:
         """handoff-work.md has no '▶' entries and must not regress."""
         small = "# Handoff\n\n## Where we are\n\n- **Thing** — done.\n"
