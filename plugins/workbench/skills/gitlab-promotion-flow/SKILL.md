@@ -71,6 +71,11 @@ different policy, that wins — resolve repository policy first (see
 5. **`main` CI passing = the production release.** Production deploys **only**
    through the `main` CI path. Never ship prod off `dev` or a feature branch.
 
+6. **Freeze the diff when the review will outlast the next merge.** An MR's
+   diff tracks its source branch head, so each merge into `dev` changes what
+   the reviewer is reading. Promote from a `release/vX.Y.Z` branch cut off
+   `dev` — `references/release-branch-promotion.md` has the mechanics.
+
 ## Guardrails
 
 - One concern per branch and per MR, on every hop. Split unrelated work apart.
@@ -84,6 +89,9 @@ different policy, that wins — resolve repository policy first (see
   `Content-Type: application/json` — glab `-f` form fields silently drop
   `protected_branch_ids` and the rule goes live globally. Push access on
   `main` (and normally `dev`) is **No one**; changes land only by MR merge.
+- A promotion MR's title comes from `gitlab-mr-create`'s `--title-file`, never
+  the `HEAD` subject — on a release branch that is `chore(release): vX.Y.Z`,
+  which titles the commit, not the release.
 - Never bypass CI on any MR hop.
 - Reach for the grouped path only for genuinely related issues; a lone concern
   goes direct — do not spin up an integration branch for one branch.
