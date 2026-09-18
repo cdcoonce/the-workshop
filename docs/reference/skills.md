@@ -33,7 +33,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
-| `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. |
+| `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles a promotion into `main`, descriptions keep real newlines, and both are read back. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
@@ -239,7 +239,7 @@ GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. Use to create, lis
 
 *`workbench` plugin*
 
-Create GitLab merge requests with `glab` using the `HEAD` conventional-commit subject as the exact title, a Markdown description file with real newlines, and API read-back verification. Use whenever creating a GitLab merge request.
+Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles a promotion into `main`, descriptions keep real newlines, and both are read back. Use whenever creating a GitLab merge request.
 
 ### `/gitlab-promotion-flow`
 

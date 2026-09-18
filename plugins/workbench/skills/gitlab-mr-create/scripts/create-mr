@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { printf 'Usage: %s DESCRIPTION.md [glab mr create options]\n' "${0##*/}" >&2; exit 64; }
+# The title rule depends on which hop this merge request is. Into the shared
+# integration branch, one branch carries one concern and the HEAD conventional
+# commit subject is the title — 38 of 38 ERG merge requests into `dev`. The
+# promotion into `main` is the opposite: 6 of 6 across every Clearway repo
+# carry a descriptive title, because the subject at the head of a release
+# branch is the release bot's `chore(release): vX.Y.Z`. That subject satisfies
+# the conventional-commit gate, so deriving the title from it does not fail
+# loudly on a promotion — it succeeds, and names a production release after a
+# chore. Hence the branch below rather than a caller-supplied override: the
+# title file is required where it is right and refused everywhere else.
+#
+# `main` is the release branch throughout these repos (see the
+# `gitlab-promotion-flow` skill); that is the assumption encoded here.
+promotion_target=main
+
+usage() {
+  printf 'Usage: %s DESCRIPTION.md [--title-file TITLE.txt] [glab mr create options]\n' "${0##*/}" >&2
+  exit 64
+}
 [[ $# -ge 1 ]] || usage
 description_file=$1
 shift
@@ -11,19 +29,68 @@ for command in glab git jq; do
   command -v "$command" >/dev/null || { printf '%s is required.\n' "$command" >&2; exit 69; }
 done
 
-expected_title=$(git log -1 --format=%s)
-conventional_commit_pattern='^[a-z]+(\([^)]+\))?!?: .+'
-[[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf 'HEAD subject is not a conventional commit: %s\n' "$expected_title" >&2; exit 65; }
-for option in "$@"; do
-  case "$option" in
-    --title|--title=*|-t|-t*|--description|--description=*|-d|-d*) printf 'Do not supply %s; the guard owns title and description.\n' "$option" >&2; exit 64 ;;
+# One pass over the arguments: reject the flags the guard owns, consume
+# `--title-file` so it never reaches glab, and note the target branch in every
+# spelling glab accepts. Missing a spelling would route a promotion down the
+# integration path, which is the defect this guard exists to prevent.
+title_file=""
+target_branch=""
+forward=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --title|--title=*|-t|-t*|--description|--description=*|-d|-d*)
+      printf 'Do not supply %s; the guard owns title and description.\n' "$1" >&2; exit 64 ;;
+    --title-file)
+      [[ $# -ge 2 ]] || { printf '--title-file needs a path.\n' >&2; exit 64; }
+      title_file=$2; shift 2; continue ;;
+    --title-file=*)
+      title_file=${1#--title-file=}; shift; continue ;;
+    --target-branch|-b)
+      target_branch=${2-} ;;
+    --target-branch=*)
+      target_branch=${1#--target-branch=} ;;
+    -b?*)
+      target_branch=${1#-b} ;;
   esac
+  forward+=("$1")
+  shift
 done
+
+# With no explicit flag glab targets the project's default branch, which in
+# some of these repos is `main`. Resolving it keeps a promotion on the
+# promotion path when the flag is simply left off.
+if [[ -z "$target_branch" ]]; then
+  target_branch=$(glab api "projects/:id" | jq -r '.default_branch // empty') || true
+  [[ -n "$target_branch" ]] || { printf 'Could not resolve the target branch; pass --target-branch explicitly.\n' >&2; exit 65; }
+fi
+
+if [[ "$target_branch" == "$promotion_target" ]]; then
+  [[ -n "$title_file" ]] || {
+    printf 'Promotion into %s needs --title-file: the HEAD subject (%s) titles the commit, not the release.\n' "$promotion_target" "$(git log -1 --format=%s)" >&2
+    printf 'Write the title to a file and pass --title-file; amending HEAD is not the remedy on a frozen or protected release branch.\n' >&2
+    exit 65
+  }
+  [[ -f "$title_file" && -s "$title_file" ]] || { printf 'Title file must exist and be non-empty: %s\n' "$title_file" >&2; exit 66; }
+  # Read from the file, never from an argument: `!NNN` is GitLab's own
+  # merge-request reference syntax and the most natural thing to write in a
+  # promotion title, and a shell that expands history turns it into a stray
+  # command (ERG !104 shipped with one baked into its title).
+  expected_title=$(<"$title_file")
+  [[ -n "$expected_title" ]] || { printf 'Title file is blank: %s\n' "$title_file" >&2; exit 65; }
+  [[ "$expected_title" != *$'\n'* ]] || { printf 'Title must be a single line: %s\n' "$title_file" >&2; exit 65; }
+else
+  [[ -z "$title_file" ]] || { printf 'Do not supply --title-file for a merge request into %s; the HEAD subject is the title there.\n' "$target_branch" >&2; exit 64; }
+  expected_title=$(git log -1 --format=%s)
+  conventional_commit_pattern='^[a-z]+(\([^)]+\))?!?: .+'
+  [[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf 'HEAD subject is not a conventional commit: %s\n' "$expected_title" >&2; exit 65; }
+fi
 
 description=$(<"$description_file")
 output_file=$(mktemp)
 trap 'rm -f "$output_file"' EXIT
-glab mr create --title "$expected_title" --description "$description" "$@" | tee "$output_file"
+# `${forward[@]+...}` because bash 3.2 — the macOS system bash — treats an
+# empty array as unset under `set -u`, while CI's bash 5 does not.
+glab mr create --title "$expected_title" --description "$description" ${forward[@]+"${forward[@]}"} | tee "$output_file"
 mr_url=$(grep -Eo 'https?://[^[:space:]]+/-/merge_requests/[0-9]+' "$output_file" | tail -n 1 || true)
 [[ -n "$mr_url" ]] || { printf 'MR was created, but glab did not report its URL; verification could not run.\n' >&2; exit 70; }
 
