@@ -246,6 +246,7 @@ def _append_bucket(out: list[str], label: str, items: list[str], source: str) ->
 
 
 _ENTRY_RE = re.compile(r"^\s*\*\*▶")
+_UNSPLIT_NOTE = "could not be condensed"
 _ELIDED_RE = re.compile(r"^_\+\d+ older session entries elided")
 
 
@@ -268,7 +269,21 @@ def _condense_resume(section: list[str], rel_path: str) -> str:
         entries[-1].append(line)
 
     head = [line for line in entries[0] if not _ELIDED_RE.match(line.strip())]
-    parts = ["\n".join(head).strip()]
+    body = "\n".join(head).strip()
+    if (
+        len(entries) == 1
+        and len(body) > HANDOFF_ENTRY_CHARS
+        and _UNSPLIT_NOTE not in body
+    ):
+        # Directly under the heading, not appended: a trailing note is exactly
+        # what the section clip removes, and this is the line that explains why
+        # the section needed clipping at all.
+        heading, _, rest = body.partition("\n")
+        body = (
+            f"{heading}\n\n_No `**\u25b6` dated entries here, so this section "
+            f"{_UNSPLIT_NOTE} — read `{rel_path}`._\n\n{rest.strip()}"
+        )
+    parts = [body]
     kept = entries[1:1 + HANDOFF_RESUME_ENTRIES]
     for entry in kept:
         parts.append(_clip("\n".join(entry).strip(), HANDOFF_ENTRY_CHARS))
@@ -281,26 +296,53 @@ def _condense_resume(section: list[str], rel_path: str) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+_CLIP_NOTE = "_Sections clipped for context budget"
+
+
+def _clip_block(block: str, limit: int) -> str:
+    """Clip one section to `limit` characters, always keeping its heading line.
+
+    Parameters
+    ----------
+    block : str
+        A section, its heading (when it has one) on the first line.
+    limit : int
+        Maximum characters for the returned section.
+
+    Returns
+    -------
+    str
+        `block` unchanged when short enough, else the heading plus a clipped
+        body. The result never exceeds `limit`, so re-clipping is a no-op.
+    """
+    if len(block) <= limit:
+        return block
+    lines = block.splitlines()
+    head, rest = lines[0], "\n".join(lines[1:]).strip()
+    return f"{head}\n\n{_clip(rest, max(limit - len(head) - 4, 0))}".strip()
+
+
 def _budget_sections(body: str, rel_path: str) -> str:
-    """Drop whole trailing sections until the digest fits the byte ceiling."""
+    """Clip sections until the digest fits the byte ceiling, losing none of them.
+
+    Sections are trimmed in place rather than dropped from the end. A handoff
+    whose resume stack could not be collapsed — its entry markers did not match
+    the expected format — is far larger than the ceiling in its first section,
+    and dropping from the end costs every remaining section rather than the
+    intended tail.
+    """
     if len(body.encode("utf-8")) <= HANDOFF_MAX_BYTES:
         return body
 
     blocks = [block for block in ("\n".join(s).strip() for s in _split_sections(body)) if block]
-    dropped: list[str] = []
-    while (
-        len("\n\n".join(blocks).encode("utf-8")) > HANDOFF_MAX_BYTES
-        and len(blocks) > 1
-    ):
-        dropped.append(blocks.pop().splitlines()[0].lstrip("# ").strip())
+    if not blocks:
+        return body
 
-    out = "\n\n".join(blocks)
-    if dropped:
-        out += (
-            f"\n\n_Elided for context budget ({', '.join(reversed(dropped))}) "
-            f"— read `{rel_path}`._"
-        )
-    return out
+    budget = HANDOFF_MAX_BYTES // len(blocks)
+    out = "\n\n".join(_clip_block(block, budget) for block in blocks)
+    if _CLIP_NOTE in out:
+        return out
+    return f"{out}\n\n{_CLIP_NOTE} — read `{rel_path}` for the full text._"
 
 
 # ---------------------------------------------------------------------------
@@ -310,10 +352,12 @@ def _budget_sections(body: str, rel_path: str) -> str:
 def condense_digest(text: str, rel_path: str) -> str:
     """Budget a handoff or notebook digest for SessionStart injection.
 
-    Every section is preserved, but the reverse-chronological "**▶" entry stack
+    Every section is preserved. The reverse-chronological "**▶" entry stack
     under "Resume from here" collapses to the newest few plus a count and a
-    pointer, and trailing sections drop once the result exceeds
-    `HANDOFF_MAX_BYTES`. A no-op for digests that are already small.
+    pointer, and sections are clipped in place — never dropped — once the
+    result exceeds `HANDOFF_MAX_BYTES`. A resume section carrying no "**▶"
+    entries is marked as un-condensed rather than passing through silently.
+    A no-op for digests that are already small.
 
     Parameters
     ----------
