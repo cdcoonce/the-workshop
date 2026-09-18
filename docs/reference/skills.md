@@ -245,7 +245,7 @@ Create GitLab merge requests with `glab` using the `HEAD` conventional-commit su
 
 *`workbench` plugin*
 
-Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening an MR into dev, promoting dev to main, or releasing to production in these repos.
+Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). Use when starting work, choosing a branch or merge target, opening or merging an MR into dev, promoting dev to main, or releasing to production there.
 
 ### `/grill-me`
 

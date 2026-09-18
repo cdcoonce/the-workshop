@@ -207,6 +207,122 @@ def test_manual_pipeline_is_terminal_indeterminate(repo, fake_glab):
     assert result.returncode == 2
 
 
+# --- manual pipelines ---------------------------------------------------------
+
+# A dev branch pipeline resting on its promotion button. A `when: manual` job
+# declared under `rules:` without `allow_failure: true` is blocking, so GitLab
+# reports the whole pipeline as `manual` while every automatic job is green.
+PARKED_DEV_JOBS = [
+    job("version_dev", "success"),
+    job("typecheck", "success"),
+    job("build", "success"),
+    job("test", "success"),
+    job("deploy_dev", "success"),
+    job("promote_to_prod", "manual"),
+]
+
+
+def verdict_line(stdout: str) -> str:
+    lines = [line for line in stdout.splitlines() if line.startswith("verdict:")]
+    assert len(lines) == 1, stdout
+    return lines[0]
+
+
+def test_ref_watch_judges_the_branch_pipeline_not_the_promotion_mr_listed_first(
+    repo, fake_glab
+):
+    """The verdict a merge queue gates on, in the listing's real shape.
+
+    An open dev→main promotion MR has `dev` as its source branch, so every dev
+    push also starts an MR pipeline on the same SHA — and GitLab's
+    `pipelines?ref=dev` filter returns it, listed first, with `ref` set to
+    `refs/merge-requests/<iid>/head` (reproduced 2026-09-11). A hand-rolled
+    guard that took the first result verified that MR pipeline instead of the
+    dev one; `--ref` is matched against each returned pipeline's own `ref`.
+    """
+    promotion_mr = dict(
+        pipeline("success", pid=202, ref="refs/merge-requests/7/head"),
+        source="merge_request_event",
+    )
+    dev_push = dict(pipeline("success", pid=101, ref="dev"), source="push")
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [promotion_mr, dev_push]}],
+        jobs=[{"stdout": GREEN_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha", "--ref", "dev")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    fetched = [c[1] for c in calls(fake_glab) if "/jobs" in c[1]]
+    assert fetched and all("pipelines/101/jobs" in q for q in fetched)
+
+
+def test_optional_manual_jobs_are_not_named_as_the_blocker(repo, fake_glab):
+    """A manual job with `allow_failure: true` never holds a pipeline, so the
+    verdict must name the blocking button and not it."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[
+            {
+                "stdout": PARKED_DEV_JOBS
+                + [job("rebuild_cache", "manual", allow_failure=True)]
+            }
+        ],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 2, result.stdout
+    line = verdict_line(result.stdout)
+    assert "promote_to_prod" in line
+    assert "rebuild_cache" not in line
+
+
+def test_a_red_job_outranks_a_parked_pipeline(repo, fake_glab):
+    """A job can fail beside a waiting manual job — same stage, or a separate
+    DAG branch — and GitLab still reports the pipeline as `manual`. The red job
+    is the verdict; "blocked on a manual job" must not swallow it."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[
+            {
+                "stdout": [
+                    job("version_dev", "success"),
+                    job("test", "failed"),
+                    job("promote_to_prod", "manual"),
+                ]
+            }
+        ],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 1, result.stdout
+
+
+def test_manual_pipeline_names_the_job_holding_it(repo, fake_glab):
+    """A parked pipeline is exit 2, and the verdict names the job holding it
+    together with the fix: `allow_failure: true`, or dropping the job. A
+    promote button declared under `rules:` without it parks every pipeline on
+    the branch, and a watcher flag that passed one anyway would leave that in
+    place — which is how a hand-rolled check came to stand in for a verdict."""
+    script_responses(
+        fake_glab,
+        pipelines=[{"stdout": [pipeline("manual")]}],
+        jobs=[{"stdout": PARKED_DEV_JOBS}],
+    )
+
+    result = run_watch(repo, fake_glab, "sha")
+
+    assert result.returncode == 2, result.stdout
+    line = verdict_line(result.stdout)
+    assert "promote_to_prod" in line
+    assert "allow_failure" in line
+
+
 # --- resilience ---------------------------------------------------------------
 
 
