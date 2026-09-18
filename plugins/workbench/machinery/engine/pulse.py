@@ -1101,12 +1101,19 @@ def existing_weeks(ledger_path: Path) -> set[str]:
 
 
 def _machine_for(vault_root: Path) -> str:
-    vc = vault_root / ".vault-context"
-    if vc.is_file():
-        text = vc.read_text().strip().lower()
-        if text:
-            return text
-    return "personal"
+    """Ledger key from ``.vault-context``, via the canonical reader.
+
+    This used to open the file itself and return any non-empty value verbatim,
+    which made pulse the ONE consumer with its own resolution rule — and left it
+    blind to the linked-worktree case the canonical reader now handles. It also
+    accepted values (``laptop``) that every sibling consumer already answers
+    ``unknown`` for, so a vault relying on that leniency was writing a
+    ``pulse-laptop.csv`` inside a vault whose handoff, notebook, and gardener
+    state had all silently gone to ``unknown``. One rule, shared with
+    ``budget_burn``, which pulse already imports and which passes the same
+    ``personal`` default.
+    """
+    return vault_utils.read_vault_context(vault_root, default="personal")
 
 
 def _report_lines(rows: dict[str, dict[str, str]], machine: str) -> list[str]:

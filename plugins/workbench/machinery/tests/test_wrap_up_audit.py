@@ -1006,6 +1006,72 @@ def test_missing_vault_context_gives_incomplete(tmp_path: Path) -> None:
     assert any(nr["check"] == "handoff_sections" for nr in report["not_run"])
 
 
+# ===========================================================================
+# Linked worktree — `.vault-context` lives only in the main checkout
+#
+# `.vault-context` is gitignored and untracked, so a `git worktree add` copy
+# never receives it, while the TRACKED `.brain/handoff-*.md` is right there.
+# The collector fails closed on an "unknown" context, so before the canonical
+# reader learned the worktree fallback, `/wrap-up` run from a Claude Code
+# desktop worktree could NEVER reach CLEAN — `handoff_sections` was always
+# not_run and the verdict always INCOMPLETE, whatever the session had done.
+#
+# Real `git worktree add`, no mocked git: the bug is in the on-disk layout.
+# ===========================================================================
+
+def _vault_with_worktree(tmp_path: Path) -> tuple[Path, Path]:
+    """(main checkout, linked worktree) — marker untracked, handoff tracked."""
+    main = tmp_path / "vault"
+    main.mkdir()
+    _git_init(main)
+    _write(main, ".gitignore", ".vault-context\n")
+    _write(main, "brain/A.md", _note("A", body="See [[B]]."))
+    _write(main, "brain/B.md", _note("B"))
+    _git_commit_all(main, "init")
+
+    worktree = tmp_path / "wt"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "wt", str(worktree)],
+        cwd=main,
+        check=True,
+    )
+    return main, worktree
+
+
+@NEEDS_GRAPHMARK_07
+def test_worktree_resolves_handoff_from_main_checkout(tmp_path: Path) -> None:
+    main, worktree = _vault_with_worktree(tmp_path)
+
+    assert (main / ".vault-context").is_file()
+    assert not (worktree / ".vault-context").exists()
+    assert (worktree / ".brain" / "handoff-personal.md").is_file()
+
+    report = collect(worktree, files=["brain/A.md"], base="HEAD")
+
+    handoff = report["checks"]["handoff_sections"]
+    assert handoff["not_run"] is None
+    assert handoff["file"] == ".brain/handoff-personal.md"
+    assert handoff["present"] == ["Resume From Here"]
+    assert not any(nr["check"] == "handoff_sections" for nr in report["not_run"])
+    assert report["verdict"] != "INCOMPLETE"
+
+
+@NEEDS_GRAPHMARK_07
+def test_worktree_own_marker_wins_over_main_checkout(tmp_path: Path) -> None:
+    """An explicit per-worktree marker is honoured: it names `work`, so the
+    collector looks for the `work` handoff and reports it missing rather than
+    silently auditing the main checkout's `personal` one."""
+    _, worktree = _vault_with_worktree(tmp_path)
+    _write(worktree, ".vault-context", "work")
+
+    report = collect(worktree, files=["brain/A.md"], base="HEAD")
+
+    handoff = report["checks"]["handoff_sections"]
+    assert handoff["file"] == ".brain/handoff-work.md"
+    assert handoff["not_run"] is not None
+    assert report["verdict"] == "INCOMPLETE"
+
+
 def test_missing_handoff_file_for_known_context_gives_incomplete(tmp_path: Path) -> None:
     _git_init(tmp_path)
     (tmp_path / ".brain" / "handoff-personal.md").unlink()  # .vault-context stays "personal"
