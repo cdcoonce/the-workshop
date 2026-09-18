@@ -80,6 +80,66 @@ def find_vault_root_from_env() -> Path | None:
     return find_vault_root(Path(proj)) if proj else find_vault_root()
 
 
+def _linked_worktree_main_root(path: Path) -> Path | None:
+    """Main worktree root when *path* is a linked worktree, else ``None``.
+
+    A linked worktree's ``.git`` is a FILE holding ``gitdir: <dir>``, and that
+    directory holds a ``commondir`` file pointing back at the main checkout's
+    ``.git`` — whose parent is the main worktree root. Both indirections are
+    resolved on the filesystem rather than by shelling out to ``git rev-parse
+    --git-common-dir``: this runs inside ``session-start.py``, on the hot path of
+    every single session, and two small reads beat a subprocess spawn. The same
+    ``gitdir:`` parse already backs ``sync_manager._git_dir``.
+
+    A submodule's ``.git`` is also a file, so the ``commondir`` step is what
+    tells the two apart: a submodule's gitdir (``<super>/.git/modules/<name>``)
+    has no such file, and this returns ``None`` rather than resolving to the
+    superproject. The ``.git`` name check likewise rejects a worktree of a bare
+    repository, where the common dir is the repo itself and has no work tree.
+
+    Args:
+        path: Directory to classify.
+
+    Returns:
+        Path to the main worktree root, or None when *path* is not a linked
+        worktree (a normal checkout, a submodule, or not a repo at all).
+    """
+    dot_git = path / ".git"
+    if not dot_git.is_file():
+        return None
+    try:
+        text = dot_git.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text.startswith("gitdir:"):
+        return None
+    gitdir = Path(text.split(":", 1)[1].strip())
+    if not gitdir.is_absolute():
+        gitdir = path / gitdir
+    try:
+        common_text = (gitdir / "commondir").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None  # no commondir → a submodule, not a linked worktree
+    common = Path(common_text)
+    if not common.is_absolute():
+        common = gitdir / common
+    try:
+        common = common.resolve()
+    except OSError:
+        return None
+    if common.name != ".git":
+        return None  # bare repo: no main work tree to inherit from
+    return common.parent
+
+
+def _read_context_marker(ctx_file: Path) -> str | None:
+    """Normalized ``.vault-context`` text, or ``None`` when the file is unreadable."""
+    try:
+        return ctx_file.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return None
+
+
 def read_vault_context(vault_root: Path, default: str = "unknown") -> str:
     """Read ``.vault-context`` (``work``|``personal``) from the vault root.
 
@@ -87,16 +147,36 @@ def read_vault_context(vault_root: Path, default: str = "unknown") -> str:
     otherwise (file missing, empty, or any other value) returns *default*.
 
     The canonical single reader (#50): every hook/script that needs the machine
-    context — session-start, graph_gardener, notebook-distill, context_loader —
-    reads through here, so the missing-file fallback is reconciled in ONE place.
-    The default is ``"unknown"`` (a missing marker genuinely means the machine is
-    unidentified). Callers that build per-context filenames stay mutually
-    consistent precisely because they share this one default.
+    context — session-start, graph_gardener, notebook-distill, context_loader,
+    pulse, wrap_up_audit — reads through here, so the missing-file fallback is
+    reconciled in ONE place. The default is ``"unknown"`` (a missing marker
+    genuinely means the machine is unidentified). Callers that build
+    per-context filenames stay mutually consistent precisely because they share
+    this one default.
+
+    When the marker is absent and *vault_root* is a LINKED WORKTREE, the main
+    worktree's marker is read instead. This is not a convenience: the marker is
+    gitignored and untracked, so it exists only in the main checkout, while
+    Claude Code desktop sessions run inside ``<vault>/.claude/worktrees/<name>/``.
+    Answering ``"unknown"`` there failed quietly in both directions — session
+    start looked up a ``handoff-unknown.md`` that cannot exist and injected no
+    handoff at all while logging that it had; the distiller and gardener wrote
+    orphan ``notebook-unknown-*.md`` / ``gardener-unknown.md`` files no reader
+    ever picks back up; and ``/wrap-up`` fails closed on ``"unknown"``, so it
+    could never reach CLEAN from a worktree.
+
+    A marker PRESENT in the worktree always wins, including when its value is
+    invalid — present-but-invalid answers *default* rather than inheriting, so a
+    typo resolves to nothing instead of silently to the other context. Only a
+    missing or unreadable marker consults the main checkout. This function never
+    writes the marker anywhere.
     """
-    ctx_file = vault_root / ".vault-context"
-    try:
-        val = ctx_file.read_text(encoding="utf-8").strip().lower()
-    except OSError:
+    val = _read_context_marker(vault_root / ".vault-context")
+    if val is None:
+        main_root = _linked_worktree_main_root(vault_root)
+        if main_root is not None:
+            val = _read_context_marker(main_root / ".vault-context")
+    if val is None:
         return default
     return val if val in ("work", "personal") else default
 

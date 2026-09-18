@@ -1332,6 +1332,46 @@ class TestCoveredWeeks:
 
 
 # ---------------------------------------------------------------------------
+# Ledger key resolution — one rule, shared with every other engine consumer.
+#
+# pulse used to open `.vault-context` itself. That made it the only consumer
+# with its own resolution rule, and blind to the linked-worktree case: the
+# marker is untracked, so a `git worktree add` copy has none, and pulse would
+# fall back to "personal" — writing `pulse-personal.csv` on a `work` machine.
+# ---------------------------------------------------------------------------
+class TestMachineFor:
+    @staticmethod
+    def _git(cwd: Path, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+    def _repo(self, root: Path) -> Path:
+        root.mkdir(parents=True, exist_ok=True)
+        self._git(root, "init", "-q", "-b", "main", ".")
+        self._git(root, "config", "user.email", "test@example.invalid")
+        self._git(root, "config", "user.name", "Test")
+        (root / "README.md").write_text("vault\n")
+        self._git(root, "add", "README.md")
+        self._git(root, "commit", "-qm", "init")
+        return root
+
+    def test_reads_the_marker(self, tmp_path: Path) -> None:
+        (tmp_path / ".vault-context").write_text("work\n")
+        assert pulse._machine_for(tmp_path) == "work"
+
+    def test_missing_marker_defaults_to_personal(self, tmp_path: Path) -> None:
+        assert pulse._machine_for(tmp_path) == "personal"
+
+    def test_worktree_inherits_the_main_checkouts_machine(self, tmp_path: Path) -> None:
+        main = self._repo(tmp_path / "vault")
+        (main / ".vault-context").write_text("work\n")
+        wt = tmp_path / "wt"
+        self._git(main, "worktree", "add", "-q", "-b", "wt", str(wt))
+
+        assert not (wt / ".vault-context").exists()
+        assert pulse._machine_for(wt) == "work"
+
+
+# ---------------------------------------------------------------------------
 # Vault root auto-detection — main()'s no-`--vault-root` path delegates to
 # vault_utils.find_vault_root, which requires the brain/+perf/ signature, not
 # a bare `.vault-context` marker (#573).
