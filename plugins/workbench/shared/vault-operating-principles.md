@@ -59,6 +59,8 @@ python3 "/abs/path/to/machinery/engine/pulse.py"
 - Every markdown note outside excluded infrastructure must have required YAML frontmatter.
 - Notes over 300 characters need at least one resolving `[[wikilink]]`.
 - New, moved, or archived notes must update the relevant index.
+- An entry added to an accumulating file (index, log, hub note) goes where its existing entries imply — under their heading, newest first when they are dated. Insert at that anchor rather than reading or rewriting the file: these files outgrow what fits in context, and a file nobody reads invites an append at the end.
+- Refer to another entry by its date or title, never by its position ("the entry above"). Re-sorting moves entries, and a later entry sharing a date can land between two that were adjacent.
 - Never delete notes, force-push, or auto-resolve conflicts without explicit user approval.
 - Generated caches, local indexes, and counters are machine-local unless the vault rules say otherwise.
 - Git sync rebases before push and aborts on conflicts.

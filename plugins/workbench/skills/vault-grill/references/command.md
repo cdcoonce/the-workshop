@@ -99,4 +99,5 @@ Charles's head but not yet (fully) in the vault.
 - **Evergreen only.** The note is for knowledge that stays true; transient data gets a pointer, not a
   transcription.
 - **Vault contract.** Validate frontmatter and wikilinks before saving; update the relevant index;
-  no orphan notes.
+  no orphan notes. An entry joining an accumulating file goes newest-first under its existing
+  heading, inserted at that anchor rather than appended at the end.
