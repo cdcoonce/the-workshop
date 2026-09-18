@@ -183,6 +183,65 @@ def _indexed(path: Path, vault_root: Path, linkset: set[str]) -> bool:
     return bool(candidates & linkset)
 
 
+ACCUMULATING_HUB_FILES = frozenset({
+    "brain/Memories.md",
+    "brain/North Star.md",
+    "brain/Key Decisions.md",
+    "brain/Patterns.md",
+    "brain/Gotchas.md",
+    "brain/Capabilities.md",
+    "work/Index.md",
+    "personal/Index.md",
+    "org/People & Context.md",
+    "perf/Brag Doc.md",
+})
+
+# Two entry shapes accumulate in these files: dated "###" headings (the
+# decisions log) and dated "- **" bullets (the brag doc). Both are one entry
+# per line-start, so one pattern covers them.
+_ENTRY_DATE_RE = re.compile(r"^(?:#{2,4}\s+|-\s+\*\*)(\d{4}-\d{2}-\d{2})")
+
+
+def _entry_order_issues(vault_root: Path) -> list[Issue]:
+    """Report dated entries that run older-to-newer in a newest-first log.
+
+    These files are appended to by many unrelated sessions, so a single entry
+    added at the wrong end is invisible until someone reads the file end to
+    end. Equal dates are legal: several sessions can close on one day.
+
+    Parameters
+    ----------
+    vault_root : Path
+        Vault root the hub files are resolved against.
+
+    Returns
+    -------
+    list of Issue
+        One issue per adjacent pair whose later entry carries the newer date.
+    """
+    issues: list[Issue] = []
+    for rel in sorted(ACCUMULATING_HUB_FILES):
+        path = vault_root / rel
+        if not path.is_file():
+            continue
+        previous: tuple[int, str] | None = None
+        for lineno, line in enumerate(_read(path).splitlines(), 1):
+            matched = _ENTRY_DATE_RE.match(line)
+            if not matched:
+                continue
+            current = (lineno, matched.group(1))
+            if previous is not None and current[1] > previous[1]:
+                issues.append(
+                    Issue(
+                        rel,
+                        f"{current[1]} (line {lineno}) follows the older "
+                        f"{previous[1]} (line {previous[0]}) — entries run newest-first",
+                    )
+                )
+            previous = current
+    return issues
+
+
 def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     governed = iter_governed_markdown_notes(vault_root)
@@ -222,18 +281,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
         rel = rel_posix(path, vault_root) or str(path)
         if _is_transient(rel):
             continue
-        if rel in {
-            "brain/Memories.md",
-            "brain/North Star.md",
-            "brain/Key Decisions.md",
-            "brain/Patterns.md",
-            "brain/Gotchas.md",
-            "brain/Capabilities.md",
-            "work/Index.md",
-            "personal/Index.md",
-            "org/People & Context.md",
-            "perf/Brag Doc.md",
-        }:
+        if rel in ACCUMULATING_HUB_FILES:
             continue
         if len(_body(path).strip()) > 300 and not incoming[path]:
             orphans.append(Issue(rel, "no incoming backlinks"))
@@ -312,6 +360,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
         "personal_index": personal_not_indexed,
         "stale_active": stale_active,
         "duplicate_descriptions": duplicate_descriptions,
+        "entry_order": _entry_order_issues(vault_root),
     }
 
     return {
