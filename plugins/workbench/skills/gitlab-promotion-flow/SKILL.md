@@ -1,10 +1,10 @@
 ---
 name: gitlab-promotion-flow
 description: >
-  Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt,
-  ingestion). Use when starting work, choosing a branch or merge target, opening
-  an MR into dev, promoting dev to main, or releasing to production in these
-  repos.
+  Integration and promotion policy for Clearway GitLab data repos (Dagster,
+  dbt, ingestion). Use when starting work, choosing a branch or merge target,
+  opening or merging an MR into dev, promoting dev to main, or releasing to
+  production there.
 ---
 
 # GitLab promotion flow
@@ -89,5 +89,8 @@ different policy, that wins — resolve repository policy first (see
   goes direct — do not spin up an integration branch for one branch.
 - Watch CI for the pushed SHA and confirm every job is green before calling a
   push or promote done — proactively, unprompted.
+- Where a release bot commits to `dev` after every merge, land MRs by
+  [references/release-bot-dev.md](references/release-bot-dev.md): each queued
+  MR rebases onto the bot's commit, which itself never gets a pipeline.
 - Fix CI/SAST findings at the source; do not path-exclude or suppress to pass a
   gate.

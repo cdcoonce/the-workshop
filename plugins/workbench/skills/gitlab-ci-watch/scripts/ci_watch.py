@@ -12,8 +12,8 @@ Exit contract (the verdict a session must relay, per verify-ci-green):
   1  red — pipeline failed/canceled, or any job failed/canceled (roll-up
      success with a failed allow_failure job is still red)
   2  indeterminate — setup failure (wrong cwd, missing remote), crash,
-     timeout, MR closed, blocked on a manual job, repeated API failures, or
-     per-job status unverifiable
+     timeout, MR closed, blocked on a manual job (the verdict names it),
+     repeated API failures, or per-job status unverifiable
 
 Every glab call is guarded: stderr noise, empty stdout, or a nonzero exit is
 one skipped tick, never a dead watcher. The project is derived from the remote
@@ -136,6 +136,32 @@ def fetch_listing(
     return None
 
 
+def manual_verdict(entries: list[dict]) -> int:
+    """Name the job holding a pipeline GitLab reports as `manual`.
+
+    A `when: manual` job declared under `rules:` blocks unless it also sets
+    `allow_failure: true`, so one promote-style button parks every pipeline on
+    its branch. The verdict names it and says where the fix belongs: in the
+    job. Passing the parked pipeline instead would leave the button in place —
+    and a button that pushes with the CI job token starts no pipeline on its
+    target branch, so it cannot deploy at all.
+    """
+    waiting = sorted(
+        e.get("name", "?")
+        for e in entries
+        if e.get("status") == "manual" and not e.get("allow_failure")
+    )
+    if not waiting:
+        say("verdict: pipeline is manual — needs attention, not a pass")
+        return INDETERMINATE
+    say(
+        f"verdict: blocked on manual job(s) {', '.join(waiting)} — not a pass;"
+        " a manual job that should not hold its pipeline needs"
+        " `allow_failure: true`, or removing"
+    )
+    return INDETERMINATE
+
+
 def report(project: str, pipe: dict, sha: str, interval: float) -> int:
     """Print the per-job report for a terminal pipeline and return the verdict.
 
@@ -150,7 +176,8 @@ def report(project: str, pipe: dict, sha: str, interval: float) -> int:
         say("per-job status unavailable — re-query needed before trusting this result")
         return INDETERMINATE
     any_red = False
-    for job in jobs + [dict(b, _bridge=True) for b in bridges]:
+    entries = jobs + [dict(b, _bridge=True) for b in bridges]
+    for job in entries:
         job_status = job.get("status", "unknown")
         suffix = " [bridge]" if job.get("_bridge") else ""
         if job.get("allow_failure") and job_status == "failed":
@@ -164,6 +191,8 @@ def report(project: str, pipe: dict, sha: str, interval: float) -> int:
     if status == "success":
         say("verdict: every job green")
         return GREEN
+    if status == "manual":
+        return manual_verdict(entries)
     say(f"verdict: pipeline is {status} — needs attention, not a pass")
     return INDETERMINATE
 
