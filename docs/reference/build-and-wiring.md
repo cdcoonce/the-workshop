@@ -74,7 +74,7 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 | `protect-files.py` | `workbench` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
 | `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
-| `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
 | `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
 | `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
