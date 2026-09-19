@@ -30,6 +30,7 @@ command works:
 
 ```json
 {
+  "runner": "pytest",
   "test_command": ["uv", "run", "pytest", "-q", "tests/test_thing.py"],
   "collect_command": ["uv", "run", "pytest", "--collect-only", "-q", "tests/test_thing.py"],
   "mutants": [
@@ -39,6 +40,15 @@ command works:
       "oracle": "real",
       "find": "k = min(k, MAX_RESULTS)",
       "replace": "k = k"
+    },
+    {
+      "label": "[control] reorder two independent writes",
+      "file": "engine/thing.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Distinct keys, neither reads the other's write; inert on every path the suite reaches.",
+      "find": "save(A)\n    save(B)",
+      "replace": "save(B)\n    save(A)"
     }
   ]
 }
@@ -47,6 +57,24 @@ command works:
 ```bash
 python3 "<skill base directory>/scripts/teeth_check.py" spec.json
 ```
+
+Commit the spec next to the tests, and check its anchors are still live:
+
+```bash
+python3 "<skill base directory>/scripts/teeth_check.py" --check-anchors spec.json
+```
+
+`--check-anchors` resolves every anchor and runs nothing — no baseline, no
+test command, no write — in about the time a linter takes. It exists because
+the anchors are exact source strings, so any refactor of the code under test
+rots all of them at once, silently, until someone re-runs the matrix and
+rebuilds the table by hand. Run it wherever the repo already runs something
+fast, and the spec breaks while its author still has the context.
+
+Re-running the mutants after a genuine restructure is **not** waste: the old
+mutants described defects in code that no longer exists, so those verdicts
+really did expire. The waste is re-deriving the table from a shell history,
+which is what happens whenever the spec was never a file.
 
 The absolute path matters. `cwd` is the target repository, which does not
 contain this skill, so a bare `scripts/teeth_check.py` fails on a missing file
@@ -59,11 +87,57 @@ already closes both (see **Safety** and **Traps that fake a survivor**), and
 its spec is a committable artifact, so the count in the pull-request body stays
 re-runnable instead of becoming prose.
 
-Exit code is non-zero when any mutant survives or any row fails to score, so it
-can gate CI. `--json` emits the machine-readable form. `collect_command` is
-optional; without it the caught-no-mutant list reads _not computed_, not an
-empty all-clear. `oracle` is required per mutant — see **Traps that fake a
-kill**.
+Exit code is non-zero when any mutant survives unexpectedly, any row fails to
+score, or a declared control gets caught, so it can gate CI. `--json` emits the
+machine-readable form. `collect_command` is optional; without it the
+caught-no-mutant list reads _not computed_, not an empty all-clear. `oracle` is
+required per mutant — see **Traps that fake a kill**.
+
+## Runners
+
+`runner` names the suite's output shape: `pytest` (the default) or `vitest`.
+
+It is defaulted rather than required, unlike `oracle`, and the asymmetry is the
+reason. A wrong `oracle` manufactures a guarantee nobody checked. A wrong
+`runner` makes every row `unscored` — a refusal, never a false kill — so a
+default here cannot certify anything it did not measure.
+
+That refusal used to be a dead end. A vitest suite scored `unscored` on every
+row, with advice pointing at the mutant and the test command, neither of which
+could possibly help; the tool read as broken and the loop got hand-rolled
+instead. So an `unscored` row now tests its output against every other
+registered runner and names the one that matches, putting the fix in the
+message.
+
+A vitest run that fails to _transform_ the mutated file prints a `FAIL` line
+naming the file with no test after it. That is not a kill — nothing was
+collected and no assertion ran — so it scores `unscored`, exactly as a Python
+mutant that will not compile does.
+
+## Declare a control
+
+A matrix where everything dies cannot be told apart from a rig that reports red
+for everything: a broken test command, a mutant that kills the import, a
+baseline that was never green. One row per spec should be a mutation you can
+argue is semantically inert, declared `"expect": "survived"`. It holds green and
+proves the rig discriminates.
+
+`why` is required on that row, and the report prints it verbatim instead of a
+count, because the argument _is_ the artifact. A control justified by "I ran it
+and nothing broke" is empirical, not structural, and is indistinguishable from a
+survivor someone talked themselves out of.
+
+State the scope the inertness holds over, and name where it does not. Two
+`localStorage` writes on independent keys are inert on every path a suite
+reaches — and are not atomic, so a quota throw between them persists different
+state by order. Saying so is what separates a control from a rationalisation.
+
+A control that gets **killed** is a hard failure, not a curiosity: either the
+inertness argument is wrong and it is a real mutant, or a test is asserting
+incidental form rather than behaviour. Both need a person.
+
+A run whose only green row is the control has proved the harness executes, and
+nothing whatever about teeth.
 
 ## Choosing mutants
 
@@ -138,6 +212,13 @@ The matrix maps each mutant to the tests that killed it.
 - **Before chasing a survivor, check the mutant actually changes behaviour.** A
   semantic no-op survives everything and looks exactly like a real gap. Adding
   `except BaseException: raise` above a `finally:` changes nothing.
+- **"It turned out to be a no-op" can itself be the finding.** Discarding it as
+  a bad mutant is the reflex, and it is wrong whenever the code _claims_ that
+  line is load-bearing. A clamp documented as protecting a second code path
+  survived its mutation because the clamp did not protect it: the comment was
+  false, and the test pinning that comment asserted nothing. The defect was the
+  claim, not the mutant. Read what the code says about a line before concluding
+  the line does not matter.
 
 ## Traps that fake a survivor
 

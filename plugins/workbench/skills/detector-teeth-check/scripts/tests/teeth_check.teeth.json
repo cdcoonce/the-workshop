@@ -1,0 +1,42 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
+  "mutants": [
+    {
+      "label": "vitest parser drops the ' > ' requirement, so a transform error scores as a kill",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "rf\"^\\s*FAIL\\s+(\\S+\\.(?:{_JS_TEST_FILE_EXTENSIONS}) > .+)$\", re.MULTILINE",
+      "replace": "rf\"^\\s*FAIL\\s+(\\S+\\.(?:{_JS_TEST_FILE_EXTENSIONS}).*)$\", re.MULTILINE"
+    },
+    {
+      "label": "a broken control no longer fails the run",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        or report.controls_broken()",
+      "replace": "        or []"
+    },
+    {
+      "label": "a control may omit its inertness argument",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if expect == \"survived\" and not (why and why.strip()):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "runner mismatch advice also matches the configured runner, so it always fires",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if name != exclude and candidate.failed_re.search(output):",
+      "replace": "        if candidate.failed_re.search(output):"
+    },
+    {
+      "label": "an unknown runner name is silently accepted as pytest",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        raise SpecError(f\"unknown runner {name!r}; expected one of {sorted(RUNNERS)}\")",
+      "replace": "        return \"pytest\""
+    }
+  ]
+}
