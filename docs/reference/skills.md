@@ -24,7 +24,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/dbt-expert` | `workbench` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |
 | `/dbt-manifest-facts` | `workbench` | Answers structural questions about a dbt project from its manifest.json, not comments or memory. |
 | `/design-an-interface` | `workbench` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
-| `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. |
+| `/detector-teeth-check` | `workbench` | Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. |
 | `/dev-cycle` | `workbench` | Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. |
 | `/dignified-python` | `workbench` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
 | `/drain-queue` | `workbench` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
@@ -185,7 +185,7 @@ Generate multiple radically different interface designs for a module using paral
 
 *`workbench` plugin*
 
-Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. Use after writing tests for a validator or guard whose failure mode is silent, before trusting a green suite.
+Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. Use for any teeth check, mutation run or vacuous-test doubt, and in place of hand-rolling a mutate/revert script, which loses work and runs stale bytecode.
 
 ### `/dev-cycle`
 

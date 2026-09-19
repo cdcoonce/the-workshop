@@ -1,10 +1,10 @@
 ---
 name: detector-teeth-check
 description: >
-  Verify a test suite would actually catch the bug it claims to prevent, by
-  re-injecting the defect and checking it goes red. Use after writing tests
-  for a validator or guard whose failure mode is silent, before trusting a
-  green suite.
+  Prove tests catch the defect they claim to prevent: re-inject it, check the
+  suite goes red. Use for any teeth check, mutation run or vacuous-test doubt,
+  and in place of hand-rolling a mutate/revert script, which loses work and
+  runs stale bytecode.
 ---
 
 # Detector teeth check
@@ -45,8 +45,19 @@ command works:
 ```
 
 ```bash
-python scripts/teeth_check.py spec.json
+python3 "<skill base directory>/scripts/teeth_check.py" spec.json
 ```
+
+The absolute path matters. `cwd` is the target repository, which does not
+contain this skill, so a bare `scripts/teeth_check.py` fails on a missing file
+— and in a repo that has its own `scripts/` it fails on a directory that
+exists, which reads like a broken tool rather than a wrong path. Do not fall
+back to writing your own loop when the path is wrong: fix the path. A
+hand-rolled mutate/revert script is how uncommitted work gets destroyed by
+`git checkout --` and how a same-size mutation runs stale bytecode; this script
+already closes both (see **Safety** and **Traps that fake a survivor**), and
+its spec is a committable artifact, so the count in the pull-request body stays
+re-runnable instead of becoming prose.
 
 Exit code is non-zero when any mutant survives or any row fails to score, so it
 can gate CI. `--json` emits the machine-readable form. `collect_command` is
