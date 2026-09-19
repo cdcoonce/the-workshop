@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.7.0` | 73 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.7.1` | 73 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.2` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -209,7 +209,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/dbt-expert` | `workbench` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |
 | `/dbt-manifest-facts` | `workbench` | Answers structural questions about a dbt project from its manifest.json, not comments or memory. |
 | `/design-an-interface` | `workbench` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
-| `/detector-teeth-check` | `workbench` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. |
+| `/detector-teeth-check` | `workbench` | Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. |
 | `/dev-cycle` | `workbench` | Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. |
 | `/dignified-python` | `workbench` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
 | `/drain-queue` | `workbench` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |

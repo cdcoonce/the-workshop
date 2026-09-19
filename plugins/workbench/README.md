@@ -29,7 +29,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/dbt-expert` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |
 | `/dbt-manifest-facts` | Answers structural questions about a dbt project from its manifest.json, not comments or memory. |
 | `/design-an-interface` | Generate multiple radically different interface designs for a module using parallel sub-agents. |
-| `/detector-teeth-check` | Verify a test suite would actually catch the bug it claims to prevent, by re-injecting the defect and checking it goes red. |
+| `/detector-teeth-check` | Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. |
 | `/dev-cycle` | Takes a GitHub-issues-driven feature from brainstorm through a merged PR, interactively. |
 | `/dignified-python` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
 | `/drain-queue` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
