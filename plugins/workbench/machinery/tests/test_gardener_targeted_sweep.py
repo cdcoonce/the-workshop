@@ -10,8 +10,7 @@ soft — a broken scan degrades to the ordinary sweep, never to a broken hook.
 from __future__ import annotations
 
 import importlib.util
-import json
-import subprocess
+import os
 from pathlib import Path
 
 # Load the engine by path, the way every other module in this suite does. The
@@ -25,71 +24,93 @@ gg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gg)
 
 
-class TestNotesWithBrokenLinks:
-    def test_returns_sorted_rel_paths_from_the_seam(self, tmp_path, monkeypatch):
-        (tmp_path / ".claude" / "scripts").mkdir(parents=True)
-        (tmp_path / ".claude" / "scripts" / "graph_cli.py").write_text("#\n")
-        payload = json.dumps(
-            {
-                "z/late.md": [{"display": "X", "reason": "missing", "candidates": []}],
-                "a/early.md": [{"display": "Y", "reason": "missing", "candidates": []}],
-            }
+class TestGraphmarkBrokenFailSoftContract:
+    """The in-process scan's contract, which the whole write-time advisory rests on.
+
+    ``None`` means "the scan could not run"; ``{}`` means "it ran and found nothing".
+    Callers branch on that difference: ``validate-write`` turns ``None`` into a visible
+    "link check unavailable" advisory, and ``broken_links_by_note`` falls back to its
+    older logic rather than reporting a clean graph. Collapsing it either way is a silent
+    failure — one direction and the check goes quiet again (the bug this replaces), the
+    other and it cries wolf on every write.
+
+    The retired subprocess contract this class replaces (missing uv, non-zero exit,
+    malformed JSON, timeout, a stubbed seam script at ``.claude/scripts/graph_cli.py``)
+    went away with the shell-out and is deliberately not re-tested: those tests planted a
+    vendored copy at the path the old code read, so they could never catch that path
+    becoming unreachable — which is precisely how this stayed broken.
+    """
+
+    def _vault(self, tmp_path: Path) -> Path:
+        vault = tmp_path / "vault"
+        (vault / ".vault").mkdir(parents=True)
+        (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n', encoding="utf-8")
+        (vault / "brain").mkdir()
+        return vault
+
+    def test_a_scan_that_cannot_run_returns_none(self, tmp_path):
+        not_a_directory = tmp_path / "regular-file"
+        not_a_directory.write_text("not a vault\n", encoding="utf-8")
+
+        assert gg._graphmark_broken(not_a_directory) is None
+
+    def test_an_absent_vault_root_returns_none(self, tmp_path):
+        assert gg._graphmark_broken(tmp_path / "does-not-exist") is None
+
+    def test_a_clean_vault_returns_an_empty_dict_not_none(self, tmp_path):
+        vault = self._vault(tmp_path)
+        (vault / "brain" / "a.md").write_text("# A\n\nSee [[b]].\n", encoding="utf-8")
+        (vault / "brain" / "b.md").write_text("# B\n\nSee [[a]].\n", encoding="utf-8")
+
+        assert gg._graphmark_broken(vault) == {}
+
+    def test_a_broken_link_is_reported_with_its_reason(self, tmp_path):
+        vault = self._vault(tmp_path)
+        (vault / "brain" / "a.md").write_text(
+            "# A\n\nSee [[No Such Note]].\n", encoding="utf-8"
         )
 
-        def fake_run(cmd, **kw):
-            return subprocess.CompletedProcess(cmd, 0, stdout=payload, stderr="")
+        raw = gg._graphmark_broken(vault)
 
-        monkeypatch.setattr(gg.subprocess, "run", fake_run)
-        assert gg.notes_with_broken_links(tmp_path) == ["a/early.md", "z/late.md"]
+        assert list(raw) == ["brain/a.md"]
+        entry = raw["brain/a.md"][0]
+        assert entry["display"] == "No Such Note"
+        assert entry["reason"] == "missing"
+        assert "candidates" in entry
 
-    def test_missing_seam_script_returns_empty(self, tmp_path):
-        assert gg.notes_with_broken_links(tmp_path) == []
+    def test_the_pinned_vault_root_is_restored_afterwards(self, tmp_path, monkeypatch):
+        # _pin_vault_root mutates process-global state (CLAUDE_PROJECT_DIR and
+        # sys.modules). The gardener worker scans one vault after another in a single
+        # process, so a leak here silently resolves the next vault's scope config
+        # against the previous vault.
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/sentinel")
 
-    def _with_seam(self, tmp_path):
-        (tmp_path / ".claude" / "scripts").mkdir(parents=True)
-        (tmp_path / ".claude" / "scripts" / "graph_cli.py").write_text("#\n")
+        gg._graphmark_broken(self._vault(tmp_path))
 
-    def test_nonzero_exit_returns_empty(self, tmp_path, monkeypatch):
-        self._with_seam(tmp_path)
-        monkeypatch.setattr(
-            gg.subprocess, "run",
-            lambda cmd, **kw: subprocess.CompletedProcess(cmd, 2, stdout="", stderr="boom"),
+        assert os.environ["CLAUDE_PROJECT_DIR"] == "/sentinel"
+
+
+class TestNotesWithBrokenLinksOnARealVault:
+    """Proves the targeted sweep's seam is alive on a vault that looks like a REAL current
+    install: a real ``.vault/vault.json`` marker and real note files, with NO
+    ``.claude/scripts/graph_cli.py`` anywhere. ``TestNotesWithBrokenLinks`` above fakes the
+    resolver's reply by mocking ``subprocess.run`` against a stubbed seam script — useful
+    for the subprocess-era failure modes it documents, but it cannot catch the seam being
+    permanently unreachable, which is exactly what happened when the vendored copy was
+    deleted. This test drives ``graph_cli.build()`` for real.
+    """
+
+    def test_broken_wikilink_is_found_with_no_vendored_copy(self, tmp_path):
+        (tmp_path / ".vault").mkdir()
+        (tmp_path / ".vault" / "vault.json").write_text('{"vault": "test"}\n', encoding="utf-8")
+        brain = tmp_path / "brain"
+        brain.mkdir()
+        (brain / "index.md").write_text(
+            "# Index\n\nSee [[Totally Nonexistent Note]] for details.\n", encoding="utf-8"
         )
-        assert gg.notes_with_broken_links(tmp_path) == []
 
-    def test_malformed_json_returns_empty(self, tmp_path, monkeypatch):
-        self._with_seam(tmp_path)
-        monkeypatch.setattr(
-            gg.subprocess, "run",
-            lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="{not json", stderr=""),
-        )
-        assert gg.notes_with_broken_links(tmp_path) == []
-
-    def test_non_dict_payload_returns_empty(self, tmp_path, monkeypatch):
-        self._with_seam(tmp_path)
-        monkeypatch.setattr(
-            gg.subprocess, "run",
-            lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="[1,2]", stderr=""),
-        )
-        assert gg.notes_with_broken_links(tmp_path) == []
-
-    def test_timeout_returns_empty(self, tmp_path, monkeypatch):
-        self._with_seam(tmp_path)
-
-        def boom(cmd, **kw):
-            raise subprocess.TimeoutExpired(cmd, 1)
-
-        monkeypatch.setattr(gg.subprocess, "run", boom)
-        assert gg.notes_with_broken_links(tmp_path) == []
-
-    def test_missing_uv_returns_empty(self, tmp_path, monkeypatch):
-        self._with_seam(tmp_path)
-
-        def boom(cmd, **kw):
-            raise FileNotFoundError("uv")
-
-        monkeypatch.setattr(gg.subprocess, "run", boom)
-        assert gg.notes_with_broken_links(tmp_path) == []
+        assert not (tmp_path / ".claude" / "scripts").exists()
+        assert gg.notes_with_broken_links(tmp_path) == ["brain/index.md"]
 
 
 class TestTargetedSourceFeedsTheSweep:
