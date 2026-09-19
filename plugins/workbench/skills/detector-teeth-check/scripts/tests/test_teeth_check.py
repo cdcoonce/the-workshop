@@ -26,12 +26,17 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from teeth_check import (  # noqa: E402
     BaselineNotGreen,
+    RUNNERS,
     _default_runner,
+    _exit_code,
+    _find_matching_runner,
+    _runner_mismatch_advice,
     Mutation,
     Spec,
     SpecError,
     apply_mutation,
     load_spec,
+    main,
     parse_collected_tests,
     parse_failed_tests,
     render,
@@ -567,3 +572,396 @@ def test_a_survivor_is_not_counted_as_a_double_only_kill(target: Path) -> None:
     )
     assert report.survivors() != []
     assert report.double_only_kills() == []
+
+
+# ---------------------------------------------------------------------------
+# Runner-aware output parsing
+#
+# pytest's FAILED/collected shapes were hardcoded, so a vitest suite scored
+# every mutant "unscored" even when it correctly went red — the run measured
+# nothing not because the harness broke, but because it was reading the
+# wrong shape. A runner registry pulls the two apart.
+# ---------------------------------------------------------------------------
+
+
+_VITEST_FAIL_LINE = (
+    " FAIL  src/lib/__tests__/groceries.test.ts > probe outer > fails on purpose\n"
+)
+_VITEST_TRANSFORM_ERROR_LINE = (
+    " FAIL  src/lib/__tests__/zz_syntaxprobe.test.ts "
+    "[ src/lib/__tests__/zz_syntaxprobe.test.ts ]\n"
+)
+_VITEST_LIST_OUTPUT = (
+    "src/lib/__tests__/groceries.test.ts > withReservedList "
+    "(post-0008/pre-seed guard) > prepends the grocery list when the server "
+    "roster lacks the reserved id\n"
+    "src/lib/__tests__/groceries.test.ts > probe outer > fails on purpose\n"
+)
+
+
+def test_parses_a_vitest_fail_line_into_its_full_id() -> None:
+    assert parse_failed_tests(_VITEST_FAIL_LINE, RUNNERS["vitest"]) == {
+        "src/lib/__tests__/groceries.test.ts > probe outer > fails on purpose"
+    }
+
+
+def test_a_vitest_transform_error_line_is_not_parsed_as_a_failing_test() -> None:
+    """No ` > ` separator means the file never loaded — nothing was evaluated."""
+    assert parse_failed_tests(_VITEST_TRANSFORM_ERROR_LINE, RUNNERS["vitest"]) == set()
+
+
+def test_a_vitest_transform_error_scores_unscored_not_killed(target: Path) -> None:
+    """The integration case: a non-zero run naming only that line measures nothing."""
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "Test Files  1 passed (1)\n"
+        return 1, _VITEST_TRANSFORM_ERROR_LINE
+
+    report = run_teeth_check(
+        Spec(
+            test_command=["npx", "vitest", "run"],
+            mutants=[Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")],
+            runner="vitest",
+        ),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["unscored"]
+    assert report.survivors() == []
+
+
+def test_parses_vitest_list_output_into_collected_ids() -> None:
+    assert parse_collected_tests(_VITEST_LIST_OUTPUT, RUNNERS["vitest"]) == [
+        "src/lib/__tests__/groceries.test.ts > withReservedList "
+        "(post-0008/pre-seed guard) > prepends the grocery list when the "
+        "server roster lacks the reserved id",
+        "src/lib/__tests__/groceries.test.ts > probe outer > fails on purpose",
+    ]
+
+
+def test_load_spec_refuses_an_unknown_runner(tmp_path: Path) -> None:
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "test_command": ["pytest", "-q"],
+                "runner": "mocha",
+                "mutants": [_mutant()],
+            }
+        )
+    )
+    with pytest.raises(SpecError, match="mocha"):
+        load_spec(spec)
+
+
+def test_load_spec_defaults_the_runner_to_pytest(tmp_path: Path) -> None:
+    """No `runner` key must behave exactly as pytest does today."""
+    spec = load_spec(_write_spec(tmp_path, [_mutant()]))
+    assert spec.runner == "pytest"
+
+
+def test_vitest_normalize_matches_ids_across_whitespace_differences() -> None:
+    """A FAIL-line id and a `list` id must compare equal despite differing spacing."""
+    fail_line_id = "groceries.test.ts >  probe outer  > fails on purpose"
+    list_id = "groceries.test.ts > probe outer > fails on purpose"
+    normalize = RUNNERS["vitest"].normalize
+    assert normalize(fail_line_id) == normalize(list_id)
+
+
+# ---------------------------------------------------------------------------
+# Self-diagnosing the wrong-runner failure
+#
+# A vitest user pointed at a pytest-configured spec used to see two sentences
+# that both point at the mutant and the test command, and neither can fix a
+# mismatched runner. The unscored row now checks the other registered
+# runners' shapes and names one if it matches.
+# ---------------------------------------------------------------------------
+
+
+def test_unscored_detail_names_a_runner_that_would_have_matched(target: Path) -> None:
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "2 passed in 0.1s\n"
+        return 1, _VITEST_FAIL_LINE
+
+    report = run_teeth_check(
+        _spec(target, Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["unscored"]
+    detail = report.mutants[0].detail
+    assert "vitest" in detail
+    assert "runner" in detail
+
+
+def test_unscored_detail_keeps_generic_wording_when_no_runner_matches(
+    target: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "2 passed in 0.1s\n"
+        return 4, "ERROR: unrecognized arguments: --timeout=120\n"
+
+    report = run_teeth_check(
+        _spec(target, Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")),
+        runner=runner,
+    )
+
+    detail = report.mutants[0].detail
+    assert "DOES match runner" not in detail
+    assert "naming no failing test" in detail
+
+
+# ---------------------------------------------------------------------------
+# Positive controls — a mutant declared to survive on purpose
+#
+# A run in which everything dies cannot distinguish "the tests have teeth"
+# from "this rig reports red for everything." A control is a deliberate
+# semantic no-op that must survive, and a committed spec needs a way to say
+# so without failing the run.
+# ---------------------------------------------------------------------------
+
+
+def _control(path: Path, **over: object) -> Mutation:
+    base: dict[str, object] = dict(
+        label="noop",
+        find="GUARD = True",
+        replace="GUARD = True  # comment only",
+        oracle="real",
+        expect="survived",
+        why="adds a trailing comment; changes no executed behaviour",
+    )
+    base.update(over)
+    return Mutation(path=path, **base)  # type: ignore[arg-type]
+
+
+def test_expect_survived_and_green_is_a_held_control(target: Path) -> None:
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        return 0, "2 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(target, _control(target)),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["control-held"]
+    assert report.survivors() == []
+    assert _exit_code(report) == 0
+
+
+def test_expect_survived_and_red_is_a_broken_control(target: Path) -> None:
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "2 passed in 0.1s\n"
+        return 1, "FAILED tests/test_a.py::test_guard\n1 failed, 1 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(target, _control(target)),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["control-broken"]
+    assert report.mutants[0].killed_by == ["tests/test_a.py::test_guard"]
+    assert _exit_code(report) != 0
+
+
+def test_load_spec_refuses_a_survived_control_with_no_why(tmp_path: Path) -> None:
+    m = _mutant(expect="survived")
+    with pytest.raises(SpecError, match="why"):
+        load_spec(_write_spec(tmp_path, [m]))
+
+
+def test_load_spec_refuses_a_survived_control_with_a_blank_why(tmp_path: Path) -> None:
+    m = _mutant(expect="survived", why="   ")
+    with pytest.raises(SpecError, match="why"):
+        load_spec(_write_spec(tmp_path, [m]))
+
+
+def test_load_spec_refuses_an_expect_it_does_not_recognise(tmp_path: Path) -> None:
+    with pytest.raises(SpecError, match="maybe"):
+        load_spec(_write_spec(tmp_path, [_mutant(expect="maybe")]))
+
+
+def test_a_held_control_is_not_counted_in_the_kill_tally(target: Path) -> None:
+    calls: list[list[str]] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        if len(calls) == 1:  # baseline
+            return 0, "2 passed in 0.1s\n"
+        if len(calls) == 2:  # the control: stays green
+            return 0, "2 passed in 0.1s\n"
+        return 1, "FAILED t.py::test_cap\n1 failed, 1 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(
+            target,
+            _control(target),
+            Mutation("cap", target, "LIMIT = 25", "LIMIT = 999", oracle="real"),
+        ),
+        runner=runner,
+    )
+
+    assert [m.label for m in report.controls_held()] == ["noop"]
+    out = render(report)
+    assert "1 killed — 1 against the real dependency, 0 against doubles" in out
+
+
+def test_render_prints_a_held_controls_why_verbatim(target: Path) -> None:
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        return 0, "2 passed in 0.1s\n"
+
+    why_text = "swaps operand order in a commutative sum; result is identical"
+    report = run_teeth_check(
+        _spec(target, _control(target, why=why_text)),
+        runner=runner,
+    )
+
+    out = render(report)
+    assert why_text in out
+
+
+def test_render_notes_when_a_control_held_but_nothing_was_killed(target: Path) -> None:
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        return 0, "2 passed in 0.1s\n"
+
+    report = run_teeth_check(
+        _spec(target, _control(target)),
+        runner=runner,
+    )
+
+    out = render(report)
+    assert "rig executes" in out
+
+
+# ---------------------------------------------------------------------------
+# --check-anchors
+#
+# A spec's `find` anchors are exact source strings, so any refactor of the
+# code under test silently rots them. This must be safe and near-instant: no
+# baseline, no test command, no write — just apply_mutation's own check.
+# ---------------------------------------------------------------------------
+
+
+def test_check_anchors_resolves_all_and_runs_no_commands(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    spec_path = _write_spec(tmp_path, [_mutant()])
+
+    def _poisoned(cmd: list[str]) -> tuple[int, str]:
+        raise AssertionError(f"--check-anchors ran a command: {cmd}")
+
+    monkeypatch.setattr("teeth_check._default_runner", _poisoned)
+
+    code = main(["--check-anchors", str(spec_path)])
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "cap: ok" in out
+
+
+def test_check_anchors_reports_a_stale_anchor_and_exits_nonzero(
+    target: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec_path = _write_spec(
+        tmp_path, [_mutant(label="stale", find="GONE = 1", replace="GONE = 2")]
+    )
+
+    code = main(["--check-anchors", str(spec_path)])
+
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "stale" in out
+    assert "anchor not found" in out
+
+
+def test_check_anchors_writes_nothing(target: Path, tmp_path: Path) -> None:
+    spec_path = _write_spec(tmp_path, [_mutant()])
+    before = target.read_bytes()
+
+    main(["--check-anchors", str(spec_path)])
+
+    assert target.read_bytes() == before
+
+
+def test_vitest_failed_line_tolerates_reporter_padding() -> None:
+    """The ` > ` requirement discriminates, not the prefix's exact spacing.
+
+    Pinning vitest's observed one-space/two-space padding would make the
+    parser a hostage to its reporter's formatting — and the failure mode of
+    that drift is every row going ``unscored``, the exact dead end this
+    runner support exists to remove.
+    """
+    padded = "    FAIL   src/a.test.ts > outer > does a thing"
+    assert parse_failed_tests(padded, RUNNERS["vitest"]) == {
+        "src/a.test.ts > outer > does a thing"
+    }
+
+
+def test_vitest_transform_error_is_not_a_kill_at_any_padding() -> None:
+    """A file that never loaded evaluated no assertion, however it is printed."""
+    for line in (
+        " FAIL  src/a.test.ts [ src/a.test.ts ]",
+        "   FAIL    src/a.test.ts [ src/a.test.ts ]",
+    ):
+        assert parse_failed_tests(line, RUNNERS["vitest"]) == set()
+
+
+def test_runner_advice_is_pastable_json() -> None:
+    """The detail tells the author what to type, so it must be valid JSON.
+
+    ``{'runner': 'vitest'}`` is Python's repr, not a spec a JSON parser will
+    accept — and this string exists precisely to be copied into one.
+    """
+    spec = Spec(
+        test_command=["pytest"],
+        runner="pytest",
+        mutants=[
+            Mutation(
+                label="m",
+                path=Path("x.py"),
+                find="a",
+                replace="b",
+                oracle="real",
+            )
+        ],
+    )
+    detail = _runner_mismatch_advice(
+        " FAIL  src/a.test.ts > outer > does a thing", spec.runner
+    )
+    assert '"runner": "vitest"' in detail
+    assert "'runner'" not in detail
+
+
+def test_mismatch_advice_never_names_the_runner_already_configured() -> None:
+    """``exclude`` has to hold for output that BOTH runners can match.
+
+    Via ``run_teeth_check`` this guard is unreachable — the check only runs
+    once the configured runner's regex matched nothing, so it could never be
+    the one returned. That makes the property real but untestable through the
+    main path, which is exactly how a defensive guard rots: advice reading
+    "set runner pytest" on a spec already configured for pytest is a dead end
+    of the same kind this check exists to remove.
+    """
+    both = (
+        "FAILED tests/test_a.py::test_one\n"
+        " FAIL  src/a.test.ts > outer > does a thing\n"
+    )
+    assert _find_matching_runner(both, exclude="pytest") == "vitest"
+    assert _find_matching_runner(both, exclude="vitest") == "pytest"

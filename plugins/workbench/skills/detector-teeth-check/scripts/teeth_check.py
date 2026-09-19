@@ -58,6 +58,23 @@ from typing import Callable
 _FAILED_RE = re.compile(r"^FAILED\s+(\S+)", re.MULTILINE)
 _COLLECTED_RE = re.compile(r"^(\S+::\S+)\s*$", re.MULTILINE)
 
+# vitest's id shape is `<file> > <describe...> > <test>`. A file that failed
+# to even *transform* (a syntax error in the mutated source) prints a FAIL
+# line with no ` > ` in it at all — `FAIL  x.test.ts [ x.test.ts ]` — and that
+# must NOT parse as a failing test: nothing in that file was ever evaluated,
+# so scoring it as a kill would manufacture teeth for a property that may
+# still be untested. Requiring a file-path-shaped prefix (ending in a known
+# JS/TS test-file extension) before the first ` > ` is what tells the two
+# apart, and the same constraint keeps the collected-ids regex from mistaking
+# a stray output line for a test id.
+_JS_TEST_FILE_EXTENSIONS = "tsx|mts|cts|mjs|cjs|jsx|ts|js"
+_VITEST_FAILED_RE = re.compile(
+    rf"^\s*FAIL\s+(\S+\.(?:{_JS_TEST_FILE_EXTENSIONS}) > .+)$", re.MULTILINE
+)
+_VITEST_COLLECTED_RE = re.compile(
+    rf"^(\S+\.(?:{_JS_TEST_FILE_EXTENSIONS}) > .+)$", re.MULTILINE
+)
+
 Runner = Callable[[list[str]], "tuple[int, str]"]
 
 
@@ -78,6 +95,14 @@ class SpecError(Exception):
 #: code under test emits.
 ORACLES = ("real", "double")
 
+#: Per-mutant expectation. ``killed`` is the ordinary claim — this defect
+#: should be caught. ``survived`` marks a positive control: a mutation
+#: declared, by construction, to be semantically inert. Without one, a run in
+#: which every mutant dies cannot distinguish "the tests have teeth" from
+#: "this rig reports red for everything" — there is no row proving it can
+#: also report green.
+EXPECTATIONS = ("killed", "survived")
+
 
 @dataclass(frozen=True)
 class Mutation:
@@ -86,6 +111,8 @@ class Mutation:
     find: str
     replace: str
     oracle: str | None = None
+    expect: str = "killed"
+    why: str | None = None
 
 
 @dataclass
@@ -93,15 +120,18 @@ class Spec:
     test_command: list[str]
     mutants: list[Mutation]
     collect_command: list[str] | None = None
+    runner: str = "pytest"
 
 
 @dataclass
 class MutantResult:
     label: str
-    status: str  # "killed" | "survived" | "not-applied" | "unscored"
+    status: str  # "killed" | "survived" | "not-applied" | "unscored" | "control-held" | "control-broken"
     killed_by: list[str] = field(default_factory=list)
     detail: str = ""
     oracle: str | None = None
+    expect: str = "killed"
+    why: str | None = None
 
 
 @dataclass
@@ -110,7 +140,13 @@ class Report:
     never_killed: list[str] | None
 
     def survivors(self) -> list[MutantResult]:
-        """Mutants no test caught — each names an untested property."""
+        """Mutants no test caught — each names an untested property.
+
+        A held control (``expect="survived"`` that stayed green) is not a
+        survivor: it is the same run outcome under an opposite meaning,
+        because its author declared it in advance. ``status`` keeps the two
+        apart, so this never needs to filter on ``expect``.
+        """
         return [m for m in self.mutants if m.status == "survived"]
 
     def unapplied(self) -> list[MutantResult]:
@@ -130,15 +166,39 @@ class Report:
         """
         return [m for m in self.mutants if m.status == "killed" and m.oracle == "double"]
 
+    def controls_held(self) -> list[MutantResult]:
+        """Controls that stayed green, as their author predicted.
 
-def parse_failed_tests(output: str) -> set[str]:
-    """Extract test ids from pytest's ``FAILED <id>`` summary lines."""
-    return set(_FAILED_RE.findall(output))
+        The positive-control result: proof the rig can report an all-clear
+        rather than red for everything.
+        """
+        return [m for m in self.mutants if m.status == "control-held"]
+
+    def controls_broken(self) -> list[MutantResult]:
+        """Controls a test caught anyway — the inertness argument or the test is wrong.
+
+        Which one is a human judgment, not something this tool can resolve,
+        so the row is reported with its killers rather than folded into
+        either the kill tally or the survivors list.
+        """
+        return [m for m in self.mutants if m.status == "control-broken"]
 
 
-def parse_collected_tests(output: str) -> list[str]:
-    """Extract test ids from ``pytest --collect-only -q`` output."""
-    return _COLLECTED_RE.findall(output)
+def parse_failed_tests(output: str, runner: "RunnerSpec | None" = None) -> set[str]:
+    """Extract failing test ids using *runner*'s failure-summary shape.
+
+    Defaults to pytest's ``FAILED <id>`` lines — the only shape this tool
+    understood before runners became pluggable, so a caller that does not
+    pass one keeps today's behaviour exactly.
+    """
+    spec = runner if runner is not None else RUNNERS["pytest"]
+    return set(spec.failed_re.findall(output))
+
+
+def parse_collected_tests(output: str, runner: "RunnerSpec | None" = None) -> list[str]:
+    """Extract collected test ids using *runner*'s collect-output shape."""
+    spec = runner if runner is not None else RUNNERS["pytest"]
+    return spec.collected_re.findall(output)
 
 
 def normalize_test_id(test_id: str) -> str:
@@ -156,6 +216,81 @@ def normalize_test_id(test_id: str) -> str:
     """
     file_part, sep, rest = test_id.partition("::")
     return f"{Path(file_part).name}{sep}{rest}"
+
+
+def _normalize_vitest_id(test_id: str) -> str:
+    """Collapse internal whitespace so a FAIL-line id and a `list` id compare equal.
+
+    `npx vitest list` and a FAIL line render the same ``file > describe >
+    test`` id with different internal spacing, so comparing the raw strings
+    would make every test look like it caught nothing — the same failure
+    mode ``normalize_test_id`` exists to avoid for pytest, with a different
+    cause.
+    """
+    return re.sub(r"\s+", " ", test_id).strip()
+
+
+@dataclass(frozen=True)
+class RunnerSpec:
+    """How to read one test runner's output.
+
+    Pulled apart from pytest because pytest's output shape used to be
+    hardcoded: a vitest suite scored every mutant ``unscored`` even when it
+    correctly went red, because the FAILED/collected regexes and the
+    normalization that makes ids comparable are all runner-specific.
+    """
+
+    name: str
+    failed_re: re.Pattern[str]
+    collected_re: re.Pattern[str]
+    normalize: Callable[[str], str]
+
+
+RUNNERS: dict[str, RunnerSpec] = {
+    "pytest": RunnerSpec(
+        name="pytest",
+        failed_re=_FAILED_RE,
+        collected_re=_COLLECTED_RE,
+        normalize=normalize_test_id,
+    ),
+    "vitest": RunnerSpec(
+        name="vitest",
+        failed_re=_VITEST_FAILED_RE,
+        collected_re=_VITEST_COLLECTED_RE,
+        normalize=_normalize_vitest_id,
+    ),
+}
+
+
+def _find_matching_runner(output: str, *, exclude: str) -> str | None:
+    """Return another registered runner whose failed_re matches *output*, if any.
+
+    A row that names no failing test under the configured runner might still
+    be a real red run, just parsed with the wrong shape. Checking the other
+    registered runners turns a dead-end refusal — fix the mutant, fix the
+    test command, neither of which can possibly help — into an actionable
+    one: set the right ``runner`` in the spec.
+    """
+    for name, candidate in RUNNERS.items():
+        if name != exclude and candidate.failed_re.search(output):
+            return name
+    return None
+
+
+def _runner_mismatch_advice(output: str, configured: str) -> str:
+    """Return the ``; set runner ...`` suffix for an unscored row, or "".
+
+    Kept separate because the string is the whole point of the check: it is
+    copied straight into a spec, so it has to be valid JSON rather than a
+    Python repr, and a test can say so without driving a whole run.
+    """
+    other = _find_matching_runner(output, exclude=configured)
+    if other is None:
+        return ""
+    return (
+        f"; the output DOES match runner {other!r} — set "
+        f"{json.dumps({'runner': other})} in the spec"
+    )
 
 
 def apply_mutation(text: str, find: str, replace: str) -> str:
@@ -206,11 +341,12 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
     the whole exercise is meaningless and this raises rather than reporting.
     """
     run = _default_runner if runner is None else runner
+    runner_spec = RUNNERS[spec.runner]
 
     collected: list[str] | None = None
     if spec.collect_command is not None:
         _, out = run(spec.collect_command)
-        collected = parse_collected_tests(out)
+        collected = parse_collected_tests(out, runner_spec)
 
     # A cache left from an earlier aborted run can carry mutated bytecode into
     # the baseline, where it passes unnoticed and every row after it is scored
@@ -222,7 +358,7 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
     if code != 0:
         raise BaselineNotGreen(
             "suite is red before mutation; every mutant would look killed:\n"
-            + "\n".join(sorted(parse_failed_tests(out)))
+            + "\n".join(sorted(parse_failed_tests(out, runner_spec)))
         )
 
     results: list[MutantResult] = []
@@ -239,6 +375,8 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                     "not-applied",
                     detail=str(exc),
                     oracle=mutant.oracle,
+                    expect=mutant.expect,
+                    why=mutant.why,
                 )
             )
             continue
@@ -256,6 +394,8 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                         "unscored",
                         detail=f"mutant does not compile: {exc}",
                         oracle=mutant.oracle,
+                        expect=mutant.expect,
+                        why=mutant.why,
                     )
                 )
                 continue
@@ -273,40 +413,90 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
             _purge_cached_bytecode(mutant.path)
 
         if code == 0:
-            results.append(
-                MutantResult(mutant.label, "survived", oracle=mutant.oracle)
-            )
-            continue
-
-        failed = sorted(parse_failed_tests(out))
-        if not failed:
-            # Non-zero with nothing named: the command aborted before it could
-            # collect (an unrecognised flag, a missing plugin, an import error).
-            # Scoring this as a kill would credit teeth to a run that never
-            # evaluated an assertion.
+            # A control that stays green held, as its author predicted; an
+            # ordinary mutant that stays green survived. Same run outcome,
+            # opposite meaning — only the control declared it in advance.
+            status = "control-held" if mutant.expect == "survived" else "survived"
             results.append(
                 MutantResult(
                     mutant.label,
-                    "unscored",
-                    detail=f"run exited {code} naming no failing test",
+                    status,
                     oracle=mutant.oracle,
+                    expect=mutant.expect,
+                    why=mutant.why,
                 )
             )
             continue
 
-        killers.update(normalize_test_id(t) for t in failed)
+        failed = sorted(parse_failed_tests(out, runner_spec))
+        if not failed:
+            # Non-zero with nothing named: the command aborted before it could
+            # collect (an unrecognised flag, a missing plugin, an import
+            # error) — or the configured runner is simply reading the wrong
+            # output shape. Scoring this as a kill would credit teeth to a
+            # run that never evaluated an assertion, so check whether another
+            # registered runner's shape would have matched before giving up.
+            detail = (
+                f"run exited {code} naming no failing test under runner "
+                f"{spec.runner!r}"
+            )
+            detail += _runner_mismatch_advice(out, spec.runner)
+            results.append(
+                MutantResult(
+                    mutant.label,
+                    "unscored",
+                    detail=detail,
+                    oracle=mutant.oracle,
+                    expect=mutant.expect,
+                    why=mutant.why,
+                )
+            )
+            continue
+
+        killers.update(runner_spec.normalize(t) for t in failed)
+        # A control that goes red broke: something caught a mutation its
+        # author argued was inert. An ordinary mutant that goes red killed,
+        # as before.
+        status = "control-broken" if mutant.expect == "survived" else "killed"
         results.append(
             MutantResult(
-                mutant.label, "killed", killed_by=failed, oracle=mutant.oracle
+                mutant.label,
+                status,
+                killed_by=failed,
+                oracle=mutant.oracle,
+                expect=mutant.expect,
+                why=mutant.why,
             )
         )
 
     never_killed = (
         None
         if collected is None
-        else [t for t in collected if normalize_test_id(t) not in killers]
+        else [t for t in collected if runner_spec.normalize(t) not in killers]
     )
     return Report(mutants=results, never_killed=never_killed)
+
+
+def check_anchors(spec: Spec) -> list[tuple[str, str | None]]:
+    """Check every mutant's anchor without running anything or touching disk.
+
+    A spec's ``find`` anchors are exact source strings, so a refactor of the
+    code under test can desync them silently — nothing else in this tool
+    would notice until the next full run. This reads each mutant's file and
+    asks ``apply_mutation`` whether the anchor still resolves to exactly one
+    site, and nothing more: no baseline, no test command, no write. Fast and
+    safe enough to sit ahead of a slow full run in a gate.
+    """
+    outcomes: list[tuple[str, str | None]] = []
+    for mutant in spec.mutants:
+        text = mutant.path.read_text(encoding="utf-8")
+        try:
+            apply_mutation(text, mutant.find, mutant.replace)
+        except ValueError as exc:
+            outcomes.append((mutant.label, str(exc)))
+        else:
+            outcomes.append((mutant.label, None))
+    return outcomes
 
 
 def _read_oracle(mutant: dict, label: str) -> str:
@@ -333,6 +523,61 @@ def _read_oracle(mutant: dict, label: str) -> str:
     return oracle
 
 
+def _read_expectation(mutant: dict, label: str) -> tuple[str, str | None]:
+    """Return a mutant's declared ``(expect, why)``.
+
+    ``expect`` defaults to ``killed``, so an ordinary mutant needs no new
+    key — this is additive, not a second required field alongside ``oracle``.
+    A ``survived`` control is different: the whole point is a deliberate
+    no-op, and a control nobody argued for is indistinguishable from a
+    survivor someone decided to ignore. So ``why`` is optional documentation
+    on any mutant, but required — and non-blank — exactly when ``expect`` is
+    ``survived``.
+    """
+    expect = mutant.get("expect", "killed")
+    if expect not in EXPECTATIONS:
+        raise SpecError(
+            f"mutant {label!r} declares expect {expect!r}; expected one of "
+            f"{EXPECTATIONS}"
+        )
+    why = mutant.get("why")
+    if expect == "survived" and not (why and why.strip()):
+        raise SpecError(
+            f"mutant {label!r} declares expect='survived' with no 'why': a "
+            "control without a stated argument for its own inertness is "
+            "indistinguishable from a survivor someone decided to ignore."
+        )
+    return expect, why
+
+
+def _read_runner(data: dict) -> str:
+    """Return the spec's declared runner, defaulting to ``pytest``.
+
+    Unlike ``oracle``, defaulting here cannot manufacture a false guarantee:
+    a wrong runner makes every row ``unscored`` — a loud refusal — never a
+    false kill. That asymmetry is exactly why ``oracle`` is required per
+    mutant while ``runner`` is defaulted for the whole spec.
+    """
+    name = data.get("runner", "pytest")
+    if name not in RUNNERS:
+        raise SpecError(f"unknown runner {name!r}; expected one of {sorted(RUNNERS)}")
+    return name
+
+
+def _build_mutation(raw: dict, base: Path) -> Mutation:
+    label = raw["label"]
+    expect, why = _read_expectation(raw, label)
+    return Mutation(
+        label=label,
+        path=(base / raw["file"]).resolve(),
+        find=raw["find"],
+        replace=raw["replace"],
+        oracle=_read_oracle(raw, label),
+        expect=expect,
+        why=why,
+    )
+
+
 def load_spec(path: Path) -> Spec:
     """Load a JSON spec. Mutation paths resolve relative to the spec file."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -340,16 +585,8 @@ def load_spec(path: Path) -> Spec:
     return Spec(
         test_command=data["test_command"],
         collect_command=data.get("collect_command"),
-        mutants=[
-            Mutation(
-                label=m["label"],
-                path=(base / m["file"]).resolve(),
-                find=m["find"],
-                replace=m["replace"],
-                oracle=_read_oracle(m, m["label"]),
-            )
-            for m in data["mutants"]
-        ],
+        runner=_read_runner(data),
+        mutants=[_build_mutation(m, base) for m in data["mutants"]],
     )
 
 
@@ -388,8 +625,11 @@ def render(report: Report) -> str:
         lines.append("")
         lines.append(
             "UNSCORED — these runs named no failing test, so they measured "
-            "nothing.\nFix the mutant or the test command and re-run; do NOT "
-            "read them as kills."
+            "nothing.\nCheck the configured runner first — a mismatched "
+            "output shape reads exactly\nlike a broken mutant or test "
+            "command, but no amount of fixing either one\ncan help. Only "
+            "once that's ruled out, fix the mutant or the test command\n"
+            "and re-run; do NOT read these as kills."
         )
         lines += [f"  {m.label}: {m.detail}" for m in report.unscored()]
 
@@ -404,6 +644,33 @@ def render(report: Report) -> str:
             "oracle is the real dependency:"
         )
         lines += [f"  {m.label}" for m in report.double_only_kills()]
+
+    if report.controls_held():
+        lines.append("")
+        lines.append(
+            "CONTROLS HELD — declared inert by construction, and stayed "
+            "green. The\nauthor's argument for each, verbatim:"
+        )
+        lines += [f"  {m.label}: {m.why}" for m in report.controls_held()]
+
+    if report.controls_broken():
+        lines.append("")
+        lines.append(
+            "CONTROL BROKEN — declared inert, but a test caught it anyway. "
+            "Either the\ninertness argument is wrong — read this row as a "
+            "real mutant — or a test is\nasserting incidental form rather "
+            "than behaviour. A human has to decide which:"
+        )
+        lines += [
+            f"  {m.label}: {', '.join(m.killed_by)}" for m in report.controls_broken()
+        ]
+
+    if report.controls_held() and not kills:
+        lines.append("")
+        lines.append(
+            "NOTE — a control held but nothing was killed: this run proved "
+            "the rig executes,\nnot that anything here has teeth."
+        )
 
     if report.survivors():
         lines.append("")
@@ -430,17 +697,63 @@ def render(report: Report) -> str:
     return "\n".join(lines)
 
 
+def _exit_code(report: Report) -> int:
+    """Non-zero when the suite lacks teeth, a row produced no verdict, or a
+    control caught something it declared inert.
+
+    A broken control gets the same treatment as a survivor or an unscored
+    row: it is "a human has to look at this," not a pass. A held control is
+    not in this list — green is the correct, expected outcome for one.
+    """
+    return (
+        1
+        if report.survivors()
+        or report.unapplied()
+        or report.unscored()
+        or report.controls_broken()
+        else 0
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("spec", type=Path, help="JSON spec file")
     parser.add_argument(
         "--json", action="store_true", help="emit machine-readable JSON instead"
     )
+    parser.add_argument(
+        "--check-anchors",
+        action="store_true",
+        help=(
+            "verify every mutant's anchor resolves against its file and "
+            "exit — no baseline, no test command, no writes"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
-        report = run_teeth_check(load_spec(args.spec))
-    except (BaselineNotGreen, SpecError) as exc:
+        spec = load_spec(args.spec)
+    except SpecError as exc:
+        print(f"refusing to run: {exc}", file=sys.stderr)
+        return 2
+
+    if args.check_anchors:
+        outcomes = check_anchors(spec)
+        if args.json:
+            print(
+                json.dumps(
+                    [{"label": label, "error": error} for label, error in outcomes],
+                    indent=2,
+                )
+            )
+        else:
+            for label, error in outcomes:
+                print(f"{label}: {'ok' if error is None else error}")
+        return 0 if all(error is None for _, error in outcomes) else 1
+
+    try:
+        report = run_teeth_check(spec)
+    except BaselineNotGreen as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 
@@ -457,9 +770,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(render(report))
 
-    # Non-zero when the suite lacks teeth somewhere, or when any row failed to
-    # produce a verdict — an unscored run is not a pass.
-    return 1 if report.survivors() or report.unapplied() or report.unscored() else 0
+    return _exit_code(report)
 
 
 if __name__ == "__main__":
