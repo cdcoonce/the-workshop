@@ -37,6 +37,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
+| `/measure-before-landing` | `workbench` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
 | `/mr-merge-order` | `workbench` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
 | `/mr-review-fixes` | `workbench` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
 | `/persona-builder` | `workbench` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
@@ -258,6 +259,12 @@ Interview the user relentlessly about a plan or design until reaching shared und
 *`workshop-maintainer` plugin*
 
 Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR.
+
+### `/measure-before-landing`
+
+*`workbench` plugin*
+
+Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. Use when you A/B, benchmark, baseline, or ask whether a change actually improved anything.
 
 ### `/mr-merge-order`
 

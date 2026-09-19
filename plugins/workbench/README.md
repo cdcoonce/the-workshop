@@ -41,6 +41,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles a promotion into `main`, descriptions keep real newlines, and both are read back. |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
+| `/measure-before-landing` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
 | `/mr-merge-order` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
 | `/mr-review-fixes` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
 | `/persona-builder` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
@@ -119,7 +120,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
 | `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
-| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
 | `vault-pre-compact.py` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | — | SessionStart hook: pulls from remote and injects vault context. |
 | `vault-skill-alias.py` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |

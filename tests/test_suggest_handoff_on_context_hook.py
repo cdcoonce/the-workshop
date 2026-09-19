@@ -119,7 +119,7 @@ class TestThreshold:
         assert result.returncode == 0
         assert result.stdout == ""
 
-    def test_at_or_above_threshold_suggests_handoff(
+    def test_at_or_above_threshold_suggests_wrap_up(
         self, tmp_path: Path, markers: Path
     ) -> None:
         transcript = _transcript(tmp_path, _assistant_line(2, 305_000, 2_000))
@@ -130,7 +130,8 @@ class TestThreshold:
         out = json.loads(result.stdout)
         hso = out["hookSpecificOutput"]
         assert hso["hookEventName"] == "UserPromptSubmit"
-        assert "/handoff" in hso["additionalContext"]
+        assert "/wrap-up" in hso["additionalContext"]
+        assert "/handoff" not in hso["additionalContext"]
         assert "do not run" in hso["additionalContext"].lower()
 
     def test_uses_last_assistant_usage_not_earlier(
@@ -156,7 +157,7 @@ class TestThreshold:
             threshold="40000",
         )
         out = json.loads(result.stdout)
-        assert "/handoff" in out["hookSpecificOutput"]["additionalContext"]
+        assert "/wrap-up" in out["hookSpecificOutput"]["additionalContext"]
 
 
 class TestOncePerSession:
