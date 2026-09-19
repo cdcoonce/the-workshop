@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""UserPromptSubmit hook: suggest /handoff once the session's context grows large.
+"""UserPromptSubmit hook: suggest /wrap-up once the session's context grows large.
 
 Claude Code exposes no context-window size to hooks, so this derives it from the
 transcript. The most recent assistant message's usage
@@ -10,7 +10,10 @@ transcript. The most recent assistant message's usage
 token count sent on that request — i.e. the live context size. When it crosses a
 threshold (default 300k, override with ``WORKSHOP_HANDOFF_CONTEXT_TOKENS``) the hook
 emits UserPromptSubmit ``additionalContext`` telling Claude to suggest the user run
-``/handoff`` to refresh the rolling orchestrator handoff. It suggests, never invokes.
+``/wrap-up`` — the vault wrap-up (session audit, handoff refresh, git sync), which
+subsumes the bare handoff refresh this hook used to point at. It suggests, never
+invokes. The script name, env var, and marker dir keep their historical "handoff"
+spelling so installed configs and overrides keep working.
 
 Fires at most once per session: a marker file keyed on ``session_id`` (or, when a host
 omits one, a hash of the transcript path) is written on first trigger and suppresses
@@ -124,10 +127,10 @@ def _message(context_tokens: int, threshold: int) -> str:
     limit_k = round(threshold / 1000)
     return (
         f"[context checkpoint] This session has used ~{used_k}k tokens of context "
-        f"(threshold {limit_k}k). Tell the user it's a good moment to run `/handoff` "
-        "to refresh the rolling orchestrator handoff so work can continue cleanly in a "
-        "fresh session. Mention it once, then carry on with their request — do not run "
-        "`/handoff` automatically."
+        f"(threshold {limit_k}k). Tell the user it's a good moment to run `/wrap-up` "
+        "to audit the session, refresh the rolling orchestrator handoff, and sync, "
+        "so work can continue cleanly in a fresh session. Mention it once, then carry "
+        "on with their request — do not run `/wrap-up` automatically."
     )
 
 

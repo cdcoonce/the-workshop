@@ -120,7 +120,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
 | `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
-| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /handoff once the session's context grows large. |
+| `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
 | `vault-pre-compact.py` | — | PreCompact hook: preserves session state before compaction. |
 | `vault-session-start.py` | — | SessionStart hook: pulls from remote and injects vault context. |
 | `vault-skill-alias.py` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
