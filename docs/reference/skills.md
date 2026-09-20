@@ -29,6 +29,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/dignified-python` | `workbench` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
 | `/drain-queue` | `workbench` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
 | `/drill-me` | `workbench` | Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. |
+| `/explain` | `workbench` | Explain something briefly in chat (eli5) or build a one-page visual HTML summary of a session, branch, work tree, or MR. |
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
@@ -211,6 +212,12 @@ Works a queue of specced issues by hand, one worker per issue, with a spec gate 
 *`workbench` plugin*
 
 Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. Use when Charles invokes /drill-me or asks to be drilled, quizzed, or tested on material — especially before an assessment.
+
+### `/explain`
+
+*`workbench` plugin*
+
+Explain something briefly in chat (eli5) or build a one-page visual HTML summary of a session, branch, work tree, or MR. Use for eli5/plain-english asks and summary, recap, or status page asks. Not vault wrap-up/handoff and not transcript-notes.
 
 ### `/finish-branch`
 

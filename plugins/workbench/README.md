@@ -34,6 +34,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/dignified-python` | Production Python coding standards (3.10-3.13): modern type syntax, LBYL exception handling, pathlib, ABC-based interfaces. |
 | `/drain-queue` | Works a queue of specced issues by hand, one worker per issue, with a spec gate and review before landing. |
 | `/drill-me` | Closed-book multiple-choice drilling that tells a recall gap apart from a comprehension gap. |
+| `/explain` | Explain something briefly in chat (eli5) or build a one-page visual HTML summary of a session, branch, work tree, or MR. |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
