@@ -1,0 +1,92 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_gardener_targeted_sweep.py",
+    "tests/test_validate_write.py",
+    "tests/test_unpromoted_memory.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_gardener_targeted_sweep.py",
+    "tests/test_validate_write.py",
+    "tests/test_unpromoted_memory.py"
+  ],
+  "mutants": [
+    {
+      "label": "the scan never runs (the defect that actually shipped)",
+      "file": "engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "    restore = _pin_vault_root(vault_root)\n    try:\n        import graph_cli  # noqa: PLC0415",
+      "replace": "    return None\n    restore = _pin_vault_root(vault_root)\n    try:\n        import graph_cli  # noqa: PLC0415"
+    },
+    {
+      "label": "a clean vault reads as 'scan unavailable' ({} collapsed to None)",
+      "file": "engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "        graph, _cfg = graph_cli.build(vault_root)\n        return {",
+      "replace": "        graph, _cfg = graph_cli.build(vault_root)\n        return None if not graph.unresolved else {"
+    },
+    {
+      "label": "pinned vault root leaks to the next scan (no finally: restore)",
+      "file": "engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "    except Exception:  # noqa: BLE001 - fail-soft by contract; this runs inside a hook\n        return None\n    finally:\n        restore()",
+      "replace": "    except Exception:  # noqa: BLE001 - fail-soft by contract; this runs inside a hook\n        return None"
+    },
+    {
+      "label": "a failed scan raises instead of failing soft (would break the write path)",
+      "file": "engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "    except Exception:  # noqa: BLE001 - fail-soft by contract; this runs inside a hook\n        return None\n    finally:",
+      "replace": "    except Exception:  # noqa: BLE001 - fail-soft by contract; this runs inside a hook\n        raise\n    finally:"
+    },
+    {
+      "label": "an unavailable scan goes silent again (Part 2 reverted)",
+      "file": "engine/validate-write.py",
+      "oracle": "double",
+      "find": "            return [\n                \"\u26a0\ufe0f Link check unavailable \u2014 the wikilink scan could not run, so \"",
+      "replace": "            return []\n            return [\n                \"\u26a0\ufe0f Link check unavailable \u2014 the wikilink scan could not run, so \""
+    },
+    {
+      "label": "[control] swap two independent state captures in _pin_vault_root",
+      "file": "engine/graph_gardener.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Both lines are pure reads of disjoint process state \u2014 os.environ and sys.modules \u2014 with no write between them and nothing in scope that mutates either, so both orders capture identical values on every path the suite reaches. It would stop being inert only if a future edit inserted a mutation of either store between the two captures.",
+      "find": "    prior_env = os.environ.get(\"CLAUDE_PROJECT_DIR\")\n    prior_modules = {name: sys.modules.get(name) for name in _PINNED_MODULE_NAMES}",
+      "replace": "    prior_modules = {name: sys.modules.get(name) for name in _PINNED_MODULE_NAMES}\n    prior_env = os.environ.get(\"CLAUDE_PROJECT_DIR\")"
+    }
+  ]
+}

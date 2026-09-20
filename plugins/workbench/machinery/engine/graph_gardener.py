@@ -50,6 +50,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -71,7 +72,6 @@ LANE_B_TIMEOUT = 90          # seconds for the headless claude call
 RACE_SAFETY_SECS = 120       # skip notes modified in the last N seconds
 SWEEP_BATCH = 8              # old backlog notes gardened per run (trickle sweep)
 BROKEN_BATCH = 8             # notes with known broken links gardened per run (targeted)
-BROKEN_SCAN_TIMEOUT = 30     # seconds; the graphmark scan is ~0.2s, this is a hang guard
 MAX_NOTES_LANE_B = 20        # cap: don't send 200 notes in one prompt
 
 ORPHAN_MIN_CHARS = 300       # notes this long with no [[link]] → orphan flag
@@ -554,36 +554,78 @@ def notes_with_broken_links(vault_root: Path) -> list[str]:
     return sorted(raw) if raw else []
 
 
+_PINNED_MODULE_NAMES = (
+    "vault_scope", "vault_scope_resolved", "vault_scope_defaults",
+    "frontmatter_engine", "vault_audit", "graph_cli",
+)
+
+
+def _pin_vault_root(vault_root: Path) -> Callable[[], None]:
+    """Anchor vault_scope_resolved's owner-config resolution to *vault_root*.
+
+    Identical pattern to ``cold_read_evidence._pin_vault_root`` /
+    ``wrap_up_audit._pin_vault_root``: sets ``CLAUDE_PROJECT_DIR`` and evicts the
+    vault_scope_resolved-derived modules from ``sys.modules`` before this process resolves
+    any of them, so *vault_root* (not cwd, and not whatever vault a previous call in this
+    same process pinned) is authoritative for owner scope config. The caller MUST call the
+    returned ``restore`` in a ``finally``, on both success and exception, so this
+    process-global state does not outlive one resolution.
+    """
+    had_env = "CLAUDE_PROJECT_DIR" in os.environ
+    prior_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    prior_modules = {name: sys.modules.get(name) for name in _PINNED_MODULE_NAMES}
+
+    os.environ["CLAUDE_PROJECT_DIR"] = str(vault_root)
+    for name in _PINNED_MODULE_NAMES:
+        sys.modules.pop(name, None)
+
+    def _restore() -> None:
+        if had_env:
+            os.environ["CLAUDE_PROJECT_DIR"] = prior_env  # type: ignore[assignment]
+        else:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        for name, mod in prior_modules.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
+
+    return _restore
+
+
 def _graphmark_broken(vault_root: Path) -> dict | None:
-    """Raw ``graph_cli.py --diagnose-broken`` payload, or ``None`` if the scan failed.
+    """Raw ``graph_cli.py --diagnose-broken`` payload, or ``None`` if the scan is unavailable.
 
     One code path for both consumers, so the targeted sweep and Lane A can never disagree about
     what is broken.
+
+    Runs ``graph_cli`` in-process, the same way ``cold_read_evidence`` and ``wrap_up_audit``
+    already resolve it, rather than shelling out to a copy vendored inside the vault. That
+    vendored copy went away when the engine moved into the plugin (#650/#679), but this call
+    site kept pointing at it and silently returned ``None`` on every real vault for weeks —
+    disabling the write-time link advisory and the gardener's targeted sweep together. It
+    escaped that sweep because it spelled the path as a pathlib join rather than a string,
+    which the flat-layout guard could not match; the guard now covers both spellings.
+
+    Fail-soft by design: this runs inside a session/PostToolUse hook, so ANY failure (missing
+    graphmark, a resolver error, a vault_root that isn't actually a vault) returns ``None``,
+    never raises. ``None`` means "the scan could not run" — distinct from ``{}``, which means
+    "the scan ran and found nothing broken" — callers rely on that distinction, so it must
+    never collapse to a plain truthiness check.
     """
-    script = vault_root / ".claude" / "scripts" / "graph_cli.py"
-    if not script.exists():
-        return None
+    restore = _pin_vault_root(vault_root)
     try:
-        proc = subprocess.run(
-            [
-                "uv",
-                "run",
-                str(script),
-                "--vault-root",
-                str(vault_root),
-                "--diagnose-broken",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=BROKEN_SCAN_TIMEOUT,
-            cwd=str(vault_root),
-        )
-        if proc.returncode != 0:
-            return None
-        data = json.loads(proc.stdout or "{}")
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
+        import graph_cli  # noqa: PLC0415
+
+        graph, _cfg = graph_cli.build(vault_root)
+        return {
+            note: [graph_cli._broken_entry(graph, display, suggest=5) for display in displays]
+            for note, displays in sorted(graph.unresolved.items())
+        }
+    except Exception:  # noqa: BLE001 - fail-soft by contract; this runs inside a hook
         return None
-    return data if isinstance(data, dict) else None
+    finally:
+        restore()
 
 
 def collect_touched_notes(

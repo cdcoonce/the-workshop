@@ -51,7 +51,13 @@ def _link_advisory_lines(file_path: Path, vault_root: Path) -> list[str]:
         rel = str(file_path.resolve().relative_to(vault_root.resolve()))
         raw = _graphmark_broken(vault_root)
         if raw is None:
-            return []
+            # The scan itself could not run (as opposed to running and finding nothing
+            # broken) — surface that instead of silently returning [], which is exactly
+            # how this check went unnoticed for weeks when its resolver stopped working.
+            return [
+                "⚠️ Link check unavailable — the wikilink scan could not run, so "
+                "unresolved links in this file will not be caught until the commit gate."
+            ]
         entries = raw.get(rel, [])
         displays = list(dict.fromkeys(
             entry["display"]
