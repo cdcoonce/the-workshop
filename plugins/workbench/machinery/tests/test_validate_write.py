@@ -145,8 +145,22 @@ class TestVaultRootSignature:
 
 class TestValidWrite:
     def test_valid_note_exits_zero(self, vault: Path) -> None:
+        # Deliberately no wikilink at all — not VALID_FRONTMATTER's [[Something]], which
+        # is a placeholder OTHER tests rely on staying genuinely unresolved (it exercises
+        # the link-advisory lane below, now that Part 1 makes that scan real). A body this
+        # short doesn't need one anyway: MIN_WIKILINK_LENGTH in frontmatter_engine.py only
+        # requires a wikilink past 300 chars. This test is about frontmatter validity alone.
         note = vault / "work" / "note.md"
-        note.write_text(VALID_FRONTMATTER, encoding="utf-8")
+        note.write_text(
+            "---\n"
+            "date: 2026-06-07\n"
+            'description: "A hermetic test note used to exercise the validate-write hook contract"\n'
+            "tags:\n"
+            "  - test\n"
+            "---\n\n"
+            "# A Note\n\nBody content with no links at all.\n",
+            encoding="utf-8",
+        )
 
         result = _run_hook(note)
 
@@ -228,7 +242,15 @@ class TestUnpromotedMemoryLane:
 
     @staticmethod
     def _fake_home(tmp_path: Path, vault: Path, *slugs: str) -> str:
-        home = tmp_path / "home"
+        # HOME must live OUTSIDE the vault, as it always does in reality (a user's real
+        # ~/.claude/projects/.../memory/ is never inside any vault they keep). Nesting it
+        # under ``vault`` (== ``tmp_path`` per the ``vault`` fixture) used to be harmless
+        # while the resolver was stubbed, but now that Part 1 makes the scan real,
+        # graphmark's out-of-scope catalog indexes every *.md file under vault_root by
+        # stem regardless of exclusion depth — so a memory file nested inside the vault
+        # would make its matching wikilink resolve as "out-of-scope" instead of "missing"
+        # and silently never reach the broken-links map. A sibling directory avoids that.
+        home = tmp_path.parent / f"{tmp_path.name}-fake-home"
         mem = home / ".claude" / "projects" / str(vault).replace("/", "-") / "memory"
         mem.mkdir(parents=True)
         (mem / "MEMORY.md").write_text("# Memory Index\n", encoding="utf-8")
@@ -349,17 +371,109 @@ class TestUnpromotedMemoryLane:
         additional_context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
         assert "some-durable-lesson" in additional_context
 
-    def test_no_auto_memory_on_machine_is_silent(
+    def test_no_auto_memory_on_machine_generic_warning_still_fires(
         self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Self-sufficiency: a fresh machine has no memory store and must still pass."""
+        """Self-sufficiency: a fresh machine has no memory store, so the auto-memory-specific
+        promotion diagnostic must stay silent and the check must not crash — but that must
+        NOT be confused with total silence. VALID_FRONTMATTER's [[Something]] is a genuinely
+        unresolved link (no note by that name exists anywhere in this vault), so now that
+        Part 1 makes the scan real, the generic forward-reference warning correctly still
+        fires. (Before that fix this asserted exit 0 — full silence — which was actually
+        this same bug: with no vendored graph_cli.py, the scan never ran at all.)
+        """
         monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))
         note = vault / "work" / "note.md"
         note.write_text(VALID_FRONTMATTER, encoding="utf-8")
 
         result = _run_hook(note)
 
-        assert result.returncode == 0, result.stderr
+        assert result.returncode == 2, result.stderr
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "auto-memory" not in output
+        assert "Something" in output
+
+
+class TestScanRunsInProcessOnARealVault:
+    """Direct teeth test for Part 1 of the write-time link advisory restore.
+
+    Every positive-path test in ``TestUnpromotedMemoryLane`` above stubs a
+    ``.claude/scripts/graph_cli.py`` at the vendored path the OLD implementation shelled
+    out to (``_stub_resolver``) — exactly the "fixture builds the world the code expects"
+    pattern that let ``_graphmark_broken`` stay broken on every real vault for weeks,
+    since that vendored copy was deleted when the engine moved into the plugin. This test
+    builds a vault that looks like a REAL current install instead: no ``.claude/scripts/``
+    directory anywhere. It must fail before the fix (no scan ever runs → silence) and pass
+    after it (the engine's own ``graph_cli.py`` runs in-process).
+    """
+
+    def test_nonexistent_wikilink_target_warns_with_no_vendored_copy(
+        self, vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))  # no auto-memory store
+        note = vault / "work" / "note.md"
+        note.write_text(
+            VALID_FRONTMATTER.replace("[[Something]]", "[[Totally Nonexistent Note]]"),
+            encoding="utf-8",
+        )
+        assert not (vault / ".claude" / "scripts").exists()
+
+        result = _run_hook(note)
+
+        assert result.returncode == 2, result.stderr
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "Totally Nonexistent Note" in output
+        assert "forward reference" in output.lower()
+
+
+class TestScanUnavailableAdvisory:
+    """Part 2: ``_graphmark_broken`` returning ``None`` (the scan could not run) must
+    produce a visible advisory, not silently collapse to ``[]`` — that silent collapse is
+    exactly what hid the Part 1 bug for weeks. Driven in-process, like
+    ``TestCrashPayloadShapes`` above, because the unavailable-scan condition is
+    monkeypatched onto the module rather than reachable through a real subprocess.
+    """
+
+    def test_wikilinks_present_and_scan_unavailable_warns(
+        self, vault: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        note = vault / "work" / "note.md"
+        note.write_text(VALID_FRONTMATTER, encoding="utf-8")  # contains [[Something]]
+        event = json.dumps({"tool_input": {"file_path": str(note)}})
+
+        with patch("validate_write._graphmark_broken", return_value=None), \
+             patch.object(sys, "stdin", io.StringIO(event)):
+            exit_code = validate_write.main()
+
+        # Exit 2, never 1: an unavailable scan is a degraded check, not a blocking error.
+        assert exit_code == 2
+        payload = json.loads(capsys.readouterr().out)
+        additional_context = payload["hookSpecificOutput"]["additionalContext"]
+        assert "commit gate" in additional_context.lower()
+        assert "scan" in additional_context.lower() or "check" in additional_context.lower()
+
+    def test_no_wikilinks_and_scan_unavailable_stays_silent(
+        self, vault: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        note = vault / "work" / "note.md"
+        note.write_text(
+            "---\n"
+            "date: 2026-06-07\n"
+            'description: "a note with no links at all"\n'
+            "tags:\n"
+            "  - test\n"
+            "---\n\n"
+            "# A Note\n\nJust prose, nothing to resolve.\n",
+            encoding="utf-8",
+        )
+        event = json.dumps({"tool_input": {"file_path": str(note)}})
+
+        with patch("validate_write._graphmark_broken", return_value=None), \
+             patch.object(sys, "stdin", io.StringIO(event)):
+            exit_code = validate_write.main()
+
+        assert exit_code == 0
+        assert capsys.readouterr().out == ""
 
 
 class TestExcludedAndNoop:

@@ -99,6 +99,22 @@ STALE_ENGINE = re.compile(
     r"\.claude/scripts/(" + "|".join(re.escape(n) for n in _engine_script_names()) + r")"
 )
 
+# The same stale invocation, spelled as a pathlib join instead of a path string:
+#
+#     script = vault_root / ".claude" / "scripts" / "graph_cli.py"
+#
+# STALE_ENGINE cannot see that -- there is no `.claude/scripts/graph_cli.py`
+# substring anywhere in it. That is not hypothetical: it is exactly how the last
+# surviving stale invocation escaped #679's sweep and stayed dead in
+# `_graphmark_broken` for weeks, silently disabling the write-time link advisory
+# on every vault while this guard ran green on every commit. A guard keyed to one
+# spelling of a path is blind to every other spelling of the same path.
+STALE_ENGINE_SEGMENTS = re.compile(
+    r"""["']\.claude["']\s*/\s*["']scripts["']\s*/\s*["']("""
+    + "|".join(re.escape(n) for n in _engine_script_names())
+    + r""")["']"""
+)
+
 TEXT_SUFFIXES = {".md", ".py", ".sh", ".json", ".toml", ".txt", ".yml", ".yaml"}
 
 
@@ -178,7 +194,7 @@ def _scan_engine(plugin: str) -> list[str]:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for lineno, line in enumerate(text.splitlines(), start=1):
-            if STALE_ENGINE.search(line):
+            if STALE_ENGINE.search(line) or STALE_ENGINE_SEGMENTS.search(line):
                 rel = path.relative_to(REPO_ROOT)
                 findings.append(f"{rel}:{lineno}: {line.strip()[:120]}")
     return findings
