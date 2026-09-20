@@ -1,0 +1,107 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py"
+  ],
+  "mutants": [
+    {
+      "label": "pushed-ness read from the remote-tracking ref instead of a fresh ls-remote",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    ref = f\"refs/heads/{branch}\"\n    out = _git_out(\"ls-remote\", \"--\", remote, ref)\n    for line in out.splitlines():\n        sha, _, name = line.partition(\"\\t\")\n        if name == ref:\n            return sha\n    return None",
+      "replace": "    proc = _run_git(\"rev-parse\", \"--verify\", \"--quiet\", f\"refs/remotes/{remote}/{branch}\")\n    if proc.returncode != 0:\n        return None\n    return proc.stdout.strip()"
+    },
+    {
+      "label": "squash base ignores pushed session commits and rewinds to the session base",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    squash_base = base if prefix == 0 else session[prefix - 1]",
+      "replace": "    squash_base = base"
+    },
+    {
+      "label": "merge commits in the session range no longer skip the squash",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    if _git_out(\"rev-list\", \"--count\", \"--merges\", f\"{base}..{head}\") != \"0\":\n        report.reason = \"session range contains a merge commit; history is ambiguous\"\n        return report\n",
+      "replace": ""
+    },
+    {
+      "label": "staged-but-uncommitted changes no longer skip the squash",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    staged = _run_git(\"diff\", \"--cached\", \"--quiet\")\n    if staged.returncode == 1:\n        report.reason = \"staged but uncommitted changes present; not sweeping them into a squash\"\n        return report\n    if staged.returncode != 0:\n        raise GitError(f\"diff --cached failed: {staged.stderr.strip()}\")\n",
+      "replace": ""
+    },
+    {
+      "label": "the squash never fires: any unpushed count reads as nothing to collapse",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    if report.unpushed == 1:\n        report.action = \"none\"\n        report.reason = \"only one unpushed commit; nothing to collapse\"\n        return report",
+      "replace": "    if report.unpushed >= 1:\n        report.action = \"none\"\n        report.reason = \"only one unpushed commit; nothing to collapse\"\n        return report"
+    },
+    {
+      "label": "an ls-remote failure fails open as 'nothing pushed' instead of skipping",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError as exc:\n        report.reason = f\"fresh ls-remote failed ({exc}); cannot verify pushed-ness\"\n        return report",
+      "replace": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError:\n        remote_head = None"
+    },
+    {
+      "label": "net-empty unpushed run no longer skips, so the boundary invents or fails a commit",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    old_tree = _git_out(\"rev-parse\", f\"{head}^{{tree}}\")\n    if _git_out(\"rev-parse\", f\"{squash_base}^{{tree}}\") == old_tree:\n        report.squash_base = None\n        report.reason = \"unpushed commits are net-empty; a squash would need an empty commit\"\n        return report",
+      "replace": "    old_tree = _git_out(\"rev-parse\", f\"{head}^{{tree}}\")"
+    },
+    {
+      "label": "detached HEAD no longer skips: the branch is guessed from --abbrev-ref",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    branch_proc = _run_git(\"symbolic-ref\", \"--short\", \"-q\", \"HEAD\")\n    if branch_proc.returncode != 0:\n        report.reason = \"HEAD is detached; cannot determine the branch to compare against\"\n        return report\n    branch = branch_proc.stdout.strip()",
+      "replace": "    branch = _git_out(\"rev-parse\", \"--abbrev-ref\", \"HEAD\")"
+    },
+    {
+      "label": "a base that is not an ancestor of HEAD no longer skips the squash",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    if not _is_ancestor(base, head):\n        report.reason = f\"base {base[:12]} is not an ancestor of HEAD\"\n        return report\n",
+      "replace": ""
+    },
+    {
+      "label": "interleaved pushed/unpushed classification guesses a prefix instead of refusing",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    if any(pushed_flags[first_unpushed:]):\n        return None\n    return first_unpushed",
+      "replace": "    return first_unpushed"
+    },
+    {
+      "label": "[control] reorder the action and reason writes on the success report",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of each other's field between them (reason reads only report.unpushed, set earlier on both orders); squash() is single-threaded and the Report is observed only after it returns, so the order is inert on every path the suite can reach. It would stop being inert only if something observed the half-written Report mid-assignment, which nothing in this script can do.",
+      "find": "    report.action = \"squashed\"\n    report.reason = f\"collapsed {report.unpushed} unpushed session commits into one\"",
+      "replace": "    report.reason = f\"collapsed {report.unpushed} unpushed session commits into one\"\n    report.action = \"squashed\""
+    }
+  ]
+}
