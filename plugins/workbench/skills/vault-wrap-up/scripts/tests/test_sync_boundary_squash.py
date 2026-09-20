@@ -441,6 +441,7 @@ def test_unstaged_worktree_changes_survive_and_stay_out_of_the_commit(tmp_path: 
     assert report["action"] == "squashed"
     on_disk = (local / "brain/notes.md").read_text(encoding="utf-8")
     assert on_disk == committed + "dirty edit\n"
-    assert _git(local, "status", "--porcelain") == " M brain/notes.md"
+    assert _git(local, "diff", "--name-only") == "brain/notes.md"
+    assert _git(local, "diff", "--cached", "--name-only") == ""
     in_head = _git(local, "show", "HEAD:brain/notes.md")
     assert "dirty edit" not in in_head

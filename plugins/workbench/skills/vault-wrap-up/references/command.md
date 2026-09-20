@@ -64,6 +64,14 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 10. **Validate, commit & push** (`/sync`): immediately before staging, run `uv run --script ci/vault_health.py`. The gate must pass before any audited fixes, harvested decisions/wins, or refreshed handoff are committed. If it fails, times out, or cannot run, leave edits uncommitted, repair the graph, and retry; do not pull or push an unverified tree. Forward references are allowed while editing, but must resolve at this durability boundary. Then commit and push so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
 
+    **Sync-boundary squash:** immediately after the wrap-up commit is created and before `/sync`'s `git pull --rebase`, collapse this session's unpushed commits into that single wrap-up commit:
+
+    ```bash
+    python3 "<skill>/scripts/sync_boundary_squash.py" --base <commit before this session's first commit> --json
+    ```
+
+    `<skill>` is this skill's announced base directory (the directory holding SKILL.md — the same announcement `<engine>` resolution starts from); `--base` is the same session base the audit in step 2 used. The script determines "unpushed" from a fresh `git ls-remote`, never the remote-tracking ref, and never rewrites a commit the remote already has — a pushed session commit becomes the squash base and only the commits after it collapse. On any guard — a merge commit in the session range, staged-but-uncommitted changes, an unreachable remote, an ambiguous pushed/unpushed classification — it reports `skipped` and leaves the repository untouched. Treat `skipped`, `none`, and a non-zero exit identically: proceed with `/sync` exactly as today, and never re-attempt the squash with hand-rolled git commands. Mid-session durability commits are unchanged; only their granularity at this boundary changes, so a conflicted rebase replays one session commit instead of several.
+
 11. **Offer independent follow-up sessions after successful sync**: Follow [session-follow-up.md](session-follow-up.md). The workflow-improvement offer and current-work continuation offer require separate consent. No improvement candidate does not suppress the continuation offer.
 
 12. **Report**:
