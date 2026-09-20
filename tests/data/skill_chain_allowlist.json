@@ -55,6 +55,11 @@
       "in": "vault-essay/references/command.md",
       "reason": "boundary line between /write and /essay"
     },
-    { "target": "vault-budget", "in": "vault-pulse/references/command.md", "reason": "related-skill pointer" }
+    { "target": "vault-budget", "in": "vault-pulse/references/command.md", "reason": "related-skill pointer" },
+    {
+      "target": "vault-standup",
+      "in": "explain/SKILL.md",
+      "reason": "out-of-lane fence — names the vault session verbs explain must never route to; no invocation"
+    }
   ]
 }
