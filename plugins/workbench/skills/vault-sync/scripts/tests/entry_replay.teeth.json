@@ -1,0 +1,114 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/vault-sync/scripts/tests/test_entry_replay.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/vault-sync/scripts/tests/test_entry_replay.py"
+  ],
+  "mutants": [
+    {
+      "label": "non-insertion ledger changes are silently ignored instead of refusing",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if tag != \"insert\":\n            raise RefusalError(\n                f\"{path}: non-insertion session change ({tag} touching base lines \"\n                f\"{i1 + 1}-{max(i2, i1 + 1)}); in-place ledger corrections escalate to a human\"\n            )\n        insertions.append((i1, tip_lines[j1:j2]))",
+      "replace": "        if tag != \"insert\":\n            continue\n        insertions.append((i1, tip_lines[j1:j2]))"
+    },
+    {
+      "label": "the per-entry base assertion is gone: origin-side entry edits merge silently",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        origin_keys = Counter(chunk.key for chunk in origin_block.entries)\n        for chunk in base_block.entries:\n            if origin_keys[chunk.key] < 1:\n                raise RefusalError(\n                    f\"{path}: origin's copy of entry {chunk.label!r} is not byte-identical \"\n                    \"to the session base (edited or removed); escalating\"\n                )\n            origin_keys[chunk.key] -= 1\n\n",
+      "replace": "\n"
+    },
+    {
+      "label": "the per-section base assertion is gone: origin-side section edits are overwritten",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if name in touched:\n            if body != b_map[name]:\n                raise RefusalError(\n                    f\"{path}: origin's copy of section '## {name}' is not byte-identical \"\n                    \"to the session base; escalating\"\n                )\n            out_body.append(raw)",
+      "replace": "        if name in touched:\n            out_body.append(raw)"
+    },
+    {
+      "label": "conflicts outside the allowlist no longer refuse up front",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    outside = sorted(path for path in conflicts if not is_allowlisted(path))\n    if outside:\n        report.outside_allowlist = outside\n        raise RefusalError(\"conflicting files outside the allowlist: \" + \", \".join(outside))",
+      "replace": "    outside: list[str] = []"
+    },
+    {
+      "label": "the newest-first date re-sort is dropped after insertion",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        merged_entries.sort(key=lambda chunk: chunk.day, reverse=True)\n",
+      "replace": ""
+    },
+    {
+      "label": "a failing vault-health run no longer blocks the replay",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if proc.returncode != 0:\n        report.health = \"failed\"\n        tail = (proc.stderr.strip() or proc.stdout.strip()).splitlines()[-3:]\n        raise RefusalError(\n            \"vault health failed on the replayed tree; nothing was pushed\"\n            + (f\" ({' | '.join(tail)})\" if tail else \"\")\n        )\n    report.health = \"passed\"",
+      "replace": "    report.health = \"passed\""
+    },
+    {
+      "label": "an unreachable origin fails open as 'not diverged' instead of refusing",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        raise RefusalError(\n            f\"git fetch {remote} {branch} failed ({fetch.stderr.strip() or 'no output'}); \"\n            \"cannot verify origin, so the replay fails closed\"\n        )",
+      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        report.action = \"none\"\n        report.reason = \"origin unreachable; treating as not diverged\"\n        return"
+    },
+    {
+      "label": "a missing anchor on origin is guessed (first heading) instead of refused",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if len(candidates) != 1:\n            raise RefusalError(\n                f\"{path}: anchor {anchor_line!r} was not found exactly once on origin \"\n                f\"(found {len(candidates)}); the replay never guesses a new anchor\"\n            )",
+      "replace": "        if not candidates:\n            candidates = [idx for idx, _lvl, _raw in origin_headings]"
+    },
+    {
+      "label": "a mid-replay failure no longer restores the original branch and tree",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    except BaseException:\n        restore_ok = True\n        for step in (\n            (\"reset\", \"--hard\", \"--quiet\", origin_head),\n            (\"switch\", \"--quiet\", branch),\n            (\"branch\", \"--quiet\", \"-D\", replay_branch),\n        ):\n            if _run_git(*step).returncode != 0:\n                restore_ok = False\n        report.restored = restore_ok\n        raise",
+      "replace": "    except BaseException:\n        report.restored = True\n        raise"
+    },
+    {
+      "label": "byte-identical entries origin already holds are inserted again (duplicates)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        for chunk in new_chunks:\n            if present[chunk.key] > 0:\n                present[chunk.key] -= 1\n                detail[\"duplicates_skipped\"] += 1\n                continue\n            kept.append(chunk)",
+      "replace": "        for chunk in new_chunks:\n            kept.append(chunk)"
+    },
+    {
+      "label": "touched handoff sections are never re-applied: origin wins everything",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    touched = [name for name, _raw, body in b_secs if t_map[name] != body]",
+      "replace": "    touched: list[str] = []"
+    },
+    {
+      "label": "[control] reorder the new_head and action writes on the success report",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of either field between them; _replay is single-threaded and the Report is only observed after it returns, so the order is inert on every path the suite can reach.",
+      "find": "        report.new_head = new_head\n        report.action = \"replayed\"",
+      "replace": "        report.action = \"replayed\"\n        report.new_head = new_head"
+    }
+  ]
+}
