@@ -9,12 +9,23 @@ set -euo pipefail
 # branch is the release bot's `chore(release): vX.Y.Z`. That subject satisfies
 # the conventional-commit gate, so deriving the title from it does not fail
 # loudly on a promotion — it succeeds, and names a production release after a
-# chore. Hence the branch below rather than a caller-supplied override: the
+# chore. Hence the routing below rather than a caller-supplied override: the
 # title file is required where it is right and refused everywhere else.
 #
 # `main` is the release branch throughout these repos (see the
-# `gitlab-promotion-flow` skill); that is the assumption encoded here.
-promotion_target=main
+# `gitlab-promotion-flow` skill). `staging`, where a repo's own CLAUDE.md
+# declares the dev -> staging -> main cadence (that skill's staging-cadence
+# reference), is refreshed from `dev` itself, so HEAD is whatever last landed
+# on dev: a merge commit — `Merge branch 'X' into 'dev'`, which no one can
+# amend on a protected branch — or, where a release bot commits after every
+# merge, its `chore(release): vX.Y.Z`, which passes the gate and mis-titles
+# the refresh exactly as it would a promotion.
+requires_title_file() {
+  case "$1" in
+    main|staging) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 usage() {
   printf 'Usage: %s DESCRIPTION.md [--title-file TITLE.txt] [glab mr create options]\n' "${0##*/}" >&2
@@ -64,10 +75,10 @@ if [[ -z "$target_branch" ]]; then
   [[ -n "$target_branch" ]] || { printf 'Could not resolve the target branch; pass --target-branch explicitly.\n' >&2; exit 65; }
 fi
 
-if [[ "$target_branch" == "$promotion_target" ]]; then
+if requires_title_file "$target_branch"; then
   [[ -n "$title_file" ]] || {
-    printf 'Promotion into %s needs --title-file: the HEAD subject (%s) titles the commit, not the release.\n' "$promotion_target" "$(git log -1 --format=%s)" >&2
-    printf 'Write the title to a file and pass --title-file; amending HEAD is not the remedy on a frozen or protected release branch.\n' >&2
+    printf 'A merge request into %s needs --title-file: the HEAD subject (%s) titles the branch head, not the hop.\n' "$target_branch" "$(git log -1 --format=%s)" >&2
+    printf 'Write the title to a file and pass --title-file; amending HEAD is not the remedy on a frozen or protected branch.\n' >&2
     exit 65
   }
   [[ -f "$title_file" && -s "$title_file" ]] || { printf 'Title file must exist and be non-empty: %s\n' "$title_file" >&2; exit 66; }
