@@ -95,7 +95,7 @@ Charles reads a list of defaults and answers only the ones he disagrees with. Si
    - **NOT-DISPATCH-READY** — the idea is not executor-implementable as scoped: a size lie, or ambiguity only Charles can resolve. Recommend `decompose:ready`, `daytime-only`, or back to `/grill`.
 6. **Write the findings back to the issue** as a comment titled `## Cold read — <verdict>`. The ticket is the memory store; a cold read that lives only in this chat did not happen. Include the per-detector record so a later reader can tell a clean pass from a lazy one.
 7. **Apply the label:** `cold-read:pass` on BUILD, `cold-read:rewrite` on REWRITE, `cold-read:blocked` on NOT-DISPATCH-READY. Skip silently if the repo lacks the label — the comment carries the verdict either way.
-8. **On REWRITE:** edit the issue body with the replacement text, then say plainly that the body changed and re-state the verdict as BUILD. Do not re-run the cold read on your own edit — you are no longer cold to it. A second pass, if wanted, is a fresh subagent.
+8. **On REWRITE:** edit the issue body with the replacement text, then say plainly that the body changed and re-state the verdict as BUILD. Replacement text may tighten implementation narrative; it never shortens acceptance criteria, the test criterion, or interface contracts to save length — those sections are the executor's whole signal, and length pressure guts test content first. Do not re-run the cold read on your own edit — you are no longer cold to it. A second pass, if wanted, is a fresh subagent.
 9. **Digest:** verdict, findings count by detector, whether the reader was truly cold or degraded, the label applied, and the promote command — or the reason promotion is withheld.
 
 ## Gate contract with /dispatch

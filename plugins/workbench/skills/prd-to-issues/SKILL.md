@@ -40,6 +40,7 @@ Before slicing, identify high-level decisions unlikely to change through impleme
 - Prefer many thin slices over few thick ones
 - Default: slices may be HITL (needs human interaction — an architectural decision, a design review) or AFK (implementable and mergeable without one); prefer AFK where possible. An AFK slice is one concern with clear acceptance criteria; if it needs a new module or spans multiple concerns, mark it HITL or split it.
 - `--plan`: do NOT name specific files or functions likely to change as later phases land. DO pin durable decisions — route paths, schema shapes, data model names.
+- When an issue body must shrink, cut implementation narrative from Proposed behavior — never acceptance criteria, the test criterion, or named interface contracts. Tests and interfaces are the executor's signal; implementation prose is the cheapest section to lose.
 </vertical-slice-rules>
 
 ### 5. Quiz the user

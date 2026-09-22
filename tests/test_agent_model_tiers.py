@@ -23,21 +23,25 @@ from scripts.smoke_test import _parse_frontmatter
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Every AGENT.md under the two plugins this issue covers, mapped to the
-# literal `model:` value the #285 rubric assigns it. Builders and routine
-# reviewers land on `sonnet` (mid tier); judgment-heavy review (security,
-# skill-analyst, strategy) lands on `opus` (frontier tier). No agent on the
-# current roster is pure retrieval, so none defaults to `haiku`.
+# literal `model:` value the #285 rubric assigns it. Builders and
+# work-product reviewers land on `sonnet` (mid tier); judgment-heavy review
+# (security, skill-analyst, strategy) lands on `opus` (frontier tier). The
+# three vault housekeeping scanners (brag-spotter, cross-linker,
+# people-profiler) land on `haiku` (cheapest tier) via the rubric's
+# scan-and-report row: they render no verdict on any work product, their
+# procedures name the sources to read, and their findings go to the user
+# for approval — see agent-matching.md#role-to-tier-rubric.
 EXPECTED_MODELS = {
     # plugins/workbench/agents/ (13)
     "plugins/workbench/agents/analysis-builder/AGENT.md": "sonnet",
     "plugins/workbench/agents/api-builder/AGENT.md": "sonnet",
     "plugins/workbench/agents/backend-builder/AGENT.md": "sonnet",
-    "plugins/workbench/agents/brag-spotter/AGENT.md": "sonnet",
+    "plugins/workbench/agents/brag-spotter/AGENT.md": "haiku",
     "plugins/workbench/agents/code-reviewer/AGENT.md": "sonnet",
-    "plugins/workbench/agents/cross-linker/AGENT.md": "sonnet",
+    "plugins/workbench/agents/cross-linker/AGENT.md": "haiku",
     "plugins/workbench/agents/data-quality-reviewer/AGENT.md": "sonnet",
     "plugins/workbench/agents/frontend-builder/AGENT.md": "sonnet",
-    "plugins/workbench/agents/people-profiler/AGENT.md": "sonnet",
+    "plugins/workbench/agents/people-profiler/AGENT.md": "haiku",
     "plugins/workbench/agents/pipeline-builder/AGENT.md": "sonnet",
     "plugins/workbench/agents/security-reviewer/AGENT.md": "opus",
     "plugins/workbench/agents/tdd-implementer/AGENT.md": "sonnet",
