@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "label": "terse-lens-contract-detection",
+  "metric": "injected-defect detection (1/0), one case per defect x rep, findings pooled across the three lenses of a rep",
+  "generated_at": "2026-09-22T16:17:34.315846+00:00",
+  "prereg": {
+    "path": "/Users/Charles.Coonce/Dev/the-workshop/docs/experiments/2026-09-21-terse-lens-contract-ab/prereg.md",
+    "evidence": "git-commit",
+    "recorded_at": 1790046259.0
+  },
+  "arms": {
+    "a": {
+      "label": "full contract (pr-lens-review.md worked example)",
+      "cmd": null,
+      "mean": 0.9
+    },
+    "b": {
+      "label": "terse contract (contracts/terse.md)",
+      "cmd": null,
+      "mean": 0.9
+    }
+  },
+  "bracket": {
+    "enabled": true,
+    "mean_a2": 0.8,
+    "tolerance": 0.2
+  },
+  "fixture": {
+    "fingerprint_cmd": null,
+    "captures": []
+  },
+  "stats": {
+    "n_paired": 10,
+    "n_discordant": 0,
+    "n_b_better": 0,
+    "n_a_better": 0,
+    "mean_a": 0.9,
+    "mean_b": 0.9,
+    "mean_delta": 0.0,
+    "sd_delta": 0.0,
+    "stderr": 0.0,
+    "skew_delta": 0.0,
+    "sign_p": 1.0,
+    "ci_lower": 0.0,
+    "alpha": 0.05,
+    "power": 0.8,
+    "mde": 0.0,
+    "mde_estimator": "mean paired delta at this n and the observed sd_delta"
+  },
+  "verdict": {
+    "threshold": null,
+    "rule": null,
+    "passed": null
+  },
+  "pairs": [
+    {
+      "key": "D1:r1",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D1:r2",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D2:r1",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D2:r2",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D3:r1",
+      "a": 0.0,
+      "b": 0.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D3:r2",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D4:r1",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D4:r2",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D5:r1",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    },
+    {
+      "key": "D5:r2",
+      "a": 1.0,
+      "b": 1.0,
+      "delta": 0.0
+    }
+  ]
+}

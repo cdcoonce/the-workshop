@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "key": "D1:r1",
+      "score": 1.0
+    },
+    {
+      "key": "D2:r1",
+      "score": 1.0
+    },
+    {
+      "key": "D3:r1",
+      "score": 0.0
+    },
+    {
+      "key": "D4:r1",
+      "score": 1.0
+    },
+    {
+      "key": "D5:r1",
+      "score": 1.0
+    },
+    {
+      "key": "D1:r2",
+      "score": 1.0
+    },
+    {
+      "key": "D2:r2",
+      "score": 1.0
+    },
+    {
+      "key": "D3:r2",
+      "score": 1.0
+    },
+    {
+      "key": "D4:r2",
+      "score": 1.0
+    },
+    {
+      "key": "D5:r2",
+      "score": 1.0
+    }
+  ],
+  "parse_errors": []
+}

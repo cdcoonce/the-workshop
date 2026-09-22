@@ -1,0 +1,21 @@
+prereg = "docs/experiments/2026-09-21-terse-lens-contract-ab/prereg.md"
+out = "docs/experiments/2026-09-21-terse-lens-contract-ab/results"
+label = "terse-lens-contract-detection"
+metric = "injected-defect detection (1/0), one case per defect x rep, findings pooled across the three lenses of a rep"
+alpha = 0.05
+power = 0.8
+
+[cases]
+path = "cases"
+key = "key"
+score = "score"
+
+[arms.a]
+label = "full contract (pr-lens-review.md worked example)"
+
+[arms.b]
+label = "terse contract (contracts/terse.md)"
+
+[bracket]
+enabled = true
+tolerance = 0.2
