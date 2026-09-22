@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "label": "terse-lens-contract-output",
+  "metric": "negative characters of reviewer final output, one case per lens x rep",
+  "generated_at": "2026-09-22T16:17:34.232517+00:00",
+  "prereg": {
+    "path": "/Users/Charles.Coonce/Dev/the-workshop/docs/experiments/2026-09-21-terse-lens-contract-ab/prereg.md",
+    "evidence": "git-commit",
+    "recorded_at": 1790046259.0
+  },
+  "arms": {
+    "a": {
+      "label": "full contract (pr-lens-review.md worked example)",
+      "cmd": "python3 docs/experiments/2026-09-21-terse-lens-contract-ab/score_arm.py --raw results/raw/a (arms dispatched as subagents; see prereg deviation note)",
+      "mean": -3588.8333333333335
+    },
+    "b": {
+      "label": "terse contract (contracts/terse.md)",
+      "cmd": "python3 docs/experiments/2026-09-21-terse-lens-contract-ab/score_arm.py --raw results/raw/b (arms dispatched as subagents; see prereg deviation note)",
+      "mean": -3274.5
+    }
+  },
+  "bracket": {
+    "enabled": true,
+    "mean_a2": -3540.0,
+    "tolerance": 1200.0
+  },
+  "fixture": {
+    "fingerprint_cmd": null,
+    "captures": []
+  },
+  "stats": {
+    "n_paired": 6,
+    "n_discordant": 6,
+    "n_b_better": 3,
+    "n_a_better": 3,
+    "mean_a": -3588.8333333333335,
+    "mean_b": -3274.5,
+    "mean_delta": 314.3333333333333,
+    "sd_delta": 1603.3833810622668,
+    "stderr": 654.5785242768392,
+    "skew_delta": 1.0569213289624289,
+    "sign_p": 1.0,
+    "ci_lower": -1004.6740572294407,
+    "alpha": 0.05,
+    "power": 0.8,
+    "mde": 1920.921001240761,
+    "mde_estimator": "mean paired delta at this n and the observed sd_delta"
+  },
+  "verdict": {
+    "threshold": 0.0,
+    "rule": "ci_lower > threshold",
+    "passed": false
+  },
+  "pairs": [
+    {
+      "key": "domain:r1",
+      "a": -3509.0,
+      "b": -4788.0,
+      "delta": -1279.0
+    },
+    {
+      "key": "domain:r2",
+      "a": -2188.0,
+      "b": -2903.0,
+      "delta": -715.0
+    },
+    {
+      "key": "spec_conformance:r1",
+      "a": -4417.0,
+      "b": -3577.0,
+      "delta": 840.0
+    },
+    {
+      "key": "spec_conformance:r2",
+      "a": -3102.0,
+      "b": -2335.0,
+      "delta": 767.0
+    },
+    {
+      "key": "test_veracity:r1",
+      "a": -5524.0,
+      "b": -2461.0,
+      "delta": 3063.0
+    },
+    {
+      "key": "test_veracity:r2",
+      "a": -2793.0,
+      "b": -3583.0,
+      "delta": -790.0
+    }
+  ]
+}

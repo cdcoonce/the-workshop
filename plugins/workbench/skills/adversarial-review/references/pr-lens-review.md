@@ -26,6 +26,20 @@ Without the spec, lenses drift into style review. Without the pre-change tree,
 regression is invisible — a lens can see what the new code does, never what it
 stopped doing.
 
+**The conductor computes the package once.** From the frozen head (Rule 1):
+SPEC verbatim, DIFF as one `git diff <base>...<head>`, BASE as the base SHA
+plus the checkout path — inlined into every lens prompt. Lenses do not
+re-derive them; four agents each running their own `gh` and `git` archaeology
+to reconstruct the same diff is redundant spend (measured at ~10% of both
+tokens and wall-clock in Superpowers 6's coordinator-handoff experiments).
+
+Two boundaries keep the package honest. SPEC always travels verbatim next to
+DIFF — a reviewer handed only a diff confidently substitutes global
+convention for the task's actual requirements and silently redefines the
+spec. And pre-computation removes redundant derivation, never access: the
+test-veracity lens still gets the repo, because running the new tests
+against BASE cannot be handed to it as text.
+
 ## The lens pass
 
 Three to four reviewers in parallel, each given **one narrow lens and nothing
@@ -107,15 +121,18 @@ hole — and that hole belongs in **Could not verify**, not in the verdict.
 
 ## Worked example — the lens prompts
 
-`SPEC` is the issue body, `DIFF` the PR diff, `BASE` the pre-change tree.
+`SPEC` is the issue body, `DIFF` the PR diff, `BASE` the pre-change tree —
+the first two inlined in every prompt, computed once by the conductor (see
+Scope).
 
 Shared preamble, given to every lens:
 
-> You are reviewing PR #N against its binding spec. Report ONLY defects. Every
-> finding needs a file:line and a concrete failure scenario: the inputs or state
-> that produce the wrong result. If your lens finds no defect, return an empty
-> findings list — that is the expected answer, not a failure. Do not report
-> style, naming, or preference.
+> You are reviewing PR #N against its binding spec. SPEC and DIFF are included
+> below; do not re-fetch them. Report ONLY defects. Every finding needs a
+> file:line and a concrete failure scenario: the inputs or state that produce
+> the wrong result. If your lens finds no defect, return an empty findings
+> list — that is the expected answer, not a failure. Do not report style,
+> naming, or preference.
 
 Domain correctness — rewritten per change; this one came from a ledger:
 
