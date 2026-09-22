@@ -76,6 +76,17 @@ different policy, that wins — resolve repository policy first (see
    the reviewer is reading. Promote from a `release/vX.Y.Z` branch cut off
    `dev` — `references/release-branch-promotion.md` has the mechanics.
 
+## Repo-local variant: a standing `staging` hop
+
+Some repos declare `dev → staging → main` in their own `CLAUDE.md`. There
+`staging` is the frozen promotion source — the standing replacement for a
+`release/vX.Y.Z` branch — refreshed only by a `dev → staging` MR while no
+`staging → main` promotion MR is open, and the `main`-scoped approval rule
+gates `staging → main`.
+[references/staging-cadence.md](references/staging-cadence.md) has the rules:
+refresh timing, where the approval sits, why `staging` runs no branch
+pipeline, title files on both hops, and how review fixes flow back.
+
 ## Guardrails
 
 - One concern per branch and per MR, on every hop. Split unrelated work apart.
