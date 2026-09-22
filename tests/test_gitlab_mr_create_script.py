@@ -285,6 +285,95 @@ def test_promotion_rejects_a_missing_title_file(repo) -> None:
     assert not _created(repo)
 
 
+# --- the hop into staging: the refresh MR --------------------------------
+#
+# Some repos run a dev -> staging -> main cadence (see gitlab-promotion-flow's
+# staging-cadence reference). The refresh MR's source branch is `dev` itself,
+# so HEAD is whatever last landed on dev — a merge commit, or where a release
+# bot commits after every merge, its `chore(release): vX.Y.Z`. Neither
+# describes the refresh, and the bot's subject *passes* the conventional-commit
+# regex, so deriving the title is the same silent failure the main hop had.
+
+
+def test_staging_hop_refuses_a_head_subject_that_passes_the_regex(repo) -> None:
+    """The discriminating case: a conventional subject at dev's head.
+
+    Where a release bot commits to `dev` after every merge, the refresh MR's
+    HEAD subject is `chore(release): vX.Y.Z` — valid conventional commit, so
+    the old script accepted it and titled a staging refresh after the bot's
+    chore. A merge-commit subject would prove nothing here: the regex already
+    rejects it, so old and new behaviour agree on that input.
+    """
+    result = repo("chore(release): v0.8.0", "--target-branch", "staging")
+
+    assert result.returncode == PRECONDITION
+    assert not _created(repo), "a refresh MR was opened with an underived title"
+    assert "--title-file" in result.stderr
+
+
+def test_staging_hop_names_the_remedy_on_a_merge_commit_head(repo) -> None:
+    """The 2026-09-22 gap: dev's head is `Merge branch 'X' into 'dev'`.
+
+    The old script refused this subject too — but as "not a conventional
+    commit", pointing at amending HEAD, which cannot be done to a protected
+    branch's merge commit. The refusal must name `--title-file` instead; the
+    refresh that surfaced this had to fall back to a raw `glab api` POST.
+    """
+    result = repo(
+        "Merge branch 'feat/wind-speed-row' into 'dev'",
+        "--target-branch", "staging",
+    )
+
+    assert result.returncode == PRECONDITION
+    assert not _created(repo)
+    assert "--title-file" in result.stderr
+
+
+def test_staging_refresh_uses_the_title_file_verbatim(repo) -> None:
+    title_file = repo.work / "title.txt"
+    title_file.write_text("Refresh staging from dev (carries !117, !118 and !121)\n")
+    result = repo(
+        "Merge branch 'feat/wind-speed-row' into 'dev'",
+        "--target-branch", "staging",
+        "--title-file", str(title_file),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _title(repo) == "Refresh staging from dev (carries !117, !118 and !121)"
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ("--target-branch", "staging"),
+        ("--target-branch=staging",),
+        ("-b", "staging"),
+        ("-bstaging",),
+    ],
+    ids=["long-space", "long-equals", "short-space", "short-attached"],
+)
+def test_every_target_branch_spelling_reaches_the_staging_rule(repo, flags) -> None:
+    result = repo("chore(release): v0.8.0", *flags)
+
+    assert result.returncode == PRECONDITION
+    assert not _created(repo)
+
+
+def test_staging_read_back_still_catches_a_title_that_did_not_survive(repo) -> None:
+    """The refresh hop keeps the same verification as every other hop."""
+    title_file = repo.work / "title.txt"
+    title_file.write_text("Refresh staging from dev\n")
+    result = repo(
+        "Merge branch 'feat/wind-speed-row' into 'dev'",
+        "--target-branch", "staging",
+        "--title-file", str(title_file),
+        readback_title="Refresh staging from dev ",
+    )
+
+    assert result.returncode == VERIFY_FAILED
+    assert "title differs" in result.stderr
+
+
 # --- resolving which hop this is ----------------------------------------
 
 

@@ -1,6 +1,6 @@
 ---
 name: gitlab-mr-create
-description: Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles a promotion into `main`, descriptions keep real newlines, and both are read back. Use whenever creating a GitLab merge request.
+description: Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles the hops into `staging` and `main`, descriptions keep real newlines, and both are read back. Use whenever creating a GitLab merge request.
 ---
 
 # GitLab MR creation
@@ -18,6 +18,22 @@ One branch carries one concern, so the conventional-commit subject is the title.
 ```bash
 bash "<skill base directory>/scripts/create-mr" \
   docs/mr-description.md --target-branch dev --yes
+```
+
+## Into `staging` — a title file
+
+Where a repo runs the `dev → staging → main` cadence (see
+`gitlab-promotion-flow`'s staging-cadence reference), the refresh MR's source
+branch is `dev` itself, so `HEAD` is whatever last landed there: a merge
+commit — `Merge branch 'X' into 'dev'`, no conventional-commit subject at
+all — or a release bot's `chore(release): vX.Y.Z`, which passes the gate and
+mis-titles the refresh silently. Neither describes the hop, so `--title-file`
+is required here exactly as into `main`.
+
+```bash
+printf 'Refresh staging from dev (carries !117, !118 and !121)' > /tmp/mr-title.txt
+bash "<skill base directory>/scripts/create-mr" \
+  docs/mr-description.md --title-file /tmp/mr-title.txt --target-branch staging --yes
 ```
 
 ## Into `main` — a title file
@@ -38,4 +54,4 @@ The title comes from a file for the same reason the description does. `!NNN` is 
 
 It is **not** a shell variable, and neither is anything else here: each command runs in a fresh shell, so an assignment made in one does not survive into the next. `$CLAUDE_PLUGIN_ROOT` in particular is defined only in the _hook_ environment, never in the shell a skill runs commands in — a path built from it collapses to the filesystem root and fails on a missing file (#686). A bare `scripts/create-mr` is wrong for the mirror-image reason: `cwd` is the target repository, which does not contain this skill.
 
-Amend the commit before creating the MR if its conventional-commit subject is not the intended title. That remedy assumes `HEAD` is amendable, so it never applies to a promotion: a frozen release branch exists precisely so the reviewer's diff cannot move, and these branches are protected against force-push. Use `--title-file` there.
+Amend the commit before creating the MR if its conventional-commit subject is not the intended title. That remedy assumes `HEAD` is amendable, so it never applies to a title-file hop: a frozen release branch exists precisely so the reviewer's diff cannot move, and `dev`'s merge-commit head belongs to a protected branch no one force-pushes. Use `--title-file` there.
