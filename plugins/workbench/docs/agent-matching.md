@@ -147,6 +147,8 @@ A dispatch that omits a model silently inherits the orchestrator's own model —
 
 Turn count beats token price. The cheapest tier routinely takes 2-3x the turns to reach the same result, so a task that looks cheaper on paper can cost more in wall-clock time and total tokens once retries are counted. Don't push judgment work down-tier to save tokens — reserve the cheapest tier for work that is genuinely mechanical, not merely "simple-sounding."
 
+The same economics forbid capping a dispatched agent's thinking budget to save tokens: Superpowers 6 measured a thinking-capped controller going from 92 to 138 turns with total output doubled. Thinking buys turn efficiency — capping it moves the spend, it does not remove it.
+
 ### Tier Vocabulary
 
 Use tier names (`cheapest` / `mid` / `frontier`), not specific model names, in dispatch templates — tier names survive model renames. Current mapping: `cheapest` = Haiku, `mid` = Sonnet, `frontier` = Opus.
