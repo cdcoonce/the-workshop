@@ -1,0 +1,24 @@
+prereg = "docs/experiments/2026-09-21-terse-lens-contract-ab/prereg.md"
+out = "docs/experiments/2026-09-21-terse-lens-contract-ab/results"
+label = "terse-lens-contract-output"
+metric = "negative characters of reviewer final output, one case per lens x rep"
+threshold = 0.0
+alpha = 0.05
+power = 0.8
+
+[cases]
+path = "cases"
+key = "key"
+score = "score"
+
+[arms.a]
+label = "full contract (pr-lens-review.md worked example)"
+cmd = "python3 docs/experiments/2026-09-21-terse-lens-contract-ab/score_arm.py --raw results/raw/a (arms dispatched as subagents; see prereg deviation note)"
+
+[arms.b]
+label = "terse contract (contracts/terse.md)"
+cmd = "python3 docs/experiments/2026-09-21-terse-lens-contract-ab/score_arm.py --raw results/raw/b (arms dispatched as subagents; see prereg deviation note)"
+
+[bracket]
+enabled = true
+tolerance = 1200.0

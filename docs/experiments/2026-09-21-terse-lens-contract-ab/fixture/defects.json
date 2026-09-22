@@ -1,0 +1,50 @@
+{
+  "comment": "Ground truth: five defects injected into PR #896's merged change (base c030bed^). A finding matches a defect when its file path ends with file_suffix AND (its line falls within line_window OR its description matches regex, case-insensitive). line_window null means file+regex only (D5 is an absence; D4 is any touch of the file).",
+  "defects": [
+    {
+      "id": "D1",
+      "lens_domain": "domain",
+      "nature": "off-by-one: classify_pushed_prefix returns first_unpushed + 1, misclassifying the first unpushed commit as pushed so the squash base lands on an unpushed commit and one session commit escapes the collapse",
+      "file_suffix": "scripts/sync_boundary_squash.py",
+      "line": 115,
+      "line_window": [105, 125],
+      "regex": "classify_pushed_prefix|first_unpushed|prefix.{0,40}(off.by.one|\\+\\s*1|one too|incorrect|wrong|misclassif)"
+    },
+    {
+      "id": "D2",
+      "lens_domain": "domain",
+      "nature": "argument swap: _is_ancestor(remote_head, sha) asks whether the remote head is an ancestor of each session commit, inverting pushed-ness classification",
+      "file_suffix": "scripts/sync_boundary_squash.py",
+      "line": 207,
+      "line_window": [197, 217],
+      "regex": "_is_ancestor.{0,80}(swap|revers|invert|order|backward|wrong (way|direction))|ancestor.{0,60}(remote_head).{0,40}(sha|session)|pushed_flags.{0,60}(invert|revers|wrong|backward)"
+    },
+    {
+      "id": "D3",
+      "lens_domain": "test_veracity",
+      "nature": "weakened assertion: test_collapses_three_unpushed_commits_into_one asserts len(session) >= 1, which any history satisfies, so the named exactly-one property is never asserted",
+      "file_suffix": "tests/test_sync_boundary_squash.py",
+      "line": 151,
+      "line_window": [139, 160],
+      "regex": ">=\\s*1|at least (one|1)|weak|tautolog|vacuous|trivial|always (true|pass)|never fail|does not assert (exactly|the collapse)|passes (without|even)"
+    },
+    {
+      "id": "D4",
+      "lens_domain": "spec_conformance",
+      "nature": "anti-scope violation: the diff edits plugins/workbench/skills/vault-sync/references/command.md, which SPEC explicitly declares untouched (companion issue #893's footprint)",
+      "file_suffix": "vault-sync/references/command.md",
+      "line": 3,
+      "line_window": null,
+      "regex": "vault-sync"
+    },
+    {
+      "id": "D5",
+      "lens_domain": "spec_conformance",
+      "nature": "missing specced guard: SPEC promises staged-but-uncommitted changes report skipped, but the diff contains no staged-changes (git diff --cached) guard",
+      "file_suffix": "scripts/sync_boundary_squash.py",
+      "line": null,
+      "line_window": null,
+      "regex": "staged|--cached|uncommitted"
+    }
+  ]
+}
