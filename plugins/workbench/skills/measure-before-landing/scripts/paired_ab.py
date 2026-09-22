@@ -6,8 +6,8 @@ on the discordant pairs. Refuses -- exit code 2, "VOID: <reason>" on stderr
 -- rather than reporting a number it cannot stand behind: a missing or
 too-new pre-registration, a fixture that drifted between arms, a bracket
 mismatch, or arms that disagree on which cases exist are all VOIDs, not
-verdicts. See SKILL.md and references/spec-format.md in this skill directory
-for the spec file and ledger schema this tool reads and writes.
+verdicts. See SKILL.md in this skill directory for the spec file and ledger
+schema this tool reads and writes.
 """
 
 from __future__ import annotations
