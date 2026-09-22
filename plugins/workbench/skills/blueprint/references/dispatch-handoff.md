@@ -60,6 +60,10 @@ verbatim. It is the most perishable thing on the map — it lives in one
 resolution comment and nowhere else — and the build is where it stops being
 free to state and starts being expensive to discover.
 
+When the epic runs long, cut from Proposed behavior's narrative, never from
+Acceptance criteria or the interface decisions they name — tests and
+interfaces are what the builder actually builds from.
+
 Whatever the map left in **Not yet specified** stays out. That is fog, not
 scope; filing it invents the decisions the map declined to make.
 

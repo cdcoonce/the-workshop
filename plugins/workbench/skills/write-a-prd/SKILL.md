@@ -34,6 +34,8 @@ Use `AskUserQuestion` to confirm module design:
 
 5. Once you have a complete understanding of the problem and solution, use the template below to write the PRD. The PRD should be submitted as a GitHub issue.
 
+   If the PRD runs long, tighten the Solution and Implementation Decisions prose — never cut user stories, interface descriptions, or Testing Decisions. Tests and interfaces carry most of what an implementer builds from; measured plan word budgets cut test content by 62% before touching anything else (Superpowers 6 build-loop experiments).
+
 <prd-template>
 
 ## Problem Statement
