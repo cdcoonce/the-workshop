@@ -137,10 +137,11 @@ A dispatch that omits a model silently inherits the orchestrator's own model —
 | Work                                                                                                                                                  | Tier     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | Mechanical or transcription work where the plan already contains the content (applying a scripted edit, filling in a table, copying content verbatim) | cheapest |
+| Scan-and-report sweeps where the procedure names the sources to read and the output is a findings list a human approves (vault housekeeping scans)    | cheapest |
 | Standard implementation and integration work (writing a feature per a plan task, wiring a call site, fixing a scoped bug)                             | mid      |
 | Architecture, design synthesis, and final review (system design, plan review, the final pass over a completed feature)                                | frontier |
 
-**Reviewer floor:** Reviewer dispatches never go below mid tier — reviewing requires the judgment to catch what an implementer missed, and a reviewer that shares the implementer's blind spots at a cheaper tier defeats the point of review.
+**Reviewer floor:** Dispatches that render a verdict on a work product never go below mid tier — reviewing requires the judgment to catch what an implementer missed, and a reviewer that shares the implementer's blind spots at a cheaper tier defeats the point of review. The floor covers work-product review, not scan-and-report sweeps: an agent whose `role:` key reads `reviewer` but whose job is enumerating findings for a human to approve runs on the scan row above. The cheapest tier fails safe on such work — it refuses a task beyond its scope rather than silently degrading (measured in Superpowers 6's implementer-tiering experiments).
 
 ### Turn-Count Economics
 
