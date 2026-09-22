@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "key": "domain:r1",
+      "score": -4788
+    },
+    {
+      "key": "test_veracity:r1",
+      "score": -2461
+    },
+    {
+      "key": "spec_conformance:r1",
+      "score": -3577
+    },
+    {
+      "key": "domain:r2",
+      "score": -2903
+    },
+    {
+      "key": "test_veracity:r2",
+      "score": -3583
+    },
+    {
+      "key": "spec_conformance:r2",
+      "score": -2335
+    }
+  ],
+  "parse_errors": []
+}
