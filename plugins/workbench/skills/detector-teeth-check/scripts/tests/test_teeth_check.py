@@ -15,6 +15,7 @@ The test command is injected, so no real pytest subprocess runs here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -446,6 +447,90 @@ def test_purges_cached_bytecode_after_restoring(target: Path) -> None:
     )
 
     assert not stale.exists()
+
+
+# ---------------------------------------------------------------------------
+# Line endings
+#
+# ``read_text`` translates ``\r\n`` to ``\n``. A restore written from its
+# result rewrote every line of a Windows-authored file, leaving a whole-file
+# diff on a file the run claims to leave byte-identical. Found on a 990-line
+# CRLF source that had to stay verbatim.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def crlf_target(tmp_path: Path) -> Path:
+    src = tmp_path / "mod.py"
+    src.write_bytes(b"LIMIT = 25\r\nGUARD = True\r\n")
+    return src
+
+
+def test_restores_a_crlf_file_byte_for_byte(crlf_target: Path) -> None:
+    before = hashlib.sha256(crlf_target.read_bytes()).hexdigest()
+
+    run_teeth_check(
+        _spec(crlf_target, Mutation("cap", crlf_target, "LIMIT = 25", "LIMIT = 1")),
+        runner=_killing_runner(),
+    )
+
+    assert hashlib.sha256(crlf_target.read_bytes()).hexdigest() == before
+
+
+def test_a_newline_anchor_mutates_a_crlf_file_in_its_own_line_endings(
+    crlf_target: Path,
+) -> None:
+    """Reading the source verbatim must not strand every spec written with ``\\n``.
+
+    The anchor still resolves, and the mutant on disk keeps the file's CRLF,
+    so it differs from the source only where the spec said.
+    """
+    on_disk: list[bytes] = []
+    killing = _killing_runner()
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        on_disk.append(crlf_target.read_bytes())
+        return killing(cmd)
+
+    report = run_teeth_check(
+        _spec(
+            crlf_target,
+            Mutation(
+                "cap",
+                crlf_target,
+                "LIMIT = 25\nGUARD = True",
+                "LIMIT = 1\nGUARD = True",
+            ),
+        ),
+        runner=runner,
+    )
+
+    assert [m.status for m in report.mutants] == ["killed"]
+    assert on_disk[-1] == b"LIMIT = 1\r\nGUARD = True\r\n"
+
+
+def test_apply_mutation_leaves_mixed_line_endings_alone_outside_the_anchor() -> None:
+    """A CRLF file with LF lines added elsewhere must not be re-encoded wholesale."""
+    text = "LIMIT = 25\r\nGUARD = True\r\nTAIL = 0\n"
+
+    out = apply_mutation(text, "LIMIT = 25\nGUARD = True", "LIMIT = 1\nGUARD = True")
+
+    assert out == "LIMIT = 1\r\nGUARD = True\r\nTAIL = 0\n"
+
+
+@pytest.mark.parametrize("source_eol", ["\n", "\r\n"], ids=["lf-source", "crlf-source"])
+@pytest.mark.parametrize("anchor_eol", ["\n", "\r\n"], ids=["lf-anchor", "crlf-anchor"])
+def test_apply_mutation_ignores_the_anchors_line_endings(
+    source_eol: str, anchor_eol: str
+) -> None:
+    """A spec resolves whichever platform saved the file or wrote the spec."""
+    text = f"LIMIT = 25{source_eol}GUARD = True{source_eol}"
+
+    out = apply_mutation(
+        text, f"LIMIT = 25{anchor_eol}GUARD", f"LIMIT = 1{anchor_eol}GUARD"
+    )
+
+    assert out == f"LIMIT = 1{source_eol}GUARD = True{source_eol}"
 
 
 # ---------------------------------------------------------------------------
@@ -889,6 +974,32 @@ def test_check_anchors_reports_a_stale_anchor_and_exits_nonzero(
     out = capsys.readouterr().out
     assert "stale" in out
     assert "anchor not found" in out
+
+
+@pytest.mark.parametrize(
+    ("source", "find"),
+    [
+        (b"LIMIT = 25\r\nGUARD = True\r\n", "LIMIT = 25\nGUARD"),
+        (b"LIMIT = 25\r\nGUARD = True\r\n", "LIMIT = 25\r\nGUARD"),
+        (b"LIMIT = 25\rGUARD = True\r", "LIMIT = 25\nGUARD"),
+    ],
+    ids=["crlf-source-lf-anchor", "crlf-source-crlf-anchor", "cr-source-lf-anchor"],
+)
+def test_check_anchors_agrees_with_the_run(
+    tmp_path: Path, source: bytes, find: str
+) -> None:
+    """An anchor the fast check passes must apply in the run, and vice versa.
+
+    Reading the file differently from the run would let a gate go green on a
+    spec whose every row then scores ``not-applied``.
+    """
+    (tmp_path / "mod.py").write_bytes(source)
+    spec_path = _write_spec(tmp_path, [_mutant(find=find, replace=find)])
+
+    anchors_resolve = main(["--check-anchors", str(spec_path)]) == 0
+    report = run_teeth_check(load_spec(spec_path), runner=_killing_runner())
+
+    assert anchors_resolve == (report.mutants[0].status != "not-applied")
 
 
 def test_check_anchors_writes_nothing(target: Path, tmp_path: Path) -> None:

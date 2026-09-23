@@ -323,7 +323,10 @@ Absence of a failure signal is never evidence of a pass. Three cases refuse:
 ## Safety
 
 Files are edited in place and restored from saved bytes in a `finally` — never
-by `git checkout`, which would destroy uncommitted work. The only files it
+by `git checkout`, which would destroy uncommitted work. Line endings are not
+part of an anchor: a `\n` in `find` also matches `\r\n`, and the mutant keeps
+the file's own style, so a CRLF file changes only inside the anchored span and
+comes back byte-identical. The only files it
 deletes are `__pycache__` entries for the modules it mutates: regenerable
 bytecode, never source. Commit before running
 anyway: `git status` is then an independent check that everything was restored.

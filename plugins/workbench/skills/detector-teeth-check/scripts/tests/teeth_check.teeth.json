@@ -37,6 +37,48 @@
       "oracle": "real",
       "find": "        raise SpecError(f\"unknown runner {name!r}; expected one of {sorted(RUNNERS)}\")",
       "replace": "        return \"pytest\""
+    },
+    {
+      "label": "the restore writes back newline-translated text, rewriting a CRLF file with LF (the 8.15.0 defect)",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    raw = path.read_bytes()",
+      "replace": "    raw = path.read_text(encoding=\"utf-8\").encode(\"utf-8\")"
+    },
+    {
+      "label": "a newline in an anchor matches only the source's exact line ending",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    pattern = re.compile(r\"\\r?\\n\".join(re.escape(line) for line in lines))",
+      "replace": "    pattern = re.compile(\"\\n\".join(re.escape(line) for line in lines))"
+    },
+    {
+      "label": "the mutant is written with LF even into a CRLF file",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    eol = \"\\r\\n\" if \"\\r\\n\" in text else \"\\n\"",
+      "replace": "    eol = \"\\n\""
+    },
+    {
+      "label": "the whole text is re-encoded, not just the anchored span",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    return text[:start] + new + text[end:]",
+      "replace": "    return (text[:start] + new + text[end:]).replace(\"\\r\\n\", \"\\n\").replace(\"\\n\", eol)"
+    },
+    {
+      "label": "an anchor written with CRLF never matches an LF file",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    lines = find.replace(\"\\r\\n\", \"\\n\").split(\"\\n\")",
+      "replace": "    lines = find.split(\"\\n\")"
+    },
+    {
+      "label": "--check-anchors reads newline-translated text, so it can pass an anchor the run rejects",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        _, text = _read_source(mutant.path)",
+      "replace": "        text = mutant.path.read_text(encoding=\"utf-8\")"
     }
   ]
 }
