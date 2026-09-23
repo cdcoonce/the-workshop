@@ -39,8 +39,9 @@ version of this loop gets them wrong:
    therefore declares its ``oracle``, and the report keeps the two kinds of
    kill apart instead of summing them into one reassuring number.
 
-The source file is restored in a `finally`, so a crash mid-run cannot leave
-mutated code on disk.
+The source file is restored from its saved bytes in a `finally`, so a crash
+mid-run cannot leave mutated code on disk, and a CRLF file comes back
+byte-identical rather than rewritten with LF endings.
 """
 
 from __future__ import annotations
@@ -300,13 +301,37 @@ def apply_mutation(text: str, find: str, replace: str) -> str:
     ambiguous one (two matches means the spec does not say which it meant).
     Both are spec errors, and both must be loud: a silent no-op would be
     indistinguishable from a mutation the tests failed to catch.
+
+    Line endings are not part of an anchor. A newline in *find* matches
+    ``\\n`` or ``\\r\\n``, so a spec resolves whichever platform saved the
+    file, and newlines in *replace* are written in the file's own style.
+    Only the matched span changes: re-encoding the whole text would rewrite
+    every LF line of a CRLF file that was later edited elsewhere.
     """
-    count = text.count(find)
-    if count == 0:
+    lines = find.replace("\r\n", "\n").split("\n")
+    pattern = re.compile(r"\r?\n".join(re.escape(line) for line in lines))
+    matches = list(pattern.finditer(text))
+    if not matches:
         raise ValueError(f"anchor not found: {find!r}")
-    if count > 1:
-        raise ValueError(f"anchor is ambiguous ({count} matches): {find!r}")
-    return text.replace(find, replace, 1)
+    if len(matches) > 1:
+        raise ValueError(f"anchor is ambiguous ({len(matches)} matches): {find!r}")
+    eol = "\r\n" if "\r\n" in text else "\n"
+    new = replace.replace("\r\n", "\n").replace("\n", eol)
+    start, end = matches[0].span()
+    return text[:start] + new + text[end:]
+
+
+def _read_source(path: Path) -> tuple[bytes, str]:
+    """Return *path*'s exact bytes and their text, with no newline translation.
+
+    ``read_text`` translates ``\\r\\n`` to ``\\n``, so a restore written from
+    its result rewrote every line of a CRLF file: a whole-file diff on a file
+    the run claims to leave byte-identical. The bytes are what the restore
+    writes back. ``--check-anchors`` reads through here too, so an anchor
+    cannot pass the fast check and then fail to apply in the run.
+    """
+    raw = path.read_bytes()
+    return raw, raw.decode("utf-8")
 
 
 def _purge_cached_bytecode(path: Path) -> None:
@@ -365,9 +390,9 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
     killers: set[str] = set()
 
     for mutant in spec.mutants:
-        original = mutant.path.read_text(encoding="utf-8")
+        original, text = _read_source(mutant.path)
         try:
-            mutated = apply_mutation(original, mutant.find, mutant.replace)
+            mutated = apply_mutation(text, mutant.find, mutant.replace)
         except ValueError as exc:
             results.append(
                 MutantResult(
@@ -401,13 +426,13 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                 continue
 
         try:
-            mutant.path.write_text(mutated, encoding="utf-8")
+            mutant.path.write_bytes(mutated.encode("utf-8"))
             _purge_cached_bytecode(mutant.path)
             code, out = run(spec.test_command)
         finally:
             # Restore before anything else can fail. A crash here would leave
             # deliberately-broken code in the working tree.
-            mutant.path.write_text(original, encoding="utf-8")
+            mutant.path.write_bytes(original)
             # Then drop the cache again: bytecode built from the mutant would
             # otherwise stay live and a *later* row would score this mutation.
             _purge_cached_bytecode(mutant.path)
@@ -489,7 +514,7 @@ def check_anchors(spec: Spec) -> list[tuple[str, str | None]]:
     """
     outcomes: list[tuple[str, str | None]] = []
     for mutant in spec.mutants:
-        text = mutant.path.read_text(encoding="utf-8")
+        _, text = _read_source(mutant.path)
         try:
             apply_mutation(text, mutant.find, mutant.replace)
         except ValueError as exc:
