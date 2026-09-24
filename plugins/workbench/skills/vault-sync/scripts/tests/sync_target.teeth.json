@@ -1,0 +1,58 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/vault-sync/scripts/tests/test_sync_target.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/vault-sync/scripts/tests/test_sync_target.py"
+  ],
+  "mutants": [
+    {
+      "label": "an unresolved target exits 0, so /sync would push with no target",
+      "file": "../sync_target.py",
+      "oracle": "real",
+      "find": "        print(json.dumps({\"remote\": args.remote, \"error\": str(exc)}, indent=2))\n        return 1",
+      "replace": "        print(json.dumps({\"remote\": args.remote, \"error\": str(exc)}, indent=2))\n        return 0"
+    },
+    {
+      "label": "the outside-a-repository usage check is dropped",
+      "file": "../sync_target.py",
+      "oracle": "real",
+      "find": "    if _git([\"rev-parse\", \"--git-dir\"], None).returncode != 0:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "the CLI prints the local branch as the target",
+      "file": "../sync_target.py",
+      "oracle": "real",
+      "find": "    print(json.dumps({\"remote\": args.remote, **asdict(found)}, indent=2))",
+      "replace": "    print(json.dumps({\"remote\": args.remote, **asdict(found), \"target\": found.branch}, indent=2))"
+    },
+    {
+      "label": "[control] widen the JSON indent from 2 to 4 on the resolved report",
+      "file": "../sync_target.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Whitespace only: every consumer in the repo parses the JSON (the command reference says to read `target` from it), and parsed values are unchanged. Not inert for a consumer that scrapes raw lines by position; none exists.",
+      "find": "    print(json.dumps({\"remote\": args.remote, **asdict(found)}, indent=2))",
+      "replace": "    print(json.dumps({\"remote\": args.remote, **asdict(found)}, indent=4))"
+    }
+  ]
+}

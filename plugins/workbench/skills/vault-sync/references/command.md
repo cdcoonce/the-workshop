@@ -20,8 +20,8 @@ Manually trigger git synchronization. Useful when switching machines or wanting 
 2. Stage the intended changes explicitly
 3. Generate a descriptive commit message from the changes
 4. Run `git commit` with the message
-5. **`git pull --rebase` first** — under the concurrency model above (N same-day sessions plus two machines) the remote has usually moved since this session started. Rebase onto it _before_ pushing instead of letting the push get rejected. If the rebase conflicts: abort it, then check the entry-replay fallback below — if every conflicting file is on its allowlist, run the fallback; otherwise list the conflicting files and alert the user. Never auto-resolve by hand.
-6. Run `git push` to sync with remote
+5. **Resolve the sync target, then `git pull --rebase origin <target>` first.** Run `python3 "<skill>/scripts/sync_target.py"` and read `target` from its JSON: the remote branch this checkout's work integrates into. It is **not** the current branch's name. In a desktop-app worktree on an unpublished `claude/*` branch (or a detached HEAD) it is origin's default branch (`source: remote-default`), because that branch name exists nowhere on the remote. Exit 1 (`error`) means nothing resolved: stop and alert the user. Under the concurrency model above (N same-day sessions plus two machines) the remote has usually moved since this session started, so rebase onto the target _before_ pushing instead of letting the push get rejected. If the rebase conflicts: abort it, then check the entry-replay fallback below — if every conflicting file is on its allowlist, run the fallback; otherwise list the conflicting files and alert the user. Never auto-resolve by hand.
+6. Run `git push origin HEAD:<target>` to sync with remote. Never accept git's `--set-upstream origin <branch>` hint for a session branch: it publishes a stray `claude/*` branch that no other session or machine pulls, which is how the 2026-09-10 and 2026-09-20 wrap-ups were stranded off `main`.
 
 ### Entry-replay fallback (allowlisted hub files only)
 
@@ -31,21 +31,21 @@ When the aborted rebase's conflicts are confined to the four accumulating hub fi
 python3 "<skill>/scripts/entry_replay.py" --base <commit before this session's first commit> --json
 ```
 
-`<skill>` is this skill's announced base directory (the directory holding SKILL.md); `--base` is the same session base the wrap-up audit and the #892 sync-boundary squash use. The script trusts nothing from the caller: it re-fetches origin, re-derives both sides' changes from the base, and re-checks the allowlist itself, so running it on a mis-diagnosed conflict is safe — it refuses.
+`<skill>` is this skill's announced base directory (the directory holding SKILL.md); `--base` is the same session base the wrap-up audit and the #892 sync-boundary squash use. The script trusts nothing from the caller: it resolves the sync target itself (the same rule as `sync_target.py`), re-fetches it from origin, re-derives both sides' changes from the base, and re-checks the allowlist itself, so running it on a mis-diagnosed conflict is safe — it refuses.
 
 What it does (issue #893, codifying the vault's `3164dec0` hand-built union):
 
-- Builds the merged result on a fresh branch from fetched `origin/main`, starting from **origin's copy** of every file, and carries the session's non-conflicting changes along.
+- Builds the merged result on a fresh branch from fetched `origin/<target>`, starting from **origin's copy** of every file, and carries the session's non-conflicting changes along. Only the session's own local branch is moved to the result; local `main` belongs to the primary checkout and is never touched.
 - **Ledger rule** (Gotchas, Key Decisions, Brag Doc): the session's diff must be _pure insertions_ of dated entries under a recognized anchor heading. They are re-inserted under that anchor in origin's copy, then all entries under the anchor are **re-sorted newest-first by date** — anchored insert (#871) stays the write-time rule, and the deterministic re-sort restores its ordering guarantee under concurrency. #871's ordering-drift detector stays on as the tooth.
 - **Handoff rule**: origin's file wins wholesale; only the `##` section(s) this session touched (the `handoff_sections` collector's section model) are re-applied, and the session's `description:` clause is re-applied **additively** — origin's paragraph plus the session's added clauses, never the session's whole rewritten paragraph.
 - **Assertions, fail-closed**: before every replacement it asserts origin's corresponding span is byte-identical to the session-base version, with spans drawn _per entry / per section_ — as narrow as possible (narrowness is spec). Any assertion failure, any non-insertion ledger change (an in-place correction), or any conflict outside the allowlist → it stops, lists the files, and restores the repository. The escalation path is unchanged.
 - Runs `uv run --script ci/vault_health.py` on the replayed tree before anything is pushed; a failure restores the original state.
 
-Read the outcome, don't infer it: `replayed` (exit 0) means the branch now sits on origin's tip and step 6's push is a fast-forward — proceed. `none` (exit 0) means the fallback had nothing to do — proceed exactly as today. `refused` (exit 1) means a fail-closed guard fired — the repository is already restored; list the files from the report, alert the user, and never re-attempt the merge with hand-rolled git commands.
+Read the outcome, don't infer it: `replayed` (exit 0) means the local branch now sits on the tip of `origin/<target>` (the report's `target`) and step 6's `git push origin HEAD:<target>` is a fast-forward — proceed. `none` (exit 0) means the fallback had nothing to do — proceed exactly as today. `refused` (exit 1) means a fail-closed guard fired — the repository is already restored; list the files from the report, alert the user, and never re-attempt the merge with hand-rolled git commands.
 
 ### Pull
 
-1. Run `git pull --rebase`
+1. Resolve the sync target as in Push step 5, then run `git pull --rebase origin <target>`
 2. If conflict: abort rebase, list conflicting files, alert user
 3. If success: report what was pulled
 

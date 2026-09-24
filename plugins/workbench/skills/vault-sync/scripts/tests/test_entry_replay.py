@@ -379,6 +379,49 @@ def test_concurrent_disjoint_inserts_same_anchor_replay_succeeds(tmp_path: Path)
     assert report["files"][DECISIONS]["inserted"] == 1
 
 
+def _add_session_worktree(local: Path, tmp_path: Path, branch: str = "claude/clever-benz") -> Path:
+    """The desktop app's layout: a linked worktree on an unpublished session
+    branch cut from local ``main``, with no upstream and no remote namesake."""
+    worktree = tmp_path / "worktree"
+    _git(local, "worktree", "add", "-q", "-b", branch, str(worktree), "main")
+    return worktree
+
+
+def test_worktree_session_branch_replays_onto_origin_default_branch(tmp_path: Path) -> None:
+    """The vault's 2026-09-24 wrap-up: a desktop-app worktree on an unpublished
+    ``claude/*`` branch hit a routine hub conflict, and the replay refused
+    because it fetched ``origin claude/...``, which does not exist. It must
+    replay onto origin's default branch, move only the session's own branch,
+    and leave local ``main`` -- the primary checkout's branch -- alone."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    worktree = _add_session_worktree(local, tmp_path)
+    peer_chunk = decisions_entry("2026-09-24", "Peer session decision", "**Decided:** peer thing.")
+    _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
+    origin_head = _peer_push(peer)
+    session_chunk = decisions_entry(
+        "2026-09-23", "Worktree session decision", "**Decided:** session thing."
+    )
+    _write(worktree, DECISIONS, insert_under(_read(worktree, DECISIONS), "## Recent", session_chunk))
+    _commit_all(worktree, "vault wrap-up 2026-09-24")
+    local_main_before = _git(local, "rev-parse", "main")
+
+    report = _run_replay(worktree, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report["reason"]
+    assert report["branch"] == "claude/clever-benz"
+    assert report["target"] == "main"
+    assert report["origin_head"] == origin_head
+    merged = _read(worktree, DECISIONS)
+    assert peer_chunk in merged, "origin's concurrent entry must survive"
+    assert session_chunk in merged, "the session's entry must be re-inserted"
+    assert _branch(worktree) == "claude/clever-benz"
+    assert _git(worktree, "rev-parse", "HEAD^") == origin_head
+    assert _git(local, "rev-parse", "main") == local_main_before, (
+        "local main belongs to the primary checkout and must not move"
+    )
+    _git(worktree, "push", "-q", "origin", "HEAD:main")  # raises unless a fast-forward
+
+
 def test_equal_dates_keep_session_entry_above_origin_entry(tmp_path: Path) -> None:
     _remote, local, peer, base = _make_vault(tmp_path)
     peer_chunk = decisions_entry("2026-09-20", "Peer same-day decision", "**Decided:** peer.")

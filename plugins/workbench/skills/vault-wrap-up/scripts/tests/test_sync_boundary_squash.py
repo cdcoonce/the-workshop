@@ -280,6 +280,59 @@ def test_finds_pushed_commit_despite_missing_tracking_ref(tmp_path: Path) -> Non
     assert len(session) == 2
 
 
+def _add_session_worktree(local: Path, tmp_path: Path, branch: str = "claude/clever-benz") -> Path:
+    """The desktop app's layout: a linked worktree on an unpublished session
+    branch cut from local ``main``, with no upstream and no remote namesake."""
+    worktree = tmp_path / "worktree"
+    _git(local, "worktree", "add", "-q", "-b", branch, str(worktree), "main")
+    return worktree
+
+
+def test_worktree_session_branch_measures_pushed_ness_against_main(tmp_path: Path) -> None:
+    """A session branch the remote has never heard of integrates into main.
+
+    Pushed-ness measured against ``refs/heads/claude/...`` finds nothing, calls
+    every commit unpushed, and rewrites the one ``origin/main`` already holds
+    -- the vault's 2026-09-24 worktree wrap-up exposed this.
+    """
+    _remote, local, base = _make_remote_and_clone(tmp_path)
+    worktree = _add_session_worktree(local, tmp_path)
+    c1 = _commit_file(worktree, "brain/notes.md", "line 1\n", "session commit 1")
+    _git(worktree, "push", "-q", "origin", "HEAD:main")
+    _commit_file(worktree, "brain/notes.md", "line 1\nline 2\n", "session commit 2")
+    _commit_file(
+        worktree, "brain/notes.md", "line 1\nline 2\nline 3\n", "vault wrap-up 2026-09-24"
+    )
+    tree_before = _tree(worktree, "HEAD")
+
+    report = _run_squash(worktree, base)
+
+    assert report["action"] == "squashed"
+    assert report["pushed"] == 1
+    session = _range_shas(worktree, base)
+    assert session[0] == c1, "the commit origin/main holds must keep its SHA"
+    assert len(session) == 2
+    assert _tree(worktree, "HEAD") == tree_before
+
+
+def test_unresolvable_sync_target_skips_squash(tmp_path: Path) -> None:
+    """A session branch the remote does not know, on a remote that names no
+    default branch, has no sync target. Falling back to the branch name would
+    call every commit unpushed -- the pre-fix behavior -- so the boundary
+    skips instead and leaves the repository untouched."""
+    remote, local, base = _make_remote_and_clone(tmp_path)
+    worktree = _add_session_worktree(local, tmp_path)
+    _git(remote, "symbolic-ref", "HEAD", "refs/heads/unborn")
+    _make_session_commits(worktree, n=2)
+    head_before = _head(worktree)
+
+    report = _run_squash(worktree, base)
+
+    assert report["action"] == "skipped"
+    assert "sync target" in report["reason"]
+    assert _head(worktree) == head_before
+
+
 def test_remote_branch_absent_treats_all_commits_as_unpushed(tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
     remote.mkdir()
