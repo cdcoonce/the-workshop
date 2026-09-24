@@ -84,7 +84,7 @@
       "label": "a mid-replay failure no longer restores the original branch and tree",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    except BaseException:\n        restore_ok = True\n        for step in (\n            (\"reset\", \"--hard\", \"--quiet\", origin_head),\n            (\"switch\", \"--quiet\", branch),\n            (\"branch\", \"--quiet\", \"-D\", replay_branch),\n        ):\n            if _run_git(*step).returncode != 0:\n                restore_ok = False\n        report.restored = restore_ok\n        raise",
+      "find": "    except BaseException:\n        restore_ok = True\n        back = (\n            (\"switch\", \"--quiet\", \"--detach\", head)\n            if branch is None\n            else (\"switch\", \"--quiet\", branch)\n        )\n        for step in (\n            (\"reset\", \"--hard\", \"--quiet\", origin_head),\n            back,\n            (\"branch\", \"--quiet\", \"-D\", replay_branch),\n        ):\n            if _run_git(*step).returncode != 0:\n                restore_ok = False\n        report.restored = restore_ok\n        raise",
       "replace": "    except BaseException:\n        report.restored = True\n        raise"
     },
     {
@@ -112,8 +112,43 @@
       "label": "the replay moves the target branch (local main) instead of the session's own branch",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        _git_out(\"branch\", \"-f\", branch, new_head)",
-      "replace": "        _git_out(\"branch\", \"-f\", target, new_head)"
+      "find": "            _git_out(\"branch\", \"-f\", branch, new_head)",
+      "replace": "            _git_out(\"branch\", \"-f\", target, new_head)"
+    },
+    {
+      "label": "a detached HEAD refuses outright again, so Codex hub conflicts go to a human",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None",
+      "replace": "    if branch_proc.returncode != 0:\n        raise RefusalError(\"HEAD is detached; cannot determine the branch to replay onto\")\n    branch = branch_proc.stdout.strip()"
+    },
+    {
+      "label": "a detached replay never detaches at the result: HEAD is left on the replay branch",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            _git_out(\"switch\", \"--quiet\", \"--detach\", new_head)",
+      "replace": "            pass"
+    },
+    {
+      "label": "a detached replay lands on local main (the target's namesake) instead of detaching",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            _git_out(\"switch\", \"--quiet\", \"--detach\", new_head)",
+      "replace": "            _git_out(\"branch\", \"-f\", target, new_head)\n            _git_out(\"switch\", \"--quiet\", target)"
+    },
+    {
+      "label": "a detached refusal restores to origin's head instead of the session's own commit",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            (\"switch\", \"--quiet\", \"--detach\", head)",
+      "replace": "            (\"switch\", \"--quiet\", \"--detach\", origin_head)"
+    },
+    {
+      "label": "a bisect no longer counts as an operation in progress, so the replay runs mid-bisect",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        \"REVERT_HEAD\",\n        \"BISECT_LOG\",\n",
+      "replace": "        \"REVERT_HEAD\",\n"
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",

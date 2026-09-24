@@ -13,7 +13,8 @@ stale answer here would rewrite a commit the remote already has. The target
 is the branch this checkout's work integrates into, not the current branch's
 namesake -- in a desktop-app worktree on an unpublished ``claude/*`` branch
 that namesake does not exist on the remote, and measuring against it once
-called every session commit unpushed. When the ls-remote head is an object
+called every session commit unpushed. A Codex session on a detached HEAD
+squashes the same way; only HEAD moves. When the ls-remote head is an object
 this clone has never fetched, the script fetches the target once, purely to
 make the ancestry test possible.
 
@@ -125,9 +126,20 @@ def classify_pushed_prefix(pushed_flags: Sequence[bool]) -> int | None:
 
 
 def _operation_in_progress() -> str | None:
-    """Name of any in-flight git operation that makes rewriting unsafe."""
+    """Name of any in-flight git operation that makes rewriting unsafe.
+
+    ``BISECT_LOG`` matters because a bisect detaches HEAD, and a detached
+    HEAD is otherwise a legitimate session state (a Codex worktree).
+    """
     git_dir = Path(_git_out("rev-parse", "--absolute-git-dir"))
-    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
+    for marker in (
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "BISECT_LOG",
+    ):
         if (git_dir / marker).exists():
             return marker
     return None
@@ -152,12 +164,11 @@ def squash(base: str, remote: str) -> Report:
     """
     report = Report(action="skipped", reason="", remote=remote, base=base)
 
+    # Reported only: pushed-ness is measured against the sync target, and the
+    # rewrite below never names a branch, so a detached HEAD (a Codex
+    # worktree) squashes like any other.
     branch_proc = _run_git("symbolic-ref", "--short", "-q", "HEAD")
-    if branch_proc.returncode != 0:
-        report.reason = "HEAD is detached; cannot determine the branch to compare against"
-        return report
-    branch = branch_proc.stdout.strip()
-    report.branch = branch
+    report.branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None
 
     marker = _operation_in_progress()
     if marker is not None:
