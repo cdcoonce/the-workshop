@@ -1,6 +1,6 @@
 ---
 name: gitlab-mr-create
-description: Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles the hops into `staging` and `main`, descriptions keep real newlines, and both are read back. Use whenever creating a GitLab merge request.
+description: Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. Use whenever creating a GitLab merge request.
 ---
 
 # GitLab MR creation
@@ -11,14 +11,24 @@ Run the wrapper from the target repository — `cwd` must be the repo the MR is 
 
 The wrapper reads the description from a file (preserving real line breaks rather than a literal `\\n`), rejects manual title/description flags, and verifies the created MR through `glab api`. **Which hop it is decides where the title comes from**, so pass `--target-branch` and let the script route.
 
-## Into `dev` — the `HEAD` subject
+## Into `dev` — a conventional-commit title
 
-One branch carries one concern, so the conventional-commit subject is the title. `--title-file` is refused on this hop, which keeps the affordance below from decaying into a general override.
+One branch carries one concern, and the title names that concern as a conventional commit. On a one-commit branch that is the `HEAD` subject, so the script uses it by default:
 
 ```bash
 bash "<skill base directory>/scripts/create-mr" \
   docs/mr-description.md --target-branch dev --yes
 ```
+
+A multi-commit branch ends on its last slice, not its concern. Test-first work lands a commit per behaviour, then review fixes, then a committed teeth spec, so `HEAD` reads like `test(pjm): commit the conformance mutation spec` (IQ !82). Only 17 of 54 multi-commit MRs into `dev` across six Clearway repos carry their `HEAD` subject as the title. Write the concern's title to a file instead. The same conventional-commit gate applies to it:
+
+```bash
+printf 'feat(pjm): conform pjm vocabulary in staging' > /tmp/mr-title.txt
+bash "<skill base directory>/scripts/create-mr" \
+  docs/mr-description.md --title-file /tmp/mr-title.txt --target-branch dev --yes
+```
+
+Never retitle afterwards with `glab mr update --title`: that bypasses the read-back.
 
 ## Into `staging` — a title file
 
@@ -54,4 +64,4 @@ The title comes from a file for the same reason the description does. `!NNN` is 
 
 It is **not** a shell variable, and neither is anything else here: each command runs in a fresh shell, so an assignment made in one does not survive into the next. `$CLAUDE_PLUGIN_ROOT` in particular is defined only in the _hook_ environment, never in the shell a skill runs commands in — a path built from it collapses to the filesystem root and fails on a missing file (#686). A bare `scripts/create-mr` is wrong for the mirror-image reason: `cwd` is the target repository, which does not contain this skill.
 
-Amend the commit before creating the MR if its conventional-commit subject is not the intended title. That remedy assumes `HEAD` is amendable, so it never applies to a title-file hop: a frozen release branch exists precisely so the reviewer's diff cannot move, and `dev`'s merge-commit head belongs to a protected branch no one force-pushes. Use `--title-file` there.
+Amending `HEAD` fixes a wrong subject only on a one-commit branch, where that commit is the concern. On a multi-commit branch it relabels a real slice and changes a SHA the description may cite, so pass `--title-file` instead. It never applies to a title-file hop either: a frozen release branch exists precisely so the reviewer's diff cannot move, and `dev`'s merge-commit head belongs to a protected branch no one force-pushes. Use `--title-file` there.
