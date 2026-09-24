@@ -1,0 +1,51 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "tests/test_gitlab_mr_create_script.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_gitlab_mr_create_script.py"],
+  "mutants": [
+    {
+      "label": "dev hop refuses a title file again",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "if [[ -n \"$title_file\" ]]; then\n  [[ -f",
+      "replace": "if [[ -n \"$title_file\" ]]; then\n  requires_title_file \"$target_branch\" || exit 64\n  [[ -f"
+    },
+    {
+      "label": "conventional-commit gate checks only the HEAD subject",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "if ! requires_title_file \"$target_branch\"; then",
+      "replace": "if ! requires_title_file \"$target_branch\" && [[ -z \"$title_file\" ]]; then"
+    },
+    {
+      "label": "single-line check applies only on promotion hops",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "[[ \"$expected_title\" != *$'\\n'* ]] ||",
+      "replace": "! requires_title_file \"$target_branch\" || [[ \"$expected_title\" != *$'\\n'* ]] ||"
+    },
+    {
+      "label": "dev hop accepts the flag but still titles from HEAD",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "double",
+      "find": "  title_source=\"Title file\"",
+      "replace": "  title_source=\"Title file\"\n  requires_title_file \"$target_branch\" || expected_title=$(git log -1 --format=%s)"
+    },
+    {
+      "label": "read-back skips the title when a title file titles a dev MR",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "double",
+      "find": "[[ \"$actual_title\" == \"$expected_title\" ]] ||",
+      "replace": "[[ -n \"$title_file\" ]] && ! requires_title_file \"$target_branch\" || [[ \"$actual_title\" == \"$expected_title\" ]] ||"
+    },
+    {
+      "label": "[control] reword the HEAD-subject label in the gate's error",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The label only feeds the stderr text printed when a HEAD subject fails the dev-hop gate; exit code, creation and the title handed to glab are unchanged on every path. No test asserts that message's wording (the --title-file stderr assertions are on the promotion-hop refusal, a different printf), so the suite should hold green. It is not inert to a human reader, who sees the reworded message.",
+      "find": "  title_source=\"HEAD subject\"",
+      "replace": "  title_source=\"HEAD commit subject\""
+    }
+  ]
+}
