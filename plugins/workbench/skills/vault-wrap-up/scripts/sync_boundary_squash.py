@@ -7,11 +7,16 @@ the commit before this session's first commit -- the same base the wrap-up
 audit already tracks.
 
 Which commits are "unpushed" comes from a fresh ``git ls-remote`` of the
-current branch, never from the remote-tracking ref: tracking refs go stale
-the moment the vault's other machine pushes, and a stale answer here would
-rewrite a commit the remote already has. When the ls-remote head is an
-object this clone has never fetched, the script fetches the branch once,
-purely to make the ancestry test possible.
+sync target (``sync_target.py``), never from the remote-tracking ref:
+tracking refs go stale the moment the vault's other machine pushes, and a
+stale answer here would rewrite a commit the remote already has. The target
+is the branch this checkout's work integrates into, not the current branch's
+namesake -- in a desktop-app worktree on an unpublished ``claude/*`` branch
+that namesake does not exist on the remote, and measuring against it once
+called every session commit unpushed. A Codex session on a detached HEAD
+squashes the same way; only HEAD moves. When the ls-remote head is an object
+this clone has never fetched, the script fetches the target once, purely to
+make the ancestry test possible.
 
 Fail-open contract: every guard failure reports ``skipped`` and leaves the
 repository byte-for-byte untouched, so the boundary degrades to today's
@@ -34,6 +39,9 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from sync_target import UnresolvedTarget
+from sync_target import resolve as resolve_sync_target
+
 
 class GitError(RuntimeError):
     """A git invocation failed in a way the boundary cannot interpret."""
@@ -46,6 +54,8 @@ class Report:
     action: str  # "squashed" | "none" | "skipped"
     reason: str
     branch: str | None = None
+    target: str | None = None
+    target_source: str | None = None
     remote: str = "origin"
     base: str | None = None
     old_head: str | None = None
@@ -116,9 +126,20 @@ def classify_pushed_prefix(pushed_flags: Sequence[bool]) -> int | None:
 
 
 def _operation_in_progress() -> str | None:
-    """Name of any in-flight git operation that makes rewriting unsafe."""
+    """Name of any in-flight git operation that makes rewriting unsafe.
+
+    ``BISECT_LOG`` matters because a bisect detaches HEAD, and a detached
+    HEAD is otherwise a legitimate session state (a Codex worktree).
+    """
     git_dir = Path(_git_out("rev-parse", "--absolute-git-dir"))
-    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
+    for marker in (
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "BISECT_LOG",
+    ):
         if (git_dir / marker).exists():
             return marker
     return None
@@ -143,12 +164,11 @@ def squash(base: str, remote: str) -> Report:
     """
     report = Report(action="skipped", reason="", remote=remote, base=base)
 
+    # Reported only: pushed-ness is measured against the sync target, and the
+    # rewrite below never names a branch, so a detached HEAD (a Codex
+    # worktree) squashes like any other.
     branch_proc = _run_git("symbolic-ref", "--short", "-q", "HEAD")
-    if branch_proc.returncode != 0:
-        report.reason = "HEAD is detached; cannot determine the branch to compare against"
-        return report
-    branch = branch_proc.stdout.strip()
-    report.branch = branch
+    report.branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None
 
     marker = _operation_in_progress()
     if marker is not None:
@@ -186,16 +206,25 @@ def squash(base: str, remote: str) -> Report:
         return report
 
     try:
-        remote_head = _ls_remote_head(remote, branch)
+        sync_target = resolve_sync_target(remote)
+    except UnresolvedTarget as exc:
+        report.reason = f"cannot resolve the sync target ({exc}); cannot verify pushed-ness"
+        return report
+    target = sync_target.target
+    report.target = target
+    report.target_source = sync_target.source
+
+    try:
+        remote_head = _ls_remote_head(remote, target)
     except GitError as exc:
         report.reason = f"fresh ls-remote failed ({exc}); cannot verify pushed-ness"
         return report
 
     if remote_head is not None and not _object_exists(remote_head):
-        _run_git("fetch", "--quiet", "--", remote, branch)
+        _run_git("fetch", "--quiet", "--", remote, target)
         if not _object_exists(remote_head):
             try:
-                refreshed = _ls_remote_head(remote, branch)
+                refreshed = _ls_remote_head(remote, target)
             except GitError as exc:
                 report.reason = f"fresh ls-remote failed ({exc}); cannot verify pushed-ness"
                 return report

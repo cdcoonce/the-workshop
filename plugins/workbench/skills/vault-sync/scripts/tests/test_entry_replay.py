@@ -302,6 +302,18 @@ def _branch(repo: Path) -> str:
     return _git(repo, "symbolic-ref", "--short", "HEAD")
 
 
+def _branch_or_none(repo: Path) -> str | None:
+    """HEAD's short branch name, or None when HEAD is detached."""
+    result = subprocess.run(
+        ["git", "symbolic-ref", "--short", "-q", "HEAD"],
+        cwd=repo,
+        env=_env(),
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 def _entry_dates_under(text: str, anchor: str, next_heading: str | None) -> list[str]:
     """Dates of entry-start lines between ``anchor`` and ``next_heading``."""
     block = text.split(anchor + "\n", 1)[1]
@@ -315,9 +327,10 @@ def _entry_dates_under(text: str, anchor: str, next_heading: str | None) -> list
     return dates
 
 
-def _assert_untouched(local: Path, head_before: str, branch_before: str) -> None:
+def _assert_untouched(local: Path, head_before: str, branch_before: str | None) -> None:
+    """``branch_before`` is None for a session that started on a detached HEAD."""
     assert _head(local) == head_before, "a refusal must not move HEAD"
-    assert _branch(local) == branch_before, "a refusal must not switch branches"
+    assert _branch_or_none(local) == branch_before, "a refusal must not switch branches"
     assert _git(local, "status", "--porcelain") == "", "a refusal must leave the tree clean"
     branches = _git(local, "branch", "--list", "sync-entry-replay/*")
     assert branches == "", "a refusal must not leave a replay branch behind"
@@ -377,6 +390,100 @@ def test_concurrent_disjoint_inserts_same_anchor_replay_succeeds(tmp_path: Path)
     assert _branch(local) == "main"
     assert _git(local, "status", "--porcelain") == ""
     assert report["files"][DECISIONS]["inserted"] == 1
+
+
+def _add_session_worktree(local: Path, tmp_path: Path, branch: str = "claude/clever-benz") -> Path:
+    """The desktop app's layout: a linked worktree on an unpublished session
+    branch cut from local ``main``, with no upstream and no remote namesake."""
+    worktree = tmp_path / "worktree"
+    _git(local, "worktree", "add", "-q", "-b", branch, str(worktree), "main")
+    return worktree
+
+
+def test_worktree_session_branch_replays_onto_origin_default_branch(tmp_path: Path) -> None:
+    """The vault's 2026-09-24 wrap-up: a desktop-app worktree on an unpublished
+    ``claude/*`` branch hit a routine hub conflict, and the replay refused
+    because it fetched ``origin claude/...``, which does not exist. It must
+    replay onto origin's default branch, move only the session's own branch,
+    and leave local ``main`` -- the primary checkout's branch -- alone."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    worktree = _add_session_worktree(local, tmp_path)
+    peer_chunk = decisions_entry("2026-09-24", "Peer session decision", "**Decided:** peer thing.")
+    _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
+    origin_head = _peer_push(peer)
+    session_chunk = decisions_entry(
+        "2026-09-23", "Worktree session decision", "**Decided:** session thing."
+    )
+    _write(worktree, DECISIONS, insert_under(_read(worktree, DECISIONS), "## Recent", session_chunk))
+    _commit_all(worktree, "vault wrap-up 2026-09-24")
+    local_main_before = _git(local, "rev-parse", "main")
+
+    report = _run_replay(worktree, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report["reason"]
+    assert report["branch"] == "claude/clever-benz"
+    assert report["target"] == "main"
+    assert report["origin_head"] == origin_head
+    merged = _read(worktree, DECISIONS)
+    assert peer_chunk in merged, "origin's concurrent entry must survive"
+    assert session_chunk in merged, "the session's entry must be re-inserted"
+    assert _branch(worktree) == "claude/clever-benz"
+    assert _git(worktree, "rev-parse", "HEAD^") == origin_head
+    assert _git(local, "rev-parse", "main") == local_main_before, (
+        "local main belongs to the primary checkout and must not move"
+    )
+    _git(worktree, "push", "-q", "origin", "HEAD:main")  # raises unless a fast-forward
+
+
+def _add_detached_worktree(local: Path, tmp_path: Path) -> Path:
+    """Codex's layout: a linked worktree on a detached HEAD cut from local
+    ``main`` -- no branch at all, so no branch name can say where work goes."""
+    worktree = tmp_path / "codex-worktree"
+    _git(local, "worktree", "add", "-q", "--detach", str(worktree), "main")
+    return worktree
+
+
+def _local_branches(repo: Path) -> str:
+    """Every local branch and its tip -- shared by all of a repo's worktrees."""
+    return _git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads")
+
+
+def test_detached_worktree_session_replays_and_stays_detached(tmp_path: Path) -> None:
+    """Codex runs vault sessions on a detached HEAD in a linked worktree, and
+    the replay once refused there outright, forcing routine hub conflicts to
+    be resolved by hand. It must replay onto origin's default branch and
+    leave HEAD detached at the replay commit: no local branch is created,
+    moved, or left behind."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    worktree = _add_detached_worktree(local, tmp_path)
+    peer_chunk = decisions_entry("2026-09-24", "Peer session decision", "**Decided:** peer thing.")
+    _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
+    origin_head = _peer_push(peer)
+    session_chunk = decisions_entry(
+        "2026-09-23", "Codex session decision", "**Decided:** session thing."
+    )
+    _write(worktree, DECISIONS, insert_under(_read(worktree, DECISIONS), "## Recent", session_chunk))
+    tip = _commit_all(worktree, "vault wrap-up 2026-09-24")
+    branches_before = _local_branches(local)
+
+    report = _run_replay(worktree, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report["reason"]
+    assert report["branch"] is None
+    assert report["target"] == "main"
+    assert report["target_source"] == "remote-default"
+    assert report["old_head"] == tip
+    merged = _read(worktree, DECISIONS)
+    assert peer_chunk in merged, "origin's concurrent entry must survive"
+    assert session_chunk in merged, "the session's entry must be re-inserted"
+    assert _branch_or_none(worktree) is None, "a detached session must stay detached"
+    assert _head(worktree) == report["new_head"]
+    assert _git(worktree, "rev-parse", "HEAD^") == origin_head
+    assert _git(worktree, "status", "--porcelain") == ""
+    assert _local_branches(local) == branches_before, (
+        "a detached replay must not create, move, or leave behind any local branch"
+    )
+    _git(worktree, "push", "-q", "origin", "HEAD:main")  # raises unless a fast-forward
 
 
 def test_equal_dates_keep_session_entry_above_origin_entry(tmp_path: Path) -> None:
@@ -1146,14 +1253,81 @@ def test_rebase_in_progress_refuses(tmp_path: Path) -> None:
     subprocess.run(["git", "rebase", "--abort"], cwd=local, env=_env(), check=True)
 
 
-def test_detached_head_refuses(tmp_path: Path) -> None:
-    _remote, local, _peer, base = _make_vault(tmp_path)
-    _git(local, "checkout", "-q", "--detach")
+def test_bisect_in_progress_refuses(tmp_path: Path) -> None:
+    """A bisect detaches HEAD at a commit under test. Once the replay stopped
+    refusing every detached HEAD, it must still recognize this one as an
+    operation in flight: replaying would move HEAD out from under the bisect."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(
+        peer,
+        DECISIONS,
+        insert_under(
+            _read(peer, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-24", "Peer decision", "**Decided:** peer."),
+        ),
+    )
+    _peer_push(peer)
+    _write(
+        local,
+        DECISIONS,
+        insert_under(
+            _read(local, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-23", "Session decision", "**Decided:** mine."),
+        ),
+    )
+    _commit_all(local, "session commit 1")
+    _write(local, "personal/projects/proj-a.md", NOTE_SEED + "\nsession note\n")
+    tip = _commit_all(local, "session commit 2")
+    _git(local, "bisect", "start", tip, base)
+    under_test = _head(local)
+    assert under_test != tip and _branch_or_none(local) is None, "fixture must be mid-bisect"
 
     report = _run_replay(local, base, expect_rc=1)
 
     assert report["action"] == "refused"
-    assert "detached" in report["reason"]
+    assert "in progress" in report["reason"]
+    _assert_untouched(local, under_test, None)
+    assert (local / ".git" / "BISECT_LOG").exists(), "the bisect must survive the refusal"
+
+
+def test_detached_refusal_restores_the_original_detached_commit(tmp_path: Path) -> None:
+    """A refusal after the replay branch is cut must come back to exactly
+    where a detached session started: HEAD detached at its own tip, not on
+    the replay branch, not at origin's head, and no branch left behind."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    worktree = _add_detached_worktree(local, tmp_path)
+    _write(
+        peer,
+        DECISIONS,
+        insert_under(
+            _read(peer, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-24", "Peer decision", "**Decided:** peer."),
+        ),
+    )
+    _peer_push(peer)
+    _write(
+        worktree,
+        DECISIONS,
+        insert_under(
+            _read(worktree, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-23", "Codex session decision", "**Decided:** mine."),
+        ),
+    )
+    tip = _commit_all(worktree, "vault wrap-up 2026-09-24")
+    branches_before = _local_branches(local)
+
+    report = _run_replay(worktree, base, *_health_args(tmp_path, HEALTH_FAIL), expect_rc=1)
+
+    assert report["action"] == "refused"
+    assert report["health"] == "failed"
+    assert report["replay_branch"], "the refusal must come after the replay branch was cut"
+    assert report["restored"] is True
+    _assert_untouched(worktree, tip, None)
+    assert _local_branches(local) == branches_before
 
 
 def test_base_not_ancestor_of_head_refuses(tmp_path: Path) -> None:

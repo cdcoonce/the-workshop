@@ -11,8 +11,14 @@ contribution on top of origin's copy instead of asking git to line-merge it.
 The procedure codifies the 2026-09-19 hand-built union merge (the vault's
 ``3164dec0``):
 
-1. Fresh branch from freshly fetched ``origin/<branch>``; origin's copy of
-   every file is the starting point.
+1. Fresh branch from freshly fetched ``origin/<target>``; origin's copy of
+   every file is the starting point. ``<target>`` is the sync target
+   (``sync_target.py``), not the current branch's namesake: a desktop-app
+   worktree session sits on an unpublished ``claude/*`` branch whose work
+   integrates into origin's default branch. Only that local branch is moved
+   to the result; local ``main`` belongs to the primary checkout. A Codex
+   session on a detached HEAD moves no branch: HEAD is left detached at the
+   result, and a refusal returns it to the original detached commit.
 2. The session's per-file diff (``--base`` -> HEAD) is computed
    content-level; after the #892 squash that is one hunk set.
 3. Ledger rule: hunks must be *pure insertions* of dated entries under a
@@ -58,6 +64,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sync_target import UnresolvedTarget
+from sync_target import resolve as resolve_sync_target
+
 LEDGER_FILES = frozenset(
     {
         "brain/Gotchas.md",
@@ -96,6 +105,8 @@ class Report:
     action: str  # "replayed" | "none" | "refused"
     reason: str
     branch: str | None = None
+    target: str | None = None
+    target_source: str | None = None
     remote: str = "origin"
     base: str | None = None
     old_head: str | None = None
@@ -180,9 +191,20 @@ def _name_status(old: str, new: str) -> dict[str, str]:
 
 
 def _operation_in_progress() -> str | None:
-    """Name of any in-flight git operation that makes replaying unsafe."""
+    """Name of any in-flight git operation that makes replaying unsafe.
+
+    ``BISECT_LOG`` matters because a bisect detaches HEAD, and a detached
+    HEAD is otherwise a legitimate session state (a Codex worktree).
+    """
     git_dir = Path(_git_out("rev-parse", "--absolute-git-dir"))
-    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
+    for marker in (
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "BISECT_LOG",
+    ):
         if (git_dir / marker).exists():
             return marker
     return None
@@ -872,10 +894,10 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
     if marker is not None:
         raise RefusalError(f"git operation in progress ({marker}); abort it first")
 
+    # None on a detached HEAD (a Codex worktree): the result is then checked
+    # out detached, since no local branch owns this session's commits.
     branch_proc = _run_git("symbolic-ref", "--short", "-q", "HEAD")
-    if branch_proc.returncode != 0:
-        raise RefusalError("HEAD is detached; cannot determine the branch to replay onto")
-    branch = branch_proc.stdout.strip()
+    branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None
     report.branch = branch
 
     for scope, args in (
@@ -896,10 +918,21 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
     if not _is_ancestor(base, head):
         raise RefusalError(f"base {base[:12]} is not an ancestor of HEAD")
 
-    fetch = _run_git("fetch", "--quiet", "--", remote, branch)
+    try:
+        sync_target = resolve_sync_target(remote)
+    except UnresolvedTarget as exc:
+        raise RefusalError(
+            f"cannot resolve the sync target ({exc}); cannot verify origin, "
+            "so the replay fails closed"
+        ) from exc
+    target = sync_target.target
+    report.target = target
+    report.target_source = sync_target.source
+
+    fetch = _run_git("fetch", "--quiet", "--", remote, target)
     if fetch.returncode != 0:
         raise RefusalError(
-            f"git fetch {remote} {branch} failed ({fetch.stderr.strip() or 'no output'}); "
+            f"git fetch {remote} {target} failed ({fetch.stderr.strip() or 'no output'}); "
             "cannot verify origin, so the replay fails closed"
         )
     origin_head = _git_out("rev-parse", "FETCH_HEAD^{commit}")
@@ -915,7 +948,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         return
     if not _is_ancestor(base, origin_head):
         raise RefusalError(
-            f"base {base[:12]} is not an ancestor of {remote}/{branch}; unpushed history "
+            f"base {base[:12]} is not an ancestor of {remote}/{target}; unpushed history "
             "predates this session, so attribution is ambiguous"
         )
 
@@ -985,7 +1018,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
     switch = _run_git("switch", "--quiet", "-c", replay_branch, origin_head)
     if switch.returncode != 0:
         raise RefusalError(
-            f"could not branch from {remote}/{branch} ({switch.stderr.strip() or 'no output'})"
+            f"could not branch from {remote}/{target} ({switch.stderr.strip() or 'no output'})"
         )
 
     try:
@@ -1018,7 +1051,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
                 for path, detail in sorted(report.files.items())
             )
             message = (
-                f"vault sync: entry-replay of session {head[:12]} onto {remote}/{branch}\n"
+                f"vault sync: entry-replay of session {head[:12]} onto {remote}/{target}\n"
                 "\n"
                 f"Conflicted hub files replayed onto origin's copies: {summary or 'none'}.\n"
                 f"Session-only paths carried: {sum(len(v) for v in report.carried.values())}.\n"
@@ -1033,8 +1066,11 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
 
         _run_health(health_cmd, report)
 
-        _git_out("branch", "-f", branch, new_head)
-        _git_out("switch", "--quiet", branch)
+        if branch is None:
+            _git_out("switch", "--quiet", "--detach", new_head)
+        else:
+            _git_out("branch", "-f", branch, new_head)
+            _git_out("switch", "--quiet", branch)
         _run_git("branch", "--quiet", "-D", replay_branch)
         report.new_head = new_head
         report.action = "replayed"
@@ -1043,15 +1079,20 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
             len(detail.get("sections_replaced", [])) for detail in report.files.values()
         )
         report.reason = (
-            f"replayed {len(conflicts)} conflicted hub file(s) onto {remote}/{branch}: "
+            f"replayed {len(conflicts)} conflicted hub file(s) onto {remote}/{target}: "
             f"{inserted} entries inserted, {sections} handoff section(s) re-applied; "
             "push is now a fast-forward"
         )
     except BaseException:
         restore_ok = True
+        back = (
+            ("switch", "--quiet", "--detach", head)
+            if branch is None
+            else ("switch", "--quiet", branch)
+        )
         for step in (
             ("reset", "--hard", "--quiet", origin_head),
-            ("switch", "--quiet", branch),
+            back,
             ("branch", "--quiet", "-D", replay_branch),
         ):
             if _run_git(*step).returncode != 0:

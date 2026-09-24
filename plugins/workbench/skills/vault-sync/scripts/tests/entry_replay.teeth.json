@@ -70,8 +70,8 @@
       "label": "an unreachable origin fails open as 'not diverged' instead of refusing",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        raise RefusalError(\n            f\"git fetch {remote} {branch} failed ({fetch.stderr.strip() or 'no output'}); \"\n            \"cannot verify origin, so the replay fails closed\"\n        )",
-      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        report.action = \"none\"\n        report.reason = \"origin unreachable; treating as not diverged\"\n        return"
+      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)\n    if fetch.returncode != 0:\n        raise RefusalError(\n            f\"git fetch {remote} {target} failed ({fetch.stderr.strip() or 'no output'}); \"\n            \"cannot verify origin, so the replay fails closed\"\n        )",
+      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)\n    if fetch.returncode != 0:\n        report.action = \"none\"\n        report.reason = \"origin unreachable; treating as not diverged\"\n        return"
     },
     {
       "label": "a missing anchor on origin is guessed (first heading) instead of refused",
@@ -84,7 +84,7 @@
       "label": "a mid-replay failure no longer restores the original branch and tree",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    except BaseException:\n        restore_ok = True\n        for step in (\n            (\"reset\", \"--hard\", \"--quiet\", origin_head),\n            (\"switch\", \"--quiet\", branch),\n            (\"branch\", \"--quiet\", \"-D\", replay_branch),\n        ):\n            if _run_git(*step).returncode != 0:\n                restore_ok = False\n        report.restored = restore_ok\n        raise",
+      "find": "    except BaseException:\n        restore_ok = True\n        back = (\n            (\"switch\", \"--quiet\", \"--detach\", head)\n            if branch is None\n            else (\"switch\", \"--quiet\", branch)\n        )\n        for step in (\n            (\"reset\", \"--hard\", \"--quiet\", origin_head),\n            back,\n            (\"branch\", \"--quiet\", \"-D\", replay_branch),\n        ):\n            if _run_git(*step).returncode != 0:\n                restore_ok = False\n        report.restored = restore_ok\n        raise",
       "replace": "    except BaseException:\n        report.restored = True\n        raise"
     },
     {
@@ -100,6 +100,55 @@
       "oracle": "real",
       "find": "    touched = [name for name, _raw, body in b_secs if t_map[name] != body]",
       "replace": "    touched: list[str] = []"
+    },
+    {
+      "label": "the replay fetches the local branch's namesake instead of the sync target",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)",
+      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)"
+    },
+    {
+      "label": "the replay moves the target branch (local main) instead of the session's own branch",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            _git_out(\"branch\", \"-f\", branch, new_head)",
+      "replace": "            _git_out(\"branch\", \"-f\", target, new_head)"
+    },
+    {
+      "label": "a detached HEAD refuses outright again, so Codex hub conflicts go to a human",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None",
+      "replace": "    if branch_proc.returncode != 0:\n        raise RefusalError(\"HEAD is detached; cannot determine the branch to replay onto\")\n    branch = branch_proc.stdout.strip()"
+    },
+    {
+      "label": "a detached replay never detaches at the result: HEAD is left on the replay branch",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            _git_out(\"switch\", \"--quiet\", \"--detach\", new_head)",
+      "replace": "            pass"
+    },
+    {
+      "label": "a detached replay lands on local main (the target's namesake) instead of detaching",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            _git_out(\"switch\", \"--quiet\", \"--detach\", new_head)",
+      "replace": "            _git_out(\"branch\", \"-f\", target, new_head)\n            _git_out(\"switch\", \"--quiet\", target)"
+    },
+    {
+      "label": "a detached refusal restores to origin's head instead of the session's own commit",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            (\"switch\", \"--quiet\", \"--detach\", head)",
+      "replace": "            (\"switch\", \"--quiet\", \"--detach\", origin_head)"
+    },
+    {
+      "label": "a bisect no longer counts as an operation in progress, so the replay runs mid-bisect",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        \"REVERT_HEAD\",\n        \"BISECT_LOG\",\n",
+      "replace": "        \"REVERT_HEAD\",\n"
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",
