@@ -2,15 +2,18 @@
 set -euo pipefail
 
 # The title rule depends on which hop this merge request is. Into the shared
-# integration branch, one branch carries one concern and the HEAD conventional
-# commit subject is the title — 38 of 38 ERG merge requests into `dev`. The
-# promotion into `main` is the opposite: 6 of 6 across every Clearway repo
-# carry a descriptive title, because the subject at the head of a release
+# integration branch, one branch carries one concern and its title is a
+# conventional commit naming it: the HEAD subject by default, which is right
+# for a one-commit branch (154 of 208 merge requests into `dev` across six
+# Clearway repos, 2026-09-24), or a title file on a multi-commit branch, whose
+# HEAD is its last slice (only 17 of the other 54 carry the HEAD subject).
+# The promotion into `main` is the opposite: 6 of 6 across every Clearway
+# repo carry a descriptive title, because the subject at the head of a release
 # branch is the release bot's `chore(release): vX.Y.Z`. That subject satisfies
 # the conventional-commit gate, so deriving the title from it does not fail
 # loudly on a promotion — it succeeds, and names a production release after a
-# chore. Hence the routing below rather than a caller-supplied override: the
-# title file is required where it is right and refused everywhere else.
+# chore. Hence the routing below: the title file is required on a promotion
+# hop, and optional but still gated into `dev`.
 #
 # `main` is the release branch throughout these repos (see the
 # `gitlab-promotion-flow` skill). `staging`, where a repo's own CLAUDE.md
@@ -75,12 +78,13 @@ if [[ -z "$target_branch" ]]; then
   [[ -n "$target_branch" ]] || { printf 'Could not resolve the target branch; pass --target-branch explicitly.\n' >&2; exit 65; }
 fi
 
-if requires_title_file "$target_branch"; then
-  [[ -n "$title_file" ]] || {
-    printf 'A merge request into %s needs --title-file: the HEAD subject (%s) titles the branch head, not the hop.\n' "$target_branch" "$(git log -1 --format=%s)" >&2
-    printf 'Write the title to a file and pass --title-file; amending HEAD is not the remedy on a frozen or protected branch.\n' >&2
-    exit 65
-  }
+if requires_title_file "$target_branch" && [[ -z "$title_file" ]]; then
+  printf 'A merge request into %s needs --title-file: the HEAD subject (%s) titles the branch head, not the hop.\n' "$target_branch" "$(git log -1 --format=%s)" >&2
+  printf 'Write the title to a file and pass --title-file; amending HEAD is not the remedy on a frozen or protected branch.\n' >&2
+  exit 65
+fi
+
+if [[ -n "$title_file" ]]; then
   [[ -f "$title_file" && -s "$title_file" ]] || { printf 'Title file must exist and be non-empty: %s\n' "$title_file" >&2; exit 66; }
   # Read from the file, never from an argument: `!NNN` is GitLab's own
   # merge-request reference syntax and the most natural thing to write in a
@@ -89,11 +93,21 @@ if requires_title_file "$target_branch"; then
   expected_title=$(<"$title_file")
   [[ -n "$expected_title" ]] || { printf 'Title file is blank: %s\n' "$title_file" >&2; exit 65; }
   [[ "$expected_title" != *$'\n'* ]] || { printf 'Title must be a single line: %s\n' "$title_file" >&2; exit 65; }
+  title_source="Title file"
 else
-  [[ -z "$title_file" ]] || { printf 'Do not supply --title-file for a merge request into %s; the HEAD subject is the title there.\n' "$target_branch" >&2; exit 64; }
   expected_title=$(git log -1 --format=%s)
+  title_source="HEAD subject"
+fi
+
+# Into the integration branch the title is a conventional commit whichever
+# source supplied it. HEAD's subject is the default because a one-commit
+# branch's subject is its concern; a test-first branch ends on its last slice
+# (IQ !82 ended on `test(pjm): commit the conformance mutation spec`), and
+# amending that relabels a real commit, so the concern comes from a title file
+# there instead — still held to the same gate.
+if ! requires_title_file "$target_branch"; then
   conventional_commit_pattern='^[a-z]+(\([^)]+\))?!?: .+'
-  [[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf 'HEAD subject is not a conventional commit: %s\n' "$expected_title" >&2; exit 65; }
+  [[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf '%s is not a conventional commit: %s\n' "$title_source" "$expected_title" >&2; exit 65; }
 fi
 
 description=$(<"$description_file")
