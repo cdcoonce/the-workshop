@@ -63,8 +63,8 @@
       "label": "an ls-remote failure fails open as 'nothing pushed' instead of skipping",
       "file": "../sync_boundary_squash.py",
       "oracle": "real",
-      "find": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError as exc:\n        report.reason = f\"fresh ls-remote failed ({exc}); cannot verify pushed-ness\"\n        return report",
-      "replace": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError:\n        remote_head = None"
+      "find": "    try:\n        remote_head = _ls_remote_head(remote, target)\n    except GitError as exc:\n        report.reason = f\"fresh ls-remote failed ({exc}); cannot verify pushed-ness\"\n        return report",
+      "replace": "    try:\n        remote_head = _ls_remote_head(remote, target)\n    except GitError:\n        remote_head = None"
     },
     {
       "label": "net-empty unpushed run no longer skips, so the boundary invents or fails a commit",
@@ -93,6 +93,20 @@
       "oracle": "real",
       "find": "    if any(pushed_flags[first_unpushed:]):\n        return None\n    return first_unpushed",
       "replace": "    return first_unpushed"
+    },
+    {
+      "label": "pushed-ness measured against the local branch's namesake instead of the sync target",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "        remote_head = _ls_remote_head(remote, target)",
+      "replace": "        remote_head = _ls_remote_head(remote, branch)"
+    },
+    {
+      "label": "an unresolvable sync target falls back to the branch name instead of skipping",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    except UnresolvedTarget as exc:\n        report.reason = f\"cannot resolve the sync target ({exc}); cannot verify pushed-ness\"\n        return report\n    target = sync_target.target",
+      "replace": "    except UnresolvedTarget:\n        from sync_target import SyncTarget\n        sync_target = SyncTarget(branch, branch, \"branch-name\")\n    target = sync_target.target"
     },
     {
       "label": "[control] reorder the action and reason writes on the success report",

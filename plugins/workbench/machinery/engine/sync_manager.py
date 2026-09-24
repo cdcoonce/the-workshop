@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +26,15 @@ class SyncResult:
     success: bool
     message: str
     conflicts: list[str] = field(default_factory=list)  # conflicting file paths
+
+
+class SyncTarget(NamedTuple):
+    """Where a checkout's session work goes: ``branch`` is the local branch
+    (None when detached), ``target`` the remote branch pulls rebase onto and
+    pushes land on, ``source`` the rule that chose it."""
+    branch: str | None
+    target: str
+    source: str  # "upstream" | "same-name" | "remote-default"
 
 
 class GitCommandError(Exception):
@@ -85,6 +95,21 @@ def _git_dir(cwd: Path) -> Path | None:
     return None
 
 
+def _rebase_in_progress(cwd: Path) -> bool:
+    """Whether a rebase is still underway, read from git's own state markers.
+
+    A pull that fails before its rebase phase (an unreachable remote, a
+    missing remote branch) makes the unconditional ``rebase --abort`` fail with
+    "no rebase in progress" -- which is not a repo left mid-rebase. An
+    unresolvable git dir counts as in progress: this only decides whether to
+    warn, and a false warning is cheaper than a missed one.
+    """
+    git_dir = _git_dir(cwd)
+    if git_dir is None:
+        return True
+    return (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists()
+
+
 def _try_lock(lock_path: Path) -> bool | None:
     """Try to take the exclusive sync lock via O_CREAT|O_EXCL.
 
@@ -117,6 +142,55 @@ def _try_lock(lock_path: Path) -> bool | None:
             os.close(fd)
         return True
     return False
+
+
+_HEADS = "refs/heads/"
+
+
+def _sync_target(cwd: Path, remote: str = "origin") -> SyncTarget | None:
+    """The branch on ``remote`` this checkout's session work integrates into.
+
+    HEAD's branch name is the answer only in the primary checkout on main. The
+    desktop app runs vault sessions in linked worktrees on unpublished
+    ``claude/*`` branches (Codex: a detached HEAD), whose names mean nothing on
+    the remote. The rule, identical to the vault-sync and vault-wrap-up skills'
+    ``sync_target.py`` and held to it by tests/test_sync_target_parity.py:
+
+    1. the branch's configured upstream on ``remote`` (read from config, not
+       ``@{u}``, which fails whenever the tracking ref is missing);
+    2. else a same-named branch on ``remote`` (fresh ``ls-remote``);
+    3. else ``remote``'s default branch (fresh ``ls-remote --symref``).
+
+    Returns None when nothing resolves -- an unreachable remote, or one that
+    names no default branch; callers then leave git to its own upstream
+    handling rather than guess ``main``.
+    """
+    head = _run_git(["symbolic-ref", "--short", "-q", "HEAD"], cwd)
+    branch = head.stdout.strip() if head.returncode == 0 else None
+
+    if branch:
+        up_remote = _run_git(["config", "--get", f"branch.{branch}.remote"], cwd).stdout.strip()
+        up_merge = _run_git(["config", "--get", f"branch.{branch}.merge"], cwd).stdout.strip()
+        if up_remote == remote and up_merge.startswith(_HEADS):
+            return SyncTarget(branch, up_merge[len(_HEADS):], "upstream")
+
+        ref = _HEADS + branch
+        listed = _run_git(["ls-remote", "--", remote, ref], cwd)
+        if listed.returncode != 0:
+            return None
+        if any(line.partition("\t")[2] == ref for line in listed.stdout.splitlines()):
+            return SyncTarget(branch, branch, "same-name")
+
+    symref = _run_git(["ls-remote", "--symref", "--", remote, "HEAD"], cwd)
+    if symref.returncode != 0:
+        return None
+    for line in symref.stdout.splitlines():
+        if not line.startswith("ref: "):
+            continue
+        name, _, what = line[len("ref: "):].partition("\t")
+        if what == "HEAD" and name.startswith(_HEADS):
+            return SyncTarget(branch, name[len(_HEADS):], "remote-default")
+    return None
 
 
 def _has_remote(cwd: Path) -> bool:
@@ -234,10 +308,6 @@ def pull(vault_path: str | Path) -> SyncResult:
             lock_path = None  # locking unavailable; proceed unlocked (retry below still guards)
 
     try:
-        # Resolve the current branch and pull from origin explicitly, so the
-        # fetch phase only writes the one branch we intend to rebase onto.
-        branch_result = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
-        branch = branch_result.stdout.strip()
         # --autostash: the vault is edited continuously and its auto-commit runs
         # at Stop, so SessionStart routinely fires with a dirty working tree.
         # Without this, git refuses outright ("cannot pull with rebase: You have
@@ -245,9 +315,14 @@ def pull(vault_path: str | Path) -> SyncResult:
         # notices. Git stashes, rebases, and restores in one step; on conflict
         # the abort below restores the pre-pull state.
         base_args = ["pull", "--rebase", "--autostash"]
-        pull_args = [*base_args, "origin", branch] if branch and branch != "HEAD" else base_args
 
         try:
+            # Pull the sync target from origin explicitly, so the fetch phase
+            # only writes the one branch we intend to rebase onto -- the
+            # target, not the branch name, which in a worktree session names
+            # nothing on the remote.
+            sync_target = _sync_target(cwd)
+            pull_args = [*base_args, "origin", sync_target.target] if sync_target else base_args
             result = _run_git(pull_args, cwd)
             if result.returncode != 0 and _FETCH_HEAD_RACE_ERR in result.stderr.lower():
                 # A fetch we don't control rewrote FETCH_HEAD between this pull's
@@ -272,7 +347,7 @@ def pull(vault_path: str | Path) -> SyncResult:
 
         # Abort the rebase to return to clean state
         abort_result = _run_git(["rebase", "--abort"], cwd)
-        abort_failed = abort_result.returncode != 0
+        abort_failed = abort_result.returncode != 0 and _rebase_in_progress(cwd)
 
         if conflicts:
             message = (
@@ -380,14 +455,20 @@ def push(
         if not pull_result.success:
             return pull_result
 
-        # Push — resolve the current branch and set upstream so this works on
-        # any branch, not just main. A bare `git push` fails on a fresh feature
-        # branch with "no upstream branch"; `push -u origin <branch>` sets the
-        # upstream on first push and is a harmless no-op once it's tracking.
-        # Mirrors the branch-aware resolution already used by pull().
-        branch_result = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
-        branch = branch_result.stdout.strip()
-        push_args = ["push", "-u", "origin", branch] if branch and branch != "HEAD" else ["push"]
+        # Push to the same sync target pull() rebased onto. When the target is
+        # the branch's own namesake, `push -u origin <branch>` sets tracking on
+        # a first push and is a no-op after. A session branch that integrates
+        # elsewhere (a worktree's claude/* branch -> main) pushes
+        # HEAD:<target>: pushing its own name would create a stray remote
+        # branch the rest of the vault never pulls, which is how wrap-ups were
+        # stranded before this resolution existed.
+        sync_target = _sync_target(cwd)
+        if sync_target is None:
+            push_args = ["push"]
+        elif sync_target.target == sync_target.branch:
+            push_args = ["push", "-u", "origin", sync_target.target]
+        else:
+            push_args = ["push", "origin", f"HEAD:{sync_target.target}"]
         result = _run_git(push_args, cwd)
         if result.returncode != 0:
             return SyncResult(

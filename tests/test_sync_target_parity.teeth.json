@@ -1,0 +1,83 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_sync_target_parity.py",
+    "-k",
+    "same_sync_target"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_sync_target_parity.py",
+    "-k",
+    "same_sync_target"
+  ],
+  "mutants": [
+    {
+      "label": "skill: an unpublished branch's own name is the target (the pre-fix behavior)",
+      "file": "../plugins/workbench/skills/vault-sync/scripts/sync_target.py",
+      "oracle": "real",
+      "find": "        if any(line.partition(\"\\t\")[2] == ref for line in listed.stdout.splitlines()):\n            return SyncTarget(branch, branch, \"same-name\")",
+      "replace": "        if True:\n            return SyncTarget(branch, branch, \"same-name\")"
+    },
+    {
+      "label": "skill: a tracked branch's upstream is ignored",
+      "file": "../plugins/workbench/skills/vault-sync/scripts/sync_target.py",
+      "oracle": "real",
+      "find": "        if up_remote == remote and up_merge.startswith(_HEADS):\n            return SyncTarget(branch, up_merge[len(_HEADS):], \"upstream\")",
+      "replace": "        if False:\n            return SyncTarget(branch, up_merge[len(_HEADS):], \"upstream\")"
+    },
+    {
+      "label": "skill: a remote naming no default branch is guessed as main",
+      "file": "../plugins/workbench/skills/vault-sync/scripts/sync_target.py",
+      "oracle": "real",
+      "find": "    raise UnresolvedTarget(f\"{where} {remote} names no default branch\")",
+      "replace": "    return SyncTarget(branch, \"main\", \"remote-default\")"
+    },
+    {
+      "label": "engine: an unpublished branch's own name is the target (the pre-fix behavior)",
+      "file": "../plugins/workbench/machinery/engine/sync_manager.py",
+      "oracle": "real",
+      "find": "        if any(line.partition(\"\\t\")[2] == ref for line in listed.stdout.splitlines()):\n            return SyncTarget(branch, branch, \"same-name\")",
+      "replace": "        if True:\n            return SyncTarget(branch, branch, \"same-name\")"
+    },
+    {
+      "label": "engine: a tracked branch's upstream is ignored",
+      "file": "../plugins/workbench/machinery/engine/sync_manager.py",
+      "oracle": "real",
+      "find": "        if up_remote == remote and up_merge.startswith(_HEADS):\n            return SyncTarget(branch, up_merge[len(_HEADS):], \"upstream\")",
+      "replace": "        if False:\n            return SyncTarget(branch, up_merge[len(_HEADS):], \"upstream\")"
+    },
+    {
+      "label": "engine: a remote naming no default branch is guessed as main",
+      "file": "../plugins/workbench/machinery/engine/sync_manager.py",
+      "oracle": "real",
+      "find": "            return SyncTarget(branch, name[len(_HEADS):], \"remote-default\")\n    return None",
+      "replace": "            return SyncTarget(branch, name[len(_HEADS):], \"remote-default\")\n    return SyncTarget(branch, \"main\", \"remote-default\")"
+    },
+    {
+      "label": "[control] skill: read the upstream's merge ref before its remote",
+      "file": "../plugins/workbench/skills/vault-sync/scripts/sync_target.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two read-only `git config --get` calls on independent keys; neither reads the other's result and neither writes, so their order is inert on every path. Not inert if a config read ever gained a side effect such as lazily setting upstream.",
+      "find": "        up_remote = _git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()\n        up_merge = _git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()",
+      "replace": "        up_merge = _git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()\n        up_remote = _git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()"
+    }
+  ]
+}

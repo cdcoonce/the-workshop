@@ -1,0 +1,81 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_sync_manager.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_sync_manager.py"
+  ],
+  "mutants": [
+    {
+      "label": "pull rebases onto the local branch's namesake instead of the sync target",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "pull_args = [*base_args, \"origin\", sync_target.target] if sync_target else base_args",
+      "replace": "pull_args = [*base_args, \"origin\", sync_target.branch] if sync_target else base_args"
+    },
+    {
+      "label": "push publishes a session branch under its own name (the stray-branch mechanism)",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "            push_args = [\"push\", \"origin\", f\"HEAD:{sync_target.target}\"]",
+      "replace": "            push_args = [\"push\", \"-u\", \"origin\", sync_target.branch]"
+    },
+    {
+      "label": "a pull that failed before its rebase still claims the repo was left mid-rebase",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "abort_failed = abort_result.returncode != 0 and _rebase_in_progress(cwd)",
+      "replace": "abort_failed = abort_result.returncode != 0"
+    },
+    {
+      "label": "an unresolvable git dir counts as no rebase in progress (warning fails open)",
+      "file": "engine/sync_manager.py",
+      "oracle": "double",
+      "find": "    git_dir = _git_dir(cwd)\n    if git_dir is None:\n        return True\n    return (git_dir / \"rebase-merge\")",
+      "replace": "    git_dir = _git_dir(cwd)\n    if git_dir is None:\n        return False\n    return (git_dir / \"rebase-merge\")"
+    },
+    {
+      "label": "[control] sync_manager: read the upstream's merge ref before its remote",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two read-only `git config --get` calls on independent keys inside _sync_target; neither reads the other's result and neither writes, so their order is inert wherever the resolver runs for real. The mocked pull/push tests pin _sync_target itself, so they never see the order either.",
+      "find": "        up_remote = _run_git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()\n        up_merge = _run_git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()",
+      "replace": "        up_merge = _run_git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()\n        up_remote = _run_git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()"
+    }
+  ]
+}

@@ -26,16 +26,27 @@ def _make_result(returncode: int = 0, stdout: str = "", stderr: str = "") -> sub
     return subprocess.CompletedProcess(args=["git"], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+@pytest.fixture
+def fixed_sync_target():
+    """Pin the sync target so the mocked git sequences below stay about pull/push.
+
+    The resolver itself runs against real git in the worktree tests at the
+    bottom of this file and in the repo-root tests/test_sync_target_parity.py.
+    """
+    with patch("sync_manager._sync_target", return_value=sm.SyncTarget("main", "main", "upstream")):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Pull tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("fixed_sync_target")
 class TestPull:
     @patch("sync_manager._run_git")
     def test_pull_success(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),  # remote check
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(stdout="Updating abc..def\nFast-forward"),  # pull
         ]
         result = pull(tmp_path)
@@ -46,7 +57,6 @@ class TestPull:
     def test_pull_already_up_to_date(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),  # remote
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(stdout="Already up to date."),  # pull
         ]
         result = pull(tmp_path)
@@ -71,7 +81,6 @@ class TestPull:
         """
         mock_git.side_effect = [
             _make_result(stdout="origin"),  # remote
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(stdout="Already up to date."),  # pull
         ]
 
@@ -85,7 +94,6 @@ class TestPull:
     def test_pull_conflict(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),  # remote
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(  # pull --rebase with conflict
                 returncode=1,
                 stdout="CONFLICT (content): Merge conflict in brain/North Star.md",
@@ -102,20 +110,18 @@ class TestPull:
     def test_pull_conflict_aborts_rebase(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(returncode=1, stdout="CONFLICT (content): Merge conflict in test.md"),
             _make_result(),  # rebase --abort
         ]
         pull(tmp_path)
-        # Verify rebase --abort was called (now the 4th git call: remote, rev-parse, pull, abort)
-        abort_call = mock_git.call_args_list[3]
+        # Verify rebase --abort was called (the 3rd git call: remote, pull, abort)
+        abort_call = mock_git.call_args_list[2]
         assert "abort" in str(abort_call)
 
     @patch("sync_manager._run_git")
     def test_pull_generic_failure(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(returncode=1, stderr="fatal: authentication failed"),
             _make_result(),  # rebase --abort (still called)
         ]
@@ -127,7 +133,6 @@ class TestPull:
     def test_pull_rebase_abort_failure_reports_mid_rebase(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(returncode=1, stderr="fatal: authentication failed"),
             _make_result(returncode=1, stderr="fatal: could not abort rebase"),  # abort fails
         ]
@@ -141,7 +146,6 @@ class TestPull:
     def test_pull_conflict_with_rebase_abort_failure_reports_mid_rebase(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             _make_result(
                 returncode=1,
                 stdout="CONFLICT (content): Merge conflict in brain/North Star.md",
@@ -159,7 +163,6 @@ class TestPull:
     def test_pull_timeout(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             subprocess.TimeoutExpired("git", 25),
         ]
         result = pull(tmp_path)
@@ -170,7 +173,6 @@ class TestPull:
     def test_pull_git_not_found(self, mock_git, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),  # rev-parse --abbrev-ref HEAD
             FileNotFoundError("git not found"),
         ]
         result = pull(tmp_path)
@@ -195,6 +197,7 @@ class TestPull:
 # Pull locking tests — concurrent invocations must not race on FETCH_HEAD
 # ---------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("fixed_sync_target")
 class TestPullLocking:
     @patch("sync_manager._run_git")
     def test_pull_skips_when_locked(self, mock_git, tmp_path: Path) -> None:
@@ -215,7 +218,6 @@ class TestPullLocking:
         git_dir.mkdir()
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             _make_result(stdout="Already up to date."),
         ]
         result = pull(tmp_path)
@@ -232,7 +234,6 @@ class TestPullLocking:
         os.utime(lock, (stale, stale))
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             _make_result(stdout="Already up to date."),
         ]
         result = pull(tmp_path)
@@ -246,7 +247,6 @@ class TestPullLocking:
         git_dir.mkdir()
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             subprocess.TimeoutExpired("git", 25),
         ]
         result = pull(tmp_path)
@@ -283,13 +283,13 @@ class TestPullLocking:
 # Pull retry tests — FETCH_HEAD rewritten by a fetch we don't control
 # ---------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("fixed_sync_target")
 class TestPullRetry:
     @patch("sync_manager.time.sleep")
     @patch("sync_manager._run_git")
     def test_pull_retries_once_on_fetch_head_race(self, mock_git, mock_sleep, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             _make_result(returncode=128, stderr="fatal: Cannot rebase onto multiple branches."),
             _make_result(stdout="Updating abc..def\nFast-forward"),  # retry succeeds
         ]
@@ -305,7 +305,6 @@ class TestPullRetry:
     def test_pull_retry_exhausted_reports_failure(self, mock_git, mock_sleep, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             _make_result(returncode=128, stderr="fatal: Cannot rebase onto multiple branches."),
             _make_result(returncode=128, stderr="fatal: Cannot rebase onto multiple branches."),
             _make_result(),  # rebase --abort
@@ -320,20 +319,20 @@ class TestPullRetry:
     def test_pull_does_not_retry_other_failures(self, mock_git, mock_sleep, tmp_path: Path) -> None:
         mock_git.side_effect = [
             _make_result(stdout="origin"),
-            _make_result(stdout="main"),
             _make_result(returncode=1, stderr="fatal: authentication failed"),
             _make_result(),  # rebase --abort
         ]
         result = pull(tmp_path)
         assert result.success is False
         mock_sleep.assert_not_called()
-        assert mock_git.call_count == 4
+        assert mock_git.call_count == 3  # remote, pull, abort
 
 
 # ---------------------------------------------------------------------------
 # Push tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("fixed_sync_target")
 class TestPush:
     @patch("sync_manager._run_git")
     def test_changed_paths_parses_deletions_renames_and_spaces(
@@ -429,10 +428,8 @@ class TestPush:
         mock_git.side_effect = [
             _make_result(),  # add
             _make_result(),  # commit
-            # push() now rebase-pulls before pushing (#47): pull() runs rev-parse + pull --rebase
-            _make_result(stdout="main"),  # pull(): rev-parse --abbrev-ref HEAD
+            # push() now rebase-pulls before pushing (#47); the class fixture pins the sync target
             _make_result(stdout="Already up to date."),  # pull(): pull --rebase (succeeds)
-            _make_result(stdout="main"),  # push: rev-parse --abbrev-ref HEAD
             _make_result(returncode=1, stderr="rejected: non-fast-forward"),  # push (fails)
         ]
         result = push(tmp_path)
@@ -574,6 +571,70 @@ def test_push_returns_conflict_and_does_not_push(tmp_path):
     assert res.conflicts                          # reports the conflict (not just "try pulling")
     _git(b, "pull", "--rebase", "origin", "main")
     assert (b / "seed.md").read_text() == "b version\n"  # A's change was NOT pushed
+
+
+# --- Worktree sessions: the sync target is not the branch name (2026-09-24) ---
+# The desktop app runs vault sessions in linked worktrees on unpublished
+# claude/* branches. Pulling or pushing `origin <that branch>` names nothing
+# on the remote: pulls failed at SessionStart, and a push that followed git's
+# --set-upstream hint stranded wrap-ups on stray remote branches.
+
+
+def _add_session_worktree(tmp_path, repo, branch="claude/clever-benz"):
+    worktree = tmp_path / "worktree"
+    _git(repo, "worktree", "add", "-q", "-b", branch, str(worktree), "main")
+    return worktree
+
+
+def _remote_heads(repo, pattern):
+    return subprocess.run(
+        ["git", "-C", str(repo), "ls-remote", "origin", pattern],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def test_pull_in_worktree_session_branch_rebases_onto_origin_main(tmp_path):
+    a, b = _setup(tmp_path)
+    worktree = _add_session_worktree(tmp_path, a)
+    (b / "from_b.md").write_text("b\n")
+    _git(b, "add", ".")
+    _git(b, "commit", "-m", "b")
+    _git(b, "push", "origin", "main")
+
+    res = sm.pull(worktree)
+
+    assert res.success, res.message
+    assert (worktree / "from_b.md").exists()
+    branch = subprocess.run(
+        ["git", "-C", str(worktree), "symbolic-ref", "--short", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    assert branch == "claude/clever-benz"
+
+
+def test_pull_failing_before_the_rebase_does_not_claim_mid_rebase(tmp_path):
+    a, _b = _setup(tmp_path)
+    _git(a, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+
+    res = sm.pull(a)
+
+    assert not res.success
+    assert "mid-rebase" not in res.message, (
+        "no rebase ever started, so the repository cannot have been left mid-rebase"
+    )
+
+
+def test_push_from_worktree_session_branch_lands_on_main_without_a_stray_branch(tmp_path):
+    a, b = _setup(tmp_path)
+    worktree = _add_session_worktree(tmp_path, a)
+    (worktree / "from_worktree.md").write_text("session\n")
+
+    res = sm.push(str(worktree))
+
+    assert res.success, res.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert (b / "from_worktree.md").exists()
+    assert _remote_heads(b, "refs/heads/claude/*") == "", "no stray session branch on the remote"
 
 
 # --- _parse_conflict_files: never surface free-text as a path (#55) ---
