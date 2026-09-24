@@ -315,6 +315,56 @@ def test_worktree_session_branch_measures_pushed_ness_against_main(tmp_path: Pat
     assert _tree(worktree, "HEAD") == tree_before
 
 
+def _add_detached_worktree(local: Path, tmp_path: Path) -> Path:
+    """Codex's layout: a linked worktree on a detached HEAD cut from local
+    ``main`` -- no branch at all, so no branch name can say where work goes."""
+    worktree = tmp_path / "codex-worktree"
+    _git(local, "worktree", "add", "-q", "--detach", str(worktree), "main")
+    return worktree
+
+
+def _local_branches(repo: Path) -> str:
+    """Every local branch and its tip -- shared by all of a repo's worktrees."""
+    return _git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads")
+
+
+def test_detached_worktree_session_squashes_and_stays_detached(tmp_path: Path) -> None:
+    """Codex runs vault sessions on a detached HEAD, and the boundary once
+    skipped there outright, so every Codex wrap-up rode the rebase as N
+    commits. The sync target (origin's default branch) defines pushed-ness
+    exactly as on a branch; only HEAD moves, and it stays detached."""
+    _remote, local, base = _make_remote_and_clone(tmp_path)
+    worktree = _add_detached_worktree(local, tmp_path)
+    c1 = _commit_file(worktree, "brain/notes.md", "line 1\n", "session commit 1")
+    _git(worktree, "push", "-q", "origin", "HEAD:main")
+    _commit_file(worktree, "brain/notes.md", "line 1\nline 2\n", "session commit 2")
+    _commit_file(
+        worktree, "brain/notes.md", "line 1\nline 2\nline 3\n", "vault wrap-up 2026-09-24"
+    )
+    tree_before = _tree(worktree, "HEAD")
+    branches_before = _local_branches(local)
+
+    report = _run_squash(worktree, base)
+
+    assert report["action"] == "squashed", report["reason"]
+    assert report["branch"] is None
+    assert report["target"] == "main"
+    assert report["target_source"] == "remote-default"
+    assert report["pushed"] == 1
+    session = _range_shas(worktree, base)
+    assert session[0] == c1, "the commit origin/main holds must keep its SHA"
+    assert len(session) == 2
+    assert _tree(worktree, "HEAD") == tree_before
+    assert _subject(worktree, "HEAD") == "vault wrap-up 2026-09-24"
+    head_ref = subprocess.run(
+        ["git", "symbolic-ref", "-q", "HEAD"], cwd=worktree, env=_env(), capture_output=True
+    )
+    assert head_ref.returncode == 1, "a detached session must stay detached"
+    assert _local_branches(local) == branches_before, (
+        "a detached squash must not create or move any local branch"
+    )
+
+
 def test_unresolvable_sync_target_skips_squash(tmp_path: Path) -> None:
     """A session branch the remote does not know, on a remote that names no
     default branch, has no sync target. Falling back to the branch name would
@@ -431,17 +481,23 @@ def test_unreachable_remote_skips_squash(tmp_path: Path) -> None:
     assert _head(local) == head_before
 
 
-def test_detached_head_skips_squash(tmp_path: Path) -> None:
+def test_bisect_in_progress_skips_squash(tmp_path: Path) -> None:
+    """A bisect detaches HEAD at a commit under test. Once the boundary
+    stopped skipping every detached HEAD, it must still recognize this one as
+    an operation in flight: squashing would rewrite the commit being tested."""
     _remote, local, base = _make_remote_and_clone(tmp_path)
-    _make_session_commits(local, n=2)
-    _git(local, "checkout", "-q", "--detach")
+    shas = _make_session_commits(local, n=4)
+    _git(local, "bisect", "start", shas[-1], base)
     head_before = _head(local)
+    assert head_before != shas[-1], "fixture must be mid-bisect"
+    assert len(_range_shas(local, base)) >= 2, "fixture must leave something to squash"
 
     report = _run_squash(local, base)
 
     assert report["action"] == "skipped"
-    assert "detached" in report["reason"]
+    assert "in progress" in report["reason"]
     assert _head(local) == head_before
+    assert (local / ".git" / "BISECT_LOG").exists(), "the bisect must survive the skip"
 
 
 def test_base_not_an_ancestor_skips_squash(tmp_path: Path) -> None:

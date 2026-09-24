@@ -16,7 +16,9 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    (``sync_target.py``), not the current branch's namesake: a desktop-app
    worktree session sits on an unpublished ``claude/*`` branch whose work
    integrates into origin's default branch. Only that local branch is moved
-   to the result; local ``main`` belongs to the primary checkout.
+   to the result; local ``main`` belongs to the primary checkout. A Codex
+   session on a detached HEAD moves no branch: HEAD is left detached at the
+   result, and a refusal returns it to the original detached commit.
 2. The session's per-file diff (``--base`` -> HEAD) is computed
    content-level; after the #892 squash that is one hunk set.
 3. Ledger rule: hunks must be *pure insertions* of dated entries under a
@@ -189,9 +191,20 @@ def _name_status(old: str, new: str) -> dict[str, str]:
 
 
 def _operation_in_progress() -> str | None:
-    """Name of any in-flight git operation that makes replaying unsafe."""
+    """Name of any in-flight git operation that makes replaying unsafe.
+
+    ``BISECT_LOG`` matters because a bisect detaches HEAD, and a detached
+    HEAD is otherwise a legitimate session state (a Codex worktree).
+    """
     git_dir = Path(_git_out("rev-parse", "--absolute-git-dir"))
-    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
+    for marker in (
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "BISECT_LOG",
+    ):
         if (git_dir / marker).exists():
             return marker
     return None
@@ -881,10 +894,10 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
     if marker is not None:
         raise RefusalError(f"git operation in progress ({marker}); abort it first")
 
+    # None on a detached HEAD (a Codex worktree): the result is then checked
+    # out detached, since no local branch owns this session's commits.
     branch_proc = _run_git("symbolic-ref", "--short", "-q", "HEAD")
-    if branch_proc.returncode != 0:
-        raise RefusalError("HEAD is detached; cannot determine the branch to replay onto")
-    branch = branch_proc.stdout.strip()
+    branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None
     report.branch = branch
 
     for scope, args in (
@@ -1053,8 +1066,11 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
 
         _run_health(health_cmd, report)
 
-        _git_out("branch", "-f", branch, new_head)
-        _git_out("switch", "--quiet", branch)
+        if branch is None:
+            _git_out("switch", "--quiet", "--detach", new_head)
+        else:
+            _git_out("branch", "-f", branch, new_head)
+            _git_out("switch", "--quiet", branch)
         _run_git("branch", "--quiet", "-D", replay_branch)
         report.new_head = new_head
         report.action = "replayed"
@@ -1069,9 +1085,14 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         )
     except BaseException:
         restore_ok = True
+        back = (
+            ("switch", "--quiet", "--detach", head)
+            if branch is None
+            else ("switch", "--quiet", branch)
+        )
         for step in (
             ("reset", "--hard", "--quiet", origin_head),
-            ("switch", "--quiet", branch),
+            back,
             ("branch", "--quiet", "-D", replay_branch),
         ):
             if _run_git(*step).returncode != 0:
