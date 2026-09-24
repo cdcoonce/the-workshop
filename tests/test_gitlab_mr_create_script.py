@@ -142,11 +142,11 @@ def _created(repo) -> bool:
     return (repo.stub_dir / "created").exists()
 
 
-# --- the hop into dev: unchanged, and now pinned -------------------------
+# --- the hop into dev: HEAD by default, a gated title file when it lies --
 
 
 def test_dev_hop_titles_the_mr_with_the_head_subject(repo) -> None:
-    """38 of 38 ERG merge requests into `dev` carry the commit subject."""
+    """A one-commit branch: its subject is its concern, so HEAD titles it."""
     result = repo("feat(reports): #175 add the wind speed row", "--target-branch", "dev")
 
     assert result.returncode == 0, result.stderr
@@ -160,12 +160,35 @@ def test_dev_hop_still_rejects_a_non_conventional_head_subject(repo) -> None:
     assert not _created(repo)
 
 
-def test_dev_hop_refuses_a_title_file(repo) -> None:
-    """The promotion affordance must not become a general escape hatch.
+def test_dev_hop_titles_a_multi_commit_branch_from_the_title_file(repo) -> None:
+    """The 2026-09-23 gap: IQ !82 ended on a test-only commit.
 
-    If `--title-file` were merely *accepted* everywhere, the convention that
-    holds on 38 of 38 dev merge requests would decay into a suggestion, since
-    any inconvenient HEAD subject could be overridden in passing.
+    A test-first branch lands one commit per behaviour, then review fixes,
+    then a committed mutation spec, so its HEAD subject names the last slice
+    rather than the concern: `test(pjm): commit the conformance mutation
+    spec` titled a feature MR. That subject is a valid conventional commit, so
+    the dev hop accepted it, and amending it would have relabelled a real
+    commit whose SHA the description cited. The concern's title has to be
+    suppliable without rewriting history.
+    """
+    title_file = repo.work / "title.txt"
+    title_file.write_text("feat(pjm): conform pjm vocabulary in staging\n")
+    result = repo(
+        "test(pjm): commit the conformance mutation spec",
+        "--target-branch", "dev",
+        "--title-file", str(title_file),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _title(repo) == "feat(pjm): conform pjm vocabulary in staging"
+
+
+def test_dev_hop_title_file_must_still_be_a_conventional_commit(repo) -> None:
+    """The title file supplies the concern, not an exemption from the gate.
+
+    Into `dev` the convention is a conventional-commit title, whichever
+    source it comes from; a prose title is refused as a precondition, the
+    same answer a prose HEAD subject gets.
     """
     title_file = repo.work / "title.txt"
     title_file.write_text("Something I would rather call it\n")
@@ -175,8 +198,63 @@ def test_dev_hop_refuses_a_title_file(repo) -> None:
         "--title-file", str(title_file),
     )
 
+    assert result.returncode == PRECONDITION
+    assert not _created(repo)
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["feat(pjm): conform pjm vocabulary\nin staging\n", "\n"],
+    ids=["multi-line", "blank"],
+)
+def test_dev_hop_title_file_gets_the_same_shape_checks(repo, content) -> None:
+    title_file = repo.work / "title.txt"
+    title_file.write_text(content)
+    result = repo(
+        "test(pjm): commit the conformance mutation spec",
+        "--target-branch", "dev",
+        "--title-file", str(title_file),
+    )
+
+    assert result.returncode in (NO_INPUT, PRECONDITION)
+    assert not _created(repo)
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [("--title-file", ""), ("--title-file=",), ("--title-file",)],
+    ids=["space", "equals", "trailing"],
+)
+def test_an_empty_title_file_argument_is_refused_not_ignored(repo, flags) -> None:
+    """An unset variable must not fall back to HEAD's slice subject.
+
+    Each command runs in a fresh shell, so `--title-file "$TITLE_FILE"` can
+    arrive empty. Into `dev` an empty value used to read as "no title file"
+    and title the MR from HEAD, the IQ !82 mis-title reached by accident.
+    """
+    result = repo(
+        "test(pjm): commit the conformance mutation spec",
+        "--target-branch", "dev",
+        *flags,
+    )
+
     assert result.returncode == USAGE
     assert not _created(repo)
+
+
+def test_dev_read_back_covers_the_title_file(repo) -> None:
+    """IQ !82's retitle ran through `glab mr update`, outside any read-back."""
+    title_file = repo.work / "title.txt"
+    title_file.write_text("feat(pjm): conform pjm vocabulary in staging\n")
+    result = repo(
+        "test(pjm): commit the conformance mutation spec",
+        "--target-branch", "dev",
+        "--title-file", str(title_file),
+        readback_title="test(pjm): commit the conformance mutation spec",
+    )
+
+    assert result.returncode == VERIFY_FAILED
+    assert "title differs" in result.stderr
 
 
 # --- the hop into main: the defect this suite exists for -----------------
