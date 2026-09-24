@@ -1,6 +1,6 @@
 ---
 name: gitlab-mr-create
-description: Create GitLab merge requests with `glab` — a conventional-commit title (the `HEAD` subject, or a title file on a multi-commit branch) for a merge into `dev`, a title file for the hops into `staging` and `main`, descriptions keep real newlines, and both are read back. Use whenever creating a GitLab merge request.
+description: Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. Use whenever creating a GitLab merge request.
 ---
 
 # GitLab MR creation

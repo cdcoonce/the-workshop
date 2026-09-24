@@ -39,7 +39,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/github-cli` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
 | `/gitlab-cli` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
-| `/gitlab-mr-create` | Create GitLab merge requests with `glab` — the `HEAD` subject titles a merge into `dev`, a title file titles the hops into `staging` and `main`, descriptions keep real newlines, and both are read back. |
+| `/gitlab-mr-create` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/measure-before-landing` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
