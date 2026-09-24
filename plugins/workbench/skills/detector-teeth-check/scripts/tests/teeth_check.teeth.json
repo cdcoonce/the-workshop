@@ -107,6 +107,20 @@
       "oracle": "real",
       "find": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"not-applied\",",
       "replace": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"survived\","
+    },
+    {
+      "label": "a target that is not UTF-8 escapes as a traceback (the 8.15.5 defect)",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    try:\n        text = raw.decode(\"utf-8\")\n    except UnicodeDecodeError:\n        raise TargetUnreadable(f\"not UTF-8: {path}\") from None\n    return raw, text",
+      "replace": "    return raw, raw.decode(\"utf-8\")"
+    },
+    {
+      "label": "a target that is not UTF-8 is reported without naming its path",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        raise TargetUnreadable(f\"not UTF-8: {path}\") from None",
+      "replace": "        raise TargetUnreadable(\"not UTF-8\") from None"
     }
   ]
 }
