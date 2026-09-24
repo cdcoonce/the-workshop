@@ -344,8 +344,14 @@ def _read_source(path: Path) -> tuple[bytes, str]:
     where the file was, no permission to read it — raises
     ``TargetUnreadable`` naming the path. Every one of them means the same
     thing: this row's target cannot be mutated, so the row reports it and the
-    rest of the spec still runs. Only the read is covered; nothing has been
-    written yet, so there is nothing a caught error could leave unrestored.
+    rest of the spec still runs. Bytes that are not UTF-8 — a binary file, a
+    Latin-1 source — mean the same again, and raise it too: an anchor is
+    text, so there is no text to find it in. The decode gets its own
+    ``except`` rather than leaning on the callers' ``except ValueError``,
+    which ``UnicodeDecodeError`` would also satisfy, because only here is
+    the path still in hand to name. Only the read and the decode are
+    covered; nothing has been written yet, so there is nothing a caught
+    error could leave unrestored.
     """
     try:
         raw = path.read_bytes()
@@ -353,7 +359,11 @@ def _read_source(path: Path) -> tuple[bytes, str]:
         raise TargetUnreadable(f"file not found: {path}") from None
     except OSError as exc:
         raise TargetUnreadable(f"cannot read {path}: {exc.strerror or exc}") from None
-    return raw, raw.decode("utf-8")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise TargetUnreadable(f"not UTF-8: {path}") from None
+    return raw, text
 
 
 def _purge_cached_bytecode(path: Path) -> None:

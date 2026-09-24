@@ -210,6 +210,37 @@ def test_a_missing_target_file_is_not_applied_and_the_run_continues(
     assert _exit_code(report) == 1
 
 
+def test_a_target_file_that_is_not_utf8_is_not_applied_and_the_run_continues(
+    target: Path, tmp_path: Path
+) -> None:
+    """A target that reads but will not decode is as unmutable as a missing one.
+
+    The decode error escaped as a traceback, throwing away the verdict of
+    every row after it. It must name the path, not a byte offset in an
+    unnamed file, and leave the file exactly as it was.
+    """
+    latin1 = tmp_path / "latin1.py"
+    original = "LIMIT = 25  # café\n".encode("latin-1")
+    latin1.write_bytes(original)
+
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("latin1", latin1, "LIMIT = 25", "LIMIT = 999"),
+            Mutation("cap", target, "LIMIT = 25", "LIMIT = 999"),
+        ),
+        runner=_killing_runner(),
+    )
+
+    assert [(m.label, m.status) for m in report.mutants] == [
+        ("latin1", "not-applied"),
+        ("cap", "killed"),
+    ]
+    assert report.mutants[0].detail == f"not UTF-8: {latin1}"
+    assert _exit_code(report) == 1
+    assert latin1.read_bytes() == original
+
+
 def test_a_mutant_that_does_not_compile_is_unscored(target: Path) -> None:
     """A syntactically invalid mutant measures nothing, and must not read as a kill.
 
@@ -1041,6 +1072,28 @@ def test_check_anchors_reports_a_target_that_is_not_a_readable_file(
     [outcome] = json.loads(capsys.readouterr().out)
     assert outcome["label"] == "dir"
     assert outcome["error"].startswith(f"cannot read {(tmp_path / 'pkg').resolve()}: ")
+
+
+def test_check_anchors_reports_a_target_that_is_not_utf8_and_checks_the_rest(
+    target: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A binary or non-UTF-8 target is that row's error, not a crash.
+
+    The ``make check-teeth-anchors`` gate runs this path with ``--json``; a
+    traceback there named no mutant and left every other one unchecked.
+    """
+    (tmp_path / "blob.bin").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe")
+    blob = (tmp_path / "blob.bin").resolve()
+    spec_path = _write_spec(
+        tmp_path, [_mutant(label="blob", file="blob.bin"), _mutant()]
+    )
+
+    code = main(["--check-anchors", "--json", str(spec_path)])
+
+    assert code == 1
+    outcomes = {o["label"]: o["error"] for o in json.loads(capsys.readouterr().out)}
+    assert outcomes["cap"] is None
+    assert outcomes["blob"] == f"not UTF-8: {blob}"
 
 
 @pytest.mark.parametrize(
