@@ -66,6 +66,28 @@ def test_makefile_test_target_runs_vault_machinery_suite() -> None:
     )
 
 
+def test_makefile_test_target_checks_teeth_spec_anchors() -> None:
+    """Committed teeth specs must be resolved on every gate run, not on demand.
+
+    A spec's anchors are exact source strings, so a refactor of the code they
+    quote stales them with the suite still green. `--check-anchors` catches
+    that in well under a second — but only when something runs it, and before
+    this step nothing did (#941 found two stale anchors by hand).
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    target = re.search(r"^check-teeth-anchors:\n((?:\t.*\n)+)", makefile, re.MULTILINE)
+    assert target, "Makefile must define a `check-teeth-anchors` target"
+    assert "scripts.check_teeth_anchors" in target.group(1), (
+        "`check-teeth-anchors` must run the discovering gate, "
+        "`scripts.check_teeth_anchors`, not a hand-kept list of specs"
+    )
+    test_recipe = re.search(r"^test:\n((?:\t.*\n)+)", makefile, re.MULTILINE)
+    assert test_recipe and "$(MAKE) check-teeth-anchors" in test_recipe.group(1), (
+        "the `test` target must run `check-teeth-anchors`, or a stale teeth "
+        "spec merges green"
+    )
+
+
 def test_afk_gate_invokes_make_test() -> None:
     config = (REPO_ROOT / ".afk" / "config.toml").read_text()
     assert "make test" in config, (

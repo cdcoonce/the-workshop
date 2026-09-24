@@ -1,0 +1,72 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "tests/test_teeth_anchor_gate.py", "tests/test_gate_wiring.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_teeth_anchor_gate.py", "tests/test_gate_wiring.py"],
+  "mutants": [
+    {
+      "label": "a stale spec no longer fails the gate",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "        print(f\"\\nteeth specs with unresolvable anchors: {', '.join(stale)}\", file=sys.stderr)\n        return 1",
+      "replace": "        print(f\"\\nteeth specs with unresolvable anchors: {', '.join(stale)}\", file=sys.stderr)\n        return 0"
+    },
+    {
+      "label": "the stale report drops the mutant's label",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "problems = [f\"{o['label']}: {o['error']}\" for o",
+      "replace": "problems = [f\"{o['error']}\" for o"
+    },
+    {
+      "label": "a non-zero exit with no JSON verdict reads as clean",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "    if problems:\n        return problems\n    last_line",
+      "replace": "    if True:\n        return problems\n    last_line"
+    },
+    {
+      "label": "discovery walks untracked files too",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "[\"git\", \"ls-files\", \"-z\", \"--\", *_SPEC_PATHSPECS]",
+      "replace": "[\"git\", \"ls-files\", \"-z\", \"--cached\", \"--others\", \"--\", *_SPEC_PATHSPECS]"
+    },
+    {
+      "label": "only the *.teeth.json convention is discovered",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "_SPEC_PATHSPECS = (\":(glob)**/*.teeth.json\", \":(glob)**/teeth-spec-*.json\")",
+      "replace": "_SPEC_PATHSPECS = (\":(glob)**/*.teeth.json\",)"
+    },
+    {
+      "label": "finding no specs passes vacuously",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "find": "            file=sys.stderr,\n        )\n        return 1",
+      "replace": "            file=sys.stderr,\n        )\n        return 0"
+    },
+    {
+      "label": "make test no longer runs the anchor gate",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\t$(MAKE) check-teeth-anchors\n",
+      "replace": ""
+    },
+    {
+      "label": "the gate target checks a hand-kept spec list",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\tuv run python -m scripts.check_teeth_anchors\n",
+      "replace": "\tpython3 plugins/workbench/skills/detector-teeth-check/scripts/teeth_check.py --check-anchors tests/test_gitlab_mr_create_script.teeth.json\n"
+    },
+    {
+      "label": "[control] drop the stdout flush before the stderr summary",
+      "file": "../scripts/check_teeth_anchors.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The flush only orders the per-spec list ahead of the stderr summary when both streams share one pipe, as in a CI log. capsys captures stdout and stderr into separate buffers, so relative order across the two is unobservable to every assertion in these files, and no test runs the gate through a shared pipe. Exit codes and the text of each stream are unchanged on every path. It is not inert to a human reading piped CI output, who sees the summary land above the list.",
+      "find": "        sys.stdout.flush()\n",
+      "replace": ""
+    }
+  ]
+}

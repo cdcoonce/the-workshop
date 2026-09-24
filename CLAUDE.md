@@ -128,6 +128,8 @@ merge request.
 Before a pull request is ready, `make stamp` and `make test` must both pass,
 with the regenerated files included in the change. `make test` covers the root
 suite, every auto-discovered skill-script suite, the vault machinery suite, the
+teeth-spec anchor gate (`make check-teeth-anchors`: every committed
+`*.teeth.json` / `teeth-spec-*.json` anchor must still resolve), the
 `stamp --check` drift gate, and the version-bump gate.
 
 ## Plugin Versioning
