@@ -183,6 +183,33 @@ def test_an_unapplied_mutation_is_not_a_survivor(target: Path) -> None:
     assert report.survivors() == []
 
 
+def test_a_missing_target_file_is_not_applied_and_the_run_continues(
+    target: Path, tmp_path: Path
+) -> None:
+    """A deleted or renamed target is a spec error on that row, like a stale anchor.
+
+    Crashing mid-run threw away the verdicts of every row after it; scoring
+    it as a survivor would send someone hunting for a missing test.
+    """
+    gone = tmp_path / "deleted.py"
+
+    report = run_teeth_check(
+        _spec(
+            target,
+            Mutation("gone", gone, "LIMIT = 25", "LIMIT = 999"),
+            Mutation("cap", target, "LIMIT = 25", "LIMIT = 999"),
+        ),
+        runner=_killing_runner(),
+    )
+
+    assert [(m.label, m.status) for m in report.mutants] == [
+        ("gone", "not-applied"),
+        ("cap", "killed"),
+    ]
+    assert report.mutants[0].detail == f"file not found: {gone}"
+    assert _exit_code(report) == 1
+
+
 def test_a_mutant_that_does_not_compile_is_unscored(target: Path) -> None:
     """A syntactically invalid mutant measures nothing, and must not read as a kill.
 
@@ -974,6 +1001,46 @@ def test_check_anchors_reports_a_stale_anchor_and_exits_nonzero(
     out = capsys.readouterr().out
     assert "stale" in out
     assert "anchor not found" in out
+
+
+def test_check_anchors_reports_a_missing_target_file_and_checks_the_rest(
+    target: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deleted or renamed target is a spec error on that mutant, not a crash.
+
+    A traceback printed no verdict at all: the mutant that broke went
+    unnamed, and every other mutant in the spec went unchecked.
+    """
+    gone = (tmp_path / "deleted.py").resolve()
+    spec_path = _write_spec(
+        tmp_path, [_mutant(label="gone", file="deleted.py"), _mutant()]
+    )
+
+    code = main(["--check-anchors", "--json", str(spec_path)])
+
+    assert code == 1
+    outcomes = {o["label"]: o["error"] for o in json.loads(capsys.readouterr().out)}
+    assert outcomes["cap"] is None
+    assert outcomes["gone"] == f"file not found: {gone}"
+
+
+def test_check_anchors_reports_a_target_that_is_not_a_readable_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Any failure to read the target is the same spec error as a missing one.
+
+    A directory where the file was expected can no more be mutated than a
+    deleted file can, so it is reported on its row rather than as a crash.
+    """
+    (tmp_path / "pkg").mkdir()
+    spec_path = _write_spec(tmp_path, [_mutant(label="dir", file="pkg")])
+
+    code = main(["--check-anchors", "--json", str(spec_path)])
+
+    assert code == 1
+    [outcome] = json.loads(capsys.readouterr().out)
+    assert outcome["label"] == "dir"
+    assert outcome["error"].startswith(f"cannot read {(tmp_path / 'pkg').resolve()}: ")
 
 
 @pytest.mark.parametrize(

@@ -134,12 +134,12 @@ def test_a_spec_the_checker_cannot_read_fails_the_gate(
     spec_file: str,
     mutate_spec: Callable[[dict], object] | None,
 ) -> None:
-    """A spec that crashes or is refused has no resolvable anchors either.
+    """A spec whose target is gone or that is refused has no resolvable anchors either.
 
-    Neither run prints the JSON verdict: a deleted target file surfaces as a
-    traceback, a malformed spec as a refusal on stderr. The gate must read
-    both as failures of that spec — never as a crash of its own, and never as
-    an empty (so clean) list of stale anchors.
+    A deleted target file is reported as that row's error; a malformed spec
+    is refused on stderr with no JSON verdict at all. The gate must read both
+    as failures of that spec — never as a crash of its own, and never as an
+    empty (so clean) list of stale anchors.
     """
     repo = _git_repo(tmp_path)
     _write_source(repo / "tool/ready.py")
