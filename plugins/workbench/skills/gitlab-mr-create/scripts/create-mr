@@ -54,11 +54,15 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --title|--title=*|-t|-t*|--description|--description=*|-d|-d*)
       printf 'Do not supply %s; the guard owns title and description.\n' "$1" >&2; exit 64 ;;
+    # An empty path is refused, not read as "no title file": an unset
+    # variable would otherwise title a dev MR from HEAD's last slice.
     --title-file)
-      [[ $# -ge 2 ]] || { printf '--title-file needs a path.\n' >&2; exit 64; }
+      [[ -n "${2-}" ]] || { printf -- '--title-file needs a path.\n' >&2; exit 64; }
       title_file=$2; shift 2; continue ;;
     --title-file=*)
-      title_file=${1#--title-file=}; shift; continue ;;
+      title_file=${1#--title-file=}
+      [[ -n "$title_file" ]] || { printf -- '--title-file needs a path.\n' >&2; exit 64; }
+      shift; continue ;;
     --target-branch|-b)
       target_branch=${2-} ;;
     --target-branch=*)

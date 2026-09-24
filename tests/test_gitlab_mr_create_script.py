@@ -220,6 +220,28 @@ def test_dev_hop_title_file_gets_the_same_shape_checks(repo, content) -> None:
     assert not _created(repo)
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [("--title-file", ""), ("--title-file=",), ("--title-file",)],
+    ids=["space", "equals", "trailing"],
+)
+def test_an_empty_title_file_argument_is_refused_not_ignored(repo, flags) -> None:
+    """An unset variable must not fall back to HEAD's slice subject.
+
+    Each command runs in a fresh shell, so `--title-file "$TITLE_FILE"` can
+    arrive empty. Into `dev` an empty value used to read as "no title file"
+    and title the MR from HEAD, the IQ !82 mis-title reached by accident.
+    """
+    result = repo(
+        "test(pjm): commit the conformance mutation spec",
+        "--target-branch", "dev",
+        *flags,
+    )
+
+    assert result.returncode == USAGE
+    assert not _created(repo)
+
+
 def test_dev_read_back_covers_the_title_file(repo) -> None:
     """IQ !82's retitle ran through `glab mr update`, outside any read-back."""
     title_file = repo.work / "title.txt"

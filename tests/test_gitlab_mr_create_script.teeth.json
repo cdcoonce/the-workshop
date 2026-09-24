@@ -1,7 +1,28 @@
 {
   "runner": "pytest",
-  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "tests/test_gitlab_mr_create_script.py"],
-  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_gitlab_mr_create_script.py"],
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_gitlab_mr_create_script.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_gitlab_mr_create_script.py"
+  ],
   "mutants": [
     {
       "label": "dev hop refuses a title file again",
@@ -37,6 +58,20 @@
       "oracle": "double",
       "find": "[[ \"$actual_title\" == \"$expected_title\" ]] ||",
       "replace": "[[ -n \"$title_file\" ]] && ! requires_title_file \"$target_branch\" || [[ \"$actual_title\" == \"$expected_title\" ]] ||"
+    },
+    {
+      "label": "an empty spaced --title-file reads as absent",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "[[ -n \"${2-}\" ]] || { printf -- '--title-file needs a path.\\n' >&2; exit 64; }",
+      "replace": "[[ $# -ge 2 ]] || { printf -- '--title-file needs a path.\\n' >&2; exit 64; }"
+    },
+    {
+      "label": "an empty --title-file= reads as absent",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "      [[ -n \"$title_file\" ]] || { printf -- '--title-file needs a path.\\n' >&2; exit 64; }\n",
+      "replace": ""
     },
     {
       "label": "[control] reword the HEAD-subject label in the gate's error",
