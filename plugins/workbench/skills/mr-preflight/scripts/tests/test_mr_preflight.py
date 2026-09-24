@@ -165,6 +165,22 @@ def test_a_deleted_line_with_no_replacement_is_not_a_rename(repo: Path) -> None:
     assert result.returncode == CLEAN, result.stdout
 
 
+def test_an_uncommitted_fix_does_not_clear_the_hit(repo: Path) -> None:
+    """The MR ships commits, not the working tree: a local, uncommitted fix to
+    the runbook would not reach review, so the committed reference still counts."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/runbook.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    write(repo, "docs/runbook.md", "Build LEGACY_SCHEMA_RAW first.\n")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "docs/runbook.md:1: LEGACY_SCHEMA" in result.stdout
+
+
 def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:
     write(repo, "a.py", "x = 1\n")
     commit(repo, "initial")

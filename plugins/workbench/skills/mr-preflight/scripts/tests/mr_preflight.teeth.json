@@ -1,0 +1,128 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/mr-preflight/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/mr-preflight/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "surviving references exit 0, so create-mr opens the MR anyway",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        return HITS\n    return CLEAN",
+      "replace": "        return CLEAN\n    return CLEAN"
+    },
+    {
+      "label": "every token on a removed line is chased, distinctive or not",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if t not in new_tokens and is_distinctive(t)]",
+      "replace": "if t not in new_tokens]"
+    },
+    {
+      "label": "no minimum length, so short names like a_b are chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(token) < MIN_LENGTH or DUNDER.match(token):",
+      "replace": "if DUNDER.match(token):"
+    },
+    {
+      "label": "dunders are chased like any other name",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(token) < MIN_LENGTH or DUNDER.match(token):",
+      "replace": "if len(token) < MIN_LENGTH:"
+    },
+    {
+      "label": "a name the diff adds elsewhere is still chased as renamed",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if rename.old not in seen and rename.old not in added_anywhere:",
+      "replace": "if rename.old not in seen:"
+    },
+    {
+      "label": "a removed line with no partner is compared against nothing and chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "    for old_line, new_line in zip(removed, added):\n        new_tokens = _tokens(new_line)\n        if not new_tokens:\n            continue\n",
+      "replace": "    for old_line, new_line in zip(removed, added + [\"\"] * len(removed)):\n        new_tokens = _tokens(new_line)\n"
+    },
+    {
+      "label": "qualified names are compared whole, so the bare schema is never chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "        parts = match.split(\".\")\n",
+      "replace": "        parts = [match]\n"
+    },
+    {
+      "label": "a dotted name with no distinctive part is dropped instead of chased whole",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(parts) > 1 and not any(is_distinctive(part) for part in parts):",
+      "replace": "if False:"
+    },
+    {
+      "label": "substring match, so the new name counts as the old one",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
+    },
+    {
+      "label": "the working tree is searched instead of the committed head",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
+    },
+    {
+      "label": "a failing git diff reads as an empty diff, so a bad base sweeps clean",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if result.returncode != 0:\n        raise RuntimeError",
+      "replace": "    if False:\n        raise RuntimeError"
+    },
+    {
+      "label": "the replacement name is dropped from the report",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "Rename(old=token, new=arrived[0] if arrived else \"\", path=path)",
+      "replace": "Rename(old=token, new=\"\", path=path)"
+    },
+    {
+      "label": "the rename is attributed to the raw diff path with its b/ prefix",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "path = line[6:] if line.startswith(\"+++ b/\") else line[4:]",
+      "replace": "path = line[4:]"
+    },
+    {
+      "label": "[control] swap two independent git grep flags",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "`-n` and `-w` are independent boolean options to git grep; their order changes neither the match set nor the `path:line:` output shape. Inert on every path the suite reaches, and on every input: git's option parser is order-insensitive for flags that take no argument.",
+      "find": "\"-n\", \"-w\", \"-F\", \"-e\", rename.old, head",
+      "replace": "\"-w\", \"-n\", \"-F\", \"-e\", rename.old, head"
+    }
+  ]
+}
