@@ -112,14 +112,12 @@ fi
 if ! requires_title_file "$target_branch"; then
   conventional_commit_pattern='^[a-z]+(\([^)]+\))?!?: .+'
   [[ "$expected_title" =~ $conventional_commit_pattern ]] || { printf '%s is not a conventional commit: %s\n' "$title_source" "$expected_title" >&2; exit 65; }
-fi
 
-# Into the integration branch, a rename that left its old name behind in a
-# SQL script or runbook elsewhere is refused before review ever sees it: the
-# `mr-preflight` sweep diffs from where this branch left `origin/<target>` and
-# reports every surviving reference to a renamed identifier. It fails closed:
-# a gate that skips itself when it cannot resolve a base guards nothing.
-if ! requires_title_file "$target_branch"; then
+  # A rename that left its old name behind in a SQL script or runbook
+  # elsewhere is refused before review ever sees it: the `mr-preflight` sweep
+  # diffs from where this branch left `origin/<target>` and reports every
+  # surviving reference to a renamed identifier. It fails closed: a gate that
+  # skips itself when it cannot resolve a base guards nothing.
   command -v python3 >/dev/null || { printf 'python3 is required for the mr-preflight sweep.\n' >&2; exit 69; }
   git rev-parse --verify --quiet "origin/$target_branch" >/dev/null || {
     printf 'mr-preflight: cannot sweep, origin/%s does not exist. Fetch it first.\n' "$target_branch" >&2
