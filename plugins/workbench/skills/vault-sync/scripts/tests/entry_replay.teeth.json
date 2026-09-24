@@ -70,8 +70,8 @@
       "label": "an unreachable origin fails open as 'not diverged' instead of refusing",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        raise RefusalError(\n            f\"git fetch {remote} {branch} failed ({fetch.stderr.strip() or 'no output'}); \"\n            \"cannot verify origin, so the replay fails closed\"\n        )",
-      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)\n    if fetch.returncode != 0:\n        report.action = \"none\"\n        report.reason = \"origin unreachable; treating as not diverged\"\n        return"
+      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)\n    if fetch.returncode != 0:\n        raise RefusalError(\n            f\"git fetch {remote} {target} failed ({fetch.stderr.strip() or 'no output'}); \"\n            \"cannot verify origin, so the replay fails closed\"\n        )",
+      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)\n    if fetch.returncode != 0:\n        report.action = \"none\"\n        report.reason = \"origin unreachable; treating as not diverged\"\n        return"
     },
     {
       "label": "a missing anchor on origin is guessed (first heading) instead of refused",
@@ -100,6 +100,20 @@
       "oracle": "real",
       "find": "    touched = [name for name, _raw, body in b_secs if t_map[name] != body]",
       "replace": "    touched: list[str] = []"
+    },
+    {
+      "label": "the replay fetches the local branch's namesake instead of the sync target",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, target)",
+      "replace": "    fetch = _run_git(\"fetch\", \"--quiet\", \"--\", remote, branch)"
+    },
+    {
+      "label": "the replay moves the target branch (local main) instead of the session's own branch",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        _git_out(\"branch\", \"-f\", branch, new_head)",
+      "replace": "        _git_out(\"branch\", \"-f\", target, new_head)"
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",
