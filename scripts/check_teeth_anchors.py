@@ -55,9 +55,9 @@ def find_specs(repo_root: Path) -> list[Path]:
 def check_spec(spec: Path) -> list[str]:
     """Return why *spec*'s anchors do not all resolve; empty only if they do.
 
-    The exit code is the verdict. The JSON only explains it, and a spec whose
-    target file is gone (a traceback) or that the checker refuses (a message
-    on stderr) prints none — so a non-zero exit is never read as clean just
+    The exit code is the verdict. The JSON only explains it, and a spec the
+    checker refuses (a message on stderr) or a checker that crashes outright
+    (a traceback) prints none — so a non-zero exit is never read as clean just
     because no stale anchor could be listed.
 
     Parameters

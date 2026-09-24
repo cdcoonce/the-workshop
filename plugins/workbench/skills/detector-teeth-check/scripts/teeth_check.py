@@ -11,8 +11,9 @@ Five distinctions the tool exists to keep straight, because a hand-rolled
 version of this loop gets them wrong:
 
 1. **An unapplied mutation is not a surviving mutation.** If the anchor text
-   no longer matches the source, the spec has drifted. Reporting that as a
-   survivor sends someone hunting for a missing test that already exists.
+   no longer matches the source, or the target file is gone, the spec has
+   drifted. Reporting that as a survivor sends someone hunting for a missing
+   test that already exists.
 2. **A red baseline invalidates the whole run.** Against an already-failing
    suite every mutant looks killed. The run refuses rather than emitting a
    reassuring matrix.
@@ -87,6 +88,15 @@ class SpecError(Exception):
     """Raised when a spec is unreadable — a refusal, never a verdict."""
 
 
+class TargetUnreadable(Exception):
+    """Raised when a mutant's target file cannot be read.
+
+    Scoped to one mutant, unlike ``SpecError``: the spec loaded fine, but this
+    row names a file that cannot be read. It is a spec error on that row,
+    like a stale anchor, and the other rows still get checked.
+    """
+
+
 #: What executed the assertion that scored a mutant.
 #:
 #: ``real`` — the actual dependency ran (a live client, a real database, the
@@ -151,7 +161,7 @@ class Report:
         return [m for m in self.mutants if m.status == "survived"]
 
     def unapplied(self) -> list[MutantResult]:
-        """Mutants whose anchor did not match — broken spec, not weak tests."""
+        """Mutants whose anchor or target file failed — broken spec, not weak tests."""
         return [m for m in self.mutants if m.status == "not-applied"]
 
     def unscored(self) -> list[MutantResult]:
@@ -329,8 +339,20 @@ def _read_source(path: Path) -> tuple[bytes, str]:
     the run claims to leave byte-identical. The bytes are what the restore
     writes back. ``--check-anchors`` reads through here too, so an anchor
     cannot pass the fast check and then fail to apply in the run.
+
+    Any ``OSError`` from the read — the file deleted or renamed, a directory
+    where the file was, no permission to read it — raises
+    ``TargetUnreadable`` naming the path. Every one of them means the same
+    thing: this row's target cannot be mutated, so the row reports it and the
+    rest of the spec still runs. Only the read is covered; nothing has been
+    written yet, so there is nothing a caught error could leave unrestored.
     """
-    raw = path.read_bytes()
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raise TargetUnreadable(f"file not found: {path}") from None
+    except OSError as exc:
+        raise TargetUnreadable(f"cannot read {path}: {exc.strerror or exc}") from None
     return raw, raw.decode("utf-8")
 
 
@@ -390,7 +412,20 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
     killers: set[str] = set()
 
     for mutant in spec.mutants:
-        original, text = _read_source(mutant.path)
+        try:
+            original, text = _read_source(mutant.path)
+        except TargetUnreadable as exc:
+            results.append(
+                MutantResult(
+                    mutant.label,
+                    "not-applied",
+                    detail=str(exc),
+                    oracle=mutant.oracle,
+                    expect=mutant.expect,
+                    why=mutant.why,
+                )
+            )
+            continue
         try:
             mutated = apply_mutation(text, mutant.find, mutant.replace)
         except ValueError as exc:
@@ -510,11 +545,17 @@ def check_anchors(spec: Spec) -> list[tuple[str, str | None]]:
     would notice until the next full run. This reads each mutant's file and
     asks ``apply_mutation`` whether the anchor still resolves to exactly one
     site, and nothing more: no baseline, no test command, no write. Fast and
-    safe enough to sit ahead of a slow full run in a gate.
+    safe enough to sit ahead of a slow full run in a gate. A file it cannot
+    read is that row's error, so one deleted target still leaves every other
+    row checked and reported.
     """
     outcomes: list[tuple[str, str | None]] = []
     for mutant in spec.mutants:
-        _, text = _read_source(mutant.path)
+        try:
+            _, text = _read_source(mutant.path)
+        except TargetUnreadable as exc:
+            outcomes.append((mutant.label, str(exc)))
+            continue
         try:
             apply_mutation(text, mutant.find, mutant.replace)
         except ValueError as exc:
@@ -643,7 +684,7 @@ def render(report: Report) -> str:
 
     if report.unapplied():
         lines.append("")
-        lines.append("SPEC ERROR — these anchors did not match; not a test weakness:")
+        lines.append("SPEC ERROR — these mutants could not be applied; not a test weakness:")
         lines += [f"  {m.label}: {m.detail}" for m in report.unapplied()]
 
     if report.unscored():

@@ -42,8 +42,8 @@
       "label": "the restore writes back newline-translated text, rewriting a CRLF file with LF (the 8.15.0 defect)",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "    raw = path.read_bytes()",
-      "replace": "    raw = path.read_text(encoding=\"utf-8\").encode(\"utf-8\")"
+      "find": "        raw = path.read_bytes()",
+      "replace": "        raw = path.read_text(encoding=\"utf-8\").encode(\"utf-8\")"
     },
     {
       "label": "a newline in an anchor matches only the source's exact line ending",
@@ -77,8 +77,36 @@
       "label": "--check-anchors reads newline-translated text, so it can pass an anchor the run rejects",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        _, text = _read_source(mutant.path)",
-      "replace": "        text = mutant.path.read_text(encoding=\"utf-8\")"
+      "find": "            _, text = _read_source(mutant.path)",
+      "replace": "            text = mutant.path.read_text(encoding=\"utf-8\")"
+    },
+    {
+      "label": "--check-anchors lets an unreadable target escape as a traceback",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            _, text = _read_source(mutant.path)\n        except TargetUnreadable as exc:",
+      "replace": "            _, text = _read_source(mutant.path)\n        except SpecError as exc:"
+    },
+    {
+      "label": "the run lets an unreadable target escape as a traceback",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            original, text = _read_source(mutant.path)\n        except TargetUnreadable as exc:",
+      "replace": "            original, text = _read_source(mutant.path)\n        except SpecError as exc:"
+    },
+    {
+      "label": "only a missing target is caught, so a directory target still crashes",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    except OSError as exc:\n        raise TargetUnreadable(",
+      "replace": "    except FileNotFoundError as exc:\n        raise TargetUnreadable("
+    },
+    {
+      "label": "a missing target scores as a survivor, not a spec error",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"not-applied\",",
+      "replace": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"survived\","
     }
   ]
 }
