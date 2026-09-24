@@ -43,6 +43,17 @@ stamp:
 stamp-check:
 	uv run python -m scripts.stamp --check
 
+# Teeth-spec drift gate: a detector-teeth-check spec anchors each mutant on an
+# exact source string, so a refactor of the quoted code stales it with every
+# suite still green (#941 found two by hand). Resolves every committed spec's
+# anchors via `teeth_check.py --check-anchors` — no baseline, no mutant runs.
+# Specs are DISCOVERED from the index (`*.teeth.json`, `teeth-spec-*.json`),
+# so a new one is gated the moment it is committed. `file` paths resolve
+# against the spec's own directory, so no per-spec cwd is needed here.
+.PHONY: check-teeth-anchors
+check-teeth-anchors:
+	uv run python -m scripts.check_teeth_anchors
+
 # Vault machinery suite: the vault's engine scripts ship as workbench payload
 # (plugins/workbench/machinery/). Like the skill-script suites, the tests live
 # in an isolated subtree beside the code they exercise and run in their OWN
@@ -110,5 +121,6 @@ test:
 	$(MAKE) test-machinery
 	$(MAKE) test-wrap-up-gate-parity
 	$(MAKE) test-cold-read-evidence-wikilink-parity
+	$(MAKE) check-teeth-anchors
 	$(MAKE) stamp-check
 	$(MAKE) verify-versions
