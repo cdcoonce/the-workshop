@@ -65,7 +65,9 @@ python3 "<skill base directory>/scripts/teeth_check.py" --check-anchors spec.jso
 ```
 
 `--check-anchors` resolves every anchor and runs nothing — no baseline, no
-test command, no write — in about the time a linter takes. It exists because
+test command, no write — in about the time a linter takes. A target file it
+cannot read (deleted, renamed, a directory) is reported on its own row like a
+stale anchor, the other rows are still checked, and it exits 1. It exists because
 the anchors are exact source strings, so any refactor of the code under test
 rots all of them at once, silently, until someone re-runs the matrix and
 rebuilds the table by hand. Run it wherever the repo already runs something
@@ -307,11 +309,13 @@ once per environment.
 
 ## What it refuses to score
 
-Absence of a failure signal is never evidence of a pass. Three cases refuse:
+Absence of a failure signal is never evidence of a pass. Five cases refuse:
 
 - **A red baseline** — every mutant would look killed. Exits 2.
 - **An anchor matching zero or more than one place** — ambiguous means the spec
   never said which site it meant.
+- **A target file it cannot read** — deleted, renamed, or a directory where the
+  file was. That row is `not-applied`, naming the path; the rest still run.
 - **A run that named no failing test.** A mutant that will not compile, or a
   command aborting before collection (unrecognised flag, missing plugin), exits
   non-zero with no `FAILED` line — the harness broke, no assertion caught
