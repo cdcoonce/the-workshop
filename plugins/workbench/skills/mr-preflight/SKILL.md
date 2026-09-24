@@ -1,6 +1,6 @@
 ---
 name: mr-preflight
-description: Catches stale references before a GitLab merge request opens, such as identifiers a diff renamed that are still named elsewhere in code, SQL, YAML or docs. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, when review flags a runbook or doc still naming an old schema, table or function, or when asked to check for leftovers after a rename.
+description: Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or when a doc still names an old schema or function.
 ---
 
 # MR preflight
