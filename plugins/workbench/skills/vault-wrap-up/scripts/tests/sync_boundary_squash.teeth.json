@@ -74,13 +74,6 @@
       "replace": "    old_tree = _git_out(\"rev-parse\", f\"{head}^{{tree}}\")"
     },
     {
-      "label": "detached HEAD no longer skips: the branch is guessed from --abbrev-ref",
-      "file": "../sync_boundary_squash.py",
-      "oracle": "real",
-      "find": "    branch_proc = _run_git(\"symbolic-ref\", \"--short\", \"-q\", \"HEAD\")\n    if branch_proc.returncode != 0:\n        report.reason = \"HEAD is detached; cannot determine the branch to compare against\"\n        return report\n    branch = branch_proc.stdout.strip()",
-      "replace": "    branch = _git_out(\"rev-parse\", \"--abbrev-ref\", \"HEAD\")"
-    },
-    {
       "label": "a base that is not an ancestor of HEAD no longer skips the squash",
       "file": "../sync_boundary_squash.py",
       "oracle": "real",
@@ -107,6 +100,20 @@
       "oracle": "real",
       "find": "    except UnresolvedTarget as exc:\n        report.reason = f\"cannot resolve the sync target ({exc}); cannot verify pushed-ness\"\n        return report\n    target = sync_target.target",
       "replace": "    except UnresolvedTarget:\n        from sync_target import SyncTarget\n        sync_target = SyncTarget(branch, branch, \"branch-name\")\n    target = sync_target.target"
+    },
+    {
+      "label": "a detached HEAD skips outright again, so Codex wrap-ups ride the rebase as N commits",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "    report.branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else None",
+      "replace": "    if branch_proc.returncode != 0:\n        report.reason = \"HEAD is detached; cannot determine the branch to compare against\"\n        return report\n    report.branch = branch_proc.stdout.strip()"
+    },
+    {
+      "label": "a bisect no longer counts as an operation in progress, so the squash rewrites mid-bisect",
+      "file": "../sync_boundary_squash.py",
+      "oracle": "real",
+      "find": "        \"REVERT_HEAD\",\n        \"BISECT_LOG\",\n",
+      "replace": "        \"REVERT_HEAD\",\n"
     },
     {
       "label": "[control] reorder the action and reason writes on the success report",
