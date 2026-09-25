@@ -1578,3 +1578,20 @@ def test_a_changed_test_command_since_the_revision_runs_every_row(
         "[control] rewrite GUARD in place",
     ]
     assert "partial" not in data
+
+
+def test_a_row_copied_verbatim_since_the_revision_counts_as_added(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Each committed row matches one current row, not every copy of it."""
+    spec = json.loads(committed_spec.read_text())
+    spec["mutants"].append(spec["mutants"][0])
+    committed_spec.write_text(json.dumps(spec))
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", "--json", str(committed_spec)])
+
+    assert _labels_run(capsys) == ["[control] rewrite GUARD in place", "cap"]

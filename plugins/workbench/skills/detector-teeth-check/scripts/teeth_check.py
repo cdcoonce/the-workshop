@@ -863,11 +863,16 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
         if before is None or settings(before) != settings(current)
         else before["mutants"]
     )
-    keep = [
-        mutant
-        for raw, mutant in zip(raw_rows, spec.mutants)
-        if raw not in old_rows or mutant.expect == "survived"
-    ]
+    # Each committed row vouches for one current row, so a verbatim copy
+    # added since REV is still new.
+    unmatched = list(old_rows)
+    keep = []
+    for raw, mutant in zip(raw_rows, spec.mutants):
+        if raw in unmatched:
+            unmatched.remove(raw)
+            if mutant.expect != "survived":
+                continue
+        keep.append(mutant)
     return dataclasses.replace(spec, mutants=keep)
 
 
