@@ -9,6 +9,7 @@ does. Every test drives the CLI and asserts on its exit code and output.
 
 from __future__ import annotations
 
+import resource
 import subprocess
 import sys
 from pathlib import Path
@@ -497,3 +498,71 @@ def test_update_keeps_crlf_prose_byte_for_byte(repo: Path) -> None:
 
     assert after.startswith(above + SWEEP_BEGIN.encode() + b"\r\n")
     assert after.endswith(SWEEP_END.encode() + b"\r\n" + below)
+
+
+def test_update_leaves_a_description_alone_when_nothing_was_renamed(repo: Path) -> None:
+    """Most branches rename nothing; their MR goes out exactly as written."""
+    write(repo, "a.py", "x = 1\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", "x = 2\n")
+    commit(repo, "no rename")
+    prose = b"## What this does\r\n\r\nBumps x.\r\n"
+    description = repo.parent / "description.md"
+    description.write_bytes(prose)
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_bytes() == prose
+
+
+def test_update_still_refreshes_a_stale_block_when_nothing_was_renamed(repo: Path) -> None:
+    """A block copied from an earlier run must not keep claiming old hits."""
+    write(repo, "a.py", "x = 1\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", "x = 2\n")
+    commit(repo, "no rename")
+    description = describe(repo, "- [ ] `sql/audit.sql:1` `LEGACY_SCHEMA`\n", prose="Prose.\n\n")
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_text() == (
+        f"Prose.\n\n{SWEEP_BEGIN}\n**mr-preflight sweep**\n\n"
+        f"No renamed identifiers on this branch.\n{SWEEP_END}\n"
+    )
+
+
+def test_an_update_that_fails_mid_write_leaves_the_description_intact(repo: Path) -> None:
+    """A full disk while `--update` writes must not cost the author the prose
+    it exists to preserve. A file-size limit makes the write fail partway."""
+    base = two_renames(repo)
+    description = repo.parent / "description.md"
+    original = ("## What this does\n\n" + "Prose the author wrote. " * 40 + "\n").encode()
+    description.write_bytes(original)
+    limit = len(original) + 20  # room to read it, not to write the rendered block
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base,
+         "--description", str(description), "--update"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit)),
+    )
+
+    assert description.read_bytes() == original
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "Traceback" not in result.stderr
+    assert sorted(path.name for path in repo.parent.iterdir()) == ["description.md", "repo"]
+
+
+def test_update_keeps_the_description_file_mode(repo: Path) -> None:
+    """The replacement is a new file; it must not come back owner-only."""
+    base = two_renames(repo)
+    description = describe(repo, "")
+    description.chmod(0o644)
+
+    sweep(repo, base, "--description", str(description), "--update")
+
+    assert description.stat().st_mode & 0o777 == 0o644

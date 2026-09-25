@@ -114,3 +114,36 @@ def test_prose_quoting_a_marker_inline_is_not_a_marker() -> None:
     after = replace_block(prose, "sweep", "body\n")
 
     assert after == f"{prose}\n{SWEEP_BEGIN}\nbody\n{SWEEP_END}\n"
+
+
+@pytest.mark.parametrize("separator", ["\r", "\x0b", "\x0c", "\x85", " "])
+def test_a_marker_glued_to_prose_by_a_non_newline_break_is_not_a_marker(
+    separator: str,
+) -> None:
+    """Only `\\n` ends a line. `str.splitlines` also breaks at `\\r`, form feed,
+    NEL and U+2028, which would read the begin marker as alone on its line
+    and let `--update` overwrite the prose glued after it."""
+    text = f"Intro.\n{SWEEP_BEGIN}{separator}glued prose\nbody\n{SWEEP_END}\nOutro.\n"
+
+    with pytest.raises(BlockError):
+        replace_block(text, "sweep", "new\n")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "-\twaive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # tab
+        "-waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # no space
+        "-  waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # two spaces
+        "* waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # other bullet
+        "+ waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # other bullet
+        "- Waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # capital
+    ],
+)
+def test_a_near_miss_waiver_is_reported_rather_than_read_as_prose(line: str) -> None:
+    """Its author meant a waiver; silence would leave the hit blocking with
+    nothing pointing at the typo."""
+    waivers, malformed = parse_waivers(f"{line}\n")
+
+    assert waivers == []
+    assert malformed == [line]

@@ -12,8 +12,11 @@ blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -46,6 +49,25 @@ def _git(repo: Path, *args: str) -> str:
 def _read_description(path: Path) -> str:
     # Bytes in, decoded by hand, so a CRLF description is read as written.
     return path.read_bytes().decode("utf-8", "surrogateescape")
+
+
+def _write_description(path: Path, text: str) -> None:
+    """Replace ``path`` with ``text`` all at once.
+
+    Written to a sibling temp file, then renamed over the original: writing in
+    place truncates first, so a full disk or a kill mid-write would leave the
+    author's description empty or cut short.
+    """
+    target = path.resolve()
+    fd, temp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(text.encode("utf-8", "surrogateescape"))
+        shutil.copymode(target, temp)
+        os.replace(temp, target)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
 
 
 def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) -> str:
@@ -106,9 +128,16 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         print(f"{hit.path}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
     for line in malformed:
         print(f"malformed waiver: {line}")
-    if update and description is not None:
+    # A branch that renamed nothing gains no block: its MR goes out exactly as
+    # written. An existing block is still rewritten, so a stale one copied from
+    # an earlier run cannot keep claiming hits that are gone.
+    if update and description is not None and (renames or block is not None):
         rendered = replace_block(text, "sweep", render_body(renames, blocking, waiver_lines(body)))
-        description.write_bytes(rendered.encode("utf-8", "surrogateescape"))
+        try:
+            _write_description(description, rendered)
+        except OSError as error:
+            print(f"mr-preflight: could not update {description}: {error}", file=sys.stderr)
+            return SETUP_ERROR
     if blocking:
         print(f"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.")
     if malformed:

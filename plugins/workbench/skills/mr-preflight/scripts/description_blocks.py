@@ -31,10 +31,15 @@ class Block:
 
 
 def _lines(text: str) -> list[tuple[int, str]]:
-    """Each line's offset and content, line ending included."""
+    """Each line's offset and content, line ending included.
+
+    Split at `\\n` only. `str.splitlines` also breaks at `\\r`, form feed, NEL
+    and U+2028, so a marker glued to prose by one of them would read as alone
+    on its line and the prose after it would be replaced as block body.
+    """
     offset = 0
     lines = []
-    for line in text.splitlines(keepends=True):
+    for line in re.findall(r"[^\n]*\n|[^\n]+", text):
         lines.append((offset, line))
         offset += len(line)
     return lines
@@ -92,8 +97,9 @@ WAIVER = re.compile(
     r"^- waive (?P<token>`[^`]+`|\S+) (?P<path>`[^`]+`|\S+): (?P<reason>\S.*)$"
 )
 # Anything that starts like a waiver is held to the form: a typo silently
-# read as prose would leave the author believing a hit was waived.
-WAIVER_INTENT = re.compile(r"^- waive(?:\s|$)")
+# read as prose would leave the author believing a hit was waived. So the net
+# is wider than the form: any list bullet, any spacing, any case.
+WAIVER_INTENT = re.compile(r"^[-*+]\s*waive(?:\s|$)", re.IGNORECASE)
 
 
 def waiver_lines(body: str) -> list[str]:

@@ -121,6 +121,7 @@ def repo(tmp_path: Path):
         description: str = "## What this does\n\nReal newlines.\n",
         default_branch: str = "dev",
         readback_title: str = "",
+        description_name: str = "",
     ) -> subprocess.CompletedProcess:
         (work / "file.txt").write_text(subject)
         subprocess.run(["git", "add", "-A"], cwd=work, check=True)
@@ -134,8 +135,11 @@ def repo(tmp_path: Path):
             cwd=work,
             check=True,
         )
-        description_file = work / "description.md"
+        # A bare relative name is how a caller spells a file whose name
+        # starts with `-`; the default is an absolute path.
+        description_file = work / (description_name or "description.md")
         description_file.write_text(description)
+        description_arg = description_name or str(description_file)
 
         env = {
             **os.environ,
@@ -145,7 +149,7 @@ def repo(tmp_path: Path):
             "STUB_READBACK_TITLE": readback_title,
         }
         return subprocess.run(
-            ["bash", str(CREATE_MR), str(description_file), *args],
+            ["bash", str(CREATE_MR), description_arg, *args],
             cwd=work,
             env=env,
             capture_output=True,
@@ -623,21 +627,59 @@ def test_dev_hop_ships_the_waiver_it_accepted_in_the_description(repo) -> None:
 
 
 
-def test_a_promotion_description_is_sent_as_written_with_no_sweep_block(repo) -> None:
-    """Only the `dev` hop is swept, so only it gains a sweep block."""
-    title_file = repo.work / "title.txt"
-    title_file.write_text("Promote ERG v0.7.2 to main\n")
+@pytest.mark.parametrize(
+    ("target", "subject", "title"),
+    [
+        # Reaches the `dev` check itself: only `dev` may gain a block.
+        ("hotfix-thing", "fix(dbt): hotfix the schema name", ""),
+        # A promotion never reaches that check; pinned as it was before.
+        ("main", "chore(release): v0.7.2", "Promote ERG v0.7.2 to main\n"),
+    ],
+)
+def test_other_hops_send_the_description_as_written(repo, target, subject, title) -> None:
+    """A renamed identifier is on the branch, so a sweep would have rendered
+    a block; any hop but `dev` must still send the author's text unchanged."""
+    repo.seed({"dbt_project.yml": "schema: LEGACY_SCHEMA\n"})
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+    title_args: list[str] = []
+    if title:
+        (repo.work / "title.txt").write_text(title)
+        title_args = ["--title-file", str(repo.work / "title.txt")]
     body = "## What ships\n\n- !101\n"
 
+    result = repo(subject, "--target-branch", target, *title_args, description=body)
+
+    assert result.returncode == 0, result.stderr
+    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+
+
+
+def test_a_description_file_named_like_a_flag_still_reaches_the_sweep(repo) -> None:
+    """`cp -desc.md` reads the name as options; the copy must take it as a path."""
+    body = "## What this does\n\nAdds a row.\n"
+
     result = repo(
-        "chore(release): v0.7.2",
-        "--target-branch", "main",
-        "--title-file", str(title_file),
+        "feat(reports): #175 add the wind speed row",
+        "--target-branch", "dev",
         description=body,
+        description_name="-desc.md",
     )
 
     assert result.returncode == 0, result.stderr
     assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+
+
+def test_broken_markers_are_refused_without_the_update_hint(repo) -> None:
+    """`--update` cannot repair a broken block, so suggesting it misleads:
+    the refusal names the markers instead."""
+    body = f"## What this does\n\n{SWEEP_BEGIN}\nno end marker\n"
+
+    result = repo("feat(reports): #175 add the wind speed row", "--target-branch", "dev", description=body)
+
+    assert result.returncode == PRECONDITION
+    assert "mr-preflight:sweep:end" in result.stderr
+    assert "--update" not in result.stderr
+    assert not _created(repo)
 
 
 # --- the guards that already existed ------------------------------------
@@ -662,12 +704,11 @@ def test_the_description_keeps_its_real_newlines(repo) -> None:
         description=body,
     )
 
-    # Into `dev` the rendered sweep block follows the author's prose, which
-    # arrives first and unchanged.
-    sent = (repo.stub_dir / "description").read_text()
+    # Nothing was renamed, so no sweep block is added: the MR carries the
+    # author's description exactly.
     assert result.returncode == 0, result.stderr
-    assert sent.startswith(f"{body}\n{SWEEP_BEGIN}\n")
-    assert "\\n" not in sent
+    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+    assert "\\n" not in (repo.stub_dir / "description").read_text()
 
 
 def test_read_back_still_catches_a_title_that_did_not_survive(repo) -> None:

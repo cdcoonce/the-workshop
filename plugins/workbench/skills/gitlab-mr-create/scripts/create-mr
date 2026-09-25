@@ -137,12 +137,21 @@ if ! requires_title_file "$target_branch"; then
     sweep_base=$(git merge-base HEAD "origin/$target_branch")
     preflight="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../mr-preflight/scripts/mr_preflight.py"
     rendered_file=$(mktemp)
-    cp "$description_file" "$rendered_file"
-    if ! sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" --description "$rendered_file" --update 2>&1); then
+    cp -- "$description_file" "$rendered_file"
+    sweep_status=0
+    sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" --description "$rendered_file" --update 2>&1) || sweep_status=$?
+    if [[ $sweep_status -ne 0 ]]; then
       printf '%s\n' "$sweep_output" >&2
-      printf 'Refusing to open the MR: fix each reference above, or waive it in the description (see the mr-preflight skill).\n' >&2
-      printf 'To write the open references into %s as a to-do list:\n  python3 %q sweep --base %s --description %q --update\n' \
-        "$description_file" "$preflight" "$sweep_base" "$description_file" >&2
+      # Exit 1 is hits or malformed waivers, which `--update` can list in the
+      # description; anything else is a setup error (a broken block, a bad
+      # base) that `--update` refuses too, so pointing at it would mislead.
+      if [[ $sweep_status -eq 1 ]]; then
+        printf 'Refusing to open the MR: fix each reference above, or waive it in the description (see the mr-preflight skill).\n' >&2
+        printf 'To write the open references into %s as a to-do list:\n  python3 %q sweep --base %s --description %q --update\n' \
+          "$description_file" "$preflight" "$sweep_base" "$description_file" >&2
+      else
+        printf 'Refusing to open the MR: the mr-preflight sweep could not run (see above).\n' >&2
+      fi
       exit 65
     fi
     description_source=$rendered_file
