@@ -328,6 +328,8 @@ def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR
     assert "mr-preflight:" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
 
 
 def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
@@ -467,6 +469,8 @@ def test_a_missing_description_file_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR, result.stdout
     assert "nope.md" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
 
 
 RECORD = "<!-- mr-preflight:record:begin -->\nrecord body\n<!-- mr-preflight:record:end -->\n"

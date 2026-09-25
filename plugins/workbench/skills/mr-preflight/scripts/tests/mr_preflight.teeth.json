@@ -193,6 +193,20 @@
       "replace": "file=sys.stderr)\n        raise\n\n\nif __name__"
     },
     {
+      "label": "a failing git command is reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    except RuntimeError as error:\n",
+      "replace": "    except LookupError as error:\n"
+    },
+    {
+      "label": "a failed description write is reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except OSError as error:\n            # stdout is block-buffered",
+      "replace": "        except LookupError as error:\n            # stdout is block-buffered"
+    },
+    {
       "label": "diff lines split with splitlines, so a \\r before a rename cuts it off",
       "file": "../rename_detector.py",
       "oracle": "real",
@@ -368,7 +382,7 @@
       "replace": "            pass\n"
     },
     {
-      "label": "an unreadable description crashes with a traceback instead of a setup error",
+      "label": "an unreadable description is reported as an internal crash instead of a named setup error",
       "file": "../mr_preflight.py",
       "oracle": "real",
       "find": "        except (OSError, BlockError) as error:",
