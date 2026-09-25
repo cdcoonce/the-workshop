@@ -1196,3 +1196,48 @@ def test_mismatch_advice_never_names_the_runner_already_configured() -> None:
     )
     assert _find_matching_runner(both, exclude="pytest") == "vitest"
     assert _find_matching_runner(both, exclude="vitest") == "pytest"
+
+
+# ---------------------------------------------------------------------------
+# Anchor preflight on a full run
+#
+# A full run costs one test-suite run per row; resolving every anchor costs
+# milliseconds. Scoring a stale row `not-applied` only when the loop reaches
+# it spent a whole run (6.6 minutes on the 60-row mr-preflight spec) to learn
+# what `--check-anchors` knew up front, and a run with any unapplied row can
+# never be the recorded tally. So the CLI resolves every anchor before the
+# baseline and refuses outright.
+# ---------------------------------------------------------------------------
+
+
+def _poison_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _poisoned(cmd: list[str]) -> tuple[int, str]:
+        raise AssertionError(f"ran a command despite a stale anchor: {cmd}")
+
+    monkeypatch.setattr("teeth_check._default_runner", _poisoned)
+
+
+def test_a_full_run_refuses_a_stale_anchor_before_running_anything(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Every stale row is named, not just the first, so one repair pass fixes all."""
+    spec_path = _write_spec(
+        tmp_path,
+        [
+            _mutant(label="first stale", find="GONE = 1", replace="GONE = 2"),
+            _mutant(),
+            _mutant(label="second stale", file="deleted.py"),
+        ],
+    )
+    _poison_runner(monkeypatch)
+
+    code = main([str(spec_path)])
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "first stale: anchor not found" in err
+    assert f"second stale: file not found: {(tmp_path / 'deleted.py').resolve()}" in err
+    assert "cap:" not in err

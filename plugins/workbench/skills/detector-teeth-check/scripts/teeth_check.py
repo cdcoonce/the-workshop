@@ -827,6 +827,22 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{label}: {'ok' if error is None else error}")
         return 0 if all(error is None for _, error in outcomes) else 1
 
+    # A stale row costs nothing to find here and a whole run to find in the
+    # loop, which reaches it only after the baseline and every row before it
+    # — and a run holding any unapplied row can never be the recorded tally.
+    # The loop still scores `not-applied` itself, for a file that changes
+    # after this check.
+    stale = [(label, error) for label, error in check_anchors(spec) if error]
+    if stale:
+        print(
+            f"refusing to run: {len(stale)} anchor(s) no longer resolve; "
+            "nothing ran. Re-anchor these rows, then re-run:",
+            file=sys.stderr,
+        )
+        for label, error in stale:
+            print(f"  {label}: {error}", file=sys.stderr)
+        return 2
+
     try:
         report = run_teeth_check(spec)
     except BaselineNotGreen as exc:
