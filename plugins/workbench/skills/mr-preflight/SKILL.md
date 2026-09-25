@@ -138,6 +138,7 @@ python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev
 
 Exit `0` is clean, `1` means surviving references (listed on stdout), `2` is a
 setup error such as an unresolvable base or a malformed `.mr-preflight.toml`.
+A crash inside the sweep also exits `2`, so it is never read as references to fix.
 
 With the MR description, waived hits print as `waived:` and only the rest
 block. `--update` rewrites the description's sweep block in place, appending

@@ -9,7 +9,7 @@ globs and never chases its ``ignore_tokens``; the summary says how many. With
 (``- waive TOKEN path: reason``) excuse their hits, and a malformed waiver line
 blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
 1 unwaived references or malformed waivers, 2 setup error (including an
-unusable ``.mr-preflight.toml``).
+unusable ``.mr-preflight.toml``) or a crash.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -217,7 +218,15 @@ def main() -> int:
     args = parser.parse_args()
     if args.update and args.description is None:
         parser.error("--update needs --description")
-    return run_sweep(args.base, args.head, args.description, args.update)
+    try:
+        return run_sweep(args.base, args.head, args.description, args.update)
+    except Exception as error:
+        # Python exits 1 on an uncaught exception, and 1 means "references to
+        # fix or waive" to create-mr; a crash is a sweep that could not run.
+        sys.stdout.flush()
+        traceback.print_exc()
+        print(f"mr-preflight: internal error: {type(error).__name__}: {error}", file=sys.stderr)
+        return SETUP_ERROR
 
 
 if __name__ == "__main__":

@@ -327,6 +327,34 @@ def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:
     assert "mr-preflight:" in result.stderr
 
 
+def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
+    """Python exits 1 on an uncaught exception, which `create-mr` reads as
+    unwaived references to fix or waive. Whatever breaks inside the sweep
+    must exit 2 instead, naming the failure."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    # `mr_preflight` binds `sweep` by name at import, so patch it there.
+    crash = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SCRIPT.parent)!r})\n"
+        "import mr_preflight\n"
+        "def boom(*args, **kwargs):\n"
+        "    raise ValueError('unexpected git grep row')\n"
+        "mr_preflight.sweep = boom\n"
+        f"sys.argv = ['mr_preflight.py', 'sweep', '--base', {base!r}]\n"
+        "sys.exit(mr_preflight.main())\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", crash], cwd=repo, capture_output=True, text=True
+    )
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: ValueError: unexpected git grep row" in result.stderr
+
+
 # --- waivers from the description's sweep block ---------------------------
 
 SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
