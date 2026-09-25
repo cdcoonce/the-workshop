@@ -74,6 +74,27 @@
       "replace": ""
     },
     {
+      "label": "the dev hop never runs the sweep, so a surviving rename opens the MR",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "    if ! sweep_output=$(python3 \"$preflight\" sweep --base \"$sweep_base\" 2>&1); then",
+      "replace": "    if false; then"
+    },
+    {
+      "label": "a missing origin/<target> warns and sweeps nothing instead of refusing",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "      exit 65\n    }\n    sweep_base=$(git merge-base HEAD \"origin/$target_branch\")",
+      "replace": "    }\n    sweep_base=$(git merge-base HEAD \"origin/$target_branch\" 2>/dev/null || git rev-parse HEAD)"
+    },
+    {
+      "label": "every non-promotion target is swept, not only dev",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "  if [[ \"$target_branch\" == dev ]]; then",
+      "replace": "  if true; then"
+    },
+    {
       "label": "[control] reword the HEAD-subject label in the gate's error",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",

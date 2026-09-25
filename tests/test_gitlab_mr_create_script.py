@@ -92,6 +92,29 @@ def repo(tmp_path: Path):
 
     subprocess.run(["git", "init", "-q", "-b", "dev"], cwd=work, check=True)
 
+    # The dev hop sweeps from the merge-base with `origin/dev`, so the repo
+    # needs a real remote whose `dev` is the base the branch diverged from.
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=work, check=True)
+
+    def seed(files: dict[str, str]) -> None:
+        """Commit files and publish them as `origin/dev`: the sweep's base."""
+        for path, content in files.items():
+            target = work / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+        subprocess.run(["git", "add", "-A"], cwd=work, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
+             "commit", "-q", "--allow-empty", "-m", "chore: seed"],
+            cwd=work,
+            check=True,
+        )
+        subprocess.run(["git", "push", "-q", "origin", "dev"], cwd=work, check=True)
+
+    seed({"seed.txt": "base\n"})
+
     def run(
         subject: str,
         *args: str,
@@ -131,6 +154,7 @@ def repo(tmp_path: Path):
 
     run.stub_dir = stub_dir  # type: ignore[attr-defined]
     run.work = work  # type: ignore[attr-defined]
+    run.seed = seed  # type: ignore[attr-defined]
     return run
 
 
@@ -507,6 +531,57 @@ def test_the_wrappers_own_flag_never_reaches_glab(repo) -> None:
     assert "--title-file" not in passthrough
     assert str(title_file) not in passthrough
     assert "--yes" in passthrough, "real glab flags must still be forwarded"
+
+
+# --- the reference sweep on the dev hop ---------------------------------
+#
+# A rename lands in one file while a SQL script or runbook elsewhere keeps the
+# old name, and review is where it used to be caught. Into `dev` the wrapper
+# now runs `mr-preflight`'s sweep first and refuses while any reference to a
+# renamed identifier survives at HEAD.
+
+
+def test_dev_hop_refuses_while_a_renamed_identifier_survives(repo) -> None:
+    repo.seed({
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "sql/audit.sql": "USE SCHEMA LEGACY_SCHEMA;\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+
+    result = repo("feat(dbt): move models to the raw schema", "--target-branch", "dev")
+
+    assert result.returncode == PRECONDITION
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stderr
+    assert not _created(repo)
+
+
+def test_dev_hop_refuses_when_the_sweep_has_no_base(repo) -> None:
+    """Fail closed: a gate that skips when it cannot run guards nothing."""
+    subprocess.run(["git", "remote", "remove", "origin"], cwd=repo.work, check=True)
+
+    result = repo("feat(reports): #175 add the wind speed row", "--target-branch", "dev")
+
+    assert result.returncode == PRECONDITION
+    assert "origin/dev" in result.stderr
+    assert not _created(repo)
+
+
+def test_other_targets_are_not_swept(repo) -> None:
+    """The sweep is the `dev` hop's gate only. An MR into any other
+    non-promotion target behaves as before: no sweep, and no refusal for a
+    missing `origin/<target>`, even with a surviving rename on the branch."""
+    repo.seed({
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "sql/audit.sql": "USE SCHEMA LEGACY_SCHEMA;\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+
+    result = repo(
+        "fix(dbt): hotfix the schema name", "--target-branch", "hotfix-thing"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _created(repo)
 
 
 # --- the guards that already existed ------------------------------------
