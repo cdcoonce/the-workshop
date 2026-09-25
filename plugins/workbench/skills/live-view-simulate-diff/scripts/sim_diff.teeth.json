@@ -1,0 +1,78 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "--with", "ruff", "python", "-m", "pytest", "-q", "tests"],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests"
+  ],
+  "mutants": [
+    {
+      "label": "noise classification dropped: every within-tolerance drift reports as a real change",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "        if diff <= max(rel_tol * max(abs(a), abs(b)), abs_tol):\n            return \"noise\"",
+      "replace": "        if diff <= max(rel_tol * max(abs(a), abs(b)), abs_tol):\n            return \"changed\""
+    },
+    {
+      "label": "ref matcher loses its trailing boundary: budgets also matches budgets_ext",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "+ r'(?![\\w$\".])', re.IGNORECASE",
+      "replace": "+ r'', re.IGNORECASE"
+    },
+    {
+      "label": "self-expansion exclusion dropped: a patch reading its own table recurses forever",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "    active = {f: b for f, b in mapping.items() if f not in _expanding}",
+      "replace": "    active = dict(mapping)"
+    },
+    {
+      "label": "write-verb guard neutered: DML in a simulated body is never detected",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "        if re.search(rf\"\\b{verb}\\b\", masked, re.IGNORECASE):\n            found.append(verb)",
+      "replace": "        if False and re.search(rf\"\\b{verb}\\b\", masked, re.IGNORECASE):\n            found.append(verb)"
+    },
+    {
+      "label": "new-duplicate-key gate returns empty: grain regressions pass silently",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "    return sorted(dup_keys(prop) - dup_keys(base), key=repr)",
+      "replace": "    return sorted(dup_keys(prop) - dup_keys(prop), key=repr)"
+    },
+    {
+      "label": "DDL hash not taken from the fetched baseline: worksheet guard pins a stale hash",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "    ddl_sha = hashlib.sha256(ddl.encode()).hexdigest()",
+      "replace": "    ddl_sha = hashlib.sha256(b\"stale\").hexdigest()"
+    },
+    {
+      "label": "findings never reach the exit code",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "find": "    return exit_code",
+      "replace": "    return 0"
+    },
+    {
+      "label": "[control] reorder two bucket-dict entries",
+      "file": "sim_diff.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Dict literal order is semantically inert; every assertion compares buckets by key, never by order.",
+      "find": "            \"added\": len(diff.added),\n            \"removed\": len(diff.removed),",
+      "replace": "            \"removed\": len(diff.removed),\n            \"added\": len(diff.added),"
+    }
+  ]
+}
