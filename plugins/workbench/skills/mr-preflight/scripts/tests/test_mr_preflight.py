@@ -696,14 +696,21 @@ def test_a_malformed_config_is_a_setup_error_naming_the_file(repo: Path, content
     assert "Traceback" not in result.stderr
 
 
-def test_a_config_path_that_is_a_directory_is_a_setup_error(repo: Path) -> None:
-    write(repo, ".mr-preflight.toml/ignore.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+@pytest.mark.parametrize("kind", ["directory", "symlink"])
+def test_a_config_path_that_is_not_a_regular_file_is_a_setup_error(repo: Path, kind: str) -> None:
+    """A committed symlink's blob is its target's path, which is not the file
+    anyone meant and must never be parsed as the list."""
+    write(repo, "real.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+    if kind == "directory":
+        write(repo, ".mr-preflight.toml/ignore.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+    else:
+        (repo / ".mr-preflight.toml").symlink_to("real.toml")
     base = two_renames(repo)
 
     result = sweep(repo, base)
 
     assert result.returncode == SETUP_ERROR, result.stdout
-    assert ".mr-preflight.toml" in result.stderr
+    assert ".mr-preflight.toml at HEAD is malformed: it is not a regular file" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -780,3 +787,22 @@ def test_the_config_is_never_a_hit_for_a_name_it_ignores(repo: Path) -> None:
 
     assert result.returncode == CLEAN, result.stdout
     assert ".mr-preflight.toml" not in [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+
+
+@pytest.mark.parametrize("head", ["sha", ":/rename, and ignore the changelog"])
+def test_the_config_comes_from_the_head_being_swept(repo: Path, head: str) -> None:
+    """`--head` names the tree searched, so its ignore list is the one that
+    applies, not the checked-out branch's, however the commit is spelt."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    swept = commit(repo, "rename, and ignore the changelog")
+    git(repo, "rm", "-q", ".mr-preflight.toml")
+    commit(repo, "drop the ignore list")
+
+    result = sweep(repo, base, "--head", swept if head == "sha" else head)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout

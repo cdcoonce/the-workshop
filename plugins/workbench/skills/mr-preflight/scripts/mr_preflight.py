@@ -51,13 +51,21 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
-    """The ignore list committed at ``head``; none when the file is absent."""
-    spec = f"{head}:{CONFIG_NAME}"
-    probe = subprocess.run(["git", "cat-file", "-e", spec], cwd=repo, capture_output=True)
-    if probe.returncode != 0:
+    """The ignore list committed at ``head``; none when the file is absent.
+
+    ``head`` is resolved to an object first: ``<rev>:<path>`` misreads some
+    spellings (``:/message`` takes the path as part of its search), and any
+    failed lookup would otherwise pass as "no file" and apply no ignores.
+    """
+    commit = _git(repo, "rev-parse", "--verify", head).strip()
+    entry = _git(repo, "ls-tree", "-z", commit, "--", CONFIG_NAME).rstrip("\0")
+    if not entry:
         return IgnoreConfig()
-    blob = subprocess.run(["git", "cat-file", "blob", spec], cwd=repo, capture_output=True)
+    mode, kind, obj = entry.split("\t", 1)[0].split(" ")
     try:
+        if kind != "blob" or mode == "120000":
+            raise ConfigError("it is not a regular file")
+        blob = subprocess.run(["git", "cat-file", "blob", obj], cwd=repo, capture_output=True)
         if blob.returncode != 0:
             raise ConfigError(blob.stderr.decode("utf-8", "replace").strip())
         # Decoded strictly: TOML is UTF-8, and a replaced byte would parse.
