@@ -15,10 +15,10 @@ keeps the old name. Anyone following the stale doc builds the retired thing.
 The sweep finds every identifier the branch renamed and reports each reference
 to the old name that survives at `HEAD`.
 
-It runs automatically: `gitlab-mr-create` sweeps every MR into `dev` (or any
-non-promotion target) from the merge-base with `origin/<target>` and refuses
-to open the MR while a hit remains. It fails closed when `origin/<target>` is
-missing; fetch it and retry.
+It runs automatically: `gitlab-mr-create` sweeps every MR into `dev` from the
+merge-base with `origin/dev` and refuses to open the MR while a hit remains.
+It fails closed when `origin/dev` is missing; fetch it and retry. Other
+targets are not swept.
 
 ### Reading a hit
 
@@ -46,9 +46,10 @@ again. Every hit blocks.
   chases the bare `LEGACY_SCHEMA`, so a `USE SCHEMA` line elsewhere is found.
   A dotted name with no distinctive part (`pkg.module`) is chased whole.
 
-Matches are whole words (`git grep -w`) over the committed `HEAD` tree, so
-`LEGACY_SCHEMA_RAW` never counts as `LEGACY_SCHEMA`, and uncommitted edits are
-invisible.
+Matches are whole words (`git grep -w`) over the committed `HEAD` tree of the
+whole repository, wherever it is run from, so `LEGACY_SCHEMA_RAW` never counts
+as `LEGACY_SCHEMA` and uncommitted edits are invisible. Binary files are
+skipped.
 
 ## Running it by hand
 

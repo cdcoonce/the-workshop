@@ -102,6 +102,28 @@ def test_non_distinctive_tokens_are_never_chased(repo: Path, old: str, new: str)
     assert "b.py" not in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("LoadCurves", "FetchPrices"),  # CamelCase alone: no `_`, no `.`
+        ("ab_cde", "ab_xyz"),  # exactly the minimum length
+    ],
+)
+def test_distinctive_tokens_at_each_rule_edge_are_chased(
+    repo: Path, old: str, new: str
+) -> None:
+    write(repo, "a.py", f"value = {old}()\n")
+    write(repo, "docs/notes.md", f"Call {old} first.\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", f"value = {new}()\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert f"docs/notes.md:1: {old} (renamed to {new} in a.py)" in result.stdout
+
+
 def test_a_token_the_diff_adds_elsewhere_moved_rather_than_renamed(repo: Path) -> None:
     """`load_curves` left one call site but the diff adds it on another line.
 
@@ -119,6 +141,23 @@ def test_a_token_the_diff_adds_elsewhere_moved_rather_than_renamed(repo: Path) -
 
     assert result.returncode == CLEAN, result.stdout
     assert "load_curves" not in result.stdout
+
+
+def test_a_changed_sql_comment_in_the_same_hunk_does_not_hide_the_rename(
+    repo: Path,
+) -> None:
+    """A removed `-- comment` reaches the diff as `--- comment`, which reads
+    like a file header; the rename on the line above it must still be found."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n-- old header comment\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n-- new header comment\n")
+    commit(repo, "rename and reword")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
 
 
 def test_a_rename_inside_qualified_names_chases_the_bare_schema(repo: Path) -> None:
@@ -179,6 +218,54 @@ def test_an_uncommitted_fix_does_not_clear_the_hit(repo: Path) -> None:
 
     assert result.returncode == HITS, result.stdout
     assert "docs/runbook.md:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_a_path_with_a_colon_is_reported_whole(repo: Path) -> None:
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/a:b.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "sql/a:b.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_a_binary_file_holding_the_old_name_is_not_a_crash(repo: Path) -> None:
+    """Binary content has no line to fix; it must neither crash the sweep
+    nor stand in for a hit, while text hits are still reported."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/runbook.md", "Build LEGACY_SCHEMA first.\n")
+    (repo / "data").mkdir()
+    (repo / "data" / "export.bin").write_bytes(b"\x00\x01LEGACY_SCHEMA\x00")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "docs/runbook.md:1: LEGACY_SCHEMA" in result.stdout
+    assert "export.bin" not in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_the_whole_repo_is_swept_from_a_subdirectory(repo: Path) -> None:
+    """`create-mr` may run from anywhere inside the repo; a leftover at the
+    root must not drop out of the search because the cwd is `sub/`."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    write(repo, "sub/notes.md", "nothing here\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo / "sub", base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
 
 
 def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:

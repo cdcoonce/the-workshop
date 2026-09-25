@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
 INTERNAL_CAPITAL = re.compile(r"[a-z0-9][A-Z]")
 DUNDER = re.compile(r"^__\w+__$")
 MIN_LENGTH = 6
+# `@@ -start[,count] +start[,count] @@`; an omitted count means one line.
+HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(?P<removed>\d+))? \+\d+(?:,(?P<added>\d+))? @@")
 
 
 def is_distinctive(token: str) -> bool:
@@ -58,13 +61,22 @@ def _tokens(line: str) -> list[str]:
 def _pair_renames(removed: list[str], added: list[str], path: str) -> list[Rename]:
     renames = []
     for old_line, new_line in zip(removed, added):
+        old_tokens = _tokens(old_line)
         new_tokens = _tokens(new_line)
         if not new_tokens:
             continue
-        gone = [t for t in _tokens(old_line) if t not in new_tokens and is_distinctive(t)]
-        arrived = [t for t in new_tokens if t not in _tokens(old_line)]
-        for token in gone:
-            renames.append(Rename(old=token, new=arrived[0] if arrived else "", path=path))
+        # Align the two token sequences so each replaced name is credited to
+        # the name that took its place, not to the first new name on the line.
+        replacement: dict[str, str] = {}
+        matcher = SequenceMatcher(a=old_tokens, b=new_tokens, autojunk=False)
+        for op, i1, i2, j1, j2 in matcher.get_opcodes():
+            if op == "replace":
+                for offset, token in enumerate(old_tokens[i1:i2]):
+                    new = new_tokens[j1 + offset] if j1 + offset < j2 else ""
+                    replacement.setdefault(token, new)
+        for token in old_tokens:
+            if token not in new_tokens and is_distinctive(token):
+                renames.append(Rename(old=token, new=replacement.get(token, ""), path=path))
     return renames
 
 
@@ -92,21 +104,33 @@ def detect_renames(diff_text: str) -> list[Rename]:
         removed.clear()
         added.clear()
 
+    # Header lines are only headers outside a hunk. Inside one, the hunk
+    # header's counts say exactly how many removed and added lines follow, so
+    # a removed SQL comment `-- x` (diffed as `--- x`) or an added `++ x`
+    # (diffed as `+++ x`) stays content instead of reading as a file header.
+    removed_left = added_left = 0
     for line in diff_text.splitlines():
-        if line.startswith("+++ "):
+        if removed_left or added_left:
+            if line.startswith("-") and removed_left:
+                removed_left -= 1
+                if added:
+                    flush()
+                removed.append(line[1:])
+            elif line.startswith("+") and added_left:
+                added_left -= 1
+                added.append(line[1:])
+                added_anywhere.update(_tokens(line[1:]))
+            continue
+        hunk = HUNK_HEADER.match(line)
+        if hunk:
+            flush()
+            removed_left = int(hunk.group("removed") or 1)
+            added_left = int(hunk.group("added") or 1)
+        elif line.startswith("+++ "):
             flush()
             path = line[6:] if line.startswith("+++ b/") else line[4:]
         elif line.startswith("--- ") or line.startswith("diff --git"):
             flush()
-        elif line.startswith("@@"):
-            flush()
-        elif line.startswith("-"):
-            if added:
-                flush()
-            removed.append(line[1:])
-        elif line.startswith("+"):
-            added.append(line[1:])
-            added_anywhere.update(_tokens(line[1:]))
     flush()
 
     # A token the diff also adds somewhere moved rather than disappeared, so

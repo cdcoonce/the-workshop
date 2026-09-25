@@ -35,8 +35,8 @@
       "label": "every token on a removed line is chased, distinctive or not",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "if t not in new_tokens and is_distinctive(t)]",
-      "replace": "if t not in new_tokens]"
+      "find": "if token not in new_tokens and is_distinctive(token):",
+      "replace": "if token not in new_tokens:"
     },
     {
       "label": "no minimum length, so short names like a_b are chased",
@@ -44,6 +44,55 @@
       "oracle": "real",
       "find": "if len(token) < MIN_LENGTH or DUNDER.match(token):",
       "replace": "if DUNDER.match(token):"
+    },
+    {
+      "label": "CamelCase alone no longer makes a name distinctive",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": " or bool(INTERNAL_CAPITAL.search(token))",
+      "replace": ""
+    },
+    {
+      "label": "the minimum length drifts from 6 to 7",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "MIN_LENGTH = 6",
+      "replace": "MIN_LENGTH = 7"
+    },
+    {
+      "label": "file headers are recognized inside a hunk, so a removed SQL comment ends it",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "        if removed_left or added_left:\n",
+      "replace": "        if (removed_left or added_left) and not line.startswith((\"--- \", \"+++ \")):\n"
+    },
+    {
+      "label": "every replaced name is credited to the first new name on the line",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "replace": "renames.append(Rename(old=token, new=next((t for t in new_tokens if t not in old_tokens), \"\"), path=path))"
+    },
+    {
+      "label": "the sweep runs from the cwd instead of the repo root",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "repo = Path(_git(Path.cwd(), \"rev-parse\", \"--show-toplevel\").strip())",
+      "replace": "repo = Path.cwd()"
+    },
+    {
+      "label": "binary files are grepped, so their line-less rows reach the parser",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\"",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-n\""
+    },
+    {
+      "label": "rows are split on the first colon, so a path containing one breaks",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n",
+      "replace": "            row = row.replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line, _ = row.split(\":\", 2)\n"
     },
     {
       "label": "dunders are chased like any other name",
@@ -63,8 +112,8 @@
       "label": "a removed line with no partner is compared against nothing and chased",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "    for old_line, new_line in zip(removed, added):\n        new_tokens = _tokens(new_line)\n        if not new_tokens:\n            continue\n",
-      "replace": "    for old_line, new_line in zip(removed, added + [\"\"] * len(removed)):\n        new_tokens = _tokens(new_line)\n"
+      "find": "    for old_line, new_line in zip(removed, added):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n        if not new_tokens:\n            continue\n",
+      "replace": "    for old_line, new_line in zip(removed, added + [\"\"] * len(removed)):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n"
     },
     {
       "label": "qualified names are compared whole, so the bare schema is never chased",
@@ -84,15 +133,15 @@
       "label": "substring match, so the new name counts as the old one",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
-      "replace": "[\"git\", \"grep\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
     },
     {
       "label": "the working tree is searched instead of the committed head",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
-      "replace": "[\"git\", \"grep\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
     },
     {
       "label": "a failing git diff reads as an empty diff, so a bad base sweeps clean",
@@ -105,8 +154,8 @@
       "label": "the replacement name is dropped from the report",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "Rename(old=token, new=arrived[0] if arrived else \"\", path=path)",
-      "replace": "Rename(old=token, new=\"\", path=path)"
+      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "replace": "renames.append(Rename(old=token, new=\"\", path=path))"
     },
     {
       "label": "the rename is attributed to the raw diff path with its b/ prefix",

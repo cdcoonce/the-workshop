@@ -31,8 +31,10 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def run_sweep(base: str, head: str) -> int:
-    repo = Path.cwd()
     try:
+        # `git grep <tree>` searches only the cwd's subtree, so run from the
+        # top: a leftover at the repo root counts wherever this was invoked.
+        repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
         hits = sweep(repo, head, detect_renames(diff_text))
     except RuntimeError as error:

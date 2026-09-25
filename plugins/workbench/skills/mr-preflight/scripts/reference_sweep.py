@@ -37,8 +37,11 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
     """
     hits: list[Hit] = []
     for rename in renames:
+        # `-z` separates name, line and content with NUL, so a `:` inside a
+        # path cannot split it; `-I` skips binary files, which have no line
+        # to fix and would otherwise print a line-less "Binary file" row.
         result = subprocess.run(
-            ["git", "grep", "-n", "-w", "-F", "-e", rename.old, head, "--"],
+            ["git", "grep", "-z", "-I", "-n", "-w", "-F", "-e", rename.old, head, "--"],
             cwd=repo,
             capture_output=True,
             text=True,
@@ -47,9 +50,10 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
         if result.returncode not in (0, 1):
             raise RuntimeError(result.stderr.strip() or f"git grep failed for {rename.old}")
         prefix = f"{head}:"
-        for row in result.stdout.splitlines():
-            if row.startswith(prefix):
-                row = row[len(prefix):]
-            path, line, _ = row.split(":", 2)
+        # Rows end at `\n` only: `splitlines` would also break on a form feed
+        # or `\r` inside a matched line's content and strand its NULs.
+        for row in filter(None, result.stdout.split("\n")):
+            name, line, _ = row.split("\0", 2)
+            path = name[len(prefix):] if name.startswith(prefix) else name
             hits.append(Hit(path=path, line=int(line), rename=rename))
     return hits

@@ -47,6 +47,37 @@ def test_pairing_is_positional_so_an_extra_removed_line_is_not_a_rename() -> Non
     ]
 
 
+def test_two_renames_on_one_line_each_name_their_own_replacement() -> None:
+    diff = """\
+--- a/q.sql
++++ b/q.sql
+@@ -1 +1 @@
+-SELECT LEGACY_SCHEMA.a, other_config.b FROM x
++SELECT LEGACY_SCHEMA_RAW.a, updated_config.b FROM x
+"""
+    assert detect_renames(diff) == [
+        Rename(old="LEGACY_SCHEMA", new="LEGACY_SCHEMA_RAW", path="q.sql"),
+        Rename(old="other_config", new="updated_config", path="q.sql"),
+    ]
+
+
+def test_content_lines_that_look_like_file_headers_stay_content() -> None:
+    """Inside a hunk, `--- x` is a removed `-- x` and `+++ x` an added `++ x`."""
+    diff = """\
+diff --git a/job.sql b/job.sql
+--- a/job.sql
++++ b/job.sql
+@@ -1,2 +1,2 @@
+-USE SCHEMA LEGACY_SCHEMA;
+--- nightly load
++USE SCHEMA LEGACY_SCHEMA_RAW;
++++ counter
+"""
+    assert detect_renames(diff) == [
+        Rename(old="LEGACY_SCHEMA", new="LEGACY_SCHEMA_RAW", path="job.sql"),
+    ]
+
+
 def test_a_rename_seen_twice_is_reported_once() -> None:
     diff = """\
 --- a/a.sql
