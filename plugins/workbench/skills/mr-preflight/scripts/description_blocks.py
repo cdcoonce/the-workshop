@@ -75,7 +75,10 @@ def replace_block(text: str, name: str, body: str) -> str:
     """
     block = find_block(text, name)
     if block is None:
-        gap = "\n" * (2 - len(text) + len(text.rstrip("\n"))) if text else ""
+        # One blank line between the prose and the block, whatever the prose
+        # already ends with; an empty description needs none.
+        trailing = len(text) - len(text.rstrip("\n"))
+        gap = "\n" * max(0, 2 - trailing) if text else ""
         section = f"{_marker(name, 'begin')}\n{body}{_marker(name, 'end')}\n"
         return text + gap + section
     return text[: block.start] + body + text[block.end :]
@@ -103,8 +106,8 @@ WAIVER_INTENT = re.compile(r"^[-*+]\s*waive(?:\s|$)", re.IGNORECASE)
 
 
 def waiver_lines(body: str) -> list[str]:
-    """Every line of ``body`` that starts ``- waive``, well formed or not, as
-    written minus its line ending. What ``--update`` carries forward."""
+    """Every line of ``body`` that starts like a waiver, well formed or not,
+    as written minus its line ending. What ``--update`` carries forward."""
     return [line.rstrip("\r") for line in body.split("\n") if WAIVER_INTENT.match(line.strip())]
 
 
@@ -114,8 +117,8 @@ def parse_waivers(body: str) -> tuple[list[Waiver], list[str]]:
     Returns
     -------
     tuple[list[Waiver], list[str]]
-        The waivers in body order, and every line that starts ``- waive`` but
-        does not match the form.
+        The waivers in body order, and every line that starts like a waiver
+        but does not match the form.
     """
     waivers: list[Waiver] = []
     malformed: list[str] = []

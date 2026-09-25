@@ -49,16 +49,19 @@ description, inside its sweep block:
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.
-- **Malformed lines block.** A line that starts `- waive` but does not match
-  the form is reported as `malformed waiver:` and blocks, because its author
-  believes it waives something.
+- **Malformed lines block.** A line that starts like a waiver but does not
+  match the form is reported as `malformed waiver:` and blocks, because its
+  author believes it waives something. That includes near misses: another
+  bullet (`* waive`), other spacing (`-waive`) or case (`- Waive`).
 - **Markers own the block.** Each marker must sit alone on its line, once. A
   missing, repeated or reversed marker is a setup error, never read as "no
   waivers".
 
-`create-mr` reads the waivers from the description file it is given and sends
-the MR with the rendered block, so the reviewer sees every waiver and its
-reason. It renders into a copy: your description file is not rewritten.
+`create-mr` reads the waivers from the description file it is given and, when
+the branch renamed something, sends the MR with the rendered block, so the
+reviewer sees every rename, waiver and reason. It renders into a copy: your
+description file is not rewritten. A branch that renamed nothing, with no
+block in its description, goes out exactly as written.
 
 ### What counts as a rename
 
@@ -95,9 +98,11 @@ setup error such as an unresolvable base.
 With the MR description, waived hits print as `waived:` and only the rest
 block. `--update` rewrites the description's sweep block in place, appending
 one if there is none: the renames, each unwaived hit as a `- [ ]` to-do, and
-every `- waive` line carried forward as written. Everything outside the block
-is left byte for byte. Anything else inside the block is the tool's and is
-replaced.
+every waiver line, malformed ones included, carried forward as written. When
+the branch renamed nothing and there is no block, the file is left alone.
+Everything outside the block is left byte for byte. Anything else inside the
+block is the tool's and is replaced. The file is replaced in one step, so a
+failed write leaves the original intact.
 
 ```bash
 python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev --description description.md --update

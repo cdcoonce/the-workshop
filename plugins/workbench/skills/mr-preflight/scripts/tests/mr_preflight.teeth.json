@@ -217,7 +217,7 @@
       "label": "an appended block is glued onto the last line of prose",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "        gap = \"\\n\" * (2 - len(text) + len(text.rstrip(\"\\n\"))) if text else \"\"\n",
+      "find": "        gap = \"\\n\" * max(0, 2 - trailing) if text else \"\"\n",
       "replace": "        gap = \"\"\n"
     },
     {
