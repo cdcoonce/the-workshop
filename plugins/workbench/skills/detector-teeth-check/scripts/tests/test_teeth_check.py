@@ -1555,3 +1555,26 @@ def test_changed_since_follows_a_committed_symlink_to_the_spec(
     main(["--changed-since", "HEAD", "--json", str(link)])
 
     assert _labels_run(capsys) == ["guard", "[control] rewrite GUARD in place"]
+
+
+def test_a_changed_test_command_since_the_revision_runs_every_row(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A new test command can flip any row's verdict, edited or not."""
+    spec = json.loads(committed_spec.read_text())
+    spec["test_command"] = ["pytest", "-q", "-k", "cap"]
+    committed_spec.write_text(json.dumps(spec))
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", "--json", str(committed_spec)])
+    data = json.loads(capsys.readouterr().out)
+
+    assert [m["label"] for m in data["mutants"]] == [
+        "cap",
+        "guard",
+        "[control] rewrite GUARD in place",
+    ]
+    assert "partial" not in data

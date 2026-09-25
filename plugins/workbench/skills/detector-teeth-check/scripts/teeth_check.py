@@ -849,9 +849,20 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
     # Through a symlink, git would show the link's text, not the spec.
     spec_path = spec_path.resolve()
     before = _committed_spec(spec_path, rev)
-    # First written after REV: every row is new.
-    old_rows = [] if before is None else before["mutants"]
-    raw_rows = json.loads(spec_path.read_text(encoding="utf-8"))["mutants"]
+    current = json.loads(spec_path.read_text(encoding="utf-8"))
+    raw_rows = current["mutants"]
+
+    def settings(doc: dict) -> dict:
+        return {key: value for key, value in doc.items() if key != "mutants"}
+
+    # First written after REV, every row is new. A changed test command,
+    # collect command or runner can flip any row's verdict, so every row
+    # counts as changed then too.
+    old_rows = (
+        []
+        if before is None or settings(before) != settings(current)
+        else before["mutants"]
+    )
     keep = [
         mutant
         for raw, mutant in zip(raw_rows, spec.mutants)
