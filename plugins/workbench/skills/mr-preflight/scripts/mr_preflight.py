@@ -2,11 +2,14 @@
 """Deterministic checks run before a GitLab merge request is opened.
 
 ``sweep`` finds identifiers the diff between ``--base`` and ``--head`` renamed
-and reports every reference to the old name that survives at head. With
+and reports every reference to the old name that survives at head. The repo's
+committed ``.mr-preflight.toml`` at head drops hits in its ``ignore_paths``
+globs and never chases its ``ignore_tokens``; the summary says how many. With
 ``--description``, the waivers in that MR description's sweep block
 (``- waive TOKEN path: reason``) excuse their hits, and a malformed waiver line
 blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
-1 unwaived references or malformed waivers, 2 setup error.
+1 unwaived references or malformed waivers, 2 setup error (including an
+unusable ``.mr-preflight.toml``).
 """
 
 from __future__ import annotations

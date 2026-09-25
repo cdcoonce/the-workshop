@@ -78,15 +78,20 @@ ignore_tokens = ["schema_version"]
 ```
 
 - **`ignore_paths`** are globs over repo-relative paths, matched the way git
-  matches path globs: `*`, `?` and `[...]` stay inside one directory, so
-  `*.md` is the root's Markdown only, and a whole `**` spans any depth
-  (`docs/adr/**`, `**/CHANGELOG.md`). The whole path must match, and case
-  counts. Hits in these paths are dropped before waivers are read.
+  matches path globs: `*`, `?` and `[...]` (negated by `!` or `^`) stay
+  inside one directory, so `*.md` is the root's Markdown only, and a whole
+  `**` spans any depth (`docs/adr/**`, `**/CHANGELOG.md`). The whole path
+  must match, so `docs/adr` or `docs/adr/` ignores nothing, and case counts.
+  `\` escapes and `[[:digit:]]`-style classes are not supported and are
+  refused as a setup error, since they would not match what git matches.
+  Hits in these paths are dropped before waivers are read.
 - **`ignore_tokens`** are exact names that are never chased. A branch whose
   only renames are ignored tokens counts as renaming nothing.
-- **Committed only.** The file is read from the `HEAD` tree, like everything
-  the sweep searches, so an ignore that exists only on your disk does
-  nothing. Commit it first.
+- **Committed only.** The file is read from the swept head's tree, like
+  everything the sweep searches, so an ignore that exists only on your disk
+  or in the index does nothing. Commit it first. The file itself is left out
+  of the sweep: its lines are not uses of the names they list, so it never
+  hides a rename or blocks on one.
 - **Creep stays visible.** Every run that the file changed prints, clean or
   not:
 
@@ -94,9 +99,11 @@ ignore_tokens = ["schema_version"]
   mr-preflight: .mr-preflight.toml suppressed 3 hit(s) in ignored paths and skipped 1 renamed token(s).
   ```
 
-- **Missing means no ignores; malformed is a setup error** (exit `2`, naming
-  the file): invalid TOML, a key other than these two, or a value that is not
-  a list of strings.
+- **Missing means no ignores; anything unusable is a setup error** (exit
+  `2`, naming the file): invalid TOML, a key other than these two, a value
+  that is not a list of strings, a directory or symlink in its place, or a
+  Python older than 3.11 (reading it needs `tomllib`; a repo without the file
+  sweeps on any Python 3).
 
 ### What counts as a rename
 
