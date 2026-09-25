@@ -634,6 +634,11 @@ def test_an_ignored_token_is_never_chased(repo: Path) -> None:
     assert result.returncode == HITS, result.stderr
     assert "LEGACY_SCHEMA" not in result.stdout
     assert "CHANGELOG.md:3: load_curves (renamed to fetch_prices in pipeline.py)" in result.stdout
+    # A config of tokens alone suppresses no hits and must still say so.
+    assert (
+        "mr-preflight: .mr-preflight.toml suppressed 0 hit(s) in ignored paths"
+        " and skipped 1 renamed token(s)."
+    ) in result.stdout.splitlines()
 
 
 def test_a_branch_whose_only_rename_is_ignored_renamed_nothing(repo: Path) -> None:
@@ -715,11 +720,15 @@ def test_a_config_path_that_is_not_a_regular_file_is_a_setup_error(repo: Path, k
     assert "Traceback" not in result.stderr
 
 
-def test_only_the_committed_config_counts(repo: Path) -> None:
+@pytest.mark.parametrize("state", ["untracked", "staged"])
+def test_only_the_committed_config_counts(repo: Path, state: str) -> None:
     """The sweep reads the head tree, so an ignore that exists only on the
-    author's disk cannot pass an MR whose reviewers never see it."""
+    author's disk, or only in the index, cannot pass an MR whose reviewers
+    never see it."""
     base = two_renames(repo)
     configure(repo, 'ignore_paths = ["**"]\n')
+    if state == "staged":
+        git(repo, "add", ".mr-preflight.toml")
 
     result = sweep(repo, base)
 
@@ -862,3 +871,41 @@ def test_a_config_on_a_python_without_tomllib_is_a_setup_error(repo: Path) -> No
     assert ".mr-preflight.toml" in result.stderr
     assert "Python 3.11" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("token", ["SCHEMA", "legacy_schema", "LEGACY_SCHEMA_RAW"])
+def test_ignore_tokens_match_the_whole_name_exactly(repo: Path, token: str) -> None:
+    """A part of the name, another case of it, or its successor ignores nothing."""
+    configure(repo, f'ignore_tokens = ["{token}"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW" in result.stdout
+    assert "skipped" not in result.stdout
+
+
+def test_a_hit_in_an_ignored_path_is_suppressed_even_when_waived(repo: Path) -> None:
+    """Ignored paths are dropped before waivers are read, so one hit is
+    reported once, as suppressed, never also as waived."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+    description = describe(repo, "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert not any(line.startswith("waived: CHANGELOG.md:") for line in result.stdout.splitlines())
+    assert "suppressed 3 hit(s) in ignored paths" in result.stdout
+
+
+def test_a_config_that_changed_nothing_says_nothing(repo: Path) -> None:
+    """The count is for creep; a config that hid nothing adds no line to
+    every sweep, and neither does a repo with no config."""
+    configure(repo, 'ignore_paths = ["vendor/**"]\nignore_tokens = ["never_renamed"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "suppressed" not in result.stdout
