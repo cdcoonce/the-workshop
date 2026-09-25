@@ -207,6 +207,27 @@
       "replace": "reason = waived.get((hit.rename.old, hit.path))"
     },
     {
+      "label": "a quoted path leaves its \" and \\ unescaped, so a name holding a literal backslash-n shows as the newline name",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        if char in '\"\\\\':\n            quoted.append(\"\\\\\" + char)\n        elif char in _ESCAPES:",
+      "replace": "        if char in _ESCAPES:"
+    },
+    {
+      "label": "only a newline triggers quoting, so a name spelled with quotes and a backslash-n shows as the newline name",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if not any(_is_control(char) or char in '\"\\\\' for char in path):",
+      "replace": "if \"\\n\" not in path:"
+    },
+    {
+      "label": "an unnamed control character is escaped as \\xNN, not in the octal form git prints",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "quoted.append(f\"\\\\{ord(char):03o}\")",
+      "replace": "quoted.append(f\"\\\\x{ord(char):02x}\")"
+    },
+    {
       "label": "a crash inside the sweep is re-raised, so it exits 1 and reads as references to fix",
       "file": "../mr_preflight.py",
       "oracle": "real",

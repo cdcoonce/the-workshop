@@ -615,6 +615,44 @@ def test_a_quoted_path_is_waived_as_it_is_reported(repo: Path) -> None:
     assert 'waived: "docs/new\\nline.md":1: LEGACY_SCHEMA: vendored name' in result.stdout
 
 
+@pytest.mark.parametrize(
+    "impostor",
+    [
+        "docs/new\\nline.md",  # a backslash and an `n`, no newline
+        '"docs/new\\nline.md"',  # the newline name's quoted form, spelled out
+    ],
+)
+def test_a_name_spelling_a_quoted_path_is_not_waived_with_it(repo: Path, impostor: str) -> None:
+    """Quoting must be one to one: a file whose name is literally the quoted
+    form of another must not ride on that other file's waiver."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    write(repo, impostor, "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/new\\nline.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert result.stdout.count("waived:") == 1
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
+
+
+def test_a_control_character_is_shown_in_the_octal_form_git_prints(repo: Path) -> None:
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/a\x01b.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert '"docs/a\\001b.md":1: LEGACY_SCHEMA' in result.stdout
+
+
 def test_update_keeps_crlf_prose_byte_for_byte(repo: Path) -> None:
     """A description saved on Windows reaches GitLab as written; reading it
     with newline translation would rewrite every line of the author's prose."""
