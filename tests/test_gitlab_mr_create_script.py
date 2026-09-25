@@ -584,6 +584,62 @@ def test_other_targets_are_not_swept(repo) -> None:
     assert _created(repo)
 
 
+
+SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
+SWEEP_END = "<!-- mr-preflight:sweep:end -->"
+
+
+def test_dev_hop_ships_the_waiver_it_accepted_in_the_description(repo) -> None:
+    """Refused while the changelog's old name is unwaived; created once the
+    description waives it, with the rendered block and its reason in the MR."""
+    repo.seed({
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "CHANGELOG.md": "- LEGACY_SCHEMA created\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+    subject = "feat(dbt): move models to the raw schema"
+    prose = "## What this does\n\nMoves the models.\n\n"
+
+    refused = repo(subject, "--target-branch", "dev", description=prose)
+    assert refused.returncode == PRECONDITION
+    assert "CHANGELOG.md:1: LEGACY_SCHEMA" in refused.stderr
+    assert f"--description {repo.work / 'description.md'} --update" in refused.stderr
+    assert not _created(repo)
+
+    waived = (
+        f"{prose}{SWEEP_BEGIN}\n"
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        f"{SWEEP_END}\n"
+    )
+    result = repo(subject, "--target-branch", "dev", description=waived)
+
+    assert result.returncode == 0, result.stderr
+    sent = (repo.stub_dir / "description").read_text()
+    assert sent.startswith(f"{prose}{SWEEP_BEGIN}\n**mr-preflight sweep**\n")
+    assert "- `LEGACY_SCHEMA` -> `LEGACY_SCHEMA_RAW` in `dbt_project.yml`" in sent
+    assert "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry" in sent
+    assert sent.endswith(SWEEP_END)
+    assert (repo.work / "description.md").read_text() == waived
+
+
+
+def test_a_promotion_description_is_sent_as_written_with_no_sweep_block(repo) -> None:
+    """Only the `dev` hop is swept, so only it gains a sweep block."""
+    title_file = repo.work / "title.txt"
+    title_file.write_text("Promote ERG v0.7.2 to main\n")
+    body = "## What ships\n\n- !101\n"
+
+    result = repo(
+        "chore(release): v0.7.2",
+        "--target-branch", "main",
+        "--title-file", str(title_file),
+        description=body,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+
+
 # --- the guards that already existed ------------------------------------
 
 
@@ -606,9 +662,12 @@ def test_the_description_keeps_its_real_newlines(repo) -> None:
         description=body,
     )
 
+    # Into `dev` the rendered sweep block follows the author's prose, which
+    # arrives first and unchanged.
+    sent = (repo.stub_dir / "description").read_text()
     assert result.returncode == 0, result.stderr
-    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
-    assert "\\n" not in (repo.stub_dir / "description").read_text()
+    assert sent.startswith(f"{body}\n{SWEEP_BEGIN}\n")
+    assert "\\n" not in sent
 
 
 def test_read_back_still_catches_a_title_that_did_not_survive(repo) -> None:

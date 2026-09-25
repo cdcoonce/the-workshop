@@ -39,6 +39,11 @@ description_file=$1
 shift
 [[ -f "$description_file" && -s "$description_file" ]] || { printf 'Description file must exist and be non-empty: %s\n' "$description_file" >&2; exit 66; }
 
+description_source=$description_file
+rendered_file=""
+output_file=""
+trap 'rm -f "$rendered_file" "$output_file"' EXIT
+
 for command in glab git jq; do
   command -v "$command" >/dev/null || { printf '%s is required.\n' "$command" >&2; exit 69; }
 done
@@ -119,6 +124,10 @@ if ! requires_title_file "$target_branch"; then
   # reference to a renamed identifier. It fails closed, since a gate that skips
   # itself when it cannot resolve a base guards nothing. Only the `dev` hop is
   # swept; other non-promotion targets keep their previous behavior.
+  #
+  # The sweep reads the author's waivers from the description's fenced sweep
+  # block and renders that block into a copy, never the author's file, so the
+  # MR ships the exact dispositions and reasons the gate accepted.
   if [[ "$target_branch" == dev ]]; then
     command -v python3 >/dev/null || { printf 'python3 is required for the mr-preflight sweep.\n' >&2; exit 69; }
     git rev-parse --verify --quiet "origin/$target_branch" >/dev/null || {
@@ -127,17 +136,21 @@ if ! requires_title_file "$target_branch"; then
     }
     sweep_base=$(git merge-base HEAD "origin/$target_branch")
     preflight="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../mr-preflight/scripts/mr_preflight.py"
-    if ! sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" 2>&1); then
+    rendered_file=$(mktemp)
+    cp "$description_file" "$rendered_file"
+    if ! sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" --description "$rendered_file" --update 2>&1); then
       printf '%s\n' "$sweep_output" >&2
-      printf 'Refusing to open the MR: fix each reference above (see the mr-preflight skill).\n' >&2
+      printf 'Refusing to open the MR: fix each reference above, or waive it in the description (see the mr-preflight skill).\n' >&2
+      printf 'To write the open references into %s as a to-do list:\n  python3 %q sweep --base %s --description %q --update\n' \
+        "$description_file" "$preflight" "$sweep_base" "$description_file" >&2
       exit 65
     fi
+    description_source=$rendered_file
   fi
 fi
 
-description=$(<"$description_file")
+description=$(<"$description_source")
 output_file=$(mktemp)
-trap 'rm -f "$output_file"' EXIT
 # `${forward[@]+...}` because bash 3.2 — the macOS system bash — treats an
 # empty array as unset under `set -u`, while CI's bash 5 does not.
 glab mr create --title "$expected_title" --description "$description" ${forward[@]+"${forward[@]}"} | tee "$output_file"
