@@ -95,6 +95,34 @@
       "replace": "  if true; then"
     },
     {
+      "label": "the dev hop sweeps without the description, so every waiver is ignored",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "sweep --base \"$sweep_base\" --description \"$rendered_file\" --update 2>&1",
+      "replace": "sweep --base \"$sweep_base\" 2>&1"
+    },
+    {
+      "label": "the MR is created from the author's file, so the sweep block never ships",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "    description_source=$rendered_file\n",
+      "replace": "    description_source=$description_file\n"
+    },
+    {
+      "label": "the sweep renders into the author's file instead of a copy",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "sweep --base \"$sweep_base\" --description \"$rendered_file\" --update 2>&1",
+      "replace": "sweep --base \"$sweep_base\" --description \"$description_file\" --update 2>&1"
+    },
+    {
+      "label": "a refusal leaves out how to write the to-do list into the description",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "      printf 'To write the open references into %s as a to-do list:\\n  python3 %q sweep --base %s --description %q --update\\n' \\\n        \"$description_file\" \"$preflight\" \"$sweep_base\" \"$description_file\" >&2\n",
+      "replace": ""
+    },
+    {
       "label": "[control] reword the HEAD-subject label in the gate's error",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",

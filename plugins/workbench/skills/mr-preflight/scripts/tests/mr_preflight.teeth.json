@@ -179,6 +179,174 @@
       "replace": "for line in diff_text.splitlines():"
     },
     {
+      "label": "a marker quoted inside a prose line opens a block",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "starts = [offset + len(line) for offset, line in _lines(text) if line.strip() == begin]",
+      "replace": "starts = [offset + len(line) for offset, line in _lines(text) if begin in line]"
+    },
+    {
+      "label": "a lone begin or end marker reads as no block, so a second one is appended",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    if not starts and not stops:\n        return None",
+      "replace": "    if not starts or not stops:\n        return None"
+    },
+    {
+      "label": "a repeated block is accepted and the first copy wins",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if len(starts) != 1 or len(stops) != 1 or stops[0] < starts[0]:",
+      "replace": "if stops[0] < starts[0]:"
+    },
+    {
+      "label": "reversed markers are accepted",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if len(starts) != 1 or len(stops) != 1 or stops[0] < starts[0]:",
+      "replace": "if len(starts) != 1 or len(stops) != 1:"
+    },
+    {
+      "label": "the body offset starts at the begin marker, so replacing drops it",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "starts = [offset + len(line) for offset, line in _lines(text) if line.strip() == begin]",
+      "replace": "starts = [offset for offset, line in _lines(text) if line.strip() == begin]"
+    },
+    {
+      "label": "an appended block is glued onto the last line of prose",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "        gap = \"\\n\" * (2 - len(text) + len(text.rstrip(\"\\n\"))) if text else \"\"\n",
+      "replace": "        gap = \"\"\n"
+    },
+    {
+      "label": "--update appends a fresh block on every run instead of replacing",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    block = find_block(text, name)\n    if block is None:",
+      "replace": "    block = find_block(text, name)\n    if True:"
+    },
+    {
+      "label": "a waiver typo is skipped as prose, so its author believes the hit is waived",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "        if not match:\n            malformed.append(line)\n            continue",
+      "replace": "        if not match:\n            continue"
+    },
+    {
+      "label": "any line starting with the word waive is held to the waiver form",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")",
+      "replace": "WAIVER_INTENT = re.compile(r\"^- waive\")"
+    },
+    {
+      "label": "a waiver path ends at its first colon",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "(?P<path>`[^`]+`|\\S+): (?P<reason>\\S.*)$",
+      "replace": "(?P<path>`[^`]+`|[^\\s:]+): (?P<reason>\\S.*)$"
+    },
+    {
+      "label": "a waiver with no reason is accepted",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "(?P<path>`[^`]+`|\\S+): (?P<reason>\\S.*)$",
+      "replace": "(?P<path>`[^`]+`|\\S+):\\s*(?P<reason>.*)$"
+    },
+    {
+      "label": "a backticked path keeps its backticks, so it never matches a hit",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "path=match[\"path\"].strip(\"`\"),",
+      "replace": "path=match[\"path\"],"
+    },
+    {
+      "label": "a waiver keyed on its token alone waives that name in every file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (t, _), r in waived.items() if t == hit.rename.old), None)"
+    },
+    {
+      "label": "a waiver keyed on its path alone waives every name in that file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (_, p), r in waived.items() if p == hit.path), None)"
+    },
+    {
+      "label": "a waiver path matches as a suffix, so docs/CHANGELOG.md rides on CHANGELOG.md",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and hit.path.endswith(p)), None)"
+    },
+    {
+      "label": "a waiver is spent on its first hit, so a second hit in the file blocks",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = waived.pop((hit.rename.old, hit.path), None)"
+    },
+    {
+      "label": "a waiver holds only at the line it was written against (line 1 in the fixture)",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = waived.get((hit.rename.old, hit.path)) if hit.line == 1 else None"
+    },
+    {
+      "label": "waived hits still fail the sweep",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if blocking or malformed:\n        return HITS",
+      "replace": "    if hits or malformed:\n        return HITS"
+    },
+    {
+      "label": "a malformed waiver is reported but does not block",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if blocking or malformed:\n        return HITS",
+      "replace": "    if blocking:\n        return HITS"
+    },
+    {
+      "label": "the description is read with newline translation, rewriting CRLF prose",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "return path.read_bytes().decode(\"utf-8\", \"surrogateescape\")",
+      "replace": "return path.read_text()"
+    },
+    {
+      "label": "--update drops the author's waiver lines",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, blocking, [])"
+    },
+    {
+      "label": "--update carries forward only well-formed waivers, losing the typo to fix",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, blocking, [f\"- waive {w.token} {w.path}: {w.reason}\" for w in parse_waivers(body)[0]])"
+    },
+    {
+      "label": "the to-do list includes hits that were waived",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, hits, waiver_lines(body))"
+    },
+    {
+      "label": "--update renders but never writes the file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        description.write_bytes(rendered.encode(\"utf-8\", \"surrogateescape\"))\n",
+      "replace": "        pass\n"
+    },
+    {
       "label": "[control] swap two independent git grep flags",
       "file": "../reference_sweep.py",
       "oracle": "real",
@@ -186,6 +354,15 @@
       "why": "`-n` and `-w` are independent boolean options to git grep; their order changes neither the match set nor the `path:line:` output shape. Inert on every path the suite reaches, and on every input: git's option parser is order-insensitive for flags that take no argument.",
       "find": "\"-n\", \"-w\", \"-F\", \"-e\", rename.old, head",
       "replace": "\"-w\", \"-n\", \"-F\", \"-e\", rename.old, head"
+    },
+    {
+      "label": "[control] swap the two closing summary lines",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two independent prints to stdout after every hit and waiver line is already printed; no caller parses their relative order (create-mr forwards the text whole, tests match whole lines by membership). Inert for every exit code and every rendered block; a human reading both lines sees them in the other order, which is the only place it shows.",
+      "find": "    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n",
+      "replace": "    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n"
     }
   ]
 }

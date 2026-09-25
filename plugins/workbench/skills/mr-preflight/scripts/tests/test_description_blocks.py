@@ -105,3 +105,12 @@ def test_words_that_merely_start_with_waive_are_not_waiver_lines() -> None:
     waivers, malformed = parse_waivers("- waiver policy: see the skill\n- waived above\n")
 
     assert (waivers, malformed) == ([], [])
+
+
+def test_prose_quoting_a_marker_inline_is_not_a_marker() -> None:
+    """Explaining the block in the description must not open one."""
+    prose = f"The sweep writes between `{SWEEP_BEGIN}` and `{SWEEP_END}`.\n"
+
+    after = replace_block(prose, "sweep", "body\n")
+
+    assert after == f"{prose}\n{SWEEP_BEGIN}\nbody\n{SWEEP_END}\n"
