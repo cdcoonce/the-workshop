@@ -1,6 +1,6 @@
 ---
 name: mr-preflight
-description: Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or when a doc still names an old schema or function.
+description: Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or to waive an intended old name.
 ---
 
 # MR preflight
@@ -16,9 +16,9 @@ The sweep finds every identifier the branch renamed and reports each reference
 to the old name that survives at `HEAD`.
 
 It runs automatically: `gitlab-mr-create` sweeps every MR into `dev` from the
-merge-base with `origin/dev` and refuses to open the MR while a hit remains.
-It fails closed when `origin/dev` is missing; fetch it and retry. Other
-targets are not swept.
+merge-base with `origin/dev` and refuses to open the MR while an unwaived hit
+remains. It fails closed when `origin/dev` is missing; fetch it and retry.
+Other targets are not swept.
 
 ### Reading a hit
 
@@ -28,7 +28,43 @@ sql/audit/01_tables.sql:17: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_p
 
 The old name, where it survives, what replaced it and where the rename
 happened. Fix the reference at that path and line, commit, and create the MR
-again. Every hit blocks.
+again, or waive it if the old name is meant to stay. Every unwaived hit blocks.
+
+### Waiving a hit
+
+Some old names are correct where they are: a changelog entry, an ADR, a
+migration that must keep reading the retired schema. Waive them in the MR
+description, inside its sweep block:
+
+```markdown
+<!-- mr-preflight:sweep:begin -->
+
+- waive LEGACY_SCHEMA CHANGELOG.md: historical entry, describes the old schema
+
+<!-- mr-preflight:sweep:end -->
+```
+
+- **Form:** `- waive TOKEN path: reason`, one per line. `path` is
+  repo-relative and exact; backtick it if it holds a space
+  (``- waive LEGACY_SCHEMA `docs/Old Notes.md`: quoted design``). The reason
+  is required.
+- **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
+  line it is on, so editing the file above the hit never invalidates it. The
+  same name in any other file, even one with the same basename, still blocks.
+- **Malformed lines block.** A line that starts like a waiver but does not
+  match the form is reported as `malformed waiver:` and blocks, because its
+  author believes it waives something. A near miss on the prefix (`* waive`,
+  `-waive`, `- Waive`) counts too when the rest of the line is a valid
+  waiver; a sentence that merely starts with the word does not.
+- **Markers own the block.** Each marker must sit alone on its line, once. A
+  missing, repeated or reversed marker is a setup error, never read as "no
+  waivers".
+
+`create-mr` reads the waivers from the description file it is given and, when
+the branch renamed something, sends the MR with the rendered block, so the
+reviewer sees every rename, waiver and reason. It renders into a copy: your
+description file is not rewritten. A branch that renamed nothing, with no
+block in its description, goes out exactly as written.
 
 ### What counts as a rename
 
@@ -61,6 +97,19 @@ python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev
 
 Exit `0` is clean, `1` means surviving references (listed on stdout), `2` is a
 setup error such as an unresolvable base.
+
+With the MR description, waived hits print as `waived:` and only the rest
+block. `--update` rewrites the description's sweep block in place, appending
+one if there is none: the renames, each unwaived hit as a `- [ ]` to-do, and
+every waiver line, malformed ones included, carried forward as written. When
+the branch renamed nothing and there is no block, the file is left alone.
+Everything outside the block is left byte for byte. Anything else inside the
+block is the tool's and is replaced. The file is replaced in one step, so a
+failed write leaves the original intact.
+
+```bash
+python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev --description description.md --update
+```
 
 `<skill base directory>` is the absolute path this skill's loader announces
 (`Base directory for this skill: /…/skills/mr-preflight`). Expand it inline.

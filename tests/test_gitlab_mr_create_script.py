@@ -121,6 +121,7 @@ def repo(tmp_path: Path):
         description: str = "## What this does\n\nReal newlines.\n",
         default_branch: str = "dev",
         readback_title: str = "",
+        description_name: str = "",
     ) -> subprocess.CompletedProcess:
         (work / "file.txt").write_text(subject)
         subprocess.run(["git", "add", "-A"], cwd=work, check=True)
@@ -134,8 +135,11 @@ def repo(tmp_path: Path):
             cwd=work,
             check=True,
         )
-        description_file = work / "description.md"
+        # A bare relative name is how a caller spells a file whose name
+        # starts with `-`; the default is an absolute path.
+        description_file = work / (description_name or "description.md")
         description_file.write_text(description)
+        description_arg = description_name or str(description_file)
 
         env = {
             **os.environ,
@@ -145,7 +149,7 @@ def repo(tmp_path: Path):
             "STUB_READBACK_TITLE": readback_title,
         }
         return subprocess.run(
-            ["bash", str(CREATE_MR), str(description_file), *args],
+            ["bash", str(CREATE_MR), description_arg, *args],
             cwd=work,
             env=env,
             capture_output=True,
@@ -584,6 +588,100 @@ def test_other_targets_are_not_swept(repo) -> None:
     assert _created(repo)
 
 
+
+SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
+SWEEP_END = "<!-- mr-preflight:sweep:end -->"
+
+
+def test_dev_hop_ships_the_waiver_it_accepted_in_the_description(repo) -> None:
+    """Refused while the changelog's old name is unwaived; created once the
+    description waives it, with the rendered block and its reason in the MR."""
+    repo.seed({
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "CHANGELOG.md": "- LEGACY_SCHEMA created\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+    subject = "feat(dbt): move models to the raw schema"
+    prose = "## What this does\n\nMoves the models.\n\n"
+
+    refused = repo(subject, "--target-branch", "dev", description=prose)
+    assert refused.returncode == PRECONDITION
+    assert "CHANGELOG.md:1: LEGACY_SCHEMA" in refused.stderr
+    assert f"--description {repo.work / 'description.md'} --update" in refused.stderr
+    assert not _created(repo)
+
+    waived = (
+        f"{prose}{SWEEP_BEGIN}\n"
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        f"{SWEEP_END}\n"
+    )
+    result = repo(subject, "--target-branch", "dev", description=waived)
+
+    assert result.returncode == 0, result.stderr
+    sent = (repo.stub_dir / "description").read_text()
+    assert sent.startswith(f"{prose}{SWEEP_BEGIN}\n**mr-preflight sweep**\n")
+    assert "- `LEGACY_SCHEMA` -> `LEGACY_SCHEMA_RAW` in `dbt_project.yml`" in sent
+    assert "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry" in sent
+    assert sent.endswith(SWEEP_END)
+    assert (repo.work / "description.md").read_text() == waived
+
+
+
+@pytest.mark.parametrize(
+    ("target", "subject", "title"),
+    [
+        # Reaches the `dev` check itself: only `dev` may gain a block.
+        ("hotfix-thing", "fix(dbt): hotfix the schema name", ""),
+        # A promotion never reaches that check; pinned as it was before.
+        ("main", "chore(release): v0.7.2", "Promote ERG v0.7.2 to main\n"),
+    ],
+)
+def test_other_hops_send_the_description_as_written(repo, target, subject, title) -> None:
+    """A renamed identifier is on the branch, so a sweep would have rendered
+    a block; any hop but `dev` must still send the author's text unchanged."""
+    repo.seed({"dbt_project.yml": "schema: LEGACY_SCHEMA\n"})
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+    title_args: list[str] = []
+    if title:
+        (repo.work / "title.txt").write_text(title)
+        title_args = ["--title-file", str(repo.work / "title.txt")]
+    body = "## What ships\n\n- !101\n"
+
+    result = repo(subject, "--target-branch", target, *title_args, description=body)
+
+    assert result.returncode == 0, result.stderr
+    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+
+
+
+def test_a_description_file_named_like_a_flag_still_reaches_the_sweep(repo) -> None:
+    """`cp -desc.md` reads the name as options; the copy must take it as a path."""
+    body = "## What this does\n\nAdds a row.\n"
+
+    result = repo(
+        "feat(reports): #175 add the wind speed row",
+        "--target-branch", "dev",
+        description=body,
+        description_name="-desc.md",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
+
+
+def test_broken_markers_are_refused_without_the_update_hint(repo) -> None:
+    """`--update` cannot repair a broken block, so suggesting it misleads:
+    the refusal names the markers instead."""
+    body = f"## What this does\n\n{SWEEP_BEGIN}\nno end marker\n"
+
+    result = repo("feat(reports): #175 add the wind speed row", "--target-branch", "dev", description=body)
+
+    assert result.returncode == PRECONDITION
+    assert "mr-preflight:sweep:end" in result.stderr
+    assert "--update" not in result.stderr
+    assert not _created(repo)
+
+
 # --- the guards that already existed ------------------------------------
 
 
@@ -606,6 +704,8 @@ def test_the_description_keeps_its_real_newlines(repo) -> None:
         description=body,
     )
 
+    # Nothing was renamed, so no sweep block is added: the MR carries the
+    # author's description exactly.
     assert result.returncode == 0, result.stderr
     assert (repo.stub_dir / "description").read_text() == body.rstrip("\n")
     assert "\\n" not in (repo.stub_dir / "description").read_text()

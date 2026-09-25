@@ -9,6 +9,7 @@ does. Every test drives the CLI and asserts on its exit code and output.
 
 from __future__ import annotations
 
+import resource
 import subprocess
 import sys
 from pathlib import Path
@@ -307,3 +308,289 @@ def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR
     assert "mr-preflight:" in result.stderr
+
+
+# --- waivers from the description's sweep block ---------------------------
+
+SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
+SWEEP_END = "<!-- mr-preflight:sweep:end -->"
+
+
+def describe(repo: Path, body: str, prose: str = "## What this does\n\nRenames.\n\n") -> Path:
+    """Write a description outside the repo, with ``body`` as its sweep block."""
+    path = repo.parent / "description.md"
+    path.write_text(f"{prose}{SWEEP_BEGIN}\n{body}{SWEEP_END}\n")
+    return path
+
+
+def two_renames(repo: Path) -> str:
+    """Rename `LEGACY_SCHEMA` and `load_curves`, leaving references in a
+    changelog, a same-named changelog elsewhere, and a SQL script."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "pipeline.py", "load_curves(path)\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n- LEGACY_SCHEMA grown\n- load_curves added\n")
+    write(repo, "docs/CHANGELOG.md", "- LEGACY_SCHEMA noted\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    write(repo, "pipeline.py", "fetch_prices(path)\n")
+    commit(repo, "rename both")
+    return base
+
+
+def test_a_waiver_covers_every_hit_of_its_token_in_its_path_and_nothing_else(
+    repo: Path,
+) -> None:
+    base = two_renames(repo)
+    description = describe(repo, "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    lines = result.stdout.splitlines()
+    assert result.returncode == HITS, result.stderr
+    assert "waived: CHANGELOG.md:1: LEGACY_SCHEMA: historical entry" in lines
+    assert "waived: CHANGELOG.md:2: LEGACY_SCHEMA: historical entry" in lines
+    blocking = [line for line in lines if "(renamed to" in line]
+    assert blocking == [
+        "docs/CHANGELOG.md:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_project.yml)",
+        "sql/audit.sql:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_project.yml)",
+        "CHANGELOG.md:3: load_curves (renamed to fetch_prices in pipeline.py)",
+    ]
+
+
+def test_a_waiver_survives_edits_above_the_hit_and_clears_the_sweep(repo: Path) -> None:
+    """Line numbers are not part of the key: a waiver written against line 1
+    still holds once the changelog grows above it."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(repo, "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n")
+    assert sweep(repo, base, "--description", str(description)).returncode == CLEAN
+
+    write(repo, "CHANGELOG.md", "## 2026-09-25\n\n- schema renamed\n\n- LEGACY_SCHEMA created\n")
+    commit(repo, "grow the changelog above the old entry")
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "waived: CHANGELOG.md:5: LEGACY_SCHEMA: historical entry" in result.stdout.splitlines()
+
+
+def test_a_malformed_waiver_line_is_reported_and_blocks(repo: Path) -> None:
+    """Every real hit is waived; the typo alone must still stop the MR, since
+    its author believes it waives something."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(
+        repo,
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        "- waive LEGACY_SCHEMA docs/runbook.md historical too\n",
+    )
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert (
+        "malformed waiver: - waive LEGACY_SCHEMA docs/runbook.md historical too"
+        in result.stdout.splitlines()
+    )
+
+
+def test_a_description_with_broken_markers_is_a_setup_error(repo: Path) -> None:
+    """An unclosed block could hold waivers the sweep never reads."""
+    base = two_renames(repo)
+    description = repo.parent / "description.md"
+    description.write_text(f"Prose.\n\n{SWEEP_BEGIN}\n- waive LEGACY_SCHEMA CHANGELOG.md: x\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert "mr-preflight:sweep:end" in result.stderr
+
+
+def test_a_missing_description_file_is_a_setup_error(repo: Path) -> None:
+    base = two_renames(repo)
+
+    result = sweep(repo, base, "--description", str(repo.parent / "nope.md"))
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert "nope.md" in result.stderr
+
+
+RECORD = "<!-- mr-preflight:record:begin -->\nrecord body\n<!-- mr-preflight:record:end -->\n"
+
+
+def test_update_rewrites_only_the_sweep_block(repo: Path) -> None:
+    """The acceptance round trip: prose above, between and below the markers
+    is byte-identical afterwards, and the record block is not the sweep's."""
+    base = two_renames(repo)
+    above = "## What this does\n\nRenames two things.  \n\n"
+    between = "\n## Testing\n\n- ran it\n\n"
+    below = "\nNo trailing newline"
+    description = repo.parent / "description.md"
+    description.write_text(
+        f"{above}{SWEEP_BEGIN}\n"
+        "stale text the sweep owns\n"
+        "- [ ] `old.sql:9` `GONE_NAME`\n"
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        "- waive load_curves CHANGELOG.md no colon\n"
+        f"{SWEEP_END}\n{between}{RECORD}{below}"
+    )
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == HITS, result.stderr
+    assert description.read_text() == (
+        f"{above}{SWEEP_BEGIN}\n"
+        "**mr-preflight sweep**\n"
+        "\n"
+        "Renamed on this branch:\n"
+        "\n"
+        "- `LEGACY_SCHEMA` -> `LEGACY_SCHEMA_RAW` in `dbt_project.yml`\n"
+        "- `load_curves` -> `fetch_prices` in `pipeline.py`\n"
+        "\n"
+        "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`):\n"
+        "\n"
+        "- [ ] `docs/CHANGELOG.md:1` `LEGACY_SCHEMA`\n"
+        "- [ ] `sql/audit.sql:1` `LEGACY_SCHEMA`\n"
+        "- [ ] `CHANGELOG.md:3` `load_curves`\n"
+        "\n"
+        "Waivers:\n"
+        "\n"
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        "- waive load_curves CHANGELOG.md no colon\n"
+        f"{SWEEP_END}\n{between}{RECORD}{below}"
+    )
+
+
+def test_update_appends_a_block_to_bare_prose_and_is_stable_on_rerun(repo: Path) -> None:
+    base = two_renames(repo)
+    prose = "## What this does\n\nRenames two things.\n"
+    description = repo.parent / "description.md"
+    description.write_text(prose)
+
+    sweep(repo, base, "--description", str(description), "--update")
+    first = description.read_text()
+    sweep(repo, base, "--description", str(description), "--update")
+
+    assert first.startswith(f"{prose}\n{SWEEP_BEGIN}\n**mr-preflight sweep**\n")
+    assert first.endswith(f"{SWEEP_END}\n")
+    assert description.read_text() == first
+
+
+def test_update_keeps_crlf_prose_byte_for_byte(repo: Path) -> None:
+    """A description saved on Windows reaches GitLab as written; reading it
+    with newline translation would rewrite every line of the author's prose."""
+    base = two_renames(repo)
+    above = b"## What this does\r\n\r\nRenames.\r\n\r\n"
+    below = b"\r\n## Testing\r\n\r\nRan it.\r\n"
+    description = repo.parent / "description.md"
+    description.write_bytes(
+        above + SWEEP_BEGIN.encode() + b"\r\nold\r\n" + SWEEP_END.encode() + b"\r\n" + below
+    )
+
+    sweep(repo, base, "--description", str(description), "--update")
+    after = description.read_bytes()
+
+    assert after.startswith(above + SWEEP_BEGIN.encode() + b"\r\n")
+    assert after.endswith(SWEEP_END.encode() + b"\r\n" + below)
+
+
+def test_update_leaves_a_description_alone_when_nothing_was_renamed(repo: Path) -> None:
+    """Most branches rename nothing; their MR goes out exactly as written."""
+    write(repo, "a.py", "x = 1\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", "x = 2\n")
+    commit(repo, "no rename")
+    prose = b"## What this does\r\n\r\nBumps x.\r\n"
+    description = repo.parent / "description.md"
+    description.write_bytes(prose)
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_bytes() == prose
+
+
+def test_update_still_refreshes_a_stale_block_when_nothing_was_renamed(repo: Path) -> None:
+    """A block copied from an earlier run must not keep claiming old hits."""
+    write(repo, "a.py", "x = 1\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", "x = 2\n")
+    commit(repo, "no rename")
+    description = describe(repo, "- [ ] `sql/audit.sql:1` `LEGACY_SCHEMA`\n", prose="Prose.\n\n")
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_text() == (
+        f"Prose.\n\n{SWEEP_BEGIN}\n**mr-preflight sweep**\n\n"
+        f"No renamed identifiers on this branch.\n{SWEEP_END}\n"
+    )
+
+
+def test_an_update_that_fails_mid_write_leaves_the_description_intact(repo: Path) -> None:
+    """A full disk while `--update` writes must not cost the author the prose
+    it exists to preserve. A file-size limit makes the write fail partway."""
+    base = two_renames(repo)
+    description = repo.parent / "description.md"
+    original = ("## What this does\n\n" + "Prose the author wrote. " * 40 + "\n").encode()
+    description.write_bytes(original)
+    limit = len(original) + 20  # room to read it, not to write the rendered block
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base,
+         "--description", str(description), "--update"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit)),
+    )
+
+    assert description.read_bytes() == original
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "Traceback" not in result.stderr
+    assert sorted(path.name for path in repo.parent.iterdir()) == ["description.md", "repo"]
+
+
+def test_update_keeps_the_description_file_mode(repo: Path) -> None:
+    """The replacement is a new file; it must not come back owner-only."""
+    base = two_renames(repo)
+    description = describe(repo, "")
+    description.chmod(0o644)
+
+    sweep(repo, base, "--description", str(description), "--update")
+
+    assert description.stat().st_mode & 0o777 == 0o644
+
+
+def test_a_failed_update_still_reports_the_hits_before_the_error(repo: Path) -> None:
+    """`create-mr` reads stdout and stderr as one stream; the hits that explain
+    the refusal must come before the write error, not after it."""
+    base = two_renames(repo)
+    locked = repo.parent / "locked"
+    locked.mkdir()
+    description = locked / "description.md"
+    description.write_text("Prose.\n")
+    locked.chmod(0o555)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "sweep", "--base", base,
+             "--description", str(description), "--update"],
+            cwd=repo,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        locked.chmod(0o755)
+
+    lines = result.stdout.splitlines()
+    hit = lines.index("sql/audit.sql:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_project.yml)")
+    error = next(i for i, line in enumerate(lines) if line.startswith("mr-preflight: could not update"))
+    assert result.returncode == SETUP_ERROR
+    assert hit < error
