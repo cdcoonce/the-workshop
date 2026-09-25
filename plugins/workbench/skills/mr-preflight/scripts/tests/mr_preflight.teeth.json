@@ -221,6 +221,13 @@
       "replace": "    except ValueError as error:\n"
     },
     {
+      "label": "the crash guard flushes a closed stdout unguarded, so a crash on `| head` exits 120 unnamed",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        try:\n            sys.stdout.flush()\n        except OSError:\n",
+      "replace": "        sys.stdout.flush()\n        if False:\n"
+    },
+    {
       "label": "a failing git command is reported as an internal crash instead of a named setup error",
       "file": "../mr_preflight.py",
       "oracle": "real",
@@ -497,8 +504,8 @@
       "label": "a write error lands above the hits in a merged stream",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "            sys.stdout.flush()\n",
-      "replace": ""
+      "find": "            sys.stdout.flush()\n            print(f\"mr-preflight: could not update",
+      "replace": "            print(f\"mr-preflight: could not update"
     },
     {
       "label": "hits in ignore_paths are kept, so the config suppresses nothing",

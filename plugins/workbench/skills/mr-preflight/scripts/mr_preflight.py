@@ -254,7 +254,12 @@ def main() -> int:
     except Exception as error:
         # Python exits 1 on an uncaught exception, and 1 means "references to
         # fix or waive" to create-mr; a crash is a sweep that could not run.
-        sys.stdout.flush()
+        try:
+            sys.stdout.flush()
+        except OSError:
+            # stdout is a closed pipe (`| head`). Point it at /dev/null, or this
+            # flush and the interpreter's at exit fail again and exit 120.
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         traceback.print_exc()
         print(f"mr-preflight: internal error: {type(error).__name__}: {error}", file=sys.stderr)
         return SETUP_ERROR

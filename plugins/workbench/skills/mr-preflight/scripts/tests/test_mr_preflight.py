@@ -364,6 +364,33 @@ def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
     assert "mr-preflight: internal error: Unforeseen: unexpected git grep row" in result.stderr
 
 
+def test_a_crash_on_a_closed_stdout_still_exits_2(repo: Path) -> None:
+    """`sweep ... | head` closes stdout mid-report. The guard's own flush then
+    hits the same broken pipe, and so does the interpreter's at exit, which
+    turned exit 2 into 120 with the error line never printed."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/big.sql", "USE SCHEMA LEGACY_SCHEMA;\n" * 5000)
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    # The read end closes before the sweep starts, so the first write fails.
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "sweep", "--base", base],
+            cwd=repo,
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    finally:
+        os.close(write_end)
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: BrokenPipeError" in result.stderr
+
+
 # --- waivers from the description's sweep block ---------------------------
 
 SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
