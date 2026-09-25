@@ -123,6 +123,7 @@ def repo(tmp_path: Path):
         readback_title: str = "",
         description_name: str = "",
         close_stderr: bool = False,
+        broken_stderr: bool = False,
     ) -> subprocess.CompletedProcess:
         (work / "file.txt").write_text(subject)
         subprocess.run(["git", "add", "-A"], cwd=work, check=True)
@@ -153,6 +154,17 @@ def repo(tmp_path: Path):
         if close_stderr:
             # A caller that closed fd 2, as `2>&-` does: every write to it fails.
             command = ["bash", "-c", 'exec 2>&-; exec "$@"', "bash", *command]
+        if broken_stderr:
+            # A pipe whose reader has gone: a write raises SIGPIPE, which
+            # `|| true` cannot catch.
+            read_end, write_end = os.pipe()
+            os.close(read_end)
+            try:
+                return subprocess.run(
+                    command, cwd=work, env=env, stdout=subprocess.PIPE, stderr=write_end, text=True
+                )
+            finally:
+                os.close(write_end)
         return subprocess.run(
             command,
             cwd=work,
@@ -615,7 +627,8 @@ def test_dev_hop_shows_what_the_repo_ignore_list_suppressed(repo) -> None:
 
 
 
-def test_dev_hop_still_opens_the_mr_when_stderr_is_closed(repo) -> None:
+@pytest.mark.parametrize("stderr", ["closed", "broken pipe"])
+def test_dev_hop_still_opens_the_mr_when_stderr_is_closed(repo, stderr) -> None:
     """The passing sweep's output is information, not a gate: failing to show
     it must not stop an MR that the sweep let through."""
     repo.seed({
@@ -626,7 +639,11 @@ def test_dev_hop_still_opens_the_mr_when_stderr_is_closed(repo) -> None:
     (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
 
     result = repo(
-        "feat(dbt): move models to the raw schema", "--target-branch", "dev", close_stderr=True
+        "feat(dbt): move models to the raw schema",
+        "--target-branch",
+        "dev",
+        close_stderr=stderr == "closed",
+        broken_stderr=stderr == "broken pipe",
     )
 
     assert result.returncode == 0
