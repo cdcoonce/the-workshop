@@ -909,3 +909,18 @@ def test_a_config_that_changed_nothing_says_nothing(repo: Path) -> None:
 
     assert result.returncode == HITS, result.stdout
     assert "suppressed" not in result.stdout
+
+
+def test_an_unreadable_config_blob_is_a_setup_error_not_no_ignores(repo: Path) -> None:
+    """The tree lists the file but its blob is gone, as in a partial clone that
+    never fetched it; that is not the same as having no ignore list."""
+    configure(repo, 'ignore_paths = ["**"]\n')
+    base = two_renames(repo)
+    blob = git(repo, "rev-parse", "HEAD:.mr-preflight.toml")
+    (repo / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml at HEAD:" in result.stderr
+    assert "Traceback" not in result.stderr

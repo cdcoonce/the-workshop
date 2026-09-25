@@ -133,14 +133,14 @@
       "label": "substring match, so the new name counts as the old one",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
-      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]"
     },
     {
       "label": "the working tree is searched instead of the committed head",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]",
       "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
     },
     {
@@ -448,22 +448,22 @@
       "label": "a trailing `**` matches the directory's own name too",
       "file": "../ignore_config.py",
       "oracle": "real",
-      "find": "        if not rest:\n            return bool(path)\n",
-      "replace": "        if not rest:\n            return True\n"
+      "find": "            if p + 1 == len(segments):\n                return q < len(path)\n",
+      "replace": "            if p + 1 == len(segments):\n                return q <= len(path)\n"
     },
     {
       "label": "a leading or middle `**` must match at least one directory",
       "file": "../ignore_config.py",
       "oracle": "real",
-      "find": "for skip in range(len(path) + 1))",
-      "replace": "for skip in range(1, len(path) + 1))"
+      "find": "for skip in range(q, len(path) + 1))",
+      "replace": "for skip in range(q + 1, len(path) + 1))"
     },
     {
       "label": "ignore_paths match case-insensitively, unlike git",
       "file": "../ignore_config.py",
       "oracle": "real",
-      "find": "fnmatchcase(path[0], head)",
-      "replace": "fnmatchcase(path[0].lower(), head.lower())"
+      "find": "fnmatchcase(path[q], segments[p])",
+      "replace": "fnmatchcase(path[q].lower(), segments[p].lower())"
     },
     {
       "label": "ignore_tokens are read but never applied",
@@ -476,8 +476,8 @@
       "label": "ignored tokens are chased, then their hits dropped, so the rename still writes a block",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "        renames = [r for r in detected if r.old not in ignores.tokens]\n        skipped_tokens = len(detected) - len(renames)\n        found = sweep(repo, head, renames)\n",
-      "replace": "        renames = list(detected)\n        skipped_tokens = 0\n        found = [h for h in sweep(repo, head, renames) if h.rename.old not in ignores.tokens]\n"
+      "find": "        renames = [r for r in detected if r.old not in ignores.tokens]\n        skipped_tokens = len(detected) - len(renames)\n        found = sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,))\n",
+      "replace": "        renames = list(detected)\n        skipped_tokens = 0\n        found = [h for h in sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,)) if h.rename.old not in ignores.tokens]\n"
     },
     {
       "label": "the suppressed count prints only when something still blocks",
@@ -525,8 +525,8 @@
       "label": "invalid TOML escapes as a traceback instead of a setup error",
       "file": "../ignore_config.py",
       "oracle": "real",
-      "find": "    except tomllib.TOMLDecodeError as error:\n        raise ConfigError(str(error)) from error\n",
-      "replace": "    except KeyError as error:\n        raise ConfigError(str(error)) from error\n"
+      "find": "    except tomllib.TOMLDecodeError as error:\n        raise ConfigError(f\"malformed TOML: {error}\") from error\n",
+      "replace": "    except KeyError as error:\n        raise ConfigError(f\"malformed TOML: {error}\") from error\n"
     },
     {
       "label": "a config error is not caught by the sweep, so it crashes with a traceback",
@@ -543,7 +543,7 @@
       "replace": "return parse_config(blob.stdout.decode(\"utf-8\", \"replace\"))"
     },
     {
-      "label": "a config path that is not a file reads as an empty config",
+      "label": "an unreadable config blob reads as an empty config",
       "file": "../mr_preflight.py",
       "oracle": "real",
       "find": "        if blob.returncode != 0:\n            raise ConfigError(blob.stderr.decode(\"utf-8\", \"replace\").strip())\n",
@@ -567,8 +567,141 @@
       "label": "a missing config is an error instead of no ignores",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "    if probe.returncode != 0:\n        return IgnoreConfig()\n",
-      "replace": "    if probe.returncode != 0:\n        raise ConfigError(f\"{CONFIG_NAME} is missing\")\n"
+      "find": "    if not entry:\n        return IgnoreConfig()\n",
+      "replace": "    if not entry:\n        raise ConfigError(f\"{CONFIG_NAME} is missing\")\n"
+    },
+    {
+      "label": "the config's own lines enter the rename diff, so naming a token there hides its rename",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": ", base, head, \"--\", \".\", CONFIG_PATHSPEC\n",
+      "replace": ", base, head\n"
+    },
+    {
+      "label": "the config is searched, so a glob naming the renamed token blocks on itself",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "exclude=(CONFIG_PATHSPEC,))",
+      "replace": "exclude=())"
+    },
+    {
+      "label": "--head is used unresolved, so `:/message` reads no config",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "commit = _git(repo, \"rev-parse\", \"--verify\", head).strip()",
+      "replace": "commit = head"
+    },
+    {
+      "label": "the config is read from the checked-out HEAD, not the head being swept",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "commit = _git(repo, \"rev-parse\", \"--verify\", head).strip()",
+      "replace": "commit = _git(repo, \"rev-parse\", \"--verify\", \"HEAD\").strip()"
+    },
+    {
+      "label": "the config is read from the base, so an ignore added on the branch never applies",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "ignores = _load_ignores(repo, head)",
+      "replace": "ignores = _load_ignores(repo, base)"
+    },
+    {
+      "label": "a symlinked config is parsed as its target's path",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if kind != \"blob\" or mode == \"120000\":",
+      "replace": "if kind != \"blob\":"
+    },
+    {
+      "label": "a directory where the config belongs is cat-filed as if a file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if kind != \"blob\" or mode == \"120000\":",
+      "replace": "if mode == \"120000\":"
+    },
+    {
+      "label": "git's `[^...]` is left to fnmatch, which reads `^` as a literal",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "out.append(\"[\" + (\"!\" + body[1:] if body.startswith(\"^\") else body) + \"]\")",
+      "replace": "out.append(\"[\" + body + \"]\")"
+    },
+    {
+      "label": "`**` matching is not memoised, so deep paths take seconds per hit",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "    @cache\n",
+      "replace": ""
+    },
+    {
+      "label": "the count prints after the update, so a failed write hides it",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    # Before the update, so a failed write still shows what the config hid.\n    if suppressed_hits or skipped_tokens:\n        print(\n            f\"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths\"\n            f\" and skipped {skipped_tokens} renamed token(s).\"\n        )\n    # A branch that renamed nothing gains no block: its MR goes out exactly as\n    # written. An existing block is still rewritten, so a stale one copied from\n    # an earlier run cannot keep claiming hits that are gone.\n    if update and description is not None and (renames or block is not None):\n        rendered = replace_block(text, \"sweep\", render_body(renames, blocking, waiver_lines(body)))\n        try:\n            _write_description(description, rendered)\n        except OSError as error:\n            # stdout is block-buffered into a pipe and stderr is not, so flush\n            # the hits first or a merged stream shows the error above them.\n            sys.stdout.flush()\n            print(f\"mr-preflight: could not update {description}: {error}\", file=sys.stderr)\n            return SETUP_ERROR\n",
+      "replace": "    # A branch that renamed nothing gains no block: its MR goes out exactly as\n    # written. An existing block is still rewritten, so a stale one copied from\n    # an earlier run cannot keep claiming hits that are gone.\n    if update and description is not None and (renames or block is not None):\n        rendered = replace_block(text, \"sweep\", render_body(renames, blocking, waiver_lines(body)))\n        try:\n            _write_description(description, rendered)\n        except OSError as error:\n            # stdout is block-buffered into a pipe and stderr is not, so flush\n            # the hits first or a merged stream shows the error above them.\n            sys.stdout.flush()\n            print(f\"mr-preflight: could not update {description}: {error}\", file=sys.stderr)\n            return SETUP_ERROR\n    # Before the update, so a failed write still shows what the config hid.\n    if suppressed_hits or skipped_tokens:\n        print(\n            f\"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths\"\n            f\" and skipped {skipped_tokens} renamed token(s).\"\n        )\n"
+    },
+    {
+      "label": "tomllib is imported at the top, so a repo with no config fails on old Python",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "from fnmatch import fnmatchcase\n",
+      "replace": "import tomllib\nfrom fnmatch import fnmatchcase\n"
+    },
+    {
+      "label": "a Python without tomllib crashes with a traceback",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "    except ModuleNotFoundError as error:\n",
+      "replace": "    except KeyError as error:\n"
+    },
+    {
+      "label": "`\\` escapes in ignore_paths are accepted",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "if \"\\\\\" in pattern or \"[:\" in pattern:",
+      "replace": "if \"[:\" in pattern:"
+    },
+    {
+      "label": "`[:class:]` in ignore_paths is accepted",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "if \"\\\\\" in pattern or \"[:\" in pattern:",
+      "replace": "if \"\\\\\" in pattern:"
+    },
+    {
+      "label": "a tokens-only config prints no count",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if suppressed_hits or skipped_tokens:\n",
+      "replace": "    if suppressed_hits:\n"
+    },
+    {
+      "label": "the count prints on every run, even when the config changed nothing",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if suppressed_hits or skipped_tokens:\n",
+      "replace": "    if True:\n"
+    },
+    {
+      "label": "ignore_tokens match any part of a name",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "renames = [r for r in detected if r.old not in ignores.tokens]",
+      "replace": "renames = [r for r in detected if not any(t in r.old for t in ignores.tokens)]"
+    },
+    {
+      "label": "ignore_tokens match regardless of case",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "renames = [r for r in detected if r.old not in ignores.tokens]",
+      "replace": "renames = [r for r in detected if r.old.lower() not in {t.lower() for t in ignores.tokens}]"
+    },
+    {
+      "label": "waivers are read before ignored paths are dropped",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    blocking = []\n    for hit in hits:\n",
+      "replace": "    blocking = []\n    for hit in found:\n"
     },
     {
       "label": "[control] swap two independent git grep flags",
