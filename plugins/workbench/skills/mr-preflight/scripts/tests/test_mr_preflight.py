@@ -594,3 +594,29 @@ def test_a_failed_update_still_reports_the_hits_before_the_error(repo: Path) -> 
     error = next(i for i, line in enumerate(lines) if line.startswith("mr-preflight: could not update"))
     assert result.returncode == SETUP_ERROR
     assert hit < error
+
+
+# --- the committed .mr-preflight.toml ignore list --------------------------
+
+
+def configure(repo: Path, toml: str) -> None:
+    """Write the repo's ignore list; the caller commits it."""
+    write(repo, ".mr-preflight.toml", toml)
+
+
+def test_ignore_paths_suppress_hits_in_those_paths_only(repo: Path) -> None:
+    """The issue's own example: a changelog and an ADR directory are permanent
+    noise, while the same name anywhere else still blocks."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md", "docs/adr/**"]\n')
+    write(repo, "docs/adr/0001-schema.md", "We chose LEGACY_SCHEMA.\n")
+    write(repo, "docs/adr/archive/0000-origin.md", "LEGACY_SCHEMA was first.\n")
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    reported = [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+    assert "CHANGELOG.md" not in reported
+    assert not any(path.startswith("docs/adr/") for path in reported)
+    assert "docs/CHANGELOG.md:1: LEGACY_SCHEMA" in result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout

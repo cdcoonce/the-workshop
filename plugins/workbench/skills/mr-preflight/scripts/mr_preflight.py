@@ -28,6 +28,7 @@ from description_blocks import (  # noqa: E402
     replace_block,
     waiver_lines,
 )
+from ignore_config import CONFIG_NAME, IgnoreConfig, parse_config  # noqa: E402
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
 
@@ -44,6 +45,15 @@ def _git(repo: Path, *args: str) -> str:
         stderr = result.stderr.decode("utf-8", "replace").strip()
         raise RuntimeError(stderr or f"git {' '.join(args)} failed")
     return result.stdout.decode("utf-8", "replace")
+
+
+def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
+    """The ignore list committed at ``head``; none when the file is absent."""
+    spec = f"{head}:{CONFIG_NAME}"
+    probe = subprocess.run(["git", "cat-file", "-e", spec], cwd=repo, capture_output=True)
+    if probe.returncode != 0:
+        return IgnoreConfig()
+    return parse_config(_git(repo, "cat-file", "blob", spec))
 
 
 def _read_description(path: Path) -> str:
@@ -112,7 +122,8 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
         renames = detect_renames(diff_text)
-        hits = sweep(repo, head, renames)
+        ignores = _load_ignores(repo, head)
+        hits = [hit for hit in sweep(repo, head, renames) if not ignores.ignores_path(hit.path)]
     except RuntimeError as error:
         print(f"mr-preflight: {error}", file=sys.stderr)
         return SETUP_ERROR
