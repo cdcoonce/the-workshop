@@ -121,6 +121,78 @@
       "oracle": "real",
       "find": "        raise TargetUnreadable(f\"not UTF-8: {path}\") from None",
       "replace": "        raise TargetUnreadable(\"not UTF-8\") from None"
+    },
+    {
+      "label": "a full run with a stale anchor still runs the baseline and every row",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    stale = [(label, error) for label, error in check_anchors(spec) if error]\n",
+      "replace": "    stale = []\n"
+    },
+    {
+      "label": "--changed-since checks only the anchors of rows it will run",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    stale = [(label, error) for label, error in check_anchors(spec) if error]\n",
+      "replace": "    stale = [(label, error) for label, error in check_anchors(select_changed_rows(args.spec, spec, args.changed_since) if args.changed_since else spec) if error]\n"
+    },
+    {
+      "label": "a partial run leaves the controls out",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
+      "replace": "        if raw not in old_rows\n"
+    },
+    {
+      "label": "a row is matched by label, so a re-anchored row is skipped",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
+      "replace": "        if raw[\"label\"] not in [row[\"label\"] for row in old_rows] or mutant.expect == \"survived\"\n"
+    },
+    {
+      "label": "a revision that does not exist reads as a spec new since it, and runs every row",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if resolved.returncode != 0:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "a partial run with no changed row runs the controls and passes",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if all(m.expect == \"survived\" for m in spec.mutants):\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "a partial run prints no PARTIAL marker",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if len(spec.mutants) < total\n",
+      "replace": "        if False\n"
+    },
+    {
+      "label": "a partial run names tests that killed only a skipped row as killing nothing",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        spec = dataclasses.replace(spec, collect_command=None)\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "a spec first written after the revision is refused instead of run whole",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        old_rows: list[dict] = []\n",
+      "replace": "        raise SpecError(f\"{spec_path} is not in {rev}\")\n"
+    },
+    {
+      "label": "[control] swap the operands of the row-selection or",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Both operands are pure: list membership over JSON-decoded dicts and an attribute read, neither of which can raise or mutate, so `a or b` and `b or a` select the same rows on every input. Short-circuit order only changes which side is evaluated, never the truth value. Inert everywhere, not just on the paths the suite reaches.",
+      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
+      "replace": "        if mutant.expect == \"survived\" or raw not in old_rows\n"
     }
   ]
 }
