@@ -70,8 +70,10 @@ def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
             raise ConfigError(blob.stderr.decode("utf-8", "replace").strip())
         # Decoded strictly: TOML is UTF-8, and a replaced byte would parse.
         return parse_config(blob.stdout.decode("utf-8"))
-    except (ConfigError, UnicodeDecodeError) as error:
-        raise ConfigError(f"{CONFIG_NAME} at {head} is malformed: {error}") from error
+    except UnicodeDecodeError as error:
+        raise ConfigError(f"{CONFIG_NAME} at {head}: not UTF-8: {error}") from error
+    except ConfigError as error:
+        raise ConfigError(f"{CONFIG_NAME} at {head}: {error}") from error
 
 
 def _read_description(path: Path) -> str:

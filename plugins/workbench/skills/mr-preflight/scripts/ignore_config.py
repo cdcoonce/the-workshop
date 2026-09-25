@@ -108,7 +108,7 @@ def parse_config(text: str) -> IgnoreConfig:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
-        raise ConfigError(str(error)) from error
+        raise ConfigError(f"malformed TOML: {error}") from error
     unknown = sorted(set(data) - set(KEYS))
     if unknown:
         raise ConfigError(f"unknown key(s) {', '.join(unknown)}; expected {' and '.join(KEYS)}")

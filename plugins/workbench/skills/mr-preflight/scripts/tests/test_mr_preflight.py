@@ -711,7 +711,7 @@ def test_a_config_path_that_is_not_a_regular_file_is_a_setup_error(repo: Path, k
     result = sweep(repo, base)
 
     assert result.returncode == SETUP_ERROR, result.stdout
-    assert ".mr-preflight.toml at HEAD is malformed: it is not a regular file" in result.stderr
+    assert ".mr-preflight.toml at HEAD: it is not a regular file" in result.stderr
     assert "Traceback" not in result.stderr
 
 
