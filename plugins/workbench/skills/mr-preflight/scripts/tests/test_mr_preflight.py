@@ -998,3 +998,23 @@ def test_an_executable_config_is_still_a_regular_file(repo: Path) -> None:
 
     assert result.returncode == CLEAN, result.stderr
     assert "suppressed 5 hit(s)" in result.stdout
+
+
+def test_a_config_moved_and_edited_is_still_not_a_rename_source(repo: Path) -> None:
+    """Moved with an edit, the config's hunks sit under its new name; they are
+    still its own lines, so a token dropped from the list is not renamed."""
+    # Long enough that git pairs the move (similarity over 50%) and shows the
+    # edited line as a hunk under the new name.
+    listing = '# Permanent noise.\nignore_paths = ["CHANGELOG.md", "docs/adr/**", "migrations/**"]\n'
+    configure(repo, listing + 'ignore_tokens = ["old_thing_x"]\n')
+    write(repo, "lib.py", "def old_thing_x():\n    pass\n")
+    base = commit(repo, "initial")
+    git(repo, "mv", ".mr-preflight.toml", "mr-preflight.old.toml")
+    write(repo, "mr-preflight.old.toml", listing + 'ignore_tokens = ["new_thing_y"]\n')
+    commit(repo, "retire the ignore list")
+    assert "rename from .mr-preflight.toml" in git(repo, "diff", "-U0", base, "HEAD")
+
+    result = sweep(repo, base)
+
+    assert "old_thing_x" not in result.stdout, result.stdout
+    assert result.returncode == CLEAN, result.stdout
