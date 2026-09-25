@@ -833,7 +833,7 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
     raw_rows = json.loads(spec_path.read_text(encoding="utf-8"))["mutants"]
     keep = [
         mutant
-        for raw, mutant in zip(raw_rows, spec.mutants, strict=True)
+        for raw, mutant in zip(raw_rows, spec.mutants)
         if raw not in old_rows or mutant.expect == "survived"
     ]
     return dataclasses.replace(spec, mutants=keep)
