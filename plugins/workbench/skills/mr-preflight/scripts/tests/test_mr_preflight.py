@@ -692,3 +692,37 @@ def test_a_malformed_config_is_a_setup_error_naming_the_file(repo: Path, content
     assert result.returncode == SETUP_ERROR, result.stdout
     assert ".mr-preflight.toml" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_a_config_path_that_is_a_directory_is_a_setup_error(repo: Path) -> None:
+    write(repo, ".mr-preflight.toml/ignore.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_only_the_committed_config_counts(repo: Path) -> None:
+    """The sweep reads the head tree, so an ignore that exists only on the
+    author's disk cannot pass an MR whose reviewers never see it."""
+    base = two_renames(repo)
+    configure(repo, 'ignore_paths = ["**"]\n')
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_the_root_config_applies_from_a_subdirectory(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["**"]\n')
+    write(repo, "sub/notes.md", "nothing here\n")
+    base = two_renames(repo)
+
+    result = sweep(repo / "sub", base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "suppressed 5 hit(s)" in result.stdout
