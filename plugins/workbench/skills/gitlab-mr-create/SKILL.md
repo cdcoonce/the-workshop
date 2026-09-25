@@ -30,7 +30,7 @@ bash "<skill base directory>/scripts/create-mr" \
 
 Never retitle afterwards with `glab mr update --title`: that bypasses the read-back.
 
-Before creating the MR, the script runs the `mr-preflight` reference sweep from the merge-base with `origin/dev`. It refuses while any reference to an identifier the branch renamed survives at `HEAD`, and when `origin/dev` is missing. Each hit prints as `path:line: OLD (renamed to NEW in FILE)`; fix it, commit, and run the script again. The `mr-preflight` skill explains what counts as a rename.
+Before creating the MR, the script runs the `mr-preflight` reference sweep from the merge-base with `origin/dev`. It refuses while any reference to an identifier the branch renamed survives at `HEAD` unwaived, while the description holds a malformed `- waive` line, and when `origin/dev` is missing. Each hit prints as `path:line: OLD (renamed to NEW in FILE)`; fix it and commit, or, for an intentional old name such as a changelog entry, add `- waive OLD path: reason` to the description's sweep block, then run the script again. On success the MR's description carries the rendered sweep block after your prose: what was renamed, and every waiver with its reason. Your description file itself is never rewritten. The `mr-preflight` skill explains what counts as a rename and how waivers work.
 
 ## Into `staging` — a title file
 

@@ -284,7 +284,7 @@ Computes a pairwise conflict matrix with git merge-tree and recommends a merge o
 
 *`workbench` plugin*
 
-Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or when a doc still names an old schema or function.
+Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or to waive an intended old name.
 
 ### `/mr-review-fixes`
 

@@ -2,8 +2,11 @@
 """Deterministic checks run before a GitLab merge request is opened.
 
 ``sweep`` finds identifiers the diff between ``--base`` and ``--head`` renamed
-and reports every reference to the old name that survives at head. Exit codes:
-0 clean, 1 surviving references, 2 setup error.
+and reports every reference to the old name that survives at head. With
+``--description``, the waivers in that MR description's sweep block
+(``- waive TOKEN path: reason``) excuse their hits, and a malformed waiver line
+blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
+1 unwaived references or malformed waivers, 2 setup error.
 """
 
 from __future__ import annotations
