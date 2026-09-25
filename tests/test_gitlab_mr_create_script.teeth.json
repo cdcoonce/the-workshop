@@ -147,22 +147,29 @@
       "label": "a passing sweep's output is discarded, hiding what the ignore list suppressed",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" >&2 || true\n",
+      "find": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" >&2 ) || true\n",
       "replace": ""
     },
     {
       "label": "a passing sweep's output goes to stdout, where glab's output is",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" >&2 || true\n",
-      "replace": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" || true\n"
+      "find": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" >&2 ) || true\n",
+      "replace": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" ) || true\n"
     },
     {
       "label": "a closed stderr fails the passing sweep's echo and aborts the MR",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" >&2 || true\n",
-      "replace": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" >&2\n"
+      "find": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" >&2 ) || true\n",
+      "replace": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" >&2 )\n"
+    },
+    {
+      "label": "a broken stderr pipe kills the script with SIGPIPE before the MR is created",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "    [[ -z \"$sweep_output\" ]] || ( printf '%s\\n' \"$sweep_output\" >&2 ) || true\n",
+      "replace": "    [[ -z \"$sweep_output\" ]] || printf '%s\\n' \"$sweep_output\" >&2 || true\n"
     },
     {
       "label": "[control] reword the HEAD-subject label in the gate's error",

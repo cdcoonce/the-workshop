@@ -133,14 +133,14 @@
       "label": "substring match, so the new name counts as the old one",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]",
-      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]"
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
     },
     {
       "label": "the working tree is searched instead of the committed head",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\", \".\", *exclude]",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
       "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
     },
     {
@@ -476,8 +476,8 @@
       "label": "ignored tokens are chased, then their hits dropped, so the rename still writes a block",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "        renames = [r for r in detected if r.old not in ignores.tokens]\n        skipped_tokens = len(detected) - len(renames)\n        found = sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,))\n",
-      "replace": "        renames = list(detected)\n        skipped_tokens = 0\n        found = [h for h in sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,)) if h.rename.old not in ignores.tokens]\n"
+      "find": "        renames = [r for r in detected if r.old not in ignores.tokens]\n        skipped_tokens = len(detected) - len(renames)\n        found = [hit for hit in sweep(repo, head, renames) if hit.path != CONFIG_NAME]\n",
+      "replace": "        renames = list(detected)\n        skipped_tokens = 0\n        found = [h for h in sweep(repo, head, renames) if h.path != CONFIG_NAME and h.rename.old not in ignores.tokens]\n"
     },
     {
       "label": "the suppressed count prints only when something still blocks",
@@ -567,36 +567,36 @@
       "label": "a missing config is an error instead of no ignores",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "    if not entry:\n        return IgnoreConfig()\n",
-      "replace": "    if not entry:\n        raise ConfigError(f\"{CONFIG_NAME} is missing\")\n"
+      "find": "    if entry is None:\n        return IgnoreConfig()\n",
+      "replace": "    if entry is None:\n        raise ConfigError(f\"{CONFIG_NAME} is missing\")\n"
     },
     {
       "label": "the config's own lines enter the rename diff, so naming a token there hides its rename",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": ", base, head, \"--\", \".\", CONFIG_PATHSPEC\n",
-      "replace": ", base, head\n"
+      "find": "detect_renames(diff_text, exclude_paths=frozenset({CONFIG_NAME}))",
+      "replace": "detect_renames(diff_text)"
     },
     {
       "label": "the config is searched, so a glob naming the renamed token blocks on itself",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "exclude=(CONFIG_PATHSPEC,))",
-      "replace": "exclude=())"
+      "find": "found = [hit for hit in sweep(repo, head, renames) if hit.path != CONFIG_NAME]",
+      "replace": "found = sweep(repo, head, renames)"
     },
     {
       "label": "the config is looked up as `<head>:<path>`, so `:/message` reads no config",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "entry = _git(repo, \"ls-tree\", \"-z\", head, \"--\", CONFIG_NAME)",
-      "replace": "entry = _git(repo, \"ls-tree\", \"-z\", f\"{head}:{CONFIG_NAME}\")"
+      "find": "listing = _git(repo, \"ls-tree\", \"-z\", head)",
+      "replace": "listing = _git(repo, \"ls-tree\", \"-z\", f\"{head}:\")"
     },
     {
       "label": "the config is read from the checked-out HEAD, not the head being swept",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "entry = _git(repo, \"ls-tree\", \"-z\", head, \"--\", CONFIG_NAME)",
-      "replace": "entry = _git(repo, \"ls-tree\", \"-z\", \"HEAD\", \"--\", CONFIG_NAME)"
+      "find": "listing = _git(repo, \"ls-tree\", \"-z\", head)",
+      "replace": "listing = _git(repo, \"ls-tree\", \"-z\", \"HEAD\")"
     },
     {
       "label": "the config is read from the base, so an ignore added on the branch never applies",
@@ -702,6 +702,62 @@
       "oracle": "real",
       "find": "    blocking = []\n    for hit in hits:\n",
       "replace": "    blocking = []\n    for hit in found:\n"
+    },
+    {
+      "label": "the config is looked up by pathspec, which GIT_*_PATHSPECS re-read",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "listing = _git(repo, \"ls-tree\", \"-z\", head)",
+      "replace": "listing = _git(repo, \"ls-tree\", \"-z\", head, \"--\", CONFIG_NAME)"
+    },
+    {
+      "label": "the config's hunks are dropped only under its new name, so a moved-and-edited config renames",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if path in exclude_paths or old_path in exclude_paths:",
+      "replace": "if path in exclude_paths:"
+    },
+    {
+      "label": "an excluded hunk's lines still count as uses elsewhere",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if path in exclude_paths or old_path in exclude_paths:",
+      "replace": "if False:"
+    },
+    {
+      "label": "every file named like the config is left out of the search",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if hit.path != CONFIG_NAME]",
+      "replace": "if not hit.path.endswith(CONFIG_NAME)]"
+    },
+    {
+      "label": "only a 100644 config counts as a regular file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if kind != \"blob\" or mode == \"120000\":",
+      "replace": "if kind != \"blob\" or mode != \"100644\":"
+    },
+    {
+      "label": "`[:class:]` is refused only at the start of a class",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "if \"\\\\\" in pattern or \"[:\" in pattern:",
+      "replace": "if \"\\\\\" in pattern or \"[[:\" in pattern:"
+    },
+    {
+      "label": "an unclosed `[` is read as a literal, as fnmatch does, not as git's no-match",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "            raise ValueError(\"an unclosed `[`\")\n",
+      "replace": "            out.append(\"[\")\n            i += 1\n            continue\n"
+    },
+    {
+      "label": "a `]` right after `[` closes the class instead of joining it",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "        if j < len(segment) and segment[j] == \"]\":\n            j += 1\n",
+      "replace": ""
     },
     {
       "label": "[control] swap two independent git grep flags",
