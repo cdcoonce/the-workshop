@@ -50,12 +50,21 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
             stderr = result.stderr.decode("utf-8", "replace").strip()
             raise RuntimeError(stderr or f"git grep failed for {rename.old}")
         prefix = f"{head}:"
-        # Bytes decoded by hand, then rows split on `\n` only. `text=True`
-        # (universal newlines) or `splitlines` would also break a row at a
-        # `\r` or form feed inside the matched line and strand its NULs.
+        # Each row is `name NUL line NUL content \n`, read field by field.
+        # git prints a newline inside a path raw under `-z`, so only the NULs
+        # can find the name; a row ends at the first `\n` after its line
+        # field. Bytes are decoded by hand because `text=True` (universal
+        # newlines) would also break a row at a `\r` in the matched line.
         stdout = result.stdout.decode("utf-8", "replace")
-        for row in filter(None, stdout.split("\n")):
-            name, line, _ = row.split("\0", 2)
+        start = 0
+        while start < len(stdout):
+            name_end = stdout.index("\0", start)
+            line_end = stdout.index("\0", name_end + 1)
+            row_end = stdout.find("\n", line_end + 1)
+            if row_end == -1:
+                row_end = len(stdout)
+            name = stdout[start:name_end]
             path = name[len(prefix):] if name.startswith(prefix) else name
-            hits.append(Hit(path=path, line=int(line), rename=rename))
+            hits.append(Hit(path=path, line=int(stdout[name_end + 1 : line_end]), rename=rename))
+            start = row_end + 1
     return hits

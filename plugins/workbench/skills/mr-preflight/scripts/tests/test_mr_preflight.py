@@ -235,6 +235,22 @@ def test_a_path_with_a_colon_is_reported_whole(repo: Path) -> None:
     assert "sql/a:b.sql:1: LEGACY_SCHEMA" in result.stdout
 
 
+def test_a_path_with_a_newline_is_reported_whole(repo: Path) -> None:
+    """Under `-z` git prints a newline in a path raw, so the name field can
+    hold one; splitting rows on `\\n` first would tear it off its NULs."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "docs/new\nline.md:1: LEGACY_SCHEMA" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
 def test_a_binary_file_holding_the_old_name_is_not_a_crash(repo: Path) -> None:
     """Binary content has no line to fix; it must neither crash the sweep
     nor stand in for a hit, while text hits are still reported."""
