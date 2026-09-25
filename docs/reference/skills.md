@@ -40,6 +40,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
 | `/measure-before-landing` | `workbench` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
 | `/mr-merge-order` | `workbench` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
+| `/mr-preflight` | `workbench` | Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. |
 | `/mr-review-fixes` | `workbench` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
 | `/persona-builder` | `workbench` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
 | `/plan-ceo-review` | `workbench` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
@@ -278,6 +279,12 @@ Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixtur
 *`workbench` plugin*
 
 Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. Use when several MRs or PRs target the same branch and the user asks which to merge first or how to order a queue. Read-only.
+
+### `/mr-preflight`
+
+*`workbench` plugin*
+
+Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or to waive an intended old name.
 
 ### `/mr-review-fixes`
 

@@ -1,0 +1,452 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/mr-preflight/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/mr-preflight/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "surviving references exit 0, so create-mr opens the MR anyway",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        return HITS\n    return CLEAN",
+      "replace": "        return CLEAN\n    return CLEAN"
+    },
+    {
+      "label": "every token on a removed line is chased, distinctive or not",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if token not in new_tokens and is_distinctive(token):",
+      "replace": "if token not in new_tokens:"
+    },
+    {
+      "label": "no minimum length, so short names like a_b are chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(token) < MIN_LENGTH or DUNDER.match(token):",
+      "replace": "if DUNDER.match(token):"
+    },
+    {
+      "label": "CamelCase alone no longer makes a name distinctive",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": " or bool(INTERNAL_CAPITAL.search(token))",
+      "replace": ""
+    },
+    {
+      "label": "the minimum length drifts from 6 to 7",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "MIN_LENGTH = 6",
+      "replace": "MIN_LENGTH = 7"
+    },
+    {
+      "label": "file headers are recognized inside a hunk, so a removed SQL comment ends it",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "        if removed_left or added_left:\n",
+      "replace": "        if (removed_left or added_left) and not line.startswith((\"--- \", \"+++ \")):\n"
+    },
+    {
+      "label": "every replaced name is credited to the first new name on the line",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "replace": "renames.append(Rename(old=token, new=next((t for t in new_tokens if t not in old_tokens), \"\"), path=path))"
+    },
+    {
+      "label": "the sweep runs from the cwd instead of the repo root",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "repo = Path(_git(Path.cwd(), \"rev-parse\", \"--show-toplevel\").strip())",
+      "replace": "repo = Path.cwd()"
+    },
+    {
+      "label": "binary files are grepped, so their line-less rows reach the parser",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\"",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-n\""
+    },
+    {
+      "label": "rows are split on the first colon, so a path containing one breaks",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n",
+      "replace": "            row = row.replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line, _ = row.split(\":\", 2)\n"
+    },
+    {
+      "label": "dunders are chased like any other name",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(token) < MIN_LENGTH or DUNDER.match(token):",
+      "replace": "if len(token) < MIN_LENGTH:"
+    },
+    {
+      "label": "a name the diff adds elsewhere is still chased as renamed",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if rename.old not in seen and rename.old not in added_anywhere:",
+      "replace": "if rename.old not in seen:"
+    },
+    {
+      "label": "a removed line with no partner is compared against nothing and chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "    for old_line, new_line in zip(removed, added):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n        if not new_tokens:\n            continue\n",
+      "replace": "    for old_line, new_line in zip(removed, added + [\"\"] * len(removed)):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n"
+    },
+    {
+      "label": "qualified names are compared whole, so the bare schema is never chased",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "        parts = match.split(\".\")\n",
+      "replace": "        parts = [match]\n"
+    },
+    {
+      "label": "a dotted name with no distinctive part is dropped instead of chased whole",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if len(parts) > 1 and not any(is_distinctive(part) for part in parts):",
+      "replace": "if False:"
+    },
+    {
+      "label": "substring match, so the new name counts as the old one",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-F\", \"-e\", rename.old, head, \"--\"]"
+    },
+    {
+      "label": "the working tree is searched instead of the committed head",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, head, \"--\"]",
+      "replace": "[\"git\", \"grep\", \"-z\", \"-I\", \"-n\", \"-w\", \"-F\", \"-e\", rename.old, \"--\"]"
+    },
+    {
+      "label": "a failing git diff reads as an empty diff, so a bad base sweeps clean",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if result.returncode != 0:\n        stderr = result.stderr.decode",
+      "replace": "    if False:\n        stderr = result.stderr.decode"
+    },
+    {
+      "label": "the replacement name is dropped from the report",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "replace": "renames.append(Rename(old=token, new=\"\", path=path))"
+    },
+    {
+      "label": "the rename is attributed to the raw diff path with its b/ prefix",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "path = line[6:] if line.startswith(\"+++ b/\") else line[4:]",
+      "replace": "path = line[4:]"
+    },
+    {
+      "label": "grep rows split with splitlines, so a \\r inside a hit line strands half a row",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "for row in filter(None, stdout.split(\"\\n\")):",
+      "replace": "for row in filter(None, stdout.splitlines()):"
+    },
+    {
+      "label": "diff lines split with splitlines, so a \\r before a rename cuts it off",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "for line in diff_text.split(\"\\n\"):",
+      "replace": "for line in diff_text.splitlines():"
+    },
+    {
+      "label": "a marker quoted inside a prose line opens a block",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "starts = [offset + len(line) for offset, line in _lines(text) if line.strip() == begin]",
+      "replace": "starts = [offset + len(line) for offset, line in _lines(text) if begin in line]"
+    },
+    {
+      "label": "a lone begin or end marker reads as no block, so a second one is appended",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    if not starts and not stops:\n        return None",
+      "replace": "    if not starts or not stops:\n        return None"
+    },
+    {
+      "label": "a repeated block is accepted and the first copy wins",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if len(starts) != 1 or len(stops) != 1 or stops[0] < starts[0]:",
+      "replace": "if stops[0] < starts[0]:"
+    },
+    {
+      "label": "reversed markers are accepted",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if len(starts) != 1 or len(stops) != 1 or stops[0] < starts[0]:",
+      "replace": "if len(starts) != 1 or len(stops) != 1:"
+    },
+    {
+      "label": "the body offset starts at the begin marker, so replacing drops it",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "starts = [offset + len(line) for offset, line in _lines(text) if line.strip() == begin]",
+      "replace": "starts = [offset for offset, line in _lines(text) if line.strip() == begin]"
+    },
+    {
+      "label": "an appended block is glued onto the last line of prose",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "        gap = \"\\n\" * max(0, 2 - trailing) if text else \"\"\n",
+      "replace": "        gap = \"\"\n"
+    },
+    {
+      "label": "--update appends a fresh block on every run instead of replacing",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    block = find_block(text, name)\n    if block is None:",
+      "replace": "    block = find_block(text, name)\n    if True:"
+    },
+    {
+      "label": "a waiver typo is skipped as prose, so its author believes the hit is waived",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "        if not match:\n            malformed.append(line)\n            continue",
+      "replace": "        if not match:\n            continue"
+    },
+    {
+      "label": "any line starting with the word waive is held to the waiver form",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")",
+      "replace": "WAIVER_INTENT = re.compile(r\"^- waive\")"
+    },
+    {
+      "label": "a waiver path ends at its first colon",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "(?P<path>`[^`]+`|\\S+): (?P<reason>\\S.*)$",
+      "replace": "(?P<path>`[^`]+`|[^\\s:]+): (?P<reason>\\S.*)$"
+    },
+    {
+      "label": "a waiver with no reason is accepted",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "(?P<path>`[^`]+`|\\S+): (?P<reason>\\S.*)$",
+      "replace": "(?P<path>`[^`]+`|\\S+):\\s*(?P<reason>.*)$"
+    },
+    {
+      "label": "a backticked path keeps its backticks, so it never matches a hit",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "path=match[\"path\"].strip(\"`\"),",
+      "replace": "path=match[\"path\"],"
+    },
+    {
+      "label": "a waiver keyed on its token alone waives that name in every file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (t, _), r in waived.items() if t == hit.rename.old), None)"
+    },
+    {
+      "label": "a waiver keyed on its path alone waives every name in that file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (_, p), r in waived.items() if p == hit.path), None)"
+    },
+    {
+      "label": "a waiver path matches as a suffix, so docs/CHANGELOG.md rides on CHANGELOG.md",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and hit.path.endswith(p)), None)"
+    },
+    {
+      "label": "a waiver is spent on its first hit, so a second hit in the file blocks",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = waived.pop((hit.rename.old, hit.path), None)"
+    },
+    {
+      "label": "a waiver holds only at the line it was written against (line 1 in the fixture)",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "replace": "reason = waived.get((hit.rename.old, hit.path)) if hit.line == 1 else None"
+    },
+    {
+      "label": "waived hits still fail the sweep",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if blocking or malformed:\n        return HITS",
+      "replace": "    if hits or malformed:\n        return HITS"
+    },
+    {
+      "label": "a malformed waiver is reported but does not block",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if blocking or malformed:\n        return HITS",
+      "replace": "    if blocking:\n        return HITS"
+    },
+    {
+      "label": "the description is read with newline translation, rewriting CRLF prose",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "return path.read_bytes().decode(\"utf-8\", \"surrogateescape\")",
+      "replace": "return path.read_text()"
+    },
+    {
+      "label": "--update drops the author's waiver lines",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, blocking, [])"
+    },
+    {
+      "label": "--update carries forward only well-formed waivers, losing the typo to fix",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, blocking, [f\"- waive {w.token} {w.path}: {w.reason}\" for w in parse_waivers(body)[0]])"
+    },
+    {
+      "label": "the to-do list includes hits that were waived",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "render_body(renames, blocking, waiver_lines(body))",
+      "replace": "render_body(renames, hits, waiver_lines(body))"
+    },
+    {
+      "label": "--update renders but never writes the file",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "            _write_description(description, rendered)\n",
+      "replace": "            pass\n"
+    },
+    {
+      "label": "an unreadable description crashes with a traceback instead of a setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except (OSError, BlockError) as error:",
+      "replace": "        except BlockError as error:"
+    },
+    {
+      "label": "--update writes a block onto a branch that renamed nothing",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if update and description is not None and (renames or block is not None):",
+      "replace": "if update and description is not None:"
+    },
+    {
+      "label": "a stale block is left claiming old hits when nothing was renamed",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if update and description is not None and (renames or block is not None):",
+      "replace": "if update and description is not None and renames:"
+    },
+    {
+      "label": "lines split with splitlines, so a marker glued by \\r or U+2028 reads as alone",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "for line in re.findall(r\"[^\\n]*\\n|[^\\n]+\", text):",
+      "replace": "for line in text.splitlines(keepends=True):"
+    },
+    {
+      "label": "the malformed net only catches the exact `- waive ` spelling",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\", re.IGNORECASE)",
+      "replace": "NEAR_MISS = re.compile(r\"^- waive\\s+\")"
+    },
+    {
+      "label": "the malformed net is case-sensitive, so `- Waive` reads as prose",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\", re.IGNORECASE)",
+      "replace": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\")"
+    },
+    {
+      "label": "--update writes in place, so a failed write truncates the description",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "            _write_description(description, rendered)\n",
+      "replace": "            description.write_bytes(rendered.encode(\"utf-8\", \"surrogateescape\"))\n"
+    },
+    {
+      "label": "a failed write leaves its temp file beside the description",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        Path(temp).unlink(missing_ok=True)\n        raise",
+      "replace": "        raise"
+    },
+    {
+      "label": "a failed write crashes with a traceback instead of a setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except OSError as error:\n            # stdout is block-buffered",
+      "replace": "        except ValueError as error:\n            # stdout is block-buffered"
+    },
+    {
+      "label": "the rewritten description comes back owner-only",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        shutil.copymode(target, temp)\n",
+      "replace": ""
+    },
+    {
+      "label": "every near miss counts, so prose starting with Waive blocks the MR",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    return bool(NEAR_MISS.match(line) and WAIVER.match(NEAR_MISS.sub(\"- waive \", line, count=1)))",
+      "replace": "    return bool(NEAR_MISS.match(line))"
+    },
+    {
+      "label": "a write error lands above the hits in a merged stream",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "            sys.stdout.flush()\n",
+      "replace": ""
+    },
+    {
+      "label": "[control] swap two independent git grep flags",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "`-n` and `-w` are independent boolean options to git grep; their order changes neither the match set nor the `path:line:` output shape. Inert on every path the suite reaches, and on every input: git's option parser is order-insensitive for flags that take no argument.",
+      "find": "\"-n\", \"-w\", \"-F\", \"-e\", rename.old, head",
+      "replace": "\"-w\", \"-n\", \"-F\", \"-e\", rename.old, head"
+    },
+    {
+      "label": "[control] swap the two closing summary lines",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two independent prints to stdout after every hit and waiver line is already printed; no caller parses their relative order (create-mr forwards the text whole, tests match whole lines by membership). Inert for every exit code and every rendered block; a human reading both lines sees them in the other order, which is the only place it shows.",
+      "find": "    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n",
+      "replace": "    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n"
+    }
+  ]
+}

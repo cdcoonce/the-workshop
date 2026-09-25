@@ -44,6 +44,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
 | `/measure-before-landing` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
 | `/mr-merge-order` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
+| `/mr-preflight` | Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. |
 | `/mr-review-fixes` | Reads MR/PR review threads, triages findings, lands the fix, and replies to the reviewer in-thread. |
 | `/persona-builder` | Builds an installable, self-tuning coach/advisor persona for a named owner via interviews, field research, and a three-layer package delivered by PR. |
 | `/plan-ceo-review` | CEO/founder-mode review that rethinks a plan to find the 10-star product. |
