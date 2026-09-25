@@ -18,7 +18,7 @@ class Hit:
     rename: Rename
 
 
-def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
+def sweep(repo: Path, head: str, renames: list[Rename], exclude: tuple[str, ...] = ()) -> list[Hit]:
     """Return every word-boundary occurrence of each renamed token at ``head``.
 
     Parameters
@@ -29,6 +29,8 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
         Commit-ish whose tree is searched, so uncommitted edits never count.
     renames
         Tokens to chase, from ``rename_detector.detect_renames``.
+    exclude
+        Pathspecs never searched, such as the repo's own ignore list.
 
     Returns
     -------
@@ -41,7 +43,7 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
         # path cannot split it; `-I` skips binary files, which have no line
         # to fix and would otherwise print a line-less "Binary file" row.
         result = subprocess.run(
-            ["git", "grep", "-z", "-I", "-n", "-w", "-F", "-e", rename.old, head, "--"],
+            ["git", "grep", "-z", "-I", "-n", "-w", "-F", "-e", rename.old, head, "--", ".", *exclude],
             cwd=repo,
             capture_output=True,
         )

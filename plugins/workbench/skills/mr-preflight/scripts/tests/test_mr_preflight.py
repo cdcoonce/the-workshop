@@ -728,3 +728,55 @@ def test_the_root_config_applies_from_a_subdirectory(repo: Path) -> None:
 
     assert result.returncode == CLEAN, result.stdout
     assert "suppressed 5 hit(s)" in result.stdout
+
+
+def test_a_config_added_with_the_rename_hides_only_its_own_paths(repo: Path) -> None:
+    """The branch that renames is the one that adds the ignore. The config's
+    own lines naming the old token are not a use of it, so they cannot turn
+    the rename into a move and hide the hit in a path nobody ignored."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    configure(repo, '# CHANGELOG keeps LEGACY_SCHEMA history\nignore_paths = ["CHANGELOG.md"]\n')
+    commit(repo, "rename, and ignore the changelog")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    reported = [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+    assert "sql/audit.sql" in reported
+    assert "CHANGELOG.md" not in reported
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_dropping_an_ignored_token_is_not_a_rename_of_it(repo: Path) -> None:
+    """Editing the list pairs its old and new lines; the token that left the
+    list is still in use everywhere and must not start blocking."""
+    configure(repo, 'ignore_tokens = ["old_thing_x", "LEGACY_SCHEMA"]\n')
+    write(repo, "lib.py", "def old_thing_x():\n    pass\n")
+    base = commit(repo, "initial")
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    commit(repo, "stop ignoring old_thing_x")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "old_thing_x" not in result.stdout
+
+
+def test_the_config_is_never_a_hit_for_a_name_it_ignores(repo: Path) -> None:
+    """A glob naming the renamed directory is the config doing its job, not a
+    stale reference that needs a waiver of its own."""
+    configure(repo, 'ignore_paths = ["migrations/LEGACY_SCHEMA/**"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "migrations/LEGACY_SCHEMA/001.sql", "CREATE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert ".mr-preflight.toml" not in [line.split(":", 1)[0] for line in result.stdout.splitlines()]

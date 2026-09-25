@@ -32,6 +32,9 @@ from ignore_config import CONFIG_NAME, ConfigError, IgnoreConfig, parse_config  
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
 
+# The root's `.mr-preflight.toml` exactly, whatever the cwd; never a glob.
+CONFIG_PATHSPEC = f":(top,exclude,literal){CONFIG_NAME}"
+
 CLEAN = 0
 HITS = 1
 SETUP_ERROR = 2
@@ -127,7 +130,12 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # `git grep <tree>` searches only the cwd's subtree, so run from the
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
-        diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
+        # The ignore list is not a use of the names it lists, so it is left
+        # out of the diff and the search: a line of it naming the old token
+        # would read as the token moving, and a glob naming it as a hit.
+        diff_text = _git(
+            repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head, "--", ".", CONFIG_PATHSPEC
+        )
         # Ignored tokens leave the rename set before the search, and hits in
         # ignored paths are dropped before waivers are consulted; both are
         # counted so the summary keeps allowlist creep in view.
@@ -135,7 +143,7 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         detected = detect_renames(diff_text)
         renames = [r for r in detected if r.old not in ignores.tokens]
         skipped_tokens = len(detected) - len(renames)
-        found = sweep(repo, head, renames)
+        found = sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,))
         hits = [hit for hit in found if not ignores.ignores_path(hit.path)]
         suppressed_hits = len(found) - len(hits)
     except (RuntimeError, ConfigError) as error:
