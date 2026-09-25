@@ -968,3 +968,33 @@ def test_pathspec_settings_in_the_environment_change_nothing(repo: Path, variabl
     assert result.returncode == HITS, result.stderr
     assert "other.py:1: LEGACY_SCHEMA (renamed to NEW_SCHEMA in code.py)" in result.stdout
     assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_only_the_root_config_is_left_out_of_the_sweep(repo: Path) -> None:
+    """A nested `.mr-preflight.toml` or a file merely named like one is
+    ordinary content: its references to the old name are hits."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "pkg/.mr-preflight.toml", "# LEGACY_SCHEMA\n")
+    write(repo, "legacy.mr-preflight.toml", "# LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "pkg/.mr-preflight.toml:1: LEGACY_SCHEMA" in result.stdout
+    assert "legacy.mr-preflight.toml:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_an_executable_config_is_still_a_regular_file(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["**"]\n')
+    (repo / ".mr-preflight.toml").chmod(0o755)
+    base = two_renames(repo)
+    assert git(repo, "ls-tree", "HEAD", ".mr-preflight.toml").startswith("100755 ")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stderr
+    assert "suppressed 5 hit(s)" in result.stdout
