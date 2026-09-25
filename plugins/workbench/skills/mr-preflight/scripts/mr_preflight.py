@@ -169,6 +169,12 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         print(f"{hit.path}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
     for line in malformed:
         print(f"malformed waiver: {line}")
+    # Before the update, so a failed write still shows what the config hid.
+    if suppressed_hits or skipped_tokens:
+        print(
+            f"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths"
+            f" and skipped {skipped_tokens} renamed token(s)."
+        )
     # A branch that renamed nothing gains no block: its MR goes out exactly as
     # written. An existing block is still rewritten, so a stale one copied from
     # an earlier run cannot keep claiming hits that are gone.
@@ -182,11 +188,6 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
             sys.stdout.flush()
             print(f"mr-preflight: could not update {description}: {error}", file=sys.stderr)
             return SETUP_ERROR
-    if suppressed_hits or skipped_tokens:
-        print(
-            f"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths"
-            f" and skipped {skipped_tokens} renamed token(s)."
-        )
     if blocking:
         print(f"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.")
     if malformed:

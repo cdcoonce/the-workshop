@@ -806,3 +806,20 @@ def test_the_config_comes_from_the_head_being_swept(repo: Path, head: str) -> No
 
     assert result.returncode == CLEAN, result.stdout
     assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_a_failed_update_still_reports_what_the_config_suppressed(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+    locked = repo.parent / "locked"
+    locked.mkdir()
+    description = locked / "description.md"
+    description.write_text("Prose.\n")
+    locked.chmod(0o555)
+    try:
+        result = sweep(repo, base, "--description", str(description), "--update")
+    finally:
+        locked.chmod(0o755)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert "suppressed 3 hit(s) in ignored paths" in result.stdout
