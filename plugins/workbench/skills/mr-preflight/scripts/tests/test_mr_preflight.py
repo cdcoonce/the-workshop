@@ -341,13 +341,16 @@ def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
     base = commit(repo, "initial")
     write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
     commit(repo, "rename")
-    # `mr_preflight` binds `sweep` by name at import, so patch it there.
+    # `mr_preflight` binds `sweep` by name at import, so patch it there. The
+    # exception is a class no handler names, so only a catch-all can take it.
     crash = (
         "import sys\n"
         f"sys.path.insert(0, {str(SCRIPT.parent)!r})\n"
         "import mr_preflight\n"
+        "class Unforeseen(Exception):\n"
+        "    pass\n"
         "def boom(*args, **kwargs):\n"
-        "    raise ValueError('unexpected git grep row')\n"
+        "    raise Unforeseen('unexpected git grep row')\n"
         "mr_preflight.sweep = boom\n"
         f"sys.argv = ['mr_preflight.py', 'sweep', '--base', {base!r}]\n"
         "sys.exit(mr_preflight.main())\n"
@@ -358,7 +361,7 @@ def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
     )
 
     assert result.returncode == SETUP_ERROR, result.stderr
-    assert "mr-preflight: internal error: ValueError: unexpected git grep row" in result.stderr
+    assert "mr-preflight: internal error: Unforeseen: unexpected git grep row" in result.stderr
 
 
 # --- waivers from the description's sweep block ---------------------------

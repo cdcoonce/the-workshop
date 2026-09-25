@@ -186,11 +186,39 @@
       "replace": "row_end = stdout.find(\"\\n\", start)"
     },
     {
+      "label": "a hit's path is rendered raw into the block, so a newline in a name forges a waiver or a marker",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "\"\".join(f\"- [ ] `{quote_path(h.path)}:{h.line}` `{h.rename.old}`\\n\" for h in blocking)",
+      "replace": "\"\".join(f\"- [ ] `{h.path}:{h.line}` `{h.rename.old}`\\n\" for h in blocking)"
+    },
+    {
+      "label": "a hit's path is printed raw, so a newline in a name splits its report line",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "print(f\"{quote_path(hit.path)}:{hit.line}: {hit.rename.old} (renamed",
+      "replace": "print(f\"{hit.path}:{hit.line}: {hit.rename.old} (renamed"
+    },
+    {
+      "label": "a waiver is matched on the raw path, so a quoted path can never be waived",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.get((hit.rename.old, hit.path))"
+    },
+    {
       "label": "a crash inside the sweep is re-raised, so it exits 1 and reads as references to fix",
       "file": "../mr_preflight.py",
       "oracle": "real",
       "find": "file=sys.stderr)\n        return SETUP_ERROR\n\n\nif __name__",
       "replace": "file=sys.stderr)\n        raise\n\n\nif __name__"
+    },
+    {
+      "label": "the crash guard catches only ValueError, so any other crash exits 1 as references",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    except Exception as error:\n",
+      "replace": "    except ValueError as error:\n"
     },
     {
       "label": "a failing git command is reported as an internal crash instead of a named setup error",
@@ -301,36 +329,36 @@
       "label": "a waiver keyed on its token alone waives that name in every file",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
       "replace": "reason = next((r for (t, _), r in waived.items() if t == hit.rename.old), None)"
     },
     {
       "label": "a waiver keyed on its path alone waives every name in that file",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = next((r for (_, p), r in waived.items() if p == hit.path), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = next((r for (_, p), r in waived.items() if p == quote_path(hit.path)), None)"
     },
     {
       "label": "a waiver path matches as a suffix, so docs/CHANGELOG.md rides on CHANGELOG.md",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and hit.path.endswith(p)), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and quote_path(hit.path).endswith(p)), None)"
     },
     {
       "label": "a waiver is spent on its first hit, so a second hit in the file blocks",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = waived.pop((hit.rename.old, hit.path), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.pop((hit.rename.old, quote_path(hit.path)), None)"
     },
     {
       "label": "a waiver holds only at the line it was written against (line 1 in the fixture)",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = waived.get((hit.rename.old, hit.path)) if hit.line == 1 else None"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.get((hit.rename.old, quote_path(hit.path))) if hit.line == 1 else None"
     },
     {
       "label": "waived hits still fail the sweep",
