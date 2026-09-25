@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 
 CONFIG_NAME = ".mr-preflight.toml"
+KEYS = ("ignore_paths", "ignore_tokens")
+
+
+class ConfigError(ValueError):
+    """The config cannot be read as written: a setup error, never "no ignores"."""
 
 
 @dataclass(frozen=True)
@@ -45,9 +50,27 @@ def _glob_match(pattern: list[str], path: list[str]) -> bool:
 
 
 def parse_config(text: str) -> IgnoreConfig:
-    """Parse the text of ``.mr-preflight.toml``."""
-    data = tomllib.loads(text)
+    """Parse the text of ``.mr-preflight.toml``.
+
+    Raises
+    ------
+    ConfigError
+        On invalid TOML, an unknown key (a misspelt one would otherwise ignore
+        nothing, silently), or a value that is not a list of strings (a bare
+        string would otherwise iterate into one-character globs).
+    """
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigError(str(error)) from error
+    unknown = sorted(set(data) - set(KEYS))
+    if unknown:
+        raise ConfigError(f"unknown key(s) {', '.join(unknown)}; expected {' and '.join(KEYS)}")
+    for key in KEYS:
+        value = data.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ConfigError(f"{key} must be a list of strings")
     return IgnoreConfig(
-        paths=tuple(data.get("ignore_paths", ())),
-        tokens=frozenset(data.get("ignore_tokens", ())),
+        paths=tuple(data.get("ignore_paths", [])),
+        tokens=frozenset(data.get("ignore_tokens", [])),
     )

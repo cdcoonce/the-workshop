@@ -668,3 +668,27 @@ def test_a_clean_run_still_reports_what_the_config_suppressed(repo: Path) -> Non
         "mr-preflight: .mr-preflight.toml suppressed 4 hit(s) in ignored paths"
         " and skipped 1 renamed token(s)."
     ) in result.stdout.splitlines()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b'ignore_paths = ["CHANGELOG.md"\n', id="unclosed-array"),
+        pytest.param(b'ignore_paths = ["CHANGELOG.md"]\r', id="bare-carriage-return"),
+        pytest.param(b'ignore_paths = ["\xff.md"]\n', id="not-utf8"),
+        # A bare string would otherwise iterate into one-character globs.
+        pytest.param(b'ignore_paths = "CHANGELOG.md"\n', id="string-not-list"),
+        pytest.param(b"ignore_tokens = [1]\n", id="non-string-token"),
+        # A misspelt key would otherwise ignore nothing, silently.
+        pytest.param(b'ignore_path = ["CHANGELOG.md"]\n', id="unknown-key"),
+    ],
+)
+def test_a_malformed_config_is_a_setup_error_naming_the_file(repo: Path, content: bytes) -> None:
+    (repo / ".mr-preflight.toml").write_bytes(content)
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml" in result.stderr
+    assert "Traceback" not in result.stderr

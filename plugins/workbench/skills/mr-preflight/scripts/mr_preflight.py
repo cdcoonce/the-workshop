@@ -28,7 +28,7 @@ from description_blocks import (  # noqa: E402
     replace_block,
     waiver_lines,
 )
-from ignore_config import CONFIG_NAME, IgnoreConfig, parse_config  # noqa: E402
+from ignore_config import CONFIG_NAME, ConfigError, IgnoreConfig, parse_config  # noqa: E402
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
 
@@ -53,7 +53,14 @@ def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
     probe = subprocess.run(["git", "cat-file", "-e", spec], cwd=repo, capture_output=True)
     if probe.returncode != 0:
         return IgnoreConfig()
-    return parse_config(_git(repo, "cat-file", "blob", spec))
+    blob = subprocess.run(["git", "cat-file", "blob", spec], cwd=repo, capture_output=True)
+    try:
+        if blob.returncode != 0:
+            raise ConfigError(blob.stderr.decode("utf-8", "replace").strip())
+        # Decoded strictly: TOML is UTF-8, and a replaced byte would parse.
+        return parse_config(blob.stdout.decode("utf-8"))
+    except (ConfigError, UnicodeDecodeError) as error:
+        raise ConfigError(f"{CONFIG_NAME} at {head} is malformed: {error}") from error
 
 
 def _read_description(path: Path) -> str:
@@ -131,7 +138,7 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         found = sweep(repo, head, renames)
         hits = [hit for hit in found if not ignores.ignores_path(hit.path)]
         suppressed_hits = len(found) - len(hits)
-    except RuntimeError as error:
+    except (RuntimeError, ConfigError) as error:
         print(f"mr-preflight: {error}", file=sys.stderr)
         return SETUP_ERROR
 
