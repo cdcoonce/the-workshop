@@ -42,6 +42,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
+| `/live-view-simulate-diff` | Simulates a proposed change to a live Snowflake view read-only and diffs it against the deployed output with float tolerance. |
 | `/measure-before-landing` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
 | `/mr-merge-order` | Computes a pairwise conflict matrix with git merge-tree and recommends a merge order by rebase cost. |
 | `/mr-preflight` | Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. |
