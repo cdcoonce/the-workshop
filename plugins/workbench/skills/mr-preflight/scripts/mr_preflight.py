@@ -15,8 +15,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from reference_sweep import sweep  # noqa: E402
-from rename_detector import detect_renames  # noqa: E402
+from description_blocks import (  # noqa: E402
+    BlockError,
+    find_block,
+    parse_waivers,
+    replace_block,
+    waiver_lines,
+)
+from reference_sweep import Hit, sweep  # noqa: E402
+from rename_detector import Rename, detect_renames  # noqa: E402
 
 CLEAN = 0
 HITS = 1
@@ -33,21 +40,77 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout.decode("utf-8", "replace")
 
 
-def run_sweep(base: str, head: str) -> int:
+def _read_description(path: Path) -> str:
+    # Bytes in, decoded by hand, so a CRLF description is read as written.
+    return path.read_bytes().decode("utf-8", "surrogateescape")
+
+
+def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) -> str:
+    """The sweep block's body: what was renamed, what still blocks, and the
+    author's waiver lines exactly as written."""
+    sections = []
+    if renames:
+        sections.append(
+            "Renamed on this branch:\n\n"
+            + "".join(f"- `{r.old}` -> `{r.new}` in `{r.path}`\n" for r in renames)
+        )
+    else:
+        sections.append("No renamed identifiers on this branch.\n")
+    if blocking:
+        sections.append(
+            "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`):\n\n"
+            + "".join(f"- [ ] `{h.path}:{h.line}` `{h.rename.old}`\n" for h in blocking)
+        )
+    if waivers:
+        sections.append("Waivers:\n\n" + "".join(f"{line}\n" for line in waivers))
+    return "**mr-preflight sweep**\n\n" + "\n".join(sections)
+
+
+def run_sweep(base: str, head: str, description: Path | None = None, update: bool = False) -> int:
+    waived: dict[tuple[str, str], str] = {}
+    malformed: list[str] = []
+    body = ""
+    if description is not None:
+        try:
+            text = _read_description(description)
+            block = find_block(text, "sweep")
+        except (OSError, BlockError) as error:
+            print(f"mr-preflight: {error}", file=sys.stderr)
+            return SETUP_ERROR
+        body = text[block.start : block.end] if block else ""
+        waivers, malformed = parse_waivers(body)
+        waived = {(w.token, w.path): w.reason for w in waivers}
+
     try:
         # `git grep <tree>` searches only the cwd's subtree, so run from the
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
-        hits = sweep(repo, head, detect_renames(diff_text))
+        renames = detect_renames(diff_text)
+        hits = sweep(repo, head, renames)
     except RuntimeError as error:
         print(f"mr-preflight: {error}", file=sys.stderr)
         return SETUP_ERROR
 
+    blocking = []
     for hit in hits:
+        reason = waived.get((hit.rename.old, hit.path))
+        if reason is None:
+            blocking.append(hit)
+        else:
+            print(f"waived: {hit.path}:{hit.line}: {hit.rename.old}: {reason}")
+    for hit in blocking:
         print(f"{hit.path}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
-    if hits:
-        print(f"mr-preflight: {len(hits)} surviving reference(s) to renamed identifiers.")
+    for line in malformed:
+        print(f"malformed waiver: {line}")
+    if update and description is not None:
+        rendered = replace_block(text, "sweep", render_body(renames, blocking, waiver_lines(body)))
+        description.write_bytes(rendered.encode("utf-8", "surrogateescape"))
+    if blocking:
+        print(f"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.")
+    if malformed:
+        print(f"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.")
+    if blocking or malformed:
         return HITS
     return CLEAN
 
@@ -58,8 +121,18 @@ def main() -> int:
     sweep_cmd = commands.add_parser("sweep", help="report surviving references to renamed identifiers")
     sweep_cmd.add_argument("--base", required=True, help="commit-ish the diff starts from")
     sweep_cmd.add_argument("--head", default="HEAD", help="commit-ish whose tree is searched")
+    sweep_cmd.add_argument(
+        "--description", type=Path, help="MR description whose sweep block holds the waivers"
+    )
+    sweep_cmd.add_argument(
+        "--update",
+        action="store_true",
+        help="rewrite the description's sweep block in place (needs --description)",
+    )
     args = parser.parse_args()
-    return run_sweep(args.base, args.head)
+    if args.update and args.description is None:
+        parser.error("--update needs --description")
+    return run_sweep(args.base, args.head, args.description, args.update)
 
 
 if __name__ == "__main__":

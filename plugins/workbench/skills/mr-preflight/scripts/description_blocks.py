@@ -96,6 +96,12 @@ WAIVER = re.compile(
 WAIVER_INTENT = re.compile(r"^- waive(?:\s|$)")
 
 
+def waiver_lines(body: str) -> list[str]:
+    """Every line of ``body`` that starts ``- waive``, well formed or not, as
+    written minus its line ending. What ``--update`` carries forward."""
+    return [line.rstrip("\r") for line in body.split("\n") if WAIVER_INTENT.match(line.strip())]
+
+
 def parse_waivers(body: str) -> tuple[list[Waiver], list[str]]:
     """Read the waiver lines of a sweep section's body.
 
@@ -107,12 +113,10 @@ def parse_waivers(body: str) -> tuple[list[Waiver], list[str]]:
     """
     waivers: list[Waiver] = []
     malformed: list[str] = []
-    for line in body.split("\n"):
-        stripped = line.strip()
-        match = WAIVER.match(stripped)
+    for line in waiver_lines(body):
+        match = WAIVER.match(line.strip())
         if not match:
-            if WAIVER_INTENT.match(stripped):
-                malformed.append(line.rstrip("\r"))
+            malformed.append(line)
             continue
         waivers.append(
             Waiver(
