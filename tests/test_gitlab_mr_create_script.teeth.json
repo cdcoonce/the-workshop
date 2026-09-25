@@ -77,7 +77,7 @@
       "label": "the dev hop never runs the sweep, so a surviving rename opens the MR",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "    if ! sweep_output=$(python3 \"$preflight\" sweep --base \"$sweep_base\" 2>&1); then",
+      "find": "    if ! sweep_output=$(python3 \"$preflight\" sweep --base \"$sweep_base\" --description \"$rendered_file\" --update 2>&1); then",
       "replace": "    if false; then"
     },
     {

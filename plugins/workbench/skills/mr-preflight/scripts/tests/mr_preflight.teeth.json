@@ -347,6 +347,13 @@
       "replace": "        pass\n"
     },
     {
+      "label": "an unreadable description crashes with a traceback instead of a setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except (OSError, BlockError) as error:",
+      "replace": "        except BlockError as error:"
+    },
+    {
       "label": "[control] swap two independent git grep flags",
       "file": "../reference_sweep.py",
       "oracle": "real",
