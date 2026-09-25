@@ -431,6 +431,146 @@
       "replace": ""
     },
     {
+      "label": "hits in ignore_paths are kept, so the config suppresses nothing",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "hits = [hit for hit in found if not ignores.ignores_path(hit.path)]",
+      "replace": "hits = list(found)"
+    },
+    {
+      "label": "ignore_paths match with fnmatch on the whole path, so `*` crosses `/`",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "        segments = path.split(\"/\")\n        return any(_glob_match(pattern.split(\"/\"), segments) for pattern in self.paths)\n",
+      "replace": "        return any(fnmatchcase(path, pattern) for pattern in self.paths)\n"
+    },
+    {
+      "label": "a trailing `**` matches the directory's own name too",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "        if not rest:\n            return bool(path)\n",
+      "replace": "        if not rest:\n            return True\n"
+    },
+    {
+      "label": "a leading or middle `**` must match at least one directory",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "for skip in range(len(path) + 1))",
+      "replace": "for skip in range(1, len(path) + 1))"
+    },
+    {
+      "label": "ignore_paths match case-insensitively, unlike git",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "fnmatchcase(path[0], head)",
+      "replace": "fnmatchcase(path[0].lower(), head.lower())"
+    },
+    {
+      "label": "ignore_tokens are read but never applied",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "renames = [r for r in detected if r.old not in ignores.tokens]",
+      "replace": "renames = list(detected)"
+    },
+    {
+      "label": "ignored tokens are chased, then their hits dropped, so the rename still writes a block",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        renames = [r for r in detected if r.old not in ignores.tokens]\n        skipped_tokens = len(detected) - len(renames)\n        found = sweep(repo, head, renames)\n",
+      "replace": "        renames = list(detected)\n        skipped_tokens = 0\n        found = [h for h in sweep(repo, head, renames) if h.rename.old not in ignores.tokens]\n"
+    },
+    {
+      "label": "the suppressed count prints only when something still blocks",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if suppressed_hits or skipped_tokens:\n",
+      "replace": "    if blocking and (suppressed_hits or skipped_tokens):\n"
+    },
+    {
+      "label": "the suppressed count is every hit found, not the ones dropped",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "suppressed_hits = len(found) - len(hits)",
+      "replace": "suppressed_hits = len(found)"
+    },
+    {
+      "label": "the skipped-token count is every renamed token, not the ignored ones",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "skipped_tokens = len(detected) - len(renames)",
+      "replace": "skipped_tokens = len(detected)"
+    },
+    {
+      "label": "a bare string passes as a list and iterates into one-character globs",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "if not isinstance(value, list) or not all(",
+      "replace": "if not all("
+    },
+    {
+      "label": "a list holding a non-string passes validation",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "if not isinstance(value, list) or not all(isinstance(item, str) for item in value):",
+      "replace": "if not isinstance(value, list):"
+    },
+    {
+      "label": "a misspelt key is accepted and ignores nothing",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "    if unknown:\n        raise ConfigError(",
+      "replace": "    if False:\n        raise ConfigError("
+    },
+    {
+      "label": "invalid TOML escapes as a traceback instead of a setup error",
+      "file": "../ignore_config.py",
+      "oracle": "real",
+      "find": "    except tomllib.TOMLDecodeError as error:\n        raise ConfigError(str(error)) from error\n",
+      "replace": "    except KeyError as error:\n        raise ConfigError(str(error)) from error\n"
+    },
+    {
+      "label": "a config error is not caught by the sweep, so it crashes with a traceback",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    except (RuntimeError, ConfigError) as error:",
+      "replace": "    except RuntimeError as error:"
+    },
+    {
+      "label": "the config is decoded leniently, so a stray byte parses as U+FFFD",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "return parse_config(blob.stdout.decode(\"utf-8\"))",
+      "replace": "return parse_config(blob.stdout.decode(\"utf-8\", \"replace\"))"
+    },
+    {
+      "label": "a config path that is not a file reads as an empty config",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        if blob.returncode != 0:\n            raise ConfigError(blob.stderr.decode(\"utf-8\", \"replace\").strip())\n",
+      "replace": ""
+    },
+    {
+      "label": "the config is read from the working tree, so an uncommitted ignore passes the MR",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        ignores = _load_ignores(repo, head)\n",
+      "replace": "        ignores = parse_config((repo / CONFIG_NAME).read_text()) if (repo / CONFIG_NAME).is_file() else IgnoreConfig()\n"
+    },
+    {
+      "label": "the config is read from the cwd, so a subdirectory run ignores nothing",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        ignores = _load_ignores(repo, head)\n",
+      "replace": "        ignores = parse_config(Path(CONFIG_NAME).read_text()) if Path(CONFIG_NAME).is_file() else IgnoreConfig()\n"
+    },
+    {
+      "label": "a missing config is an error instead of no ignores",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if probe.returncode != 0:\n        return IgnoreConfig()\n",
+      "replace": "    if probe.returncode != 0:\n        raise ConfigError(f\"{CONFIG_NAME} is missing\")\n"
+    },
+    {
       "label": "[control] swap two independent git grep flags",
       "file": "../reference_sweep.py",
       "oracle": "real",
