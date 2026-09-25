@@ -78,6 +78,43 @@ mutants described defects in code that no longer exists, so those verdicts
 really did expire. The waste is re-deriving the table from a shell history,
 which is what happens whenever the spec was never a file.
 
+### In a fix round
+
+A spec committed before review goes stale on every review fix that rewrites a
+line it anchors on. A full run resolves every anchor before its baseline and
+refuses in well under a second, naming each stale row. It never spends a whole
+matrix to report `not-applied` at the end.
+
+Each row reruns the whole test command, so a full run costs one suite per row
+(60 rows of a 6.5-second suite is six and a half minutes). Inside the loop,
+run only what the round touched:
+
+```bash
+python3 "<skill base directory>/scripts/teeth_check.py" --changed-since <base> spec.json
+```
+
+That runs rows added or edited in the spec since `<base>` (any change to a
+row's JSON selects it: a re-anchor, a new replace, a relabel, a pasted
+duplicate), plus every control. A change to `test_command`, `collect_command`
+or `runner` can flip any row's verdict, so it runs every row. It still
+resolves every row's anchor first, so a row the fix moved but you did not
+touch refuses the run. Text output opens with `PARTIAL: k of N` and `--json`
+gains a `partial` key. It skips never-killed collection, because a test that
+kills only a skipped row would read as killing nothing. It cannot be combined
+with `--check-anchors`, which already checks every row.
+
+- **A partial run is never the tally.** A fix can make an untouched row's
+  mutant survive (a second guard now covers the one it removes). Finish with
+  one full run, and record that run's count.
+- **Re-anchoring is a judgment, not a search.** When the fix only moved or
+  reworded the line, carry the mutation across. When it changed the construct
+  (a split regex, an in-place write turned atomic), re-derive the mutant from
+  its label, or retire the row. The textually nearest line is often the wrong
+  site.
+- **Other specs rot too.** A fix to shared code can stale a different spec's
+  rows. After each round, run `--check-anchors` on every spec in the repo, or
+  the repo's own anchor gate.
+
 The absolute path matters. `cwd` is the target repository, which does not
 contain this skill, so a bare `scripts/teeth_check.py` fails on a missing file
 — and in a repo that has its own `scripts/` it fails on a directory that
@@ -268,7 +305,7 @@ unguarded.
 **The mirror.** A recording double is built from the shape the code under test
 emits. Mutate that code and the recording changes, so the assertion fails and
 the mutant dies — guaranteed, before the suite ever runs. Mutation testing
-perturbs our source; a recording double's oracle *is* our source. They share an
+perturbs our source; a recording double's oracle _is_ our source. They share an
 oracle, so stacking them adds no coverage while presenting as two independent
 gates.
 
@@ -298,10 +335,10 @@ of the property under test still leaves that property really executed.
 **Mutations you cannot spell in source.** Find/replace says "the code is
 wrong". It cannot say "the destination was built by the previous version of
 this code" — and a conversion defect lives exactly there. Every fixture-building
-integration test is born *after* the change, so the first run after deploy is
+integration test is born _after_ the change, so the first run after deploy is
 unreachable by construction: dlt grants a brand-new table a one-time schema
 grace, so the real-dlt round-trip test above executed the genuine dependency and
-*still* could not see it. For any change to a write disposition, schema
+_still_ could not see it. For any change to a write disposition, schema
 contract, primary or merge key, partition scheme, or file layout, the tooth is a
 test that runs the **old** contract first and the new one second against the
 same destination. Nothing else reaches that state, and it is reachable exactly
@@ -309,14 +346,20 @@ once per environment.
 
 ## What it refuses to score
 
-Absence of a failure signal is never evidence of a pass. Five cases refuse:
+Absence of a failure signal is never evidence of a pass. These cases refuse:
 
 - **A red baseline** — every mutant would look killed. Exits 2.
 - **An anchor matching zero or more than one place** — ambiguous means the spec
-  never said which site it meant.
+  never said which site it meant. A run refuses before its baseline, naming
+  every such row (exit 2); `--check-anchors` reports each on its row (exit 1).
 - **A target file it cannot read** — deleted, renamed, a directory where the
-  file was, or bytes that are not UTF-8 (a binary, a Latin-1 source). That row
-  is `not-applied`, naming the path; the rest still run.
+  file was, or bytes that are not UTF-8 (a binary, a Latin-1 source). Treated
+  like a stale anchor, naming the path. A file that changes mid-run still
+  scores that row `not-applied` while the rest run.
+- **A `--changed-since` revision git cannot resolve**, a spec at that
+  revision that is not a readable teeth spec, or no row added or edited since
+  it. A typo must not read as "every row is new", and controls alone verify
+  nothing. Exits 2.
 - **A run that named no failing test.** A mutant that will not compile, or a
   command aborting before collection (unrecognised flag, missing plugin), exits
   non-zero with no `FAILED` line — the harness broke, no assertion caught
