@@ -252,6 +252,37 @@ def test_a_binary_file_holding_the_old_name_is_not_a_crash(repo: Path) -> None:
     assert "Traceback" not in result.stderr
 
 
+def test_a_carriage_return_inside_a_hit_line_is_not_a_crash(repo: Path) -> None:
+    """A committed log line `progress: 10%\\rLEGACY_SCHEMA loaded` is one line
+    to git; reading it as two must not strand half a row without its NULs."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    (repo / "run.log").write_bytes(b"progress: 10%\rLEGACY_SCHEMA loaded\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "run.log:1: LEGACY_SCHEMA" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_a_carriage_return_before_a_rename_does_not_hide_it(repo: Path) -> None:
+    """The diff side of the same trap: a `\\r` earlier on the renamed line
+    must not cut the line in two before the old name is compared."""
+    (repo / "config.txt").write_bytes(b"stage\rschema: LEGACY_SCHEMA\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    (repo / "config.txt").write_bytes(b"stage\rschema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
 def test_the_whole_repo_is_swept_from_a_subdirectory(repo: Path) -> None:
     """`create-mr` may run from anywhere inside the repo; a leftover at the
     root must not drop out of the search because the cwd is `sub/`."""

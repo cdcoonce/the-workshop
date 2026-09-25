@@ -44,15 +44,17 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
             ["git", "grep", "-z", "-I", "-n", "-w", "-F", "-e", rename.old, head, "--"],
             cwd=repo,
             capture_output=True,
-            text=True,
         )
         # git grep exits 1 for "no match", which is the clean answer here.
         if result.returncode not in (0, 1):
-            raise RuntimeError(result.stderr.strip() or f"git grep failed for {rename.old}")
+            stderr = result.stderr.decode("utf-8", "replace").strip()
+            raise RuntimeError(stderr or f"git grep failed for {rename.old}")
         prefix = f"{head}:"
-        # Rows end at `\n` only: `splitlines` would also break on a form feed
-        # or `\r` inside a matched line's content and strand its NULs.
-        for row in filter(None, result.stdout.split("\n")):
+        # Bytes decoded by hand, then rows split on `\n` only. `text=True`
+        # (universal newlines) or `splitlines` would also break a row at a
+        # `\r` or form feed inside the matched line and strand its NULs.
+        stdout = result.stdout.decode("utf-8", "replace")
+        for row in filter(None, stdout.split("\n")):
             name, line, _ = row.split("\0", 2)
             path = name[len(prefix):] if name.startswith(prefix) else name
             hits.append(Hit(path=path, line=int(line), rename=rename))

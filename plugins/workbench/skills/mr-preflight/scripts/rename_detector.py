@@ -109,7 +109,8 @@ def detect_renames(diff_text: str) -> list[Rename]:
     # a removed SQL comment `-- x` (diffed as `--- x`) or an added `++ x`
     # (diffed as `+++ x`) stays content instead of reading as a file header.
     removed_left = added_left = 0
-    for line in diff_text.splitlines():
+    # `\n` only: `splitlines` would also break a diffed line at a `\r`.
+    for line in diff_text.split("\n"):
         if removed_left or added_left:
             if line.startswith("-") and removed_left:
                 removed_left -= 1

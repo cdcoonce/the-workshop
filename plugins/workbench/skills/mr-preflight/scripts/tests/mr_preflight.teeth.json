@@ -147,8 +147,8 @@
       "label": "a failing git diff reads as an empty diff, so a bad base sweeps clean",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "    if result.returncode != 0:\n        raise RuntimeError",
-      "replace": "    if False:\n        raise RuntimeError"
+      "find": "    if result.returncode != 0:\n        stderr = result.stderr.decode",
+      "replace": "    if False:\n        stderr = result.stderr.decode"
     },
     {
       "label": "the replacement name is dropped from the report",
@@ -163,6 +163,20 @@
       "oracle": "real",
       "find": "path = line[6:] if line.startswith(\"+++ b/\") else line[4:]",
       "replace": "path = line[4:]"
+    },
+    {
+      "label": "grep rows split with splitlines, so a \\r inside a hit line strands half a row",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "for row in filter(None, stdout.split(\"\\n\")):",
+      "replace": "for row in filter(None, stdout.splitlines()):"
+    },
+    {
+      "label": "diff lines split with splitlines, so a \\r before a rename cuts it off",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "for line in diff_text.split(\"\\n\"):",
+      "replace": "for line in diff_text.splitlines():"
     },
     {
       "label": "[control] swap two independent git grep flags",

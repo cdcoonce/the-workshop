@@ -24,10 +24,13 @@ SETUP_ERROR = 2
 
 
 def _git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    # Bytes, decoded by hand: `text=True` applies universal newlines, turning
+    # a `\r` inside a diffed line into a line break that splits it in two.
+    result = subprocess.run(["git", *args], cwd=repo, capture_output=True)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
-    return result.stdout
+        stderr = result.stderr.decode("utf-8", "replace").strip()
+        raise RuntimeError(stderr or f"git {' '.join(args)} failed")
+    return result.stdout.decode("utf-8", "replace")
 
 
 def run_sweep(base: str, head: str) -> int:
