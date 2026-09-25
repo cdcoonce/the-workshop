@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ignore_config import parse_config  # noqa: E402
+from ignore_config import ConfigError, parse_config  # noqa: E402
 
 
 def ignored(pattern: str, path: str) -> bool:
@@ -63,3 +63,11 @@ def test_many_double_stars_stay_linear_on_a_deep_path() -> None:
     started = time.monotonic()
     assert not config.ignores_path(path)
     assert time.monotonic() - started < 1.0
+
+
+@pytest.mark.parametrize("pattern", ["a\\\\*b.md", "sql/v[[:digit:]].sql"])
+def test_glob_syntax_git_reads_differently_is_refused(pattern: str) -> None:
+    """`fnmatch` has no `\\` escape and no `[:class:]`, so it would read these
+    as something git does not, and ignore a path git would keep."""
+    with pytest.raises(ConfigError, match="ignore_paths"):
+        parse_config(f'ignore_paths = ["{pattern}"]\n')

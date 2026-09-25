@@ -116,6 +116,12 @@ def parse_config(text: str) -> IgnoreConfig:
         value = data.get(key, [])
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise ConfigError(f"{key} must be a list of strings")
+    for pattern in data.get("ignore_paths", []):
+        # `fnmatch` has neither, so it would match something git does not.
+        if "\\" in pattern or "[:" in pattern:
+            raise ConfigError(
+                f"ignore_paths entry {pattern!r} uses a `\\` escape or a `[:class:]`, which are not supported"
+            )
     return IgnoreConfig(
         paths=tuple(data.get("ignore_paths", [])),
         tokens=frozenset(data.get("ignore_tokens", [])),
