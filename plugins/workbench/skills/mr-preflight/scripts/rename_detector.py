@@ -80,13 +80,17 @@ def _pair_renames(removed: list[str], added: list[str], path: str) -> list[Renam
     return renames
 
 
-def detect_renames(diff_text: str) -> list[Rename]:
+def detect_renames(diff_text: str, exclude_paths: frozenset[str] = frozenset()) -> list[Rename]:
     """Return every token a paired ``-``/``+`` line replaced.
 
     Parameters
     ----------
     diff_text
         Output of ``git diff -U0`` between the base and the head.
+    exclude_paths
+        Files whose lines are neither renames nor uses, on either side of the
+        diff. They are skipped here, after git has paired moved files: a
+        pathspec would unpair a moved file and turn its lines into additions.
 
     Returns
     -------
@@ -95,7 +99,7 @@ def detect_renames(diff_text: str) -> list[Rename]:
     """
     candidates: list[Rename] = []
     added_anywhere: set[str] = set()
-    path = ""
+    path = old_path = ""
     removed: list[str] = []
     added: list[str] = []
 
@@ -112,6 +116,12 @@ def detect_renames(diff_text: str) -> list[Rename]:
     # `\n` only: `splitlines` would also break a diffed line at a `\r`.
     for line in diff_text.split("\n"):
         if removed_left or added_left:
+            if path in exclude_paths or old_path in exclude_paths:
+                if line.startswith("-") and removed_left:
+                    removed_left -= 1
+                elif line.startswith("+") and added_left:
+                    added_left -= 1
+                continue
             if line.startswith("-") and removed_left:
                 removed_left -= 1
                 if added:
@@ -130,8 +140,12 @@ def detect_renames(diff_text: str) -> list[Rename]:
         elif line.startswith("+++ "):
             flush()
             path = line[6:] if line.startswith("+++ b/") else line[4:]
-        elif line.startswith("--- ") or line.startswith("diff --git"):
+        elif line.startswith("--- "):
             flush()
+            old_path = line[6:] if line.startswith("--- a/") else line[4:]
+        elif line.startswith("diff --git"):
+            flush()
+            path = old_path = ""
     flush()
 
     # A token the diff also adds somewhere moved rather than disappeared, so

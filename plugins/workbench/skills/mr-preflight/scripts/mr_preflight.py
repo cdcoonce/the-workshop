@@ -2,11 +2,14 @@
 """Deterministic checks run before a GitLab merge request is opened.
 
 ``sweep`` finds identifiers the diff between ``--base`` and ``--head`` renamed
-and reports every reference to the old name that survives at head. With
+and reports every reference to the old name that survives at head. The repo's
+committed ``.mr-preflight.toml`` at head drops hits in its ``ignore_paths``
+globs and never chases its ``ignore_tokens``; the summary says how many. With
 ``--description``, the waivers in that MR description's sweep block
 (``- waive TOKEN path: reason``) excuse their hits, and a malformed waiver line
 blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
-1 unwaived references or malformed waivers, 2 setup error.
+1 unwaived references or malformed waivers, 2 setup error (including an
+unusable ``.mr-preflight.toml``).
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from description_blocks import (  # noqa: E402
     replace_block,
     waiver_lines,
 )
+from ignore_config import CONFIG_NAME, ConfigError, IgnoreConfig, parse_config  # noqa: E402
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
 
@@ -44,6 +48,34 @@ def _git(repo: Path, *args: str) -> str:
         stderr = result.stderr.decode("utf-8", "replace").strip()
         raise RuntimeError(stderr or f"git {' '.join(args)} failed")
     return result.stdout.decode("utf-8", "replace")
+
+
+def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
+    """The ignore list committed at ``head``; none when the file is absent.
+
+    The root tree is listed whole rather than looked up by path: glued as
+    ``<rev>:<path>``, a ``:/message`` head would search for the path too, a
+    pathspec is re-read by ``GIT_*_PATHSPECS`` in the environment, and a
+    failed lookup would pass as "no file" and apply no ignores.
+    """
+    listing = _git(repo, "ls-tree", "-z", head)
+    entries = (row.split("\t", 1) for row in listing.split("\0") if row)
+    entry = next((meta for meta, name in entries if name == CONFIG_NAME), None)
+    if entry is None:
+        return IgnoreConfig()
+    mode, kind, obj = entry.split(" ")
+    try:
+        if kind != "blob" or mode == "120000":
+            raise ConfigError("it is not a regular file")
+        blob = subprocess.run(["git", "cat-file", "blob", obj], cwd=repo, capture_output=True)
+        if blob.returncode != 0:
+            raise ConfigError(blob.stderr.decode("utf-8", "replace").strip())
+        # Decoded strictly: TOML is UTF-8, and a replaced byte would parse.
+        return parse_config(blob.stdout.decode("utf-8"))
+    except UnicodeDecodeError as error:
+        raise ConfigError(f"{CONFIG_NAME} at {head}: not UTF-8: {error}") from error
+    except ConfigError as error:
+        raise ConfigError(f"{CONFIG_NAME} at {head}: {error}") from error
 
 
 def _read_description(path: Path) -> str:
@@ -111,9 +143,21 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
-        renames = detect_renames(diff_text)
-        hits = sweep(repo, head, renames)
-    except RuntimeError as error:
+        # Ignored tokens leave the rename set before the search, and hits in
+        # ignored paths are dropped before waivers are consulted; both are
+        # counted so the summary keeps allowlist creep in view.
+        ignores = _load_ignores(repo, head)
+        # The ignore list is not a use of the names it lists, so its lines
+        # are left out of the renames and its hits out of the search: a line
+        # naming the old token would read as the token moving, a glob naming
+        # it as a hit. Filtered here, never by pathspec (see `_load_ignores`).
+        detected = detect_renames(diff_text, exclude_paths=frozenset({CONFIG_NAME}))
+        renames = [r for r in detected if r.old not in ignores.tokens]
+        skipped_tokens = len(detected) - len(renames)
+        found = [hit for hit in sweep(repo, head, renames) if hit.path != CONFIG_NAME]
+        hits = [hit for hit in found if not ignores.ignores_path(hit.path)]
+        suppressed_hits = len(found) - len(hits)
+    except (RuntimeError, ConfigError) as error:
         print(f"mr-preflight: {error}", file=sys.stderr)
         return SETUP_ERROR
 
@@ -128,6 +172,12 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         print(f"{hit.path}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
     for line in malformed:
         print(f"malformed waiver: {line}")
+    # Before the update, so a failed write still shows what the config hid.
+    if suppressed_hits or skipped_tokens:
+        print(
+            f"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths"
+            f" and skipped {skipped_tokens} renamed token(s)."
+        )
     # A branch that renamed nothing gains no block: its MR goes out exactly as
     # written. An existing block is still rewritten, so a stale one copied from
     # an earlier run cannot keep claiming hits that are gone.

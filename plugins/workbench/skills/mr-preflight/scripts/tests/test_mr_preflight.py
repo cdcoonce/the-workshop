@@ -9,6 +9,7 @@ does. Every test drives the CLI and asserts on its exit code and output.
 
 from __future__ import annotations
 
+import os
 import resource
 import subprocess
 import sys
@@ -594,3 +595,426 @@ def test_a_failed_update_still_reports_the_hits_before_the_error(repo: Path) -> 
     error = next(i for i, line in enumerate(lines) if line.startswith("mr-preflight: could not update"))
     assert result.returncode == SETUP_ERROR
     assert hit < error
+
+
+# --- the committed .mr-preflight.toml ignore list --------------------------
+
+
+def configure(repo: Path, toml: str) -> None:
+    """Write the repo's ignore list; the caller commits it."""
+    write(repo, ".mr-preflight.toml", toml)
+
+
+def test_ignore_paths_suppress_hits_in_those_paths_only(repo: Path) -> None:
+    """The issue's own example: a changelog and an ADR directory are permanent
+    noise, while the same name anywhere else still blocks."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md", "docs/adr/**"]\n')
+    write(repo, "docs/adr/0001-schema.md", "We chose LEGACY_SCHEMA.\n")
+    write(repo, "docs/adr/archive/0000-origin.md", "LEGACY_SCHEMA was first.\n")
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    reported = [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+    assert "CHANGELOG.md" not in reported
+    assert not any(path.startswith("docs/adr/") for path in reported)
+    assert "docs/CHANGELOG.md:1: LEGACY_SCHEMA" in result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+    # Five of the seven hits were suppressed: the count is of those alone.
+    assert "suppressed 5 hit(s) in ignored paths" in result.stdout
+
+
+def test_an_ignored_token_is_never_chased(repo: Path) -> None:
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "LEGACY_SCHEMA" not in result.stdout
+    assert "CHANGELOG.md:3: load_curves (renamed to fetch_prices in pipeline.py)" in result.stdout
+    # A config of tokens alone suppresses no hits and must still say so.
+    assert (
+        "mr-preflight: .mr-preflight.toml suppressed 0 hit(s) in ignored paths"
+        " and skipped 1 renamed token(s)."
+    ) in result.stdout.splitlines()
+
+
+def test_a_branch_whose_only_rename_is_ignored_renamed_nothing(repo: Path) -> None:
+    """An ignored token leaves the rename set, not just the hit list, so its
+    MR gains no sweep block claiming a rename the repo chose not to track."""
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = repo.parent / "description.md"
+    description.write_text("Prose only.\n")
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_text() == "Prose only.\n"
+
+
+def test_a_clean_run_still_reports_what_the_config_suppressed(repo: Path) -> None:
+    """Allowlist creep is invisible exactly when the sweep passes, so the count
+    prints on a clean run too: four path hits and one skipped token here."""
+    configure(
+        repo,
+        'ignore_paths = ["CHANGELOG.md", "docs/**", "sql/*.sql"]\n'
+        'ignore_tokens = ["load_curves"]\n',
+    )
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert (
+        "mr-preflight: .mr-preflight.toml suppressed 4 hit(s) in ignored paths"
+        " and skipped 1 renamed token(s)."
+    ) in result.stdout.splitlines()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b'ignore_paths = ["CHANGELOG.md"\n', id="unclosed-array"),
+        pytest.param(b'ignore_paths = ["CHANGELOG.md"]\r', id="bare-carriage-return"),
+        pytest.param(b'ignore_paths = ["\xff.md"]\n', id="not-utf8"),
+        # A bare string would otherwise iterate into one-character globs.
+        pytest.param(b'ignore_paths = "CHANGELOG.md"\n', id="string-not-list"),
+        pytest.param(b"ignore_tokens = [1]\n", id="non-string-token"),
+        # A misspelt key would otherwise ignore nothing, silently.
+        pytest.param(b'ignore_path = ["CHANGELOG.md"]\n', id="unknown-key"),
+    ],
+)
+def test_a_malformed_config_is_a_setup_error_naming_the_file(repo: Path, content: bytes) -> None:
+    (repo / ".mr-preflight.toml").write_bytes(content)
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("kind", ["directory", "symlink"])
+def test_a_config_path_that_is_not_a_regular_file_is_a_setup_error(repo: Path, kind: str) -> None:
+    """A committed symlink's blob is its target's path, which is not the file
+    anyone meant and must never be parsed as the list."""
+    write(repo, "real.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+    if kind == "directory":
+        write(repo, ".mr-preflight.toml/ignore.toml", 'ignore_paths = ["CHANGELOG.md"]\n')
+    else:
+        (repo / ".mr-preflight.toml").symlink_to("real.toml")
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml at HEAD: it is not a regular file" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("state", ["untracked", "staged"])
+def test_only_the_committed_config_counts(repo: Path, state: str) -> None:
+    """The sweep reads the head tree, so an ignore that exists only on the
+    author's disk, or only in the index, cannot pass an MR whose reviewers
+    never see it."""
+    base = two_renames(repo)
+    configure(repo, 'ignore_paths = ["**"]\n')
+    if state == "staged":
+        git(repo, "add", ".mr-preflight.toml")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_the_root_config_applies_from_a_subdirectory(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["**"]\n')
+    write(repo, "sub/notes.md", "nothing here\n")
+    base = two_renames(repo)
+
+    result = sweep(repo / "sub", base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "suppressed 5 hit(s)" in result.stdout
+
+
+def test_a_config_added_with_the_rename_hides_only_its_own_paths(repo: Path) -> None:
+    """The branch that renames is the one that adds the ignore. The config's
+    own lines naming the old token are not a use of it, so they cannot turn
+    the rename into a move and hide the hit in a path nobody ignored."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    configure(repo, '# CHANGELOG keeps LEGACY_SCHEMA history\nignore_paths = ["CHANGELOG.md"]\n')
+    commit(repo, "rename, and ignore the changelog")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    reported = [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+    assert "sql/audit.sql" in reported
+    assert "CHANGELOG.md" not in reported
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_dropping_an_ignored_token_is_not_a_rename_of_it(repo: Path) -> None:
+    """Editing the list pairs its old and new lines; the token that left the
+    list is still in use everywhere and must not start blocking."""
+    configure(repo, 'ignore_tokens = ["old_thing_x", "LEGACY_SCHEMA"]\n')
+    write(repo, "lib.py", "def old_thing_x():\n    pass\n")
+    base = commit(repo, "initial")
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    commit(repo, "stop ignoring old_thing_x")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "old_thing_x" not in result.stdout
+
+
+def test_the_config_is_never_a_hit_for_a_name_it_ignores(repo: Path) -> None:
+    """A glob naming the renamed directory is the config doing its job, not a
+    stale reference that needs a waiver of its own."""
+    configure(repo, 'ignore_paths = ["migrations/LEGACY_SCHEMA/**"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "migrations/LEGACY_SCHEMA/001.sql", "CREATE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert ".mr-preflight.toml" not in [line.split(":", 1)[0] for line in result.stdout.splitlines()]
+
+
+@pytest.mark.parametrize("head", ["sha", ":/rename, and ignore the changelog"])
+def test_the_config_comes_from_the_head_being_swept(repo: Path, head: str) -> None:
+    """`--head` names the tree searched, so its ignore list is the one that
+    applies, not the checked-out branch's, however the commit is spelt."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    swept = commit(repo, "rename, and ignore the changelog")
+    git(repo, "rm", "-q", ".mr-preflight.toml")
+    commit(repo, "drop the ignore list")
+
+    result = sweep(repo, base, "--head", swept if head == "sha" else head)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_a_failed_update_still_reports_what_the_config_suppressed(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+    locked = repo.parent / "locked"
+    locked.mkdir()
+    description = locked / "description.md"
+    description.write_text("Prose.\n")
+    locked.chmod(0o555)
+    try:
+        result = sweep(repo, base, "--description", str(description), "--update")
+    finally:
+        locked.chmod(0o755)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert "suppressed 3 hit(s) in ignored paths" in result.stdout
+
+
+def sweep_without_tomllib(repo: Path, base: str) -> subprocess.CompletedProcess:
+    """Run the sweep as Python 3.10 and older would: `import tomllib` fails."""
+    shim = repo.parent / "no-tomllib"
+    shim.mkdir(exist_ok=True)
+    (shim / "tomllib.py").write_text("raise ModuleNotFoundError(\"No module named 'tomllib'\")\n")
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(shim)},
+    )
+
+
+def test_a_repo_without_a_config_needs_no_tomllib(repo: Path) -> None:
+    """`create-mr` runs whatever `python3` is on PATH; a crash exits 1, which
+    it reads as hits. With no config to parse, an old Python sweeps as before."""
+    base = two_renames(repo)
+
+    result = sweep_without_tomllib(repo, base)
+
+    assert "Traceback" not in result.stderr
+    assert result.returncode == HITS
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_a_config_on_a_python_without_tomllib_is_a_setup_error(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+
+    result = sweep_without_tomllib(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert ".mr-preflight.toml" in result.stderr
+    assert "Python 3.11" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("token", ["SCHEMA", "legacy_schema", "LEGACY_SCHEMA_RAW"])
+def test_ignore_tokens_match_the_whole_name_exactly(repo: Path, token: str) -> None:
+    """A part of the name, another case of it, or its successor ignores nothing."""
+    configure(repo, f'ignore_tokens = ["{token}"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "sql/audit.sql:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW" in result.stdout
+    assert "skipped" not in result.stdout
+
+
+def test_a_hit_in_an_ignored_path_is_suppressed_even_when_waived(repo: Path) -> None:
+    """Ignored paths are dropped before waivers are read, so one hit is
+    reported once, as suppressed, never also as waived."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+    description = describe(repo, "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert not any(line.startswith("waived: CHANGELOG.md:") for line in result.stdout.splitlines())
+    assert "suppressed 3 hit(s) in ignored paths" in result.stdout
+
+
+def test_a_config_that_changed_nothing_says_nothing(repo: Path) -> None:
+    """The count is for creep; a config that hid nothing adds no line to
+    every sweep, and neither does a repo with no config."""
+    configure(repo, 'ignore_paths = ["vendor/**"]\nignore_tokens = ["never_renamed"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "suppressed" not in result.stdout
+
+
+def test_an_unreadable_config_blob_is_a_setup_error_not_no_ignores(repo: Path) -> None:
+    """The tree lists the file but its blob is gone, as in a partial clone that
+    never fetched it; that is not the same as having no ignore list."""
+    configure(repo, 'ignore_paths = ["**"]\n')
+    base = two_renames(repo)
+    blob = git(repo, "rev-parse", "HEAD:.mr-preflight.toml")
+    (repo / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+
+    result = sweep(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stdout
+    assert ".mr-preflight.toml at HEAD:" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_moving_the_config_away_does_not_hide_a_rename(repo: Path) -> None:
+    """git pairs a moved file before anything filters it, so the config's
+    lines never reappear as added content that reads as the token moving."""
+    configure(repo, 'ignore_paths = ["migrations/LEGACY_SCHEMA/**"]\n')
+    write(repo, "code.py", "x = LEGACY_SCHEMA\n")
+    write(repo, "other.py", "LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    git(repo, "mv", ".mr-preflight.toml", ".mr-preflight.toml.bak")
+    write(repo, "code.py", "x = NEW_SCHEMA\n")
+    commit(repo, "rename, and retire the ignore list")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "other.py:1: LEGACY_SCHEMA (renamed to NEW_SCHEMA in code.py)" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "variable", ["GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS", "GIT_NOGLOB_PATHSPECS"]
+)
+def test_pathspec_settings_in_the_environment_change_nothing(repo: Path, variable: str) -> None:
+    """These re-read every pathspec git is given, so the sweep gives git none:
+    the config added with the rename still hides only its own path."""
+    write(repo, "code.py", "x = LEGACY_SCHEMA\n")
+    write(repo, "other.py", "LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "code.py", "x = NEW_SCHEMA\n")
+    configure(repo, '# keeps LEGACY_SCHEMA history\nignore_paths = ["CHANGELOG.md"]\n')
+    commit(repo, "rename, and ignore the changelog")
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**os.environ, variable: "1"},
+    )
+
+    assert result.returncode == HITS, result.stderr
+    assert "other.py:1: LEGACY_SCHEMA (renamed to NEW_SCHEMA in code.py)" in result.stdout
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout
+
+
+def test_only_the_root_config_is_left_out_of_the_sweep(repo: Path) -> None:
+    """A nested `.mr-preflight.toml` or a file merely named like one is
+    ordinary content: its references to the old name are hits."""
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "pkg/.mr-preflight.toml", "# LEGACY_SCHEMA\n")
+    write(repo, "legacy.mr-preflight.toml", "# LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "pkg/.mr-preflight.toml:1: LEGACY_SCHEMA" in result.stdout
+    assert "legacy.mr-preflight.toml:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_an_executable_config_is_still_a_regular_file(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["**"]\n')
+    (repo / ".mr-preflight.toml").chmod(0o755)
+    base = two_renames(repo)
+    assert git(repo, "ls-tree", "HEAD", ".mr-preflight.toml").startswith("100755 ")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stderr
+    assert "suppressed 5 hit(s)" in result.stdout
+
+
+def test_a_config_moved_and_edited_is_still_not_a_rename_source(repo: Path) -> None:
+    """Moved with an edit, the config's hunks sit under its new name; they are
+    still its own lines, so a token dropped from the list is not renamed."""
+    # Long enough that git pairs the move (similarity over 50%) and shows the
+    # edited line as a hunk under the new name.
+    listing = '# Permanent noise.\nignore_paths = ["CHANGELOG.md", "docs/adr/**", "migrations/**"]\n'
+    configure(repo, listing + 'ignore_tokens = ["old_thing_x"]\n')
+    write(repo, "lib.py", "def old_thing_x():\n    pass\n")
+    base = commit(repo, "initial")
+    git(repo, "mv", ".mr-preflight.toml", "mr-preflight.old.toml")
+    write(repo, "mr-preflight.old.toml", listing + 'ignore_tokens = ["new_thing_y"]\n')
+    commit(repo, "retire the ignore list")
+    assert "rename from .mr-preflight.toml" in git(repo, "diff", "-U0", base, "HEAD")
+
+    result = sweep(repo, base)
+
+    assert "old_thing_x" not in result.stdout, result.stdout
+    assert result.returncode == CLEAN, result.stdout
