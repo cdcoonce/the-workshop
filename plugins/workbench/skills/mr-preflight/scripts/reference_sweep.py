@@ -55,7 +55,9 @@ def sweep(repo: Path, head: str, renames: list[Rename]) -> list[Hit]:
         # can find the name; a row ends at the first `\n` after its line
         # field. Bytes are decoded by hand because `text=True` (universal
         # newlines) would also break a row at a `\r` in the matched line.
-        stdout = result.stdout.decode("utf-8", "replace")
+        # `surrogateescape` keeps each byte of a non-UTF-8 name distinct, where
+        # `replace` would read two such names as one and waive them together.
+        stdout = result.stdout.decode("utf-8", "surrogateescape")
         start = 0
         while start < len(stdout):
             name_end = stdout.index("\0", start)

@@ -640,6 +640,36 @@ def test_a_name_spelling_a_quoted_path_is_not_waived_with_it(repo: Path, imposto
     assert "mr-preflight: 1 surviving reference(s)" in result.stdout
 
 
+def test_names_differing_only_in_invalid_utf8_are_waived_apart(repo: Path) -> None:
+    """Decoded with replacement, `docs/x\\377evil.md` and `docs/x\\376evil.md`
+    both read as `docs/x\\ufffdevil.md`, so one waiver cleared both files. The
+    filesystem refuses such names, so they go straight into the index."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    git(repo, "add", "dbt_project.yml")
+    blob = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"],
+        cwd=repo, input=b"Build LEGACY_SCHEMA first.\n", capture_output=True, check=True,
+    ).stdout.decode().strip()
+    for name in (b"docs/x\xffevil.md", b"docs/x\xfeevil.md"):
+        subprocess.run(
+            ["git", "update-index", "--add", "--index-info"],
+            cwd=repo, input=b"100644 " + blob.encode() + b"\t" + name + b"\n", check=True,
+        )
+    git(repo, "commit", "-q", "-m", "initial")
+    base = git(repo, "rev-parse", "HEAD")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    git(repo, "add", "dbt_project.yml")
+    git(repo, "commit", "-q", "-m", "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/x\\377evil.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert 'waived: "docs/x\\377evil.md":1: LEGACY_SCHEMA' in result.stdout
+    assert '"docs/x\\376evil.md":1: LEGACY_SCHEMA (renamed' in result.stdout
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
+
+
 def test_a_control_character_is_shown_in_the_octal_form_git_prints(repo: Path) -> None:
     write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
     write(repo, "docs/a\x01b.md", "Build LEGACY_SCHEMA first.\n")

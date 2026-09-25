@@ -168,8 +168,8 @@
       "label": "grep output read with universal newlines, so a \\r inside a hit line strands half a row",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "stdout = result.stdout.decode(\"utf-8\", \"replace\")\n",
-      "replace": "stdout = result.stdout.decode(\"utf-8\", \"replace\").replace(\"\\r\", \"\\n\")\n"
+      "find": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\")\n",
+      "replace": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\").replace(\"\\r\", \"\\n\")\n"
     },
     {
       "label": "grep rows split on newlines before NULs, so a newline in a path crashes the sweep",
@@ -217,7 +217,7 @@
       "label": "only a newline triggers quoting, so a name spelled with quotes and a backslash-n shows as the newline name",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "if not any(_is_control(char) or char in '\"\\\\' for char in path):",
+      "find": "if not any(_is_control(char) or _is_raw_byte(char) or char in '\"\\\\' for char in path):",
       "replace": "if \"\\n\" not in path:"
     },
     {
@@ -226,6 +226,20 @@
       "oracle": "real",
       "find": "quoted.append(f\"\\\\{ord(char):03o}\")",
       "replace": "quoted.append(f\"\\\\x{ord(char):02x}\")"
+    },
+    {
+      "label": "grep output decoded with replacement, so names differing only in non-UTF-8 bytes share one waiver",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\")",
+      "replace": "stdout = result.stdout.decode(\"utf-8\", \"replace\")"
+    },
+    {
+      "label": "a non-UTF-8 byte does not trigger quoting, so its name is never shown in git's octal form",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if not any(_is_control(char) or _is_raw_byte(char) or char in '\"\\\\' for char in path):",
+      "replace": "if not any(_is_control(char) or char in '\"\\\\' for char in path):"
     },
     {
       "label": "a crash inside the sweep is re-raised, so it exits 1 and reads as references to fix",

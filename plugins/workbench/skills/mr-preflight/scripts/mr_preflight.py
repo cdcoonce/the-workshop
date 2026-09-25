@@ -110,15 +110,20 @@ def _is_control(char: str) -> bool:
     return char < " " or char == "\x7f"
 
 
+def _is_raw_byte(char: str) -> bool:
+    # A byte that was not UTF-8, carried through by `surrogateescape`.
+    return "\udc80" <= char <= "\udcff"
+
+
 def quote_path(path: str) -> str:
     """``path`` quoted the way git quotes it, when it holds a control character,
-    a double quote or a backslash; any other path as is.
+    a double quote, a backslash or a byte that is not UTF-8; any other path as is.
 
     A tracked name is text anyone on the branch chose. Printed raw, a newline
     in it would put the rest of the name on a line of its own in the MR
     description, where the next run reads it as a waiver or a block marker.
     """
-    if not any(_is_control(char) or char in '"\\' for char in path):
+    if not any(_is_control(char) or _is_raw_byte(char) or char in '"\\' for char in path):
         return path
     quoted = []
     for char in path:
@@ -128,6 +133,8 @@ def quote_path(path: str) -> str:
             quoted.append(_ESCAPES[char])
         elif _is_control(char):
             quoted.append(f"\\{ord(char):03o}")
+        elif _is_raw_byte(char):
+            quoted.append(f"\\{ord(char) - 0xDC00:03o}")
         else:
             quoted.append(char)
     return '"' + "".join(quoted) + '"'
