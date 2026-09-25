@@ -9,6 +9,7 @@ does. Every test drives the CLI and asserts on its exit code and output.
 
 from __future__ import annotations
 
+import os
 import resource
 import subprocess
 import sys
@@ -823,3 +824,41 @@ def test_a_failed_update_still_reports_what_the_config_suppressed(repo: Path) ->
 
     assert result.returncode == SETUP_ERROR, result.stdout
     assert "suppressed 3 hit(s) in ignored paths" in result.stdout
+
+
+def sweep_without_tomllib(repo: Path, base: str) -> subprocess.CompletedProcess:
+    """Run the sweep as Python 3.10 and older would: `import tomllib` fails."""
+    shim = repo.parent / "no-tomllib"
+    shim.mkdir(exist_ok=True)
+    (shim / "tomllib.py").write_text("raise ModuleNotFoundError(\"No module named 'tomllib'\")\n")
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(shim)},
+    )
+
+
+def test_a_repo_without_a_config_needs_no_tomllib(repo: Path) -> None:
+    """`create-mr` runs whatever `python3` is on PATH; a crash exits 1, which
+    it reads as hits. With no config to parse, an old Python sweeps as before."""
+    base = two_renames(repo)
+
+    result = sweep_without_tomllib(repo, base)
+
+    assert "Traceback" not in result.stderr
+    assert result.returncode == HITS
+    assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_a_config_on_a_python_without_tomllib_is_a_setup_error(repo: Path) -> None:
+    configure(repo, 'ignore_paths = ["CHANGELOG.md"]\n')
+    base = two_renames(repo)
+
+    result = sweep_without_tomllib(repo, base)
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert ".mr-preflight.toml" in result.stderr
+    assert "Python 3.11" in result.stderr
+    assert "Traceback" not in result.stderr

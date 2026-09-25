@@ -6,7 +6,6 @@ hands its text here, so every rule is testable against a string.
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from functools import cache
@@ -99,6 +98,13 @@ def parse_config(text: str) -> IgnoreConfig:
         nothing, silently), or a value that is not a list of strings (a bare
         string would otherwise iterate into one-character globs).
     """
+    # Imported here, not at the top: `tomllib` is Python 3.11+, and a repo
+    # with no config must sweep on whatever `python3` `create-mr` finds.
+    try:
+        import tomllib
+    except ModuleNotFoundError as error:
+        raise ConfigError("reading it needs Python 3.11 or newer (tomllib)") from error
+
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
