@@ -194,7 +194,8 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
 
     blocking = []
     for hit in hits:
-        reason = waived.get((hit.rename.old, hit.path))
+        # Matched on the path as reported, so a quoted path is waived as shown.
+        reason = waived.get((hit.rename.old, quote_path(hit.path)))
         if reason is None:
             blocking.append(hit)
         else:

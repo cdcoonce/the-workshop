@@ -567,6 +567,22 @@ def test_a_newline_in_a_path_cannot_write_into_the_sweep_block(repo: Path, tail:
     assert description.read_text() == first
 
 
+def test_a_quoted_path_is_waived_as_it_is_reported(repo: Path) -> None:
+    """The sweep shows a newline path quoted; copying that form into a waiver
+    is the only way to write one, so it must be the form that matches."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/new\\nline.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == CLEAN, result.stdout
+    assert 'waived: "docs/new\\nline.md":1: LEGACY_SCHEMA: vendored name' in result.stdout
+
+
 def test_update_keeps_crlf_prose_byte_for_byte(repo: Path) -> None:
     """A description saved on Windows reaches GitLab as written; reading it
     with newline translation would rewrite every line of the author's prose."""

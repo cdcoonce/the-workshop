@@ -47,7 +47,9 @@ description, inside its sweep block:
 - **Form:** `- waive TOKEN path: reason`, one per line. `path` is
   repo-relative and exact; backtick it if it holds a space
   (``- waive LEGACY_SCHEMA `docs/Old Notes.md`: quoted design``). The reason
-  is required.
+  is required. A path holding a newline, tab, other control character, `"` or `\`
+  is reported quoted the way git quotes it (`"docs/new\nline.md"`); waive it
+  in that quoted form, exactly as reported.
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.
