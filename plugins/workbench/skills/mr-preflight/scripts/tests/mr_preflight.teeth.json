@@ -231,8 +231,8 @@
       "label": "a failing git command is reported as an internal crash instead of a named setup error",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "    except RuntimeError as error:\n",
-      "replace": "    except LookupError as error:\n"
+      "find": "    except (RuntimeError, ConfigError) as error:\n",
+      "replace": "    except ConfigError as error:\n"
     },
     {
       "label": "a failed description write is reported as an internal crash instead of a named setup error",

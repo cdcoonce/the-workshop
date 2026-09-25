@@ -982,8 +982,9 @@ def sweep_without_tomllib(repo: Path, base: str) -> subprocess.CompletedProcess:
 
 
 def test_a_repo_without_a_config_needs_no_tomllib(repo: Path) -> None:
-    """`create-mr` runs whatever `python3` is on PATH; a crash exits 1, which
-    it reads as hits. With no config to parse, an old Python sweeps as before."""
+    """`create-mr` runs whatever `python3` is on PATH, and an import failure
+    there would refuse the MR as a setup error. With no config to parse, an old
+    Python sweeps as before."""
     base = two_renames(repo)
 
     result = sweep_without_tomllib(repo, base)
