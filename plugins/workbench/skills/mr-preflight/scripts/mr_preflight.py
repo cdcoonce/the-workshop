@@ -263,6 +263,10 @@ def main() -> int:
         # fix or waive" to create-mr; a crash is a sweep that could not run.
         try:
             sys.stdout.flush()
+        except ValueError:
+            # stdout was already closed: nothing is buffered, and the
+            # interpreter skips a closed stream when it flushes at exit.
+            pass
         except OSError:
             # stdout is a closed pipe (`| head`). Point it at /dev/null, or this
             # flush and the interpreter's at exit fail again and exit 120.

@@ -259,8 +259,15 @@
       "label": "the crash guard flushes a closed stdout unguarded, so a crash on `| head` exits 120 unnamed",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "        try:\n            sys.stdout.flush()\n        except OSError:\n",
-      "replace": "        sys.stdout.flush()\n        if False:\n"
+      "find": "        try:\n            sys.stdout.flush()\n        except ValueError:\n            # stdout was already closed: nothing is buffered, and the\n            # interpreter skips a closed stream when it flushes at exit.\n            pass\n        except OSError:\n            # stdout is a closed pipe (`| head`). Point it at /dev/null, or this\n            # flush and the interpreter's at exit fail again and exit 120.\n            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())\n",
+      "replace": "        sys.stdout.flush()\n"
+    },
+    {
+      "label": "the crash guard's flush lets ValueError from a closed sys.stdout escape, so it exits 1",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except ValueError:\n            # stdout was already closed: nothing is buffered, and the\n            # interpreter skips a closed stream when it flushes at exit.\n            pass\n",
+      "replace": ""
     },
     {
       "label": "a failing git command is reported as an internal crash instead of a named setup error",

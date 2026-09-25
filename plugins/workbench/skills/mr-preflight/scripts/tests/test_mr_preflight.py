@@ -364,6 +364,35 @@ def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
     assert "mr-preflight: internal error: Unforeseen: unexpected git grep row" in result.stderr
 
 
+def test_a_crash_after_stdout_was_closed_still_exits_2(repo: Path) -> None:
+    """A closed `sys.stdout` raises ValueError on flush, not OSError; the guard
+    must not crash on its own cleanup and exit 1 after all."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    crash = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SCRIPT.parent)!r})\n"
+        "import mr_preflight\n"
+        "class Unforeseen(Exception):\n"
+        "    pass\n"
+        "def boom(*args, **kwargs):\n"
+        "    sys.stdout.close()\n"
+        "    raise Unforeseen('stdout closed under the sweep')\n"
+        "mr_preflight.sweep = boom\n"
+        f"sys.argv = ['mr_preflight.py', 'sweep', '--base', {base!r}]\n"
+        "sys.exit(mr_preflight.main())\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", crash], cwd=repo, capture_output=True, text=True
+    )
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: Unforeseen: stdout closed under the sweep" in result.stderr
+
+
 def test_a_crash_on_a_closed_stdout_still_exits_2(repo: Path) -> None:
     """`sweep ... | head` closes stdout mid-report. The guard's own flush then
     hits the same broken pipe, and so does the interpreter's at exit, which
