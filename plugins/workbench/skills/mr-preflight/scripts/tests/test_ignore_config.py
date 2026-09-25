@@ -9,6 +9,7 @@ exactly the allowlist creep the config must not make easy.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -51,3 +52,14 @@ def ignored(pattern: str, path: str) -> bool:
 )
 def test_ignore_paths_match_like_git_path_globs(pattern: str, path: str, expected: bool) -> None:
     assert ignored(pattern, path) is expected
+
+
+def test_many_double_stars_stay_linear_on_a_deep_path() -> None:
+    """Each `**` tries every split, so without memoising, ten of them against
+    a 21-deep path take seconds per hit, and the sweep checks every hit."""
+    config = parse_config(f"ignore_paths = [{'**/' * 10 + 'nomatch.md'!r}]\n")
+    path = "/".join(["d"] * 20 + ["x.md"])
+
+    started = time.monotonic()
+    assert not config.ignores_path(path)
+    assert time.monotonic() - started < 1.0

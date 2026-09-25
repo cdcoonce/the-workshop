@@ -9,6 +9,7 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
+from functools import cache
 
 CONFIG_NAME = ".mr-preflight.toml"
 KEYS = ("ignore_paths", "ignore_tokens")
@@ -34,19 +35,26 @@ class IgnoreConfig:
 def _glob_match(pattern: list[str], path: list[str]) -> bool:
     """Match path segments the way git's path globs do.
 
-    ``*``, ``?`` and ``[...]`` (negated by ``!`` or ``^``) stay inside one segment, so ``*.md`` is the
-    root's Markdown only; a whole ``**`` segment spans any number of them. A
+    ``*``, ``?`` and ``[...]`` (negated by ``!`` or ``^``) stay inside one
+    segment, so ``*.md`` is the root's Markdown only; a whole ``**`` segment
+    spans any number of them. A
     leading or middle ``**`` may match none, a trailing one at least one, so
     ``docs/adr/**`` is what is inside ``docs/adr``, never a file of that name.
+    Memoised on positions, since each ``**`` tries every split.
     """
-    if not pattern:
-        return not path
-    head, rest = pattern[0], pattern[1:]
-    if head == "**":
-        if not rest:
-            return bool(path)
-        return any(_glob_match(rest, path[skip:]) for skip in range(len(path) + 1))
-    return bool(path) and fnmatchcase(path[0], _negate_like_git(head)) and _glob_match(rest, path[1:])
+    segments = [_negate_like_git(segment) for segment in pattern]
+
+    @cache
+    def match(p: int, q: int) -> bool:
+        if p == len(segments):
+            return q == len(path)
+        if segments[p] == "**":
+            if p + 1 == len(segments):
+                return q < len(path)
+            return any(match(p + 1, skip) for skip in range(q, len(path) + 1))
+        return q < len(path) and fnmatchcase(path[q], segments[p]) and match(p + 1, q + 1)
+
+    return match(0, 0)
 
 
 def _negate_like_git(segment: str) -> str:
