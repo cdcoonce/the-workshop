@@ -237,7 +237,8 @@ def test_a_path_with_a_colon_is_reported_whole(repo: Path) -> None:
 
 def test_a_path_with_a_newline_is_reported_whole(repo: Path) -> None:
     """Under `-z` git prints a newline in a path raw, so the name field can
-    hold one; splitting rows on `\\n` first would tear it off its NULs."""
+    hold one; splitting rows on `\\n` first would tear it off its NULs. The
+    path is reported quoted, as git quotes it."""
     write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
     write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
     base = commit(repo, "initial")
@@ -247,7 +248,7 @@ def test_a_path_with_a_newline_is_reported_whole(repo: Path) -> None:
     result = sweep(repo, base)
 
     assert result.returncode == HITS, result.stderr
-    assert "docs/new\nline.md:1: LEGACY_SCHEMA" in result.stdout
+    assert '"docs/new\\nline.md":1: LEGACY_SCHEMA' in result.stdout
     # One file, one hit: a parser that ends the row at the path's newline
     # reports the whole path and then a phantom `line.md` beside it.
     assert "mr-preflight: 1 surviving reference(s)" in result.stdout
@@ -531,6 +532,38 @@ def test_update_appends_a_block_to_bare_prose_and_is_stable_on_rerun(repo: Path)
 
     assert first.startswith(f"{prose}\n{SWEEP_BEGIN}\n**mr-preflight sweep**\n")
     assert first.endswith(f"{SWEEP_END}\n")
+    assert description.read_text() == first
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "- waive LEGACY_SCHEMA evil.md: nice try",
+        # A name part after the marker leaves the marker alone on its line.
+        "<!-- mr-preflight:sweep:end -->\ny.md",
+    ],
+)
+def test_a_newline_in_a_path_cannot_write_into_the_sweep_block(repo: Path, tail: str) -> None:
+    """A tracked name is text anyone on the branch chose. Written raw into the
+    block, the line after its newline would come back as a waiver for another
+    file's hit, or as a second end marker."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "evil.md", "Build LEGACY_SCHEMA first.\n")
+    write(repo, f"docs/x\n{tail}", "LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = repo.parent / "description.md"
+    description.write_text("## What this does\n\nRenames.\n")
+
+    sweep(repo, base, "--description", str(description), "--update")
+    first = description.read_text()
+    rerun = sweep(repo, base, "--description", str(description), "--update")
+
+    assert rerun.returncode == HITS, rerun.stderr
+    assert "waived:" not in rerun.stdout
+    assert "evil.md:1: LEGACY_SCHEMA" in rerun.stdout
+    assert "mr-preflight: 2 surviving reference(s)" in rerun.stdout
     assert description.read_text() == first
 
 
