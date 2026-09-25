@@ -121,8 +121,8 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
-        renames = detect_renames(diff_text)
         ignores = _load_ignores(repo, head)
+        renames = [r for r in detect_renames(diff_text) if r.old not in ignores.tokens]
         hits = [hit for hit in sweep(repo, head, renames) if not ignores.ignores_path(hit.path)]
     except RuntimeError as error:
         print(f"mr-preflight: {error}", file=sys.stderr)

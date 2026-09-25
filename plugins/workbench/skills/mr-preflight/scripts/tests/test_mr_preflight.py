@@ -620,3 +620,32 @@ def test_ignore_paths_suppress_hits_in_those_paths_only(repo: Path) -> None:
     assert not any(path.startswith("docs/adr/") for path in reported)
     assert "docs/CHANGELOG.md:1: LEGACY_SCHEMA" in result.stdout
     assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+
+
+def test_an_ignored_token_is_never_chased(repo: Path) -> None:
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert "LEGACY_SCHEMA" not in result.stdout
+    assert "CHANGELOG.md:3: load_curves (renamed to fetch_prices in pipeline.py)" in result.stdout
+
+
+def test_a_branch_whose_only_rename_is_ignored_renamed_nothing(repo: Path) -> None:
+    """An ignored token leaves the rename set, not just the hit list, so its
+    MR gains no sweep block claiming a rename the repo chose not to track."""
+    configure(repo, 'ignore_tokens = ["LEGACY_SCHEMA"]\n')
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/audit.sql", "USE SCHEMA LEGACY_SCHEMA;\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = repo.parent / "description.md"
+    description.write_text("Prose only.\n")
+
+    result = sweep(repo, base, "--description", str(description), "--update")
+
+    assert result.returncode == CLEAN, result.stdout
+    assert description.read_text() == "Prose only.\n"
