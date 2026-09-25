@@ -1212,7 +1212,7 @@ def test_mismatch_advice_never_names_the_runner_already_configured() -> None:
 
 def _poison_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     def _poisoned(cmd: list[str]) -> tuple[int, str]:
-        raise AssertionError(f"ran a command despite a stale anchor: {cmd}")
+        raise AssertionError(f"ran a command it should have refused: {cmd}")
 
     monkeypatch.setattr("teeth_check._default_runner", _poisoned)
 
@@ -1241,3 +1241,257 @@ def test_a_full_run_refuses_a_stale_anchor_before_running_anything(
     assert "first stale: anchor not found" in err
     assert f"second stale: file not found: {(tmp_path / 'deleted.py').resolve()}" in err
     assert "cap:" not in err
+
+
+# ---------------------------------------------------------------------------
+# --changed-since: the inner loop of a fix round
+#
+# A review-fix round touches a handful of rows (the fix's new tooth, the rows
+# it re-anchored) and a full run re-scores all of them. `--changed-since REV`
+# runs only rows added or edited in the spec since REV, plus every declared
+# control, so the round is verified in seconds. It is never the tally: the
+# count a pull request carries comes from one full run at the end.
+# ---------------------------------------------------------------------------
+
+
+def _git(repo: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
+_HELD_CONTROL = _mutant(
+    label="[control] rewrite GUARD in place",
+    find="GUARD = True",
+    replace="GUARD = True",
+    expect="survived",
+    why="Identical text; nothing changes.",
+)
+
+
+@pytest.fixture
+def committed_spec(target: Path, tmp_path: Path) -> Path:
+    """A spec committed at HEAD with two rows and a control."""
+    spec_path = _write_spec(
+        tmp_path,
+        [
+            _mutant(),
+            _mutant(label="guard", find="GUARD = True", replace="GUARD = False"),
+            _HELD_CONTROL,
+        ],
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "spec")
+    return spec_path
+
+
+def _labels_run(capsys: pytest.CaptureFixture[str]) -> list[str]:
+    return [m["label"] for m in json.loads(capsys.readouterr().out)["mutants"]]
+
+
+def test_changed_since_runs_only_edited_and_added_rows_plus_controls(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`cap` is byte-identical to HEAD, so it must not run."""
+    _write_spec(
+        tmp_path,
+        [
+            _mutant(),
+            _mutant(label="guard", find="GUARD = True", replace="GUARD = None"),
+            _HELD_CONTROL,
+            _mutant(label="zero cap", replace="LIMIT = 0"),
+        ],
+    )
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", "--json", str(committed_spec)])
+
+    assert _labels_run(capsys) == ["guard", "[control] rewrite GUARD in place", "zero cap"]
+
+
+def test_a_partial_run_says_it_is_not_the_tally(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A partial matrix pasted into a pull request would read as the full count."""
+    _write_spec(
+        tmp_path,
+        [
+            _mutant(),
+            _mutant(label="guard", find="GUARD = True", replace="GUARD = None"),
+            _HELD_CONTROL,
+        ],
+    )
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", str(committed_spec)])
+    text = capsys.readouterr().out
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+    main(["--changed-since", "HEAD", "--json", str(committed_spec)])
+    data = json.loads(capsys.readouterr().out)
+
+    assert text.startswith("PARTIAL: 2 of 3 rows (changed since HEAD, plus controls)")
+    assert "not the tally" in text.splitlines()[0]
+    assert data["partial"] == {"ran": 2, "of": 3, "changed_since": "HEAD"}
+
+
+def test_changed_since_still_refuses_a_stale_anchor_on_a_row_it_would_skip(
+    committed_spec: Path,
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The case a fix round produces: the code moved, the row did not.
+
+    `cap` is unchanged since HEAD, so it would not run, but the fix rewrote
+    the line it anchors on. The fix round is where that gets found.
+    """
+    target.write_text("LIMIT = 30\nGUARD = True\n")
+    _write_spec(
+        tmp_path,
+        [
+            _mutant(),
+            _mutant(label="guard", find="GUARD = True", replace="GUARD = None"),
+            _HELD_CONTROL,
+        ],
+    )
+    _poison_runner(monkeypatch)
+
+    code = main(["--changed-since", "HEAD", str(committed_spec)])
+
+    assert code == 2
+    assert "cap: anchor not found" in capsys.readouterr().err
+
+
+def test_changed_since_refuses_when_no_row_changed(
+    committed_spec: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Controls alone verify nothing; a clean exit here would read as a pass."""
+    _poison_runner(monkeypatch)
+
+    code = main(["--changed-since", "HEAD", str(committed_spec)])
+
+    assert code == 2
+    assert "no rows added or edited since HEAD" in capsys.readouterr().err
+
+
+def test_a_spec_absent_at_the_revision_runs_every_row_as_new(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A spec first written on this branch is all new rows: a full run, not partial."""
+    fresh = tmp_path / "fresh.teeth.json"
+    fresh.write_text(committed_spec.read_text())
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", "--json", str(fresh)])
+    data = json.loads(capsys.readouterr().out)
+
+    assert [m["label"] for m in data["mutants"]] == [
+        "cap",
+        "guard",
+        "[control] rewrite GUARD in place",
+    ]
+    assert "partial" not in data
+
+
+def test_changed_since_refuses_a_revision_that_does_not_exist(
+    committed_spec: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A typo must not read as 'the spec is new here' and quietly run every row."""
+    _poison_runner(monkeypatch)
+
+    code = main(["--changed-since", "no-such-rev", str(committed_spec)])
+
+    assert code == 2
+    assert "no-such-rev" in capsys.readouterr().err
+
+
+def test_changed_since_refuses_a_spec_outside_a_git_repository(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    spec_path = _write_spec(tmp_path, [_mutant()])
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    _poison_runner(monkeypatch)
+
+    code = main(["--changed-since", "HEAD", str(spec_path)])
+
+    assert code == 2
+    assert "HEAD" in capsys.readouterr().err
+
+
+def test_a_partial_run_does_not_compute_never_killed_tests(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A test that kills only a skipped row would be named as killing nothing.
+
+    `test_cap` kills `cap`, which is unchanged and does not run, so against
+    the selected rows alone it looks like dead weight.
+    """
+    rows = [_mutant(), _mutant(label="guard", find="GUARD = True", replace="GUARD = False")]
+    spec_path = tmp_path / "spec.json"
+
+    def write(rows: list[dict]) -> None:
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "test_command": ["pytest", "-q"],
+                    "collect_command": ["pytest", "--collect-only", "-q"],
+                    "mutants": rows,
+                }
+            )
+        )
+
+    write(rows)
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "spec")
+    write([rows[0], _mutant(label="guard", find="GUARD = True", replace="GUARD = None")])
+
+    def runner() -> object:
+        test_runs = 0
+
+        def run(cmd: list[str]) -> tuple[int, str]:
+            nonlocal test_runs
+            if "--collect-only" in cmd:
+                return 0, "tests/test_a.py::test_cap\ntests/test_a.py::test_guard\n"
+            test_runs += 1
+            if test_runs == 1:  # baseline
+                return 0, "2 passed in 0.1s\n"
+            return 1, "FAILED tests/test_a.py::test_guard\n1 failed, 1 passed in 0.1s\n"
+
+        return run
+
+    monkeypatch.setattr("teeth_check._default_runner", runner())
+    main(["--changed-since", "HEAD", str(spec_path)])
+    text = capsys.readouterr().out
+    monkeypatch.setattr("teeth_check._default_runner", runner())
+    main(["--changed-since", "HEAD", "--json", str(spec_path)])
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["never_killed"] is None
+    assert "never-killed tests: not computed (partial run)" in text

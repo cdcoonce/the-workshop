@@ -48,6 +48,7 @@ byte-identical rather than rewritten with LF endings.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import re
@@ -666,7 +667,7 @@ def load_spec(path: Path) -> Spec:
     )
 
 
-def render(report: Report) -> str:
+def render(report: Report, *, never_killed_unknown: str = "no collect_command in spec") -> str:
     lines = ["mutant                          status       oracle       killed by"]
     for m in report.mutants:
         who = ", ".join(m.killed_by) if m.killed_by else (m.detail or "-")
@@ -759,7 +760,7 @@ def render(report: Report) -> str:
 
     lines.append("")
     if report.never_killed is None:
-        lines.append("never-killed tests: not computed (no collect_command in spec)")
+        lines.append(f"never-killed tests: not computed ({never_killed_unknown})")
     elif report.never_killed:
         lines.append(
             "CAUGHT NO MUTANT IN THIS RUN — not necessarily dead weight. A "
@@ -791,6 +792,53 @@ def _exit_code(report: Report) -> int:
     )
 
 
+def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
+    """Return *spec* cut to rows added or edited since *rev*, plus controls.
+
+    A row is unchanged only when the same JSON object appears in the spec as
+    committed at *rev*; any edit to it — a re-anchor, a new replace, a
+    relabel — selects it. Controls always run, since a partial run with no
+    control cannot show the rig still discriminates.
+    """
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+        cwd=spec_path.parent,
+        capture_output=True,
+    )
+    if resolved.returncode != 0:
+        # Checked apart from the path lookup below: both fail the same way,
+        # and a typo read as "spec is new here" would quietly run every row.
+        raise SpecError(
+            f"--changed-since {rev!r} is not a commit in a git repository "
+            f"holding {spec_path}"
+        )
+    committed = f"{rev}:./{spec_path.name}"
+    present = subprocess.run(
+        ["git", "cat-file", "-e", committed],
+        cwd=spec_path.parent,
+        capture_output=True,
+    )
+    if present.returncode != 0:
+        # First written after REV: every row is new.
+        old_rows: list[dict] = []
+    else:
+        before = subprocess.run(
+            ["git", "show", committed],
+            cwd=spec_path.parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        old_rows = json.loads(before)["mutants"]
+    raw_rows = json.loads(spec_path.read_text(encoding="utf-8"))["mutants"]
+    keep = [
+        mutant
+        for raw, mutant in zip(raw_rows, spec.mutants, strict=True)
+        if raw not in old_rows or mutant.expect == "survived"
+    ]
+    return dataclasses.replace(spec, mutants=keep)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("spec", type=Path, help="JSON spec file")
@@ -803,6 +851,14 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "verify every mutant's anchor resolves against its file and "
             "exit — no baseline, no test command, no writes"
+        ),
+    )
+    parser.add_argument(
+        "--changed-since",
+        metavar="REV",
+        help=(
+            "run only rows added or edited since git revision REV, plus "
+            "controls — a fix round's inner loop, never the recorded tally"
         ),
     )
     args = parser.parse_args(argv)
@@ -843,6 +899,31 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {label}: {error}", file=sys.stderr)
         return 2
 
+    total = len(spec.mutants)
+    if args.changed_since is not None:
+        try:
+            spec = select_changed_rows(args.spec, spec, args.changed_since)
+        except SpecError as exc:
+            print(f"refusing to run: {exc}", file=sys.stderr)
+            return 2
+        if all(m.expect == "survived" for m in spec.mutants):
+            print(
+                f"refusing to run: no rows added or edited since "
+                f"{args.changed_since}; controls alone verify nothing",
+                file=sys.stderr,
+            )
+            return 2
+    # Only a run of every row is a count a pull request may carry; a partial
+    # one says so on its first line, where a paste would begin.
+    partial = (
+        {"ran": len(spec.mutants), "of": total, "changed_since": args.changed_since}
+        if len(spec.mutants) < total
+        else None
+    )
+    if partial is not None:
+        # A test that kills only a skipped row would read as killing nothing.
+        spec = dataclasses.replace(spec, collect_command=None)
+
     try:
         report = run_teeth_check(spec)
     except BaselineNotGreen as exc:
@@ -850,17 +931,23 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "mutants": [vars(m) for m in report.mutants],
-                    "never_killed": report.never_killed,
-                },
-                indent=2,
-            )
-        )
+        payload: dict = {
+            "mutants": [vars(m) for m in report.mutants],
+            "never_killed": report.never_killed,
+        }
+        if partial is not None:
+            payload["partial"] = partial
+        print(json.dumps(payload, indent=2))
     else:
-        print(render(report))
+        if partial is not None:
+            print(
+                f"PARTIAL: {partial['ran']} of {partial['of']} rows (changed since "
+                f"{partial['changed_since']}, plus controls) — not the tally; "
+                "run the full spec before recording a count\n"
+            )
+            print(render(report, never_killed_unknown="partial run"))
+        else:
+            print(render(report))
 
     return _exit_code(report)
 
