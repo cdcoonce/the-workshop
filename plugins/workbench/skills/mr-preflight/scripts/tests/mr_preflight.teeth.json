@@ -417,6 +417,13 @@
       "replace": "        except BlockError as error:"
     },
     {
+      "label": "broken block markers are reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except (OSError, BlockError) as error:",
+      "replace": "        except OSError as error:"
+    },
+    {
       "label": "--update writes a block onto a branch that renamed nothing",
       "file": "../mr_preflight.py",
       "oracle": "real",

@@ -464,6 +464,8 @@ def test_a_description_with_broken_markers_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR, result.stdout
     assert "mr-preflight:sweep:end" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
 
 
 def test_a_missing_description_file_is_a_setup_error(repo: Path) -> None:
