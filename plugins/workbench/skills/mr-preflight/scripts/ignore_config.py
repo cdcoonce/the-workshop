@@ -34,7 +34,7 @@ class IgnoreConfig:
 def _glob_match(pattern: list[str], path: list[str]) -> bool:
     """Match path segments the way git's path globs do.
 
-    ``*``, ``?`` and ``[...]`` stay inside one segment, so ``*.md`` is the
+    ``*``, ``?`` and ``[...]`` (negated by ``!`` or ``^``) stay inside one segment, so ``*.md`` is the
     root's Markdown only; a whole ``**`` segment spans any number of them. A
     leading or middle ``**`` may match none, a trailing one at least one, so
     ``docs/adr/**`` is what is inside ``docs/adr``, never a file of that name.
@@ -46,7 +46,39 @@ def _glob_match(pattern: list[str], path: list[str]) -> bool:
         if not rest:
             return bool(path)
         return any(_glob_match(rest, path[skip:]) for skip in range(len(path) + 1))
-    return bool(path) and fnmatchcase(path[0], head) and _glob_match(rest, path[1:])
+    return bool(path) and fnmatchcase(path[0], _negate_like_git(head)) and _glob_match(rest, path[1:])
+
+
+def _negate_like_git(segment: str) -> str:
+    """Spell git's ``[^...]`` negation as ``fnmatch``'s ``[!...]``.
+
+    ``fnmatch`` reads a leading ``^`` in a class as a literal, so ``[^0-9]``
+    would ignore exactly the paths git keeps. Classes are delimited the way
+    ``fnmatch`` delimits them: a ``]`` right after the opening (or after its
+    negation) is literal, and an unclosed ``[`` is a literal ``[``.
+    """
+    out = []
+    i = 0
+    while i < len(segment):
+        if segment[i] != "[":
+            out.append(segment[i])
+            i += 1
+            continue
+        j = i + 1
+        if j < len(segment) and segment[j] in "!^":
+            j += 1
+        if j < len(segment) and segment[j] == "]":
+            j += 1
+        while j < len(segment) and segment[j] != "]":
+            j += 1
+        if j >= len(segment):
+            out.append("[")
+            i += 1
+            continue
+        body = segment[i + 1 : j]
+        out.append("[" + ("!" + body[1:] if body.startswith("^") else body) + "]")
+        i = j + 1
+    return "".join(out)
 
 
 def parse_config(text: str) -> IgnoreConfig:

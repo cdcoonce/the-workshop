@@ -41,6 +41,11 @@ def ignored(pattern: str, path: str) -> bool:
         ("CHANGELOG.md", "docs/CHANGELOG.md", False),  # the whole path matches
         ("changelog.md", "CHANGELOG.md", False),  # case-sensitive, like git
         ("sql/v[0-9].sql", "sql/v1.sql", True),
+        ("sql/v[!0-9].sql", "sql/vx.sql", True),
+        ("sql/v[^0-9].sql", "sql/vx.sql", True),  # git negates with `^` too
+        ("sql/v[^0-9].sql", "sql/v1.sql", False),
+        ("sql/v[^0-9].sql", "sql/v^.sql", True),
+        ("sql/v[]^].sql", "sql/v^.sql", True),  # a `^` that is not first is literal
         ("notes:v2/*.md", "notes:v2/a.md", True),  # `:` is an ordinary character
     ],
 )
