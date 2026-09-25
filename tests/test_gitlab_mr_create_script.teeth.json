@@ -77,8 +77,8 @@
       "label": "the dev hop never runs the sweep, so a surviving rename opens the MR",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "    if ! sweep_output=$(python3 \"$preflight\" sweep --base \"$sweep_base\" --description \"$rendered_file\" --update 2>&1); then",
-      "replace": "    if false; then"
+      "find": "    sweep_output=$(python3 \"$preflight\" sweep --base \"$sweep_base\" --description \"$rendered_file\" --update 2>&1) || sweep_status=$?\n",
+      "replace": "    sweep_output=\"\"\n"
     },
     {
       "label": "a missing origin/<target> warns and sweeps nothing instead of refusing",
@@ -119,8 +119,29 @@
       "label": "a refusal leaves out how to write the to-do list into the description",
       "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
       "oracle": "real",
-      "find": "      printf 'To write the open references into %s as a to-do list:\\n  python3 %q sweep --base %s --description %q --update\\n' \\\n        \"$description_file\" \"$preflight\" \"$sweep_base\" \"$description_file\" >&2\n",
+      "find": "        printf 'To write the open references into %s as a to-do list:\\n  python3 %q sweep --base %s --description %q --update\\n' \\\n          \"$description_file\" \"$preflight\" \"$sweep_base\" \"$description_file\" >&2\n",
       "replace": ""
+    },
+    {
+      "label": "cp reads a dash-led description name as options",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "    cp -- \"$description_file\" \"$rendered_file\"\n",
+      "replace": "    cp \"$description_file\" \"$rendered_file\"\n"
+    },
+    {
+      "label": "a setup error gets the --update hint it cannot use",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "      if [[ $sweep_status -eq 1 ]]; then\n",
+      "replace": "      if true; then\n"
+    },
+    {
+      "label": "the other hops' description is swept too, so they gain a sweep block",
+      "file": "../plugins/workbench/skills/gitlab-mr-create/scripts/create-mr",
+      "oracle": "real",
+      "find": "  if [[ \"$target_branch\" == dev ]]; then\n",
+      "replace": "  if [[ \"$target_branch\" != main ]]; then\n"
     },
     {
       "label": "[control] reword the HEAD-subject label in the gate's error",

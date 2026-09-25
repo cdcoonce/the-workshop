@@ -238,8 +238,8 @@
       "label": "any line starting with the word waive is held to the waiver form",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")",
-      "replace": "WAIVER_INTENT = re.compile(r\"^- waive\")"
+      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
+      "replace": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive\", re.IGNORECASE)"
     },
     {
       "label": "a waiver path ends at its first colon",
@@ -343,8 +343,8 @@
       "label": "--update renders but never writes the file",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "        description.write_bytes(rendered.encode(\"utf-8\", \"surrogateescape\"))\n",
-      "replace": "        pass\n"
+      "find": "            _write_description(description, rendered)\n",
+      "replace": "            pass\n"
     },
     {
       "label": "an unreadable description crashes with a traceback instead of a setup error",
@@ -352,6 +352,69 @@
       "oracle": "real",
       "find": "        except (OSError, BlockError) as error:",
       "replace": "        except BlockError as error:"
+    },
+    {
+      "label": "--update writes a block onto a branch that renamed nothing",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if update and description is not None and (renames or block is not None):",
+      "replace": "if update and description is not None:"
+    },
+    {
+      "label": "a stale block is left claiming old hits when nothing was renamed",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if update and description is not None and (renames or block is not None):",
+      "replace": "if update and description is not None and renames:"
+    },
+    {
+      "label": "lines split with splitlines, so a marker glued by \\r or U+2028 reads as alone",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "for line in re.findall(r\"[^\\n]*\\n|[^\\n]+\", text):",
+      "replace": "for line in text.splitlines(keepends=True):"
+    },
+    {
+      "label": "the malformed net only catches the exact `- waive ` spelling",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
+      "replace": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")"
+    },
+    {
+      "label": "the malformed net is case-sensitive, so `- Waive` reads as prose",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
+      "replace": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\")"
+    },
+    {
+      "label": "--update writes in place, so a failed write truncates the description",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "            _write_description(description, rendered)\n",
+      "replace": "            description.write_bytes(rendered.encode(\"utf-8\", \"surrogateescape\"))\n"
+    },
+    {
+      "label": "a failed write leaves its temp file beside the description",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        Path(temp).unlink(missing_ok=True)\n        raise",
+      "replace": "        raise"
+    },
+    {
+      "label": "a failed write crashes with a traceback instead of a setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except OSError as error:\n            print(f\"mr-preflight: could not update",
+      "replace": "        except ValueError as error:\n            print(f\"mr-preflight: could not update"
+    },
+    {
+      "label": "the rewritten description comes back owner-only",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        shutil.copymode(target, temp)\n",
+      "replace": ""
     },
     {
       "label": "[control] swap two independent git grep flags",
