@@ -82,16 +82,18 @@ ignore_tokens = ["schema_version"]
   inside one directory, so `*.md` is the root's Markdown only, and a whole
   `**` spans any depth (`docs/adr/**`, `**/CHANGELOG.md`). The whole path
   must match, so `docs/adr` or `docs/adr/` ignores nothing, and case counts.
-  `\` escapes and `[[:digit:]]`-style classes are not supported and are
-  refused as a setup error, since they would not match what git matches.
+  `\` escapes, `[[:digit:]]`-style classes and an unclosed `[` are refused
+  as a setup error, since they would not match what git matches.
   Hits in these paths are dropped before waivers are read.
 - **`ignore_tokens`** are exact names that are never chased. A branch whose
   only renames are ignored tokens counts as renaming nothing.
 - **Committed only.** The file is read from the swept head's tree, like
   everything the sweep searches, so an ignore that exists only on your disk
-  or in the index does nothing. Commit it first. The file itself is left out
-  of the sweep: its lines are not uses of the names they list, so it never
-  hides a rename or blocks on one.
+  or in the index does nothing. Commit it first. Only the root's file is
+  read, and only it is left out of the sweep: its lines are not uses of the
+  names they list, so adding, editing or moving it never hides a rename, and
+  it never blocks on one. A `.mr-preflight.toml` in a subdirectory is
+  ordinary content.
 - **Creep stays visible.** Every run that the file changed prints, clean or
   not:
 
