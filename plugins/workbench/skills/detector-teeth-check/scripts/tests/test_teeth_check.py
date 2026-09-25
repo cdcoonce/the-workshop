@@ -1495,3 +1495,63 @@ def test_a_partial_run_does_not_compute_never_killed_tests(
 
     assert data["never_killed"] is None
     assert "never-killed tests: not computed (partial run)" in text
+
+
+@pytest.mark.parametrize(
+    "committed",
+    [
+        "not json",
+        '{"test_command": ["x"]}',
+        '{"test_command": ["x"], "mutants": {}}',
+        '{"test_command": ["x"], "mutants": "legacy"}',
+        '{"test_command": ["x"], "mutants": ["a row that is not an object"]}',
+        '["a spec that is not an object"]',
+    ],
+    ids=["invalid-json", "no-mutants", "mutants-object", "mutants-string", "row-string", "top-level-list"],
+)
+def test_changed_since_refuses_a_spec_it_cannot_read_at_the_revision(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    committed: str,
+) -> None:
+    """A traceback exits 1, the code for 'lacks teeth'; a refusal must exit 2."""
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text(committed)
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "broken spec")
+    _write_spec(tmp_path, [_mutant()])
+    _poison_runner(monkeypatch)
+
+    code = main(["--changed-since", "HEAD", str(spec_path)])
+
+    assert code == 2
+    assert "HEAD" in capsys.readouterr().err
+
+
+def test_changed_since_follows_a_committed_symlink_to_the_spec(
+    committed_spec: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Through a symlink git shows the link's own text, not the spec."""
+    link = tmp_path / "link.json"
+    link.symlink_to("spec.json")
+    _git(tmp_path, "add", "link.json")
+    _git(tmp_path, "commit", "-q", "-m", "link")
+    _write_spec(
+        tmp_path,
+        [
+            _mutant(),
+            _mutant(label="guard", find="GUARD = True", replace="GUARD = None"),
+            _HELD_CONTROL,
+        ],
+    )
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    main(["--changed-since", "HEAD", "--json", str(link)])
+
+    assert _labels_run(capsys) == ["guard", "[control] rewrite GUARD in place"]

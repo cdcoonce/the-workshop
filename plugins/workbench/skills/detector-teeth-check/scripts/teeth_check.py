@@ -792,13 +792,12 @@ def _exit_code(report: Report) -> int:
     )
 
 
-def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
-    """Return *spec* cut to rows added or edited since *rev*, plus controls.
+def _committed_spec(spec_path: Path, rev: str) -> dict | None:
+    """Return the spec as committed at *rev*, or None if it was not there.
 
-    A row is unchanged only when the same JSON object appears in the spec as
-    committed at *rev*; any edit to it — a re-anchor, a new replace, a
-    relabel — selects it. Controls always run, since a partial run with no
-    control cannot show the rig still discriminates.
+    Refuses (``SpecError``) rather than guessing: an unresolvable *rev* must
+    not read as "the spec is new here" and quietly run every row, and a spec
+    that was not a readable teeth spec at *rev* has no rows to compare with.
     """
     resolved = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
@@ -819,17 +818,39 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
         capture_output=True,
     )
     if present.returncode != 0:
-        # First written after REV: every row is new.
-        old_rows: list[dict] = []
-    else:
-        before = subprocess.run(
-            ["git", "show", committed],
-            cwd=spec_path.parent,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        old_rows = json.loads(before)["mutants"]
+        return None
+    before = subprocess.run(
+        ["git", "show", committed],
+        cwd=spec_path.parent,
+        capture_output=True,
+        check=True,
+    ).stdout
+    try:
+        doc = json.loads(before.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SpecError(f"{spec_path.name} at {rev!r} is not JSON: {exc}") from None
+    rows = doc.get("mutants") if isinstance(doc, dict) else None
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        raise SpecError(
+            f"{spec_path.name} at {rev!r} has no list of mutant objects to "
+            "compare with"
+        )
+    return doc
+
+
+def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
+    """Return *spec* cut to rows added or edited since *rev*, plus controls.
+
+    A row is unchanged only when the same JSON object appears in the spec as
+    committed at *rev*; any edit to it — a re-anchor, a new replace, a
+    relabel — selects it. Controls always run, since a partial run with no
+    control cannot show the rig still discriminates.
+    """
+    # Through a symlink, git would show the link's text, not the spec.
+    spec_path = spec_path.resolve()
+    before = _committed_spec(spec_path, rev)
+    # First written after REV: every row is new.
+    old_rows = [] if before is None else before["mutants"]
     raw_rows = json.loads(spec_path.read_text(encoding="utf-8"))["mutants"]
     keep = [
         mutant
