@@ -1595,3 +1595,14 @@ def test_a_row_copied_verbatim_since_the_revision_counts_as_added(
     main(["--changed-since", "HEAD", "--json", str(committed_spec)])
 
     assert _labels_run(capsys) == ["[control] rewrite GUARD in place", "cap"]
+
+
+def test_check_anchors_with_changed_since_is_a_usage_error(
+    committed_spec: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checking anchors ignored the revision, so a bogus one exited 0 unread."""
+    with pytest.raises(SystemExit) as exc:
+        main(["--check-anchors", "--changed-since", "no-such-rev", str(committed_spec)])
+
+    assert exc.value.code == 2
+    assert "--changed-since" in capsys.readouterr().err

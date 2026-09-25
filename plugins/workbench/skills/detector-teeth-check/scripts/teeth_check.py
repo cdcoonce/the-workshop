@@ -882,7 +882,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--json", action="store_true", help="emit machine-readable JSON instead"
     )
-    parser.add_argument(
+    # Anchors are checked for every row regardless, so a revision given
+    # alongside would be read by nothing.
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check-anchors",
         action="store_true",
         help=(
@@ -890,7 +893,7 @@ def main(argv: list[str] | None = None) -> int:
             "exit — no baseline, no test command, no writes"
         ),
     )
-    parser.add_argument(
+    mode.add_argument(
         "--changed-since",
         metavar="REV",
         help=(
