@@ -924,3 +924,47 @@ def test_an_unreadable_config_blob_is_a_setup_error_not_no_ignores(repo: Path) -
     assert result.returncode == SETUP_ERROR, result.stdout
     assert ".mr-preflight.toml at HEAD:" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_moving_the_config_away_does_not_hide_a_rename(repo: Path) -> None:
+    """git pairs a moved file before anything filters it, so the config's
+    lines never reappear as added content that reads as the token moving."""
+    configure(repo, 'ignore_paths = ["migrations/LEGACY_SCHEMA/**"]\n')
+    write(repo, "code.py", "x = LEGACY_SCHEMA\n")
+    write(repo, "other.py", "LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    git(repo, "mv", ".mr-preflight.toml", ".mr-preflight.toml.bak")
+    write(repo, "code.py", "x = NEW_SCHEMA\n")
+    commit(repo, "rename, and retire the ignore list")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stdout
+    assert "other.py:1: LEGACY_SCHEMA (renamed to NEW_SCHEMA in code.py)" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "variable", ["GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS", "GIT_NOGLOB_PATHSPECS"]
+)
+def test_pathspec_settings_in_the_environment_change_nothing(repo: Path, variable: str) -> None:
+    """These re-read every pathspec git is given, so the sweep gives git none:
+    the config added with the rename still hides only its own path."""
+    write(repo, "code.py", "x = LEGACY_SCHEMA\n")
+    write(repo, "other.py", "LEGACY_SCHEMA\n")
+    write(repo, "CHANGELOG.md", "- LEGACY_SCHEMA created\n")
+    base = commit(repo, "initial")
+    write(repo, "code.py", "x = NEW_SCHEMA\n")
+    configure(repo, '# keeps LEGACY_SCHEMA history\nignore_paths = ["CHANGELOG.md"]\n')
+    commit(repo, "rename, and ignore the changelog")
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "sweep", "--base", base],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**os.environ, variable: "1"},
+    )
+
+    assert result.returncode == HITS, result.stderr
+    assert "other.py:1: LEGACY_SCHEMA (renamed to NEW_SCHEMA in code.py)" in result.stdout
+    assert "suppressed 1 hit(s) in ignored paths" in result.stdout

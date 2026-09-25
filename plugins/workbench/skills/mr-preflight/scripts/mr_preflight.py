@@ -35,9 +35,6 @@ from ignore_config import CONFIG_NAME, ConfigError, IgnoreConfig, parse_config  
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
 
-# The root's `.mr-preflight.toml` exactly, whatever the cwd; never a glob.
-CONFIG_PATHSPEC = f":(top,exclude,literal){CONFIG_NAME}"
-
 CLEAN = 0
 HITS = 1
 SETUP_ERROR = 2
@@ -56,14 +53,17 @@ def _git(repo: Path, *args: str) -> str:
 def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
     """The ignore list committed at ``head``; none when the file is absent.
 
-    ``ls-tree`` takes the revision and the path apart: glued as
-    ``<rev>:<path>``, a ``:/message`` head would search for the path too, and
-    a failed lookup would pass as "no file" and apply no ignores.
+    The root tree is listed whole rather than looked up by path: glued as
+    ``<rev>:<path>``, a ``:/message`` head would search for the path too, a
+    pathspec is re-read by ``GIT_*_PATHSPECS`` in the environment, and a
+    failed lookup would pass as "no file" and apply no ignores.
     """
-    entry = _git(repo, "ls-tree", "-z", head, "--", CONFIG_NAME).rstrip("\0")
-    if not entry:
+    listing = _git(repo, "ls-tree", "-z", head)
+    entries = (row.split("\t", 1) for row in listing.split("\0") if row)
+    entry = next((meta for meta, name in entries if name == CONFIG_NAME), None)
+    if entry is None:
         return IgnoreConfig()
-    mode, kind, obj = entry.split("\t", 1)[0].split(" ")
+    mode, kind, obj = entry.split(" ")
     try:
         if kind != "blob" or mode == "120000":
             raise ConfigError("it is not a regular file")
@@ -142,20 +142,19 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # `git grep <tree>` searches only the cwd's subtree, so run from the
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
-        # The ignore list is not a use of the names it lists, so it is left
-        # out of the diff and the search: a line of it naming the old token
-        # would read as the token moving, and a glob naming it as a hit.
-        diff_text = _git(
-            repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head, "--", ".", CONFIG_PATHSPEC
-        )
+        diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
         # Ignored tokens leave the rename set before the search, and hits in
         # ignored paths are dropped before waivers are consulted; both are
         # counted so the summary keeps allowlist creep in view.
         ignores = _load_ignores(repo, head)
-        detected = detect_renames(diff_text)
+        # The ignore list is not a use of the names it lists, so its lines
+        # are left out of the renames and its hits out of the search: a line
+        # naming the old token would read as the token moving, a glob naming
+        # it as a hit. Filtered here, never by pathspec (see `_load_ignores`).
+        detected = detect_renames(diff_text, exclude_paths=frozenset({CONFIG_NAME}))
         renames = [r for r in detected if r.old not in ignores.tokens]
         skipped_tokens = len(detected) - len(renames)
-        found = sweep(repo, head, renames, exclude=(CONFIG_PATHSPEC,))
+        found = [hit for hit in sweep(repo, head, renames) if hit.path != CONFIG_NAME]
         hits = [hit for hit in found if not ignores.ignores_path(hit.path)]
         suppressed_hits = len(found) - len(hits)
     except (RuntimeError, ConfigError) as error:
