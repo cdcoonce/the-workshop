@@ -115,20 +115,23 @@ if ! requires_title_file "$target_branch"; then
 
   # A rename that left its old name behind in a SQL script or runbook
   # elsewhere is refused before review ever sees it: the `mr-preflight` sweep
-  # diffs from where this branch left `origin/<target>` and reports every
-  # surviving reference to a renamed identifier. It fails closed: a gate that
-  # skips itself when it cannot resolve a base guards nothing.
-  command -v python3 >/dev/null || { printf 'python3 is required for the mr-preflight sweep.\n' >&2; exit 69; }
-  git rev-parse --verify --quiet "origin/$target_branch" >/dev/null || {
-    printf 'mr-preflight: cannot sweep, origin/%s does not exist. Fetch it first.\n' "$target_branch" >&2
-    exit 65
-  }
-  sweep_base=$(git merge-base HEAD "origin/$target_branch")
-  preflight="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../mr-preflight/scripts/mr_preflight.py"
-  if ! sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" 2>&1); then
-    printf '%s\n' "$sweep_output" >&2
-    printf 'Refusing to open the MR: fix each reference above (see the mr-preflight skill).\n' >&2
-    exit 65
+  # diffs from where this branch left `origin/dev` and reports every surviving
+  # reference to a renamed identifier. It fails closed, since a gate that skips
+  # itself when it cannot resolve a base guards nothing. Only the `dev` hop is
+  # swept; other non-promotion targets keep their previous behavior.
+  if [[ "$target_branch" == dev ]]; then
+    command -v python3 >/dev/null || { printf 'python3 is required for the mr-preflight sweep.\n' >&2; exit 69; }
+    git rev-parse --verify --quiet "origin/$target_branch" >/dev/null || {
+      printf 'mr-preflight: cannot sweep, origin/%s does not exist. Fetch it first.\n' "$target_branch" >&2
+      exit 65
+    }
+    sweep_base=$(git merge-base HEAD "origin/$target_branch")
+    preflight="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../mr-preflight/scripts/mr_preflight.py"
+    if ! sweep_output=$(python3 "$preflight" sweep --base "$sweep_base" 2>&1); then
+      printf '%s\n' "$sweep_output" >&2
+      printf 'Refusing to open the MR: fix each reference above (see the mr-preflight skill).\n' >&2
+      exit 65
+    fi
   fi
 fi
 

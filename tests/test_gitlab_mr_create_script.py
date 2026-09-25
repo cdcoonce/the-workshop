@@ -566,6 +566,24 @@ def test_dev_hop_refuses_when_the_sweep_has_no_base(repo) -> None:
     assert not _created(repo)
 
 
+def test_other_targets_are_not_swept(repo) -> None:
+    """The sweep is the `dev` hop's gate only. An MR into any other
+    non-promotion target behaves as before: no sweep, and no refusal for a
+    missing `origin/<target>`, even with a surviving rename on the branch."""
+    repo.seed({
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "sql/audit.sql": "USE SCHEMA LEGACY_SCHEMA;\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+
+    result = repo(
+        "fix(dbt): hotfix the schema name", "--target-branch", "hotfix-thing"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _created(repo)
+
+
 # --- the guards that already existed ------------------------------------
 
 
