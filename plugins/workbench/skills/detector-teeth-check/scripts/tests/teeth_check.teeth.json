@@ -140,15 +140,15 @@
       "label": "a partial run leaves the controls out",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
-      "replace": "        if raw not in old_rows\n"
+      "find": "            if mutant.expect != \"survived\":\n                continue\n",
+      "replace": "            continue\n"
     },
     {
       "label": "a row is matched by label, so a re-anchored row is skipped",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
-      "replace": "        if raw[\"label\"] not in [row[\"label\"] for row in old_rows] or mutant.expect == \"survived\"\n"
+      "find": "        if raw in unmatched:\n            unmatched.remove(raw)\n",
+      "replace": "        if raw[\"label\"] in [row[\"label\"] for row in unmatched]:\n            unmatched.remove(next(row for row in unmatched if row[\"label\"] == raw[\"label\"]))\n"
     },
     {
       "label": "a revision that does not exist reads as a spec new since it, and runs every row",
@@ -182,17 +182,59 @@
       "label": "a spec first written after the revision is refused instead of run whole",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        old_rows: list[dict] = []\n",
-      "replace": "        raise SpecError(f\"{spec_path} is not in {rev}\")\n"
+      "find": "    if present.returncode != 0:\n        return None\n",
+      "replace": "    if present.returncode != 0:\n        raise SpecError(f\"{spec_path} is not in {rev}\")\n"
     },
     {
-      "label": "[control] swap the operands of the row-selection or",
+      "label": "a committed row that is not an object is compared, not refused",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):\n",
+      "replace": "    if not isinstance(rows, list):\n"
+    },
+    {
+      "label": "a committed spec that is not JSON crashes instead of refusing",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    except (UnicodeDecodeError, json.JSONDecodeError) as exc:\n",
+      "replace": "    except UnicodeDecodeError as exc:\n"
+    },
+    {
+      "label": "a symlinked spec is looked up by its link text",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    spec_path = spec_path.resolve()\n",
+      "replace": ""
+    },
+    {
+      "label": "a changed test command since the revision still runs only edited rows",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if before is None or settings(before) != settings(current)\n",
+      "replace": "        if before is None\n"
+    },
+    {
+      "label": "one committed row vouches for every verbatim copy of it",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            unmatched.remove(raw)\n",
+      "replace": "            pass\n"
+    },
+    {
+      "label": "--check-anchors silently ignores --changed-since",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    mode.add_argument(\n        \"--changed-since\",",
+      "replace": "    parser.add_argument(\n        \"--changed-since\","
+    },
+    {
+      "label": "[control] consume the last equal committed row instead of the first",
       "file": "../teeth_check.py",
       "oracle": "real",
       "expect": "survived",
-      "why": "Both operands are pure: list membership over JSON-decoded dicts and an attribute read, neither of which can raise or mutate, so `a or b` and `b or a` select the same rows on every input. Short-circuit order only changes which side is evaluated, never the truth value. Inert everywhere, not just on the paths the suite reaches.",
-      "find": "        if raw not in old_rows or mutant.expect == \"survived\"\n",
-      "replace": "        if mutant.expect == \"survived\" or raw not in old_rows\n"
+      "why": "Rows equal under == are interchangeable here: after this line `unmatched` is only read by `raw in unmatched` and `unmatched.remove(raw)`, both of which compare by equality and never by position or identity, so removing the last equal copy instead of the first leaves every later membership answer, and so the selection, identical. The index cannot raise, because the line runs only inside `if raw in unmatched`. Inert on every input while `unmatched` is only queried by equality; it would stop being inert if anything later read the list by position.",
+      "find": "            unmatched.remove(raw)\n",
+      "replace": "            del unmatched[len(unmatched) - 1 - unmatched[::-1].index(raw)]\n"
     }
   ]
 }
