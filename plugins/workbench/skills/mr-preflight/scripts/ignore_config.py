@@ -62,7 +62,8 @@ def _negate_like_git(segment: str) -> str:
     ``fnmatch`` reads a leading ``^`` in a class as a literal, so ``[^0-9]``
     would ignore exactly the paths git keeps. Classes are delimited the way
     ``fnmatch`` delimits them: a ``]`` right after the opening (or after its
-    negation) is literal, and an unclosed ``[`` is a literal ``[``.
+    negation) is a member. An unclosed ``[`` raises ``ValueError``: git
+    matches nothing with it, where ``fnmatch`` would read a literal ``[``.
     """
     out = []
     i = 0
@@ -79,9 +80,7 @@ def _negate_like_git(segment: str) -> str:
         while j < len(segment) and segment[j] != "]":
             j += 1
         if j >= len(segment):
-            out.append("[")
-            i += 1
-            continue
+            raise ValueError("an unclosed `[`")
         body = segment[i + 1 : j]
         out.append("[" + ("!" + body[1:] if body.startswith("^") else body) + "]")
         i = j + 1
@@ -122,6 +121,11 @@ def parse_config(text: str) -> IgnoreConfig:
             raise ConfigError(
                 f"ignore_paths entry {pattern!r} uses a `\\` escape or a `[:class:]`, which are not supported"
             )
+        for segment in pattern.split("/"):
+            try:
+                _negate_like_git(segment)
+            except ValueError as error:
+                raise ConfigError(f"ignore_paths entry {pattern!r} has {error}, which matches nothing") from error
     return IgnoreConfig(
         paths=tuple(data.get("ignore_paths", [])),
         tokens=frozenset(data.get("ignore_tokens", [])),

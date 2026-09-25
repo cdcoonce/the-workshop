@@ -47,6 +47,10 @@ def ignored(pattern: str, path: str) -> bool:
         ("sql/v[^0-9].sql", "sql/v1.sql", False),
         ("sql/v[^0-9].sql", "sql/v^.sql", True),
         ("sql/v[]^].sql", "sql/v^.sql", True),  # a `^` that is not first is literal
+        ("sql/v[][^a].sql", "sql/v^.sql", True),  # a `]` first is a member, so this
+        ("sql/v[][^a].sql", "sql/v!.sql", False),  # class is `]`, `[`, `^` and `a`
+        ("sql/v[!]].sql", "sql/va.sql", True),
+        ("sql/v[!]].sql", "sql/v].sql", False),
         ("notes:v2/*.md", "notes:v2/a.md", True),  # `:` is an ordinary character
     ],
 )
@@ -65,9 +69,21 @@ def test_many_double_stars_stay_linear_on_a_deep_path() -> None:
     assert time.monotonic() - started < 1.0
 
 
-@pytest.mark.parametrize("pattern", ["a\\\\*b.md", "sql/v[[:digit:]].sql"])
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        "a\\\\*b.md",
+        "sql/v[[:digit:]].sql",
+        "sql/v[a[:digit:]].sql",  # a class anywhere in the pattern, not only first
+        # An unclosed `[` matches nothing in git; `fnmatch` reads it as a literal.
+        "notes[draft/*.md",
+        "d/[^]",
+        "d/[!]abc",
+    ],
+)
 def test_glob_syntax_git_reads_differently_is_refused(pattern: str) -> None:
-    """`fnmatch` has no `\\` escape and no `[:class:]`, so it would read these
-    as something git does not, and ignore a path git would keep."""
+    """`fnmatch` has no `\\` escape, no `[:class:]` and no unmatched `[`, so
+    it would read these as something git does not, and ignore a path git
+    would keep."""
     with pytest.raises(ConfigError, match="ignore_paths"):
         parse_config(f'ignore_paths = ["{pattern}"]\n')
