@@ -136,6 +136,9 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         try:
             _write_description(description, rendered)
         except OSError as error:
+            # stdout is block-buffered into a pipe and stderr is not, so flush
+            # the hits first or a merged stream shows the error above them.
+            sys.stdout.flush()
             print(f"mr-preflight: could not update {description}: {error}", file=sys.stderr)
             return SETUP_ERROR
     if blocking:

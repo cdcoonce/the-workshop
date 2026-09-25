@@ -566,3 +566,31 @@ def test_update_keeps_the_description_file_mode(repo: Path) -> None:
     sweep(repo, base, "--description", str(description), "--update")
 
     assert description.stat().st_mode & 0o777 == 0o644
+
+
+def test_a_failed_update_still_reports_the_hits_before_the_error(repo: Path) -> None:
+    """`create-mr` reads stdout and stderr as one stream; the hits that explain
+    the refusal must come before the write error, not after it."""
+    base = two_renames(repo)
+    locked = repo.parent / "locked"
+    locked.mkdir()
+    description = locked / "description.md"
+    description.write_text("Prose.\n")
+    locked.chmod(0o555)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "sweep", "--base", base,
+             "--description", str(description), "--update"],
+            cwd=repo,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        locked.chmod(0o755)
+
+    lines = result.stdout.splitlines()
+    hit = lines.index("sql/audit.sql:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_project.yml)")
+    error = next(i for i, line in enumerate(lines) if line.startswith("mr-preflight: could not update"))
+    assert result.returncode == SETUP_ERROR
+    assert hit < error

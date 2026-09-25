@@ -38,21 +38,24 @@ description, inside its sweep block:
 
 ```markdown
 <!-- mr-preflight:sweep:begin -->
+
 - waive LEGACY_SCHEMA CHANGELOG.md: historical entry, describes the old schema
+
 <!-- mr-preflight:sweep:end -->
 ```
 
 - **Form:** `- waive TOKEN path: reason`, one per line. `path` is
   repo-relative and exact; backtick it if it holds a space
-  (`` - waive LEGACY_SCHEMA `docs/Old Notes.md`: quoted design ``). The reason
+  (``- waive LEGACY_SCHEMA `docs/Old Notes.md`: quoted design``). The reason
   is required.
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.
 - **Malformed lines block.** A line that starts like a waiver but does not
   match the form is reported as `malformed waiver:` and blocks, because its
-  author believes it waives something. That includes near misses: another
-  bullet (`* waive`), other spacing (`-waive`) or case (`- Waive`).
+  author believes it waives something. A near miss on the prefix (`* waive`,
+  `-waive`, `- Waive`) counts too when the rest of the line is a valid
+  waiver; a sentence that merely starts with the word does not.
 - **Markers own the block.** Each marker must sit alone on its line, once. A
   missing, repeated or reversed marker is a setup error, never read as "no
   waivers".

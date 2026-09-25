@@ -99,16 +99,25 @@ class Waiver:
 WAIVER = re.compile(
     r"^- waive (?P<token>`[^`]+`|\S+) (?P<path>`[^`]+`|\S+): (?P<reason>\S.*)$"
 )
-# Anything that starts like a waiver is held to the form: a typo silently
-# read as prose would leave the author believing a hit was waived. So the net
-# is wider than the form: any list bullet, any spacing, any case.
-WAIVER_INTENT = re.compile(r"^[-*+]\s*waive(?:\s|$)", re.IGNORECASE)
+# A line with the exact `- waive` prefix is always held to the form: a typo
+# silently read as prose would leave the author believing a hit was waived.
+WAIVER_INTENT = re.compile(r"^- waive(?:\s|$)")
+# A near miss on the prefix (another bullet, other spacing, other case) is
+# held to it only when the rest is a valid waiver, so an English sentence
+# that happens to start with the word is left alone.
+NEAR_MISS = re.compile(r"^[-*+]\s*waive\s+", re.IGNORECASE)
+
+
+def _starts_like_a_waiver(line: str) -> bool:
+    if WAIVER_INTENT.match(line):
+        return True
+    return bool(NEAR_MISS.match(line) and WAIVER.match(NEAR_MISS.sub("- waive ", line, count=1)))
 
 
 def waiver_lines(body: str) -> list[str]:
     """Every line of ``body`` that starts like a waiver, well formed or not,
     as written minus its line ending. What ``--update`` carries forward."""
-    return [line.rstrip("\r") for line in body.split("\n") if WAIVER_INTENT.match(line.strip())]
+    return [line.rstrip("\r") for line in body.split("\n") if _starts_like_a_waiver(line.strip())]
 
 
 def parse_waivers(body: str) -> tuple[list[Waiver], list[str]]:

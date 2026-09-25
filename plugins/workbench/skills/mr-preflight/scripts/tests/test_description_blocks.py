@@ -147,3 +147,18 @@ def test_a_near_miss_waiver_is_reported_rather_than_read_as_prose(line: str) -> 
 
     assert waivers == []
     assert malformed == [line]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- Waive review needed for the vendor migration before we cut over.",
+        "* waive the fee if the vendor agrees",
+        "+ WAIVE: see the thread",
+    ],
+)
+def test_prose_that_merely_starts_with_waive_is_not_a_malformed_waiver(line: str) -> None:
+    """Only the exact `- waive` prefix is always held to the form. A near miss
+    counts only when it would be a valid waiver with that prefix; ordinary
+    English starting with the word must not block the MR forever."""
+    assert parse_waivers(f"{line}\n") == ([], [])

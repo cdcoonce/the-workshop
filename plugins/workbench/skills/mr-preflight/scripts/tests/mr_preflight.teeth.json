@@ -238,8 +238,8 @@
       "label": "any line starting with the word waive is held to the waiver form",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
-      "replace": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive\", re.IGNORECASE)"
+      "find": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")",
+      "replace": "WAIVER_INTENT = re.compile(r\"^- waive\")"
     },
     {
       "label": "a waiver path ends at its first colon",
@@ -378,15 +378,15 @@
       "label": "the malformed net only catches the exact `- waive ` spelling",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
-      "replace": "WAIVER_INTENT = re.compile(r\"^- waive(?:\\s|$)\")"
+      "find": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\", re.IGNORECASE)",
+      "replace": "NEAR_MISS = re.compile(r\"^- waive\\s+\")"
     },
     {
       "label": "the malformed net is case-sensitive, so `- Waive` reads as prose",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\", re.IGNORECASE)",
-      "replace": "WAIVER_INTENT = re.compile(r\"^[-*+]\\s*waive(?:\\s|$)\")"
+      "find": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\", re.IGNORECASE)",
+      "replace": "NEAR_MISS = re.compile(r\"^[-*+]\\s*waive\\s+\")"
     },
     {
       "label": "--update writes in place, so a failed write truncates the description",
@@ -406,14 +406,28 @@
       "label": "a failed write crashes with a traceback instead of a setup error",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "        except OSError as error:\n            print(f\"mr-preflight: could not update",
-      "replace": "        except ValueError as error:\n            print(f\"mr-preflight: could not update"
+      "find": "        except OSError as error:\n            # stdout is block-buffered",
+      "replace": "        except ValueError as error:\n            # stdout is block-buffered"
     },
     {
       "label": "the rewritten description comes back owner-only",
       "file": "../mr_preflight.py",
       "oracle": "real",
       "find": "        shutil.copymode(target, temp)\n",
+      "replace": ""
+    },
+    {
+      "label": "every near miss counts, so prose starting with Waive blocks the MR",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "    return bool(NEAR_MISS.match(line) and WAIVER.match(NEAR_MISS.sub(\"- waive \", line, count=1)))",
+      "replace": "    return bool(NEAR_MISS.match(line))"
+    },
+    {
+      "label": "a write error lands above the hits in a merged stream",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "            sys.stdout.flush()\n",
       "replace": ""
     },
     {
