@@ -1,6 +1,6 @@
 ---
 name: mr-preflight
-description: Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or to waive an intended old name.
+description: Catches stale references before a GitLab MR opens: names a diff renamed that code, SQL or docs still use. Use when creating an MR into dev, when create-mr refuses with an mr-preflight hit, or to waive or permanently ignore an old name.
 ---
 
 # MR preflight
@@ -66,6 +66,38 @@ reviewer sees every rename, waiver and reason. It renders into a copy: your
 description file is not rewritten. A branch that renamed nothing, with no
 block in its description, goes out exactly as written.
 
+### Ignoring permanent noise
+
+A waiver is per MR. Noise every MR would waive again, such as a changelog or
+migration history, belongs in a committed `.mr-preflight.toml` at the
+repository root:
+
+```toml
+ignore_paths = ["CHANGELOG.md", "docs/adr/**"]
+ignore_tokens = ["schema_version"]
+```
+
+- **`ignore_paths`** are globs over repo-relative paths, matched the way git
+  matches path globs: `*`, `?` and `[...]` stay inside one directory, so
+  `*.md` is the root's Markdown only, and a whole `**` spans any depth
+  (`docs/adr/**`, `**/CHANGELOG.md`). The whole path must match, and case
+  counts. Hits in these paths are dropped before waivers are read.
+- **`ignore_tokens`** are exact names that are never chased. A branch whose
+  only renames are ignored tokens counts as renaming nothing.
+- **Committed only.** The file is read from the `HEAD` tree, like everything
+  the sweep searches, so an ignore that exists only on your disk does
+  nothing. Commit it first.
+- **Creep stays visible.** Every run that the file changed prints, clean or
+  not:
+
+  ```text
+  mr-preflight: .mr-preflight.toml suppressed 3 hit(s) in ignored paths and skipped 1 renamed token(s).
+  ```
+
+- **Missing means no ignores; malformed is a setup error** (exit `2`, naming
+  the file): invalid TOML, a key other than these two, or a value that is not
+  a list of strings.
+
 ### What counts as a rename
 
 - **Paired lines only.** Within a hunk, removed lines are compared with the
@@ -96,7 +128,7 @@ python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev
 ```
 
 Exit `0` is clean, `1` means surviving references (listed on stdout), `2` is a
-setup error such as an unresolvable base.
+setup error such as an unresolvable base or a malformed `.mr-preflight.toml`.
 
 With the MR description, waived hits print as `waived:` and only the rest
 block. `--update` rewrites the description's sweep block in place, appending
