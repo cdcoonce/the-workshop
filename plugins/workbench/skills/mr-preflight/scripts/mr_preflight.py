@@ -121,9 +121,16 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # top: a leftover at the repo root counts wherever this was invoked.
         repo = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
         diff_text = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", base, head)
+        # Ignored tokens leave the rename set before the search, and hits in
+        # ignored paths are dropped before waivers are consulted; both are
+        # counted so the summary keeps allowlist creep in view.
         ignores = _load_ignores(repo, head)
-        renames = [r for r in detect_renames(diff_text) if r.old not in ignores.tokens]
-        hits = [hit for hit in sweep(repo, head, renames) if not ignores.ignores_path(hit.path)]
+        detected = detect_renames(diff_text)
+        renames = [r for r in detected if r.old not in ignores.tokens]
+        skipped_tokens = len(detected) - len(renames)
+        found = sweep(repo, head, renames)
+        hits = [hit for hit in found if not ignores.ignores_path(hit.path)]
+        suppressed_hits = len(found) - len(hits)
     except RuntimeError as error:
         print(f"mr-preflight: {error}", file=sys.stderr)
         return SETUP_ERROR
@@ -152,6 +159,11 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
             sys.stdout.flush()
             print(f"mr-preflight: could not update {description}: {error}", file=sys.stderr)
             return SETUP_ERROR
+    if suppressed_hits or skipped_tokens:
+        print(
+            f"mr-preflight: {CONFIG_NAME} suppressed {suppressed_hits} hit(s) in ignored paths"
+            f" and skipped {skipped_tokens} renamed token(s)."
+        )
     if blocking:
         print(f"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.")
     if malformed:

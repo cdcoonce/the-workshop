@@ -649,3 +649,22 @@ def test_a_branch_whose_only_rename_is_ignored_renamed_nothing(repo: Path) -> No
 
     assert result.returncode == CLEAN, result.stdout
     assert description.read_text() == "Prose only.\n"
+
+
+def test_a_clean_run_still_reports_what_the_config_suppressed(repo: Path) -> None:
+    """Allowlist creep is invisible exactly when the sweep passes, so the count
+    prints on a clean run too: four path hits and one skipped token here."""
+    configure(
+        repo,
+        'ignore_paths = ["CHANGELOG.md", "docs/**", "sql/*.sql"]\n'
+        'ignore_tokens = ["load_curves"]\n',
+    )
+    base = two_renames(repo)
+
+    result = sweep(repo, base)
+
+    assert result.returncode == CLEAN, result.stdout
+    assert (
+        "mr-preflight: .mr-preflight.toml suppressed 4 hit(s) in ignored paths"
+        " and skipped 1 renamed token(s)."
+    ) in result.stdout.splitlines()
