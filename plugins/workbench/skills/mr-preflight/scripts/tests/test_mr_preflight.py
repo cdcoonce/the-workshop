@@ -620,6 +620,8 @@ def test_ignore_paths_suppress_hits_in_those_paths_only(repo: Path) -> None:
     assert not any(path.startswith("docs/adr/") for path in reported)
     assert "docs/CHANGELOG.md:1: LEGACY_SCHEMA" in result.stdout
     assert "sql/audit.sql:1: LEGACY_SCHEMA" in result.stdout
+    # Five of the seven hits were suppressed: the count is of those alone.
+    assert "suppressed 5 hit(s) in ignored paths" in result.stdout
 
 
 def test_an_ignored_token_is_never_chased(repo: Path) -> None:
