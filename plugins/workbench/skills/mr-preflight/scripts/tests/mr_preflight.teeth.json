@@ -585,18 +585,18 @@
       "replace": "exclude=())"
     },
     {
-      "label": "--head is used unresolved, so `:/message` reads no config",
+      "label": "the config is looked up as `<head>:<path>`, so `:/message` reads no config",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "commit = _git(repo, \"rev-parse\", \"--verify\", head).strip()",
-      "replace": "commit = head"
+      "find": "entry = _git(repo, \"ls-tree\", \"-z\", head, \"--\", CONFIG_NAME)",
+      "replace": "entry = _git(repo, \"ls-tree\", \"-z\", f\"{head}:{CONFIG_NAME}\")"
     },
     {
       "label": "the config is read from the checked-out HEAD, not the head being swept",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "commit = _git(repo, \"rev-parse\", \"--verify\", head).strip()",
-      "replace": "commit = _git(repo, \"rev-parse\", \"--verify\", \"HEAD\").strip()"
+      "find": "entry = _git(repo, \"ls-tree\", \"-z\", head, \"--\", CONFIG_NAME)",
+      "replace": "entry = _git(repo, \"ls-tree\", \"-z\", \"HEAD\", \"--\", CONFIG_NAME)"
     },
     {
       "label": "the config is read from the base, so an ignore added on the branch never applies",

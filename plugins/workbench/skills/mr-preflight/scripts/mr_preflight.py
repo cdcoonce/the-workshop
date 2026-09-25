@@ -56,12 +56,11 @@ def _git(repo: Path, *args: str) -> str:
 def _load_ignores(repo: Path, head: str) -> IgnoreConfig:
     """The ignore list committed at ``head``; none when the file is absent.
 
-    ``head`` is resolved to an object first: ``<rev>:<path>`` misreads some
-    spellings (``:/message`` takes the path as part of its search), and any
-    failed lookup would otherwise pass as "no file" and apply no ignores.
+    ``ls-tree`` takes the revision and the path apart: glued as
+    ``<rev>:<path>``, a ``:/message`` head would search for the path too, and
+    a failed lookup would pass as "no file" and apply no ignores.
     """
-    commit = _git(repo, "rev-parse", "--verify", head).strip()
-    entry = _git(repo, "ls-tree", "-z", commit, "--", CONFIG_NAME).rstrip("\0")
+    entry = _git(repo, "ls-tree", "-z", head, "--", CONFIG_NAME).rstrip("\0")
     if not entry:
         return IgnoreConfig()
     mode, kind, obj = entry.split("\t", 1)[0].split(" ")
