@@ -94,11 +94,14 @@ python3 "<skill base directory>/scripts/teeth_check.py" --changed-since <base> s
 ```
 
 That runs rows added or edited in the spec since `<base>` (any change to a
-row's JSON selects it: a re-anchor, a new replace, a relabel), plus every
-control. It still resolves every row's anchor first, so a row the fix moved
-but you did not touch refuses the run. Its first line reads `PARTIAL: k of N`,
-and it skips never-killed collection, because a test that kills only a
-skipped row would read as killing nothing.
+row's JSON selects it: a re-anchor, a new replace, a relabel, a pasted
+duplicate), plus every control. A change to `test_command`, `collect_command`
+or `runner` can flip any row's verdict, so it runs every row. It still
+resolves every row's anchor first, so a row the fix moved but you did not
+touch refuses the run. Text output opens with `PARTIAL: k of N` and `--json`
+gains a `partial` key. It skips never-killed collection, because a test that
+kills only a skipped row would read as killing nothing. It cannot be combined
+with `--check-anchors`, which already checks every row.
 
 - **A partial run is never the tally.** A fix can make an untouched row's
   mutant survive (a second guard now covers the one it removes). Finish with
@@ -353,9 +356,10 @@ Absence of a failure signal is never evidence of a pass. These cases refuse:
   file was, or bytes that are not UTF-8 (a binary, a Latin-1 source). Treated
   like a stale anchor, naming the path. A file that changes mid-run still
   scores that row `not-applied` while the rest run.
-- **A `--changed-since` revision git cannot resolve**, or no row added or
-  edited since it. A typo must not read as "every row is new", and controls
-  alone verify nothing. Exits 2.
+- **A `--changed-since` revision git cannot resolve**, a spec at that
+  revision that is not a readable teeth spec, or no row added or edited since
+  it. A typo must not read as "every row is new", and controls alone verify
+  nothing. Exits 2.
 - **A run that named no failing test.** A mutant that will not compile, or a
   command aborting before collection (unrecognised flag, missing plugin), exits
   non-zero with no `FAILED` line — the harness broke, no assertion caught
