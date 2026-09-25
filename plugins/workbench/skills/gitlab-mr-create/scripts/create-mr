@@ -156,8 +156,9 @@ if ! requires_title_file "$target_branch"; then
     fi
     # A passing sweep can still have something to say: waived hits, and what
     # the repo's `.mr-preflight.toml` suppressed. Show it, so allowlist creep
-    # stays visible on the path that enforces the gate.
-    [[ -z "$sweep_output" ]] || printf '%s\n' "$sweep_output" >&2
+    # stays visible on the path that enforces the gate. Best effort: under
+    # `set -e`, a caller's closed stderr must not stop an MR the sweep passed.
+    [[ -z "$sweep_output" ]] || printf '%s\n' "$sweep_output" >&2 || true
     description_source=$rendered_file
   fi
 fi
