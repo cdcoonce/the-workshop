@@ -154,6 +154,10 @@ if ! requires_title_file "$target_branch"; then
       fi
       exit 65
     fi
+    # A passing sweep can still have something to say: waived hits, and what
+    # the repo's `.mr-preflight.toml` suppressed. Show it, so allowlist creep
+    # stays visible on the path that enforces the gate.
+    [[ -z "$sweep_output" ]] || printf '%s\n' "$sweep_output" >&2
     description_source=$rendered_file
   fi
 fi

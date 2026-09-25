@@ -589,6 +589,27 @@ def test_other_targets_are_not_swept(repo) -> None:
 
 
 
+def test_dev_hop_shows_what_the_repo_ignore_list_suppressed(repo) -> None:
+    """A clean sweep still reports the hits `.mr-preflight.toml` suppressed,
+    so the author sees allowlist creep on the path that enforces the gate."""
+    repo.seed({
+        ".mr-preflight.toml": 'ignore_paths = ["CHANGELOG.md"]\n',
+        "dbt_project.yml": "schema: LEGACY_SCHEMA\n",
+        "CHANGELOG.md": "- LEGACY_SCHEMA created\n",
+    })
+    (repo.work / "dbt_project.yml").write_text("schema: LEGACY_SCHEMA_RAW\n")
+
+    result = repo("feat(dbt): move models to the raw schema", "--target-branch", "dev")
+
+    assert result.returncode == 0, result.stderr
+    assert _created(repo)
+    assert (
+        "mr-preflight: .mr-preflight.toml suppressed 1 hit(s) in ignored paths"
+        " and skipped 0 renamed token(s)."
+    ) in result.stderr.splitlines()
+
+
+
 SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
 SWEEP_END = "<!-- mr-preflight:sweep:end -->"
 
