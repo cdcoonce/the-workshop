@@ -28,7 +28,11 @@ def test_workshop_declares_dev_first_promotion_path() -> None:
     assert "gitlab` is a downstream copy" in instructions
     assert "Open a pull request into `dev`" in instructions
     assert "Promote `dev` → `main`" in instructions
-    assert "never push to it directly" in instructions
+    assert (
+        "complete it with `git push origin origin/dev:main`, never the merge button"
+        in instructions
+    )
+    assert "The promotion fast-forward is the only push it ever receives" in instructions
     assert "no longer kept in sync by an automated mirror job" in instructions
     assert "mergeable once CI is green — no approval required" in instructions
     assert "requires 1 approval before merge" in instructions

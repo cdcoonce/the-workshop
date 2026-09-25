@@ -102,9 +102,16 @@ This repo **integrates on GitHub**.
   Conventional Commit types (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`,
   `chore/`, `ci/`, `perf/`, `style/`). No vendor or agent prefixes.
 - **Open a pull request into `dev`.** Never commit to `dev` directly.
-- **Promote `dev` → `main`** with a pull request once dev CI is green. `main` is
-  the release branch: never push to it directly, and never merge a feature
-  branch straight into it.
+- **Promote `dev` → `main` by fast-forward.** Open a pull request from `dev`
+  into `main` once dev CI is green — the PR is the review gate and the
+  promotion record — then complete it with `git push origin origin/dev:main`,
+  never the merge button. GitHub marks the PR merged and `main` becomes
+  exactly `dev`. A merge-commit promotion instead leaves `main` one merge
+  commit ahead of `dev`, and the up-to-date protection then blocks the next
+  promotion until a `main` → `dev` sync-back PR lands (the pre-2026-09-25
+  ritual, e.g. #967 + #968); the fast-forward removes that step entirely.
+- **`main` is the release branch.** The promotion fast-forward is the only
+  push it ever receives; never merge a feature branch straight into it.
 - **Both branches are protected.** The `test` check must pass and the branch
   must be up to date with its base before a merge is allowed.
 - Before any push or pull request, confirm the target branch from these project
