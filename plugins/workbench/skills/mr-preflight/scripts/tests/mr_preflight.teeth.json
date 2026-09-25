@@ -91,8 +91,8 @@
       "label": "rows are split on the first colon, so a path containing one breaks",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n",
-      "replace": "            row = row.replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line, _ = row.split(\":\", 2)\n"
+      "find": "            name = stdout[start:name_end]\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(stdout[name_end + 1 : line_end]), rename=rename))\n",
+      "replace": "            row = stdout[start:line_end].replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line = row.split(\":\", 2)[:2]\n            hits.append(Hit(path=path, line=int(line), rename=rename))\n"
     },
     {
       "label": "dunders are chased like any other name",
@@ -165,11 +165,32 @@
       "replace": "path = line[4:]"
     },
     {
-      "label": "grep rows split with splitlines, so a \\r inside a hit line strands half a row",
+      "label": "grep output read with universal newlines, so a \\r inside a hit line strands half a row",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "for row in filter(None, stdout.split(\"\\n\")):",
-      "replace": "for row in filter(None, stdout.splitlines()):"
+      "find": "stdout = result.stdout.decode(\"utf-8\", \"replace\")\n",
+      "replace": "stdout = result.stdout.decode(\"utf-8\", \"replace\").replace(\"\\r\", \"\\n\")\n"
+    },
+    {
+      "label": "grep rows split on newlines before NULs, so a newline in a path crashes the sweep",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "        start = 0\n        while start < len(stdout):\n            name_end = stdout.index(\"\\0\", start)\n            line_end = stdout.index(\"\\0\", name_end + 1)\n            row_end = stdout.find(\"\\n\", line_end + 1)\n            if row_end == -1:\n                row_end = len(stdout)\n            name = stdout[start:name_end]\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(stdout[name_end + 1 : line_end]), rename=rename))\n            start = row_end + 1\n",
+      "replace": "        for row in filter(None, stdout.split(\"\\n\")):\n            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(line), rename=rename))\n"
+    },
+    {
+      "label": "a grep row ends at the first newline after its start, so a newline in a path adds a phantom hit",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "row_end = stdout.find(\"\\n\", line_end + 1)",
+      "replace": "row_end = stdout.find(\"\\n\", start)"
+    },
+    {
+      "label": "a crash inside the sweep is re-raised, so it exits 1 and reads as references to fix",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "file=sys.stderr)\n        return SETUP_ERROR\n\n\nif __name__",
+      "replace": "file=sys.stderr)\n        raise\n\n\nif __name__"
     },
     {
       "label": "diff lines split with splitlines, so a \\r before a rename cuts it off",

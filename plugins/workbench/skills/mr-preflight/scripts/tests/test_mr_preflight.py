@@ -248,6 +248,9 @@ def test_a_path_with_a_newline_is_reported_whole(repo: Path) -> None:
 
     assert result.returncode == HITS, result.stderr
     assert "docs/new\nline.md:1: LEGACY_SCHEMA" in result.stdout
+    # One file, one hit: a parser that ends the row at the path's newline
+    # reports the whole path and then a phantom `line.md` beside it.
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
     assert "Traceback" not in result.stderr
 
 
