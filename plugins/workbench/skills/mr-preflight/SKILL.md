@@ -47,7 +47,9 @@ description, inside its sweep block:
 - **Form:** `- waive TOKEN path: reason`, one per line. `path` is
   repo-relative and exact; backtick it if it holds a space
   (``- waive LEGACY_SCHEMA `docs/Old Notes.md`: quoted design``). The reason
-  is required.
+  is required. A path holding a newline, tab, other control character, `"`,
+  `\` or a byte that is not UTF-8 is reported quoted the way git quotes it
+  (`"docs/new\nline.md"`); waive it in that quoted form, exactly as reported.
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.
@@ -138,6 +140,7 @@ python3 "<skill base directory>/scripts/mr_preflight.py" sweep --base origin/dev
 
 Exit `0` is clean, `1` means surviving references (listed on stdout), `2` is a
 setup error such as an unresolvable base or a malformed `.mr-preflight.toml`.
+A crash inside the sweep also exits `2`, so it is never read as references to fix.
 
 With the MR description, waived hits print as `waived:` and only the rest
 block. `--update` rewrites the description's sweep block in place, appending

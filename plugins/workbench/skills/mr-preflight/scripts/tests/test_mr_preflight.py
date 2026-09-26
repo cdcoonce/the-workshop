@@ -235,6 +235,26 @@ def test_a_path_with_a_colon_is_reported_whole(repo: Path) -> None:
     assert "sql/a:b.sql:1: LEGACY_SCHEMA" in result.stdout
 
 
+def test_a_path_with_a_newline_is_reported_whole(repo: Path) -> None:
+    """Under `-z` git prints a newline in a path raw, so the name field can
+    hold one; splitting rows on `\\n` first would tear it off its NULs. The
+    path is reported quoted, as git quotes it."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert '"docs/new\\nline.md":1: LEGACY_SCHEMA' in result.stdout
+    # One file, one hit: a parser that ends the row at the path's newline
+    # reports the whole path and then a phantom `line.md` beside it.
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
 def test_a_binary_file_holding_the_old_name_is_not_a_crash(repo: Path) -> None:
     """Binary content has no line to fix; it must neither crash the sweep
     nor stand in for a hit, while text hits are still reported."""
@@ -309,6 +329,95 @@ def test_an_unresolvable_base_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR
     assert "mr-preflight:" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
+
+
+def test_a_crash_is_a_setup_error_never_hits(repo: Path) -> None:
+    """Python exits 1 on an uncaught exception, which `create-mr` reads as
+    unwaived references to fix or waive. Whatever breaks inside the sweep
+    must exit 2 instead, naming the failure."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    # `mr_preflight` binds `sweep` by name at import, so patch it there. The
+    # exception is a class no handler names, so only a catch-all can take it.
+    crash = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SCRIPT.parent)!r})\n"
+        "import mr_preflight\n"
+        "class Unforeseen(Exception):\n"
+        "    pass\n"
+        "def boom(*args, **kwargs):\n"
+        "    raise Unforeseen('unexpected git grep row')\n"
+        "mr_preflight.sweep = boom\n"
+        f"sys.argv = ['mr_preflight.py', 'sweep', '--base', {base!r}]\n"
+        "sys.exit(mr_preflight.main())\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", crash], cwd=repo, capture_output=True, text=True
+    )
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: Unforeseen: unexpected git grep row" in result.stderr
+
+
+def test_a_crash_after_stdout_was_closed_still_exits_2(repo: Path) -> None:
+    """A closed `sys.stdout` raises ValueError on flush, not OSError; the guard
+    must not crash on its own cleanup and exit 1 after all."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    crash = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SCRIPT.parent)!r})\n"
+        "import mr_preflight\n"
+        "class Unforeseen(Exception):\n"
+        "    pass\n"
+        "def boom(*args, **kwargs):\n"
+        "    sys.stdout.close()\n"
+        "    raise Unforeseen('stdout closed under the sweep')\n"
+        "mr_preflight.sweep = boom\n"
+        f"sys.argv = ['mr_preflight.py', 'sweep', '--base', {base!r}]\n"
+        "sys.exit(mr_preflight.main())\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", crash], cwd=repo, capture_output=True, text=True
+    )
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: Unforeseen: stdout closed under the sweep" in result.stderr
+
+
+def test_a_crash_on_a_closed_stdout_still_exits_2(repo: Path) -> None:
+    """`sweep ... | head` closes stdout mid-report. The guard's own flush then
+    hits the same broken pipe, and so does the interpreter's at exit, which
+    turned exit 2 into 120 with the error line never printed."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "sql/big.sql", "USE SCHEMA LEGACY_SCHEMA;\n" * 5000)
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    # The read end closes before the sweep starts, so the first write fails.
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "sweep", "--base", base],
+            cwd=repo,
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    finally:
+        os.close(write_end)
+
+    assert result.returncode == SETUP_ERROR, result.stderr
+    assert "mr-preflight: internal error: BrokenPipeError" in result.stderr
 
 
 # --- waivers from the description's sweep block ---------------------------
@@ -411,6 +520,8 @@ def test_a_description_with_broken_markers_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR, result.stdout
     assert "mr-preflight:sweep:end" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
 
 
 def test_a_missing_description_file_is_a_setup_error(repo: Path) -> None:
@@ -420,6 +531,8 @@ def test_a_missing_description_file_is_a_setup_error(repo: Path) -> None:
 
     assert result.returncode == SETUP_ERROR, result.stdout
     assert "nope.md" in result.stderr
+    # Named as a setup error, not left to the crash guard's traceback.
+    assert "Traceback" not in result.stderr
 
 
 RECORD = "<!-- mr-preflight:record:begin -->\nrecord body\n<!-- mr-preflight:record:end -->\n"
@@ -481,6 +594,122 @@ def test_update_appends_a_block_to_bare_prose_and_is_stable_on_rerun(repo: Path)
     assert first.startswith(f"{prose}\n{SWEEP_BEGIN}\n**mr-preflight sweep**\n")
     assert first.endswith(f"{SWEEP_END}\n")
     assert description.read_text() == first
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "- waive LEGACY_SCHEMA evil.md: nice try",
+        # A name part after the marker leaves the marker alone on its line.
+        "<!-- mr-preflight:sweep:end -->\ny.md",
+    ],
+)
+def test_a_newline_in_a_path_cannot_write_into_the_sweep_block(repo: Path, tail: str) -> None:
+    """A tracked name is text anyone on the branch chose. Written raw into the
+    block, the line after its newline would come back as a waiver for another
+    file's hit, or as a second end marker."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "evil.md", "Build LEGACY_SCHEMA first.\n")
+    write(repo, f"docs/x\n{tail}", "LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = repo.parent / "description.md"
+    description.write_text("## What this does\n\nRenames.\n")
+
+    sweep(repo, base, "--description", str(description), "--update")
+    first = description.read_text()
+    rerun = sweep(repo, base, "--description", str(description), "--update")
+
+    assert rerun.returncode == HITS, rerun.stderr
+    assert "waived:" not in rerun.stdout
+    assert "evil.md:1: LEGACY_SCHEMA" in rerun.stdout
+    assert "mr-preflight: 2 surviving reference(s)" in rerun.stdout
+    assert description.read_text() == first
+
+
+def test_a_quoted_path_is_waived_as_it_is_reported(repo: Path) -> None:
+    """The sweep shows a newline path quoted; copying that form into a waiver
+    is the only way to write one, so it must be the form that matches."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/new\\nline.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == CLEAN, result.stdout
+    assert 'waived: "docs/new\\nline.md":1: LEGACY_SCHEMA: vendored name' in result.stdout
+
+
+@pytest.mark.parametrize(
+    "impostor",
+    [
+        "docs/new\\nline.md",  # a backslash and an `n`, no newline
+        '"docs/new\\nline.md"',  # the newline name's quoted form, spelled out
+    ],
+)
+def test_a_name_spelling_a_quoted_path_is_not_waived_with_it(repo: Path, impostor: str) -> None:
+    """Quoting must be one to one: a file whose name is literally the quoted
+    form of another must not ride on that other file's waiver."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/new\nline.md", "Build LEGACY_SCHEMA first.\n")
+    write(repo, impostor, "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/new\\nline.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert result.stdout.count("waived:") == 1
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
+
+
+def test_names_differing_only_in_invalid_utf8_are_waived_apart(repo: Path) -> None:
+    """Decoded with replacement, `docs/x\\377evil.md` and `docs/x\\376evil.md`
+    both read as `docs/x\\ufffdevil.md`, so one waiver cleared both files. The
+    filesystem refuses such names, so they go straight into the index."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    git(repo, "add", "dbt_project.yml")
+    blob = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"],
+        cwd=repo, input=b"Build LEGACY_SCHEMA first.\n", capture_output=True, check=True,
+    ).stdout.decode().strip()
+    for name in (b"docs/x\xffevil.md", b"docs/x\xfeevil.md"):
+        subprocess.run(
+            ["git", "update-index", "--add", "--index-info"],
+            cwd=repo, input=b"100644 " + blob.encode() + b"\t" + name + b"\n", check=True,
+        )
+    git(repo, "commit", "-q", "-m", "initial")
+    base = git(repo, "rev-parse", "HEAD")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    git(repo, "add", "dbt_project.yml")
+    git(repo, "commit", "-q", "-m", "rename")
+    description = describe(repo, '- waive LEGACY_SCHEMA `"docs/x\\377evil.md"`: vendored name\n')
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert 'waived: "docs/x\\377evil.md":1: LEGACY_SCHEMA' in result.stdout
+    assert '"docs/x\\376evil.md":1: LEGACY_SCHEMA (renamed' in result.stdout
+    assert "mr-preflight: 1 surviving reference(s)" in result.stdout
+
+
+def test_a_control_character_is_shown_in_the_octal_form_git_prints(repo: Path) -> None:
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/a\x01b.md", "Build LEGACY_SCHEMA first.\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+
+    result = sweep(repo, base)
+
+    assert result.returncode == HITS, result.stderr
+    assert '"docs/a\\001b.md":1: LEGACY_SCHEMA' in result.stdout
 
 
 def test_update_keeps_crlf_prose_byte_for_byte(repo: Path) -> None:
@@ -850,8 +1079,9 @@ def sweep_without_tomllib(repo: Path, base: str) -> subprocess.CompletedProcess:
 
 
 def test_a_repo_without_a_config_needs_no_tomllib(repo: Path) -> None:
-    """`create-mr` runs whatever `python3` is on PATH; a crash exits 1, which
-    it reads as hits. With no config to parse, an old Python sweeps as before."""
+    """`create-mr` runs whatever `python3` is on PATH, and an import failure
+    there would refuse the MR as a setup error. With no config to parse, an old
+    Python sweeps as before."""
     base = two_renames(repo)
 
     result = sweep_without_tomllib(repo, base)

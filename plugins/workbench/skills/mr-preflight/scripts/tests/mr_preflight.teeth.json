@@ -91,8 +91,8 @@
       "label": "rows are split on the first colon, so a path containing one breaks",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n",
-      "replace": "            row = row.replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line, _ = row.split(\":\", 2)\n"
+      "find": "            name = stdout[start:name_end]\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(stdout[name_end + 1 : line_end]), rename=rename))\n",
+      "replace": "            row = stdout[start:line_end].replace(\"\\0\", \":\")\n            row = row[len(prefix):] if row.startswith(prefix) else row\n            path, line = row.split(\":\", 2)[:2]\n            hits.append(Hit(path=path, line=int(line), rename=rename))\n"
     },
     {
       "label": "dunders are chased like any other name",
@@ -165,11 +165,123 @@
       "replace": "path = line[4:]"
     },
     {
-      "label": "grep rows split with splitlines, so a \\r inside a hit line strands half a row",
+      "label": "grep output read with universal newlines, so a \\r inside a hit line strands half a row",
       "file": "../reference_sweep.py",
       "oracle": "real",
-      "find": "for row in filter(None, stdout.split(\"\\n\")):",
-      "replace": "for row in filter(None, stdout.splitlines()):"
+      "find": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\")\n",
+      "replace": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\").replace(\"\\r\", \"\\n\")\n"
+    },
+    {
+      "label": "grep rows split on newlines before NULs, so a newline in a path crashes the sweep",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "        start = 0\n        while start < len(stdout):\n            name_end = stdout.index(\"\\0\", start)\n            line_end = stdout.index(\"\\0\", name_end + 1)\n            row_end = stdout.find(\"\\n\", line_end + 1)\n            if row_end == -1:\n                row_end = len(stdout)\n            name = stdout[start:name_end]\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(stdout[name_end + 1 : line_end]), rename=rename))\n            start = row_end + 1\n",
+      "replace": "        for row in filter(None, stdout.split(\"\\n\")):\n            name, line, _ = row.split(\"\\0\", 2)\n            path = name[len(prefix):] if name.startswith(prefix) else name\n            hits.append(Hit(path=path, line=int(line), rename=rename))\n"
+    },
+    {
+      "label": "a grep row ends at the first newline after its start, so a newline in a path adds a phantom hit",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "row_end = stdout.find(\"\\n\", line_end + 1)",
+      "replace": "row_end = stdout.find(\"\\n\", start)"
+    },
+    {
+      "label": "a hit's path is rendered raw into the block, so a newline in a name forges a waiver or a marker",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "\"\".join(f\"- [ ] `{quote_path(h.path)}:{h.line}` `{h.rename.old}`\\n\" for h in blocking)",
+      "replace": "\"\".join(f\"- [ ] `{h.path}:{h.line}` `{h.rename.old}`\\n\" for h in blocking)"
+    },
+    {
+      "label": "a hit's path is printed raw, so a newline in a name splits its report line",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "print(f\"{quote_path(hit.path)}:{hit.line}: {hit.rename.old} (renamed",
+      "replace": "print(f\"{hit.path}:{hit.line}: {hit.rename.old} (renamed"
+    },
+    {
+      "label": "a waiver is matched on the raw path, so a quoted path can never be waived",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.get((hit.rename.old, hit.path))"
+    },
+    {
+      "label": "a quoted path leaves its \" and \\ unescaped, so a name holding a literal backslash-n shows as the newline name",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        if char in '\"\\\\':\n            quoted.append(\"\\\\\" + char)\n        elif char in _ESCAPES:",
+      "replace": "        if char in _ESCAPES:"
+    },
+    {
+      "label": "only a newline triggers quoting, so a name spelled with quotes and a backslash-n shows as the newline name",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if not any(_is_control(char) or _is_raw_byte(char) or char in '\"\\\\' for char in path):",
+      "replace": "if \"\\n\" not in path:"
+    },
+    {
+      "label": "an unnamed control character is escaped as \\xNN, not in the octal form git prints",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "quoted.append(f\"\\\\{ord(char):03o}\")",
+      "replace": "quoted.append(f\"\\\\x{ord(char):02x}\")"
+    },
+    {
+      "label": "grep output decoded with replacement, so names differing only in non-UTF-8 bytes share one waiver",
+      "file": "../reference_sweep.py",
+      "oracle": "real",
+      "find": "stdout = result.stdout.decode(\"utf-8\", \"surrogateescape\")",
+      "replace": "stdout = result.stdout.decode(\"utf-8\", \"replace\")"
+    },
+    {
+      "label": "a non-UTF-8 byte does not trigger quoting, so its name is never shown in git's octal form",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "if not any(_is_control(char) or _is_raw_byte(char) or char in '\"\\\\' for char in path):",
+      "replace": "if not any(_is_control(char) or char in '\"\\\\' for char in path):"
+    },
+    {
+      "label": "a crash inside the sweep is re-raised, so it exits 1 and reads as references to fix",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "file=sys.stderr)\n        return SETUP_ERROR\n\n\nif __name__",
+      "replace": "file=sys.stderr)\n        raise\n\n\nif __name__"
+    },
+    {
+      "label": "the crash guard catches only ValueError, so any other crash exits 1 as references",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    except Exception as error:\n",
+      "replace": "    except ValueError as error:\n"
+    },
+    {
+      "label": "the crash guard flushes a closed stdout unguarded, so a crash on `| head` exits 120 unnamed",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        try:\n            sys.stdout.flush()\n        except ValueError:\n            # stdout was already closed: nothing is buffered, and the\n            # interpreter skips a closed stream when it flushes at exit.\n            pass\n        except OSError:\n            # stdout is a closed pipe (`| head`). Point it at /dev/null, or this\n            # flush and the interpreter's at exit fail again and exit 120.\n            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())\n",
+      "replace": "        sys.stdout.flush()\n"
+    },
+    {
+      "label": "the crash guard's flush lets ValueError from a closed sys.stdout escape, so it exits 1",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except ValueError:\n            # stdout was already closed: nothing is buffered, and the\n            # interpreter skips a closed stream when it flushes at exit.\n            pass\n",
+      "replace": ""
+    },
+    {
+      "label": "a failing git command is reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    except (RuntimeError, ConfigError) as error:\n",
+      "replace": "    except ConfigError as error:\n"
+    },
+    {
+      "label": "a failed description write is reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except OSError as error:\n            # stdout is block-buffered",
+      "replace": "        except LookupError as error:\n            # stdout is block-buffered"
     },
     {
       "label": "diff lines split with splitlines, so a \\r before a rename cuts it off",
@@ -266,36 +378,36 @@
       "label": "a waiver keyed on its token alone waives that name in every file",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
       "replace": "reason = next((r for (t, _), r in waived.items() if t == hit.rename.old), None)"
     },
     {
       "label": "a waiver keyed on its path alone waives every name in that file",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = next((r for (_, p), r in waived.items() if p == hit.path), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = next((r for (_, p), r in waived.items() if p == quote_path(hit.path)), None)"
     },
     {
       "label": "a waiver path matches as a suffix, so docs/CHANGELOG.md rides on CHANGELOG.md",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and hit.path.endswith(p)), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = next((r for (t, p), r in waived.items() if t == hit.rename.old and quote_path(hit.path).endswith(p)), None)"
     },
     {
       "label": "a waiver is spent on its first hit, so a second hit in the file blocks",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = waived.pop((hit.rename.old, hit.path), None)"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.pop((hit.rename.old, quote_path(hit.path)), None)"
     },
     {
       "label": "a waiver holds only at the line it was written against (line 1 in the fixture)",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "reason = waived.get((hit.rename.old, hit.path))",
-      "replace": "reason = waived.get((hit.rename.old, hit.path)) if hit.line == 1 else None"
+      "find": "reason = waived.get((hit.rename.old, quote_path(hit.path)))",
+      "replace": "reason = waived.get((hit.rename.old, quote_path(hit.path))) if hit.line == 1 else None"
     },
     {
       "label": "waived hits still fail the sweep",
@@ -347,11 +459,18 @@
       "replace": "            pass\n"
     },
     {
-      "label": "an unreadable description crashes with a traceback instead of a setup error",
+      "label": "an unreadable description is reported as an internal crash instead of a named setup error",
       "file": "../mr_preflight.py",
       "oracle": "real",
       "find": "        except (OSError, BlockError) as error:",
       "replace": "        except BlockError as error:"
+    },
+    {
+      "label": "broken block markers are reported as an internal crash instead of a named setup error",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        except (OSError, BlockError) as error:",
+      "replace": "        except OSError as error:"
     },
     {
       "label": "--update writes a block onto a branch that renamed nothing",
@@ -427,8 +546,8 @@
       "label": "a write error lands above the hits in a merged stream",
       "file": "../mr_preflight.py",
       "oracle": "real",
-      "find": "            sys.stdout.flush()\n",
-      "replace": ""
+      "find": "            sys.stdout.flush()\n            print(f\"mr-preflight: could not update",
+      "replace": "            print(f\"mr-preflight: could not update"
     },
     {
       "label": "hits in ignore_paths are kept, so the config suppresses nothing",

@@ -9,7 +9,7 @@ globs and never chases its ``ignore_tokens``; the summary says how many. With
 (``- waive TOKEN path: reason``) excuse their hits, and a malformed waiver line
 blocks; ``--update`` rewrites the block in place. Exit codes: 0 clean,
 1 unwaived references or malformed waivers, 2 setup error (including an
-unusable ``.mr-preflight.toml``).
+unusable ``.mr-preflight.toml``) or a crash.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -102,6 +103,43 @@ def _write_description(path: Path, text: str) -> None:
         raise
 
 
+_ESCAPES = {"\a": "\\a", "\b": "\\b", "\t": "\\t", "\n": "\\n", "\v": "\\v", "\f": "\\f", "\r": "\\r"}
+
+
+def _is_control(char: str) -> bool:
+    return char < " " or char == "\x7f"
+
+
+def _is_raw_byte(char: str) -> bool:
+    # A byte that was not UTF-8, carried through by `surrogateescape`.
+    return "\udc80" <= char <= "\udcff"
+
+
+def quote_path(path: str) -> str:
+    """``path`` quoted the way git quotes it, when it holds a control character,
+    a double quote, a backslash or a byte that is not UTF-8; any other path as is.
+
+    A tracked name is text anyone on the branch chose. Printed raw, a newline
+    in it would put the rest of the name on a line of its own in the MR
+    description, where the next run reads it as a waiver or a block marker.
+    """
+    if not any(_is_control(char) or _is_raw_byte(char) or char in '"\\' for char in path):
+        return path
+    quoted = []
+    for char in path:
+        if char in '"\\':
+            quoted.append("\\" + char)
+        elif char in _ESCAPES:
+            quoted.append(_ESCAPES[char])
+        elif _is_control(char):
+            quoted.append(f"\\{ord(char):03o}")
+        elif _is_raw_byte(char):
+            quoted.append(f"\\{ord(char) - 0xDC00:03o}")
+        else:
+            quoted.append(char)
+    return '"' + "".join(quoted) + '"'
+
+
 def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) -> str:
     """The sweep block's body: what was renamed, what still blocks, and the
     author's waiver lines exactly as written."""
@@ -116,7 +154,7 @@ def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) 
     if blocking:
         sections.append(
             "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`):\n\n"
-            + "".join(f"- [ ] `{h.path}:{h.line}` `{h.rename.old}`\n" for h in blocking)
+            + "".join(f"- [ ] `{quote_path(h.path)}:{h.line}` `{h.rename.old}`\n" for h in blocking)
         )
     if waivers:
         sections.append("Waivers:\n\n" + "".join(f"{line}\n" for line in waivers))
@@ -163,13 +201,14 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
 
     blocking = []
     for hit in hits:
-        reason = waived.get((hit.rename.old, hit.path))
+        # Matched on the path as reported, so a quoted path is waived as shown.
+        reason = waived.get((hit.rename.old, quote_path(hit.path)))
         if reason is None:
             blocking.append(hit)
         else:
-            print(f"waived: {hit.path}:{hit.line}: {hit.rename.old}: {reason}")
+            print(f"waived: {quote_path(hit.path)}:{hit.line}: {hit.rename.old}: {reason}")
     for hit in blocking:
-        print(f"{hit.path}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
+        print(f"{quote_path(hit.path)}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
     for line in malformed:
         print(f"malformed waiver: {line}")
     # Before the update, so a failed write still shows what the config hid.
@@ -217,7 +256,24 @@ def main() -> int:
     args = parser.parse_args()
     if args.update and args.description is None:
         parser.error("--update needs --description")
-    return run_sweep(args.base, args.head, args.description, args.update)
+    try:
+        return run_sweep(args.base, args.head, args.description, args.update)
+    except Exception as error:
+        # Python exits 1 on an uncaught exception, and 1 means "references to
+        # fix or waive" to create-mr; a crash is a sweep that could not run.
+        try:
+            sys.stdout.flush()
+        except ValueError:
+            # stdout was already closed: nothing is buffered, and the
+            # interpreter skips a closed stream when it flushes at exit.
+            pass
+        except OSError:
+            # stdout is a closed pipe (`| head`). Point it at /dev/null, or this
+            # flush and the interpreter's at exit fail again and exit 120.
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        traceback.print_exc()
+        print(f"mr-preflight: internal error: {type(error).__name__}: {error}", file=sys.stderr)
+        return SETUP_ERROR
 
 
 if __name__ == "__main__":
