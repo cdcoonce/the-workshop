@@ -712,18 +712,39 @@ class TestBumpLevel:
 
 
 def afk_version_base() -> str:
-    """The `VERSION_BASE` afk's gate is configured to use.
+    """The `VERSION_BASE` afk's gate resolves for a staging-bound slice.
 
-    Read from `.afk/config.toml` rather than restated, so retargeting the
-    override turns the tests that call this red instead of leaving them green
-    against a fiction.
+    Read from the real gate rather than restated: `.afk/config.toml` runs
+    `make afk-test`, whose Makefile recipe resolves the base from
+    AFK_GATE_TARGET and falls back to the integration branch. A dry run with
+    the variable unset resolves that fallback, so retargeting it turns the
+    tests that call this red instead of leaving them green against a fiction.
     """
+    import os
+    import subprocess
     import tomllib
 
     config = tomllib.loads((REPO_ROOT / ".afk" / "config.toml").read_text())
-    match = re.search(r"VERSION_BASE=(\S+)", config["test_command"])
-    if match is None:
-        raise AssertionError(".afk/config.toml sets no VERSION_BASE for the gate")
+    make_target = config["test_command"].removeprefix("make ").strip()
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"MAKEFLAGS", "MFLAGS", "MAKELEVEL", "VERSION_BASE", "AFK_GATE_TARGET"}
+    }
+    proc = subprocess.run(
+        ["make", "-n", make_target],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    match = re.search(r"check_version_bumps --base (\S+)", proc.stdout)
+    if proc.returncode != 0 or match is None:
+        raise AssertionError(
+            f"`make -n {make_target}` resolves no VERSION_BASE for the gate "
+            f"(rc={proc.returncode}): {proc.stderr[-500:]}"
+        )
     return match.group(1)
 
 

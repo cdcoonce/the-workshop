@@ -1,0 +1,65 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "tests/test_gate_wiring.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_gate_wiring.py"],
+  "mutants": [
+    {
+      "label": "afk-test ignores AFK_GATE_TARGET (grades every slice against staging)",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "@target=\"$${AFK_GATE_TARGET:-afk/staging}\"; \\",
+      "replace": "@target=\"afk/staging\"; \\"
+    },
+    {
+      "label": "fallback names the trunk instead of the integration branch",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "@target=\"$${AFK_GATE_TARGET:-afk/staging}\"; \\",
+      "replace": "@target=\"$${AFK_GATE_TARGET:-afk/dev}\"; \\"
+    },
+    {
+      "label": "refusal disabled",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\tif [ \"$$ok\" != yes ]; then \\",
+      "replace": "\tif false; then \\"
+    },
+    {
+      "label": "shell metacharacters admitted (only nesting refused)",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\t\tafk/*/* | *[!A-Za-z0-9._/-]*) ok=no ;; \\",
+      "replace": "\t\tafk/*/*) ok=no ;; \\"
+    },
+    {
+      "label": "nested refs admitted (only metacharacters refused)",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\t\tafk/*/* | *[!A-Za-z0-9._/-]*) ok=no ;; \\",
+      "replace": "\t\t*[!A-Za-z0-9._/-]*) ok=no ;; \\"
+    },
+    {
+      "label": "afk-test skips the full make test gate",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "\t$(MAKE) test VERSION_BASE=\"$$target\"",
+      "replace": "\t$(MAKE) verify-versions VERSION_BASE=\"$$target\""
+    },
+    {
+      "label": "test_command reverts to the hardcoded staging override",
+      "file": "../.afk/config.toml",
+      "oracle": "real",
+      "find": "test_command = \"make afk-test\"",
+      "replace": "test_command = \"make test VERSION_BASE=afk/staging\""
+    },
+    {
+      "label": "[control] reword the afk-test comment header",
+      "file": "../Makefile",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "A Makefile comment line; make ignores it and no test reads Makefile comments. Inert on every path; stops being inert only if a test starts matching comment text.",
+      "find": "# afk's gate (`.afk/config.toml` test_command). The full `make test`, graded",
+      "replace": "# afk gate. The full `make test`, graded"
+    }
+  ]
+}

@@ -30,6 +30,29 @@ verify-versions:
 
 VERSION_BASE ?= origin/main
 
+# afk's gate (`.afk/config.toml` test_command). The full `make test`, graded
+# against the branch the slice lands on: afk exports that branch as
+# AFK_GATE_TARGET (`afk/staging`, or `afk/epic-N` for an epic child), and
+# without it (an older driver, the agent's own run, a hand run) this falls back
+# to the integration branch. Resolved here, not in test_command, because the
+# executor agent runs test_command under a headless grant and a `$` in it is
+# flagged for approval nobody can give. The target is issue-body text and
+# verify-versions splices VERSION_BASE into its recipe unquoted, so anything but
+# a single-segment `afk/` ref is refused before it reaches a shell line.
+.PHONY: afk-test
+afk-test:
+	@target="$${AFK_GATE_TARGET:-afk/staging}"; \
+	case "$$target" in \
+		afk/*/* | *[!A-Za-z0-9._/-]*) ok=no ;; \
+		afk/?*) ok=yes ;; \
+		*) ok=no ;; \
+	esac; \
+	if [ "$$ok" != yes ]; then \
+		echo "afk-test: refusing AFK_GATE_TARGET=\"$$target\" (want afk/<branch>)" >&2; \
+		exit 2; \
+	fi; \
+	$(MAKE) test VERSION_BASE="$$target"
+
 # The repo's only build component. `stamp` writes every generated file from the
 # hand-written truth in the tree (each plugin's `.claude-plugin/plugin.json`,
 # SKILL.md/AGENT.md frontmatter, and each hook script's own WORKSHOP_HOOK
