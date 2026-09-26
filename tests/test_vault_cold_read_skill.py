@@ -71,6 +71,18 @@ def test_whole_set_obligations_bind_every_child() -> None:
     assert "byte-identical" in section
 
 
+def test_narrowed_anti_scope_is_judged_per_prohibition() -> None:
+    """A parent may let each child carry a narrowed anti-scope. Then no
+    byte comparison applies, so each parent prohibition is judged in
+    substance, and one the child weakens or drops blocks. Only the parent's
+    own text can allow narrowing: the executor never sees a brief."""
+    section = _coverage()
+    for name in ("`kept`", "`narrowed`", "`weaker`", "`dropped`"):
+        assert name in section, f"narrowed-AS class {name} is not defined"
+    assert "A `weaker` or `dropped` prohibition blocks" in section
+    assert "authorized in the parent's text" in section
+
+
 def test_gate_carriage_matches_the_whole_command() -> None:
     """A probe for a word the anti-scope block also contains reads the gate
     as carried in children that never name it."""
