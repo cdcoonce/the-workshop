@@ -104,9 +104,11 @@ This repo **integrates on GitHub**.
 - **Open a pull request into `dev`.** Never commit to `dev` directly.
 - **Promote `dev` → `main` by fast-forward.** Open a pull request from `dev`
   into `main` once dev CI is green — the PR is the review gate and the
-  promotion record — then complete it with `git push origin origin/dev:main`,
-  never the merge button. GitHub marks the PR merged and `main` becomes
-  exactly `dev`. A merge-commit promotion instead leaves `main` one merge
+  promotion record — then complete it with
+  `python3 plugins/workbench/skills/github-pr-land/scripts/pr_land.py promote <pr>`,
+  never the merge button. It waits for the promotion PR's own `test` check and
+  pushes the pinned SHA. GitHub marks the PR merged and `main` becomes
+  exactly the PR's tested head SHA. A merge-commit promotion instead leaves `main` one merge
   commit ahead of `dev`, and the up-to-date protection then blocks the next
   promotion until a `main` → `dev` sync-back PR lands (the pre-2026-09-25
   ritual, e.g. #967 + #968); the fast-forward removes that step entirely.

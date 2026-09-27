@@ -1,0 +1,105 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_promote.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_promote.py"
+  ],
+  "mutants": [
+    {
+      "label": "promote_pr does nothing and returns 0 (test_happy_path_fast_forwards_release_to_the_pr_head)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    payload = _api_json(runner, repo, f\"repos/{repo}/pulls/{pr}\")\n    head = payload.get(\"head\") if isinstance(payload, dict) else None\n    base = payload.get(\"base\") if isinstance(payload, dict) else None\n    head_ref =",
+      "replace": "    return GREEN\n    payload = _api_json(runner, repo, f\"repos/{repo}/pulls/{pr}\")\n    head = payload.get(\"head\") if isinstance(payload, dict) else None\n    base = payload.get(\"base\") if isinstance(payload, dict) else None\n    head_ref ="
+    },
+    {
+      "label": "the head-ref check is skipped (test_head_ref_other_than_trunk_refuses_without_pushing)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if head_ref != trunk or base_ref != release:\n",
+      "replace": "    if base_ref != release:\n"
+    },
+    {
+      "label": "the ancestor check is skipped (test_release_tip_not_an_ancestor_refuses_as_not_a_fast_forward)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if contained.returncode != 0:\n        print(f\"refused: {release} at {tip}",
+      "replace": "    if False:\n        print(f\"refused: {release} at {tip}"
+    },
+    {
+      "label": "the watch is skipped (test_red_watch_returns_1_and_never_pushes)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    watched = watch_sha(runner, repo, sha, branch=release, timeout=timeout, interval=interval, clock=clock, sleep=sleep)\n",
+      "replace": "    watched = WatchResult(GREEN)\n"
+    },
+    {
+      "label": "the Bypassed rule violations line is ignored (test_bypassed_rule_violations_exits_2_and_says_so)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "if \"Bypassed rule violations\" in line]",
+      "replace": "if False]"
+    },
+    {
+      "label": "the post-push poll does not wait for the release tip (test_poll_waits_for_the_release_branch_to_show_the_pushed_sha)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if _branch_tip(runner, repo, release) == sha and isinstance(view, dict)",
+      "replace": "        if isinstance(view, dict)"
+    },
+    {
+      "label": "origin/dev is pushed instead of the SHA (test_push_source_is_the_literal_head_sha)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "[\"git\", \"push\", \"origin\", f\"{sha}:refs/heads/{release}\"]",
+      "replace": "[\"git\", \"push\", \"origin\", f\"origin/{trunk}:refs/heads/{release}\"]"
+    },
+    {
+      "label": "a rejected push is not reported (test_rejected_push_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if pushed.returncode != 0:\n        print(f\"push to {release} refused: {pushed.stderr.strip()}\", file=sys.stderr)\n        return INDETERMINATE\n",
+      "replace": "    if pushed.returncode != 0:\n        print(f\"push to {release} refused: {pushed.stderr.strip()}\", file=sys.stderr)\n        return GREEN\n"
+    },
+    {
+      "label": "merged is not required (test_pr_never_marked_merged_exits_2_at_the_deadline)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "and isinstance(view, dict) and view.get(\"merged\") is True:",
+      "replace": "and isinstance(view, dict):"
+    },
+    {
+      "label": "the push is forced (test_no_argv_forces_or_bypasses)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "[\"git\", \"push\", \"origin\", f\"{sha}:refs/heads/{release}\"]",
+      "replace": "[\"git\", \"push\", \"--force\", \"origin\", f\"{sha}:refs/heads/{release}\"]"
+    },
+    {
+      "label": "promote drops --interval (test_cli_promote_resolves_repo_and_threads_its_flags)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            release=args.release,\n            timeout=args.timeout,\n            interval=args.interval,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha(",
+      "replace": "            release=args.release,\n            timeout=args.timeout,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha("
+    }
+  ]
+}

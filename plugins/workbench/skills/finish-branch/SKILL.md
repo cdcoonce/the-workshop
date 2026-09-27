@@ -48,6 +48,7 @@ mechanics; this skill does not run `git push` or `gh pr create` directly.
 2. Re-run the full test suite after any rebase and confirm it's green before
    opening the PR.
 3. Use `github-cli` to push the branch and open the pull request.
+4. Landing the PR is done with `github-pr-land`, never a bare `gh pr merge`.
 
 ### 3. Keep the branch as-is
 

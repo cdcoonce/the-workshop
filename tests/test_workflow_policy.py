@@ -29,7 +29,7 @@ def test_workshop_declares_dev_first_promotion_path() -> None:
     assert "Open a pull request into `dev`" in instructions
     assert "Promote `dev` → `main`" in instructions
     assert (
-        "complete it with `git push origin origin/dev:main`, never the merge button"
+        "complete it with `python3 plugins/workbench/skills/github-pr-land/scripts/pr_land.py promote <pr>`, never the merge button"
         in instructions
     )
     assert "The promotion fast-forward is the only push it ever receives" in instructions
