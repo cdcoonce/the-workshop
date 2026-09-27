@@ -452,3 +452,113 @@ def test_main_cli_stamp_apply_then_check(fake_gh, fake_git) -> None:
 
     rc = main(["check", "--repo", REPO, "--issue", "42"])
     assert rc == 0
+
+
+# --------------------------------------------------------------------------- #
+# adversarial-review additions
+# --------------------------------------------------------------------------- #
+
+def test_apply_refuses_a_response_with_no_body_field(monkeypatch, fake_git) -> None:
+    """A response missing ``body`` is not a ``null`` body: --apply must not wipe it."""
+    import cold_read_stamp as crs
+
+    calls: list[list[str]] = []
+
+    def runner(args, timeout=30):
+        calls.append(list(args))
+        if args == ["api", f"repos/{REPO}/issues/42"]:
+            return (0, json.dumps({"number": 42, "state": "open"}), "")
+        raise AssertionError(f"unexpected gh call: {args}")
+
+    monkeypatch.setattr(crs, "_run_gh", runner)
+    fake_git.shas["origin/dev"] = "e" * 40
+
+    rc = cmd_stamp(REPO, 42, Path("/repo"), "dev", apply=True)
+    assert rc == 2
+    assert not any("PATCH" in call for call in calls)
+
+
+def test_apply_cleans_up_tempfile_when_the_write_fails(monkeypatch, tmp_path, fake_gh, fake_git) -> None:
+    import cold_read_stamp as crs
+
+    real_ntf = crs.tempfile.NamedTemporaryFile
+
+    class FailingHandle:
+        def __init__(self, inner):
+            self._inner = inner
+            self.name = inner.name
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self._inner.close()
+            return False
+
+        def write(self, _text):
+            raise OSError("No space left on device")
+
+    def failing_ntf(*args, **kwargs):
+        kwargs["dir"] = str(tmp_path)
+        return FailingHandle(real_ntf(*args, **kwargs))
+
+    monkeypatch.setattr(crs.tempfile, "NamedTemporaryFile", failing_ntf)
+    fake_gh.set_issue(REPO, 42, "content\n")
+    fake_git.shas["origin/dev"] = "e" * 40
+
+    rc = main(["stamp", "--repo", REPO, "--issue", "42", "--repo-dir", "/repo", "--target", "dev", "--apply"])
+    assert rc == 2
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_check_exits_2_on_v1_prefix_with_trailing_junk(fake_gh) -> None:
+    rest = "x\n"
+    h12 = body_hash(rest)[:12]
+    junk = _stamp(h12, "dev", "0" * 12, "-")[: -len(" -->")] + " --> junk -->"
+    fake_gh.set_issue(REPO, 42, rest + junk + "\n")
+    assert cmd_check(REPO, 42) == 2
+
+
+def test_apply_exits_2_when_refetched_stamp_differs_from_printed(fake_gh, fake_git, monkeypatch) -> None:
+    fake_gh.set_issue(REPO, 42, "content\n")
+    fake_git.shas["origin/dev"] = "f" * 40
+    real_call = fake_gh.__call__
+
+    def altering(args, timeout=30):
+        result = real_call(args, timeout)
+        if len(args) >= 3 and args[2] == "PATCH":
+            stored = fake_gh.issues[f"{REPO}#42"]["body"]
+            fake_gh.issues[f"{REPO}#42"]["body"] = stored.replace("target=dev@", "target=main@")
+        return result
+
+    import cold_read_stamp as crs
+
+    monkeypatch.setattr(crs, "_run_gh", altering)
+    assert cmd_stamp(REPO, 42, Path("/repo"), "dev", apply=True) == 2
+
+
+def test_stamp_depends_on_is_case_insensitive_and_drops_zero(capsys, fake_gh, fake_git) -> None:
+    fake_gh.set_issue(REPO, 42, "depends on: #0 and #5\nDEPENDS ON #6\n")
+    fake_gh.set_issue(REPO, 5, None, state="open")
+    fake_gh.set_issue(REPO, 6, None, state="closed")
+    fake_git.shas["origin/dev"] = "1" * 40
+
+    rc = cmd_stamp(REPO, 42, Path("/repo"), "dev", apply=False)
+    assert rc == 0
+    assert "deps=#5:open,#6:closed" in capsys.readouterr().out
+
+
+def test_main_maps_an_uncaught_exception_to_exit_2(monkeypatch) -> None:
+    import cold_read_stamp as crs
+
+    def exploding(args, timeout=30):
+        raise RuntimeError("seam blew up")
+
+    monkeypatch.setattr(crs, "_run_gh", exploding)
+    assert main(["check", "--repo", REPO, "--issue", "42"]) == 2
+
+
+def test_main_argparse_error_exits_2() -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        main(["check", "--repo", REPO, "--issue", "abc"])
+    assert excinfo.value.code == 2

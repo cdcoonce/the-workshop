@@ -128,8 +128,8 @@
       "label": "a null body is not read as empty (test_apply_on_null_body_writes_and_check_passes)",
       "file": "engine/cold_read_stamp.py",
       "oracle": "double",
-      "find": "    body = data.get(\"body\")\n    if body is None:\n        body = \"\"\n    return body, None",
-      "replace": "    body = data.get(\"body\")\n    if body is None:\n        body = \"None\"\n    return body, None"
+      "find": "    body = data[\"body\"]\n    if body is None:\n        body = \"\"",
+      "replace": "    body = data[\"body\"]\n    if body is None:\n        body = \"None\""
     },
     {
       "label": "only the first `Depends on` line is parsed (test_stamp_dedupes_across_multiple_depends_on_lines)",
@@ -137,6 +137,55 @@
       "oracle": "double",
       "find": "    for match in DEPENDS_ON_RE.finditer(body):",
       "replace": "    _first = DEPENDS_ON_RE.search(body)\n    for match in ([_first] if _first else []):"
+    },
+    {
+      "label": "a response with no body field is read as an empty body (test_apply_refuses_a_response_with_no_body_field)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    if not isinstance(data, dict) or \"body\" not in data:\n        return None, f\"gh api repos/{repo}/issues/{number} response has no 'body' field\"\n    body = data[\"body\"]",
+      "replace": "    body = data.get(\"body\")"
+    },
+    {
+      "label": "a failed tempfile write leaks the tempfile (test_apply_cleans_up_tempfile_when_the_write_fails)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "            tmp_path = handle.name\n            handle.write(b_text)\n            handle.write(stamp_line)\n            handle.write(\"\\n\")\n",
+      "replace": "            handle.write(b_text)\n            handle.write(stamp_line)\n            handle.write(\"\\n\")\n            tmp_path = handle.name\n"
+    },
+    {
+      "label": "a v1 prefix with trailing text parses as v1 (test_check_exits_2_on_v1_prefix_with_trailing_junk)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    match = V1_STAMP_RE.fullmatch(stamps[0])",
+      "replace": "    match = V1_STAMP_RE.match(stamps[0])"
+    },
+    {
+      "label": "--apply accepts a re-fetched stamp line that differs from the printed one (test_apply_exits_2_when_refetched_stamp_differs_from_printed)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "if len(refetched_stamps) != 1 or refetched_stamps[0] != stamp_line:",
+      "replace": "if len(refetched_stamps) != 1:"
+    },
+    {
+      "label": "`Depends on` is matched case-sensitively (test_stamp_depends_on_is_case_insensitive_and_drops_zero)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "r\"(?im)^depends on",
+      "replace": "r\"(?m)^[Dd]epends on"
+    },
+    {
+      "label": "#0 counts as a dependency (test_stamp_depends_on_is_case_insensitive_and_drops_zero)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "if number > 0 and number not in seen:",
+      "replace": "if number >= 0 and number not in seen:"
+    },
+    {
+      "label": "an uncaught exception escapes main instead of exiting 2 (test_main_maps_an_uncaught_exception_to_exit_2)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    except Exception as exc:  # noqa: BLE001",
+      "replace": "    except ZeroDivisionError as exc:  # noqa: BLE001"
     }
   ]
 }

@@ -279,9 +279,16 @@ def _fetch_body(repo: str, number: int) -> tuple[str | None, str | None]:
         data = json.loads(stdout)
     except json.JSONDecodeError as exc:
         return None, f"gh api repos/{repo}/issues/{number} returned invalid JSON: {exc}"
-    body = data.get("body")
+    # A JSON ``null`` body is an empty body; a response with no ``body``
+    # field at all is not an issue object, and reading it as empty would let
+    # ``stamp --apply`` overwrite the real body with a bare stamp line.
+    if not isinstance(data, dict) or "body" not in data:
+        return None, f"gh api repos/{repo}/issues/{number} response has no 'body' field"
+    body = data["body"]
     if body is None:
         body = ""
+    if not isinstance(body, str):
+        return None, f"gh api repos/{repo}/issues/{number} response 'body' is not a string"
     return body, None
 
 
@@ -437,10 +444,10 @@ def cmd_stamp(repo: str, issue: int, repo_dir: Path, target: str, apply: bool) -
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", newline="", delete=False
         ) as handle:
+            tmp_path = handle.name
             handle.write(b_text)
             handle.write(stamp_line)
             handle.write("\n")
-            tmp_path = handle.name
 
         patch_result = _run_gh(
             ["api", "-X", "PATCH", f"repos/{repo}/issues/{issue}", "-F", f"body=@{tmp_path}"]
