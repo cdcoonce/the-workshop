@@ -37,6 +37,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/explain` | Explain something briefly in chat (eli5) or build a one-page visual HTML summary of a session, branch, work tree, or MR. |
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
+| `/github-pr-land` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
 | `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
 | `/gitlab-cli` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
