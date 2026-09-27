@@ -34,7 +34,8 @@ requires a staged integration branch.
 HEAD happens to be, which drags unmerged commits into the PR and can bypass
 merge gates.
 
-**After pushing a PR:** watch checks go green (`gh pr checks --watch`) before declaring the work done. Never walk away from a red PR.
+**After pushing a PR:** watch the head SHA's checks go green with `pr_land.py watch <sha> --branch <base>` from `github-pr-land` before declaring the work done. Never walk away from a red PR.
+Merges go through `github-pr-land`'s `land`.
 
 **Before squash-merging a branch:** run `gh pr list --base <branch>` for the
 branch about to be merged. A squash-merge with `--delete-branch` auto-closes

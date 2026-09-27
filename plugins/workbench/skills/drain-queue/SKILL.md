@@ -92,11 +92,13 @@ gate — I will read the full diff myself regardless of your findings."
 
 ```bash
 cd <worktree> && <repo gate command> \
-  && cd <main checkout> && gh pr merge <PR> --squash \
+  && cd <main checkout> && python3 "<github-pr-land base dir>/scripts/pr_land.py" land <PR> --method squash --gate "<repo gate command>" --require <repo's required check> \
   && gh issue view <N> --json state --jq .state \
   && git worktree remove <worktree> && git branch -D <branch> \
   && git fetch origin && git log --oneline -1 origin/<integration-branch>
 ```
+
+Invoking drain-queue on a named batch is Charles's explicit ask to merge those PRs with `pr_land.py land`.
 
 Confirm the issue actually closed. A linked-issue keyword that silently failed to fire leaves
 the ticket open and the queue miscounted. The next issue starts from the newly fetched tip.
