@@ -1,0 +1,69 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_no_model_calls.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_no_model_calls.py"
+  ],
+  "mutants": [
+    {
+      "label": "model-client import detection disabled",
+      "file": "no_model_calls_check.py",
+      "oracle": "real",
+      "find": "_MODEL_MODULE_PREFIXES = (\"anthropic\", \"claude_agent_sdk\")",
+      "replace": "_MODEL_MODULE_PREFIXES = ()"
+    },
+    {
+      "label": "claude CLI detection disabled (no shell namespaces watched)",
+      "file": "no_model_calls_check.py",
+      "oracle": "real",
+      "find": "_SHELL_NAMESPACES = {\"subprocess\", \"os\"}",
+      "replace": "_SHELL_NAMESPACES = set()"
+    },
+    {
+      "label": "claude CLI detection only matches an exact 'claude' token, not a 'claude ...' command string",
+      "file": "no_model_calls_check.py",
+      "oracle": "real",
+      "find": "    if token is not None and (token == \"claude\" or token.startswith(\"claude \")):",
+      "replace": "    if token is not None and token == \"claude\":"
+    },
+    {
+      "label": "[does-nothing] find_violations always returns an empty list",
+      "file": "no_model_calls_check.py",
+      "oracle": "real",
+      "find": "    tree = ast.parse(source)\n    violations: list[str] = []\n    for node in ast.walk(tree):\n        offender = _is_model_import(node)\n        if offender is not None:\n            violations.append(f\"imports model client {offender!r}\")\n            continue\n        offender = _is_claude_cli_call(node)\n        if offender is not None:\n            violations.append(f\"invokes the claude CLI: {offender!r}\")\n    return violations",
+      "replace": "    return []"
+    },
+    {
+      "label": "[control] reword the module docstring",
+      "file": "no_model_calls_check.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "evals/_harness/scorer.py and the guard runner must stay pure — nothing under",
+      "replace": "evals/_harness/scorer.py and the guard runner have to stay pure — nothing under"
+    }
+  ]
+}
