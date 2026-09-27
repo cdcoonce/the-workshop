@@ -913,7 +913,10 @@ def promote_pr(
 
 def _rounds(value: str) -> int:
     """An argparse ``type`` for ``--max-rounds``: an integer of at least 1."""
-    rounds = int(value)
+    try:
+        rounds = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be an integer of at least 1, got {value!r}") from None
     if rounds < 1:
         raise argparse.ArgumentTypeError(f"must be at least 1, got {rounds}")
     return rounds

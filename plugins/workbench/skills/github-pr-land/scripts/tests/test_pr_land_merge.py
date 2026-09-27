@@ -617,14 +617,17 @@ def test_land_requires_method_and_gate(world: World, missing: str) -> None:
     assert world.runner.calls == []
 
 
-@pytest.mark.parametrize("rounds", ["0", "-1"])
-def test_max_rounds_below_one_is_rejected_before_any_call(world: World, rounds: str) -> None:
-    """Guards against accepting --max-rounds 0, which runs no round and reports "base moved 0 times"."""
+@pytest.mark.parametrize("rounds", ["0", "-1", "abc"])
+def test_max_rounds_below_one_is_rejected_before_any_call(
+    world: World, capsys: pytest.CaptureFixture[str], rounds: str
+) -> None:
+    """Guards against accepting --max-rounds 0, which runs no round and reports "base moved 0 times", or a non-integer."""
     argv = ["land", str(PR), "--method", "squash", "--gate", "true", "--max-rounds", rounds]
     with pytest.raises(SystemExit) as exc:
         pr_land.main(argv, runner=world.runner, clock=world.clock.clock, sleep=world.clock.sleep)
     assert exc.value.code == 2
     assert world.runner.calls == []
+    assert "at least 1" in capsys.readouterr().err
 
 
 def test_red_watch_returns_1_and_never_merges(world: World) -> None:
