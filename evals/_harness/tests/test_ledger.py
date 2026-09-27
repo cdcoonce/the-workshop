@@ -107,19 +107,20 @@ def test_write_run_writes_raws_alongside_the_run_file(tmp_path):
     runs_dir = tmp_path / "evals" / "example-skill" / "runs"
     source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
 
-    write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
+    run_file = write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
 
-    assert (runs_dir / "case-a" / "attempt-1" / "transcript.jsonl").exists()
-    assert (runs_dir / "case-a" / "attempt-1" / "final-reply.txt").exists()
+    raw_dir = runs_dir / run_file.stem / "case-a" / "attempt-1"
+    assert (raw_dir / "transcript.jsonl").exists()
+    assert (raw_dir / "final-reply.txt").exists()
 
 
 def test_write_run_copies_end_state_snapshot_verbatim(tmp_path):
     runs_dir = tmp_path / "evals" / "example-skill" / "runs"
     source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
 
-    write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
+    run_file = write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
 
-    copied = runs_dir / "case-a" / "attempt-1" / "end_state" / "pytest-final.txt"
+    copied = runs_dir / run_file.stem / "case-a" / "attempt-1" / "end_state" / "pytest-final.txt"
     assert copied.read_text(encoding="utf-8") == "1 passed\n"
 
 
@@ -153,9 +154,9 @@ def test_write_run_scrubs_home_paths_from_run_file_and_raw_copy(tmp_path):
     run_text = run_file.read_text(encoding="utf-8")
     assert home not in run_text
 
-    raw_text = (runs_dir / "case-a" / "attempt-1" / "final-reply.txt").read_text(
-        encoding="utf-8"
-    )
+    raw_text = (
+        runs_dir / run_file.stem / "case-a" / "attempt-1" / "final-reply.txt"
+    ).read_text(encoding="utf-8")
     assert home not in raw_text
 
 
@@ -241,25 +242,27 @@ def test_write_run_fails_on_an_existing_run_file_path(tmp_path):
 
     write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source}, now=fixed_now)
 
-    with pytest.raises(FileExistsError):
-        write_run(
-            runs_dir,
-            _base_run(raw="case-a/attempt-2/"),
-            {"case-a/attempt-2/": source},
-            now=fixed_now,
-        )
+    # Same `now` (and hence the same fingerprint-derived stem) collides on the
+    # run-file path itself. `match` pins the failure to the run-file check
+    # specifically, since the raw destination would also already exist by
+    # this point and must not be what trips the error.
+    with pytest.raises(FileExistsError, match="run file already exists"):
+        write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source}, now=fixed_now)
 
 
 def test_write_run_fails_on_an_existing_raw_file_path(tmp_path):
     runs_dir = tmp_path / "evals" / "example-skill" / "runs"
     source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
+    fixed_now = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
-    collision_dir = runs_dir / "case-a" / "attempt-1"
-    collision_dir.mkdir(parents=True)
-    (collision_dir / "transcript.jsonl").write_text("already here", encoding="utf-8")
+    # Write once to learn the real (stem-prefixed) raw destination, then
+    # remove only the run file so the next call's run-file check passes and
+    # the raw-file check is the one that trips.
+    run_file = write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source}, now=fixed_now)
+    run_file.unlink()
 
     with pytest.raises(FileExistsError):
-        write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
+        write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source}, now=fixed_now)
 
 
 def test_write_run_writes_only_under_runs_dir_and_never_a_file_named_tests_md(tmp_path):
@@ -273,3 +276,56 @@ def test_write_run_writes_only_under_runs_dir_and_never_a_file_named_tests_md(tm
         if path.is_file():
             assert path.name != "tests.md"
             assert str(path).startswith(str(runs_dir))
+
+
+def test_write_run_sets_raw_to_the_stem_prefixed_path_for_every_attempt(tmp_path):
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+    source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
+
+    run_file = write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
+
+    written = json.loads(run_file.read_text(encoding="utf-8"))
+    for case in written["cases"]:
+        for attempt in case["attempts"]:
+            expected_raw = f"{run_file.stem}/{case['case']}/attempt-{attempt['attempt']}/"
+            assert attempt["raw"] == expected_raw
+            assert (runs_dir / expected_raw).is_dir()
+
+
+def test_write_run_does_not_collide_raws_across_separate_runs_of_the_same_case(tmp_path):
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+    source_1 = _build_raw_source(tmp_path, "run-1", ["claude-sonnet-5"])
+    source_2 = _build_raw_source(tmp_path, "run-2", ["claude-sonnet-5"])
+
+    # Same caller-supplied `raw` key ("case-a/attempt-1/") and the same case
+    # and attempt numbers, but two separate runs at different `now` values —
+    # the stem write_run derives must keep their raws apart.
+    run_file_1 = write_run(
+        runs_dir,
+        _base_run(),
+        {"case-a/attempt-1/": source_1},
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    run_file_2 = write_run(
+        runs_dir,
+        _base_run(),
+        {"case-a/attempt-1/": source_2},
+        now=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+
+    assert run_file_1 != run_file_2
+    assert (runs_dir / run_file_1.stem / "case-a" / "attempt-1" / "transcript.jsonl").exists()
+    assert (runs_dir / run_file_2.stem / "case-a" / "attempt-1" / "transcript.jsonl").exists()
+
+
+def test_write_run_rejects_an_unsafe_case_id_and_writes_nothing(tmp_path):
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+    source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
+
+    run = _base_run()
+    run["cases"][0]["case"] = "../x"
+
+    with pytest.raises(ValueError):
+        write_run(runs_dir, run, {"case-a/attempt-1/": source})
+
+    assert not runs_dir.exists()

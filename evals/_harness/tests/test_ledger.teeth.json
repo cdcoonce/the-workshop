@@ -71,8 +71,22 @@
       "label": "raw-file write-once check disabled",
       "file": "../ledger.py",
       "oracle": "real",
-      "find": "                if dest_path.exists():",
-      "replace": "                if False:"
+      "find": "            if dest_path.exists():",
+      "replace": "            if False:"
+    },
+    {
+      "label": "write_run uses the caller's raw verbatim instead of the stem-prefixed path",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "            new_raw = f\"{stem}/{case_id}/{attempt_segment}/\"",
+      "replace": "            new_raw = attempt[\"raw\"]"
+    },
+    {
+      "label": "unsafe case id not rejected",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        case_id = _validate_path_segment(case[\"case\"], \"case id\")",
+      "replace": "        case_id = case[\"case\"]"
     },
     {
       "label": "raw file discovery no longer recurses into end_state/",

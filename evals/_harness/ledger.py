@@ -41,6 +41,19 @@ def _fingerprint_short(fingerprint: dict) -> str:
     return hashlib.sha256(payload).hexdigest()[:8]
 
 
+def _validate_path_segment(value, label: str) -> str:
+    """Return *value* as a safe single path segment, or raise ``ValueError``.
+
+    A safe segment is non-empty, contains no ``/`` or ``\\``, is not ``.`` or
+    ``..``, and is not itself absolute — so it can never be used to write
+    outside the directory it is joined under.
+    """
+    text = str(value)
+    if not text or text in (".", "..") or "/" in text or "\\" in text or Path(text).is_absolute():
+        raise ValueError(f"unsafe {label}: {value!r}")
+    return text
+
+
 def _model_ids_for_case(case: dict, raw_sources: dict[str, Path]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -73,13 +86,18 @@ def write_run(
     runs_dir : Path
         The skill's ``evals/<skill>/runs/`` directory.
     run : dict
-        The run-file object. Each case's ``attempts[i]["raw"]`` already gives
-        that attempt's raw destination, relative to *runs_dir*. Each case's
-        ``model_ids`` is overwritten by this function from that case's raw
+        The run-file object. Each case's ``attempts[i]["raw"]`` is only a key
+        into *raw_sources*: it is never written verbatim into the run file.
+        ``write_run`` owns the destination layout and overwrites each
+        attempt's ``raw`` with ``f"{stem}/{case}/attempt-{n}/"``, where
+        ``stem`` is the run file's own stem, ``case`` is that attempt's
+        case id, and ``n`` its attempt number — so a caller can never predict
+        or collide with another run's raw paths. Each case's ``model_ids`` is
+        likewise overwritten by this function from that case's raw
         transcripts.
     raw_sources : dict[str, Path]
-        Maps each attempt's ``raw`` value to the directory the conductor
-        collected for that attempt.
+        Maps each attempt's original (caller-supplied) ``raw`` value to the
+        directory the conductor collected for that attempt.
     now : datetime | None
         The UTC instant to timestamp the run file with. Defaults to the
         current time; a caller passes a fixed value for a deterministic
@@ -95,6 +113,10 @@ def write_run(
     FileExistsError
         If the run-file path, or any raw file's destination path, already
         exists.
+    ValueError
+        If a case id or attempt number is not a safe single path segment
+        (empty, containing ``/`` or ``\\``, equal to ``.`` or ``..``, or
+        absolute).
     """
     run = _scrub_value(json.loads(json.dumps(run)))
     for case in run["cases"]:
@@ -107,19 +129,32 @@ def write_run(
     if run_file_path.exists():
         raise FileExistsError(f"run file already exists: {run_file_path}")
 
+    # write_run owns the raw destination layout: `<stem>/<case>/attempt-<n>/`.
+    # The caller's `raw` value is only the lookup key into `raw_sources`; it
+    # is replaced here before anything is written or validated.
+    raw_copy_sources: dict[str, Path] = {}
+    for case in run["cases"]:
+        case_id = _validate_path_segment(case["case"], "case id")
+        for attempt in case["attempts"]:
+            attempt_segment = _validate_path_segment(
+                f"attempt-{attempt['attempt']}", "attempt number"
+            )
+            source = raw_sources[attempt["raw"]]
+            new_raw = f"{stem}/{case_id}/{attempt_segment}/"
+            attempt["raw"] = new_raw
+            raw_copy_sources[new_raw] = source
+
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     jsonschema.validate(run, schema)
 
     copy_plan: list[tuple[Path, Path]] = []
-    for case in run["cases"]:
-        for attempt in case["attempts"]:
-            source = raw_sources[attempt["raw"]]
-            dest_root = runs_dir / attempt["raw"]
-            for src_path in _source_files(source):
-                dest_path = dest_root / src_path.relative_to(source)
-                if dest_path.exists():
-                    raise FileExistsError(f"raw file already exists: {dest_path}")
-                copy_plan.append((src_path, dest_path))
+    for raw, source in raw_copy_sources.items():
+        dest_root = runs_dir / raw
+        for src_path in _source_files(source):
+            dest_path = dest_root / src_path.relative_to(source)
+            if dest_path.exists():
+                raise FileExistsError(f"raw file already exists: {dest_path}")
+            copy_plan.append((src_path, dest_path))
 
     for src_path, dest_path in copy_plan:
         dest_path.parent.mkdir(parents=True, exist_ok=True)
