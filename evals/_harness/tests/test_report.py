@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from evals._harness.ledger import write_run
 from evals._harness.report import write_report
 
 _COUNTED_MISS = "miss"
@@ -306,3 +307,97 @@ def test_write_report_writes_only_beside_the_run_file_and_never_tests_md(tmp_pat
     new_file = new_files.pop()
     assert new_file.parent == runs_dir
     assert new_file.name != "tests.md"
+
+
+def _write_transcript(path: Path, model: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {"model": model, "content": [{"type": "text", "text": "done"}]},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_write_report_omits_a_home_path_planted_in_a_raw_end_to_end(tmp_path):
+    """A home path planted in a raw's content must not reach the run file,
+    the written raw copy, or the report — going through the real
+    ``write_run`` -> ``write_report`` pipeline, not a hand-written run file.
+    """
+    home = str(Path.home())
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+
+    source = tmp_path / "sources" / "attempt-1"
+    _write_transcript(source / "transcript.jsonl", "claude-sonnet-5")
+    (source / "final-reply.txt").write_text(f"see {home}/secret.txt", encoding="utf-8")
+
+    run = {
+        "skill": "example-skill",
+        "verdict": "red",
+        "fingerprint": _fingerprint("2026-01-01"),
+        "tokens": 100,
+        "wall_time_s": 1.0,
+        "cases": [
+            {
+                "case": "case-a",
+                "fixture_fingerprint": "c" * 64,
+                "gated_items": ["item-a"],
+                "model_ids": ["placeholder-should-be-overwritten"],
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "classification": "counted",
+                        "items": {"item-a": "miss"},
+                        "parse_error": False,
+                        "unmatched_findings": 0,
+                        "reserve_used": 0,
+                        "raw": "case-a/attempt-1/",
+                    },
+                    {
+                        "attempt": 2,
+                        "classification": "counted",
+                        "items": {"item-a": "miss"},
+                        "parse_error": False,
+                        "unmatched_findings": 0,
+                        "reserve_used": 0,
+                        "raw": "case-a/attempt-2/",
+                    },
+                    {
+                        "attempt": 3,
+                        "classification": "counted",
+                        "items": {"item-a": "miss"},
+                        "parse_error": False,
+                        "unmatched_findings": 0,
+                        "reserve_used": 0,
+                        "raw": "case-a/attempt-3/",
+                    },
+                ],
+            }
+        ],
+    }
+
+    run_file = write_run(
+        runs_dir,
+        run,
+        {
+            "case-a/attempt-1/": source,
+            "case-a/attempt-2/": source,
+            "case-a/attempt-3/": source,
+        },
+    )
+
+    report_path = write_report(run_file)
+
+    run_text = run_file.read_text(encoding="utf-8")
+    raw_copy_text = (
+        runs_dir / run_file.stem / "case-a" / "attempt-1" / "final-reply.txt"
+    ).read_text(encoding="utf-8")
+    report_text = report_path.read_text(encoding="utf-8")
+
+    assert home not in run_text
+    assert home not in raw_copy_text
+    assert home not in report_text
