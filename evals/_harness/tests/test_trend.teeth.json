@@ -53,8 +53,15 @@
       "label": "summarize counts trend items alongside gated items",
       "file": "../trend.py",
       "oracle": "real",
-      "find": "                    if item_id in gated:",
-      "replace": "                    if True:"
+      "find": "            for item_id in case[\"gated_items\"]:\n                needed = _attempts_needed(attempts, item_id)",
+      "replace": "            for item_id in {i for a in attempts for i in a[\"items\"]} | set(case[\"gated_items\"]):\n                needed = _attempts_needed(attempts, item_id)"
+    },
+    {
+      "label": "summarize counts every attempt that recorded the item",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                needed = _attempts_needed(attempts, item_id)",
+      "replace": "                needed = len([a for a in attempts if item_id in a[\"items\"]])"
     },
     {
       "label": "history always reports hit as False",
