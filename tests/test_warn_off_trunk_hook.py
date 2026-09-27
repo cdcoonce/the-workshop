@@ -26,6 +26,47 @@ def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
     )
 
 
+# Runs the hook as __main__ with chosen modules made unimportable. A None entry
+# in sys.modules makes `import <name>` raise ModuleNotFoundError — the same
+# failure a pre-3.11 interpreter gives for `import tomllib`.
+_BLOCKING_RUNNER = """
+import runpy, sys
+hook_path, blocked, alias_tomli = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+if alias_tomli:
+    import tomllib
+    sys.modules["tomli"] = tomllib
+for name in filter(None, blocked.split(",")):
+    sys.modules[name] = None
+sys.argv = [hook_path]
+runpy.run_path(hook_path, run_name="__main__")
+"""
+
+
+def run_hook_without(
+    payload: dict, blocked: list[str], alias_tomli: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Run the hook with ``blocked`` modules unimportable.
+
+    ``alias_tomli`` stands the stdlib ``tomllib`` in for the third-party
+    ``tomli`` backport (same API), so the fallback is exercised without
+    ``tomli`` being installed.
+    """
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _BLOCKING_RUNNER,
+            str(HOOK_PATH),
+            ",".join(blocked),
+            "1" if alias_tomli else "0",
+        ],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
 def _init_git_repo(path: Path, branch: str = "main") -> None:
     subprocess.run(["git", "init", "-q", "-b", branch], cwd=path, check=True)
     subprocess.run(
@@ -151,3 +192,29 @@ def test_malformed_toml_is_silent(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert result.stderr == ""
+
+
+def test_no_toml_parser_is_silent(tmp_path: Path) -> None:
+    # A pre-3.11 interpreter with no tomli installed — the headless afk
+    # executor's environment. The repo would otherwise warn, so silence here
+    # proves the hook skipped rather than crashed.
+    _init_git_repo(tmp_path, branch="feature/thing")
+    _write_config(tmp_path, 'trunk_branch = "main"\n')
+
+    result = run_hook_without({"cwd": str(tmp_path)}, blocked=["tomllib", "tomli"])
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_tomli_fallback_still_warns(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path, branch="feature/thing")
+    _write_config(tmp_path, 'trunk_branch = "main"\n')
+
+    result = run_hook_without(
+        {"cwd": str(tmp_path)}, blocked=["tomllib"], alias_tomli=True
+    )
+
+    assert result.returncode == 0
+    assert "feature/thing" in result.stderr
+    assert "Traceback" not in result.stderr

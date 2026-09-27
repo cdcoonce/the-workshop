@@ -16,8 +16,9 @@ out (default on when the key is absent); the top-level `trunk_branch` key
 names the trunk (default `"main"` when absent — no branch name is hardcoded
 as *the* trunk, since it varies per repo).
 
-Fails open everywhere: no git, no `.afk/config.toml`, malformed TOML, detached
-HEAD, or a linked worktree checkout all exit 0 silently. Any other exception
+Fails open everywhere: no git, no `.afk/config.toml`, malformed TOML, no TOML
+parser (Python < 3.11 without `tomli`), detached HEAD, or a linked worktree
+checkout all exit 0 silently. Any other exception
 also exits 0 — a hook that breaks session end is worse than the bug it reports.
 """
 
@@ -27,8 +28,18 @@ WORKSHOP_HOOK = {"event": "SessionEnd"}
 import json  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
-import tomllib  # noqa: E402
 from pathlib import Path  # noqa: E402
+
+# tomllib is stdlib only from 3.11; hooks can run under an older interpreter
+# (the headless afk executor's). Fall back to the tomli backport, else skip
+# the check below rather than crash at import, outside the catch-all.
+try:
+    import tomllib  # noqa: E402
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # noqa: E402
+    except ModuleNotFoundError:
+        tomllib = None
 
 raw_payload = sys.stdin.read()
 if not raw_payload.strip():
@@ -68,6 +79,9 @@ try:
     config_path = Path(repo_root) / ".afk" / "config.toml"
     if not config_path.exists():
         sys.exit(0)
+
+    if tomllib is None:
+        sys.exit(0)  # no TOML parser — cannot read the config
 
     with config_path.open("rb") as f:
         config = tomllib.load(f)
