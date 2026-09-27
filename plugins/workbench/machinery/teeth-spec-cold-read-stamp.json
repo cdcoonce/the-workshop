@@ -1,0 +1,142 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_cold_read_stamp.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.6,<0.7",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_cold_read_stamp.py"
+  ],
+  "mutants": [
+    {
+      "label": "the stamp line is hashed as part of the body (test_body_hash_matches_vector_and_survives_appended_stamp)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "        if STAMP_LINE_RE.fullmatch(content):\n            continue\n        kept.append(content + terminator)",
+      "replace": "        if False:\n            continue\n        kept.append(content + terminator)"
+    },
+    {
+      "label": "line endings are normalized before hashing (test_body_hash_sensitive_to_crlf_and_trailing_newline)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "        elif part.endswith(\"\\r\"):\n            pieces.append((part[:-1], \"\\r\\n\"))\n        else:\n            pieces.append((part, \"\\n\"))",
+      "replace": "        elif part.endswith(\"\\r\"):\n            pieces.append((part[:-1], \"\\n\"))\n        else:\n            pieces.append((part, \"\\n\"))"
+    },
+    {
+      "label": "`gh issue view -q .body` output hashed with its trailing newline (test_body_hash_matches_vector_and_survives_appended_stamp)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "    return hashlib.sha256(_strip_stamp_lines(body).encode(\"utf-8\")).hexdigest()",
+      "replace": "    return hashlib.sha256((_strip_stamp_lines(body) + \"\\n\").encode(\"utf-8\")).hexdigest()"
+    },
+    {
+      "label": "--apply appends a second stamp instead of replacing (test_apply_replaces_existing_stamp_not_appends)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "            handle.write(b_text)\n            handle.write(stamp_line)\n            handle.write(\"\\n\")",
+      "replace": "            handle.write(body)\n            handle.write(stamp_line)\n            handle.write(\"\\n\")"
+    },
+    {
+      "label": "a closed-since-stamp dependency is not reported (test_check_dependency_closed_since_stamp_names_issue)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "        if current_state == \"closed\":\n            reasons.append(f\"dependency #{number} closed since stamp; re-read against shipped code\")",
+      "replace": "        if False:\n            reasons.append(f\"dependency #{number} closed since stamp; re-read against shipped code\")"
+    },
+    {
+      "label": "check resolves the target (test_check_makes_no_git_call)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "        return 2\n\n    stamps = _stamp_line_contents(body)",
+      "replace": "        return 2\n\n    _run_git([\"-C\", \".\", \"rev-parse\", \"--verify\", \"HEAD\"])\n    stamps = _stamp_line_contents(body)"
+    },
+    {
+      "label": "two stamp lines accepted (test_check_exits_2_on_two_stamp_lines)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    if len(stamps) > 1:\n        print(f\"ERROR: {len(stamps)} cold-read-stamp lines found in body; expected exactly one\", file=sys.stderr)\n        return 2",
+      "replace": "    if len(stamps) > 2:\n        print(f\"ERROR: {len(stamps)} cold-read-stamp lines found in body; expected exactly one\", file=sys.stderr)\n        return 2"
+    },
+    {
+      "label": "`str.splitlines` used as the line splitter (test_body_hash_matches_vector_and_survives_appended_stamp)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "    parts = text.split(\"\\n\")\n    last = len(parts) - 1\n    pieces: list[tuple[str, str]] = []\n    for i, part in enumerate(parts):\n        if i == last:\n            if part == \"\":\n                continue\n            pieces.append((part, \"\"))\n        elif part.endswith(\"\\r\"):\n            pieces.append((part[:-1], \"\\r\\n\"))\n        else:\n            pieces.append((part, \"\\n\"))\n    return pieces",
+      "replace": "    raw_lines = text.splitlines(keepends=True)\n    pieces: list[tuple[str, str]] = []\n    for raw in raw_lines:\n        content_only = raw.splitlines()[0] if raw.splitlines() else raw\n        terminator = raw[len(content_only):]\n        pieces.append((content_only, terminator))\n    return pieces"
+    },
+    {
+      "label": "a body without a trailing newline fails its own --apply (test_apply_on_plain_body_writes_and_check_passes)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    stripped = _strip_stamp_lines(body)\n    b_text = stripped if stripped.endswith(\"\\n\") else stripped + \"\\n\"",
+      "replace": "    stripped = _strip_stamp_lines(body)\n    b_text = stripped"
+    },
+    {
+      "label": "a failed dependency lookup is skipped (test_stamp_exits_2_on_failed_dependency_lookup)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "        state, err = _issue_state(repo, number)\n        if err is not None:\n            return None, f\"dependency #{number} lookup failed: {err}\"\n        resolved.append((number, state))",
+      "replace": "        state, err = _issue_state(repo, number)\n        if err is not None:\n            continue\n        resolved.append((number, state))"
+    },
+    {
+      "label": "a failed PATCH is reported as success (test_apply_exits_2_when_patch_fails)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "        if patch_result is None or patch_result[0] != 0:\n            stderr = patch_result[2] if patch_result is not None else \"gh could not be invoked\"\n            print(f\"ERROR: gh api PATCH repos/{repo}/issues/{issue} failed: {stderr.strip()}\", file=sys.stderr)\n            return 2",
+      "replace": "        if patch_result is None or patch_result[0] != 0:\n            stderr = patch_result[2] if patch_result is not None else \"gh could not be invoked\"\n            print(f\"ERROR: gh api PATCH repos/{repo}/issues/{issue} failed: {stderr.strip()}\", file=sys.stderr)\n            return 0"
+    },
+    {
+      "label": "a prefix match counts as a stamp line (test_body_hash_distinguishes_prefix_stamp_like_line)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "    if STAMP_LINE_RE.fullmatch(content):",
+      "replace": "    if STAMP_LINE_RE.match(content):"
+    },
+    {
+      "label": "a null body is not read as empty (test_apply_on_null_body_writes_and_check_passes)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    body = data.get(\"body\")\n    if body is None:\n        body = \"\"\n    return body, None",
+      "replace": "    body = data.get(\"body\")\n    if body is None:\n        body = \"None\"\n    return body, None"
+    },
+    {
+      "label": "only the first `Depends on` line is parsed (test_stamp_dedupes_across_multiple_depends_on_lines)",
+      "file": "engine/cold_read_stamp.py",
+      "oracle": "double",
+      "find": "    for match in DEPENDS_ON_RE.finditer(body):",
+      "replace": "    _first = DEPENDS_ON_RE.search(body)\n    for match in ([_first] if _first else []):"
+    }
+  ]
+}
