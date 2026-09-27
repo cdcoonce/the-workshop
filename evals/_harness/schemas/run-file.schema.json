@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-workshop.dev/evals/_harness/schemas/run-file.schema.json",
+  "title": "Eval run file",
+  "type": "object",
+  "required": ["skill", "verdict", "fingerprint", "tokens", "wall_time_s", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "skill": { "type": "string" },
+    "verdict": { "enum": ["green", "red", "void"] },
+    "fingerprint": {
+      "type": "object",
+      "required": ["direct_tier_hash", "injection_tier_hash", "plugin_version", "claude_code_version", "run_date"],
+      "additionalProperties": false,
+      "properties": {
+        "direct_tier_hash": { "type": "string" },
+        "injection_tier_hash": { "type": "string" },
+        "plugin_version": { "type": "string" },
+        "claude_code_version": { "type": "string" },
+        "run_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "tokens": { "type": "integer", "minimum": 0 },
+    "wall_time_s": { "type": "number", "minimum": 0 },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case", "fixture_fingerprint", "gated_items", "model_ids", "attempts"],
+        "additionalProperties": false,
+        "properties": {
+          "case": { "type": "string" },
+          "fixture_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "gated_items": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "model_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "attempt",
+                "classification",
+                "items",
+                "parse_error",
+                "unmatched_findings",
+                "reserve_used",
+                "raw"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "attempt": { "type": "integer", "minimum": 1 },
+                "classification": { "enum": ["counted", "indeterminate"] },
+                "items": {
+                  "type": "object",
+                  "additionalProperties": { "enum": ["hit", "miss", "indeterminate"] }
+                },
+                "parse_error": { "type": "boolean" },
+                "unmatched_findings": { "type": "integer", "minimum": 0 },
+                "reserve_used": { "type": "integer", "minimum": 0 },
+                "raw": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
