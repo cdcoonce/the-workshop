@@ -7,6 +7,9 @@ Subcommands:
   check-runs and statuses of that SHA — never the combined state,
   ``gh pr checks`` or ``statusCheckRollup``, which on these repos read
   ``pending`` with ``total_count: 0`` forever.
+- ``land <pr>`` refreshes a behind head, gates it, waits for GitHub to register
+  it, watches it, merges pinned to it, and checks the landed tree is the
+  tested tree.
 
 Exit contract: 0 green, 1 red, 2 indeterminate (timeout, refusal, neutral or
 unknown outcome, unreadable input). Must run inside a clone of the PR's repo;
@@ -602,6 +605,173 @@ def refresh_and_gate(
         _remove_worktree(runner, scratch)
 
 
+def _base_moved(runner: Runner, repo: str, info: PrInfo) -> bool | None:
+    """Whether the live ``git/ref/heads/<base_ref>`` tip left the round's base; ``None`` if unreadable.
+
+    Never ``pulls/<pr>.base.sha``: GitHub does not update it when the base moves.
+    """
+    ref = _api_json(runner, repo, f"repos/{repo}/git/ref/heads/{info.base_ref}")
+    target = ref.get("object") if isinstance(ref, dict) else None
+    tip = target.get("sha") if isinstance(target, dict) else None
+    if not isinstance(tip, str) or not FULL_SHA.fullmatch(tip):
+        print(f"cannot read the tip of {info.base_ref}", file=sys.stderr)
+        return None
+    return tip != info.base_sha
+
+
+def _pr_head(runner: Runner, repo: str, pr: int) -> str | None:
+    payload = _api_json(runner, repo, f"repos/{repo}/pulls/{pr}")
+    head = payload.get("head") if isinstance(payload, dict) else None
+    sha = head.get("sha") if isinstance(head, dict) else None
+    return sha if isinstance(sha, str) else None
+
+
+def _tree(runner: Runner, commit: str) -> str | None:
+    result = runner.run(["git", "rev-parse", f"{commit}^{{tree}}"])
+    tree = result.stdout.strip()
+    return tree if result.returncode == 0 and FULL_SHA.fullmatch(tree) else None
+
+
+def _check_landed(runner: Runner, repo: str, pr: int, tested: RefreshResult, watched: WatchResult) -> int:
+    """Confirm *pr* merged with the tested tree, then print the ledger line."""
+    view = gh(runner, repo, "pr", "view", str(pr), "--json", "mergeCommit,state")
+    try:
+        payload = json.loads(view.stdout) if view.returncode == 0 else None
+    except json.JSONDecodeError:
+        payload = None
+    state = payload.get("state") if isinstance(payload, dict) else None
+    if state != "MERGED":
+        print(f"pull request {pr} is in state {state} after gh pr merge, not MERGED", file=sys.stderr)
+        return INDETERMINATE
+    commit = payload.get("mergeCommit")
+    oid = commit.get("oid") if isinstance(commit, dict) else None
+    if not isinstance(oid, str) or not FULL_SHA.fullmatch(oid):
+        print(f"pull request {pr} is MERGED but names no mergeCommit", file=sys.stderr)
+        return INDETERMINATE
+    fetched = runner.run(["git", "fetch", "origin", oid])
+    if fetched.returncode != 0:
+        print(f"git fetch of the merge commit failed: {fetched.stderr.strip()}", file=sys.stderr)
+        return INDETERMINATE
+    landed, expected = _tree(runner, oid), _tree(runner, tested.tested_sha)
+    if landed is None or expected is None or landed != expected:
+        print(f"LANDED TREE DIFFERS FROM TESTED TREE: landed {landed} ({oid}), tested {expected} ({tested.tested_sha})", file=sys.stderr)
+        return INDETERMINATE
+    checks = ",".join(str(run_id) for run_id in watched.run_ids)
+    print(f"landed pr={pr} tested={tested.tested_sha} gate={tested.gate_note} checks={checks} merge={oid}")
+    return GREEN
+
+
+def land_pr(
+    runner: Runner,
+    repo: str,
+    pr: int,
+    *,
+    method: str,
+    gate: str,
+    gate_evidence: str | None = None,
+    require: Sequence[str] = (),
+    accept_delta_change: bool = False,
+    max_rounds: int = 3,
+    trunk: str = "dev",
+    release: str = "main",
+    timeout: float = 2700,
+    interval: float = 15,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Refresh, gate, wait on and merge *pr* at exactly the head that was tested.
+
+    Each round refreshes against the live base, waits for GitHub to register
+    the pushed head, watches that SHA's checks, and merges pinned to it with
+    ``--match-head-commit``. A base that moves during the round starts another,
+    up to *max_rounds*. Never passes ``--admin`` or ``--auto``.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``git`` and ``gh`` in the target clone.
+    repo : str
+        ``owner/name`` every ``gh`` call is pinned to.
+    pr : int
+        The pull request number.
+    method : str
+        ``merge``, ``squash`` or ``rebase``.
+    gate, gate_evidence, accept_delta_change, trunk, release
+        Passed to ``refresh_and_gate``.
+    require : Sequence[str]
+        Extra required check names, passed to ``watch_sha``.
+    max_rounds : int
+        Rounds before a base that keeps moving exits 2.
+    timeout : float
+        Seconds for head registration, and separately for the watch.
+    interval : float
+        Seconds between polls.
+    clock, sleep : Callable
+        Injectable time source and sleeper, used for every poll.
+
+    Returns
+    -------
+    int
+        0 landed with the tested tree (after the one ledger line), 1 gate or
+        checks red, 2 refused or indeterminate.
+    """
+    for round_no in range(1, max_rounds + 1):
+        try:
+            info = read_pr(runner, repo, pr)
+        except Refused as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return INDETERMINATE
+        tested = refresh_and_gate(
+            runner,
+            repo,
+            info,
+            gate=gate,
+            gate_evidence=gate_evidence,
+            accept_delta_change=accept_delta_change,
+            trunk=trunk,
+            release=release,
+        )
+        if tested.exit_code != 0:
+            print(tested.message, file=sys.stderr)
+            return tested.exit_code
+
+        deadline = clock() + timeout
+        while _pr_head(runner, repo, pr) != tested.tested_sha:
+            if clock() >= deadline:
+                print(f"timed out after {timeout}s waiting for pull request {pr} to show head {tested.tested_sha}", file=sys.stderr)
+                return INDETERMINATE
+            sleep(interval)
+
+        watched = watch_sha(
+            runner,
+            repo,
+            tested.tested_sha,
+            branch=info.base_ref,
+            require=require,
+            timeout=timeout,
+            interval=interval,
+            clock=clock,
+            sleep=sleep,
+        )
+        if watched.code != 0:
+            return watched.code
+
+        moved = _base_moved(runner, repo, info)
+        if moved is False:
+            merged = gh(runner, repo, "pr", "merge", str(pr), f"--{method}", "--match-head-commit", tested.tested_sha)
+            if merged.returncode == 0:
+                return _check_landed(runner, repo, pr, tested, watched)
+            moved = _base_moved(runner, repo, info)
+            if moved is False:
+                print(f"gh pr merge failed: {merged.stderr.strip()}", file=sys.stderr)
+                return INDETERMINATE
+        if moved is None:
+            return INDETERMINATE
+        print(f"{info.base_ref} moved during round {round_no}", file=sys.stderr)
+    print(f"base moved {max_rounds} times", file=sys.stderr)
+    return INDETERMINATE
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pr_land.py", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -611,6 +781,18 @@ def _parser() -> argparse.ArgumentParser:
     watch.add_argument("--require", action="append", default=[], metavar="NAME", help="extra required check (repeatable)")
     watch.add_argument("--timeout", type=float, default=2700)
     watch.add_argument("--interval", type=float, default=15)
+    land = commands.add_parser("land", help="refresh, gate, watch and merge a PR at its tested head")
+    land.add_argument("pr", type=int)
+    land.add_argument("--method", choices=["merge", "squash", "rebase"], required=True)
+    land.add_argument("--gate", required=True, metavar="CMD", help="gate run in the refreshed tree")
+    land.add_argument("--gate-evidence", default=None, metavar="REGEX", help="must match the gate's output")
+    land.add_argument("--require", action="append", default=[], metavar="NAME", help="extra required check (repeatable)")
+    land.add_argument("--accept-delta-change", action="store_true")
+    land.add_argument("--max-rounds", type=int, default=3)
+    land.add_argument("--trunk", default="dev")
+    land.add_argument("--release", default="main")
+    land.add_argument("--timeout", type=float, default=2700)
+    land.add_argument("--interval", type=float, default=15)
     return parser
 
 
@@ -644,6 +826,24 @@ def main(
     except Refused as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return INDETERMINATE
+    if args.command == "land":
+        return land_pr(
+            runner,
+            repo,
+            args.pr,
+            method=args.method,
+            gate=args.gate,
+            gate_evidence=args.gate_evidence,
+            require=args.require,
+            accept_delta_change=args.accept_delta_change,
+            max_rounds=args.max_rounds,
+            trunk=args.trunk,
+            release=args.release,
+            timeout=args.timeout,
+            interval=args.interval,
+            clock=clock,
+            sleep=sleep,
+        )
     result = watch_sha(
         runner,
         repo,

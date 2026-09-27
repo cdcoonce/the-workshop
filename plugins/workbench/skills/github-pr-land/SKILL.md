@@ -65,3 +65,31 @@ How it decides:
 Output is one line per accepted item — `<name> suite=<id> run=<id>
 <conclusion>` or `<context> status=<id> <state>` — so every verdict traces
 back to the run it came from.
+
+## `land`
+
+Run it only when Charles has explicitly asked for that PR to be merged, and
+with Bash `run_in_background: true`.
+
+```bash
+python3 "<skill base dir>/scripts/pr_land.py" land <pr> --method squash --gate "make test"
+```
+
+`--method {merge,squash,rebase}` and `--gate CMD` are required. Optional:
+`--gate-evidence REGEX`, `--require NAME`, `--accept-delta-change`,
+`--max-rounds 3`, `--trunk dev`, `--release main`, `--timeout 2700`,
+`--interval 15`. Each round merges the live base into the head, runs the gate,
+pushes, waits for `pulls/<pr>` to show that head, watches it, re-reads the base
+from `git/ref/heads/<base>`, and merges with `--match-head-commit <tested>`
+(never `--admin` or `--auto`). A base that moved starts another round.
+
+It stops without merging — exit 2 unless noted — on: a fork or `dev`→`main`
+PR, a conflict (resolve by hand), a changed patch-id, a red gate (1) or one
+that did not run or lacks its evidence, a head never registered, a red (1) or
+unfinished watch, `base moved <n> times`, or a failed merge (gh's stderr
+echoed). After the merge it exits 2 if the PR is not `MERGED` or on
+`LANDED TREE DIFFERS FROM TESTED TREE` (both tree ids printed) — investigate
+the landed commit by hand.
+
+Success prints exactly one ledger line and exits 0:
+`landed pr=<n> tested=<sha> gate=<note> checks=<run ids> merge=<oid>`.
