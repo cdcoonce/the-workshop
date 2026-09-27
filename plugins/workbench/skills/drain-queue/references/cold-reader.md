@@ -10,12 +10,15 @@ it converts the gate into a rubber stamp.
 
 ## Slots
 
-| Slot               | What makes it correct                                                                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<N>` / `<repo>`   | The issue number and `owner/name`. Nothing else identifies the target.                                                                                               |
-| `<clone path>`     | A local checkout the reader may read. Read-only for the reader.                                                                                                      |
-| `<normative docs>` | Design docs the body must not contradict, if any. Omit the line if none.                                                                                             |
-| `<detector tails>` | Per-issue additions to detectors 5, 7, and 8: the exact functions, fields, and forks this spec makes claims about. This is where a generic gate becomes a sharp one. |
+| Slot                     | What makes it correct                                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<N>` / `<repo>`         | The issue number and `owner/name`. Nothing else identifies the target.                                                                                               |
+| `<clone path>`           | A local checkout the reader may read and fetch. The reader never edits it; probe builds run in a scratch archive.                                                    |
+| `<integration-branch>`   | The integration branch pinned in step zero. Probe builds archive `origin/<integration-branch>`.                                                                      |
+| `<repo gate command>`    | The repository's full gate, the one step 4 runs. A probe build runs it once for its baseline.                                                                        |
+| `<workbench skills dir>` | Absolute path of the installed workbench plugin's `skills/` directory, so the reader can open `vault-cold-read`'s Probe builds and run `teeth_check.py`.             |
+| `<normative docs>`       | Design docs the body must not contradict, if any. Omit the line if none.                                                                                             |
+| `<detector tails>`       | Per-issue additions to detectors 5, 7, and 8: the exact functions, fields, and forks this spec makes claims about. This is where a generic gate becomes a sharp one. |
 
 ## Template
 
@@ -24,14 +27,26 @@ You are a cold reader running an adversarial gate on a GitHub issue before it is
 have NO other context — that is the point. Read the issue exactly the way the builder will:
 cold.
 
-Target: issue #<N> in repo <repo>. Local clone: <clone path>.
+Target: issue #<N> in repo <repo>. Local clone: <clone path>. Integration branch:
+<integration-branch>. Gate: <repo gate command>.
 
 Rules:
-- Read-only on code. Do NOT edit files. Do NOT use artifact, task-spawning, or memory tools.
+- Never edit <clone path>, any other checkout, or the issue body. Do NOT use artifact,
+  task-spawning, or memory tools.
 - Fetch the issue: `gh issue view <N> --repo <repo> --comments`. Note existing labels.
-- You may read the repo ONLY to (a) resolve paths and symbols the body cites and (b) verify
-  behavioral claims the body makes about existing code. Do not reconstruct unstated intent
-  from code archaeology — needing to do that IS a finding.
+- You may read the repo ONLY to (a) resolve paths and symbols the body cites, (b) verify
+  behavioral claims the body makes about existing code, and (c) run probe builds. Do not
+  reconstruct unstated intent from code archaeology — needing to do that IS a finding.
+- Settle empirical questions by running them: run probe builds per the "## Probe builds"
+  section of <workbench skills dir>/vault-cold-read/references/command.md, whose mutation
+  tool is <workbench skills dir>/detector-teeth-check/scripts/teeth_check.py. Three
+  exceptions to that section apply here:
+  - the fork point is <integration-branch>, the integration branch pinned in step zero of
+    this queue, not the section's afk fork-point rule;
+  - its executor-contract bullet does not apply, because this queue's workers write their
+    own PR bodies;
+  - run only its detector-3 mutation and its detector-8 probe; this gate has no detectors 9
+    or 11.
 - <normative docs> is normative for this build; a contradiction between it and the body is a
   finding, not a judgment call.
 
@@ -77,10 +92,13 @@ Verdict, one of:
 
 Before returning, post your verdict to the issue as a comment titled
 `## Cold read — <verdict>`, including the per-detector record so a later reader can tell a
-clean pass from a lazy one. This comment is the only durable record of the gate.
+clean pass from a lazy one. This comment is the only durable record of the gate. Then, if the
+repo has the labels, set the verdict's label in place of any other cold-read label:
+cold-read:pass on BUILD, cold-read:rewrite on REWRITE, cold-read:blocked on
+NOT-DISPATCH-READY.
 
-A first-ever cold read that finds nothing is suspicious — say so if it happens. Do not fix
-code and do not propose implementations.
+A first-ever cold read that finds nothing is suspicious — say so if it happens. Probe builds
+are instruments, not proposals; no code goes in the body.
 
 Return: verdict; per-detector record; findings with defaults; exact replacement text if
 REWRITE.
@@ -91,6 +109,11 @@ REWRITE.
 A REWRITE is the healthy outcome, not a setback. Apply the reader's replacement text to the
 issue body verbatim rather than paraphrasing it — paraphrase is how a resolved ambiguity
 becomes an unresolved one again.
+
+Applying it does not clear the gate. After applying replacement text, dispatch a fresh reader
+on the edited body, from this template, before step 2; you are no longer cold to an edit you
+made. `vault-cold-read`'s step 8 owns the rest of that loop, its sole exemption and its read
+cap.
 
 A NOT-DISPATCH-READY removes the issue from the queue. Resist the pull to rescope it into
 something buildable in the moment; that decision belongs to shaping, with the whole context

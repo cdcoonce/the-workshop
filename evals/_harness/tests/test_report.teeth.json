@@ -1,0 +1,88 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_report.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_report.py"
+  ],
+  "mutants": [
+    {
+      "label": "non-red run is reported anyway",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "    if run[\"verdict\"] != \"red\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "_item_status red threshold loosened to more than 3 misses",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "    if outcomes.count(\"miss\") >= _COUNTED_MISS_CAP:",
+      "replace": "    if outcomes.count(\"miss\") > _COUNTED_MISS_CAP:"
+    },
+    {
+      "label": "void items are dropped from the failing-items list",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "            if status in (\"red\", \"void\"):",
+      "replace": "            if status == \"red\":"
+    },
+    {
+      "label": "raws listing only ever returns the first attempt",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "            return [attempt[\"raw\"] for attempt in case[\"attempts\"]]",
+      "replace": "            return [case[\"attempts\"][0][\"raw\"]]"
+    },
+    {
+      "label": "fingerprint diff always reports unchanged",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "        if old == new:",
+      "replace": "        if True:"
+    },
+    {
+      "label": "newest-green selection keeps the first match instead of the newest",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "        if newest is None or candidate_path.name > newest[0]:",
+      "replace": "        if newest is None:"
+    },
+    {
+      "label": "write-once report check disabled",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "    if report_path.exists():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "report text is never scrubbed of home paths",
+      "file": "../report.py",
+      "oracle": "real",
+      "find": "    text = _scrub(\"\\n\".join(lines) + \"\\n\")",
+      "replace": "    text = \"\\n\".join(lines) + \"\\n\""
+    }
+  ]
+}

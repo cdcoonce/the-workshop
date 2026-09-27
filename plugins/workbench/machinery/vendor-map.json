@@ -198,6 +198,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/cold_read_stamp.py",
+      "target": ".claude/scripts/cold_read_stamp.py"
+    },
+    {
+      "kind": "file",
       "source": "tools/machinery_check.py",
       "target": ".claude/scripts/machinery_check.py"
     },
