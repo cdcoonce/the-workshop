@@ -71,6 +71,8 @@ class Hub:
         self.view_result: Result | None = None
         self.view_sequence: list[str | Result] | None = None
         self._view_calls = 0
+        self.clock: FakeClock | None = None
+        self.view_sleep_counts: list[int] = []
         self.base_read_failures: set[int] = set()
         self.serve_runs = True
         self.statuses: list[dict] = []
@@ -173,6 +175,8 @@ class Hub:
 
     def _view(self) -> Result:
         if self.view_sequence is not None:
+            if self.clock is not None:
+                self.view_sleep_counts.append(len(self.clock.sleeps))
             index = min(self._view_calls, len(self.view_sequence) - 1)
             self._view_calls += 1
             entry = self.view_sequence[index]
@@ -260,7 +264,9 @@ def world(git_repo: Path, tmp_path: Path) -> World:
         ),
     )
     hub = Hub(fake, origin, author)
-    return World(git_repo, origin, author, fake, hub, CompositeRunner(hub, git_repo), FakeClock())
+    clock = FakeClock()
+    hub.clock = clock
+    return World(git_repo, origin, author, fake, hub, CompositeRunner(hub, git_repo), clock)
 
 
 def behind(world: World) -> tuple[str, str]:
@@ -480,21 +486,39 @@ def test_lagging_open_view_is_reread_until_merged(world: World, capsys: pytest.C
     views, _ = world.after_first_merge()
     assert len(views) == 3
     assert world.clock.sleeps == [7, 7]
-    assert f"gh pr merge exited 1 but the PR is MERGED: {reason}" in captured.err
+    assert world.hub.view_sleep_counts == [0, 1, 2]
+    failed_line = f"gh pr merge failed: {reason}"
+    merged_line = f"gh pr merge exited 1 but the PR is MERGED: {reason}"
+    assert failed_line in captured.err
+    assert merged_line in captured.err
+    assert captured.err.index(failed_line) < captured.err.index(merged_line)
     assert ledger_lines(captured.out) == [f"landed pr={PR} tested={tested} gate=exit 0 checks=4101,4102 merge={oid}"]
 
 
-def test_persistently_open_view_after_landing_starts_a_new_round(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Guards against re-reading forever (or not re-reading at all) when GitHub's view never catches up to our own landing."""
+@pytest.mark.parametrize("max_rounds", [3, 2])
+def test_persistently_open_view_after_landing_starts_a_new_round(
+    world: World, capsys: pytest.CaptureFixture[str], max_rounds: int
+) -> None:
+    """Guards against re-reading forever (or not re-reading at all) when GitHub's view never catches up to our own landing.
+
+    Parametrized over ``max_rounds`` (the round budget, unrelated to the fixed
+    3-re-read bound) to guard against the re-read loop mistakenly using
+    ``max_rounds`` instead of its own hardcoded 3: with the default 3 the two
+    numbers coincide, so only ``max_rounds=2`` tells them apart.
+    """
     behind(world)
     reason = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
     world.hub.fail_after_landing = reason
     world.hub.view_sequence = ["OPEN"]
-    assert land(world) == INDETERMINATE
+    assert land(world, max_rounds=max_rounds) == INDETERMINATE
     captured = capsys.readouterr()
-    views, _ = world.after_first_merge()
+    views, base_reads_after = world.after_first_merge()
     assert len(views) == 4
     assert world.clock.sleeps == [15, 15, 15]
+    assert world.hub.view_sleep_counts == [0, 1, 2, 3]
+    # Exactly the post-merge-failure re-check and round 2's fresh read_pr — no
+    # extra _base_moved call once the re-read loop exhausts.
+    assert len(base_reads_after) == 2
     assert "main moved during round 1" in captured.err
     assert "the PR's delta is empty on one side of the refresh; the base already contains it" in captured.err
     assert len(world.refreshes()) == 2

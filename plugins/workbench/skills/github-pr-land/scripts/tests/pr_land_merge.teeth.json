@@ -331,6 +331,34 @@
       "oracle": "double",
       "find": "                    if state != \"OPEN\":\n",
       "replace": "                    if False:\n"
+    },
+    {
+      "label": "the re-read sleeps after the view read instead of before it (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n",
+      "replace": "                for _ in range(3):\n                    view = _pr_view(runner, repo, pr)\n                    sleep(interval)\n"
+    },
+    {
+      "label": "_base_moved is called again after the re-read loop exhausts (test_persistently_open_view_after_landing_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n        if moved is None:\n",
+      "replace": "                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n                moved = _base_moved(runner, repo, info)\n        if moved is None:\n"
+    },
+    {
+      "label": "the `gh pr merge failed` print fires after the re-read loop instead of before it (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                return INDETERMINATE\n            if moved is True:\n                # GitHub's view can still lag behind a merge that landed: our\n                # own commit moved the base, so re-read a few more times\n                # before trusting a new round on what may be an already-\n                # merged PR.\n                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n                    state = view.get(\"state\") if view is not None else None\n                    if state == \"MERGED\":\n                        print(\n                            f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\",\n                            file=sys.stderr,\n                        )\n                        return _verify_landed(runner, pr, view, tested, watched)\n                    if state != \"OPEN\":\n                        if isinstance(state, str):\n                            problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                        else:\n                            problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n        if moved is None:\n",
+      "replace": "            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n                return INDETERMINATE\n            if moved is None:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n                return INDETERMINATE\n            if moved is True:\n                # GitHub's view can still lag behind a merge that landed: our\n                # own commit moved the base, so re-read a few more times\n                # before trusting a new round on what may be an already-\n                # merged PR.\n                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n                    state = view.get(\"state\") if view is not None else None\n                    if state == \"MERGED\":\n                        print(\n                            f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\",\n                            file=sys.stderr,\n                        )\n                        return _verify_landed(runner, pr, view, tested, watched)\n                    if state != \"OPEN\":\n                        if isinstance(state, str):\n                            problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                        else:\n                            problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n        if moved is None:\n"
+    },
+    {
+      "label": "the re-read loop bound is max_rounds instead of a fixed 3 (test_persistently_open_view_after_landing_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n",
+      "replace": "                for _ in range(max_rounds):\n"
     }
   ]
 }
