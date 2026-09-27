@@ -227,6 +227,24 @@ def test_fails_when_a_direct_tier_file_is_renamed_out_of_the_tier(tmp_path):
     assert results[0].level == "fail"
 
 
+def test_a_non_json_run_file_does_not_satisfy_the_requirement(tmp_path):
+    """N2: a file directly in evals/<skill>/runs/ without a .json suffix must
+    never satisfy the guard, even with otherwise-valid green content and the
+    current hash -- only ``.json`` run files are ever written by the ledger.
+    """
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _write(repo, "evals/commit/marker.txt", "changed\n")
+    _commit(repo, "change marker")
+    expected_hash = tree_hash(["evals/commit/marker.txt"], ref="HEAD", repo=repo)
+    _write(repo, "evals/commit/runs/run1.txt", _run_file(verdict="green", direct_tier_hash=expected_hash))
+    _commit(repo, "add a non-json run file")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
 def test_a_nested_raw_json_under_runs_does_not_satisfy_the_requirement(tmp_path):
     """F2: only files directly in evals/<skill>/runs/ are run files; anything
     deeper (an attempt's raw output) must never satisfy the guard.

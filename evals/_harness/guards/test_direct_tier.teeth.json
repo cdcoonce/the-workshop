@@ -123,6 +123,14 @@
       "replace": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}..HEAD\")"
     },
     {
+      "label": "N2/I11: _has_matching_green_run drops the .json-suffix requirement",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_non_json_run_file_does_not_satisfy_the_requirement: only a file directly in evals/<skill>/runs/ with a .json suffix is ever a run file the ledger writes; a .txt file with otherwise-valid green content and the current hash must never satisfy the guard.",
+      "find": "        if not added_path.endswith(\".json\"):\n            continue",
+      "replace": "        pass"
+    },
+    {
       "label": "[control] reword the guard module docstring",
       "file": "./direct_tier.py",
       "oracle": "real",

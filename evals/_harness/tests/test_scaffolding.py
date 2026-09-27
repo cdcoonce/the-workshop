@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -206,7 +207,56 @@ def test_deps_file_declares_the_shared_injection_tier(skill):
     assert deps["injection"] == _EXPECTED_INJECTION_TIER
 
 
-def _direct_tier_problems(skill: str, direct: list[str]) -> list[str]:
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _init_repo(repo: Path) -> None:
+    repo.mkdir(parents=True, exist_ok=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+
+
+def _commit(repo: Path, message: str) -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _write(repo: Path, rel_path: str, content: str) -> None:
+    path = repo / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _build_skill_repo(
+    tmp_path: Path, skill: str, skill_md_text: str, *, extra_files: dict[str, str] | None = None
+) -> Path:
+    """Build a synthetic git repo with one rostered skill's SKILL.md at *skill*'s path.
+
+    Never reads the real repo's SKILL.md content — a legitimate edit to a
+    real skill's docs (an added outside link with its matching deps entry,
+    or a dropped one) must never turn ``_direct_tier_problems``'s own unit
+    tests red; only the parametrized real-repo test below exercises the
+    actual committed files.
+    """
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo, f"{_SKILLS_ROOT}/{skill}/SKILL.md", skill_md_text)
+    for rel_path, content in (extra_files or {}).items():
+        _write(repo, rel_path, content)
+    _commit(repo, "initial")
+    return repo
+
+
+def _direct_tier_problems(skill: str, direct: list[str], *, repo_root: Path) -> list[str]:
     """Return why *direct* doesn't cover the skill dir and its SKILL.md's outside links.
 
     Not a word-for-word pin of the direct list (that broke the moment a
@@ -215,42 +265,102 @@ def _direct_tier_problems(skill: str, direct: list[str]) -> list[str]:
     issue's own definition promises: the skill's own directory is always a
     member, and every link SKILL.md makes to a tracked file outside that
     directory is too.
+
+    Compares EXPANDED file sets (via ``expand_paths``, the same expansion
+    ``deps_completeness``/#993's ``deps.py`` uses), never raw path strings —
+    a parent-directory entry, or a trailing ``/`` on an entry, is accepted
+    in *direct* exactly when ``deps_completeness`` would accept it.
+
+    *repo_root* is the git repository *direct* and the skill's SKILL.md are
+    resolved against — the real repo for the scaffolding invariant this
+    module pins below, or a synthetic temporary repo in this module's own
+    unit tests.
     """
     problems: list[str] = []
     skill_dir_rel = f"{_SKILLS_ROOT}/{skill}"
-    if skill_dir_rel not in direct:
+    covered = set(expand_paths(direct, ref="HEAD", repo=repo_root))
+
+    skill_dir_files = set(expand_paths([skill_dir_rel], ref="HEAD", repo=repo_root))
+    if skill_dir_files - covered:
         problems.append(f"{skill}: direct tier missing the skill directory {skill_dir_rel!r}")
 
-    skill_md_path = _REPO_ROOT / skill_dir_rel / "SKILL.md"
+    skill_md_path = repo_root / skill_dir_rel / "SKILL.md"
     text = skill_md_path.read_text(encoding="utf-8") if skill_md_path.exists() else ""
     for link in _markdown_link_targets(text):
         resolved = posixpath.normpath(posixpath.join(skill_dir_rel, link))
         if resolved == skill_dir_rel or resolved.startswith(skill_dir_rel + "/"):
-            continue  # inside the skill dir; covered by the dir itself
-        tracked = expand_paths([resolved], ref="HEAD", repo=_REPO_ROOT)
+            continue  # inside the skill dir; covered by the skill dir's own files above
+        tracked = set(expand_paths([resolved], ref="HEAD", repo=repo_root))
         if not tracked:
             continue  # not a tracked file; nothing for direct to cover
-        if resolved not in direct:
+        if tracked - covered:
             problems.append(f"{skill}: outside link {link!r} -> {resolved} missing from direct tier")
     return problems
 
 
-def test_direct_tier_problems_flags_a_missing_skill_dir():
-    assert _direct_tier_problems("commit", []) != []
+def test_direct_tier_problems_flags_a_missing_skill_dir(tmp_path):
+    repo = _build_skill_repo(tmp_path, "commit", "No outside links here.\n")
+    assert _direct_tier_problems("commit", [], repo_root=repo) != []
 
 
-def test_direct_tier_problems_flags_a_missing_outside_link():
-    # tdd's SKILL.md links ../../docs/tdd.md outside its own directory; a
-    # direct list holding only the skill dir must be flagged as incomplete.
-    assert _direct_tier_problems("tdd", [f"{_SKILLS_ROOT}/tdd"]) != []
+def test_direct_tier_problems_accepts_the_skill_dir_alone_when_there_is_no_outside_link(tmp_path):
+    repo = _build_skill_repo(tmp_path, "commit", "No outside links here.\n")
+    direct = [f"{_SKILLS_ROOT}/commit"]
+    assert _direct_tier_problems("commit", direct, repo_root=repo) == []
 
 
-def test_direct_tier_problems_accepts_the_skill_dir_alone_when_there_is_no_outside_link():
-    assert _direct_tier_problems("commit", [f"{_SKILLS_ROOT}/commit"]) == []
+def test_direct_tier_problems_accepts_a_trailing_slash_on_the_skill_dir_entry(tmp_path):
+    """A trailing '/' on the skill dir entry is accepted, matching
+    ``expand_paths`` (and so ``deps_completeness``), which strips it before
+    resolving tracked files — never a literal string match.
+    """
+    repo = _build_skill_repo(tmp_path, "commit", "No outside links here.\n")
+    direct = [f"{_SKILLS_ROOT}/commit/"]
+    assert _direct_tier_problems("commit", direct, repo_root=repo) == []
+
+
+def test_direct_tier_problems_flags_a_missing_outside_link(tmp_path):
+    # An outside link, mirroring the real tdd SKILL.md's `../../docs/tdd.md`
+    # link: a direct list holding only the skill dir must be flagged as
+    # incomplete.
+    repo = _build_skill_repo(
+        tmp_path,
+        "tdd",
+        "See [the tdd doc](../../docs/tdd.md) for details.\n",
+        extra_files={"plugins/workbench/docs/tdd.md": "tdd doc\n"},
+    )
+    direct = [f"{_SKILLS_ROOT}/tdd"]
+    assert _direct_tier_problems("tdd", direct, repo_root=repo) != []
+
+
+def test_direct_tier_problems_accepts_the_outside_link_covered_by_its_own_path(tmp_path):
+    repo = _build_skill_repo(
+        tmp_path,
+        "tdd",
+        "See [the tdd doc](../../docs/tdd.md) for details.\n",
+        extra_files={"plugins/workbench/docs/tdd.md": "tdd doc\n"},
+    )
+    direct = [f"{_SKILLS_ROOT}/tdd", "plugins/workbench/docs/tdd.md"]
+    assert _direct_tier_problems("tdd", direct, repo_root=repo) == []
+
+
+def test_direct_tier_problems_accepts_a_parent_directory_entry_covering_the_outside_link(tmp_path):
+    """A parent-directory entry that covers the outside link must be
+    accepted exactly as ``deps_completeness`` accepts it, not just the
+    outside link's own literal path.
+    """
+    repo = _build_skill_repo(
+        tmp_path,
+        "tdd",
+        "See [the tdd doc](../../docs/tdd.md) for details.\n",
+        extra_files={"plugins/workbench/docs/tdd.md": "tdd doc\n"},
+    )
+    direct = [f"{_SKILLS_ROOT}/tdd", "plugins/workbench/docs"]
+    assert _direct_tier_problems("tdd", direct, repo_root=repo) == []
 
 
 @pytest.mark.parametrize("skill", ROSTERED_SKILLS)
 def test_deps_file_direct_tier_covers_the_skill_dir_and_outside_links(skill):
     path = _REPO_ROOT / "evals" / skill / "deps"
     deps = parse_deps(path.read_text(encoding="utf-8"))
-    assert _direct_tier_problems(skill, deps["direct"]) == []
+    assert _direct_tier_problems(skill, deps["direct"], repo_root=_REPO_ROOT) == []

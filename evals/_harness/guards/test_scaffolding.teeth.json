@@ -113,15 +113,16 @@
       "file": "../tests/test_scaffolding.py",
       "oracle": "real",
       "why": "Killed by test_direct_tier_problems_flags_a_missing_skill_dir.",
-      "find": "    if skill_dir_rel not in direct:\n        problems.append(f\"{skill}: direct tier missing the skill directory {skill_dir_rel!r}\")",
+      "find": "    if skill_dir_files - covered:\n        problems.append(f\"{skill}: direct tier missing the skill directory {skill_dir_rel!r}\")",
       "replace": "    pass"
     },
     {
-      "label": "_direct_tier_problems drops the in-skill-dir skip, flagging every same/sub-dir link too",
+      "label": "[control] _direct_tier_problems drops the in-skill-dir skip",
       "file": "../tests/test_scaffolding.py",
       "oracle": "real",
-      "why": "Killed by the real-repo test_deps_file_direct_tier_covers_the_skill_dir_and_outside_links[commit] and [adversarial-review]: both skills' SKILL.md link a references/ subdirectory file covered only by the whole skill dir being in `direct`, never by its own literal path.",
-      "find": "        if resolved == skill_dir_rel or resolved.startswith(skill_dir_rel + \"/\"):\n            continue  # inside the skill dir; covered by the dir itself",
+      "expect": "survived",
+      "why": "Provably inert since N1 moved the outside-link check to `tracked - covered`: when the whole skill dir is a `direct` member (as the real deps files and every synthetic fixture here have it), `covered` already includes every file under that dir via expand_paths, so a same/sub-dir link's `tracked` set is already a subset of `covered` whether or not this skip runs first. Kept in source as the documented positive conjunct (an in-dir link is never even eligible to violate coverage) and to skip needless expand_paths calls, but no fixture can distinguish its presence from its absence any more.",
+      "find": "        if resolved == skill_dir_rel or resolved.startswith(skill_dir_rel + \"/\"):\n            continue  # inside the skill dir; covered by the skill dir's own files above",
       "replace": "        pass"
     },
     {
@@ -129,8 +130,24 @@
       "file": "../tests/test_scaffolding.py",
       "oracle": "real",
       "why": "Killed by test_direct_tier_problems_flags_a_missing_outside_link.",
-      "find": "        if resolved not in direct:\n            problems.append(f\"{skill}: outside link {link!r} -> {resolved} missing from direct tier\")",
+      "find": "        if tracked - covered:\n            problems.append(f\"{skill}: outside link {link!r} -> {resolved} missing from direct tier\")",
       "replace": "        pass"
+    },
+    {
+      "label": "N1: _direct_tier_problems reverts to string membership for the skill-dir check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_accepts_a_trailing_slash_on_the_skill_dir_entry: a trailing '/' on the skill dir entry is a literal-string mismatch but an EXPANDED-file-set match, so a string-membership check would wrongly flag it as missing.",
+      "find": "    covered = set(expand_paths(direct, ref=\"HEAD\", repo=repo_root))\n\n    skill_dir_files = set(expand_paths([skill_dir_rel], ref=\"HEAD\", repo=repo_root))\n    if skill_dir_files - covered:",
+      "replace": "    covered = set(expand_paths(direct, ref=\"HEAD\", repo=repo_root))\n\n    skill_dir_files = set(expand_paths([skill_dir_rel], ref=\"HEAD\", repo=repo_root))\n    if skill_dir_rel not in direct:"
+    },
+    {
+      "label": "N1: _direct_tier_problems reverts to string membership for the outside-link check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_accepts_a_parent_directory_entry_covering_the_outside_link: a parent-directory entry covers the outside link's EXPANDED file but never matches it as a literal string, so a string-membership check would wrongly flag it as missing.",
+      "find": "        tracked = set(expand_paths([resolved], ref=\"HEAD\", repo=repo_root))\n        if not tracked:\n            continue  # not a tracked file; nothing for direct to cover\n        if tracked - covered:",
+      "replace": "        tracked = set(expand_paths([resolved], ref=\"HEAD\", repo=repo_root))\n        if not tracked:\n            continue  # not a tracked file; nothing for direct to cover\n        if resolved not in direct:"
     },
     {
       "label": "[control] reword the scaffolding test module docstring",
