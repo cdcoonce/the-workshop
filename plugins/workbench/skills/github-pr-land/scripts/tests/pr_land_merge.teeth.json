@@ -247,6 +247,41 @@
       "oracle": "double",
       "find": "    if expected is None:\n",
       "replace": "    if False:\n"
+    },
+    {
+      "label": "a failed-but-landed merge skips the tree check (test_failed_merge_that_landed_a_different_tree_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                return _verify_landed(runner, pr, view, tested, watched)\n",
+      "replace": "                oid = (view.get(\"mergeCommit\") or {}).get(\"oid\")\n                checks = \",\".join([*(str(run_id) for run_id in watched.run_ids), *(f\"status:{status_id}\" for status_id in watched.status_ids)])\n                print(f\"landed pr={pr} tested={tested.tested_sha} gate={tested.gate_note} checks={checks} merge={oid}\")\n                return GREEN\n"
+    },
+    {
+      "label": "a view with no state is read as OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            state = view.get(\"state\") if view is not None else None\n",
+      "replace": "            state = view.get(\"state\", \"OPEN\") if view is not None else None\n"
+    },
+    {
+      "label": "an unreadable view is read as OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            state = view.get(\"state\") if view is not None else None\n",
+      "replace": "            state = view.get(\"state\") if view is not None else \"OPEN\"\n"
+    },
+    {
+      "label": "a MERGED view with no mergeCommit falls through to the base re-read (test_failed_merge_whose_merged_view_names_no_merge_commit_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            if state == \"MERGED\":\n",
+      "replace": "            if state == \"MERGED\" and not isinstance(view.get(\"mergeCommit\"), dict):\n                state = \"OPEN\"\n            if state == \"MERGED\":\n"
+    },
+    {
+      "label": "the tested tree is checked before the landed tree (test_unreadable_tree_is_not_a_mismatch)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    landed = _tree(runner, oid)\n    if landed is None:\n        print(f\"cannot read tree for {oid}\", file=sys.stderr)\n        return INDETERMINATE\n    expected = _tree(runner, tested.tested_sha)\n    if expected is None:\n        print(f\"cannot read tree for {tested.tested_sha}\", file=sys.stderr)\n        return INDETERMINATE\n",
+      "replace": "    expected = _tree(runner, tested.tested_sha)\n    if expected is None:\n        print(f\"cannot read tree for {tested.tested_sha}\", file=sys.stderr)\n        return INDETERMINATE\n    landed = _tree(runner, oid)\n    if landed is None:\n        print(f\"cannot read tree for {oid}\", file=sys.stderr)\n        return INDETERMINATE\n"
     }
   ]
 }

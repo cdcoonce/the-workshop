@@ -430,8 +430,10 @@ def test_failed_merge_that_landed_does_not_start_a_new_round(world: World, capsy
     [
         (json_result({"state": "CLOSED", "mergeCommit": None}), "pull request 7 is in state CLOSED after a failed gh pr merge"),
         (Result(1, "", "GraphQL: Could not resolve to a PullRequest\n"), "cannot read the state of pull request 7 after a failed gh pr merge"),
+        (json_result({"mergeCommit": None}), "cannot read the state of pull request 7 after a failed gh pr merge"),
+        (Result(0, "not json", ""), "cannot read the state of pull request 7 after a failed gh pr merge"),
     ],
-    ids=["closed", "view-fails"],
+    ids=["closed", "view-fails", "no-state", "unparseable"],
 )
 def test_merge_failure_with_pr_neither_merged_nor_open_exits_2(
     world: World, capsys: pytest.CaptureFixture[str], view: Result, message: str
@@ -478,6 +480,36 @@ def test_ledger_line_names_tested_head_checks_and_merge(world: World, capsys: py
     assert " checks=4101,4102 " in lines[0]
 
 
+def test_failed_merge_that_landed_a_different_tree_exits_2(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against the failed-but-landed path printing the ledger without comparing the landed tree to the tested tree."""
+    behind(world)
+    world.hub.fail_after_landing = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.land_base_tree = True
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert "LANDED TREE DIFFERS FROM TESTED TREE" in captured.err
+    assert ledger_lines(captured.out) == []
+    _, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(world.refreshes()) == 1
+
+
+def test_failed_merge_whose_merged_view_names_no_merge_commit_exits_2(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Guards against a MERGED view with no mergeCommit after a failed merge falling through to the base re-read."""
+    behind(world)
+    world.hub.fail_after_landing = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.view_result = json_result({"state": "MERGED", "mergeCommit": None})
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert "is MERGED but names no mergeCommit" in captured.err
+    assert ledger_lines(captured.out) == []
+    _, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(world.refreshes()) == 1
+
+
 def test_statuses_only_green_names_status_ids_in_checks(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Guards against an empty checks= when the required names are satisfied only by commit statuses."""
     behind(world)
@@ -512,22 +544,27 @@ def test_watch_gets_a_fresh_timeout_after_registration(world: World) -> None:
     assert len(world.merges()) == 1
 
 
-@pytest.mark.parametrize("side", ["landed", "tested"])
+@pytest.mark.parametrize("side", ["landed", "tested", "both"])
 def test_unreadable_tree_is_not_a_mismatch(world: World, capsys: pytest.CaptureFixture[str], side: str) -> None:
-    """Guards against reporting a tree git could not read as LANDED TREE DIFFERS with a None tree id."""
+    """Guards against reporting a tree git could not read as LANDED TREE DIFFERS with a None tree id, and against checking the tested side first."""
     behind(world)
-    unreadable: list[str] = []
+    unreadable: dict[str, str] = {}
 
     def break_tree() -> None:
-        sha = world.hub.merge_oid if side == "landed" else world.hub.ref(HEAD_REF)
-        assert sha is not None
-        unreadable.append(sha)
-        world.runner.overlay(["git", "rev-parse", f"{sha}^{{tree}}"], returncode=128)
+        shas = {"landed": world.hub.merge_oid, "tested": world.hub.ref(HEAD_REF)}
+        for name, sha in shas.items():
+            assert sha is not None
+            if side in (name, "both"):
+                unreadable[name] = sha
+                world.runner.overlay(["git", "rev-parse", f"{sha}^{{tree}}"], returncode=128)
 
     world.hub.on_merge = break_tree
     assert land(world) == INDETERMINATE
     captured = capsys.readouterr()
-    assert unreadable and f"cannot read tree for {unreadable[0]}" in captured.err
+    named = unreadable["tested" if side == "tested" else "landed"]
+    assert f"cannot read tree for {named}" in captured.err
+    if side == "both":
+        assert f"cannot read tree for {unreadable['tested']}" not in captured.err
     assert "LANDED TREE DIFFERS" not in captured.err
     assert ledger_lines(captured.out) == []
 
