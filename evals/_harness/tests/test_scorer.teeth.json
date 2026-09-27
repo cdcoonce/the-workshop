@@ -1,0 +1,128 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scorer.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scorer.py"
+  ],
+  "mutants": [
+    {
+      "label": "harness breakage classification disabled (transcript_status ignored)",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if transcript_status != \"complete\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "unparsed-envelope miss rule disabled",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if not envelope_parsed:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "hit/miss mapping always reports a miss",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "        item_hits={item_id: (\"hit\" if hit else \"miss\") for item_id, hit in item_hits.items()},",
+      "replace": "        item_hits={item_id: \"miss\" for item_id, hit in item_hits.items()},"
+    },
+    {
+      "label": "should_retry ignores that every item is already met",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if all(item_states.values()):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "should_retry drops the 3-counted-attempt cap",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if counted_attempts >= _COUNTED_ATTEMPT_CAP:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "should_retry drops the 5-execution-total cap",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if counted_attempts + reserve_used >= _EXECUTION_CAP:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[does-nothing] should_retry always refuses to retry",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if all(item_states.values()):\n        return False\n    if counted_attempts >= _COUNTED_ATTEMPT_CAP:\n        return False\n    if counted_attempts + reserve_used >= _EXECUTION_CAP:\n        return False\n    return True",
+      "replace": "    return False"
+    },
+    {
+      "label": "compute_verdict red threshold loosened (needs more than 3 misses)",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if outcomes.count(\"miss\") >= _COUNTED_ATTEMPT_CAP:",
+      "replace": "    if outcomes.count(\"miss\") > _COUNTED_ATTEMPT_CAP:"
+    },
+    {
+      "label": "compute_verdict precedence: void checked before red",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "find": "    if \"red\" in gated_states:\n        return \"red\"\n    if \"void\" in gated_states:\n        return \"void\"\n    return \"green\"",
+      "replace": "    if \"void\" in gated_states:\n        return \"void\"\n    if \"red\" in gated_states:\n        return \"red\"\n    return \"green\""
+    },
+    {
+      "label": "classify_attempt checks envelope_parsed before transcript_status (breakage no longer wins)",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "why": "Killed by test_classify_attempt_harness_breakage_is_indeterminate_for_every_item[False-*]: with envelope_parsed=False and a non-complete transcript_status, the swapped order scores a counted miss instead of an indeterminate.",
+      "find": "    if transcript_status != \"complete\":\n        return Attempt(\n            classification=\"indeterminate\",\n            item_hits={item_id: \"indeterminate\" for item_id in item_hits},\n            parse_error=False,\n        )\n    if not envelope_parsed:\n        return Attempt(\n            classification=\"counted\",\n            item_hits={item_id: \"miss\" for item_id in item_hits},\n            parse_error=True,\n        )",
+      "replace": "    if not envelope_parsed:\n        return Attempt(\n            classification=\"counted\",\n            item_hits={item_id: \"miss\" for item_id in item_hits},\n            parse_error=True,\n        )\n    if transcript_status != \"complete\":\n        return Attempt(\n            classification=\"indeterminate\",\n            item_hits={item_id: \"indeterminate\" for item_id in item_hits},\n            parse_error=False,\n        )"
+    },
+    {
+      "label": "_item_verdict red threshold lowered to 2 misses",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "why": "Killed by test_compute_verdict_void_not_red_with_only_two_of_three_counted_misses: 2 misses padded with indeterminates must stay void, not red.",
+      "find": "    if outcomes.count(\"miss\") >= _COUNTED_ATTEMPT_CAP:",
+      "replace": "    if outcomes.count(\"miss\") >= 2:"
+    },
+    {
+      "label": "_item_verdict checks the last outcome is a hit instead of any outcome",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "why": "Killed by test_compute_verdict_green_when_a_hit_precedes_a_later_miss: [\"hit\", \"miss\"] must still verdict green.",
+      "find": "    if \"hit\" in outcomes:",
+      "replace": "    if outcomes[-1] == \"hit\":"
+    },
+    {
+      "label": "[control] reword the _item_verdict docstring",
+      "file": "../scorer.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring wording inside a private helper; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "    A ``\"miss\"`` entry corresponds to one counted attempt that missed this",
+      "replace": "    A ``\"miss\"`` entry represents one counted attempt that missed this"
+    }
+  ]
+}
