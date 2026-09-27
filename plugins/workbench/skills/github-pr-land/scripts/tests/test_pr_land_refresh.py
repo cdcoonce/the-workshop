@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+import pr_land
 from conftest import CompositeRunner, FakeGh, json_result
 from pr_land import PrInfo, RefreshResult, read_pr, refresh_and_gate
 
@@ -124,6 +125,15 @@ def test_behind_head_merges_and_pushes(world: World) -> None:
     assert world.origin_ref("feat/x") == result.tested_sha
 
 
+def test_gate_runs_in_the_merged_scratch_tree(world: World) -> None:
+    """Guards against running the gate outside the merged scratch worktree, testing some other tree."""
+    head, base = behind(world)
+    marker = world.tmp / "gate-head"
+    result = run(world, head, base, gate=f"test -f b.txt && test -f a.txt && git rev-parse HEAD > {marker}")
+    assert (result.exit_code, result.pushed) == (0, True)
+    assert marker.read_text(encoding="utf-8").strip() == result.tested_sha
+
+
 def test_fetch_precedes_ancestry_check(world: World) -> None:
     """Guards against checking ancestry before fetching, which exits 128 on objects the clone lacks."""
     head, base = behind(world)
@@ -142,6 +152,18 @@ def test_head_containing_base_skips_refresh_and_gate(world: World) -> None:
     marker = world.tmp / "gate-ran"
     result = run(world, head, base, gate=f"touch {marker}")
     assert result == RefreshResult(head, False, "not run (head contained base)", 0, result.message)
+    assert not marker.exists()
+    assert world.origin_ref("feat/x") == head
+
+
+def test_ancestry_check_error_is_indeterminate(world: World) -> None:
+    """Guards against an is-ancestor exit other than 0/1 (128: bad object) being read as contained or behind."""
+    head, base = behind(world)
+    world.runner.overlay(["git", "merge-base", "--is-ancestor"], returncode=128)
+    marker = world.tmp / "gate-ran"
+    result = run(world, head, base, gate=f"touch {marker}")
+    assert (result.exit_code, result.pushed, result.gate_note) == (2, False, "not run")
+    assert "exited 128" in result.message
     assert not marker.exists()
     assert world.origin_ref("feat/x") == head
 
@@ -200,11 +222,77 @@ def test_conflict_names_files_and_pushes_nothing(world: World) -> None:
     assert world.origin_ref("feat/x") == head
 
 
+def test_conflict_aborts_the_merge_in_the_scratch_tree(world: World) -> None:
+    """Guards against leaving a half-merged scratch tree behind by skipping `git merge --abort`."""
+    world.commit("main", "f.txt", LINES, "chore: f")
+    world.branch("feat/x")
+    head = world.commit("feat/x", "f.txt", line_edit(5, "five"), "feat: five")
+    base = world.commit("main", "f.txt", line_edit(5, "FIVE"), "chore: FIVE")
+    result = run(world, head, base)
+    assert result.exit_code == 2
+    [scratch] = [cwd for argv, cwd in world.runner.calls if argv[:3] == ["git", "merge", "--no-edit"]]
+    assert scratch != str(world.clone)
+    assert (["git", "merge", "--abort"], scratch) in world.runner.calls
+
+
 def test_nearby_base_edit_changes_patch_id_and_refuses(world: World) -> None:
     """Guards against skipping the patch-id comparison when the merge is clean but the delta moved."""
     head, base = nearby(world)
     result = run(world, head, base)
     assert (result.exit_code, result.pushed) == (2, False)
+    assert "patch-id" in result.message
+    assert world.origin_ref("feat/x") == head
+
+
+def _config_color(world: World) -> None:
+    git(world.clone, "config", "color.diff", "always")
+
+
+def _config_external(world: World) -> None:
+    git(world.clone, "config", "diff.external", "true")
+
+
+DIFF_CONFIGS = pytest.mark.parametrize("configure", [_config_color, _config_external], ids=["color", "external"])
+
+
+@DIFF_CONFIGS
+def test_diff_config_cannot_blind_the_patch_id_check(world: World, configure: object) -> None:
+    """Guards against color.diff/diff.external emptying both patch-ids, which compare equal and pass."""
+    head, base = nearby(world)
+    configure(world)
+    result = run(world, head, base)
+    assert (result.exit_code, result.pushed) == (2, False)
+    assert "patch-id" in result.message
+    assert world.origin_ref("feat/x") == head
+
+
+@DIFF_CONFIGS
+def test_diff_config_still_lands_a_clean_refresh(world: World, configure: object) -> None:
+    """Guards against diffs fed to patch-id honouring color.diff or diff.external instead of passing
+    --no-color --no-ext-diff, which empties the ids so a clean refresh can never land."""
+    head, base = behind(world)
+    configure(world)
+    result = run(world, head, base)
+    assert (result.exit_code, result.pushed, result.message) == (0, True, "")
+    assert world.origin_ref("feat/x") == result.tested_sha
+
+
+@pytest.mark.parametrize("empty", ["before", "after", "both"])
+def test_empty_patch_id_refuses(world: World, monkeypatch: pytest.MonkeyPatch, empty: str) -> None:
+    """Guards against an empty patch-id failing open: two empty ids compare equal and the delta check passes."""
+    head, base = behind(world)
+    real = pr_land._patch_id
+    seen: list[str] = []
+
+    def patch_id(diff: str) -> str:
+        side = "before" if not seen else "after"
+        seen.append(side)
+        return "" if empty in (side, "both") else real(diff)
+
+    monkeypatch.setattr(pr_land, "_patch_id", patch_id)
+    result = run(world, head, base, accept_delta_change=True)
+    assert (result.exit_code, result.pushed) == (2, False)
+    assert "patch-id produced no id" in result.message
     assert world.origin_ref("feat/x") == head
 
 
@@ -222,7 +310,7 @@ def test_empty_delta_refuses_even_when_accepted(world: World, accept: bool) -> N
     head, base = empty_delta(world)
     result = run(world, head, base, accept_delta_change=accept)
     assert (result.exit_code, result.pushed) == (2, False)
-    assert result.message
+    assert "base already contains it" in result.message
     assert world.origin_ref("feat/x") == head
 
 

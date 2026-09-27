@@ -39,11 +39,11 @@
       "replace": "    fetched = Result(0, \"\", \"\")\n"
     },
     {
-      "label": "a head containing the base is refreshed and gated anyway (test_head_containing_base_skips_refresh_and_gate)",
+      "label": "a behind head (is-ancestor exit 1) takes the contained path, skipping refresh and gate (test_behind_head_merges_and_pushes)",
       "file": "../pr_land.py",
       "oracle": "real",
       "find": "    if contained.returncode == 0:\n",
-      "replace": "    if False:\n"
+      "replace": "    if contained.returncode in (0, 1):\n"
     },
     {
       "label": "read_pr takes the frozen pulls base.sha (test_read_pr_takes_live_base_tip_not_frozen_base_sha)",
@@ -163,6 +163,69 @@
       "oracle": "real",
       "find": "[\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)",
       "replace": "[\"git\", \"merge\", \"--no-edit\", base_sha])"
+    },
+    {
+      "label": "is-ancestor arguments swapped, so a head containing the base is refreshed and gated (test_head_containing_base_skips_refresh_and_gate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"merge-base\", \"--is-ancestor\", base_sha, head_sha]",
+      "replace": "[\"git\", \"merge-base\", \"--is-ancestor\", head_sha, base_sha]"
+    },
+    {
+      "label": "an is-ancestor exit 128 goes down the refresh path (test_ancestry_check_error_is_indeterminate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if contained.returncode != 1:\n",
+      "replace": "    if contained.returncode not in (1, 128):\n"
+    },
+    {
+      "label": "an is-ancestor exit 128 is read as contained (test_ancestry_check_error_is_indeterminate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if contained.returncode == 0:\n",
+      "replace": "    if contained.returncode != 1:\n"
+    },
+    {
+      "label": "the before diff honours color.diff (test_diff_config_still_lands_a_clean_refresh[color])",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"diff\", \"--no-color\", \"--no-ext-diff\", fork_point.stdout.strip(), head_sha]",
+      "replace": "[\"git\", \"diff\", \"--no-ext-diff\", fork_point.stdout.strip(), head_sha]"
+    },
+    {
+      "label": "the after diff honours color.diff (test_diff_config_still_lands_a_clean_refresh[color])",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"diff\", \"--no-color\", \"--no-ext-diff\", base_sha, \"HEAD\"]",
+      "replace": "[\"git\", \"diff\", \"--no-ext-diff\", base_sha, \"HEAD\"]"
+    },
+    {
+      "label": "the diffs honour diff.external (test_diff_config_still_lands_a_clean_refresh[external])",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"diff\", \"--no-color\", \"--no-ext-diff\", fork_point.stdout.strip(), head_sha]",
+      "replace": "[\"git\", \"diff\", \"--no-color\", fork_point.stdout.strip(), head_sha]"
+    },
+    {
+      "label": "an empty patch-id is not refused, so two empty ids compare equal (test_empty_patch_id_refuses)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if not before_id or not after_id:\n            return _refused(\n                info, \"git patch-id produced no id for the PR's delta; cannot compare it across the refresh\"\n            )\n",
+      "replace": ""
+    },
+    {
+      "label": "the gate runs outside the merged scratch tree (test_gate_runs_in_the_merged_scratch_tree)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            [\"bash\", \"-o\", \"pipefail\", \"-c\", gate],\n            cwd=scratch,\n",
+      "replace": "            [\"bash\", \"-o\", \"pipefail\", \"-c\", gate],\n"
+    },
+    {
+      "label": "a conflicted merge is not aborted (test_conflict_aborts_the_merge_in_the_scratch_tree)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            runner.run([\"git\", \"merge\", \"--abort\"], cwd=scratch)\n",
+      "replace": ""
     }
   ]
 }

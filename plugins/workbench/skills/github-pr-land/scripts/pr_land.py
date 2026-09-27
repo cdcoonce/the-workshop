@@ -551,7 +551,7 @@ def refresh_and_gate(
     fork_point = runner.run(["git", "merge-base", base_sha, head_sha])
     if fork_point.returncode != 0:
         return _refused(info, f"git merge-base failed: {fork_point.stderr.strip()}")
-    before = runner.run(["git", "diff", fork_point.stdout.strip(), head_sha])
+    before = runner.run(["git", "diff", "--no-color", "--no-ext-diff", fork_point.stdout.strip(), head_sha])
 
     scratch = tempfile.mkdtemp(prefix="pr-land-")
     try:
@@ -565,12 +565,16 @@ def refresh_and_gate(
             files = conflicted.stdout.strip() or "(none listed)"
             return _refused(info, f"merging {info.base_ref} conflicts; resolve by hand:\n{files}")
 
-        after = runner.run(["git", "diff", base_sha, "HEAD"], cwd=scratch)
+        after = runner.run(["git", "diff", "--no-color", "--no-ext-diff", base_sha, "HEAD"], cwd=scratch)
         if before.returncode != 0 or after.returncode != 0:
             return _refused(info, "git diff failed while computing the PR's delta")
         if not before.stdout.strip() or not after.stdout.strip():
             return _refused(info, "the PR's delta is empty on one side of the refresh; the base already contains it")
         before_id, after_id = _patch_id(before.stdout), _patch_id(after.stdout)
+        if not before_id or not after_id:
+            return _refused(
+                info, "git patch-id produced no id for the PR's delta; cannot compare it across the refresh"
+            )
         if before_id != after_id and not accept_delta_change:
             return _refused(
                 info, "the PR's patch-id changed across the refresh; review the merge, then pass accept_delta_change"
