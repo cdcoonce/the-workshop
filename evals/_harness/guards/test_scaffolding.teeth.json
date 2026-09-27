@@ -1,0 +1,73 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scaffolding.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scaffolding.py"
+  ],
+  "mutants": [
+    {
+      "label": "_gaps_problems drops the header check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_a_missing_or_altered_header: a gaps.md whose header was altered or dropped must be flagged.",
+      "find": "    if lines[:3] != _GAPS_HEADER_LINES:\n        return [\"missing or altered header\"]",
+      "replace": "    pass"
+    },
+    {
+      "label": "_gaps_problems drops the per-entry format check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_an_entry_missing_a_reason: a bare line with no '- behavior: reason' shape must be flagged, or the check is vacuous.",
+      "find": "        if not _GAPS_ENTRY_PATTERN.match(line):\n            problems.append(f\"malformed entry: {line!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "the committed commit/gaps.md loses its pinned header",
+      "file": "../../commit/gaps.md",
+      "oracle": "real",
+      "why": "Killed by test_gaps_md_exists_with_header_and_wellformed_entries[commit]: proves the real committed file, not just the synthetic-content helper test, is actually checked.",
+      "find": "# Gaps",
+      "replace": "# Gapz"
+    },
+    {
+      "label": "the committed commit/deps direct tier points at the wrong skill",
+      "file": "../../commit/deps",
+      "oracle": "real",
+      "why": "Killed by test_deps_file_declares_the_expected_direct_tier[commit]: proves the real committed deps file, not just a synthetic one, is actually checked.",
+      "find": "\"plugins/workbench/skills/commit\"",
+      "replace": "\"plugins/workbench/skills/wrong-skill\""
+    },
+    {
+      "label": "[control] reword the scaffolding test module docstring",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Covers the four per-skill files for every rostered skill",
+      "replace": "This module covers the four per-skill files for every rostered skill"
+    }
+  ]
+}

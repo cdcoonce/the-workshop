@@ -1,0 +1,84 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_uncalibrated.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_uncalibrated.py"
+  ],
+  "mutants": [
+    {
+      "label": "check drops the directory-exists conjunct",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "why": "Killed by test_skips_a_rostered_skill_with_no_directory_yet: a rostered skill with no eval directory yet must not be treated as an existing-but-inactive skill.",
+      "find": "        if not skill_dir.is_dir():\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check inverts the is_active condition, warning on active skills instead",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "find": "        if not is_active(skill_dir):",
+      "replace": "        if is_active(skill_dir):"
+    },
+    {
+      "label": "[does-nothing] check never appends a warn result",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "find": "            results.append(\n                Result(\n                    level=\"warn\",\n                    guard=_GUARD_NAME,\n                    message=f\"{skill}: uncalibrated (no gated checks or retired entries yet)\",\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "check emits fail instead of warn",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "find": "                    level=\"warn\",",
+      "replace": "                    level=\"fail\","
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"uncalibrated\"",
+      "replace": "_GUARD_NAME = \"uncalibrated_guard\""
+    },
+    {
+      "label": "check drops the skill name from the warn message",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "find": "                    message=f\"{skill}: uncalibrated (no gated checks or retired entries yet)\",",
+      "replace": "                    message=\"uncalibrated (no gated checks or retired entries yet)\","
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./uncalibrated.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never emits ``fail`` — an inactive skill is an",
+      "replace": "This guard never emits fail — an inactive skill is an"
+    }
+  ]
+}

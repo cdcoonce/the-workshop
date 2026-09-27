@@ -1,0 +1,99 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_deps_completeness.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_deps_completeness.py"
+  ],
+  "mutants": [
+    {
+      "label": "_markdown_link_targets stops excluding http(s) links",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "        if target.startswith(\"http://\") or target.startswith(\"https://\"):\n            continue",
+      "replace": "        if False:\n            continue"
+    },
+    {
+      "label": "_markdown_link_targets stops stripping a #fragment",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "        target = target.split(\"#\", 1)[0]",
+      "replace": "        pass"
+    },
+    {
+      "label": "_markdown_link_targets keeps a trailing Markdown title in the target",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "        target = raw_target.split(\" \", 1)[0].strip()",
+      "replace": "        target = raw_target.strip()"
+    },
+    {
+      "label": "check resolves a link without joining the skill's own directory",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "            resolved = posixpath.normpath(posixpath.join(skill_dir_rel, link))",
+      "replace": "            resolved = posixpath.normpath(link)"
+    },
+    {
+      "label": "check drops the tracked-file conjunct, flagging every untracked link too",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "why": "Killed by test_no_fail_for_a_link_to_an_untracked_file: the positive conjunct (a link must resolve to a tracked file before it can be a violation) must hold, or a link to a file that was never committed spuriously fails the guard.",
+      "find": "            if not tracked:\n                # Not a tracked file (e.g. an external or generated path) —\n                # nothing for the direct tier to cover.\n                continue",
+      "replace": "            pass"
+    },
+    {
+      "label": "check builds the covered set from the injection tier instead of direct",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "        covered = set(expand_paths(deps[\"direct\"], ref=\"HEAD\", repo=ctx.repo_root))",
+      "replace": "        covered = set(expand_paths(deps.get(\"injection\", []), ref=\"HEAD\", repo=ctx.repo_root))"
+    },
+    {
+      "label": "check flags every tracked link as missing regardless of coverage",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "find": "            if resolved not in covered:",
+      "replace": "            if True:"
+    },
+    {
+      "label": "[does-nothing] check silently skips every rostered skill",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_skill_md_link_is_not_covered_by_the_direct_list: a real, checkable SKILL.md/deps pair must still be evaluated, not skipped as though neither file existed.",
+      "find": "        if not skill_md_path.exists() or not deps_path.exists():\n            continue",
+      "replace": "        continue"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./deps_completeness.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never reimplements ``deps`` TOML parsing or tier expansion",
+      "replace": "This module never reimplements deps TOML parsing or tier expansion"
+    }
+  ]
+}

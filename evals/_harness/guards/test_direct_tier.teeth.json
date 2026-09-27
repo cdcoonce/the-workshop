@@ -1,0 +1,102 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_direct_tier.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_direct_tier.py"
+  ],
+  "mutants": [
+    {
+      "label": "check drops the deps-file-exists conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_skips_an_active_skill_with_no_deps_file: an active rostered skill with no deps file must be skipped, not crash reading a missing deps file.",
+      "find": "        if not deps_path.exists():\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check evaluates an inactive skill too",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_evaluate_an_inactive_skills_direct_tier_change: an inactive rostered skill must never be evaluated by this guard, regardless of what its direct tier's diff contains.",
+      "find": "        if not is_active(eval_dir):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "[does-nothing] check drops the tier-touched conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_no_fail_when_the_diff_never_touches_the_direct_tier and test_no_fail_on_an_empty_diff: the positive conjunct (the diff must actually touch the direct tier) must hold, or an unrelated change — including no change at all — spuriously fails an active skill.",
+      "find": "        if not (tier_files & changed):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check drops the base-ref half of the tier-files union, missing a deletion",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        tier_files = set(\n            expand_paths(direct_paths, ref=\"HEAD\", repo=ctx.repo_root)\n        ) | set(expand_paths(direct_paths, ref=ctx.base, repo=ctx.repo_root))",
+      "replace": "        tier_files = set(\n            expand_paths(direct_paths, ref=\"HEAD\", repo=ctx.repo_root)\n        )"
+    },
+    {
+      "label": "_added_paths drops the 'A' status filter, counting modified files as added",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_modified_preexisting_run_file_does_not_satisfy_the_requirement: only a run file the diff genuinely adds can satisfy the requirement, never one that merely changed.",
+      "find": "        if status.startswith(\"A\"):\n            added.add(path)",
+      "replace": "        added.add(path)"
+    },
+    {
+      "label": "_has_matching_green_run drops the runs/ directory prefix filter",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        if not added_path.startswith(runs_prefix):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "_has_matching_green_run drops the verdict == green conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        if run.get(\"verdict\") != \"green\":\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "_has_matching_green_run drops the direct-tier-hash comparison",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        if run.get(\"fingerprint\", {}).get(\"direct_tier_hash\") == expected_hash:\n            return True",
+      "replace": "        return True",
+      "why": "Killed by test_fails_when_a_green_run_files_hash_does_not_match: a green run file added by the diff must still carry the exact current direct-tier hash, not merely exist."
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "never satisfies this — only a matching green one does.",
+      "replace": "never counts — only a matching green run does."
+    }
+  ]
+}

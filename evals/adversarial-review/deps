@@ -1,0 +1,14 @@
+direct = [
+  "plugins/workbench/skills/adversarial-review",
+]
+injection = [
+  "plugins/workbench/hooks/hooks.json",
+  "plugins/workbench/hooks/run-hook.sh",
+  "plugins/workbench/hooks/run-vault-hook.sh",
+  "plugins/workbench/hooks/scripts/inject-skill-router.py",
+  "plugins/workbench/hooks/scripts/vault-session-start.py",
+  "plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+  "plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+  "plugins/workbench/hooks/scripts/vault-skill-alias.py",
+  "plugins/workbench/skills/using-workflow/SKILL.md",
+]
