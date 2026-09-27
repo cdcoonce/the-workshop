@@ -1,0 +1,163 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_matchers.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_matchers.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] review_match never credits any finding",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    return location_hit and regex_hit",
+      "replace": "    return False"
+    },
+    {
+      "label": "conjunctive matcher weakened to disjunctive (location OR regex)",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    return location_hit and regex_hit",
+      "replace": "    return location_hit or regex_hit"
+    },
+    {
+      "label": "file-suffix-only location variant drops the suffix requirement",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if line_window is None:\n        location_hit = file_str.endswith(file_suffix)",
+      "replace": "    if line_window is None:\n        location_hit = True"
+    },
+    {
+      "label": "extract_findings drops the bare-brace-span fallback",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    brace_start = final_text.find(\"{\")\n    if brace_start != -1:\n        candidates.append(final_text[brace_start : final_text.rfind(\"}\") + 1])",
+      "replace": "    brace_start = final_text.find(\"{\")\n    if False:\n        candidates.append(final_text[brace_start : final_text.rfind(\"}\") + 1])"
+    },
+    {
+      "label": "extract_findings reports ok=True on an unparseable reply",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    return [], False",
+      "replace": "    return [], True"
+    },
+    {
+      "label": "count_unmatched counts matched findings instead of unmatched ones",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "        if not any(",
+      "replace": "        if any(",
+      "why": "Killed by test_count_unmatched_counts_findings_crediting_no_item: 2 findings match the item and 1 does not, so the inverted count (2) diverges from the correct count (1)."
+    },
+    {
+      "label": "precedes compares ordinals with the wrong direction",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    return min(first_ordinals) < min(then_ordinals)",
+      "replace": "    return min(first_ordinals) > min(then_ordinals)"
+    },
+    {
+      "label": "precedes drops its either-missing guard",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if not first_ordinals or not then_ordinals:\n        return False",
+      "replace": "    if not first_ordinals or not then_ordinals:\n        pass"
+    },
+    {
+      "label": "test-file path exclusion disabled, so a test-file edit counts as a source edit",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "def _is_test_path(file_path: str) -> bool:\n    parts = file_path.split(\"/\")\n    name = parts[-1] if parts else file_path\n    if name == \"conftest.py\":\n        return True\n    if name.startswith(\"test_\") and name.endswith(\".py\"):\n        return True\n    if name.endswith(\"_test.py\"):\n        return True\n    return \"tests\" in parts",
+      "replace": "def _is_test_path(file_path: str) -> bool:\n    return False"
+    },
+    {
+      "label": "test-failure detection no longer requires the Bash tool",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if event.name != \"Bash\":\n        return False",
+      "replace": "    if event.name != \"Bash\":\n        pass"
+    },
+    {
+      "label": "the 'error during collection' substring marker is dropped",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if \"error during collection\" in text:\n        return True",
+      "replace": "    if False:\n        return True"
+    },
+    {
+      "label": "the ERROR-prefix failure marker is dropped, only FAILED lines count",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    return any(line.startswith(\"FAILED \") or line.startswith(\"ERROR \") for line in text.splitlines())",
+      "replace": "    return any(line.startswith(\"FAILED \") for line in text.splitlines())"
+    },
+    {
+      "label": "skill_triggered_first's Skill/ToolSearch exemption is narrowed to only the rostered skill's own call",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_skill_triggered_first_exemption_not_narrowed_to_rostered_skill_only: an earlier, unrelated Skill call (using-workflow) must not count against the rostered skill's own trigger.",
+      "find": "    other_ordinals = [\n        event.ordinal for event in transcript.events if event.name not in _TRIGGERING_EXEMPT_TOOLS\n    ]",
+      "replace": "    other_ordinals = [\n        event.ordinal\n        for event in transcript.events\n        if event.name not in _TRIGGERING_EXEMPT_TOOLS\n        or (event.name == \"Skill\" and event.input.get(\"skill\") != skill)\n    ]"
+    },
+    {
+      "label": "skill_triggered_first drops the 'preceded by a non-exempt call' check",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if other_ordinals and trigger_ordinal >= min(other_ordinals):\n        return False",
+      "replace": "    if False:\n        return False"
+    },
+    {
+      "label": "skill_triggered_first drops the 'no such Skill call occurs' guard",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if not skill_ordinals:\n        return False",
+      "replace": "    if not skill_ordinals:\n        pass"
+    },
+    {
+      "label": "skill_triggered_first drops the final-assistant-text ordering check",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "    if transcript.final_text_ordinal is not None and trigger_ordinal >= transcript.final_text_ordinal:\n        return False",
+      "replace": "    if False:\n        return False"
+    },
+    {
+      "label": "skill_triggered_first's final-text check loosens strict precedence to allow a tie",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_skill_triggered_first_unmet_when_trigger_ordinal_equals_final_text_ordinal: the Skill call must be strictly earlier than the final text block, not merely no later.",
+      "find": "    if transcript.final_text_ordinal is not None and trigger_ordinal >= transcript.final_text_ordinal:",
+      "replace": "    if transcript.final_text_ordinal is not None and trigger_ordinal > transcript.final_text_ordinal:"
+    },
+    {
+      "label": "[control] reword the module docstring's contract summary",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring prose; nothing parses or asserts on it, so no test can observe the change.",
+      "find": "    Trend count of findings that credit no item; never gates a verdict.",
+      "replace": "    Trend count of findings that credit no item; informational only, never a gate."
+    }
+  ]
+}
