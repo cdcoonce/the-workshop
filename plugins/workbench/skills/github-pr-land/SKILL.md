@@ -83,11 +83,11 @@ pushes, waits for `pulls/<pr>` to show that head, watches it, re-reads the base
 from `git/ref/heads/<base>`, and merges with `--match-head-commit <tested>`
 (never `--admin` or `--auto`). A base that moved starts another round.
 
-It stops without merging — exit 2 unless noted — on: a fork or `dev`→`main`
-PR, a conflict (resolve by hand), a changed patch-id, a red gate (1) or one
-that did not run or lacks its evidence, a head never registered, a red (1) or
-unfinished watch, `base moved <n> times`, or a failed merge (gh's stderr
-echoed; a PR that reads `MERGED` anyway is checked as landed, never retried).
+It stops without merging — exit 2 unless noted — on: a fork or `dev`→`main` PR,
+a conflict (resolve by hand), a changed patch-id, a red gate (1) or one that did
+not run or lacks its evidence, a head never registered, a red (1) or unfinished
+watch, `base moved <n> times`, or a failed merge: gh's stderr echoed; a moved-base
+`OPEN` view re-reads 3 times before a round, `MERGED` lands, never retried.
 After the merge it exits 2 if the PR is not `MERGED`, a tree is unreadable, or
 on `LANDED TREE DIFFERS FROM TESTED TREE` (both ids printed) — check by hand.
 
