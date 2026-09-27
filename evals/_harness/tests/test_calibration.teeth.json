@@ -1,0 +1,113 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration.py"
+  ],
+  "mutants": [
+    {
+      "label": "[gate-candidate,triggering] skill-arm clause never gates (5-of-6 threshold dropped)",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    skill_arm_passes = skill_n == 6 and skill_hits >= 5",
+      "replace": "    skill_arm_passes = True"
+    },
+    {
+      "label": "[gate-candidate] no-skill-arm rate clause never gates (at-most-1-of-3 threshold dropped)",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            no_skill_passes = no_skill_arm_result[\"n\"] == 3 and no_skill_arm_result[\"hits\"] <= 1",
+      "replace": "            no_skill_passes = True"
+    },
+    {
+      "label": "[gate-candidate,triggering] mechanical-vs-audited-rate clause never gates",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    rate_matches = skill_hits == audited_hits",
+      "replace": "    rate_matches = True"
+    },
+    {
+      "label": "cross-match clause never fails even on a sibling-credited finding",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if audited_item is not None and audited_item != item_id:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "baseline-void cap never trips on a third contaminated no-skill attempt",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            if replacements >= 2:",
+      "replace": "            if replacements >= 999:"
+    },
+    {
+      "label": "[gate-candidate] a missing no-skill arm is treated as passing instead of not-admitted",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        no_skill_arm_result = None\n        no_skill_passes = False",
+      "replace": "        no_skill_arm_result = None\n        no_skill_passes = True"
+    },
+    {
+      "label": "compute_no_skill_arm counts a contaminated (indeterminate) attempt instead of replacing it",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if attempt[\"contaminated\"]:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[does-nothing][gate-candidate] admission returns not-admitted for every item",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    admitted = skill_arm_passes and no_skill_passes and rate_matches and cross_match_result == \"pass\"",
+      "replace": "    admitted = False"
+    },
+    {
+      "label": "[does-nothing][triggering] admission returns not-admitted for every item",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        admitted = skill_arm_passes and rate_matches and cross_match_result == \"pass\"",
+      "replace": "        admitted = False"
+    },
+    {
+      "label": "[triggering] no_skill_arm_result is no longer stored as null",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            \"no_skill_arm_result\": None,",
+      "replace": "            \"no_skill_arm_result\": \"baseline-void\","
+    },
+    {
+      "label": "a trend item is admitted instead of never-gated",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            \"gate_or_trend_status\": \"trend\",",
+      "replace": "            \"gate_or_trend_status\": \"gate\","
+    }
+  ]
+}
