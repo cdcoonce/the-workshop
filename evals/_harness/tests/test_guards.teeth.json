@@ -64,6 +64,38 @@
       "replace": "        results.extend(check(None))"
     },
     {
+      "label": "main always returns 0 regardless of report()",
+      "file": "../guards/__main__.py",
+      "oracle": "real",
+      "why": "Killed by test_main_wires_base_and_repo_root_into_the_guard_context and test_module_execution_exits_1_on_a_failing_guard_and_0_when_the_guard_dir_is_empty: a failing planted guard must make main() (and the subprocess) exit 1.",
+      "find": "    ctx = GuardContext(base=args.base, repo_root=Path.cwd())\n    return report(run_checks(ctx))",
+      "replace": "    ctx = GuardContext(base=args.base, repo_root=Path.cwd())\n    report(run_checks(ctx))\n    return 0"
+    },
+    {
+      "label": "module execution drops sys.exit around main()",
+      "file": "../guards/__main__.py",
+      "oracle": "real",
+      "why": "Killed by test_module_execution_exits_1_on_a_failing_guard_and_0_when_the_guard_dir_is_empty: only the subprocess run, executing the real `if __name__ == \"__main__\":` block, can observe this — an in-process main() call never runs it.",
+      "find": "    sys.exit(main())",
+      "replace": "    main()"
+    },
+    {
+      "label": "main ignores args.base and hardcodes the ref",
+      "file": "../guards/__main__.py",
+      "oracle": "real",
+      "why": "Killed by test_main_wires_base_and_repo_root_into_the_guard_context: the planted guard records ctx.base and asserts it equals the passed --base value ('SENTINEL'), not a hardcoded ref.",
+      "find": "    ctx = GuardContext(base=args.base, repo_root=Path.cwd())",
+      "replace": "    ctx = GuardContext(base=\"origin/main\", repo_root=Path.cwd())"
+    },
+    {
+      "label": "main passes a bogus repo_root instead of Path.cwd()",
+      "file": "../guards/__main__.py",
+      "oracle": "real",
+      "why": "Killed by test_main_wires_base_and_repo_root_into_the_guard_context: the planted guard records ctx.repo_root and asserts it equals Path.cwd(), not a bogus path.",
+      "find": "    ctx = GuardContext(base=args.base, repo_root=Path.cwd())",
+      "replace": "    ctx = GuardContext(base=args.base, repo_root=Path(\"/nonexistent/bogus\"))"
+    },
+    {
       "label": "[does-nothing] report always returns 0 and prints nothing",
       "file": "../guards/__main__.py",
       "oracle": "real",

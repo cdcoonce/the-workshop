@@ -23,10 +23,18 @@ def test_classify_attempt_scores_hits_and_misses_on_a_complete_parsed_transcript
 @pytest.mark.parametrize(
     "transcript_status", ["dispatch_error", "missing", "truncated", "api_error"]
 )
-def test_classify_attempt_harness_breakage_is_indeterminate_for_every_item(transcript_status):
+@pytest.mark.parametrize("envelope_parsed", [True, False])
+def test_classify_attempt_harness_breakage_is_indeterminate_for_every_item(
+    transcript_status, envelope_parsed
+):
+    # envelope_parsed=False alongside harness breakage must still classify
+    # indeterminate for every item — harness breakage wins over the parse-
+    # error rule. With envelope_parsed=True only (as this test used to be
+    # parametrized), swapping the two `if` blocks in classify_attempt cannot
+    # be observed: both orderings agree whenever envelope_parsed is True.
     attempt = classify_attempt(
         transcript_status=transcript_status,
-        envelope_parsed=True,
+        envelope_parsed=envelope_parsed,
         item_hits={"item-a": True, "item-b": False},
     )
     assert attempt == Attempt(
@@ -137,3 +145,29 @@ def test_compute_verdict_red_takes_precedence_over_void():
         }
     )
     assert verdict == "red"
+
+
+def test_compute_verdict_void_not_red_with_only_two_of_three_counted_misses():
+    # Only 2 misses (below the 3-counted-attempt cap), padded out with
+    # indeterminates from the exhausted reserve — this must stay "void", not
+    # "red". A mutant that lowers the red threshold from >= 3 to >= 2 misses
+    # would misclassify this as "red".
+    verdict = compute_verdict(
+        {
+            "item-a": (True, ["miss", "miss", "indeterminate", "indeterminate", "indeterminate"]),
+        }
+    )
+    assert verdict == "void"
+
+
+def test_compute_verdict_green_when_a_hit_precedes_a_later_miss():
+    # A hit anywhere in the outcomes list resolves the item, regardless of
+    # position — this is a union/any check, not "the last outcome is a hit".
+    # A mutant checking outcomes[-1] == "hit" instead of "hit" in outcomes
+    # would misclassify this as not-hit (and then, with only 1 "miss", void).
+    verdict = compute_verdict(
+        {
+            "item-a": (True, ["hit", "miss"]),
+        }
+    )
+    assert verdict == "green"
