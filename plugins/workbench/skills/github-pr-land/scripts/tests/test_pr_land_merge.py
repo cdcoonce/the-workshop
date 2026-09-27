@@ -69,6 +69,8 @@ class Hub:
         self.fail_after_landing: str | None = None
         self.on_merge: Callable[[], None] | None = None
         self.view_result: Result | None = None
+        self.view_sequence: list[str | Result] | None = None
+        self._view_calls = 0
         self.base_read_failures: set[int] = set()
         self.serve_runs = True
         self.statuses: list[dict] = []
@@ -170,6 +172,15 @@ class Hub:
         return Result(0, "", "")
 
     def _view(self) -> Result:
+        if self.view_sequence is not None:
+            index = min(self._view_calls, len(self.view_sequence) - 1)
+            self._view_calls += 1
+            entry = self.view_sequence[index]
+            if isinstance(entry, Result):
+                return entry
+            if entry == "MERGED":
+                return json_result({"state": "MERGED", "mergeCommit": {"oid": self.merge_oid}})
+            return json_result({"state": entry, "mergeCommit": None})
         if self.view_result is not None:
             return self.view_result
         if self.merge_oid is None:
@@ -450,6 +461,95 @@ def test_merge_failure_with_pr_neither_merged_nor_open_exits_2(
     assert reason in captured.err
     _, rereads = world.after_first_merge()
     assert rereads == []
+    assert len(world.refreshes()) == 1
+    assert ledger_lines(captured.out) == []
+
+
+def test_lagging_open_view_is_reread_until_merged(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against trusting a lagging OPEN view after a failed-but-landed merge, which starts a spurious round."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.fail_after_landing = reason
+    world.hub.view_sequence = ["OPEN", "OPEN", "MERGED"]
+    assert land(world, interval=7) == GREEN
+    captured = capsys.readouterr()
+    tested = world.hub.ref(HEAD_REF)
+    oid = world.hub.merge_oid
+    assert oid is not None
+    assert len(world.refreshes()) == 1 and len(world.pushes()) == 1 and len(world.merges()) == 1
+    views, _ = world.after_first_merge()
+    assert len(views) == 3
+    assert world.clock.sleeps == [7, 7]
+    assert f"gh pr merge exited 1 but the PR is MERGED: {reason}" in captured.err
+    assert ledger_lines(captured.out) == [f"landed pr={PR} tested={tested} gate=exit 0 checks=4101,4102 merge={oid}"]
+
+
+def test_persistently_open_view_after_landing_starts_a_new_round(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against re-reading forever (or not re-reading at all) when GitHub's view never catches up to our own landing."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.fail_after_landing = reason
+    world.hub.view_sequence = ["OPEN"]
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    views, _ = world.after_first_merge()
+    assert len(views) == 4
+    assert world.clock.sleeps == [15, 15, 15]
+    assert "main moved during round 1" in captured.err
+    assert "the PR's delta is empty on one side of the refresh; the base already contains it" in captured.err
+    assert len(world.refreshes()) == 2
+    assert len(world.pushes()) == 1
+    assert len(world.merges()) == 1
+    assert ledger_lines(captured.out) == []
+
+
+@pytest.mark.parametrize(
+    "setup",
+    ["unchanged", "unreadable"],
+)
+def test_open_after_merge_is_not_reread_when_base_did_not_move(
+    world: World, capsys: pytest.CaptureFixture[str], setup: str
+) -> None:
+    """Guards against re-reading a lagging view when the base recheck itself was unchanged or unreadable, not moved."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 is not mergeable: the merge commit cannot be cleanly created."
+    world.hub.merge_failures = [reason]
+    if setup == "unreadable":
+        world.hub.base_read_failures = {3}  # read_pr, the pre-merge re-check, then the post-merge re-read
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert reason in captured.err
+    views, _ = world.after_first_merge()
+    assert len(views) == 1
+    assert world.clock.sleeps == []
+    assert len(world.merges()) == 1
+    assert ledger_lines(captured.out) == []
+
+
+@pytest.mark.parametrize(
+    ("view", "message"),
+    [
+        ("CLOSED", "pull request 7 is in state CLOSED after a failed gh pr merge"),
+        (Result(1, "", "GraphQL: Could not resolve to a PullRequest\n"), "cannot read the state of pull request 7 after a failed gh pr merge"),
+    ],
+    ids=["closed", "view-fails"],
+)
+def test_reread_turning_non_open_non_merged_exits_2(
+    world: World, capsys: pytest.CaptureFixture[str], view: str | Result, message: str
+) -> None:
+    """Guards against a re-read that turns CLOSED or unreadable being treated as still OPEN, which would keep re-reading or start a round."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 is closed"
+    world.hub.merge_failures = [reason]
+    world.hub.base_moves = {3}
+    world.hub.view_sequence = ["OPEN", view]
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert message in captured.err
+    assert reason in captured.err
+    views, _ = world.after_first_merge()
+    assert len(views) == 2
+    assert world.clock.sleeps == [15]
     assert len(world.refreshes()) == 1
     assert ledger_lines(captured.out) == []
 
