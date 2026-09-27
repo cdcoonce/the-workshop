@@ -323,3 +323,53 @@ def test_dispatch_promotes_only_after_a_fresh_build_and_a_stamp_check() -> None:
         assert sentence.index("cold_read_stamp.py check") < sentence.index(
             "afk-driver"
         ), f"stamp check does not come first: {sentence!r}"
+
+
+# --- Review fixes: stamp only what was read (#1037) --------------------------
+
+
+def test_step_7_stamps_only_the_body_the_reader_was_given() -> None:
+    """The stamp hashes the body at stamp time, so a body edited during the
+    read, or a stamp left from an earlier BUILD under a later REWRITE or
+    NOT-DISPATCH-READY, would certify text no reader passed."""
+    assert "Record the body= field" in _step(1)
+    step = _step(7)
+    for phrase in (
+        "On BUILD, stamp",
+        "not the one step 1 recorded, the body changed during the read",
+        "On any other verdict, remove the pass label and delete any stamp line",
+    ):
+        assert phrase in step, f"step 7 lacks {phrase!r}"
+
+
+def test_step_8_exemption_binds_the_whole_read() -> None:
+    step = _step(8)
+    for phrase in (
+        "made to the body that reader read, its body= field unchanged since step 1",
+        "covering every blocking finding of that read",
+        "degraded or provisional whenever that read's record makes it so",
+    ):
+        assert phrase in step, f"step 8 lacks {phrase!r}"
+
+
+def test_gate_contract_legacy_passes_and_degraded_builds() -> None:
+    """A legacy pass read against an open dependency's body must not be
+    stamped once that dependency has closed, and a later non-BUILD read
+    must not be skipped over for an older BUILD comment."""
+    contract = _cold_section(GATE_HEADING)
+    for phrase in (
+        "comment is a BUILD, that comment is newer than its last body edit",
+        "no dependency it names has closed since that comment",
+        "A degraded BUILD blocks auto-promote",
+    ):
+        assert phrase in contract, f"gate contract lacks {phrase!r}"
+    assert "detector-3, 9 or 11 criterion was only REASONED" in _cold_section(
+        PROBE_HEADING
+    )
+
+
+def test_no_sentence_forbids_the_reader_to_execute() -> None:
+    """A keyword net, not a proof: paraphrase still needs the line-list review."""
+    lowered = _flat(COLD_READ.read_text()).lower()
+    for phrase in ("never execute", "not execute", "never run code", "read-only"):
+        assert phrase not in lowered, f"command.md forbids execution: {phrase!r}"
