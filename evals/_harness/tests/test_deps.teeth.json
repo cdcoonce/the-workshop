@@ -1,0 +1,81 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_deps.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_deps.py"
+  ],
+  "mutants": [
+    {
+      "label": "parse_deps drops the direct list",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "        \"direct\": list(data.get(\"direct\", [])),",
+      "replace": "        \"direct\": [],"
+    },
+    {
+      "label": "parse_deps drops the injection list",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "        \"injection\": list(data.get(\"injection\", [])),",
+      "replace": "        \"injection\": [],"
+    },
+    {
+      "label": "expand_paths never keeps an exact tracked-file match",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "        if normalized in tracked_paths:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "expand_paths never expands a directory prefix",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "        resolved.update(path for path in tracked_paths if path.startswith(prefix))",
+      "replace": "        pass"
+    },
+    {
+      "label": "tree_hash lines drop the blob sha, hashing paths alone",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "    lines = sorted(f\"{path}\\0{blob_shas[path]}\" for path in resolved)",
+      "replace": "    lines = sorted(f\"{path}\" for path in resolved)"
+    },
+    {
+      "label": "tree_hash's blob-sha lookup ignores ref, always reading HEAD",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "    repo_dir = repo if repo is not None else _THIS_REPO_ROOT\n    resolved = expand_paths(paths, ref=ref, repo=repo_dir)\n    blob_shas = dict(_git_ls_tree(ref, repo_dir))",
+      "replace": "    repo_dir = repo if repo is not None else _THIS_REPO_ROOT\n    resolved = expand_paths(paths, ref=ref, repo=repo_dir)\n    blob_shas = dict(_git_ls_tree(\"HEAD\", repo_dir))"
+    },
+    {
+      "label": "tree_hash ignores an explicit repo argument",
+      "file": "../deps.py",
+      "oracle": "real",
+      "find": "def tree_hash(paths: list[str], ref: str = \"HEAD\", repo: Path | None = None) -> str:",
+      "replace": "def tree_hash(paths: list[str], ref: str = \"HEAD\", repo: Path | None = None) -> str:\n    repo = None"
+    }
+  ]
+}
