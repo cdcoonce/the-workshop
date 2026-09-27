@@ -16,7 +16,7 @@ PLUGINS := $(notdir $(wildcard plugins/*))
 # clean run means something; see the [tool.ruff.lint] comment for why E501 is out.
 .PHONY: lint
 lint:
-	uv run --with ruff ruff check scripts tests plugins
+	uv run --with ruff ruff check scripts tests plugins evals
 
 # Delivery gate: a plugin whose shipped content changed must also declare a new
 # version, or `claude plugin update` offers nothing and the change reaches
@@ -129,6 +129,26 @@ test-wrap-up-gate-parity:
 test-cold-read-evidence-wikilink-parity:
 	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
 
+# Eval harness gate (#991): the harness's own tests, plus every fixture
+# case's case_tests/ directory (owned by the fixture children, #998-#1002),
+# run as their own pytest invocation in an isolated rootdir — same pattern as
+# test-machinery, so `evals` never collides with the root suite's own `tests`
+# package. Deliberately NOT `cd evals/_harness` first: the tests import
+# `evals._harness.*` from the repo root. Nothing under a case's `fixture/` is
+# ever collected, since only `case_tests/` directories are passed.
+#
+# Also runs the guard runner (auto-discovers modules under
+# evals/_harness/guards/, e.g. #993's ledger guard and #1009's schema guard;
+# jsonschema is not a project dependency, hence `--with jsonschema` on both
+# lines). VERSION_BASE is a `?=` default (the `VERSION_BASE ?= origin/main`
+# line above), which make does NOT export to recipe environments, so it is
+# passed explicitly here exactly as verify-versions does with --base
+# $(VERSION_BASE).
+.PHONY: test-evals
+test-evals:
+	uv run --with pytest --with jsonschema python -m pytest -q --rootdir=evals --import-mode=importlib evals/_harness/tests $(wildcard evals/*/*/case_tests)
+	uv run --with jsonschema python -m evals._harness.guards --base $(VERSION_BASE)
+
 # Full gate: the root suite, every skill-script suite, and the machinery suite.
 # Skill-script suites live in isolated subtrees with a sibling `scripts` package
 # and bare imports, so they run in their OWN rootdir (a separate pytest
@@ -144,6 +164,7 @@ test:
 	$(MAKE) test-machinery
 	$(MAKE) test-wrap-up-gate-parity
 	$(MAKE) test-cold-read-evidence-wikilink-parity
+	$(MAKE) test-evals
 	$(MAKE) check-teeth-anchors
 	$(MAKE) stamp-check
 	$(MAKE) verify-versions
