@@ -1,0 +1,53 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_harness_scope.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_harness_scope.py"
+  ],
+  "mutants": [
+    {
+      "label": "forbidden-import check drops the paired_ab pattern",
+      "file": "test_harness_scope.py",
+      "oracle": "real",
+      "find": "    return \"paired_ab\" in parts or \"plugins\" in parts",
+      "replace": "    return \"plugins\" in parts"
+    },
+    {
+      "label": "forbidden-import check drops the plugins pattern",
+      "file": "test_harness_scope.py",
+      "oracle": "real",
+      "find": "    return \"paired_ab\" in parts or \"plugins\" in parts",
+      "replace": "    return \"paired_ab\" in parts"
+    },
+    {
+      "label": "import scan ignores from-imports",
+      "file": "test_harness_scope.py",
+      "oracle": "real",
+      "find": "        elif isinstance(node, ast.ImportFrom):\n            if node.module:\n                names.append(node.module)",
+      "replace": "        elif isinstance(node, ast.ImportFrom):\n            pass"
+    }
+  ]
+}

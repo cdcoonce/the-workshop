@@ -1,0 +1,120 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_schemas.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_schemas.py"
+  ],
+  "mutants": [
+    {
+      "label": "run-file schema: top level no longer requires skill",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "  \"required\": [\"skill\", \"verdict\", \"fingerprint\", \"tokens\", \"wall_time_s\", \"cases\"],",
+      "replace": "  \"required\": [\"verdict\", \"fingerprint\", \"tokens\", \"wall_time_s\", \"cases\"],"
+    },
+    {
+      "label": "run-file schema: top level allows an unknown field",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "  \"additionalProperties\": false,\n  \"properties\": {\n    \"skill\": { \"type\": \"string\" },",
+      "replace": "  \"additionalProperties\": true,\n  \"properties\": {\n    \"skill\": { \"type\": \"string\" },"
+    },
+    {
+      "label": "run-file schema: fingerprint no longer requires run_date",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "\"required\": [\"direct_tier_hash\", \"injection_tier_hash\", \"plugin_version\", \"claude_code_version\", \"run_date\"],",
+      "replace": "\"required\": [\"direct_tier_hash\", \"injection_tier_hash\", \"plugin_version\", \"claude_code_version\"],"
+    },
+    {
+      "label": "run-file schema: case level no longer requires case",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "        \"required\": [\"case\", \"fixture_fingerprint\", \"gated_items\", \"model_ids\", \"attempts\"],",
+      "replace": "        \"required\": [\"fixture_fingerprint\", \"gated_items\", \"model_ids\", \"attempts\"],"
+    },
+    {
+      "label": "run-file schema: case level allows an unknown field",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "        \"additionalProperties\": false,\n        \"properties\": {\n          \"case\": { \"type\": \"string\" },",
+      "replace": "        \"additionalProperties\": true,\n        \"properties\": {\n          \"case\": { \"type\": \"string\" },"
+    },
+    {
+      "label": "run-file schema: attempt level no longer requires raw",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "                \"reserve_used\",\n                \"raw\"\n              ],\n              \"additionalProperties\": false,",
+      "replace": "                \"reserve_used\"\n              ],\n              \"additionalProperties\": false,"
+    },
+    {
+      "label": "run-file schema: attempt level allows an unknown field",
+      "file": "../schemas/run-file.schema.json",
+      "oracle": "real",
+      "find": "              \"additionalProperties\": false,\n              \"properties\": {\n                \"attempt\": { \"type\": \"integer\", \"minimum\": 1 },",
+      "replace": "              \"additionalProperties\": true,\n              \"properties\": {\n                \"attempt\": { \"type\": \"integer\", \"minimum\": 1 },"
+    },
+    {
+      "label": "calibration schema: top level no longer requires n",
+      "file": "../schemas/calibration-record.schema.json",
+      "oracle": "real",
+      "find": "  \"required\": [\n    \"n\",\n    \"hits\",",
+      "replace": "  \"required\": [\n    \"hits\","
+    },
+    {
+      "label": "calibration schema: top level allows an unknown field",
+      "file": "../schemas/calibration-record.schema.json",
+      "oracle": "real",
+      "find": "  \"additionalProperties\": false,\n  \"properties\": {\n    \"n\": { \"type\": \"integer\", \"minimum\": 0 },",
+      "replace": "  \"additionalProperties\": true,\n  \"properties\": {\n    \"n\": { \"type\": \"integer\", \"minimum\": 0 },"
+    },
+    {
+      "label": "calibration schema: no_skill_arm_result drops the null variant",
+      "file": "../schemas/calibration-record.schema.json",
+      "oracle": "real",
+      "find": "        { \"type\": \"null\" },\n        { \"const\": \"baseline-void\" },",
+      "replace": "        { \"const\": \"baseline-void\" },"
+    },
+    {
+      "label": "calibration schema: audit entry no longer requires raw",
+      "file": "../schemas/calibration-record.schema.json",
+      "oracle": "real",
+      "find": "        \"required\": [\"raw\", \"finding\", \"credited_item\", \"audited_item\"],",
+      "replace": "        \"required\": [\"finding\", \"credited_item\", \"audited_item\"],"
+    },
+    {
+      "label": "calibration schema: audit entry allows an unknown field",
+      "file": "../schemas/calibration-record.schema.json",
+      "oracle": "real",
+      "find": "        \"additionalProperties\": false,\n        \"properties\": {\n          \"raw\": { \"type\": \"string\" },",
+      "replace": "        \"additionalProperties\": true,\n        \"properties\": {\n          \"raw\": { \"type\": \"string\" },"
+    }
+  ]
+}

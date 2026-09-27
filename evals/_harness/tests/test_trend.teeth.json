@@ -1,0 +1,88 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_trend.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_trend.py"
+  ],
+  "mutants": [
+    {
+      "label": "summarize drops the tokens total",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "        total_tokens += run[\"tokens\"]",
+      "replace": "        pass"
+    },
+    {
+      "label": "summarize drops the wall_time_s total",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "        total_wall_time += run[\"wall_time_s\"]",
+      "replace": "        pass"
+    },
+    {
+      "label": "summarize drops the unmatched_findings total",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                total_unmatched += attempt[\"unmatched_findings\"]",
+      "replace": "                pass"
+    },
+    {
+      "label": "summarize counts trend items alongside gated items",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                    if item_id in gated:",
+      "replace": "                    if True:"
+    },
+    {
+      "label": "history always reports hit as False",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                    \"hit\": len(hit_attempts) > 0,",
+      "replace": "                    \"hit\": False,"
+    },
+    {
+      "label": "history always reports first_hit_attempt as None",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                    \"first_hit_attempt\": min(hit_attempts) if hit_attempts else None,",
+      "replace": "                    \"first_hit_attempt\": None,"
+    },
+    {
+      "label": "history always reports attempts_used as 0",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "                    \"attempts_used\": len(attempts),",
+      "replace": "                    \"attempts_used\": 0,"
+    },
+    {
+      "label": "history no longer orders run files chronologically",
+      "file": "../trend.py",
+      "oracle": "real",
+      "find": "    for run_file in sorted(runs_dir.glob(\"*.json\")):",
+      "replace": "    for run_file in sorted(runs_dir.glob(\"*.json\"), reverse=True):"
+    }
+  ]
+}
