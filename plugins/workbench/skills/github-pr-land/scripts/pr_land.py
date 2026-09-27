@@ -20,8 +20,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -386,6 +388,218 @@ def watch_sha(
             print(f"timed out after {timeout}s waiting on {full}", file=sys.stderr)
             return WatchResult(INDETERMINATE, run_ids, status_ids)
         sleep(interval)
+
+
+@dataclass(frozen=True)
+class PrInfo:
+    """The PR fields a land needs, with the base read at its live tip."""
+
+    number: int
+    head_sha: str
+    head_ref: str
+    head_repo: str
+    base_ref: str
+    base_sha: str
+
+
+@dataclass(frozen=True)
+class RefreshResult:
+    """What the refresh-and-gate steps did, and the head the gate tested."""
+
+    tested_sha: str
+    pushed: bool
+    gate_note: str
+    exit_code: int
+    message: str
+
+
+def read_pr(runner: Runner, repo: str, pr: int) -> PrInfo:
+    """Read *pr*'s head and the live tip of its base branch.
+
+    ``pulls/<pr>.base.sha`` is never used: GitHub freezes it at the PR's last
+    update, so it can trail the live base by any number of commits.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``gh``.
+    repo : str
+        ``owner/name`` every ``gh`` call is pinned to.
+    pr : int
+        The pull request number.
+
+    Returns
+    -------
+    PrInfo
+        The PR's head and base, ``base_sha`` read from ``git/ref/heads/<base_ref>``.
+
+    Raises
+    ------
+    Refused
+        When either read fails or returns an unexpected shape.
+    """
+    payload = _api_json(runner, repo, f"repos/{repo}/pulls/{pr}")
+    head = payload.get("head") if isinstance(payload, dict) else None
+    base = payload.get("base") if isinstance(payload, dict) else None
+    head_repo = head.get("repo") if isinstance(head, dict) else None
+    if not isinstance(payload, dict) or not isinstance(head, dict) or not isinstance(base, dict):
+        raise Refused(f"cannot read pull request {pr}")
+    number = payload.get("number")
+    head_sha = head.get("sha")
+    head_ref = head.get("ref")
+    base_ref = base.get("ref")
+    full_name = head_repo.get("full_name") if isinstance(head_repo, dict) else None
+    if (
+        not isinstance(number, int)
+        or not isinstance(head_sha, str)
+        or not FULL_SHA.fullmatch(head_sha)
+        or not isinstance(head_ref, str)
+        or not head_ref
+        or not isinstance(base_ref, str)
+        or not base_ref
+        or not isinstance(full_name, str)
+    ):
+        raise Refused(f"pull request {pr} is missing its head or base")
+    ref = _api_json(runner, repo, f"repos/{repo}/git/ref/heads/{base_ref}")
+    target = ref.get("object") if isinstance(ref, dict) else None
+    base_sha = target.get("sha") if isinstance(target, dict) else None
+    if not isinstance(base_sha, str) or not FULL_SHA.fullmatch(base_sha):
+        raise Refused(f"cannot read the tip of {base_ref}")
+    return PrInfo(number, head_sha, head_ref, full_name, base_ref, base_sha)
+
+
+def _refused(info: PrInfo, message: str, gate_note: str = "not run") -> RefreshResult:
+    return RefreshResult(info.head_sha, False, gate_note, INDETERMINATE, message)
+
+
+def _patch_id(diff: str) -> str:
+    proc = subprocess.run(
+        ["git", "patch-id", "--stable"], input=diff, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+    )
+    return proc.stdout.split()[0] if proc.returncode == 0 and proc.stdout.split() else ""
+
+
+def _remove_worktree(runner: Runner, scratch: str) -> None:
+    """Remove *scratch* and prune its record; never raises."""
+    try:
+        runner.run(["git", "worktree", "remove", "--force", scratch])
+        runner.run(["git", "worktree", "prune"])
+    except Exception as exc:  # cleanup must not mask the caller's outcome
+        print(f"cleanup of {scratch} failed: {exc}", file=sys.stderr)
+    shutil.rmtree(scratch, ignore_errors=True)
+
+
+def refresh_and_gate(
+    runner: Runner,
+    repo: str,
+    info: PrInfo,
+    *,
+    gate: str,
+    gate_evidence: str | None = None,
+    accept_delta_change: bool = False,
+    trunk: str = "dev",
+    release: str = "main",
+) -> RefreshResult:
+    """Merge the live base into the PR head, gate the result, and push it.
+
+    Every step after the ancestry check runs in a detached scratch worktree;
+    the caller's working tree and branch are never touched. The push is a plain
+    fast-forward, so a head that moved on origin since it was read refuses.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``git`` in the caller's clone and in the scratch worktree.
+    repo : str
+        ``owner/name`` the head must live in.
+    info : PrInfo
+        The PR, as ``read_pr`` returned it.
+    gate : str
+        Shell command run as ``bash -o pipefail -c <gate>`` in the scratch worktree.
+    gate_evidence : str | None
+        Regex that must match the gate's output for a pass to count.
+    accept_delta_change : bool
+        Proceed when the PR's patch-id changed across the refresh.
+    trunk, release : str
+        A ``trunk`` head into a ``release`` base is a promotion, refused here.
+
+    Returns
+    -------
+    RefreshResult
+        Exit 0 tested (and pushed, when a refresh was needed), 1 gate red,
+        2 refused or indeterminate with ``message`` saying why.
+    """
+    if info.head_repo.casefold() != repo.casefold():
+        return _refused(info, f"head lives in {info.head_repo!r}, not {repo!r}; fork PRs are not landed")
+    if info.head_ref == trunk and info.base_ref == release:
+        return _refused(info, f"{trunk} into {release} is a promotion; use promote")
+    head_sha, base_sha = info.head_sha, info.base_sha
+
+    fetched = runner.run(["git", "fetch", "origin", head_sha, base_sha])
+    if fetched.returncode != 0:
+        return _refused(info, f"git fetch failed: {fetched.stderr.strip()}")
+    contained = runner.run(["git", "merge-base", "--is-ancestor", base_sha, head_sha])
+    if contained.returncode == 0:
+        return RefreshResult(head_sha, False, "not run (head contained base)", GREEN, "")
+    if contained.returncode != 1:
+        return _refused(info, f"git merge-base --is-ancestor exited {contained.returncode}: {contained.stderr.strip()}")
+    fork_point = runner.run(["git", "merge-base", base_sha, head_sha])
+    if fork_point.returncode != 0:
+        return _refused(info, f"git merge-base failed: {fork_point.stderr.strip()}")
+    before = runner.run(["git", "diff", fork_point.stdout.strip(), head_sha])
+
+    scratch = tempfile.mkdtemp(prefix="pr-land-")
+    try:
+        added = runner.run(["git", "worktree", "add", "--detach", scratch, head_sha])
+        if added.returncode != 0:
+            return _refused(info, f"git worktree add failed: {added.stderr.strip()}")
+        merged = runner.run(["git", "merge", "--no-edit", base_sha], cwd=scratch)
+        if merged.returncode != 0:
+            conflicted = runner.run(["git", "diff", "--name-only", "--diff-filter=U"], cwd=scratch)
+            runner.run(["git", "merge", "--abort"], cwd=scratch)
+            files = conflicted.stdout.strip() or "(none listed)"
+            return _refused(info, f"merging {info.base_ref} conflicts; resolve by hand:\n{files}")
+
+        after = runner.run(["git", "diff", base_sha, "HEAD"], cwd=scratch)
+        if before.returncode != 0 or after.returncode != 0:
+            return _refused(info, "git diff failed while computing the PR's delta")
+        if not before.stdout.strip() or not after.stdout.strip():
+            return _refused(info, "the PR's delta is empty on one side of the refresh; the base already contains it")
+        before_id, after_id = _patch_id(before.stdout), _patch_id(after.stdout)
+        if before_id != after_id and not accept_delta_change:
+            return _refused(
+                info, "the PR's patch-id changed across the refresh; review the merge, then pass accept_delta_change"
+            )
+
+        proc = subprocess.run(
+            ["bash", "-o", "pipefail", "-c", gate],
+            cwd=scratch,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if proc.returncode in (126, 127):
+            note = f"did not run ({proc.returncode})"
+            return _refused(info, f"gate did not run: {proc.stderr.strip()}", note)
+        if proc.returncode != 0:
+            return RefreshResult(head_sha, False, f"exit {proc.returncode}", RED, "gate failed")
+        note = "exit 0"
+        if gate_evidence is not None:
+            match = re.search(gate_evidence, proc.stdout + proc.stderr)
+            if match is None:
+                return _refused(info, f"gate output has no match for {gate_evidence!r}", note)
+            note += f", evidence '{match.group(0)}'"
+
+        tip = runner.run(["git", "rev-parse", "HEAD"], cwd=scratch)
+        if tip.returncode != 0 or not FULL_SHA.fullmatch(tip.stdout.strip()):
+            return _refused(info, "cannot read the refreshed head", note)
+        pushed = runner.run(["git", "push", "origin", f"HEAD:refs/heads/{info.head_ref}"], cwd=scratch)
+        if pushed.returncode != 0:
+            return _refused(info, f"push to {info.head_ref} refused: {pushed.stderr.strip()}", note)
+        return RefreshResult(tip.stdout.strip(), True, note, GREEN, "")
+    finally:
+        _remove_worktree(runner, scratch)
 
 
 def _parser() -> argparse.ArgumentParser:

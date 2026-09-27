@@ -1,0 +1,168 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_refresh.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_refresh.py"
+  ],
+  "mutants": [
+    {
+      "label": "refresh_and_gate does nothing and returns 0 (test_behind_head_merges_and_pushes)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if info.head_repo.casefold() != repo.casefold():\n",
+      "replace": "    return RefreshResult(info.head_sha, False, \"\", GREEN, \"\")\n    if info.head_repo.casefold() != repo.casefold():\n"
+    },
+    {
+      "label": "ancestry is checked without fetching first (test_fetch_precedes_ancestry_check)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    fetched = runner.run([\"git\", \"fetch\", \"origin\", head_sha, base_sha])\n",
+      "replace": "    fetched = Result(0, \"\", \"\")\n"
+    },
+    {
+      "label": "a head containing the base is refreshed and gated anyway (test_head_containing_base_skips_refresh_and_gate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if contained.returncode == 0:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "read_pr takes the frozen pulls base.sha (test_read_pr_takes_live_base_tip_not_frozen_base_sha)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    ref = _api_json(runner, repo, f\"repos/{repo}/git/ref/heads/{base_ref}\")\n",
+      "replace": "    ref = {\"object\": base}\n"
+    },
+    {
+      "label": "base resolved from origin/<base_ref> (test_shas_come_from_the_api_not_origin_refs)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    head_sha, base_sha = info.head_sha, info.base_sha\n",
+      "replace": "    head_sha = info.head_sha\n    base_sha = runner.run([\"git\", \"rev-parse\", f\"origin/{info.base_ref}\"]).stdout.strip()\n"
+    },
+    {
+      "label": "a conflict message omits the conflicted files (test_conflict_names_files_and_pushes_nothing)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            files = conflicted.stdout.strip() or \"(none listed)\"\n",
+      "replace": "            files = \"\"\n"
+    },
+    {
+      "label": "the patch-id comparison is skipped (test_nearby_base_edit_changes_patch_id_and_refuses)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        if before_id != after_id and not accept_delta_change:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "accept_delta_change is ignored (test_accept_delta_change_pushes_a_changed_delta)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        if before_id != after_id and not accept_delta_change:\n",
+      "replace": "        if before_id != after_id:\n"
+    },
+    {
+      "label": "accept_delta_change waives the empty-delta refusal (test_empty_delta_refuses_even_when_accepted)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        if not before.stdout.strip() or not after.stdout.strip():\n",
+      "replace": "        if (not before.stdout.strip() or not after.stdout.strip()) and not accept_delta_change:\n"
+    },
+    {
+      "label": "a gate exit 127 maps to red (test_gate_command_not_found_is_indeterminate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        if proc.returncode in (126, 127):\n",
+      "replace": "        if proc.returncode in (126,):\n"
+    },
+    {
+      "label": "a gate exit 126 maps to red (test_gate_not_executable_is_indeterminate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        if proc.returncode in (126, 127):\n",
+      "replace": "        if proc.returncode in (127,):\n"
+    },
+    {
+      "label": "the gate runs without -o pipefail (test_gate_pipeline_failure_is_red)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"bash\", \"-o\", \"pipefail\", \"-c\", gate]",
+      "replace": "[\"bash\", \"-c\", gate]"
+    },
+    {
+      "label": "missing gate evidence is not refused (test_gate_evidence_missing_is_indeterminate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if match is None:\n                return _refused(info, f\"gate output has no match for {gate_evidence!r}\", note)\n            note += f\", evidence '{match.group(0)}'\"\n",
+      "replace": "            if match is not None:\n                note += f\", evidence '{match.group(0)}'\"\n"
+    },
+    {
+      "label": "the gate note drops the evidence match (test_gate_evidence_is_quoted_in_the_note)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            note += f\", evidence '{match.group(0)}'\"\n",
+      "replace": "            note += \"\"\n"
+    },
+    {
+      "label": "the push is forced (test_origin_head_advanced_before_push_is_refused)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"push\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]",
+      "replace": "[\"git\", \"push\", \"--force\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]"
+    },
+    {
+      "label": "the push uses a +refspec (test_push_is_never_forced)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "f\"HEAD:refs/heads/{info.head_ref}\"",
+      "replace": "f\"+HEAD:refs/heads/{info.head_ref}\""
+    },
+    {
+      "label": "a fork head is refreshed (test_fork_head_is_refused)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if info.head_repo.casefold() != repo.casefold():\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "dev into main is landed instead of promoted (test_dev_into_main_is_refused_toward_promote)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if info.head_ref == trunk and info.base_ref == release:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "the finally cleanup is removed (test_gate_exception_propagates_after_cleanup)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    finally:\n        _remove_worktree(runner, scratch)\n",
+      "replace": "    finally:\n        pass\n"
+    },
+    {
+      "label": "the merge runs in the caller's cwd (test_caller_clone_is_never_touched)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)",
+      "replace": "[\"git\", \"merge\", \"--no-edit\", base_sha])"
+    }
+  ]
+}
