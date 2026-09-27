@@ -1,0 +1,133 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_transcript.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_transcript.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] parse_transcript short-circuits to an empty complete transcript for any existing file",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "        return Transcript(status=\"truncated\", events=[], model_ids=[], final_text=\"\")\n\n    truncated = False",
+      "replace": "        return Transcript(status=\"truncated\", events=[], model_ids=[], final_text=\"\")\n\n    return Transcript(status=\"complete\", events=[], model_ids=[], final_text=\"\")\n\n    truncated = False"
+    },
+    {
+      "label": "an unreadable path raises instead of reporting truncated",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "    except OSError:\n        return Transcript(status=\"truncated\", events=[], model_ids=[], final_text=\"\")",
+      "replace": "    except ValueError:\n        return Transcript(status=\"truncated\", events=[], model_ids=[], final_text=\"\")"
+    },
+    {
+      "label": "a line cut mid-UTF-8 character is skipped instead of truncating the transcript",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "        except UnicodeDecodeError:\n            truncated = True\n            continue",
+      "replace": "        except UnicodeDecodeError:\n            continue"
+    },
+    {
+      "label": "missing-file status detection disabled",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "    if not path.exists():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "invalid-JSON line no longer truncates the transcript",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "        except json.JSONDecodeError:\n            truncated = True\n            continue",
+      "replace": "        except json.JSONDecodeError:\n            continue"
+    },
+    {
+      "label": "a line missing type/dict structure no longer truncates the transcript",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "        if not isinstance(envelope, dict) or \"type\" not in envelope:\n            truncated = True\n            continue",
+      "replace": "        if not isinstance(envelope, dict) or \"type\" not in envelope:\n            continue"
+    },
+    {
+      "label": "a line missing the message structure no longer truncates the transcript",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "        if not isinstance(message, dict):\n            truncated = True\n            continue",
+      "replace": "        if not isinstance(message, dict):\n            continue"
+    },
+    {
+      "label": "isApiErrorMessage no longer flips the transcript to api_error",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "            if envelope.get(\"isApiErrorMessage\") is True:\n                api_error = True",
+      "replace": "            if envelope.get(\"isApiErrorMessage\") is True:\n                pass"
+    },
+    {
+      "label": "model_ids no longer excludes the synthetic model id",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "            if isinstance(model, str) and model != _SYNTHETIC_MODEL and model not in seen_models:",
+      "replace": "            if isinstance(model, str) and model not in seen_models:"
+    },
+    {
+      "label": "model_ids stops recording message.model at all",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "                seen_models.add(model)\n                model_ids.append(model)",
+      "replace": "                seen_models.add(model)"
+    },
+    {
+      "label": "per-block ordinal stops advancing, so sibling tool_use blocks share one ordinal",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "            line_last_text: tuple[str, int] | None = None\n            for block in content:\n                position = ordinal\n                ordinal += 1",
+      "replace": "            line_last_text: tuple[str, int] | None = None\n            for block in content:\n                position = ordinal"
+    },
+    {
+      "label": "tool_result blocks no longer attach their content/is_error to the matching tool_use event",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "find": "                    target = pending.get(tool_use_id) if isinstance(tool_use_id, str) else None\n                    if target is not None:",
+      "replace": "                    target = pending.get(tool_use_id) if isinstance(tool_use_id, str) else None\n                    if False:"
+    },
+    {
+      "label": "final_text overwritten even on an assistant line with no text block, instead of carrying the prior line's last text block forward",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "why": "Killed by test_parse_transcript_final_text_is_last_text_block_of_last_assistant_line_with_one: a later assistant line with only a tool_use block must leave final_text at the earlier line's text, not reset it to empty.",
+      "find": "            if line_last_text is not None:\n                final_text, final_text_ordinal = line_last_text",
+      "replace": "            final_text, final_text_ordinal = line_last_text if line_last_text is not None else (\"\", None)"
+    },
+    {
+      "label": "[control] reword the module docstring's envelope description",
+      "file": "../transcript.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring prose; nothing parses or asserts on it, so no test can observe the change.",
+      "find": "from ``message.model`` on that line — never from the transcript's own prose.",
+      "replace": "from ``message.model`` on that line, which is authoritative over any self-reported prose."
+    }
+  ]
+}
