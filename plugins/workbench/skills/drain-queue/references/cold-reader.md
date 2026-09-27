@@ -92,7 +92,10 @@ Verdict, one of:
 
 Before returning, post your verdict to the issue as a comment titled
 `## Cold read — <verdict>`, including the per-detector record so a later reader can tell a
-clean pass from a lazy one. This comment is the only durable record of the gate.
+clean pass from a lazy one. This comment is the only durable record of the gate. Then, if the
+repo has the labels, set the verdict's label in place of any other cold-read label:
+cold-read:pass on BUILD, cold-read:rewrite on REWRITE, cold-read:blocked on
+NOT-DISPATCH-READY.
 
 A first-ever cold read that finds nothing is suspicious — say so if it happens. Probe builds
 are instruments, not proposals; no code goes in the body.

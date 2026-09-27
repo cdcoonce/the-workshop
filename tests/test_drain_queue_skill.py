@@ -80,6 +80,12 @@ def test_rewrite_bullet_has_no_second_path_to_build_or_pass() -> None:
     bullet = _rewrite_bullet()
     assert bullet.count("BUILD") == 1, bullet
     assert "cold-read:pass" not in bullet
+    lowered = bullet.lower()
+    # "pass needs a fresh reader's BUILD" is the only pass the bullet may name;
+    # "then set the pass label" or "then proceed to step 2" goes red here.
+    assert lowered.count("pass") == 1, bullet
+    for phrase in ("proceed", "step 2"):
+        assert phrase not in lowered, f"REWRITE bullet says {phrase!r}"
 
 
 def test_rewrite_bullet_defers_the_loop_to_vault_cold_read_step_8() -> None:
@@ -110,6 +116,22 @@ def test_template_names_drain_queue_exceptions_to_probe_builds() -> None:
         "detector-8 probe",
     ):
         assert phrase in template, f"cold-reader template lacks {phrase!r}"
+
+
+def test_template_read_allowlist_admits_probe_builds() -> None:
+    """The ONLY-to allowlist is the old ban's shape: dropping probe builds
+    from it re-forbids them however the rest of the template reads."""
+    template = _template()
+    start = template.index("ONLY to")
+    sentence = template[start : template.index(".", start)]
+    assert "probe builds" in sentence, sentence
+
+
+def test_template_sets_the_rewrite_label_the_skill_relies_on() -> None:
+    """SKILL.md step 1 says applied text leaves the issue at cold-read:rewrite;
+    the reader is the one who sets it."""
+    template = _template()
+    assert "cold-read:rewrite on REWRITE" in template
 
 
 def test_template_keeps_the_code_archaeology_ban() -> None:
