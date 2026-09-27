@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-workshop.dev/evals/_harness/schemas/calibration-record.schema.json",
+  "title": "Calibration record",
+  "type": "object",
+  "required": [
+    "n",
+    "hits",
+    "audited_hits",
+    "cross_match_result",
+    "no_skill_arm_result",
+    "gate_or_trend_status",
+    "input_hash",
+    "audit"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "n": { "type": "integer", "minimum": 0 },
+    "hits": { "type": "integer", "minimum": 0 },
+    "audited_hits": { "type": "integer", "minimum": 0 },
+    "cross_match_result": { "enum": ["pass", "fail"] },
+    "no_skill_arm_result": {
+      "oneOf": [
+        { "type": "null" },
+        { "const": "baseline-void" },
+        {
+          "type": "object",
+          "required": ["n", "hits", "replacements"],
+          "additionalProperties": false,
+          "properties": {
+            "n": { "type": "integer", "minimum": 0 },
+            "hits": { "type": "integer", "minimum": 0 },
+            "replacements": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "gate_or_trend_status": { "enum": ["gate", "trend"] },
+    "input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["raw", "finding", "credited_item", "audited_item"],
+        "additionalProperties": false,
+        "properties": {
+          "raw": { "type": "string" },
+          "finding": { "type": "integer", "minimum": 0 },
+          "credited_item": { "type": "string" },
+          "audited_item": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
