@@ -32,6 +32,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/explain` | `workbench` | Explain something briefly in chat (eli5) or build a one-page visual HTML summary of a session, branch, work tree, or MR. |
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
+| `/github-pr-land` | `workbench` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
 | `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
@@ -232,6 +233,12 @@ Use when implementation is complete, all tests pass, and you need to decide how 
 *`workbench` plugin*
 
 GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. Use to create, list, or update GitHub issues, open or review pull requests, or manage Actions without a browser.
+
+### `/github-pr-land`
+
+*`workbench` plugin*
+
+Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. Use to merge, land, or ff-promote a PR, or to watch CI on a pushed SHA.
 
 ### `/gitlab-ci-watch`
 

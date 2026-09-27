@@ -1,0 +1,259 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "watch_sha does nothing and returns 0",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    full = _resolve_sha(runner, sha)\n",
+      "replace": "    return WatchResult(GREEN)\n    full = _resolve_sha(runner, sha)\n"
+    },
+    {
+      "label": "a required name with zero runs and zero statuses counts as green",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                lines.append(f\"{name} no check runs or statuses yet\")\n                verdicts.append(None)\n",
+      "replace": "                lines.append(f\"{name} no check runs or statuses yet\")\n"
+    },
+    {
+      "label": "the combined commit state is read",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        statuses = _fetch_pages(runner, repo, f\"commits/{full}/statuses\", None)\n",
+      "replace": "        _api_json(runner, repo, f\"repos/{repo}/commits/{full}/status\")\n        statuses = _fetch_pages(runner, repo, f\"commits/{full}/statuses\", None)\n"
+    },
+    {
+      "label": "a neutral conclusion counts as green",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "RUN_GREEN = frozenset({\"success\"})",
+      "replace": "RUN_GREEN = frozenset({\"success\", \"neutral\"})"
+    },
+    {
+      "label": "latest run per name instead of latest run per suite",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        best = latest.get(suite_id)\n",
+      "replace": "        suite_id = 0\n        best = latest.get(suite_id)\n"
+    },
+    {
+      "label": "the oldest run in a suite wins over its re-run",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "if best is None or run[\"id\"] > best[\"id\"]:",
+      "replace": "if best is None or run[\"id\"] < best[\"id\"]:"
+    },
+    {
+      "label": "red is decided while another required check is still pending",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if None not in verdicts:\n",
+      "replace": "        if RED in verdicts or None not in verdicts:\n"
+    },
+    {
+      "label": "timed_out is no longer a red conclusion",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "RUN_RED = frozenset({\"failure\", \"cancelled\", \"timed_out\", ",
+      "replace": "RUN_RED = frozenset({\"failure\", \"cancelled\", "
+    },
+    {
+      "label": "an unrecognized conclusion counts as green",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if conclusion in RUN_RED:\n        return RED\n    return INDETERMINATE\n",
+      "replace": "    if conclusion in RUN_RED:\n        return RED\n    return GREEN\n"
+    },
+    {
+      "label": "an empty required set passes vacuously",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if not required:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "Branch not protected is treated as a protection read failure",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "if message == NOT_PROTECTED and \"HTTP 404\" in result.stderr:",
+      "replace": "if False:"
+    },
+    {
+      "label": "any protection read failure contributes no names instead of refusing",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        print(f\"cannot read protection of {branch}: {result.stderr.strip()}\", file=sys.stderr)\n        return None\n",
+      "replace": "        return names\n"
+    },
+    {
+      "label": "any 404 reads as an unprotected branch",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "if message == NOT_PROTECTED and \"HTTP 404\" in result.stderr:",
+      "replace": "if \"HTTP 404\" in result.stderr:"
+    },
+    {
+      "label": "--require replaces the protection contexts instead of joining them",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if branch is None:\n        return names\n",
+      "replace": "    if branch is None or names:\n        return names\n"
+    },
+    {
+      "label": "the protection app_id pin is ignored for check runs",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if app_id is not None and not (isinstance(app, dict) and app.get(\"id\") == app_id):\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "a null app_id pin matches no app",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if app_id is not None and not (isinstance(app, dict) and app.get(\"id\") == app_id):\n",
+      "replace": "        if not (isinstance(app, dict) and app.get(\"id\") == app_id):\n"
+    },
+    {
+      "label": "commit statuses are ignored",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    for status in statuses:\n",
+      "replace": "    for status in []:\n"
+    },
+    {
+      "label": "a status satisfies a name protection pins to an app",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if app_id is not None:\n        return None\n    for status in statuses:\n",
+      "replace": "    for status in statuses:\n"
+    },
+    {
+      "label": "the oldest status per context wins",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    for status in statuses:\n",
+      "replace": "    for status in reversed(statuses):\n"
+    },
+    {
+      "label": "only the first page of check runs is read",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        page += 1\n",
+      "replace": "        return items\n"
+    },
+    {
+      "label": "an abbreviated SHA is sent to GitHub unexpanded",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        return None\n    return full\n",
+      "replace": "        return None\n    return sha\n"
+    },
+    {
+      "label": "a ref that is not a commit is watched anyway",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if result.returncode != 0 or not FULL_SHA.fullmatch(full):\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "gh api gets -R, which it rejects",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        return runner.run([\"gh\", *args])\n",
+      "replace": "        return runner.run([\"gh\", *args, \"-R\", repo])\n"
+    },
+    {
+      "label": "non-api gh subcommands are not pinned with -R",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    return runner.run([\"gh\", *args, \"-R\", repo])\n",
+      "replace": "    return runner.run([\"gh\", *args])\n"
+    },
+    {
+      "label": "a gh api endpoint outside the repo is run",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if len(args) < 2 or not args[1].startswith(f\"repos/{repo}/\"):\n",
+      "replace": "        if len(args) < 2:\n"
+    },
+    {
+      "label": "statuses are read from the singular /status path",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "f\"commits/{full}/statuses\"",
+      "replace": "f\"commits/{full}/status\""
+    },
+    {
+      "label": "the check-run line drops the suite id",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "lines.append(f\"{name} suite={run['check_suite'].get('id')} run={run['id']} {shown}\")",
+      "replace": "lines.append(f\"{name} run={run['id']} {shown}\")"
+    },
+    {
+      "label": "the status line drops the status id",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "lines.append(f\"{name} status={status.get('id')} {status.get('state')}\")",
+      "replace": "lines.append(f\"{name} {status.get('state')}\")"
+    },
+    {
+      "label": "an origin naming a different repo than gh is accepted",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if from_origin.casefold() != repo.casefold():\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "a trailing .git is kept in the origin's repo name",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    name = parts[-1][: -len(\".git\")] if parts[-1].endswith(\".git\") else parts[-1]\n",
+      "replace": "    name = parts[-1]\n"
+    },
+    {
+      "label": "main drops the injected sleep",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    sleep = sleep if sleep is not None else time.sleep\n",
+      "replace": "    sleep = time.sleep\n"
+    },
+    {
+      "label": "SubprocessRunner does not capture output",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "capture_output=True",
+      "replace": "capture_output=False"
+    },
+    {
+      "label": "overlay drops the injected stderr",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "                    stderr=result.stderr + append_stderr,\n",
+      "replace": "                    stderr=result.stderr,\n"
+    }
+  ]
+}
