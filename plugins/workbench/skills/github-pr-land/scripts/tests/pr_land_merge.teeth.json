@@ -1,0 +1,154 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_merge.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_merge.py"
+  ],
+  "mutants": [
+    {
+      "label": "land_pr does nothing and returns 0 (test_behind_pr_lands_end_to_end)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    for round_no in range(1, max_rounds + 1):\n",
+      "replace": "    return GREEN\n    for round_no in range(1, max_rounds + 1):\n"
+    },
+    {
+      "label": "the registration poll is skipped (test_merge_waits_for_pull_to_register_the_pushed_head)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        while _pr_head(runner, repo, pr) != tested.tested_sha:\n",
+      "replace": "        while False:\n"
+    },
+    {
+      "label": "the post-watch base re-check is skipped (test_base_moved_after_watch_runs_a_second_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        moved = _base_moved(runner, repo, info)\n        if moved is False:\n            merged =",
+      "replace": "        moved = False\n        if moved is False:\n            merged ="
+    },
+    {
+      "label": "max_rounds is off by one (test_base_moving_every_round_gives_up_after_max_rounds)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "range(1, max_rounds + 1)",
+      "replace": "range(1, max_rounds + 2)"
+    },
+    {
+      "label": "the base re-check reads the frozen pulls base.sha (test_every_base_decision_reads_the_live_ref)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    ref = _api_json(runner, repo, f\"repos/{repo}/git/ref/heads/{info.base_ref}\")\n    target = ref.get(\"object\") if isinstance(ref, dict) else None\n",
+      "replace": "    ref = _api_json(runner, repo, f\"repos/{repo}/pulls/{info.number}\")\n    target = ref.get(\"base\") if isinstance(ref, dict) else None\n"
+    },
+    {
+      "label": "gh's stderr is not echoed on a failed merge (test_merge_failure_with_unchanged_base_echoes_stderr)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)",
+      "replace": "print(\"gh pr merge failed\", file=sys.stderr)"
+    },
+    {
+      "label": "a failed merge never re-reads the base (test_merge_failure_after_base_moved_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                print(",
+      "replace": "            moved = False\n            if moved is False:\n                print("
+    },
+    {
+      "label": "the landed-tree comparison is skipped (test_landed_tree_differing_from_tested_tree_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if landed is None or expected is None or landed != expected:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "commit ids are compared instead of trees (test_behind_pr_lands_end_to_end)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    landed, expected = _tree(runner, oid), _tree(runner, tested.tested_sha)\n",
+      "replace": "    landed, expected = oid, tested.tested_sha\n"
+    },
+    {
+      "label": "the ledger's checks= names the statuses, not the check runs (test_ledger_line_names_tested_head_checks_and_merge)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "str(run_id) for run_id in watched.run_ids)",
+      "replace": "str(run_id) for run_id in watched.status_ids)"
+    },
+    {
+      "label": "--match-head-commit is dropped (test_merge_is_pinned_to_the_tested_head)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "f\"--{method}\", \"--match-head-commit\", tested.tested_sha)",
+      "replace": "f\"--{method}\")"
+    },
+    {
+      "label": "the merge passes --admin (test_no_argv_bypasses_protection_or_queues_a_merge)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "f\"--{method}\", \"--match-head-commit\", tested.tested_sha)",
+      "replace": "f\"--{method}\", \"--admin\", \"--match-head-commit\", tested.tested_sha)"
+    },
+    {
+      "label": "land skips resolve_repo (test_origin_that_differs_from_gh_repo_refuses)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    try:\n        repo = resolve_repo(runner)\n",
+      "replace": "    try:\n        repo = \"acme/widget\" if args.command == \"land\" else resolve_repo(runner)\n"
+    },
+    {
+      "label": "a registration timeout proceeds to watch and merge (test_head_never_registered_exits_2_at_deadline)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "to show head {tested.tested_sha}\", file=sys.stderr)\n                return INDETERMINATE\n",
+      "replace": "to show head {tested.tested_sha}\", file=sys.stderr)\n                break\n"
+    },
+    {
+      "label": "a refresh refusal is carried on past (test_refresh_conflict_stops_before_watch_and_merge)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if tested.exit_code != 0:\n",
+      "replace": "        if tested.exit_code == RED:\n"
+    },
+    {
+      "label": "a PR still OPEN after the merge call is not reported as such (test_open_after_merge_call_exits_2_without_ledger)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if state != \"MERGED\":\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "--method has a default (test_land_requires_method_and_gate)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "choices=[\"merge\", \"squash\", \"rebase\"], required=True)",
+      "replace": "choices=[\"merge\", \"squash\", \"rebase\"], default=\"squash\")"
+    },
+    {
+      "label": "a red watch merges anyway (test_red_watch_returns_1_and_never_merges)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "        if watched.code != 0:\n",
+      "replace": "        if watched.code == INDETERMINATE:\n"
+    }
+  ]
+}
