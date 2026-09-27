@@ -44,8 +44,12 @@ is a checklist. Gate specs you wrote yourself, especially the ones you wrote thi
 authorship is what blinds you to an unbound referent. Three verdicts:
 
 - **BUILD** — no blocking findings. Proceed.
-- **REWRITE** — fixable by editing the issue body. Apply the reader's exact replacement text,
-  then re-state BUILD. This is the common case, not a failure.
+- **REWRITE** — fixable by editing the issue body. This is the common case, not a failure.
+  Applying the reader's exact replacement text leaves the issue at cold-read:rewrite, and pass
+  needs a fresh reader's BUILD on that exact body: you are no longer cold to an edit you made.
+  `vault-cold-read`'s step 8 owns the rest of the rewrite loop, its sole exemption and its read
+  cap; follow them there, not from memory. When the repo lacks the label, the verdict comment
+  carries the state.
 - **NOT-DISPATCH-READY** — the issue leaves the queue and goes back to shaping. Do not build
   it, and do not quietly rescope it into something buildable.
 
