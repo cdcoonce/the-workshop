@@ -638,17 +638,18 @@ def _tree(runner: Runner, commit: str) -> str | None:
     return tree if result.returncode == 0 and FULL_SHA.fullmatch(tree) else None
 
 
-def _check_landed(runner: Runner, repo: str, pr: int, tested: RefreshResult, watched: WatchResult) -> int:
-    """Confirm *pr* merged with the tested tree, then print the ledger line."""
+def _pr_view(runner: Runner, repo: str, pr: int) -> dict | None:
+    """``gh pr view <pr> --json mergeCommit,state`` as a dict; ``None`` if the read fails or is not an object."""
     view = gh(runner, repo, "pr", "view", str(pr), "--json", "mergeCommit,state")
     try:
         payload = json.loads(view.stdout) if view.returncode == 0 else None
     except json.JSONDecodeError:
         payload = None
-    state = payload.get("state") if isinstance(payload, dict) else None
-    if state != "MERGED":
-        print(f"pull request {pr} is in state {state} after gh pr merge, not MERGED", file=sys.stderr)
-        return INDETERMINATE
+    return payload if isinstance(payload, dict) else None
+
+
+def _verify_landed(runner: Runner, pr: int, payload: dict, tested: RefreshResult, watched: WatchResult) -> int:
+    """Given a ``MERGED`` view *payload*, confirm the landed tree is the tested tree, then print the ledger line."""
     commit = payload.get("mergeCommit")
     oid = commit.get("oid") if isinstance(commit, dict) else None
     if not isinstance(oid, str) or not FULL_SHA.fullmatch(oid):
@@ -658,13 +659,30 @@ def _check_landed(runner: Runner, repo: str, pr: int, tested: RefreshResult, wat
     if fetched.returncode != 0:
         print(f"git fetch of the merge commit failed: {fetched.stderr.strip()}", file=sys.stderr)
         return INDETERMINATE
-    landed, expected = _tree(runner, oid), _tree(runner, tested.tested_sha)
-    if landed is None or expected is None or landed != expected:
+    landed = _tree(runner, oid)
+    if landed is None:
+        print(f"cannot read tree for {oid}", file=sys.stderr)
+        return INDETERMINATE
+    expected = _tree(runner, tested.tested_sha)
+    if expected is None:
+        print(f"cannot read tree for {tested.tested_sha}", file=sys.stderr)
+        return INDETERMINATE
+    if landed != expected:
         print(f"LANDED TREE DIFFERS FROM TESTED TREE: landed {landed} ({oid}), tested {expected} ({tested.tested_sha})", file=sys.stderr)
         return INDETERMINATE
-    checks = ",".join(str(run_id) for run_id in watched.run_ids)
+    checks = ",".join([*(str(run_id) for run_id in watched.run_ids), *(f"status:{status_id}" for status_id in watched.status_ids)])
     print(f"landed pr={pr} tested={tested.tested_sha} gate={tested.gate_note} checks={checks} merge={oid}")
     return GREEN
+
+
+def _check_landed(runner: Runner, repo: str, pr: int, tested: RefreshResult, watched: WatchResult) -> int:
+    """Confirm *pr* merged with the tested tree, then print the ledger line."""
+    payload = _pr_view(runner, repo, pr)
+    state = payload.get("state") if payload is not None else None
+    if state != "MERGED":
+        print(f"pull request {pr} is in state {state} after gh pr merge, not MERGED", file=sys.stderr)
+        return INDETERMINATE
+    return _verify_landed(runner, pr, payload, tested, watched)
 
 
 def land_pr(
@@ -767,9 +785,24 @@ def land_pr(
             merged = gh(runner, repo, "pr", "merge", str(pr), f"--{method}", "--match-head-commit", tested.tested_sha)
             if merged.returncode == 0:
                 return _check_landed(runner, repo, pr, tested, watched)
+            # Read the PR before the base: if gh merged it and then errored,
+            # our own landing commit has moved the base, and a re-read would
+            # start a round on an already-merged PR.
+            view = _pr_view(runner, repo, pr)
+            state = view.get("state") if view is not None else None
+            if state == "MERGED":
+                print(f"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}", file=sys.stderr)
+                return _verify_landed(runner, pr, view, tested, watched)
+            if state != "OPEN":
+                if isinstance(state, str):
+                    problem = f"pull request {pr} is in state {state} after a failed gh pr merge"
+                else:
+                    problem = f"cannot read the state of pull request {pr} after a failed gh pr merge"
+                print(f"{problem}: {merged.stderr.strip()}", file=sys.stderr)
+                return INDETERMINATE
+            print(f"gh pr merge failed: {merged.stderr.strip()}", file=sys.stderr)
             moved = _base_moved(runner, repo, info)
             if moved is False:
-                print(f"gh pr merge failed: {merged.stderr.strip()}", file=sys.stderr)
                 return INDETERMINATE
         if moved is None:
             return INDETERMINATE
@@ -878,6 +911,14 @@ def promote_pr(
         sleep(interval)
 
 
+def _rounds(value: str) -> int:
+    """An argparse ``type`` for ``--max-rounds``: an integer of at least 1."""
+    rounds = int(value)
+    if rounds < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {rounds}")
+    return rounds
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pr_land.py", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -894,7 +935,7 @@ def _parser() -> argparse.ArgumentParser:
     land.add_argument("--gate-evidence", default=None, metavar="REGEX", help="must match the gate's output")
     land.add_argument("--require", action="append", default=[], metavar="NAME", help="extra required check (repeatable)")
     land.add_argument("--accept-delta-change", action="store_true")
-    land.add_argument("--max-rounds", type=int, default=3)
+    land.add_argument("--max-rounds", type=_rounds, default=3)
     land.add_argument("--trunk", default="dev")
     land.add_argument("--release", default="main")
     land.add_argument("--timeout", type=float, default=2700)
