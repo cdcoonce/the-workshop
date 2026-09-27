@@ -1,0 +1,81 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fingerprint.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fingerprint.py"
+  ],
+  "mutants": [
+    {
+      "label": "builder_output_fingerprint no longer excludes .git/ contents",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "        if \".git\" in path.relative_to(root).parts:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "drops the toplevel check",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "    if not _is_own_repo_root(root):\n        return \"\"\n    result = subprocess.run(",
+      "replace": "    result = subprocess.run("
+    },
+    {
+      "label": "builder_output_fingerprint drops the git-log segment",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "    full = f\"{body}\\n--git-log--\\n{git_log}\"",
+      "replace": "    full = body"
+    },
+    {
+      "label": "compute_fingerprint swaps direct and injection tier hashes",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "        \"direct_tier_hash\": tree_hash(direct_paths, ref=ref, repo=repo),\n        \"injection_tier_hash\": tree_hash(injection_paths, ref=ref, repo=repo),",
+      "replace": "        \"direct_tier_hash\": tree_hash(injection_paths, ref=ref, repo=repo),\n        \"injection_tier_hash\": tree_hash(direct_paths, ref=ref, repo=repo),"
+    },
+    {
+      "label": "compute_fingerprint drops run_date",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "        \"run_date\": run_date,",
+      "replace": "        \"run_date\": \"\","
+    },
+    {
+      "label": "compute_fingerprint drops plugin_version",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "        \"plugin_version\": plugin_version,",
+      "replace": "        \"plugin_version\": \"\","
+    },
+    {
+      "label": "compute_fingerprint drops claude_code_version",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "        \"claude_code_version\": claude_code_version,",
+      "replace": "        \"claude_code_version\": \"\","
+    }
+  ]
+}

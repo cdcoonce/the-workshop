@@ -1,0 +1,113 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ledger.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ledger.py"
+  ],
+  "mutants": [
+    {
+      "label": "_scrub_text no longer replaces the home path",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "    return text.replace(_HOME, _HOME_PLACEHOLDER)",
+      "replace": "    return text"
+    },
+    {
+      "label": "run dict is deep-copied but never scrubbed",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "    run = _scrub_value(json.loads(json.dumps(run)))",
+      "replace": "    run = json.loads(json.dumps(run))"
+    },
+    {
+      "label": "raw file copy skips scrubbing before writing",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        dest_path.write_text(_scrub_text(text), encoding=\"utf-8\")",
+      "replace": "        dest_path.write_text(text, encoding=\"utf-8\")"
+    },
+    {
+      "label": "case model_ids is never overwritten from the transcript",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        case[\"model_ids\"] = _model_ids_for_case(case, raw_sources)",
+      "replace": "        pass"
+    },
+    {
+      "label": "run-file write-once check disabled",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "    if run_file_path.exists():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "raw-file write-once check disabled",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "            if dest_path.exists():",
+      "replace": "            if False:"
+    },
+    {
+      "label": "write_run uses the caller's raw verbatim instead of the stem-prefixed path",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "            new_raw = f\"{stem}/{case_id}/{attempt_segment}/\"",
+      "replace": "            new_raw = attempt[\"raw\"]"
+    },
+    {
+      "label": "unsafe case id not rejected",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        case_id = _validate_path_segment(case[\"case\"], \"case id\")",
+      "replace": "        case_id = case[\"case\"]"
+    },
+    {
+      "label": "raw file discovery no longer recurses into end_state/",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "    return [path for path in sorted(source.rglob(\"*\")) if path.is_file()]",
+      "replace": "    return [path for path in sorted(source.glob(\"*\")) if path.is_file()]"
+    },
+    {
+      "label": "model-id derivation globs the wrong file extension",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        for jsonl_path in sorted(source.glob(\"*.jsonl\")):",
+      "replace": "        for jsonl_path in sorted(source.glob(\"*.txt\")):"
+    },
+    {
+      "label": "written run file carries the repo's HEAD commit SHA in a field",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "    runs_dir.mkdir(parents=True, exist_ok=True)",
+      "replace": "    runs_dir.mkdir(parents=True, exist_ok=True)\n    run[\"fingerprint\"][\"run_date\"] = __import__(\"subprocess\").run([\"git\", \"-C\", str(runs_dir), \"rev-parse\", \"HEAD\"], capture_output=True, text=True).stdout.strip()"
+    }
+  ]
+}
