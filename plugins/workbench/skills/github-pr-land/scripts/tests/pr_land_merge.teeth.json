@@ -70,22 +70,22 @@
       "label": "a failed merge never re-reads the base (test_merge_failure_after_base_moved_starts_a_new_round)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                print(",
-      "replace": "            moved = False\n            if moved is False:\n                print("
+      "find": "            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                return INDETERMINATE\n",
+      "replace": "            moved = False\n            if moved is False:\n                return INDETERMINATE\n"
     },
     {
       "label": "the landed-tree comparison is skipped (test_landed_tree_differing_from_tested_tree_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "    if landed is None or expected is None or landed != expected:\n",
+      "find": "    if landed != expected:\n",
       "replace": "    if False:\n"
     },
     {
       "label": "commit ids are compared instead of trees (test_behind_pr_lands_end_to_end)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "    landed, expected = _tree(runner, oid), _tree(runner, tested.tested_sha)\n",
-      "replace": "    landed, expected = oid, tested.tested_sha\n"
+      "find": "    if landed != expected:\n",
+      "replace": "    if oid != tested.tested_sha:\n"
     },
     {
       "label": "the ledger's checks= names the statuses, not the check runs (test_ledger_line_names_tested_head_checks_and_merge)",
@@ -149,6 +149,104 @@
       "oracle": "double",
       "find": "        if watched.code != 0:\n",
       "replace": "        if watched.code == INDETERMINATE:\n"
+    },
+    {
+      "label": "the base re-read runs before the PR state check (test_failed_merge_that_landed_does_not_start_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            view = _pr_view(runner, repo, pr)\n",
+      "replace": "            moved = _base_moved(runner, repo, info)\n            view = _pr_view(runner, repo, pr)\n"
+    },
+    {
+      "label": "a MERGED state after a failed merge is not treated as landed (test_failed_merge_that_landed_does_not_start_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            if state == \"MERGED\":\n",
+      "replace": "            if False:\n"
+    },
+    {
+      "label": "gh's stderr is not echoed when a failed merge landed (test_failed_merge_that_landed_does_not_start_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n",
+      "replace": ""
+    },
+    {
+      "label": "the PR state is never read after a failed merge (test_merge_failure_with_unchanged_base_echoes_stderr)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            view = _pr_view(runner, repo, pr)\n",
+      "replace": "            view = {\"state\": \"OPEN\"}\n"
+    },
+    {
+      "label": "gh's stderr is dropped when the base re-read fails (test_merge_failure_with_unreadable_base_echoes_stderr)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n            moved = _base_moved(runner, repo, info)\n",
+      "replace": "            moved = _base_moved(runner, repo, info)\n            if moved is not None:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n"
+    },
+    {
+      "label": "gh's stderr is dropped before a new round (test_merge_failure_after_base_moved_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n            moved = _base_moved(runner, repo, info)\n",
+      "replace": "            moved = _base_moved(runner, repo, info)\n            if moved is not True:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n"
+    },
+    {
+      "label": "a non-OPEN non-MERGED state falls through to the base re-read (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            if state != \"OPEN\":\n",
+      "replace": "            if False:\n"
+    },
+    {
+      "label": "gh's stderr is not echoed when the PR is neither MERGED nor OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n",
+      "replace": "                print(problem, file=sys.stderr)\n"
+    },
+    {
+      "label": "status ids are dropped from checks= (test_statuses_only_green_names_status_ids_in_checks)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": ", *(f\"status:{status_id}\" for status_id in watched.status_ids)])",
+      "replace": "])"
+    },
+    {
+      "label": "status ids are listed before run ids in checks= (test_ledger_checks_list_runs_then_statuses)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "checks = \",\".join([*(str(run_id) for run_id in watched.run_ids), *(f\"status:{status_id}\" for status_id in watched.status_ids)])",
+      "replace": "checks = \",\".join([*(f\"status:{status_id}\" for status_id in watched.status_ids), *(str(run_id) for run_id in watched.run_ids)])"
+    },
+    {
+      "label": "the watch gets the remaining time (test_watch_gets_a_fresh_timeout_after_registration)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            require=require,\n            timeout=timeout,\n",
+      "replace": "            require=require,\n            timeout=deadline - clock(),\n"
+    },
+    {
+      "label": "--max-rounds accepts values below 1 (test_max_rounds_below_one_is_rejected_before_any_call)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "type=_rounds, default=3)",
+      "replace": "type=int, default=3)"
+    },
+    {
+      "label": "an unreadable landed tree reads as a mismatch (test_unreadable_tree_is_not_a_mismatch)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if landed is None:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "an unreadable tested tree reads as a mismatch (test_unreadable_tree_is_not_a_mismatch)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    if expected is None:\n",
+      "replace": "    if False:\n"
     }
   ]
 }
