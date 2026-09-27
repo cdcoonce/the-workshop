@@ -158,6 +158,27 @@ def test_builder_output_fingerprint_empty_for_non_git_directory(tmp_path):
     assert len(fingerprint) == 64
 
 
+def test_builder_output_fingerprint_does_not_walk_up_to_a_parent_repo(tmp_path):
+    # `root` sits inside a git repo with real commits but is not itself a
+    # repo root (no `.git` of its own). `git -C root log` would otherwise
+    # walk up and pick up the *parent* repo's log; the spec says the
+    # git-log segment must be empty in that case, exactly as it is for a
+    # directory outside any repo entirely.
+    outer = tmp_path / "outer"
+    _init_repo(outer)
+    _write(outer, "README.md", "outer\n")
+    _commit_all(outer, "outer initial")
+
+    inner = outer / "inner"
+    _write(inner, "file.txt", "hello")
+
+    standalone = tmp_path / "standalone"
+    standalone.mkdir()
+    _write(standalone, "file.txt", "hello")
+
+    assert builder_output_fingerprint(inner) == builder_output_fingerprint(standalone)
+
+
 def test_compute_fingerprint_composes_tier_hashes_version_and_date(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)

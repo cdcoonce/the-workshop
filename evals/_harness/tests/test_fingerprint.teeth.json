@@ -36,6 +36,13 @@
       "replace": "        if False:"
     },
     {
+      "label": "drops the toplevel check",
+      "file": "../fingerprint.py",
+      "oracle": "real",
+      "find": "    if not _is_own_repo_root(root):\n        return \"\"\n    result = subprocess.run(",
+      "replace": "    result = subprocess.run("
+    },
+    {
       "label": "builder_output_fingerprint drops the git-log segment",
       "file": "../fingerprint.py",
       "oracle": "real",

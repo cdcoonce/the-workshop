@@ -74,7 +74,30 @@ def _iter_files(root: Path):
         yield path
 
 
+def _is_own_repo_root(root: Path) -> bool:
+    """Return whether *root* is itself a git repository's top level.
+
+    ``git -C root log`` walks up to a parent repository when *root* sits
+    inside one but is not itself a repo root, which would leak that parent's
+    log into this fixture's fingerprint. Comparing the resolved toplevel to
+    *root* catches exactly that case.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False
+    try:
+        return Path(result.stdout.strip()).resolve() == root.resolve()
+    except OSError:
+        return False
+
+
 def _git_log_all(root: Path) -> str:
+    if not _is_own_repo_root(root):
+        return ""
     result = subprocess.run(
         ["git", "-C", str(root), "log", "--all", "--format=%H%x00%s"],
         capture_output=True,
@@ -105,7 +128,8 @@ def builder_output_fingerprint(root: Path) -> str:
         for every file under *root* (excluding the contents of ``.git/``),
         joined by ``\\n``; then ``\\n--git-log--\\n``; then the output of
         ``git -C <root> log --all --format=%H%x00%s`` (``""`` when *root* is
-        not a git repository).
+        not itself a git repository's top level — including when it sits
+        inside one, so the log is never a parent repo's).
     """
     lines = sorted(
         f"{path.relative_to(root).as_posix()}\0{hashlib.sha256(path.read_bytes()).hexdigest()}"
