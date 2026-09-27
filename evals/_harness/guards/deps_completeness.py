@@ -73,7 +73,11 @@ def check(ctx: GuardContext) -> list[Result]:
                 # Not a tracked file (e.g. an external or generated path) —
                 # nothing for the direct tier to cover.
                 continue
-            if resolved not in covered:
+            # A directory link expands to every file under it (`tracked`);
+            # it is covered once every one of those files is covered, even
+            # though the directory path itself never appears in `covered`.
+            missing = set(tracked) - covered
+            if missing:
                 results.append(
                     Result(
                         level="fail",

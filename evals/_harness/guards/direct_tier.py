@@ -16,6 +16,7 @@ it at all, regardless of what its direct tier's diff contains.
 from __future__ import annotations
 
 import json
+import posixpath
 import subprocess
 from pathlib import Path
 
@@ -37,12 +38,19 @@ def _run_git(repo_root: Path, *args: str) -> str:
 
 
 def _changed_paths(repo_root: Path, base: str) -> set[str]:
-    output = _run_git(repo_root, "diff", "--name-only", f"{base}...HEAD")
+    # --no-renames: a plain `git diff --name-only` auto-detects renames and
+    # prints only the new path, so a direct-tier file renamed OUT of the tier
+    # (its new path is not a tier member) would otherwise vanish from the
+    # diff entirely — the base-side union below exists to catch deletions,
+    # but a rename is never a deletion under rename detection.
+    output = _run_git(repo_root, "diff", "--no-renames", "--name-only", f"{base}...HEAD")
     return {line for line in output.splitlines() if line}
 
 
 def _added_paths(repo_root: Path, base: str) -> set[str]:
-    output = _run_git(repo_root, "diff", "--name-status", f"{base}...HEAD")
+    # --no-renames: keeps a renamed-and-modified file from reading as a plain
+    # "A" (added) status pair with the rest of this module's diff calls.
+    output = _run_git(repo_root, "diff", "--no-renames", "--name-status", f"{base}...HEAD")
     added: set[str] = set()
     for line in output.splitlines():
         if not line:
@@ -57,9 +65,15 @@ def _added_paths(repo_root: Path, base: str) -> set[str]:
 def _has_matching_green_run(
     repo_root: Path, skill: str, base: str, expected_hash: str
 ) -> bool:
-    runs_prefix = f"evals/{skill}/runs/"
+    # Only a file DIRECTLY in evals/<skill>/runs/ is a run file — anything
+    # deeper (an attempt's raw output under runs/<stem>/...) is a raw, never
+    # a run file, and a run file only counts for THIS skill, never another
+    # rostered skill's runs/ directory.
+    runs_dir = f"evals/{skill}/runs"
     for added_path in _added_paths(repo_root, base):
-        if not added_path.startswith(runs_prefix):
+        if posixpath.dirname(added_path) != runs_dir:
+            continue
+        if not added_path.endswith(".json"):
             continue
         run_path = repo_root / added_path
         try:

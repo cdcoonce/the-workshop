@@ -209,3 +209,114 @@ def test_fails_when_a_direct_tier_file_is_deleted(tmp_path):
 
     assert len(results) == 1
     assert results[0].level == "fail"
+
+
+def test_fails_when_a_direct_tier_file_is_renamed_out_of_the_tier(tmp_path):
+    """F1: a plain `git diff --name-only` auto-detects the rename and shows only
+    the new path, which is not itself a tier member, so the base-side union
+    that catches deletions never sees the old path either unless renames are
+    disabled on the diff.
+    """
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _git(repo, "mv", "evals/commit/marker.txt", "outside.txt")
+    _commit(repo, "rename marker out of the tier")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_a_nested_raw_json_under_runs_does_not_satisfy_the_requirement(tmp_path):
+    """F2: only files directly in evals/<skill>/runs/ are run files; anything
+    deeper (an attempt's raw output) must never satisfy the guard.
+    """
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _write(repo, "evals/commit/marker.txt", "changed\n")
+    _commit(repo, "change marker")
+    expected_hash = tree_hash(["evals/commit/marker.txt"], ref="HEAD", repo=repo)
+    _write(
+        repo,
+        "evals/commit/runs/20260101T000000Z-abc/case1/attempt-1/out.json",
+        _run_file(verdict="green", direct_tier_hash=expected_hash),
+    )
+    _commit(repo, "add a nested raw json")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_a_run_file_under_a_different_skills_runs_dir_does_not_satisfy_the_requirement(tmp_path):
+    """F5/I5: a run file only counts for skill S if it is under evals/S/runs/."""
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _write(repo, "evals/commit/marker.txt", "changed\n")
+    _commit(repo, "change marker")
+    expected_hash = tree_hash(["evals/commit/marker.txt"], ref="HEAD", repo=repo)
+    _write(repo, "evals/tdd/runs/run1.json", _run_file(verdict="green", direct_tier_hash=expected_hash))
+    _commit(repo, "add a matching green run under the wrong skill's runs dir")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_a_green_run_file_with_a_missing_direct_tier_hash_does_not_satisfy_the_requirement(tmp_path):
+    """F5/I4: a green run file whose recorded hash is absent never satisfies the guard."""
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _write(repo, "evals/commit/marker.txt", "changed\n")
+    _commit(repo, "change marker")
+    _write(
+        repo,
+        "evals/commit/runs/run1.json",
+        json.dumps({"skill": "commit", "verdict": "green", "fingerprint": {}}),
+    )
+    _commit(repo, "add a green run with no recorded hash")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_a_green_run_file_with_an_empty_direct_tier_hash_does_not_satisfy_the_requirement(tmp_path):
+    """F5/I4: a green run file whose recorded hash is empty never satisfies the guard."""
+    repo, base_sha = _base_repo(tmp_path, active=True)
+    _write(repo, "evals/commit/marker.txt", "changed\n")
+    _commit(repo, "change marker")
+    _write(
+        repo,
+        "evals/commit/runs/run1.json",
+        _run_file(verdict="green", direct_tier_hash=""),
+    )
+    _commit(repo, "add a green run with an empty recorded hash")
+
+    results = check(GuardContext(base=base_sha, repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_ignores_base_only_changes_via_three_dot_range(tmp_path):
+    """F5/I1: the diff must be $(VERSION_BASE)...HEAD (three-dot, merge-base
+    relative). With divergent history, a commit the base branch makes to the
+    skill's direct tier AFTER the PR branch forked must not fail a PR that
+    never touches it — a two-dot diff would incorrectly include it.
+    """
+    repo, fork_sha = _base_repo(tmp_path, active=True)
+    initial_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+
+    _git(repo, "branch", "base-line", fork_sha)
+    _git(repo, "checkout", "-q", "base-line")
+    _write(repo, "evals/commit/marker.txt", "base progressed after the fork\n")
+    base_head_sha = _commit(repo, "base branch edits the tier after the fork")
+
+    _git(repo, "checkout", "-q", initial_branch)
+    _write(repo, "unrelated.txt", "hello\n")
+    _commit(repo, "PR branch touches something unrelated")
+
+    results = check(GuardContext(base=base_head_sha, repo_root=repo))
+
+    assert results == []

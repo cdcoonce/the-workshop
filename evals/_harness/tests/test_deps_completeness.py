@@ -121,6 +121,114 @@ def test_no_fail_for_a_link_to_an_untracked_file(tmp_path):
     assert results == []
 
 
+def test_fails_when_an_outside_directory_link_is_not_in_direct(tmp_path):
+    """F4/I6/I7: an outside-directory link (normalized) omitted from direct fails."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(
+        repo,
+        "plugins/workbench/skills/tdd/SKILL.md",
+        "See [the tdd doc](../../docs/tdd.md) for details.\n",
+    )
+    _write(repo, "plugins/workbench/docs/tdd.md", "tdd doc\n")
+    _write(repo, "evals/tdd/deps", 'direct = ["plugins/workbench/skills/tdd"]\ninjection = []\n')
+    _commit(repo, "initial")
+
+    results = check(GuardContext(base="HEAD", repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+    assert "tdd" in results[0].message
+
+
+def test_no_fail_when_the_outside_directory_link_is_in_direct(tmp_path):
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(
+        repo,
+        "plugins/workbench/skills/tdd/SKILL.md",
+        "See [the tdd doc](../../docs/tdd.md) for details.\n",
+    )
+    _write(repo, "plugins/workbench/docs/tdd.md", "tdd doc\n")
+    _write(
+        repo,
+        "evals/tdd/deps",
+        'direct = ["plugins/workbench/docs/tdd.md", "plugins/workbench/skills/tdd"]\ninjection = []\n',
+    )
+    _commit(repo, "initial")
+
+    results = check(GuardContext(base="HEAD", repo_root=repo))
+
+    assert results == []
+
+
+def test_fails_for_a_subdirectory_link_not_covered(tmp_path):
+    """F4/I7: a link containing '/' (a subdirectory inside the skill dir) is not ignored."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(
+        repo,
+        "plugins/workbench/skills/commit/SKILL.md",
+        "See [ref](references/x.md) for details.\n",
+    )
+    _write(repo, "plugins/workbench/skills/commit/references/x.md", "content\n")
+    _write(
+        repo,
+        "evals/commit/deps",
+        'direct = ["plugins/workbench/skills/commit/SKILL.md"]\ninjection = []\n',
+    )
+    _commit(repo, "initial")
+
+    results = check(GuardContext(base="HEAD", repo_root=repo))
+
+    assert len(results) == 1
+    assert results[0].level == "fail"
+
+
+def test_no_fail_for_a_subdirectory_link_covered_by_the_skill_dir(tmp_path):
+    """F7: a subdirectory link inside the skill dir is covered by the whole skill dir."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(
+        repo,
+        "plugins/workbench/skills/commit/SKILL.md",
+        "See [ref](references/x.md) for details.\n",
+    )
+    _write(repo, "plugins/workbench/skills/commit/references/x.md", "content\n")
+    _write(
+        repo,
+        "evals/commit/deps",
+        'direct = ["plugins/workbench/skills/commit"]\ninjection = []\n',
+    )
+    _commit(repo, "initial")
+
+    results = check(GuardContext(base="HEAD", repo_root=repo))
+
+    assert results == []
+
+
+def test_no_fail_for_a_link_to_a_directory_covered_by_the_skill_dir(tmp_path):
+    """F6: a directory link inside the skill dir must not be a false-positive fail."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(
+        repo,
+        "plugins/workbench/skills/commit/SKILL.md",
+        "See [refs](references/) for details.\n",
+    )
+    _write(repo, "plugins/workbench/skills/commit/references/a.md", "ref\n")
+    _write(
+        repo,
+        "evals/commit/deps",
+        'direct = ["plugins/workbench/skills/commit"]\ninjection = []\n',
+    )
+    _commit(repo, "initial")
+
+    results = check(GuardContext(base="HEAD", repo_root=repo))
+
+    assert results == []
+
+
 def test_skips_a_rostered_skill_with_no_deps_file_yet(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)

@@ -60,6 +60,14 @@
       "replace": "        tier_files = set(\n            expand_paths(direct_paths, ref=\"HEAD\", repo=ctx.repo_root)\n        )"
     },
     {
+      "label": "F1: _changed_paths drops --no-renames, a rename out of the tier escapes",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_direct_tier_file_is_renamed_out_of_the_tier: with rename detection on, `git diff --name-only` prints only the new path, so a tier file renamed out never appears in `changed` under its old (tier-member) path, and the guard fails open.",
+      "find": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}...HEAD\")",
+      "replace": "    output = _run_git(repo_root, \"diff\", \"--name-only\", f\"{base}...HEAD\")"
+    },
+    {
       "label": "_added_paths drops the 'A' status filter, counting modified files as added",
       "file": "./direct_tier.py",
       "oracle": "real",
@@ -68,11 +76,20 @@
       "replace": "        added.add(path)"
     },
     {
-      "label": "_has_matching_green_run drops the runs/ directory prefix filter",
+      "label": "F2/I5: _has_matching_green_run drops the runs-directory depth and skill-scoping filter",
       "file": "./direct_tier.py",
       "oracle": "real",
-      "find": "        if not added_path.startswith(runs_prefix):\n            continue",
+      "why": "Killed by test_a_nested_raw_json_under_runs_does_not_satisfy_the_requirement (a nested attempt raw would satisfy the guard) and test_a_run_file_under_a_different_skills_runs_dir_does_not_satisfy_the_requirement (another skill's run file would satisfy it too) once this conjunct is gone.",
+      "find": "        if posixpath.dirname(added_path) != runs_dir:\n            continue",
       "replace": "        pass"
+    },
+    {
+      "label": "I5: _has_matching_green_run loosens the runs-directory check to any skill's runs dir",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_run_file_under_a_different_skills_runs_dir_does_not_satisfy_the_requirement: a run file only counts for skill S if it is under evals/S/runs/, never another rostered skill's runs dir. This mutant keeps the depth requirement (still blocks a nested raw) but drops the skill-name segment, so it isolates the cross-skill claim from F2's depth claim above.",
+      "find": "        if posixpath.dirname(added_path) != runs_dir:\n            continue",
+      "replace": "        if posixpath.basename(posixpath.dirname(added_path)) != \"runs\":\n            continue"
     },
     {
       "label": "_has_matching_green_run drops the verdict == green conjunct",
@@ -88,6 +105,22 @@
       "find": "        if run.get(\"fingerprint\", {}).get(\"direct_tier_hash\") == expected_hash:\n            return True",
       "replace": "        return True",
       "why": "Killed by test_fails_when_a_green_run_files_hash_does_not_match: a green run file added by the diff must still carry the exact current direct-tier hash, not merely exist."
+    },
+    {
+      "label": "I4: _has_matching_green_run loosens the hash comparison to a substring check",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_green_run_file_with_a_missing_direct_tier_hash_does_not_satisfy_the_requirement and test_a_green_run_file_with_an_empty_direct_tier_hash_does_not_satisfy_the_requirement: an empty string is a substring of every string, so a missing or empty recorded hash would satisfy the guard under `in` instead of `==`.",
+      "find": "        if run.get(\"fingerprint\", {}).get(\"direct_tier_hash\") == expected_hash:\n            return True",
+      "replace": "        if str(run.get(\"fingerprint\", {}).get(\"direct_tier_hash\", \"\")) in expected_hash:\n            return True"
+    },
+    {
+      "label": "I1: _changed_paths uses a two-dot range, leaking base-only history",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_base_only_changes_via_three_dot_range: the guard must diff $(VERSION_BASE)...HEAD (merge-base relative), or a commit the base branch makes to the tier AFTER the PR forked spuriously fails a PR that never touches it.",
+      "find": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}...HEAD\")",
+      "replace": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}..HEAD\")"
     },
     {
       "label": "[control] reword the guard module docstring",

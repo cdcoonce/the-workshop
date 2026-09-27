@@ -90,6 +90,15 @@
       "oracle": "real",
       "find": "    manifest_path = skill_dir / \"checks.manifest\"\n    manifest_text = manifest_path.read_text(encoding=\"utf-8\") if manifest_path.exists() else \"\"\n    if parse_checks_manifest(manifest_text):\n        return True\n\n    retired_path = skill_dir / \"retired.md\"\n    retired_text = retired_path.read_text(encoding=\"utf-8\") if retired_path.exists() else \"\"\n    return bool(parse_retired_entries(retired_text))",
       "replace": "    return False"
+    },
+    {
+      "label": "[control] reword the module docstring",
+      "file": "../activation.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Guards elsewhere in this package (``#997``, ``#1009``) gate",
+      "replace": "This package's guards elsewhere (``#997``, ``#1009``) gate"
     }
   ]
 }

@@ -56,9 +56,81 @@
       "label": "the committed commit/deps direct tier points at the wrong skill",
       "file": "../../commit/deps",
       "oracle": "real",
-      "why": "Killed by test_deps_file_declares_the_expected_direct_tier[commit]: proves the real committed deps file, not just a synthetic one, is actually checked.",
+      "why": "Killed by test_deps_file_direct_tier_covers_the_skill_dir_and_outside_links[commit]: proves the real committed deps file, not just a synthetic one, is actually checked.",
       "find": "\"plugins/workbench/skills/commit\"",
       "replace": "\"plugins/workbench/skills/wrong-skill\""
+    },
+    {
+      "label": "I8: _GAPS_ENTRY_PATTERN accepts a gaps entry with an empty reason",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_an_entry_with_an_empty_reason_no_space and test_check_gaps_flags_an_entry_with_an_empty_reason_trailing_space: the pinned regex requires \\S right after ': ', so '- x:' and '- x: ' must both be malformed, not merely colon-shaped.",
+      "find": "_GAPS_ENTRY_PATTERN = re.compile(r\"^- [^:]+: \\S.*$\")",
+      "replace": "_GAPS_ENTRY_PATTERN = re.compile(r\"^- [^:]+:.*$\")"
+    },
+    {
+      "label": "_checks_manifest_problems drops the missing-description check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_manifest_flags_a_line_missing_a_description.",
+      "find": "        if len(parts) < 2:\n            problems.append(f\"missing description: {line!r}\")\n            continue",
+      "replace": "        if len(parts) < 2:\n            continue"
+    },
+    {
+      "label": "_checks_manifest_problems drops the id-grammar check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_manifest_flags_a_line_whose_id_fails_the_grammar.",
+      "find": "        if not _MANIFEST_ID_PATTERN.match(candidate_id):\n            problems.append(f\"id fails the grammar: {line!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_retired_problems drops the date-format check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_a_malformed_date.",
+      "find": "        if not date or not _RETIRED_DATE_PATTERN.match(date):\n            problems.append(f\"{entry_id}: bad or missing date {date!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_retired_problems drops the reason-grammar check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_an_unrecognized_reason.",
+      "find": "        reason = entry.get(\"reason\")\n        if not reason or not _RETIRED_REASON_PATTERN.match(reason):\n            problems.append(f\"{entry_id}: bad or missing reason {reason!r}\")",
+      "replace": "        reason = entry.get(\"reason\")"
+    },
+    {
+      "label": "_retired_problems drops the evidence-present check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_missing_evidence.",
+      "find": "        if not entry.get(\"evidence\"):\n            problems.append(f\"{entry_id}: missing evidence\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_direct_tier_problems drops the skill-directory-membership check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_flags_a_missing_skill_dir.",
+      "find": "    if skill_dir_rel not in direct:\n        problems.append(f\"{skill}: direct tier missing the skill directory {skill_dir_rel!r}\")",
+      "replace": "    pass"
+    },
+    {
+      "label": "_direct_tier_problems drops the in-skill-dir skip, flagging every same/sub-dir link too",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by the real-repo test_deps_file_direct_tier_covers_the_skill_dir_and_outside_links[commit] and [adversarial-review]: both skills' SKILL.md link a references/ subdirectory file covered only by the whole skill dir being in `direct`, never by its own literal path.",
+      "find": "        if resolved == skill_dir_rel or resolved.startswith(skill_dir_rel + \"/\"):\n            continue  # inside the skill dir; covered by the dir itself",
+      "replace": "        pass"
+    },
+    {
+      "label": "_direct_tier_problems drops the outside-link coverage check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_flags_a_missing_outside_link.",
+      "find": "        if resolved not in direct:\n            problems.append(f\"{skill}: outside link {link!r} -> {resolved} missing from direct tier\")",
+      "replace": "        pass"
     },
     {
       "label": "[control] reword the scaffolding test module docstring",
