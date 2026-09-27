@@ -574,9 +574,20 @@ def test_write_calibration_records_round_trips_a_non_empty_audit_list(tmp_path):
     assert written["item-a"]["audit"] == audit
 
 
-def test_write_calibration_records_refuses_a_case_dir_not_under_evals(tmp_path):
-    """AC: writes only under ``evals/<skill>/<case>``; a test asserts both."""
-    case_dir = tmp_path / "not_evals" / "example-skill" / "case-a"
+@pytest.mark.parametrize(
+    "relative_case_dir",
+    [
+        "not_evals/example-skill/case-a",
+        "evals/example-skill",
+        "evals/example-skill/case-a/sub",
+    ],
+)
+def test_write_calibration_records_refuses_a_case_dir_not_under_evals(tmp_path, relative_case_dir):
+    """AC: writes only under ``evals/<skill>/<case>``; a test asserts both.
+
+    Covers a wrong root, a directory one level too shallow, and one level too deep.
+    """
+    case_dir = tmp_path / relative_case_dir
     case_dir.mkdir(parents=True)
     record = compute_calibration_record(
         item_id="item-a",
@@ -593,6 +604,30 @@ def test_write_calibration_records_refuses_a_case_dir_not_under_evals(tmp_path):
         write_calibration_records(case_dir, {"item-a": record})
 
     assert not (case_dir / "calibration.json").exists()
+
+
+def test_write_calibration_records_refuses_a_symlinked_destination(tmp_path):
+    """A pre-existing ``calibration.json`` symlink must not let the write escape ``evals/``."""
+    case_dir = tmp_path / "evals" / "example-skill" / "case-a"
+    case_dir.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text("untouched\n", encoding="utf-8")
+    (case_dir / "calibration.json").symlink_to(outside)
+    record = compute_calibration_record(
+        item_id="item-a",
+        kind="gate-candidate",
+        skill_hits=5,
+        skill_n=6,
+        no_skill_attempts=[{"contaminated": False, "hit": False}] * 3,
+        audited_hits=5,
+        audit=[],
+        input_hash="a" * 64,
+    )
+
+    with pytest.raises(ValueError):
+        write_calibration_records(case_dir, {"item-a": record})
+
+    assert outside.read_text(encoding="utf-8") == "untouched\n"
 
 
 def test_write_calibration_records_touches_no_file_besides_calibration_json(tmp_path):

@@ -224,7 +224,8 @@ def write_calibration_records(case_dir: Path, records: dict[str, dict]) -> Path:
     Raises
     ------
     ValueError
-        If *case_dir* is not shaped ``evals/<skill>/<case>``.
+        If *case_dir* is not shaped ``evals/<skill>/<case>``, or its
+        ``calibration.json`` is a symlink.
     jsonschema.ValidationError
         If any record fails schema validation.
     """
@@ -236,6 +237,8 @@ def write_calibration_records(case_dir: Path, records: dict[str, dict]) -> Path:
         jsonschema.validate(record, schema)
 
     dest = case_dir / "calibration.json"
+    if dest.is_symlink():
+        raise ValueError(f"refusing to write through a symlinked destination: {dest}")
     dest.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return dest
 

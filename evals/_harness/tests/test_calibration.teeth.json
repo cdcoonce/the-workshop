@@ -238,6 +238,14 @@
       "why": "Kills test_gate_candidate_cross_match_in_the_second_audit_entry_is_caught, whose cross-match sits in the second entry."
     },
     {
+      "label": "writer drops its symlinked-destination refusal",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    if dest.is_symlink():\n        raise ValueError(f\"refusing to write through a symlinked destination: {dest}\")\n",
+      "replace": "",
+      "why": "Kills test_write_calibration_records_refuses_a_symlinked_destination: a planted calibration.json symlink would let the write overwrite a file outside evals/."
+    },
+    {
       "label": "[control] reword the module docstring's summary of what this module never does",
       "file": "../calibration.py",
       "oracle": "real",
