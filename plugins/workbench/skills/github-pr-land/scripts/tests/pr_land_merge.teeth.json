@@ -154,15 +154,15 @@
       "label": "the base re-read runs before the PR state check (test_failed_merge_that_landed_does_not_start_a_new_round)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            view = _pr_view(runner, repo, pr)\n",
-      "replace": "            moved = _base_moved(runner, repo, info)\n            view = _pr_view(runner, repo, pr)\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n",
+      "replace": "            # start a round on an already-merged PR.\n            moved = _base_moved(runner, repo, info)\n            view = _pr_view(runner, repo, pr)\n"
     },
     {
       "label": "a MERGED state after a failed merge is not treated as landed (test_failed_merge_that_landed_does_not_start_a_new_round)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            if state == \"MERGED\":\n",
-      "replace": "            if False:\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if False:\n"
     },
     {
       "label": "gh's stderr is not echoed when a failed merge landed (test_failed_merge_that_landed_does_not_start_a_new_round)",
@@ -175,8 +175,8 @@
       "label": "the PR state is never read after a failed merge (test_merge_failure_with_unchanged_base_echoes_stderr)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            view = _pr_view(runner, repo, pr)\n",
-      "replace": "            view = {\"state\": \"OPEN\"}\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = {\"state\": \"OPEN\"}\n"
     },
     {
       "label": "gh's stderr is dropped when the base re-read fails (test_merge_failure_with_unreadable_base_echoes_stderr)",
@@ -196,15 +196,15 @@
       "label": "a non-OPEN non-MERGED state falls through to the base re-read (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            if state != \"OPEN\":\n",
-      "replace": "            if False:\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                return _verify_landed(runner, pr, view, tested, watched)\n            if state != \"OPEN\":\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                return _verify_landed(runner, pr, view, tested, watched)\n            if False:\n"
     },
     {
       "label": "gh's stderr is not echoed when the PR is neither MERGED nor OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "                print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n",
-      "replace": "                print(problem, file=sys.stderr)\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                return _verify_landed(runner, pr, view, tested, watched)\n            if state != \"OPEN\":\n                if isinstance(state, str):\n                    problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                else:\n                    problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                return _verify_landed(runner, pr, view, tested, watched)\n            if state != \"OPEN\":\n                if isinstance(state, str):\n                    problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                else:\n                    problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                print(problem, file=sys.stderr)\n"
     },
     {
       "label": "status ids are dropped from checks= (test_statuses_only_green_names_status_ids_in_checks)",
@@ -252,29 +252,29 @@
       "label": "a failed-but-landed merge skips the tree check (test_failed_merge_that_landed_a_different_tree_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "                return _verify_landed(runner, pr, view, tested, watched)\n",
-      "replace": "                oid = (view.get(\"mergeCommit\") or {}).get(\"oid\")\n                checks = \",\".join([*(str(run_id) for run_id in watched.run_ids), *(f\"status:{status_id}\" for status_id in watched.status_ids)])\n                print(f\"landed pr={pr} tested={tested.tested_sha} gate={tested.gate_note} checks={checks} merge={oid}\")\n                return GREEN\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                return _verify_landed(runner, pr, view, tested, watched)\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n                print(f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\", file=sys.stderr)\n                oid = (view.get(\"mergeCommit\") or {}).get(\"oid\")\n                checks = \",\".join([*(str(run_id) for run_id in watched.run_ids), *(f\"status:{status_id}\" for status_id in watched.status_ids)])\n                print(f\"landed pr={pr} tested={tested.tested_sha} gate={tested.gate_note} checks={checks} merge={oid}\")\n                return GREEN\n"
     },
     {
       "label": "a view with no state is read as OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            state = view.get(\"state\") if view is not None else None\n",
-      "replace": "            state = view.get(\"state\", \"OPEN\") if view is not None else None\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\", \"OPEN\") if view is not None else None\n"
     },
     {
       "label": "an unreadable view is read as OPEN (test_merge_failure_with_pr_neither_merged_nor_open_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            state = view.get(\"state\") if view is not None else None\n",
-      "replace": "            state = view.get(\"state\") if view is not None else \"OPEN\"\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else \"OPEN\"\n"
     },
     {
       "label": "a MERGED view with no mergeCommit falls through to the base re-read (test_failed_merge_whose_merged_view_names_no_merge_commit_exits_2)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            if state == \"MERGED\":\n",
-      "replace": "            if state == \"MERGED\" and not isinstance(view.get(\"mergeCommit\"), dict):\n                state = \"OPEN\"\n            if state == \"MERGED\":\n"
+      "find": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\":\n",
+      "replace": "            # start a round on an already-merged PR.\n            view = _pr_view(runner, repo, pr)\n            state = view.get(\"state\") if view is not None else None\n            if state == \"MERGED\" and not isinstance(view.get(\"mergeCommit\"), dict):\n                state = \"OPEN\"\n            if state == \"MERGED\":\n"
     },
     {
       "label": "the tested tree is checked before the landed tree (test_unreadable_tree_is_not_a_mismatch)",
@@ -282,6 +282,83 @@
       "oracle": "double",
       "find": "    landed = _tree(runner, oid)\n    if landed is None:\n        print(f\"cannot read tree for {oid}\", file=sys.stderr)\n        return INDETERMINATE\n    expected = _tree(runner, tested.tested_sha)\n    if expected is None:\n        print(f\"cannot read tree for {tested.tested_sha}\", file=sys.stderr)\n        return INDETERMINATE\n",
       "replace": "    expected = _tree(runner, tested.tested_sha)\n    if expected is None:\n        print(f\"cannot read tree for {tested.tested_sha}\", file=sys.stderr)\n        return INDETERMINATE\n    landed = _tree(runner, oid)\n    if landed is None:\n        print(f\"cannot read tree for {oid}\", file=sys.stderr)\n        return INDETERMINATE\n"
+    },
+    {
+      "label": "a lagging OPEN view is not re-read before a new round (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            if moved is True:\n",
+      "replace": "            if False:\n"
+    },
+    {
+      "label": "the re-read count is off by one (test_persistently_open_view_after_landing_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n",
+      "replace": "                for _ in range(2):\n"
+    },
+    {
+      "label": "re-reads also run when the base is unchanged (test_open_after_merge_is_not_reread_when_base_did_not_move)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            if moved is False:\n                return INDETERMINATE\n            if moved is True:\n",
+      "replace": "            if moved is None:\n                return INDETERMINATE\n            if True:\n"
+    },
+    {
+      "label": "no sleep between re-reads (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n                    sleep(interval)\n",
+      "replace": "                for _ in range(3):\n                    pass\n"
+    },
+    {
+      "label": "re-reads sleep a fixed 15 s instead of interval (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n",
+      "replace": "                    sleep(15)\n                    view = _pr_view(runner, repo, pr)\n"
+    },
+    {
+      "label": "a MERGED re-read drops the `but the PR is MERGED:` stderr line (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                        print(\n                            f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\",\n                            file=sys.stderr,\n                        )\n",
+      "replace": "                        print(f\"gh pr merge exited {merged.returncode}\", file=sys.stderr)\n"
+    },
+    {
+      "label": "a CLOSED or unreadable re-read is treated as OPEN (test_reread_turning_non_open_non_merged_exits_2)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                    if state != \"OPEN\":\n",
+      "replace": "                    if False:\n"
+    },
+    {
+      "label": "the re-read sleeps after the view read instead of before it (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n",
+      "replace": "                for _ in range(3):\n                    view = _pr_view(runner, repo, pr)\n                    sleep(interval)\n"
+    },
+    {
+      "label": "_base_moved is called again after the re-read loop exhausts (test_persistently_open_view_after_landing_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n        if moved is None:\n",
+      "replace": "                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n                moved = _base_moved(runner, repo, info)\n        if moved is None:\n"
+    },
+    {
+      "label": "the `gh pr merge failed` print fires after the re-read loop instead of before it (test_lagging_open_view_is_reread_until_merged)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                return INDETERMINATE\n            if moved is True:\n                # GitHub's view can still lag behind a merge that landed: our\n                # own commit moved the base, so re-read a few more times\n                # before trusting a new round on what may be an already-\n                # merged PR.\n                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n                    state = view.get(\"state\") if view is not None else None\n                    if state == \"MERGED\":\n                        print(\n                            f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\",\n                            file=sys.stderr,\n                        )\n                        return _verify_landed(runner, pr, view, tested, watched)\n                    if state != \"OPEN\":\n                        if isinstance(state, str):\n                            problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                        else:\n                            problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n        if moved is None:\n",
+      "replace": "            moved = _base_moved(runner, repo, info)\n            if moved is False:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n                return INDETERMINATE\n            if moved is None:\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n                return INDETERMINATE\n            if moved is True:\n                # GitHub's view can still lag behind a merge that landed: our\n                # own commit moved the base, so re-read a few more times\n                # before trusting a new round on what may be an already-\n                # merged PR.\n                for _ in range(3):\n                    sleep(interval)\n                    view = _pr_view(runner, repo, pr)\n                    state = view.get(\"state\") if view is not None else None\n                    if state == \"MERGED\":\n                        print(\n                            f\"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}\",\n                            file=sys.stderr,\n                        )\n                        return _verify_landed(runner, pr, view, tested, watched)\n                    if state != \"OPEN\":\n                        if isinstance(state, str):\n                            problem = f\"pull request {pr} is in state {state} after a failed gh pr merge\"\n                        else:\n                            problem = f\"cannot read the state of pull request {pr} after a failed gh pr merge\"\n                        print(f\"{problem}: {merged.stderr.strip()}\", file=sys.stderr)\n                        return INDETERMINATE\n                print(f\"gh pr merge failed: {merged.stderr.strip()}\", file=sys.stderr)\n        if moved is None:\n"
+    },
+    {
+      "label": "the re-read loop bound is max_rounds instead of a fixed 3 (test_persistently_open_view_after_landing_starts_a_new_round)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                for _ in range(3):\n",
+      "replace": "                for _ in range(max_rounds):\n"
     }
   ]
 }

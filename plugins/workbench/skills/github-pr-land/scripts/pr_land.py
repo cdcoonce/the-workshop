@@ -804,6 +804,28 @@ def land_pr(
             moved = _base_moved(runner, repo, info)
             if moved is False:
                 return INDETERMINATE
+            if moved is True:
+                # GitHub's view can still lag behind a merge that landed: our
+                # own commit moved the base, so re-read a few more times
+                # before trusting a new round on what may be an already-
+                # merged PR.
+                for _ in range(3):
+                    sleep(interval)
+                    view = _pr_view(runner, repo, pr)
+                    state = view.get("state") if view is not None else None
+                    if state == "MERGED":
+                        print(
+                            f"gh pr merge exited {merged.returncode} but the PR is MERGED: {merged.stderr.strip()}",
+                            file=sys.stderr,
+                        )
+                        return _verify_landed(runner, pr, view, tested, watched)
+                    if state != "OPEN":
+                        if isinstance(state, str):
+                            problem = f"pull request {pr} is in state {state} after a failed gh pr merge"
+                        else:
+                            problem = f"cannot read the state of pull request {pr} after a failed gh pr merge"
+                        print(f"{problem}: {merged.stderr.strip()}", file=sys.stderr)
+                        return INDETERMINATE
         if moved is None:
             return INDETERMINATE
         print(f"{info.base_ref} moved during round {round_no}", file=sys.stderr)
