@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 import pr_land
-from conftest import CompositeRunner, FakeClock, FakeGh, json_result
+from conftest import CompositeRunner, FakeClock, FakeGh, http_error, json_result
 from pr_land import GREEN, INDETERMINATE, RED, Result, land_pr
 
 REPO = "acme/widget"
@@ -34,7 +35,10 @@ MERGE = ["gh", "pr", "merge"]
 VIEW = ["gh", "pr", "view"]
 ACTIONS_APP = 15368
 RUN_IDS = (4101, 4102)
-LEDGER = re.compile(r"^landed pr=\d+ tested=[0-9a-f]{40} gate=.+ checks=[0-9,]+ merge=[0-9a-f]{40}$")
+STATUS_IDS = (5101, 5102)
+LEDGER = re.compile(
+    r"^landed pr=\d+ tested=[0-9a-f]{40} gate=.+ checks=(?:\d+|status:\d+)(?:,(?:\d+|status:\d+))* merge=[0-9a-f]{40}$"
+)
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -62,6 +66,13 @@ class Hub:
         self.lands = True
         self.land_base_tree = False
         self.merge_oid: str | None = None
+        self.fail_after_landing: str | None = None
+        self.on_merge: Callable[[], None] | None = None
+        self.view_result: Result | None = None
+        self.base_read_failures: set[int] = set()
+        self.serve_runs = True
+        self.statuses: list[dict] = []
+        self.pending_polls = 0
         self._served_head: str | None = None
 
     def ref(self, branch: str) -> str:
@@ -89,7 +100,7 @@ class Hub:
         elif CHECK_RUNS.fullmatch(endpoint):
             result = self._check_runs()
         elif STATUSES.fullmatch(endpoint):
-            result = json_result([])
+            result = json_result(self.statuses)
         elif argv[:3] == MERGE:
             result = self._merge()
         elif argv[:3] == VIEW:
@@ -115,17 +126,24 @@ class Hub:
 
     def _base(self) -> Result:
         self.base_reads += 1
+        if self.base_reads in self.base_read_failures:
+            return http_error(502, "Server Error")
         if self.base_reads in self.base_moves:
             self.push_base()
         return json_result({"ref": "refs/heads/main", "object": {"sha": self.ref("main"), "type": "commit"}})
 
     def _check_runs(self) -> Result:
+        if not self.serve_runs:
+            return json_result({"total_count": 0, "check_runs": []})
+        pending = self.pending_polls > 0
+        if pending:
+            self.pending_polls -= 1
         runs = [
             {
                 "id": run_id,
                 "name": name,
-                "status": "completed",
-                "conclusion": self.conclusion,
+                "status": "in_progress" if pending else "completed",
+                "conclusion": None if pending else self.conclusion,
                 "check_suite": {"id": run_id},
                 "app": {"id": ACTIONS_APP, "slug": "github-actions"},
             }
@@ -145,9 +163,15 @@ class Hub:
         )
         git(self.origin, "update-ref", "refs/heads/main", oid)
         self.merge_oid = oid
+        if self.on_merge is not None:
+            self.on_merge()
+        if self.fail_after_landing is not None:
+            return Result(1, "", self.fail_after_landing)
         return Result(0, "", "")
 
     def _view(self) -> Result:
+        if self.view_result is not None:
+            return self.view_result
         if self.merge_oid is None:
             return json_result({"state": "OPEN", "mergeCommit": None})
         return json_result({"state": "MERGED", "mergeCommit": {"oid": self.merge_oid}})
@@ -195,6 +219,13 @@ class World:
     def watched(self) -> bool:
         return any(CHECK_RUNS.fullmatch(argv[2]) for argv in self.gh_argvs() if argv[:2] == ["gh", "api"])
 
+    def after_first_merge(self) -> tuple[list[int], list[int]]:
+        """Indexes into ``gh_argvs()`` of the ``gh pr view`` calls and base reads after the first ``gh pr merge``."""
+        gh_argvs = self.gh_argvs()
+        merge_at = next(i for i, argv in enumerate(gh_argvs) if argv[:3] == MERGE)
+        views = [i for i, argv in enumerate(gh_argvs) if i > merge_at and argv[:3] == VIEW]
+        return views, [i for i in self.reads(BASE_REF) if i > merge_at]
+
 
 @pytest.fixture
 def world(git_repo: Path, tmp_path: Path) -> World:
@@ -227,6 +258,21 @@ def behind(world: World) -> tuple[str, str]:
     head = world.commit(HEAD_REF, "a.txt", "a\n", "feat: a")
     base = world.commit("main", "b.txt", "b\n", "chore: b")
     return head, base
+
+
+def contexts_only(world: World) -> None:
+    """Swap in a fresh FakeGh whose protection lists test and lint with no app pins, so statuses count."""
+    fake = FakeGh()
+    fake.script(REPO_VIEW, json_result({"nameWithOwner": REPO}))
+    fake.script(
+        ["gh", "api", f"repos/{REPO}/branches/main/protection"],
+        json_result({"required_status_checks": {"strict": True, "contexts": ["test", "lint"]}}),
+    )
+    world.hub.fake = fake
+
+
+def serve_statuses(world: World) -> None:
+    world.hub.statuses = [{"id": sid, "context": name, "state": "success"} for sid, name in zip(STATUS_IDS, ("test", "lint"))]
 
 
 def land(world: World, **kwargs: object) -> int:
@@ -325,17 +371,87 @@ def test_merge_failure_with_unchanged_base_echoes_stderr(world: World, capsys: p
     assert reason in captured.err
     assert len(world.merges()) == 1
     assert ledger_lines(captured.out) == []
+    views, rereads = world.after_first_merge()
+    assert views and rereads and views[0] < rereads[0]
 
 
-def test_merge_failure_after_base_moved_starts_a_new_round(world: World) -> None:
-    """Guards against treating every merge failure as final, even when the base moved under it."""
+def test_merge_failure_after_base_moved_starts_a_new_round(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against treating every merge failure as final, even when the base moved under it, and against dropping gh's stderr before the new round."""
     behind(world)
-    world.hub.merge_failures = ["GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)"]
+    reason = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)"
+    world.hub.merge_failures = [reason]
     world.hub.base_moves = {3}
     assert land(world) == GREEN
     assert len(world.merges()) == 2
     assert len(world.refreshes()) == 2
     assert world.refreshes()[1][-1] == world.hub.pushed_bases[0]
+    err = capsys.readouterr().err
+    assert reason in err and "main moved during round 1" in err
+    assert err.index(reason) < err.index("main moved during round 1")
+
+
+def test_merge_failure_with_unreadable_base_echoes_stderr(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against dropping gh's stderr when the merge fails and the base re-read after it is unreadable."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 is not mergeable: the merge commit cannot be cleanly created."
+    world.hub.merge_failures = [reason]
+    world.hub.base_read_failures = {3}  # read_pr, the pre-merge re-check, then the post-merge re-read
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert "cannot read the tip of main" in captured.err
+    assert reason in captured.err
+    assert len(world.merges()) == 1 and len(world.refreshes()) == 1
+    assert ledger_lines(captured.out) == []
+
+
+def test_failed_merge_that_landed_does_not_start_a_new_round(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against reading our own landing commit as a moved base when gh pr merge exits nonzero after merging, which starts a round on a merged PR."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.fail_after_landing = reason
+    assert land(world) == GREEN
+    captured = capsys.readouterr()
+    tested = world.hub.ref(HEAD_REF)
+    oid = world.hub.merge_oid
+    assert oid is not None
+    assert len(world.refreshes()) == 1 and len(world.pushes()) == 1 and len(world.merges()) == 1
+    assert ledger_lines(captured.out) == [f"landed pr={PR} tested={tested} gate=exit 0 checks=4101,4102 merge={oid}"]
+    assert f"gh pr merge exited 1 but the PR is MERGED: {reason}" in captured.err
+    gh_argvs = world.gh_argvs()
+    merge_at = next(i for i, argv in enumerate(gh_argvs) if argv[:3] == MERGE)
+    assert gh_argvs[merge_at + 1][:3] == VIEW
+    views, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(views) == 1
+
+
+@pytest.mark.parametrize(
+    ("view", "message"),
+    [
+        (json_result({"state": "CLOSED", "mergeCommit": None}), "pull request 7 is in state CLOSED after a failed gh pr merge"),
+        (Result(1, "", "GraphQL: Could not resolve to a PullRequest\n"), "cannot read the state of pull request 7 after a failed gh pr merge"),
+        (json_result({"mergeCommit": None}), "cannot read the state of pull request 7 after a failed gh pr merge"),
+        (Result(0, "not json", ""), "cannot read the state of pull request 7 after a failed gh pr merge"),
+    ],
+    ids=["closed", "view-fails", "no-state", "unparseable"],
+)
+def test_merge_failure_with_pr_neither_merged_nor_open_exits_2(
+    world: World, capsys: pytest.CaptureFixture[str], view: Result, message: str
+) -> None:
+    """Guards against a failed merge on a PR that is neither MERGED nor OPEN falling through to the base re-read and another round."""
+    behind(world)
+    reason = "X Pull request acme/widget#7 is closed"
+    world.hub.merge_failures = [reason]
+    world.hub.view_result = view
+    world.hub.base_moves = {3}  # a post-merge re-read would see a moved base and start a round
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert message in captured.err
+    assert reason in captured.err
+    _, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(world.refreshes()) == 1
+    assert ledger_lines(captured.out) == []
 
 
 def test_landed_tree_differing_from_tested_tree_exits_2(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -362,6 +478,95 @@ def test_ledger_line_names_tested_head_checks_and_merge(world: World, capsys: py
     assert f"tested={world.hub.ref(HEAD_REF)} " in lines[0]
     assert lines[0].endswith(f" merge={world.hub.merge_oid}")
     assert " checks=4101,4102 " in lines[0]
+
+
+def test_failed_merge_that_landed_a_different_tree_exits_2(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against the failed-but-landed path printing the ledger without comparing the landed tree to the tested tree."""
+    behind(world)
+    world.hub.fail_after_landing = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.land_base_tree = True
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert "LANDED TREE DIFFERS FROM TESTED TREE" in captured.err
+    assert ledger_lines(captured.out) == []
+    _, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(world.refreshes()) == 1
+
+
+def test_failed_merge_whose_merged_view_names_no_merge_commit_exits_2(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Guards against a MERGED view with no mergeCommit after a failed merge falling through to the base re-read."""
+    behind(world)
+    world.hub.fail_after_landing = "X Pull request acme/widget#7 was merged, but failed to delete branch feat/x: HTTP 422"
+    world.hub.view_result = json_result({"state": "MERGED", "mergeCommit": None})
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    assert "is MERGED but names no mergeCommit" in captured.err
+    assert ledger_lines(captured.out) == []
+    _, rereads = world.after_first_merge()
+    assert rereads == []
+    assert len(world.refreshes()) == 1
+
+
+def test_statuses_only_green_names_status_ids_in_checks(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against an empty checks= when the required names are satisfied only by commit statuses."""
+    behind(world)
+    contexts_only(world)
+    world.hub.serve_runs = False
+    serve_statuses(world)
+    assert land(world) == GREEN
+    (line,) = ledger_lines(capsys.readouterr().out)
+    assert LEDGER.fullmatch(line)
+    assert re.search(r" checks=status:\d+(,status:\d+)* ", line)
+    assert " checks= " not in line and " checks=status:5101,status:5102 " in line
+
+
+def test_ledger_checks_list_runs_then_statuses(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against interleaving or reordering checks=, which must list every run id before every status id."""
+    behind(world)
+    contexts_only(world)
+    serve_statuses(world)
+    assert land(world) == GREEN
+    (line,) = ledger_lines(capsys.readouterr().out)
+    assert LEDGER.fullmatch(line)
+    assert " checks=4101,4102,status:5101,status:5102 " in line
+
+
+def test_watch_gets_a_fresh_timeout_after_registration(world: World) -> None:
+    """Guards against the watch inheriting only the time left after head registration instead of its own --timeout."""
+    behind(world)
+    world.hub.head_lag = 3  # registration polls at 0, 15, 30, 45 of a 60 s timeout
+    world.hub.pending_polls = 2  # pending at 45 and 60: past the 15 s left, well inside a fresh 60 s
+    assert land(world, timeout=60, interval=15) == GREEN
+    assert world.clock.now - 1000.0 > 60
+    assert len(world.merges()) == 1
+
+
+@pytest.mark.parametrize("side", ["landed", "tested", "both"])
+def test_unreadable_tree_is_not_a_mismatch(world: World, capsys: pytest.CaptureFixture[str], side: str) -> None:
+    """Guards against reporting a tree git could not read as LANDED TREE DIFFERS with a None tree id, and against checking the tested side first."""
+    behind(world)
+    unreadable: dict[str, str] = {}
+
+    def break_tree() -> None:
+        shas = {"landed": world.hub.merge_oid, "tested": world.hub.ref(HEAD_REF)}
+        for name, sha in shas.items():
+            assert sha is not None
+            if side in (name, "both"):
+                unreadable[name] = sha
+                world.runner.overlay(["git", "rev-parse", f"{sha}^{{tree}}"], returncode=128)
+
+    world.hub.on_merge = break_tree
+    assert land(world) == INDETERMINATE
+    captured = capsys.readouterr()
+    named = unreadable["tested" if side == "tested" else "landed"]
+    assert f"cannot read tree for {named}" in captured.err
+    if side == "both":
+        assert f"cannot read tree for {unreadable['tested']}" not in captured.err
+    assert "LANDED TREE DIFFERS" not in captured.err
+    assert ledger_lines(captured.out) == []
 
 
 @pytest.mark.parametrize("method", ["merge", "squash", "rebase"])
@@ -447,6 +652,19 @@ def test_land_requires_method_and_gate(world: World, missing: str) -> None:
         pr_land.main(argv, runner=world.runner, clock=world.clock.clock, sleep=world.clock.sleep)
     assert exc.value.code == 2
     assert world.runner.calls == []
+
+
+@pytest.mark.parametrize("rounds", ["0", "-1", "abc"])
+def test_max_rounds_below_one_is_rejected_before_any_call(
+    world: World, capsys: pytest.CaptureFixture[str], rounds: str
+) -> None:
+    """Guards against accepting --max-rounds 0, which runs no round and reports "base moved 0 times", or a non-integer."""
+    argv = ["land", str(PR), "--method", "squash", "--gate", "true", "--max-rounds", rounds]
+    with pytest.raises(SystemExit) as exc:
+        pr_land.main(argv, runner=world.runner, clock=world.clock.clock, sleep=world.clock.sleep)
+    assert exc.value.code == 2
+    assert world.runner.calls == []
+    assert "at least 1" in capsys.readouterr().err
 
 
 def test_red_watch_returns_1_and_never_merges(world: World) -> None:
