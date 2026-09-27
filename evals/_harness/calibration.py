@@ -90,8 +90,9 @@ def compute_no_skill_arm(attempts: list[dict]) -> dict | str:
 
 def _cross_match_result(item_id: str, audit: list[dict]) -> str:
     for entry in audit:
-        audited_item = entry["audited_item"]
-        if audited_item is not None and audited_item != item_id:
+        if entry["credited_item"] != item_id:
+            continue
+        if entry["audited_item"] != item_id:
             return "fail"
     return "pass"
 
@@ -219,7 +220,17 @@ def write_calibration_records(case_dir: Path, records: dict[str, dict]) -> Path:
     -------
     Path
         The written ``calibration.json`` path.
+
+    Raises
+    ------
+    ValueError
+        If *case_dir* is not shaped ``evals/<skill>/<case>``.
+    jsonschema.ValidationError
+        If any record fails schema validation.
     """
+    if case_dir.resolve().parent.parent.name != "evals":
+        raise ValueError(f"case_dir must be an evals/<skill>/<case> directory, got {case_dir}")
+
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     for record in records.values():
         jsonschema.validate(record, schema)
