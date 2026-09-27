@@ -15,11 +15,11 @@ or, worse, is read as green.
 
 ## Exit contract
 
-| Exit | Meaning                                                                                                   |
-| ---- | --------------------------------------------------------------------------------------------------------- |
-| `0`  | green — every required check is `completed:success` (check run) or `success` (status)                     |
+| Exit | Meaning                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------ |
+| `0`  | green — every required check is `completed:success` (check run) or `success` (status)                        |
 | `1`  | red — `failure`, `cancelled`, `timed_out`, `action_required`, `startup_failure`, or status `failure`/`error` |
-| `2`  | indeterminate — timeout, `neutral`/`skipped`/`stale`, unknown outcome, no required checks, or a refusal   |
+| `2`  | indeterminate — timeout, `neutral`/`skipped`/`stale`, unknown outcome, no required checks, or a refusal      |
 
 Only `0` means go. Never read `2` as "probably fine".
 
@@ -93,3 +93,7 @@ the landed commit by hand.
 
 Success prints exactly one ledger line and exits 0:
 `landed pr=<n> tested=<sha> gate=<note> checks=<run ids> merge=<oid>`.
+
+## `promote`
+
+`python3 "<skill base dir>/scripts/pr_land.py" promote <pr> [--trunk dev] [--release main] [--timeout 2700] [--interval 15]`, with Bash `run_in_background: true`, for a `dev`→`main` PR: it refuses a non-fast-forward, watches the head SHA, pushes that literal SHA to `main` (never forced), and waits for the branch and a merged PR before printing `promoted pr=<n> sha=<sha>`. Exit 2 with `Bypassed rule violations` means the SHA landed but protection was bypassed, not satisfied — report it to Charles.

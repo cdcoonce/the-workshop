@@ -10,6 +10,8 @@ Subcommands:
 - ``land <pr>`` refreshes a behind head, gates it, waits for GitHub to register
   it, watches it, merges pinned to it, and checks the landed tree is the
   tested tree.
+- ``promote <pr>`` watches a ``dev``→``main`` PR's head SHA and fast-forwards
+  ``main`` to that literal SHA, exiting 2 when the push bypassed protection.
 
 Exit contract: 0 green, 1 red, 2 indeterminate (timeout, refusal, neutral or
 unknown outcome, unreadable input). Must run inside a clone of the PR's repo;
@@ -772,6 +774,106 @@ def land_pr(
     return INDETERMINATE
 
 
+def _branch_tip(runner: Runner, repo: str, branch: str) -> str | None:
+    payload = _api_json(runner, repo, f"repos/{repo}/branches/{branch}")
+    commit = payload.get("commit") if isinstance(payload, dict) else None
+    sha = commit.get("sha") if isinstance(commit, dict) else None
+    return sha if isinstance(sha, str) and FULL_SHA.fullmatch(sha) else None
+
+
+def promote_pr(
+    runner: Runner,
+    repo: str,
+    pr: int,
+    *,
+    trunk: str = "dev",
+    release: str = "main",
+    timeout: float = 2700,
+    interval: float = 15,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Fast-forward *release* to the ``trunk``→``release`` PR's tested head SHA.
+
+    The head SHA is read once, watched, and pushed as a literal SHA — never a
+    ref name, never forced — so what lands is exactly what CI tested. A push
+    that GitHub let through by bypassing a rule is reported, not accepted.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``git`` and ``gh`` in the target clone.
+    repo : str
+        ``owner/name`` every ``gh`` call is pinned to.
+    pr : int
+        The promotion pull request number.
+    trunk, release : str
+        The PR's required head and base branches.
+    timeout : float
+        Seconds for the watch, and separately for the post-push poll.
+    interval : float
+        Seconds between polls.
+    clock, sleep : Callable
+        Injectable time source and sleeper, used for every poll.
+
+    Returns
+    -------
+    int
+        0 promoted, 1 checks red, 2 refused, bypassed or indeterminate.
+    """
+    payload = _api_json(runner, repo, f"repos/{repo}/pulls/{pr}")
+    head = payload.get("head") if isinstance(payload, dict) else None
+    base = payload.get("base") if isinstance(payload, dict) else None
+    head_ref = head.get("ref") if isinstance(head, dict) else None
+    base_ref = base.get("ref") if isinstance(base, dict) else None
+    sha = head.get("sha") if isinstance(head, dict) else None
+    if not isinstance(sha, str) or not FULL_SHA.fullmatch(sha):
+        print(f"refused: cannot read the head of pull request {pr}", file=sys.stderr)
+        return INDETERMINATE
+    if head_ref != trunk or base_ref != release:
+        print(f"refused: pull request {pr} is {head_ref} into {base_ref}, not {trunk} into {release}", file=sys.stderr)
+        return INDETERMINATE
+    fetched = runner.run(["git", "fetch", "origin", sha, release])
+    if fetched.returncode != 0:
+        print(f"refused: git fetch failed: {fetched.stderr.strip()}", file=sys.stderr)
+        return INDETERMINATE
+
+    tip = _branch_tip(runner, repo, release)
+    if tip is None:
+        print(f"refused: cannot read the tip of {release}", file=sys.stderr)
+        return INDETERMINATE
+    contained = runner.run(["git", "merge-base", "--is-ancestor", tip, sha])
+    if contained.returncode != 0:
+        print(f"refused: {release} at {tip} is not an ancestor of {sha}; not a fast-forward", file=sys.stderr)
+        return INDETERMINATE
+
+    watched = watch_sha(runner, repo, sha, branch=release, timeout=timeout, interval=interval, clock=clock, sleep=sleep)
+    if watched.code != 0:
+        return watched.code
+
+    pushed = runner.run(["git", "push", "origin", f"{sha}:refs/heads/{release}"])
+    if pushed.returncode != 0:
+        print(f"push to {release} refused: {pushed.stderr.strip()}", file=sys.stderr)
+        return INDETERMINATE
+    bypassed = [line for line in pushed.stderr.splitlines() if "Bypassed rule violations" in line]
+    if bypassed:
+        for line in bypassed:
+            print(line, file=sys.stderr)
+        print(f"{sha} landed on {release}, but protection was bypassed, not satisfied", file=sys.stderr)
+        return INDETERMINATE
+
+    deadline = clock() + timeout
+    while True:
+        view = _api_json(runner, repo, f"repos/{repo}/pulls/{pr}")
+        if _branch_tip(runner, repo, release) == sha and isinstance(view, dict) and view.get("merged") is True:
+            print(f"promoted pr={pr} sha={sha}")
+            return GREEN
+        if clock() >= deadline:
+            print(f"timed out after {timeout}s waiting for {release} to show {sha} and pull request {pr} to be merged", file=sys.stderr)
+            return INDETERMINATE
+        sleep(interval)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pr_land.py", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -793,6 +895,12 @@ def _parser() -> argparse.ArgumentParser:
     land.add_argument("--release", default="main")
     land.add_argument("--timeout", type=float, default=2700)
     land.add_argument("--interval", type=float, default=15)
+    promote = commands.add_parser("promote", help="fast-forward the release branch to a promotion PR's tested head")
+    promote.add_argument("pr", type=int)
+    promote.add_argument("--trunk", default="dev")
+    promote.add_argument("--release", default="main")
+    promote.add_argument("--timeout", type=float, default=2700)
+    promote.add_argument("--interval", type=float, default=15)
     return parser
 
 
@@ -837,6 +945,18 @@ def main(
             require=args.require,
             accept_delta_change=args.accept_delta_change,
             max_rounds=args.max_rounds,
+            trunk=args.trunk,
+            release=args.release,
+            timeout=args.timeout,
+            interval=args.interval,
+            clock=clock,
+            sleep=sleep,
+        )
+    if args.command == "promote":
+        return promote_pr(
+            runner,
+            repo,
+            args.pr,
             trunk=args.trunk,
             release=args.release,
             timeout=args.timeout,

@@ -234,6 +234,8 @@ gh pr review                               # Review current branch's PR
 
 ### gh pr merge
 
+To merge a PR, use `github-pr-land`'s `land` instead; it merges only at a CI-tested head.
+
 ```bash
 gh pr merge 45                             # Interactive merge
 gh pr merge 45 --squash                    # Squash merge
