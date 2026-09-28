@@ -1,0 +1,162 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scaffolding.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_scaffolding.py"
+  ],
+  "mutants": [
+    {
+      "label": "_gaps_problems drops the header check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_a_missing_or_altered_header: a gaps.md whose header was altered or dropped must be flagged.",
+      "find": "    if lines[:3] != _GAPS_HEADER_LINES:\n        return [\"missing or altered header\"]",
+      "replace": "    pass"
+    },
+    {
+      "label": "_gaps_problems drops the per-entry format check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_an_entry_missing_a_reason: a bare line with no '- behavior: reason' shape must be flagged, or the check is vacuous.",
+      "find": "        if not _GAPS_ENTRY_PATTERN.match(line):\n            problems.append(f\"malformed entry: {line!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "the committed commit/gaps.md loses its pinned header",
+      "file": "../../commit/gaps.md",
+      "oracle": "real",
+      "why": "Killed by test_gaps_md_exists_with_header_and_wellformed_entries[commit]: proves the real committed file, not just the synthetic-content helper test, is actually checked.",
+      "find": "# Gaps",
+      "replace": "# Gapz"
+    },
+    {
+      "label": "the committed commit/deps direct tier points at the wrong skill",
+      "file": "../../commit/deps",
+      "oracle": "real",
+      "why": "Killed by test_deps_file_direct_tier_covers_the_skill_dir_and_outside_links[commit]: proves the real committed deps file, not just a synthetic one, is actually checked.",
+      "find": "\"plugins/workbench/skills/commit\"",
+      "replace": "\"plugins/workbench/skills/wrong-skill\""
+    },
+    {
+      "label": "I8: _GAPS_ENTRY_PATTERN accepts a gaps entry with an empty reason",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_gaps_flags_an_entry_with_an_empty_reason_no_space and test_check_gaps_flags_an_entry_with_an_empty_reason_trailing_space: the pinned regex requires \\S right after ': ', so '- x:' and '- x: ' must both be malformed, not merely colon-shaped.",
+      "find": "_GAPS_ENTRY_PATTERN = re.compile(r\"^- [^:]+: \\S.*$\")",
+      "replace": "_GAPS_ENTRY_PATTERN = re.compile(r\"^- [^:]+:.*$\")"
+    },
+    {
+      "label": "_checks_manifest_problems drops the missing-description check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_manifest_flags_a_line_missing_a_description.",
+      "find": "        if len(parts) < 2:\n            problems.append(f\"missing description: {line!r}\")\n            continue",
+      "replace": "        if len(parts) < 2:\n            continue"
+    },
+    {
+      "label": "_checks_manifest_problems drops the id-grammar check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_manifest_flags_a_line_whose_id_fails_the_grammar.",
+      "find": "        if not _MANIFEST_ID_PATTERN.match(candidate_id):\n            problems.append(f\"id fails the grammar: {line!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_retired_problems drops the date-format check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_a_malformed_date.",
+      "find": "        if not date or not _RETIRED_DATE_PATTERN.match(date):\n            problems.append(f\"{entry_id}: bad or missing date {date!r}\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_retired_problems drops the reason-grammar check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_an_unrecognized_reason.",
+      "find": "        reason = entry.get(\"reason\")\n        if not reason or not _RETIRED_REASON_PATTERN.match(reason):\n            problems.append(f\"{entry_id}: bad or missing reason {reason!r}\")",
+      "replace": "        reason = entry.get(\"reason\")"
+    },
+    {
+      "label": "_retired_problems drops the evidence-present check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_check_retired_flags_missing_evidence.",
+      "find": "        if not entry.get(\"evidence\"):\n            problems.append(f\"{entry_id}: missing evidence\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "_direct_tier_problems drops the skill-directory-membership check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_flags_a_missing_skill_dir.",
+      "find": "    if skill_dir_files - covered:\n        problems.append(f\"{skill}: direct tier missing the skill directory {skill_dir_rel!r}\")",
+      "replace": "    pass"
+    },
+    {
+      "label": "[control] _direct_tier_problems drops the in-skill-dir skip",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Provably inert since N1 moved the outside-link check to `tracked - covered`: when the whole skill dir is a `direct` member (as the real deps files and every synthetic fixture here have it), `covered` already includes every file under that dir via expand_paths, so a same/sub-dir link's `tracked` set is already a subset of `covered` whether or not this skip runs first. Kept in source as the documented positive conjunct (an in-dir link is never even eligible to violate coverage) and to skip needless expand_paths calls, but no fixture can distinguish its presence from its absence any more.",
+      "find": "        if resolved == skill_dir_rel or resolved.startswith(skill_dir_rel + \"/\"):\n            continue  # inside the skill dir; covered by the skill dir's own files above",
+      "replace": "        pass"
+    },
+    {
+      "label": "_direct_tier_problems drops the outside-link coverage check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_flags_a_missing_outside_link.",
+      "find": "        if tracked - covered:\n            problems.append(f\"{skill}: outside link {link!r} -> {resolved} missing from direct tier\")",
+      "replace": "        pass"
+    },
+    {
+      "label": "N1: _direct_tier_problems reverts to string membership for the skill-dir check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_accepts_a_trailing_slash_on_the_skill_dir_entry: a trailing '/' on the skill dir entry is a literal-string mismatch but an EXPANDED-file-set match, so a string-membership check would wrongly flag it as missing.",
+      "find": "    covered = set(expand_paths(direct, ref=\"HEAD\", repo=repo_root))\n\n    skill_dir_files = set(expand_paths([skill_dir_rel], ref=\"HEAD\", repo=repo_root))\n    if skill_dir_files - covered:",
+      "replace": "    covered = set(expand_paths(direct, ref=\"HEAD\", repo=repo_root))\n\n    skill_dir_files = set(expand_paths([skill_dir_rel], ref=\"HEAD\", repo=repo_root))\n    if skill_dir_rel not in direct:"
+    },
+    {
+      "label": "N1: _direct_tier_problems reverts to string membership for the outside-link check",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "why": "Killed by test_direct_tier_problems_accepts_a_parent_directory_entry_covering_the_outside_link: a parent-directory entry covers the outside link's EXPANDED file but never matches it as a literal string, so a string-membership check would wrongly flag it as missing.",
+      "find": "        tracked = set(expand_paths([resolved], ref=\"HEAD\", repo=repo_root))\n        if not tracked:\n            continue  # not a tracked file; nothing for direct to cover\n        if tracked - covered:",
+      "replace": "        tracked = set(expand_paths([resolved], ref=\"HEAD\", repo=repo_root))\n        if not tracked:\n            continue  # not a tracked file; nothing for direct to cover\n        if resolved not in direct:"
+    },
+    {
+      "label": "[control] reword the scaffolding test module docstring",
+      "file": "../tests/test_scaffolding.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Covers the four per-skill files for every rostered skill",
+      "replace": "This module covers the four per-skill files for every rostered skill"
+    }
+  ]
+}

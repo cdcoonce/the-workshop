@@ -1,0 +1,104 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_activation.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_activation.py"
+  ],
+  "mutants": [
+    {
+      "label": "parse_checks_manifest stops skipping comments and blank lines",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "        if not stripped or stripped.startswith(\"#\"):\n            continue",
+      "replace": "        if False:\n            continue"
+    },
+    {
+      "label": "parse_checks_manifest drops the ID grammar filter",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "        if _ID_PATTERN.match(candidate):\n            ids.append(candidate)",
+      "replace": "        ids.append(candidate)"
+    },
+    {
+      "label": "parse_retired_entries never starts a new block on '## <id>'",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "        if stripped.startswith(\"## \"):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "parse_retired_entries drops a pending block when the next one starts",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "            if current is not None:\n                entries.append(current)\n            current = {\"id\": stripped[3:].strip()}",
+      "replace": "            current = {\"id\": stripped[3:].strip()}"
+    },
+    {
+      "label": "parse_retired_entries drops the final block after the loop",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "    if current is not None:\n        entries.append(current)\n    return entries",
+      "replace": "    return entries"
+    },
+    {
+      "label": "parse_retired_entries stores the whole 'key: value' line as the value",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "            key, sep, value = stripped[2:].partition(\":\")\n            if sep:\n                current[key.strip()] = value.strip()",
+      "replace": "            key, sep, value = stripped[2:].partition(\":\")\n            if sep:\n                current[key.strip()] = stripped[2:].strip()"
+    },
+    {
+      "label": "is_active inverts the gated-ID check",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "    if parse_checks_manifest(manifest_text):\n        return True",
+      "replace": "    if not parse_checks_manifest(manifest_text):\n        return True"
+    },
+    {
+      "label": "is_active ignores retired.md entirely, always inactive without a gated ID",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "    retired_path = skill_dir / \"retired.md\"\n    retired_text = retired_path.read_text(encoding=\"utf-8\") if retired_path.exists() else \"\"\n    return bool(parse_retired_entries(retired_text))",
+      "replace": "    return False"
+    },
+    {
+      "label": "[does-nothing] is_active always reports inactive regardless of input",
+      "file": "../activation.py",
+      "oracle": "real",
+      "find": "    manifest_path = skill_dir / \"checks.manifest\"\n    manifest_text = manifest_path.read_text(encoding=\"utf-8\") if manifest_path.exists() else \"\"\n    if parse_checks_manifest(manifest_text):\n        return True\n\n    retired_path = skill_dir / \"retired.md\"\n    retired_text = retired_path.read_text(encoding=\"utf-8\") if retired_path.exists() else \"\"\n    return bool(parse_retired_entries(retired_text))",
+      "replace": "    return False"
+    },
+    {
+      "label": "[control] reword the module docstring",
+      "file": "../activation.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Guards elsewhere in this package (``#997``, ``#1009``) gate",
+      "replace": "This package's guards elsewhere (``#997``, ``#1009``) gate"
+    }
+  ]
+}

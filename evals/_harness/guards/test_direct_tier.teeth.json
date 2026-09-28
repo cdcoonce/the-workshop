@@ -1,0 +1,143 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_direct_tier.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_direct_tier.py"
+  ],
+  "mutants": [
+    {
+      "label": "check drops the deps-file-exists conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_skips_an_active_skill_with_no_deps_file: an active rostered skill with no deps file must be skipped, not crash reading a missing deps file.",
+      "find": "        if not deps_path.exists():\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check evaluates an inactive skill too",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_evaluate_an_inactive_skills_direct_tier_change: an inactive rostered skill must never be evaluated by this guard, regardless of what its direct tier's diff contains.",
+      "find": "        if not is_active(eval_dir):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "[does-nothing] check drops the tier-touched conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_no_fail_when_the_diff_never_touches_the_direct_tier and test_no_fail_on_an_empty_diff: the positive conjunct (the diff must actually touch the direct tier) must hold, or an unrelated change — including no change at all — spuriously fails an active skill.",
+      "find": "        if not (tier_files & changed):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check drops the base-ref half of the tier-files union, missing a deletion",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        tier_files = set(\n            expand_paths(direct_paths, ref=\"HEAD\", repo=ctx.repo_root)\n        ) | set(expand_paths(direct_paths, ref=ctx.base, repo=ctx.repo_root))",
+      "replace": "        tier_files = set(\n            expand_paths(direct_paths, ref=\"HEAD\", repo=ctx.repo_root)\n        )"
+    },
+    {
+      "label": "F1: _changed_paths drops --no-renames, a rename out of the tier escapes",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_direct_tier_file_is_renamed_out_of_the_tier: with rename detection on, `git diff --name-only` prints only the new path, so a tier file renamed out never appears in `changed` under its old (tier-member) path, and the guard fails open.",
+      "find": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}...HEAD\")",
+      "replace": "    output = _run_git(repo_root, \"diff\", \"--name-only\", f\"{base}...HEAD\")"
+    },
+    {
+      "label": "_added_paths drops the 'A' status filter, counting modified files as added",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_modified_preexisting_run_file_does_not_satisfy_the_requirement: only a run file the diff genuinely adds can satisfy the requirement, never one that merely changed.",
+      "find": "        if status.startswith(\"A\"):\n            added.add(path)",
+      "replace": "        added.add(path)"
+    },
+    {
+      "label": "F2/I5: _has_matching_green_run drops the runs-directory depth and skill-scoping filter",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_nested_raw_json_under_runs_does_not_satisfy_the_requirement (a nested attempt raw would satisfy the guard) and test_a_run_file_under_a_different_skills_runs_dir_does_not_satisfy_the_requirement (another skill's run file would satisfy it too) once this conjunct is gone.",
+      "find": "        if posixpath.dirname(added_path) != runs_dir:\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "I5: _has_matching_green_run loosens the runs-directory check to any skill's runs dir",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_run_file_under_a_different_skills_runs_dir_does_not_satisfy_the_requirement: a run file only counts for skill S if it is under evals/S/runs/, never another rostered skill's runs dir. This mutant keeps the depth requirement (still blocks a nested raw) but drops the skill-name segment, so it isolates the cross-skill claim from F2's depth claim above.",
+      "find": "        if posixpath.dirname(added_path) != runs_dir:\n            continue",
+      "replace": "        if posixpath.basename(posixpath.dirname(added_path)) != \"runs\":\n            continue"
+    },
+    {
+      "label": "_has_matching_green_run drops the verdict == green conjunct",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        if run.get(\"verdict\") != \"green\":\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "_has_matching_green_run drops the direct-tier-hash comparison",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "find": "        if run.get(\"fingerprint\", {}).get(\"direct_tier_hash\") == expected_hash:\n            return True",
+      "replace": "        return True",
+      "why": "Killed by test_fails_when_a_green_run_files_hash_does_not_match: a green run file added by the diff must still carry the exact current direct-tier hash, not merely exist."
+    },
+    {
+      "label": "I4: _has_matching_green_run loosens the hash comparison to a substring check",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_green_run_file_with_a_missing_direct_tier_hash_does_not_satisfy_the_requirement and test_a_green_run_file_with_an_empty_direct_tier_hash_does_not_satisfy_the_requirement: an empty string is a substring of every string, so a missing or empty recorded hash would satisfy the guard under `in` instead of `==`.",
+      "find": "        if run.get(\"fingerprint\", {}).get(\"direct_tier_hash\") == expected_hash:\n            return True",
+      "replace": "        if str(run.get(\"fingerprint\", {}).get(\"direct_tier_hash\", \"\")) in expected_hash:\n            return True"
+    },
+    {
+      "label": "I1: _changed_paths uses a two-dot range, leaking base-only history",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_base_only_changes_via_three_dot_range: the guard must diff $(VERSION_BASE)...HEAD (merge-base relative), or a commit the base branch makes to the tier AFTER the PR forked spuriously fails a PR that never touches it.",
+      "find": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}...HEAD\")",
+      "replace": "    output = _run_git(repo_root, \"diff\", \"--no-renames\", \"--name-only\", f\"{base}..HEAD\")"
+    },
+    {
+      "label": "N2/I11: _has_matching_green_run drops the .json-suffix requirement",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "why": "Killed by test_a_non_json_run_file_does_not_satisfy_the_requirement: only a file directly in evals/<skill>/runs/ with a .json suffix is ever a run file the ledger writes; a .txt file with otherwise-valid green content and the current hash must never satisfy the guard.",
+      "find": "        if not added_path.endswith(\".json\"):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./direct_tier.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "never satisfies this — only a matching green one does.",
+      "replace": "never counts — only a matching green run does."
+    }
+  ]
+}
