@@ -1,0 +1,258 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration.py"
+  ],
+  "mutants": [
+    {
+      "label": "[gate-candidate,triggering] skill-arm clause never gates (5-of-6 threshold dropped)",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    skill_arm_passes = skill_n == 6 and skill_hits >= 5",
+      "replace": "    skill_arm_passes = True"
+    },
+    {
+      "label": "[gate-candidate] no-skill-arm rate clause never gates (at-most-1-of-3 threshold dropped)",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            no_skill_passes = no_skill_arm_result[\"n\"] == 3 and no_skill_arm_result[\"hits\"] <= 1",
+      "replace": "            no_skill_passes = True"
+    },
+    {
+      "label": "[gate-candidate,triggering] mechanical-vs-audited-rate clause never gates",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    rate_matches = skill_hits == audited_hits",
+      "replace": "    rate_matches = True"
+    },
+    {
+      "label": "cross-match clause never fails even on a sibling-credited finding",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if entry[\"audited_item\"] != item_id:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "baseline-void cap never trips on a third contaminated no-skill attempt",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            if replacements >= 2:",
+      "replace": "            if replacements >= 999:"
+    },
+    {
+      "label": "[gate-candidate] a missing no-skill arm is treated as passing instead of not-admitted",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        no_skill_arm_result = None\n        no_skill_passes = False",
+      "replace": "        no_skill_arm_result = None\n        no_skill_passes = True"
+    },
+    {
+      "label": "compute_no_skill_arm counts a contaminated (indeterminate) attempt instead of replacing it",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if attempt[\"contaminated\"]:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[does-nothing][gate-candidate] admission returns not-admitted for every item",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    admitted = skill_arm_passes and no_skill_passes and rate_matches and cross_match_result == \"pass\"",
+      "replace": "    admitted = False"
+    },
+    {
+      "label": "[does-nothing][triggering] admission returns not-admitted for every item",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        admitted = skill_arm_passes and rate_matches and cross_match_result == \"pass\"",
+      "replace": "        admitted = False"
+    },
+    {
+      "label": "[triggering] no_skill_arm_result is no longer stored as null",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            \"no_skill_arm_result\": None,",
+      "replace": "            \"no_skill_arm_result\": \"baseline-void\","
+    },
+    {
+      "label": "a trend item is admitted instead of never-gated",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            \"gate_or_trend_status\": \"trend\",",
+      "replace": "            \"gate_or_trend_status\": \"gate\","
+    },
+    {
+      "label": "R3 no-skill contamination cap allows only 1 replacement",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            if replacements >= 2:",
+      "replace": "            if replacements >= 1:",
+      "why": "Kills test_gate_candidate_two_contaminated_no_skill_attempts_then_three_clean_misses_is_admitted, which draws exactly 2 replacements and expects admission."
+    },
+    {
+      "label": "R4 no-skill-arm threshold tightened from <=1 to <=0",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "no_skill_arm_result[\"hits\"] <= 1",
+      "replace": "no_skill_arm_result[\"hits\"] <= 0",
+      "why": "Kills test_gate_candidate_no_skill_arm_exactly_one_third_is_admitted, which sits exactly at the 1-of-3 boundary and expects admission."
+    },
+    {
+      "label": "R5 no-skill-arm n==3 check dropped",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "no_skill_arm_result[\"n\"] == 3 and ",
+      "replace": "",
+      "why": "Kills test_gate_candidate_no_skill_arm_with_only_two_attempts_is_not_admitted, which has a 0-hit 2-attempt arm that would wrongly pass on hit-rate alone."
+    },
+    {
+      "label": "R6 skill-arm n==6 check dropped",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "skill_arm_passes = skill_n == 6 and skill_hits >= 5",
+      "replace": "skill_arm_passes = skill_hits >= 5",
+      "why": "Kills test_gate_candidate_skill_arm_with_five_of_five_is_not_admitted, a 5-of-5 skill arm that would wrongly pass on hit-rate alone."
+    },
+    {
+      "label": "R10 predicates_hash becomes an existence flag instead of a content hash",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "hashlib.sha256(predicates_path.read_bytes()).hexdigest()\n        if predicates_path.exists()\n        else None",
+      "replace": "True\n        if predicates_path.exists()\n        else None",
+      "why": "Kills test_compute_input_hash_changes_when_an_existing_predicates_body_changes, which edits an already-present predicates.py's body."
+    },
+    {
+      "label": "R11 a committed fixture short-circuits builder hashing entirely",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    if builder_path is None:\n        return tree_hash([_relpath(fixture_dir, repo_root)], repo=repo_root)",
+      "replace": "    if builder_path is None or has_fixture:\n        return tree_hash([_relpath(fixture_dir, repo_root)], repo=repo_root)",
+      "why": "Kills test_compute_input_hash_hashes_both_when_a_case_supplies_a_fixture_and_a_builder's builder-only-change assertion: with a fixture present, the builder is never hashed at all."
+    },
+    {
+      "label": "R12 fixture_fingerprint hashes the builder script instead of its output",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "            return builder_output_fingerprint(dest)",
+      "replace": "            return tree_hash([_relpath(builder_path, repo_root)], repo=repo_root)",
+      "why": "Kills test_seed_input_change_changes_fixture_fingerprint_and_input_hash: the builder script is byte-identical across the seed change, so the fingerprint would wrongly stay put."
+    },
+    {
+      "label": "R13 builder key resolved against case_dir instead of the repo root",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        return (repo_root / builder_key).resolve()",
+      "replace": "        return (case_dir / builder_key).resolve()",
+      "why": "Kills test_compute_input_hash_resolves_builder_key_against_repo_root, whose builder lives outside case_dir at a repo-root-relative path."
+    },
+    {
+      "label": "R14 output_fingerprint dropped from the hashed fixture_component",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    return [fixture_tree_hash_or_null, builder_hash, output_fingerprint]",
+      "replace": "    return [fixture_tree_hash_or_null, builder_hash, None]",
+      "why": "Kills test_seed_input_change_changes_fixture_fingerprint_and_input_hash's compute_input_hash assertion: the seed only affects the builder's untracked output, not the builder script's own tree hash."
+    },
+    {
+      "label": "R15 prompt_text dropped from the hashed payload",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "[prompt_text, fixture_component, items, predicates_hash],",
+      "replace": "[None, fixture_component, items, predicates_hash],",
+      "why": "Kills test_compute_input_hash_changes_when_prompt_text_changes."
+    },
+    {
+      "label": "R16 writer also drops a tests.md beside the case directory",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    dest = case_dir / \"calibration.json\"\n",
+      "replace": "    dest = case_dir / \"calibration.json\"\n    (case_dir.parent / \"tests.md\").write_text(\"x\")\n",
+      "why": "Kills test_write_calibration_records_touches_no_file_besides_calibration_json, which snapshots the whole tmp_path tree (not only case_dir) and refuses any tests.md anywhere."
+    },
+    {
+      "label": "R17 writer skips schema validation",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        jsonschema.validate(record, schema)",
+      "replace": "        pass",
+      "why": "Kills test_write_calibration_records_raises_and_writes_nothing_for_a_record_failing_schema."
+    },
+    {
+      "label": "write_calibration_records drops its evals/<skill>/<case> scope guard",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    if case_dir.resolve().parent.parent.name != \"evals\":\n        raise ValueError(f\"case_dir must be an evals/<skill>/<case> directory, got {case_dir}\")\n\n",
+      "replace": "",
+      "why": "Kills test_write_calibration_records_refuses_a_case_dir_not_under_evals."
+    },
+    {
+      "label": "cross-match wrongly exempts a null audited_item",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if entry[\"audited_item\"] != item_id:",
+      "replace": "        if entry[\"audited_item\"] is not None and entry[\"audited_item\"] != item_id:",
+      "why": "Kills test_gate_candidate_null_audited_item_credited_to_scored_item_is_a_cross_match: per the conductor's ruling, a null audited_item credited to the scored item is a cross-match, not a pass."
+    },
+    {
+      "label": "cross-match drops its credited_item == item_id filter",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "        if entry[\"credited_item\"] != item_id:\n            continue\n",
+      "replace": "",
+      "why": "Kills test_gate_candidate_entry_crediting_a_sibling_item_is_ignored_for_the_scored_item: a sibling's own correctly-matched entry must never fail this item."
+    },
+    {
+      "label": "cross-match only checks the first audit entry",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    for entry in audit:",
+      "replace": "    for entry in audit[:1]:",
+      "why": "Kills test_gate_candidate_cross_match_in_the_second_audit_entry_is_caught, whose cross-match sits in the second entry."
+    },
+    {
+      "label": "writer drops its symlinked-destination refusal",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "find": "    if dest.is_symlink():\n        raise ValueError(f\"refusing to write through a symlinked destination: {dest}\")\n",
+      "replace": "",
+      "why": "Kills test_write_calibration_records_refuses_a_symlinked_destination: a planted calibration.json symlink would let the write overwrite a file outside evals/."
+    },
+    {
+      "label": "[control] reword the module docstring's summary of what this module never does",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring prose describing the module's contract; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "count and audit entry is supplied by the caller (the conductor and the\nhand-run audit, #995 and #989 respectively).",
+      "replace": "count and audit entry is supplied by the caller (the conductor and the\nhand-run audit, per #995 and #989)."
+    }
+  ]
+}
