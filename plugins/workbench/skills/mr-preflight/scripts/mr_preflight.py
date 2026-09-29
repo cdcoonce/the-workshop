@@ -30,11 +30,14 @@ from description_blocks import (  # noqa: E402
     find_block,
     parse_waivers,
     replace_block,
+    stray_waivers,
     waiver_lines,
 )
 from ignore_config import CONFIG_NAME, ConfigError, IgnoreConfig, parse_config  # noqa: E402
 from reference_sweep import Hit, sweep  # noqa: E402
 from rename_detector import Rename, detect_renames  # noqa: E402
+
+SWEEP_MARKERS = "<!-- mr-preflight:sweep:begin/end -->"
 
 CLEAN = 0
 HITS = 1
@@ -153,7 +156,8 @@ def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) 
         sections.append("No renamed identifiers on this branch.\n")
     if blocking:
         sections.append(
-            "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`):\n\n"
+            "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`,"
+            " or `- waive TOKEN: reason` for every path):\n\n"
             + "".join(f"- [ ] `{quote_path(h.path)}:{h.line}` `{h.rename.old}`\n" for h in blocking)
         )
     if waivers:
@@ -163,18 +167,22 @@ def render_body(renames: list[Rename], blocking: list[Hit], waivers: list[str]) 
 
 def run_sweep(base: str, head: str, description: Path | None = None, update: bool = False) -> int:
     waived: dict[tuple[str, str], str] = {}
+    waived_everywhere: dict[str, str] = {}
     malformed: list[str] = []
+    stray: list[str] = []
     body = ""
     if description is not None:
         try:
             text = _read_description(description)
             block = find_block(text, "sweep")
+            stray = stray_waivers(text, "sweep")
         except (OSError, BlockError) as error:
             print(f"mr-preflight: {error}", file=sys.stderr)
             return SETUP_ERROR
         body = text[block.start : block.end] if block else ""
         waivers, malformed = parse_waivers(body)
-        waived = {(w.token, w.path): w.reason for w in waivers}
+        waived = {(w.token, w.path): w.reason for w in waivers if w.path is not None}
+        waived_everywhere = {w.token: w.reason for w in waivers if w.path is None}
 
     try:
         # `git grep <tree>` searches only the cwd's subtree, so run from the
@@ -204,6 +212,8 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         # Matched on the path as reported, so a quoted path is waived as shown.
         reason = waived.get((hit.rename.old, quote_path(hit.path)))
         if reason is None:
+            reason = waived_everywhere.get(hit.rename.old)
+        if reason is None:
             blocking.append(hit)
         else:
             print(f"waived: {quote_path(hit.path)}:{hit.line}: {hit.rename.old}: {reason}")
@@ -211,6 +221,11 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         print(f"{quote_path(hit.path)}:{hit.line}: {hit.rename.old} (renamed to {hit.rename.new} in {hit.rename.path})")
     for line in malformed:
         print(f"malformed waiver: {line}")
+    # Only the sweep block is read for waivers, so a well-formed line anywhere
+    # else waives nothing. Named, not blocking: with a hit left the run already
+    # blocks, and without one there is nothing it would have waived.
+    for line in stray:
+        print(f"waiver outside sweep block: {line}")
     # Before the update, so a failed write still shows what the config hid.
     if suppressed_hits or skipped_tokens:
         print(
@@ -234,6 +249,8 @@ def run_sweep(base: str, head: str, description: Path | None = None, update: boo
         print(f"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.")
     if malformed:
         print(f"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.")
+    if stray:
+        print(f"mr-preflight: {len(stray)} waiver line(s) sit outside the sweep block and waive nothing; move them between the {SWEEP_MARKERS} markers.")
     if blocking or malformed:
         return HITS
     return CLEAN

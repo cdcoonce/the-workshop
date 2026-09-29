@@ -86,10 +86,14 @@ def replace_block(text: str, name: str, body: str) -> str:
 
 @dataclass(frozen=True)
 class Waiver:
-    """A per-MR disposition: every hit of ``token`` in ``path`` is intended."""
+    """A per-MR disposition: every hit of ``token`` in ``path`` is intended.
+
+    A ``path`` of ``None`` is the token-wide form: ``token`` is intended in
+    every path.
+    """
 
     token: str
-    path: str
+    path: str | None
     reason: str
 
 
@@ -99,6 +103,11 @@ class Waiver:
 WAIVER = re.compile(
     r"^- waive (?P<token>`[^`]+`|\S+) (?P<path>`[^`]+`|\S+): (?P<reason>\S.*)$"
 )
+# `- waive TOKEN: reason`, no path: the token is intended everywhere. The colon
+# sits right after the token, which a path-form line never has (a space
+# follows its token), so the two forms cannot be confused, and the reason may
+# hold colons of its own.
+WAIVER_TOKEN_WIDE = re.compile(r"^- waive (?P<token>`[^`]+`|[^\s:`]+): (?P<reason>\S.*)$")
 # A line with the exact `- waive` prefix is always held to the form: a typo
 # silently read as prose would leave the author believing a hit was waived.
 WAIVER_INTENT = re.compile(r"^- waive(?:\s|$)")
@@ -108,10 +117,25 @@ WAIVER_INTENT = re.compile(r"^- waive(?:\s|$)")
 NEAR_MISS = re.compile(r"^[-*+]\s*waive\s+", re.IGNORECASE)
 
 
+def _match_waiver(line: str) -> Waiver | None:
+    """The waiver ``line`` spells exactly, in either form, or ``None``."""
+    wide = WAIVER_TOKEN_WIDE.match(line)
+    if wide:
+        return Waiver(token=wide["token"].strip("`"), path=None, reason=wide["reason"])
+    match = WAIVER.match(line)
+    if match:
+        return Waiver(
+            token=match["token"].strip("`"),
+            path=match["path"].strip("`"),
+            reason=match["reason"],
+        )
+    return None
+
+
 def _starts_like_a_waiver(line: str) -> bool:
     if WAIVER_INTENT.match(line):
         return True
-    return bool(NEAR_MISS.match(line) and WAIVER.match(NEAR_MISS.sub("- waive ", line, count=1)))
+    return bool(NEAR_MISS.match(line) and _match_waiver(NEAR_MISS.sub("- waive ", line, count=1)))
 
 
 def waiver_lines(body: str) -> list[str]:
@@ -132,15 +156,37 @@ def parse_waivers(body: str) -> tuple[list[Waiver], list[str]]:
     waivers: list[Waiver] = []
     malformed: list[str] = []
     for line in waiver_lines(body):
-        match = WAIVER.match(line.strip())
-        if not match:
+        waiver = _match_waiver(line.strip())
+        if waiver is None:
             malformed.append(line)
-            continue
-        waivers.append(
-            Waiver(
-                token=match["token"].strip("`"),
-                path=match["path"].strip("`"),
-                reason=match["reason"],
-            )
-        )
+        else:
+            waivers.append(waiver)
     return waivers, malformed
+
+
+FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def stray_waivers(text: str, name: str) -> list[str]:
+    """Well-formed waiver lines written outside section ``name``'s body.
+
+    Only the block is read for waivers, so these waive nothing; the author
+    likely put them under an ordinary heading. Lines inside a code fence,
+    indented, or not spelled as a waiver are quotes or prose and are left out.
+
+    Raises
+    ------
+    BlockError
+        When the markers for ``name`` are unbalanced or repeated.
+    """
+    block = find_block(text, name)
+    stray = []
+    fenced = False
+    for offset, raw in _lines(text):
+        line = raw.rstrip("\r\n")
+        if FENCE.match(line):
+            fenced = not fenced
+        elif not fenced and _match_waiver(line):
+            if block is None or not block.start <= offset < block.end:
+                stray.append(line)
+    return stray

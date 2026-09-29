@@ -53,6 +53,15 @@ description, inside its sweep block:
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.
+- **Token-wide:** `- waive TOKEN: reason`, with no path, covers `TOKEN` in every
+  file. Use it when the name is still correct across the repo (code, seeds,
+  tests) rather than writing one line per file; the reviewer sees the wider
+  scope as written. A path waiver for the same token keeps its own reason.
+- **Only the block is read.** A well-formed waiver anywhere else in the
+  description waives nothing. `sweep` names each one as
+  `waiver outside sweep block:` so a hit that stays does not look unexplained;
+  it does not block on its own. Lines in a code fence or indented are quotes,
+  not waivers.
 - **Malformed lines block.** A line that starts like a waiver but does not
   match the form is reported as `malformed waiver:` and blocks, because its
   author believes it waives something. A near miss on the prefix (`* waive`,

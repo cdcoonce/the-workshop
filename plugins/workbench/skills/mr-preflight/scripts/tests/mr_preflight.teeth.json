@@ -343,8 +343,8 @@
       "label": "a waiver typo is skipped as prose, so its author believes the hit is waived",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "        if not match:\n            malformed.append(line)\n            continue",
-      "replace": "        if not match:\n            continue"
+      "find": "        if waiver is None:\n            malformed.append(line)\n        else:\n            waivers.append(waiver)",
+      "replace": "        if waiver is not None:\n            waivers.append(waiver)"
     },
     {
       "label": "any line starting with the word waive is held to the waiver form",
@@ -539,7 +539,7 @@
       "label": "every near miss counts, so prose starting with Waive blocks the MR",
       "file": "../description_blocks.py",
       "oracle": "real",
-      "find": "    return bool(NEAR_MISS.match(line) and WAIVER.match(NEAR_MISS.sub(\"- waive \", line, count=1)))",
+      "find": "    return bool(NEAR_MISS.match(line) and _match_waiver(NEAR_MISS.sub(\"- waive \", line, count=1)))",
       "replace": "    return bool(NEAR_MISS.match(line))"
     },
     {
@@ -937,6 +937,76 @@
       "why": "Two independent prints to stdout after every hit and waiver line is already printed; no caller parses their relative order (create-mr forwards the text whole, tests match whole lines by membership). Inert for every exit code and every rendered block; a human reading both lines sees them in the other order, which is the only place it shows.",
       "find": "    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n",
       "replace": "    if malformed:\n        print(f\"mr-preflight: {len(malformed)} malformed waiver line(s); the form is `- waive TOKEN path: reason`.\")\n    if blocking:\n        print(f\"mr-preflight: {len(blocking)} surviving reference(s) to renamed identifiers.\")\n"
+    },
+    {
+      "label": "the token-wide form is never tried, so `- waive TOKEN: reason` is malformed",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "wide = WAIVER_TOKEN_WIDE.match(line)",
+      "replace": "wide = None"
+    },
+    {
+      "label": "a near-miss line is judged against the path form only",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "_match_waiver(NEAR_MISS.sub(\"- waive \", line, count=1))",
+      "replace": "WAIVER.match(NEAR_MISS.sub(\"- waive \", line, count=1))"
+    },
+    {
+      "label": "a stray waiver inside a code fence is reported",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "elif not fenced and _match_waiver(line):",
+      "replace": "elif _match_waiver(line):"
+    },
+    {
+      "label": "a waiver inside the block is reported as stray",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if block is None or not block.start <= offset < block.end:",
+      "replace": "if True:"
+    },
+    {
+      "label": "a description with no block has its stray waivers missed",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "if block is None or not block.start <= offset < block.end:",
+      "replace": "if block is not None and not block.start <= offset < block.end:"
+    },
+    {
+      "label": "an indented waiver line is reported as stray",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "line = raw.rstrip(\"\\r\\n\")",
+      "replace": "line = raw.strip()"
+    },
+    {
+      "label": "a token-wide waiver is never applied to a hit",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "reason = waived_everywhere.get(hit.rename.old)",
+      "replace": "reason = None"
+    },
+    {
+      "label": "a token-wide waiver's reason replaces a path waiver's",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "        reason = waived.get((hit.rename.old, quote_path(hit.path)))\n        if reason is None:\n            reason = waived_everywhere.get(hit.rename.old)\n",
+      "replace": "        reason = waived_everywhere.get(hit.rename.old) or waived.get((hit.rename.old, quote_path(hit.path)))\n"
+    },
+    {
+      "label": "the outside-block warning is never printed",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "for line in stray:",
+      "replace": "for line in []:"
+    },
+    {
+      "label": "a stray waiver alone blocks a clean sweep",
+      "file": "../mr_preflight.py",
+      "oracle": "real",
+      "find": "    if blocking or malformed:\n        return HITS",
+      "replace": "    if blocking or malformed or stray:\n        return HITS"
     }
   ]
 }
