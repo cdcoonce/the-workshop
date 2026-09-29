@@ -122,7 +122,16 @@ ignore_tokens = ["schema_version"]
 
 - **Paired lines only.** Within a hunk, removed lines are compared with the
   added lines that follow them, position by position. A name on the removed
-  line that is absent from its partner is renamed.
+  line that a name on its partner replaced is renamed.
+- **A real replacement.** The name must be swapped for another name, one for
+  one. A name that merely drops out of a line is a deletion, and a reworded
+  line (the two sides of the change differ in length) pairs nothing, so a
+  rewritten Markdown table or sentence never reads as renames. A lone name
+  swapped in place always pairs; in a longer block of changed names, only a
+  pair sharing a prefix or suffix of 4 or more characters does. Accepted miss:
+  `foo(old_name, x)` becoming `foo(new_name)` is a rename this leaves for
+  review.
+- **Not a case change.** `FOO_BAR` becoming `foo_bar` is the same name.
 - **Distinctive names only.** The name must contain `_`, `.` or an internal
   capital, be at least 6 characters, and not be a dunder. `rows` or `a_b`
   would match too much unrelated text to mean anything.
