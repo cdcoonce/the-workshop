@@ -7,6 +7,7 @@ against a pasted diff.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -15,6 +16,8 @@ TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
 INTERNAL_CAPITAL = re.compile(r"[a-z0-9][A-Z]")
 DUNDER = re.compile(r"^__\w+__$")
 MIN_LENGTH = 6
+# Shared prefix or suffix that makes two names in a multi-token block a pair.
+RELATED_AFFIX = 4
 # `@@ -start[,count] +start[,count] @@`; an omitted count means one line.
 HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(?P<removed>\d+))? \+\d+(?:,(?P<added>\d+))? @@")
 
@@ -58,6 +61,14 @@ def _tokens(line: str) -> list[str]:
     return tokens
 
 
+def _related(old: str, new: str) -> bool:
+    """Whether two names share a prefix or suffix of at least ``RELATED_AFFIX``."""
+    old, new = old.lower(), new.lower()
+    prefix = len(os.path.commonprefix([old, new]))
+    suffix = len(os.path.commonprefix([old[::-1], new[::-1]]))
+    return max(prefix, suffix) >= RELATED_AFFIX
+
+
 def _pair_renames(removed: list[str], added: list[str], path: str) -> list[Rename]:
     renames = []
     for old_line, new_line in zip(removed, added):
@@ -66,17 +77,25 @@ def _pair_renames(removed: list[str], added: list[str], path: str) -> list[Renam
         if not new_tokens:
             continue
         # Align the two token sequences so each replaced name is credited to
-        # the name that took its place, not to the first new name on the line.
+        # the name that took its place. Only a 1:1 block pairs: when the two
+        # sides of a replace differ in length the line was reworded, and
+        # pairing by position would credit arbitrary names (prose rewrites).
+        # A lone token swapped in place is a rename on its face; in a longer
+        # block (a table row with two cells changed) a pair must also look alike.
         replacement: dict[str, str] = {}
         matcher = SequenceMatcher(a=old_tokens, b=new_tokens, autojunk=False)
         for op, i1, i2, j1, j2 in matcher.get_opcodes():
-            if op == "replace":
-                for offset, token in enumerate(old_tokens[i1:i2]):
-                    new = new_tokens[j1 + offset] if j1 + offset < j2 else ""
-                    replacement.setdefault(token, new)
+            if op == "replace" and i2 - i1 == j2 - j1:
+                for token, new in zip(old_tokens[i1:i2], new_tokens[j1:j2]):
+                    if i2 - i1 == 1 or _related(token, new):
+                        replacement.setdefault(token, new)
         for token in old_tokens:
+            new = replacement.get(token, "")
+            # No replacement is a deletion, and a case change is the same name.
+            if not new or new.lower() == token.lower():
+                continue
             if token not in new_tokens and is_distinctive(token):
-                renames.append(Rename(old=token, new=replacement.get(token, ""), path=path))
+                renames.append(Rename(old=token, new=new, path=path))
     return renames
 
 

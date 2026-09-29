@@ -70,7 +70,7 @@
       "label": "every replaced name is credited to the first new name on the line",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "find": "renames.append(Rename(old=token, new=new, path=path))",
       "replace": "renames.append(Rename(old=token, new=next((t for t in new_tokens if t not in old_tokens), \"\"), path=path))"
     },
     {
@@ -154,7 +154,7 @@
       "label": "the replacement name is dropped from the report",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "renames.append(Rename(old=token, new=replacement.get(token, \"\"), path=path))",
+      "find": "renames.append(Rename(old=token, new=new, path=path))",
       "replace": "renames.append(Rename(old=token, new=\"\", path=path))"
     },
     {
@@ -842,6 +842,48 @@
       "oracle": "real",
       "find": "if path in exclude_paths or old_path in exclude_paths:",
       "replace": "if False:"
+    },
+    {
+      "label": "a name dropped with no replacement is chased as renamed",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if not new or new.lower() == token.lower():",
+      "replace": "if new.lower() == token.lower():"
+    },
+    {
+      "label": "a case-only change is chased as a rename",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if not new or new.lower() == token.lower():",
+      "replace": "if not new:"
+    },
+    {
+      "label": "an unequal replace block pairs names by position",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if op == \"replace\" and i2 - i1 == j2 - j1:",
+      "replace": "if op == \"replace\":"
+    },
+    {
+      "label": "a multi-token block pairs unrelated names",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "if i2 - i1 == 1 or _related(token, new):",
+      "replace": "if True:"
+    },
+    {
+      "label": "the shared-affix length drifts from 4 to 5",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "RELATED_AFFIX = 4",
+      "replace": "RELATED_AFFIX = 5"
+    },
+    {
+      "label": "only a shared prefix relates two names, so a shared suffix is missed",
+      "file": "../rename_detector.py",
+      "oracle": "real",
+      "find": "return max(prefix, suffix) >= RELATED_AFFIX",
+      "replace": "return prefix >= RELATED_AFFIX"
     },
     {
       "label": "every file named like the config is left out of the search",
