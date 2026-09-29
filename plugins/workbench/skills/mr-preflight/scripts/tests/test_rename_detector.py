@@ -104,3 +104,87 @@ def test_a_dotted_name_with_no_distinctive_part_is_chased_whole() -> None:
 +import pkg.engine
 """
     assert [r.old for r in detect_renames(diff)] == ["pkg.module"]
+
+
+# The shape of a real Markdown-only rewrite (MR !45): a table row and a sentence
+# reworded, dropping distinctive names that code and seeds still use.
+PROSE_REWRITE_DIFF = """\
+--- a/docs/reference/data-flow.md
++++ b/docs/reference/data-flow.md
+@@ -10,3 +10,2 @@
+-| `stg_onestream_budget_monthly` | SolarRECRev entities | view |
+-Loads `HoldCo` rows with prior_month logic, see pytest.mark.snowflake.
+-Old layout lives under _Legacy.
++| Budget rollup | entities | view |
++Rows load by prior window, see helpers.
+"""
+
+
+def test_a_rewritten_prose_table_and_sentence_is_not_a_rename() -> None:
+    assert detect_renames(PROSE_REWRITE_DIFF) == []
+
+
+def test_a_name_dropped_with_no_replacement_is_not_a_rename() -> None:
+    """The line has a `+` partner, but `archive_files` has nothing taking its place."""
+    diff = """\
+--- a/jobs.py
++++ b/jobs.py
+@@ -1 +1 @@
+-run(load_curves, archive_files)
++run(load_curves)
+"""
+    assert detect_renames(diff) == []
+
+
+def test_an_unequal_replace_block_pairs_nothing() -> None:
+    """Accepted miss: `foo(old_name, x)` becoming `foo(new_name)` is a real rename,
+    but a replace block whose two sides differ in length cannot be paired by
+    position without crediting arbitrary names, so the hard gate leaves it."""
+    diff = """\
+--- a/app.py
++++ b/app.py
+@@ -1 +1 @@
+-foo(old_name, x)
++foo(new_name)
+"""
+    assert detect_renames(diff) == []
+
+
+def test_a_case_only_change_is_not_a_rename() -> None:
+    diff = """\
+--- a/q.sql
++++ b/q.sql
+@@ -1 +1 @@
+-SELECT * FROM ONESTREAM_API_RAW_BUDGET
++SELECT * FROM onestream_api_raw_budget
+"""
+    assert detect_renames(diff) == []
+
+
+def test_a_change_beyond_case_is_still_a_rename() -> None:
+    """Control for the case rule: a new name that differs by more than case."""
+    diff = """\
+--- a/q.sql
++++ b/q.sql
+@@ -1 +1 @@
+-SELECT * FROM ONESTREAM_API_RAW_BUDGET
++SELECT * FROM onestream_api_raw_budget_v2
+"""
+    assert [(r.old, r.new) for r in detect_renames(diff)] == [
+        ("ONESTREAM_API_RAW_BUDGET", "onestream_api_raw_budget_v2")
+    ]
+
+
+def test_a_multi_token_block_pairs_only_names_that_share_an_affix() -> None:
+    """Two adjacent cells changed: the pair sharing a suffix is a rename, the
+    unrelated pair beside it is a reworded cell."""
+    diff = """\
+--- a/docs/tables.md
++++ b/docs/tables.md
+@@ -1 +1 @@
+-| daily_curve_view | old_txt |
++| hourly_curve_view | new_zzz |
+"""
+    assert [(r.old, r.new) for r in detect_renames(diff)] == [
+        ("daily_curve_view", "hourly_curve_view")
+    ]
