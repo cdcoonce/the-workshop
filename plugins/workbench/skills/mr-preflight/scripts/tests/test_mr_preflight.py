@@ -567,7 +567,8 @@ def test_update_rewrites_only_the_sweep_block(repo: Path) -> None:
         "- `LEGACY_SCHEMA` -> `LEGACY_SCHEMA_RAW` in `dbt_project.yml`\n"
         "- `load_curves` -> `fetch_prices` in `pipeline.py`\n"
         "\n"
-        "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`):\n"
+        "Unwaived references (fix each, or waive it below as `- waive TOKEN path: reason`,"
+        " or `- waive TOKEN: reason` for every path):\n"
         "\n"
         "- [ ] `docs/CHANGELOG.md:1` `LEGACY_SCHEMA`\n"
         "- [ ] `sql/audit.sql:1` `LEGACY_SCHEMA`\n"
@@ -1248,3 +1249,67 @@ def test_a_config_moved_and_edited_is_still_not_a_rename_source(repo: Path) -> N
 
     assert "old_thing_x" not in result.stdout, result.stdout
     assert result.returncode == CLEAN, result.stdout
+
+
+# --- token-wide waivers and waivers written outside the block --------------
+
+
+def test_a_token_wide_waiver_covers_that_token_in_every_path_and_no_other(repo: Path) -> None:
+    base = two_renames(repo)
+    description = describe(repo, "- waive LEGACY_SCHEMA: still the public schema name\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    lines = result.stdout.splitlines()
+    assert result.returncode == HITS, result.stderr
+    for shown in ("CHANGELOG.md:1", "CHANGELOG.md:2", "docs/CHANGELOG.md:1", "sql/audit.sql:1"):
+        assert f"waived: {shown}: LEGACY_SCHEMA: still the public schema name" in lines
+    assert [line for line in lines if "(renamed to" in line] == [
+        "CHANGELOG.md:3: load_curves (renamed to fetch_prices in pipeline.py)",
+    ]
+
+
+def test_a_path_waiver_beside_a_token_wide_one_keeps_its_own_reason(repo: Path) -> None:
+    base = two_renames(repo)
+    description = describe(
+        repo,
+        "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry\n"
+        "- waive LEGACY_SCHEMA: everywhere else it is the public name\n",
+    )
+
+    result = sweep(repo, base, "--description", str(description))
+
+    lines = result.stdout.splitlines()
+    assert "waived: CHANGELOG.md:1: LEGACY_SCHEMA: historical entry" in lines
+    assert "waived: sql/audit.sql:1: LEGACY_SCHEMA: everywhere else it is the public name" in lines
+
+
+def test_a_waiver_outside_the_block_is_named_and_does_not_waive(repo: Path) -> None:
+    base = two_renames(repo)
+    stray = "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry"
+    description = repo.parent / "description.md"
+    description.write_text(f"## Waivers\n\n{stray}\n\n{SWEEP_BEGIN}\n{SWEEP_END}\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    lines = result.stdout.splitlines()
+    assert result.returncode == HITS
+    assert f"waiver outside sweep block: {stray}" in lines
+    assert not any(line.startswith("waived:") for line in lines)
+    assert "CHANGELOG.md:1: LEGACY_SCHEMA (renamed to LEGACY_SCHEMA_RAW in dbt_project.yml)" in lines
+
+
+def test_a_stray_waiver_alone_does_not_block_a_clean_sweep(repo: Path) -> None:
+    """Warned, not blocking: with no hit left, the line waives nothing that matters."""
+    write(repo, "a.py", "x = 1\n")
+    base = commit(repo, "initial")
+    write(repo, "a.py", "x = 2\n")
+    commit(repo, "edit")
+    stray = "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry"
+    description = repo.parent / "description.md"
+    description.write_text(f"{stray}\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == CLEAN, result.stdout
+    assert f"waiver outside sweep block: {stray}" in result.stdout.splitlines()

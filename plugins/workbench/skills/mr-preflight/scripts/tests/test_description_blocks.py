@@ -13,7 +13,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from description_blocks import BlockError, Waiver, parse_waivers, replace_block  # noqa: E402
+from description_blocks import (  # noqa: E402
+    BlockError,
+    Waiver,
+    parse_waivers,
+    replace_block,
+    stray_waivers,
+)
 
 SWEEP_BEGIN = "<!-- mr-preflight:sweep:begin -->"
 SWEEP_END = "<!-- mr-preflight:sweep:end -->"
@@ -92,6 +98,8 @@ def test_waiver_lines_parse_into_token_path_and_reason() -> None:
         "- waive LEGACY_SCHEMA CHANGELOG.md:",  # empty reason
         "- waive LEGACY_SCHEMA CHANGELOG.md:    ",  # blank reason
         "- waive",  # nothing at all
+        "- waive LEGACY_SCHEMA:",  # token-wide form with no reason
+        "- waive LEGACY_SCHEMA:    ",  # token-wide form with a blank reason
     ],
 )
 def test_a_malformed_waiver_line_is_reported_not_skipped(line: str) -> None:
@@ -138,6 +146,7 @@ def test_a_marker_glued_to_prose_by_a_non_newline_break_is_not_a_marker(
         "* waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # other bullet
         "+ waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # other bullet
         "- Waive LEGACY_SCHEMA CHANGELOG.md: historical entry",  # capital
+        "* waive LEGACY_SCHEMA: historical entry",  # other bullet, token-wide form
     ],
 )
 def test_a_near_miss_waiver_is_reported_rather_than_read_as_prose(line: str) -> None:
@@ -162,3 +171,53 @@ def test_prose_that_merely_starts_with_waive_is_not_a_malformed_waiver(line: str
     counts only when it would be a valid waiver with that prefix; ordinary
     English starting with the word must not block the MR forever."""
     assert parse_waivers(f"{line}\n") == ([], [])
+
+
+def test_a_token_wide_waiver_has_no_path_and_keeps_colons_in_its_reason() -> None:
+    body = (
+        "- waive HoldCo: legitimate in seeds and mappings\n"
+        "- waive `load_curves`: quoted: it is the public name\n"
+        "- waive LEGACY_SCHEMA CHANGELOG.md: still the path form\n"
+    )
+
+    waivers, malformed = parse_waivers(body)
+
+    assert waivers == [
+        Waiver(token="HoldCo", path=None, reason="legitimate in seeds and mappings"),
+        Waiver(token="load_curves", path=None, reason="quoted: it is the public name"),
+        Waiver(token="LEGACY_SCHEMA", path="CHANGELOG.md", reason="still the path form"),
+    ]
+    assert malformed == []
+
+
+STRAY_LINE = "- waive LEGACY_SCHEMA CHANGELOG.md: historical entry"
+
+
+def test_a_waiver_under_a_normal_heading_is_found_outside_the_block() -> None:
+    text = f"## Waivers\n\n{STRAY_LINE}\n- waive HoldCo: seeds\n\n{SWEEP_BEGIN}\n{SWEEP_END}\n"
+
+    assert stray_waivers(text, "sweep") == [STRAY_LINE, "- waive HoldCo: seeds"]
+
+
+def test_a_description_with_no_block_still_has_its_stray_waivers_found() -> None:
+    assert stray_waivers(f"Prose.\n\n{STRAY_LINE}\n", "sweep") == [STRAY_LINE]
+
+
+def test_a_waiver_inside_the_block_is_not_stray() -> None:
+    text = f"Prose.\n\n{SWEEP_BEGIN}\n{STRAY_LINE}\n{SWEEP_END}\n"
+
+    assert stray_waivers(text, "sweep") == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"```\n{STRAY_LINE}\n```\n",  # an example in a code fence
+        f"~~~md\n{STRAY_LINE}\n~~~\n",
+        f"    {STRAY_LINE}\n",  # an indented code block
+        "- waive the fee for new accounts\n",  # prose that starts with the word
+        "- waive LEGACY_SCHEMA CHANGELOG.md historical entry\n",  # not a waiver form
+    ],
+)
+def test_quoted_examples_and_prose_are_not_stray_waivers(text: str) -> None:
+    assert stray_waivers(text, "sweep") == []
