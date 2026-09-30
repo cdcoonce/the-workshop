@@ -1,0 +1,65 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ci_workflow_paths.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ci_workflow_paths.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] _has_path_filter_key always returns False",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_detects_a_paths_trigger_key and test_detects_a_paths_ignore_trigger_key: a no-op detector would never flag a real path filter, defeating the whole check.",
+      "find": "    return bool(_PATH_FILTER_KEY_PATTERN.search(text))",
+      "replace": "    return False"
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the paths-ignore alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_detects_a_paths_ignore_trigger_key.",
+      "find": "r\"^\\s*paths(-ignore)?\\s*:\"",
+      "replace": "r\"^\\s*paths\\s*:\""
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the line-start anchor, matching any substring",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_flag_an_unrelated_paths_substring: without the anchor, casual prose mentioning 'paths' would false-positive as a trigger key.",
+      "find": "r\"^\\s*paths(-ignore)?\\s*:\", re.MULTILINE",
+      "replace": "r\"paths(-ignore)?\\s*:\", re.MULTILINE"
+    },
+    {
+      "label": "[control] reword the module docstring",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "A `paths`/`paths-ignore` trigger key on the workflow would let an evals-only",
+      "replace": "A stray `paths`/`paths-ignore` trigger key on the workflow would let an evals-only"
+    }
+  ]
+}

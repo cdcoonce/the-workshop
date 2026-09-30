@@ -1,0 +1,95 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_flaky_item_warn.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_flaky_item_warn.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never appends a warn result",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_when_an_item_is_flaky_in_two_of_the_last_three_runs: this guard's whole purpose is to warn on a flaky item.",
+      "find": "            if flaky_count >= _FLAKY_THRESHOLD:\n                results.append(\n                    Result(\n                        level=\"warn\",\n                        guard=_GUARD_NAME,\n                        message=(\n                            f\"{skill}: item {item_id!r} needed 2+ attempts in \"\n                            f\"{flaky_count} of its last {len(recent)} runs\"\n                        ),\n                    )\n                )",
+      "replace": "            pass"
+    },
+    {
+      "label": "_needed_multiple_attempts drops the never-hit (None) branch",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_when_an_item_is_flaky_in_two_of_the_last_three_runs: a first_hit_attempt of None means TypeError on a bare `>= 2` comparison, so a run where the item never hits must be treated as flaky through the explicit None check, not by falling through to the comparison.",
+      "find": "    return first_hit_attempt is None or first_hit_attempt >= 2",
+      "replace": "    return first_hit_attempt is not None and first_hit_attempt >= 2"
+    },
+    {
+      "label": "check drops the item-presence conjunct, indexing every recent entry unconditionally",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_only_counts_runs_where_the_item_is_present: a run where the item was not gated at all has no entry for it, and indexing unconditionally raises KeyError instead of treating that run as non-flaky for the item.",
+      "find": "                if item_id in entry[\"items\"] and _needed_multiple_attempts(entry[\"items\"][item_id])",
+      "replace": "                if _needed_multiple_attempts(entry[\"items\"][item_id])"
+    },
+    {
+      "label": "check raises the flaky threshold to 3",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_when_an_item_is_flaky_in_two_of_the_last_three_runs and test_warns_with_fewer_than_three_runs_when_both_are_flaky: 2 of the last 3 (or fewer) is the documented threshold, not 3.",
+      "find": "_FLAKY_THRESHOLD = 2",
+      "replace": "_FLAKY_THRESHOLD = 3"
+    },
+    {
+      "label": "check slices the oldest 3 runs instead of the most recent 3",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_runs_older_than_the_last_three: slicing from the front picks up a stale flaky occurrence that should have aged out.",
+      "find": "        recent = history(runs_dir)[-_LOOKBACK:]",
+      "replace": "        recent = history(runs_dir)[:_LOOKBACK]"
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"flaky_item_warn\"",
+      "replace": "_GUARD_NAME = \"flaky_item_warn_guard\""
+    },
+    {
+      "label": "check drops the skill name from the warn message",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "find": "                            f\"{skill}: item {item_id!r} needed 2+ attempts in \"",
+      "replace": "                            f\"item {item_id!r} needed 2+ attempts in \""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never fails, and never forces recalibration.",
+      "replace": "This guard never fails, and never forces recalibration."
+    }
+  ]
+}

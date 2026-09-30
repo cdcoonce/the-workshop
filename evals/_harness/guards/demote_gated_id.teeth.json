@@ -1,0 +1,87 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_demote_gated_id.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_demote_gated_id.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never appends a fail result",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_direct_tier_changes_and_a_gated_id_is_removed: the guard's whole purpose is to fail this co-occurrence.",
+      "find": "            results.append(\n                Result(\n                    level=\"fail\",\n                    guard=_GUARD_NAME,\n                    message=(\n                        f\"{skill}: direct tier changed while a gated id was \"\n                        \"removed from checks.manifest — looks like a demotion\"\n                    ),\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "check drops the tier-hash-unchanged skip, always evaluating manifest removal",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_a_gated_id_is_removed_with_no_direct_tier_change: a gated-ID removal alone, with no tier change, must not fail.",
+      "find": "        if head_hash == base_hash:\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check treats any tier change alone as a fail, ignoring manifest removal",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_direct_tier_changes_with_no_gated_id_removed: a tier change with no gated-ID removal must not fail — the positive conjunct.",
+      "find": "        if base_ids - head_ids:",
+      "replace": "        if True:"
+    },
+    {
+      "label": "check flips the manifest set-difference direction",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_direct_tier_changes_and_a_gated_id_is_removed and test_passes_when_direct_tier_changes_with_no_gated_id_removed together: swapping the direction misses a real removal and flags an addition instead.",
+      "find": "        if base_ids - head_ids:",
+      "replace": "        if head_ids - base_ids:"
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"demote_gated_id\"",
+      "replace": "_GUARD_NAME = \"demote_gated_id_guard\""
+    },
+    {
+      "label": "check drops the skill name from the fail message",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "find": "                        f\"{skill}: direct tier changed while a gated id was \"\n                        \"removed from checks.manifest — looks like a demotion\"",
+      "replace": "                        \"direct tier changed while a gated id was \"\n                        \"removed from checks.manifest — looks like a demotion\""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Unconditional: no activation precondition at all, and it fires independent",
+      "replace": "This guard runs unconditionally: no activation precondition at all, and it fires independent"
+    }
+  ]
+}
