@@ -1,0 +1,95 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_empty_gated_set.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_empty_gated_set.py"
+  ],
+  "mutants": [
+    {
+      "label": "[control] check drops the directory-exists conjunct",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Provably inert: is_active() already reads checks.manifest/retired.md with .exists() guards, so a missing skill_dir makes it return False regardless of this earlier check, and the fail-on-active branch below never fires either way. Kept in source to skip needless filesystem reads, but no fixture can distinguish its presence from its absence.",
+      "find": "        if not skill_dir.is_dir():\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check inverts the is_active condition, evaluating inactive skills instead",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_inactive_with_zero_gated_ids: an inactive skill with an empty manifest is the expected starting state and must not fail.",
+      "find": "        if not is_active(skill_dir):",
+      "replace": "        if is_active(skill_dir):"
+    },
+    {
+      "label": "[does-nothing] check never appends a fail result",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_on_an_active_skill_with_zero_gated_ids: this is the floor guard's whole purpose — an active skill with zero gated IDs must fail.",
+      "find": "            results.append(\n                Result(\n                    level=\"fail\",\n                    guard=_GUARD_NAME,\n                    message=f\"{skill}: active with zero gated IDs in checks.manifest\",\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "check inverts the empty-manifest condition",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_active_with_a_gated_id: an active skill WITH a gated ID must never fail — the positive conjunct.",
+      "find": "        if not parse_checks_manifest(manifest_text):",
+      "replace": "        if parse_checks_manifest(manifest_text):"
+    },
+    {
+      "label": "check emits warn instead of fail",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "find": "                    level=\"fail\",",
+      "replace": "                    level=\"warn\","
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"empty_gated_set\"",
+      "replace": "_GUARD_NAME = \"empty_gated_set_guard\""
+    },
+    {
+      "label": "check drops the skill name from the fail message",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "find": "                    message=f\"{skill}: active with zero gated IDs in checks.manifest\",",
+      "replace": "                    message=\"active with zero gated IDs in checks.manifest\","
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./empty_gated_set.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "For each rostered skill directory that exists and is active (per",
+      "replace": "This guard walks every rostered skill directory that exists and is active (per"
+    }
+  ]
+}

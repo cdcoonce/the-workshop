@@ -1,0 +1,104 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_retirement_entry.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_retirement_entry.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never appends a fail result",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_gated_id_is_removed_with_no_retired_entry: the guard's whole purpose is to fail an unretired removal.",
+      "find": "            results.append(\n                Result(\n                    level=\"fail\",\n                    guard=_GUARD_NAME,\n                    message=(\n                        f\"{skill}: gated id {removed_id!r} removed from checks.manifest \"\n                        \"with no valid retired.md entry added in this diff\"\n                    ),\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "check treats every candidate as valid regardless of its fields",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_new_entry_has_no_date and its sibling defect tests: an entry missing a required field must not satisfy the guard.",
+      "find": "            if any(_is_valid_new_entry(entry) for entry in candidates):",
+      "replace": "            if candidates:"
+    },
+    {
+      "label": "_is_valid_new_entry drops the date check",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_new_entry_has_no_date.",
+      "find": "    if not _DATE_PATTERN.match(entry.get(\"date\", \"\")):\n        return False",
+      "replace": "    pass"
+    },
+    {
+      "label": "_is_valid_new_entry drops the reason check",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_new_entry_has_an_invalid_reason.",
+      "find": "    if not _REASON_PATTERN.match(entry.get(\"reason\", \"\")):\n        return False",
+      "replace": "    pass"
+    },
+    {
+      "label": "_is_valid_new_entry drops the evidence check",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_new_entry_has_no_evidence.",
+      "find": "    return bool(entry.get(\"evidence\", \"\").strip())",
+      "replace": "    return True"
+    },
+    {
+      "label": "_REASON_PATTERN drops the superseded-by alternative",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_with_a_superseded_by_reason — the positive conjunct proving all four reason classes are accepted.",
+      "find": "    r\"^(noise|upkeep|removed-by-design|superseded-by:[A-Za-z0-9][A-Za-z0-9._-]*)$\"",
+      "replace": "    r\"^(noise|upkeep|removed-by-design)$\""
+    },
+    {
+      "label": "check flips removed_ids to the wrong set direction",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_no_fail_when_no_gated_id_is_removed and test_fails_when_a_gated_id_is_removed_with_no_retired_entry together: swapping the set difference direction reports additions as removals and misses real removals.",
+      "find": "        removed_ids = base_ids - head_ids",
+      "replace": "        removed_ids = head_ids - base_ids"
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"retirement_entry\"",
+      "replace": "_GUARD_NAME = \"retirement_entry_guard\""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never reimplements the ``checks.manifest``/``retired.md`` parsers",
+      "replace": "This guard never reimplements the ``checks.manifest``/``retired.md`` parsers"
+    }
+  ]
+}
