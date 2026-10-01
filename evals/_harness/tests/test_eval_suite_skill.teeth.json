@@ -449,6 +449,46 @@
       "replace": "`evals._harness.ledger.write_run_file(runs_dir, run, raw_sources)`"
     },
     {
+      "label": "[F5] the dispatch_error snapshot skip dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_to_skip_the_snapshot_for_a_dispatch_error_attempt.",
+      "find": "Skip this step for an attempt\n   that ended in `dispatch_error`: it has no transcripts and may have no\n   workdir, so there is nothing to snapshot, and `score_attempt` runs no\n   scorers for it.",
+      "replace": "Snapshot every attempt,\n   dispatch errors included."
+    },
+    {
+      "label": "[F5] the fresh end_state/ per attempt rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_a_resnapshot_needs_a_fresh_end_state_directory, which also executes a repeat snapshot and sees it refused.",
+      "find": "Use a new `end_state/` directory for every attempt;\n   re-snapshotting an attempt (after fixing `end_state()`, say) needs a new\n   path, or the old `end_state/` deleted first.",
+      "replace": "Snapshots may be repeated into the same directory."
+    },
+    {
+      "label": "[F5] the no-gated-items rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_a_case_with_no_gated_items_is_never_retried.",
+      "find": "A case with no gated items makes `should_retry` return `False` at once\n(`should_retry({}, 0, 0)` is `False`), so an indeterminate first attempt of\nsuch a case is not replaced.",
+      "replace": "A case with no gated items is retried like any other."
+    },
+    {
+      "label": "[F5] the no-gated-items example flipped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_every_documented_should_retry_example_returns_what_the_skill_says, which executes both examples.",
+      "find": "(`should_retry({}, 0, 0)` is `False`)",
+      "replace": "(`should_retry({}, 0, 0)` is `True`)"
+    },
+    {
+      "label": "[F5] the conductor-script root rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_how_to_run_a_conductor_script_and_that_it_is_true, which runs a script inside and outside the root.",
+      "find": "Run a conductor script with `python -c` or\n`python -m`, or with `PYTHONPATH=.`, from the checkout root: a script saved\noutside the checkout root fails with `No module named 'evals'`.",
+      "replace": "Run a conductor script from anywhere."
+    },
+    {
       "label": "[control] reword the skill's intro sentence",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",

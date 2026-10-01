@@ -392,15 +392,15 @@ def test_every_harness_call_the_skill_cites_matches_the_real_signature():
                 )
 
 
-def test_the_documented_should_retry_example_returns_what_the_skill_says():
+def test_every_documented_should_retry_example_returns_what_the_skill_says():
     text = _normalize(_skill_text())
-    match = re.search(r"`should_retry\((\{.*?\}), (\d+), (\d+)\)` is `(True|False)`", text)
-    assert match, "the skill no longer shows a should_retry example"
-    item_states = ast.literal_eval(match.group(1))
-    result = _harness_function("scorer", "should_retry")(
-        item_states, int(match.group(2)), int(match.group(3))
-    )
-    assert result is (match.group(4) == "True")
+    matches = re.findall(r"`should_retry\((\{.*?\}), (\d+), (\d+)\)` is `(True|False)`", text)
+    assert len(matches) >= 2, "the skill must show the reserve example and the no-gated-items example"
+    should_retry = _harness_function("scorer", "should_retry")
+    for item_states, counted, reserve, documented in matches:
+        assert should_retry(ast.literal_eval(item_states), int(counted), int(reserve)) is (
+            documented == "True"
+        ), f"should_retry({item_states}, {counted}, {reserve})"
 
 
 def test_the_documented_retry_caps_are_the_real_boundaries():
@@ -676,3 +676,96 @@ def test_the_skill_says_dispatch_error_is_the_only_status_override_and_score_att
     assert attempt.classification == "indeterminate"
     with pytest.raises(ValueError):
         score_attempt(case_dir, [], None, set(), transcript_status="complete")
+
+
+# ---------------------------------------------------------------------------
+# round-4 statements, each pinned by executing the real call
+# ---------------------------------------------------------------------------
+
+
+def test_the_skill_says_to_skip_the_snapshot_for_a_dispatch_error_attempt(tmp_path):
+    section = _section("4")
+    assert re.search(r"Skip this step for an attempt that ended in `dispatch_error`", section)
+    assert re.search(r"no transcripts and may have no workdir", section)
+    assert re.search(r"`score_attempt` runs no scorers for it", section)
+
+    case_dir = tmp_path / "skill-x" / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text("Do it.\n", encoding="utf-8")
+    (case_dir / "case.toml").write_text(
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "a"\nkind = "trend"\nscorer = "scorer_a"\n',
+        encoding="utf-8",
+    )
+    (case_dir / "predicates.py").write_text(
+        "def scorer_a(evidence):\n    raise AssertionError('scorer ran')\n\n"
+        "def end_state(workdir, case_dir, transcripts):\n"
+        "    return {'x.txt': (workdir / 'result.txt').read_text(encoding='utf-8')}\n",
+        encoding="utf-8",
+    )
+    # With no workdir to read, snapshotting fails: that is why the step is skipped.
+    with pytest.raises(ValueError):
+        _harness_function("dispatch", "snapshot_end_state")(case_dir, tmp_path / "no-workdir", [], tmp_path / "end_state")
+    # And scoring the dispatch_error attempt needs neither a workdir nor a snapshot nor any scorer.
+    attempt, _ = _harness_function("dispatch", "score_attempt")(
+        case_dir, [], None, set(), transcript_status="dispatch_error"
+    )
+    assert attempt.classification == "indeterminate"
+
+
+def test_the_skill_says_a_resnapshot_needs_a_fresh_end_state_directory(tmp_path):
+    section = _section("4")
+    assert re.search(r"use a new `end_state/` directory for every attempt", section, re.IGNORECASE)
+    assert re.search(r"Re-snapshotting an attempt .{0,60}needs a new path, or the old `end_state/` deleted first", section, re.IGNORECASE)
+
+    case_dir = tmp_path / "skill-x" / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "case.toml").write_text('mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8")
+    (case_dir / "predicates.py").write_text("def end_state(w, c, t):\n    return {'a.txt': 'x'}\n", encoding="utf-8")
+    snapshot_end_state = _harness_function("dispatch", "snapshot_end_state")
+    dest = tmp_path / "end_state"
+
+    snapshot_end_state(case_dir, tmp_path, [], dest)
+    with pytest.raises(ValueError):
+        snapshot_end_state(case_dir, tmp_path, [], dest)
+    import shutil
+
+    shutil.rmtree(dest)
+    snapshot_end_state(case_dir, tmp_path, [], dest)
+    snapshot_end_state(case_dir, tmp_path, [], tmp_path / "another" / "end_state")
+
+
+def test_the_skill_says_a_case_with_no_gated_items_is_never_retried():
+    section = _section("5")
+    assert re.search(r"A case with no gated items makes `should_retry` return `False` at once", section)
+    assert re.search(r"an indeterminate first attempt .{0,40}is not replaced", section)
+    assert _harness_function("scorer", "should_retry")({}, 0, 0) is False
+
+
+def test_the_skill_says_how_to_run_a_conductor_script_and_that_it_is_true(tmp_path):
+    text = _normalize(_skill_text())
+    assert re.search(r"`python -c` or `python -m`, or with `PYTHONPATH=\.`, from the checkout root", text)
+    assert "No module named 'evals'" in text
+
+    import os
+    import subprocess
+    import sys
+
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    script = tmp_path / "conductor.py"
+    script.write_text("import evals._harness.dispatch\nprint('imported')\n", encoding="utf-8")
+
+    inline = subprocess.run(
+        [sys.executable, "-c", "import evals._harness.dispatch; print('imported')"],
+        cwd=_REPO_ROOT, env=environment, capture_output=True, text=True,
+    )
+    outside = subprocess.run(
+        [sys.executable, str(script)], cwd=tmp_path, env=environment, capture_output=True, text=True
+    )
+    with_path = subprocess.run(
+        [sys.executable, str(script)], cwd=_REPO_ROOT,
+        env={**environment, "PYTHONPATH": str(_REPO_ROOT)}, capture_output=True, text=True,
+    )
+
+    assert inline.returncode == 0 and "imported" in inline.stdout
+    assert outside.returncode != 0 and "No module named 'evals'" in outside.stderr
+    assert with_path.returncode == 0 and "imported" in with_path.stdout

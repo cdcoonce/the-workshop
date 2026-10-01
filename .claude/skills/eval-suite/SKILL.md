@@ -30,7 +30,9 @@ identically to any other rostered skill.
 Run every harness call from the checkout root with
 `uv run --with jsonschema python` (the way `make test-evals` runs the
 harness): `evals/` is imported as the `evals._harness` package from the root,
-and `ledger` needs `jsonschema`.
+and `ledger` needs `jsonschema`. Run a conductor script with `python -c` or
+`python -m`, or with `PYTHONPATH=.`, from the checkout root: a script saved
+outside the checkout root fails with `No module named 'evals'`.
 
 ## Case-directory contract (summary)
 
@@ -136,7 +138,12 @@ After every attempt (subagent or inline), before scoring it:
    are the attempt's transcript JSONL files, one per case-agent (one per lens
    agent, inline): a subagent's transcript is
    `<session>/subagents/agent-<id>.jsonl`, as `evals._harness.transcript`
-   documents.
+   documents. Use a new `end_state/` directory for every attempt;
+   re-snapshotting an attempt (after fixing `end_state()`, say) needs a new
+   path, or the old `end_state/` deleted first. Skip this step for an attempt
+   that ended in `dispatch_error`: it has no transcripts and may have no
+   workdir, so there is nothing to snapshot, and `score_attempt` runs no
+   scorers for it.
 2. Score the attempt with
    `evals._harness.dispatch.score_attempt(case_dir, transcript_paths, workdir, gated_ids, transcript_status=None, end_state_dir=<the end_state/ directory just snapshotted>)`.
    This parses every transcript, builds an `Evidence` object, runs every
@@ -166,6 +173,10 @@ returns `False` once counted_attempts reaches 3, or once
 counted_attempts + reserve_used reaches 5 — whichever comes first. 5 is
 therefore the hard execution cap per fixture (3 counted plus, at most, 2
 reserve draws — the conductor enforces the 2, see below).
+
+A case with no gated items makes `should_retry` return `False` at once
+(`should_retry({}, 0, 0)` is `False`), so an indeterminate first attempt of
+such a case is not replaced.
 
 `should_retry` does not enforce the reserve size: it bounds only
 `counted_attempts + reserve_used` (at 5), never `reserve_used` itself
