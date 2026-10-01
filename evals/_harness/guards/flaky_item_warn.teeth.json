@@ -90,6 +90,14 @@
       "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
       "find": "Never fails, and never forces recalibration.",
       "replace": "This guard never fails, and never forces recalibration."
+    },
+    {
+      "label": "check iterates every item seen in recent runs instead of the current gated set",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_only_warns_for_items_in_the_skills_current_gated_set: a retired item still present in old run files is not a gated item and must not be reported.",
+      "find": "        for item_id in sorted(gated_ids):",
+      "replace": "        for item_id in sorted({i for entry in recent for i in entry[\"items\"]}):"
     }
   ]
 }

@@ -1,6 +1,6 @@
 """Guard: warn on a gated item that keeps needing multiple attempts.
 
-For each gated item, looks at a skill's last 3 run files (by filename
+For each item in the skill's current gated set (``checks.manifest``), looks at a skill's last 3 run files (by filename
 timestamp; fewer than 3 existing is not an error). Reads that per-run
 history with ``evals._harness.trend.history`` (owned by #993) rather than
 re-deriving it from raw run-file JSON. Within a single run file, an item
@@ -11,7 +11,7 @@ files, warns. Never fails, and never forces recalibration.
 
 from __future__ import annotations
 
-from evals._harness.activation import ROSTERED_SKILLS
+from evals._harness.activation import ROSTERED_SKILLS, parse_checks_manifest
 from evals._harness.guards import GuardContext, Result
 from evals._harness.trend import history
 
@@ -50,11 +50,13 @@ def check(ctx: GuardContext) -> list[Result]:
         if not recent:
             continue
 
-        item_ids: set[str] = set()
-        for entry in recent:
-            item_ids.update(entry["items"].keys())
+        # "For each gated item": the skill's CURRENT gated set, not whatever
+        # ids happen to appear in old run files (a retired item still does).
+        manifest_path = ctx.repo_root / "evals" / skill / "checks.manifest"
+        manifest_text = manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else ""
+        gated_ids = set(parse_checks_manifest(manifest_text))
 
-        for item_id in sorted(item_ids):
+        for item_id in sorted(gated_ids):
             flaky_count = sum(
                 1
                 for entry in recent

@@ -65,12 +65,20 @@ def _run(run_date: str, items: dict[str, list[str]]) -> dict:
     }
 
 
+def _gate(repo: Path, *item_ids: str) -> None:
+    """List *item_ids* as the commit skill's gated set in its checks.manifest."""
+    manifest = repo / "evals" / "commit" / "checks.manifest"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("".join(f"{item_id} A description\n" for item_id in item_ids), encoding="utf-8")
+
+
 def _write_run(runs_dir: Path, filename: str, run: dict) -> None:
     runs_dir.mkdir(parents=True, exist_ok=True)
     (runs_dir / filename).write_text(json.dumps(run), encoding="utf-8")
 
 
 def test_warns_when_an_item_is_flaky_in_two_of_the_last_three_runs(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss", "hit"]}))
     _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["hit"]}))
@@ -86,6 +94,7 @@ def test_warns_when_an_item_is_flaky_in_two_of_the_last_three_runs(tmp_path):
 
 
 def test_no_result_when_flaky_in_only_one_of_the_last_three_runs(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss", "hit"]}))
     _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["hit"]}))
@@ -97,6 +106,7 @@ def test_no_result_when_flaky_in_only_one_of_the_last_three_runs(tmp_path):
 
 
 def test_warns_with_fewer_than_three_runs_when_both_are_flaky(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss"]}))
     _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["miss", "hit"]}))
@@ -108,6 +118,7 @@ def test_warns_with_fewer_than_three_runs_when_both_are_flaky(tmp_path):
 
 
 def test_no_result_with_a_single_flaky_run_only(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss"]}))
 
@@ -117,6 +128,7 @@ def test_no_result_with_a_single_flaky_run_only(tmp_path):
 
 
 def test_ignores_runs_older_than_the_last_three(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20251230T000000Z-zzz.json", _run("2025-12-30", {_ITEM: ["miss"]}))
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["hit"]}))
@@ -129,6 +141,7 @@ def test_ignores_runs_older_than_the_last_three(tmp_path):
 
 
 def test_only_counts_runs_where_the_item_is_present(tmp_path):
+    _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {}))
     _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["miss"]}))
@@ -144,3 +157,28 @@ def test_no_result_with_no_runs_dir(tmp_path):
     results = check(GuardContext(base="unused", repo_root=tmp_path))
 
     assert results == []
+
+
+def test_only_warns_for_items_in_the_skills_current_gated_set(tmp_path):
+    # `gone` was retired (it is in retired.md, not checks.manifest) but still
+    # appears in the last three run files; the spec is "for each gated item",
+    # so only `other` -- the one gated item -- may be reported.
+    (tmp_path / "evals" / "commit").mkdir(parents=True)
+    (tmp_path / "evals" / "commit" / "checks.manifest").write_text(
+        "other An item still gated\n", encoding="utf-8"
+    )
+    (tmp_path / "evals" / "commit" / "retired.md").write_text(
+        "## gone\n- date: 2026-01-01\n- reason: noise\n- evidence: flaked repeatedly\n",
+        encoding="utf-8",
+    )
+    runs_dir = tmp_path / "evals" / "commit" / "runs"
+    flaky = {"gone": ["miss", "hit"], "other": ["miss", "hit"]}
+    _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", flaky))
+    _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", flaky))
+    _write_run(runs_dir, "20260103T000000Z-ccc.json", _run("2026-01-03", flaky))
+
+    results = check(GuardContext(base="unused", repo_root=tmp_path))
+
+    assert [result.level for result in results] == ["warn"]
+    assert "'other'" in results[0].message
+    assert not any("gone" in result.message for result in results)
