@@ -12,11 +12,14 @@ caller supplies.
 
 from __future__ import annotations
 
-import builtins
 import io
 import json
 import os
 import shutil
+import sqlite3
+import subprocess
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -32,38 +35,121 @@ from evals._harness.dispatch import (
 
 
 class StrayWriteError(AssertionError):
-    """A write landed outside the directory the entry point is allowed to write under."""
+    """A write (or a process spawn) happened where the code under test may not make one."""
 
 
-_MKDIR_LIKE = {"mkdir"}
-_ONE_PATH_OPS = ("mkdir", "remove", "unlink", "rmdir", "truncate", "utime")
+_STATE_ATTR = "_eval_suite_write_scope_state"
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
+
+# audit event -> indexes of the arguments that are written/removed paths
+_PATH_EVENTS: dict[str, tuple[int, ...]] = {
+    "os.mkdir": (0,),
+    "os.remove": (0,),
+    "os.rmdir": (0,),
+    "os.truncate": (0,),
+    "os.utime": (0,),
+    "os.chmod": (0,),
+    "os.rename": (0, 1),
+    "os.link": (0, 1),
+    "os.symlink": (1,),
+    "shutil.copyfile": (1,),
+    "shutil.copymode": (1,),
+    "shutil.copystat": (1,),
+    "shutil.copytree": (1,),
+    "shutil.move": (0, 1),
+    "shutil.rmtree": (0,),
+    "shutil.make_archive": (0,),
+    "shutil.unpack_archive": (1,),
+    "sqlite3.connect": (0,),
+}
+# Spawning any process is a write the recorder cannot see into: never allowed.
+_PROCESS_EVENTS = frozenset(
+    {
+        "subprocess.Popen",
+        "os.system",
+        "os.exec",
+        "os.posix_spawn",
+        "os.spawn",
+        "os.fork",
+        "os.forkpty",
+    }
+)
+_CREATES_DIRECTORIES = frozenset({"os.mkdir"})
+
+
+def _audit_hook(event: str, args: tuple) -> None:
+    recorder = getattr(sys, _STATE_ATTR).active
+    if recorder is not None:
+        recorder.audit(event, args)
+
+
+# Audit hooks cannot be removed, so the hook is installed once per process and
+# is inert unless a ``WriteRecorder`` context is active. The state hangs off
+# ``sys`` so a second import of this module (importlib mode) does not stack a
+# second hook.
+if not hasattr(sys, _STATE_ATTR):
+    setattr(sys, _STATE_ATTR, types.SimpleNamespace(active=None))
+    sys.addaudithook(_audit_hook)
+
+
+def recorder_is_off() -> bool:
+    return getattr(sys, _STATE_ATTR).active is None
 
 
 class WriteRecorder:
-    """Records every filesystem write the code under test makes, and blocks stray ones.
+    """Records every write the code under test makes, however it is reached, and blocks stray ones.
 
-    Diffing ``tmp_path`` before and after only sees writes that land inside
-    it, so a function that writes ``/tmp/stray.txt`` or ``./tests.md`` passes
-    unnoticed. This patches every Python-level write entry point
-    (``open``/``io.open``, ``os.open``, ``os.mkdir``, ``os.rename``,
-    ``os.replace``, ``os.remove``/``unlink``/``rmdir``, ``os.symlink``,
-    ``os.link``, ``os.truncate``, ``os.utime``) instead — ``pathlib``'s
-    ``write_text``/``write_bytes``/``touch``/``mkdir`` and ``shutil.copyfile``
-    all route through them — records each target, and raises
-    ``StrayWriteError`` before the write happens when the target is outside
-    ``allowed_roots`` (so a blocked mutant leaves no junk behind). A
-    ``mkdir`` may also create an ancestor of an allowed root.
+    Diffing ``tmp_path`` before and after only sees writes that land inside it,
+    and patching ``open``/``os.*`` misses aliases bound before the patch
+    (``_o = open``, ``from os import mkdir``, a pre-bound ``os.open``), shell-outs
+    and ``sqlite3``. A ``sys.addaudithook`` hook sees the event at the C layer
+    whatever name the caller used: ``open`` (builtin, ``io``, ``os.open``,
+    ``FileIO``, ``Path.write_*``/``touch``), ``os.mkdir``/``rename``/``remove``/
+    ``rmdir``/``symlink``/``link``/``truncate``/``utime``/``chmod``, the audited
+    ``shutil`` operations, ``sqlite3.connect``, and every process spawn
+    (``subprocess.Popen``, ``os.system``, ``os.exec*``, ``os.spawn*``,
+    ``os.posix_spawn``, ``os.fork``). The hook raises ``StrayWriteError`` before
+    the operation happens when its target is outside ``allowed_roots`` (a
+    process spawn is never allowed), so a blocked mutant leaves no junk behind.
+    A ``mkdir`` may also create an ancestor of an allowed root.
+
+    Use as a context manager; the on/off flag is cleared on exit even when the
+    body raises.
     """
 
-    def __init__(self, monkeypatch, allowed_roots: list[Path]):
+    def __init__(self, allowed_roots: list[Path]):
         self.writes: list[tuple[str, Path]] = []
         self._roots = [Path(os.path.realpath(root)) for root in allowed_roots]
-        self._install(monkeypatch)
+
+    def __enter__(self) -> "WriteRecorder":
+        state = getattr(sys, _STATE_ATTR)
+        assert state.active is None, "a WriteRecorder is already active"
+        state.active = self
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        getattr(sys, _STATE_ATTR).active = None
+
+    def audit(self, event: str, args: tuple) -> None:
+        if event in _PROCESS_EVENTS:
+            self.writes.append((event, Path(event)))
+            raise StrayWriteError(f"{event} spawned a process while recording writes")
+        if event == "open":
+            path, flags = args[0], args[2]
+            if isinstance(flags, int) and flags & _WRITE_FLAGS:
+                self._note("open", path)
+        elif event in _PATH_EVENTS:
+            for index in _PATH_EVENTS[event]:
+                if index < len(args):
+                    self._note(event, args[index])
 
     def _note(self, op: str, target) -> None:
         if not isinstance(target, (str, bytes, os.PathLike)):
             return
-        path = Path(os.path.realpath(os.fsdecode(target)))
+        text = os.fsdecode(target)
+        if text in ("", ":memory:"):
+            return
+        path = Path(os.path.realpath(text))
         self.writes.append((op, path))
         if not self._allowed(op, path):
             raise StrayWriteError(f"{op} wrote outside the allowed roots: {path}")
@@ -72,52 +158,18 @@ class WriteRecorder:
         for root in self._roots:
             if path == root or root in path.parents:
                 return True
-            if op in _MKDIR_LIKE and path in root.parents:
+            if op in _CREATES_DIRECTORIES and path in root.parents:
                 return True
         return False
 
-    def _install(self, monkeypatch) -> None:
-        recorder = self
-        real_open = builtins.open
-
-        def guarded_open(file, mode="r", *args, **kwargs):
-            if set(str(mode)) & set("wax+"):
-                recorder._note("open", file)
-            return real_open(file, mode, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "open", guarded_open)
-        monkeypatch.setattr(io, "open", guarded_open)
-
-        real_os_open = os.open
-        write_flags = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
-
-        def guarded_os_open(path, flags, *args, **kwargs):
-            if flags & write_flags:
-                recorder._note("os.open", path)
-            return real_os_open(path, flags, *args, **kwargs)
-
-        monkeypatch.setattr(os, "open", guarded_os_open)
-
-        def wrap(name: str, targets: tuple[int, ...]) -> None:
-            real = getattr(os, name)
-
-            def guarded(*args, **kwargs):
-                for index in targets:
-                    if index < len(args):
-                        recorder._note(name, args[index])
-                return real(*args, **kwargs)
-
-            monkeypatch.setattr(os, name, guarded)
-
-        for name in _ONE_PATH_OPS:
-            wrap(name, (0,))
-        wrap("rename", (0, 1))
-        wrap("replace", (0, 1))
-        wrap("link", (1,))
-        wrap("symlink", (1,))
-
     def stray_names(self) -> set[str]:
         return {path.name for _, path in self.writes}
+
+
+@pytest.fixture(autouse=True)
+def _recorder_flag_is_off_after_every_test():
+    yield
+    assert recorder_is_off(), "a test left the write recorder switched on"
 
 
 def _files_under(root: Path) -> set[Path]:
@@ -165,11 +217,11 @@ def test_prompt_and_score_builders_write_nothing(tmp_path, monkeypatch):
     _write_transcript(transcript_path)
 
     before = _files_under(tmp_path)
-    WriteRecorder(monkeypatch, [])
 
-    build_dispatch_prompt(case_dir)
-    build_no_skill_prompt(case_dir)
-    score_attempt(case_dir, [transcript_path], None, {"item-a"})
+    with WriteRecorder([]):
+        build_dispatch_prompt(case_dir)
+        build_no_skill_prompt(case_dir)
+        score_attempt(case_dir, [transcript_path], None, {"item-a"})
 
     after = _files_under(tmp_path)
 
@@ -187,9 +239,9 @@ def test_snapshot_end_state_writes_only_under_dest_and_never_tests_md(tmp_path, 
     dest = tmp_path / "attempt-1" / "end_state"
 
     before = _files_under(tmp_path)
-    WriteRecorder(monkeypatch, [dest])
 
-    snapshot_end_state(case_dir, workdir, [transcript_path], dest)
+    with WriteRecorder([dest]):
+        snapshot_end_state(case_dir, workdir, [transcript_path], dest)
 
     after = _files_under(tmp_path)
     new_files = after - before
@@ -245,7 +297,90 @@ def _write_via_symlink(target: Path) -> None:
     os.symlink(__file__, target)
 
 
+def _write_via_subprocess_touch(target: Path) -> None:
+    subprocess.run(["touch", str(target)], check=False)
+
+
+def _write_via_os_system(target: Path) -> None:
+    os.system(f"touch {target}")
+
+
+def _write_via_sqlite(target: Path) -> None:
+    sqlite3.connect(target).close()
+
+
+_ALIASED_OS_MKDIR = os.mkdir
+_ALIASED_OPEN = open
+_PREBOUND_OS_OPEN = os.open
+_PREBOUND_OS_WRITE = os.write
+
+
+def _write_via_aliased_os_mkdir(target: Path) -> None:
+    _ALIASED_OS_MKDIR(target)
+
+
+def _write_via_aliased_open(target: Path) -> None:
+    _ALIASED_OPEN(target, "w").close()
+
+
+def _write_via_prebound_os_open_and_write(target: Path) -> None:
+    fd = _PREBOUND_OS_OPEN(target, os.O_WRONLY | os.O_CREAT)
+    _PREBOUND_OS_WRITE(fd, b"x")
+    os.close(fd)
+
+
+def _write_via_rename(target: Path) -> None:
+    os.rename(__file__, target)
+
+
+def _write_via_remove(target: Path) -> None:
+    os.remove(target)
+
+
+def _write_via_rmdir(target: Path) -> None:
+    os.rmdir(target)
+
+
+def _write_via_hard_link(target: Path) -> None:
+    os.link(__file__, target)
+
+
+def _write_via_truncate(target: Path) -> None:
+    os.truncate(target, 0)
+
+
+def _write_via_shutil_move(target: Path) -> None:
+    shutil.move(__file__, target)
+
+
+def _write_via_shutil_copytree(target: Path) -> None:
+    shutil.copytree(Path(__file__).parent, target)
+
+
+def _write_via_shutil_rmtree(target: Path) -> None:
+    shutil.rmtree(target)
+
+
+def _write_via_fileio(target: Path) -> None:
+    io.FileIO(target, "w").close()
+
+
 _WRITERS = [
+    _write_via_subprocess_touch,
+    _write_via_os_system,
+    _write_via_sqlite,
+    _write_via_aliased_os_mkdir,
+    _write_via_aliased_open,
+    _write_via_prebound_os_open_and_write,
+    _write_via_rename,
+    _write_via_remove,
+    _write_via_rmdir,
+    _write_via_hard_link,
+    _write_via_truncate,
+    _write_via_shutil_move,
+    _write_via_shutil_copytree,
+    _write_via_shutil_rmtree,
+    _write_via_fileio,
     _write_via_path_write_text,
     _write_via_path_write_bytes,
     _write_via_open,
@@ -260,42 +395,82 @@ _WRITERS = [
 
 
 @pytest.mark.parametrize("writer", _WRITERS, ids=lambda fn: fn.__name__)
-def test_the_recorder_blocks_and_records_a_write_outside_the_allowed_root(
-    tmp_path, monkeypatch, writer
-):
+def test_the_recorder_blocks_and_records_a_write_outside_the_allowed_root(tmp_path, writer):
     allowed = tmp_path / "allowed"
     allowed.mkdir()
     stray = tmp_path / "stray"
-    recorder = WriteRecorder(monkeypatch, [allowed])
+    # Targets that must already exist for the operation to make sense.
+    stray_dir = tmp_path / "stray-existing"
+    stray_dir.mkdir()
+    (tmp_path / "stray-file").write_text("x", encoding="utf-8")
 
-    with pytest.raises(StrayWriteError):
-        writer(stray)
+    with WriteRecorder([allowed]) as recorder:
+        with pytest.raises(StrayWriteError):
+            writer(stray)
 
     assert recorder.writes, "the write was not even recorded"
-    monkeypatch.undo()
     assert not stray.exists()
 
 
-def test_the_recorder_allows_writes_under_the_allowed_root_and_records_them(tmp_path, monkeypatch):
+def test_the_recorder_allows_writes_under_the_allowed_root_and_records_them(tmp_path):
     allowed = tmp_path / "allowed"
-    recorder = WriteRecorder(monkeypatch, [allowed])
 
-    (allowed / "deep").mkdir(parents=True)
-    (allowed / "deep" / "note.txt").write_text("x", encoding="utf-8")
+    with WriteRecorder([allowed]) as recorder:
+        (allowed / "deep").mkdir(parents=True)
+        (allowed / "deep" / "note.txt").write_text("x", encoding="utf-8")
 
     assert {path.name for _, path in recorder.writes} >= {"allowed", "deep", "note.txt"}
 
 
-def test_the_recorder_ignores_reads(tmp_path, monkeypatch):
+def test_the_recorder_blocks_a_sibling_directory_that_merely_shares_the_prefix(tmp_path):
+    (tmp_path / "allowed").mkdir()
+
+    with WriteRecorder([tmp_path / "allowed"]):
+        with pytest.raises(StrayWriteError):
+            (tmp_path / "allowed-sibling").mkdir()
+
+
+def test_the_recorder_ignores_reads(tmp_path):
     readable = tmp_path / "readable.txt"
     readable.write_text("x", encoding="utf-8")
-    recorder = WriteRecorder(monkeypatch, [])
 
-    assert readable.read_text(encoding="utf-8") == "x"
-    with open(readable, encoding="utf-8") as handle:
-        handle.read()
+    with WriteRecorder([]) as recorder:
+        assert readable.read_text(encoding="utf-8") == "x"
+        with open(readable, encoding="utf-8") as handle:
+            handle.read()
+        os.listdir(tmp_path)
 
     assert recorder.writes == []
+
+
+def test_a_process_spawn_is_blocked_even_inside_an_allowed_root(tmp_path):
+    with WriteRecorder([tmp_path]):
+        with pytest.raises(StrayWriteError):
+            subprocess.run(["true"], check=False)
+
+
+def test_the_on_off_flag_is_cleared_when_the_body_raises(tmp_path):
+    with pytest.raises(RuntimeError):
+        with WriteRecorder([tmp_path]):
+            assert not recorder_is_off()
+            raise RuntimeError("body failed")
+
+    assert recorder_is_off()
+
+
+def test_recorders_do_not_nest(tmp_path):
+    with WriteRecorder([tmp_path]):
+        with pytest.raises(AssertionError, match="already active"):
+            with WriteRecorder([tmp_path]):
+                pass
+    assert recorder_is_off()
+
+
+def test_the_audit_hook_is_inert_outside_a_recording_window(tmp_path):
+    (tmp_path / "unrecorded.txt").write_text("fine", encoding="utf-8")
+    subprocess.run(["true"], check=True)
+
+    assert recorder_is_off()
 
 
 # ---------------------------------------------------------------------------
@@ -319,13 +494,13 @@ def test_read_only_entry_points_write_nothing_anywhere_on_disk(tmp_path, monkeyp
     transcript_path = tmp_path / "raws" / "t.jsonl"
     _write_transcript(transcript_path)
     sandbox = _sandbox(tmp_path, monkeypatch)
-    recorder = WriteRecorder(monkeypatch, [])
 
-    build_dispatch_prompt(case_dir)
-    build_no_skill_prompt(case_dir)
-    score_attempt(case_dir, [transcript_path], None, {"item-a"})
-    find_invalid_modes([case_dir])
-    find_duplicate_item_ids(tmp_path / "skill-x")
+    with WriteRecorder([]) as recorder:
+        build_dispatch_prompt(case_dir)
+        build_no_skill_prompt(case_dir)
+        score_attempt(case_dir, [transcript_path], None, {"item-a"})
+        find_invalid_modes([case_dir])
+        find_duplicate_item_ids(tmp_path / "skill-x")
 
     assert recorder.writes == []
     assert list(sandbox.iterdir()) == []
@@ -340,9 +515,9 @@ def test_snapshot_end_state_writes_only_under_dest_anywhere_on_disk(tmp_path, mo
     _write_transcript(transcript_path)
     dest = tmp_path / "attempt-1" / "end_state"
     sandbox = _sandbox(tmp_path, monkeypatch)
-    recorder = WriteRecorder(monkeypatch, [dest])
 
-    snapshot_end_state(case_dir, workdir, [transcript_path], dest)
+    with WriteRecorder([dest]) as recorder:
+        snapshot_end_state(case_dir, workdir, [transcript_path], dest)
 
     written_files = [path for op, path in recorder.writes if op == "open"]
     assert written_files == [Path(os.path.realpath(dest / "note.txt"))]

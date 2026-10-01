@@ -103,6 +103,87 @@
       "why": "Killed by test_snapshot_end_state_writes_only_under_dest_anywhere_on_disk: the sandboxed cwd means a relative stray write is both recorded and visible in the sandbox.",
       "find": "    module = _load_predicates(case_dir)\n    end_state_fn = getattr(module, \"end_state\", None)",
       "replace": "    dest.mkdir(parents=True, exist_ok=True)\n    __import__(\"pathlib\").Path(\"tests.md\").write_text(\"x\")\n    module = _load_predicates(case_dir)\n    end_state_fn = getattr(module, \"end_state\", None)"
+    },
+    {
+      "label": "[W6] build_dispatch_prompt shells out to touch via subprocess.run",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: the audit hook sees subprocess.Popen, which the old open/os patching could not.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"subprocess\").run([\"touch\", __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w6\")], check=False)\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[W7] build_dispatch_prompt shells out via os.system",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.system is audited.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"os\").system(\"touch \" + __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w7\"))\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[W8] build_dispatch_prompt creates a sqlite database file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: sqlite3.connect is audited.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"sqlite3\").connect(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w8.db\")).close()\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[W9] a module-level `open` alias writes a stray file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: an alias bound at import time bypasses monkeypatching but not the audit hook.",
+      "find": "def _combined_status(transcripts: list[Transcript]) -> str:\n    if not transcripts:",
+      "replace": "_stray_open = open\n\n\ndef _combined_status(transcripts: list[Transcript]) -> str:\n    _stray_open(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w9\"), \"w\").close()\n    if not transcripts:"
+    },
+    {
+      "label": "[W10] a module-level `from os import mkdir` alias creates a stray directory",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.mkdir is audited whatever name reaches it.",
+      "find": "def _combined_status(transcripts: list[Transcript]) -> str:\n    if not transcripts:",
+      "replace": "from os import mkdir as _stray_mkdir\n\n\ndef _combined_status(transcripts: list[Transcript]) -> str:\n    _stray_mkdir(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w10\"))\n    if not transcripts:"
+    },
+    {
+      "label": "[W11] a pre-bound os.open + os.write writes a stray file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: the open event fires when os.open is called, however it was bound.",
+      "find": "def _combined_status(transcripts: list[Transcript]) -> str:\n    if not transcripts:",
+      "replace": "_stray_os_open = __import__(\"os\").open\n_stray_os_write = __import__(\"os\").write\n\n\ndef _combined_status(transcripts: list[Transcript]) -> str:\n    _fd = _stray_os_open(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w11\"), 1 | 64)\n    _stray_os_write(_fd, b\"x\")\n    __import__(\"os\").close(_fd)\n    if not transcripts:"
+    },
+    {
+      "label": "[W12] build_dispatch_prompt creates a stray symlink",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.symlink is audited.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"os\").symlink(\"/dev/null\", __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w12\"))\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[W13] _load_end_state copies a file with shutil.copyfile",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: shutil.copyfile is audited.",
+      "find": "    if end_state_dir is None or not end_state_dir.is_dir():",
+      "replace": "    __import__(\"shutil\").copyfile(__file__, __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w13\"))\n    if end_state_dir is None or not end_state_dir.is_dir():"
+    },
+    {
+      "label": "[W14] build_dispatch_prompt opens a stray file with io.FileIO",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: FileIO opens are audited.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"io\").FileIO(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w14\"), \"w\").close()\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[control] reword the module docstring's first sentence",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring wording: no write, no behaviour; the write-scope tests cannot observe it.",
+      "find": "\"\"\"Builds dispatch prompts and scores attempts for the eval-suite conductor.",
+      "replace": "\"\"\"Builds dispatch prompts and scores attempts for the conductor of the eval suite."
     }
   ]
 }
