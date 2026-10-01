@@ -18,6 +18,7 @@ import pytest
 
 from evals._harness.dispatch import (
     AcceptanceLeakError,
+    PromptPathError,
     build_dispatch_prompt,
     build_no_skill_prompt,
     score_attempt,
@@ -222,6 +223,87 @@ def test_build_dispatch_prompt_ignores_markdown_noise_shared_with_acceptance(tmp
 
 def test_build_dispatch_prompt_works_without_an_acceptance_file(tmp_path):
     case_dir = _leak_case(tmp_path, "Investigate the repo.\n", acceptance_text=None)
+
+    assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n"
+
+
+# ---------------------------------------------------------------------------
+# the prompt path must stay inside the case directory and never name acceptance.md
+# ---------------------------------------------------------------------------
+
+
+def _prompt_path_case(tmp_path: Path, prompt_value: str) -> Path:
+    case_dir = tmp_path / "skill-p" / "case-p"
+    case_dir.mkdir(parents=True)
+    (case_dir / "acceptance.md").write_text("Private acceptance criterion here.\n", encoding="utf-8")
+    (case_dir / "case.toml").write_text(
+        f'mode = "subagent"\nprompt = {json.dumps(prompt_value)}\n', encoding="utf-8"
+    )
+    return case_dir
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+@pytest.mark.parametrize("prompt_value", ["acceptance.md", "./acceptance.md", "sub/../acceptance.md"])
+def test_a_prompt_that_names_acceptance_md_is_refused(tmp_path, builder, prompt_value):
+    case_dir = _prompt_path_case(tmp_path, prompt_value)
+    (case_dir / "sub").mkdir()
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_prompt_symlink_to_acceptance_md_is_refused(tmp_path, builder):
+    case_dir = _prompt_path_case(tmp_path, "prompt.md")
+    (case_dir / "prompt.md").symlink_to(case_dir / "acceptance.md")
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_prompt_path_escaping_the_case_directory_is_refused(tmp_path, builder):
+    (tmp_path / "skill-p").mkdir()
+    (tmp_path / "skill-p" / "secret.txt").write_text("outside the case\n", encoding="utf-8")
+    case_dir = _prompt_path_case(tmp_path, "../secret.txt")
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_an_absolute_prompt_path_is_refused(tmp_path, builder):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside the case\n", encoding="utf-8")
+    case_dir = _prompt_path_case(tmp_path, str(outside))
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_prompt_symlink_pointing_outside_the_case_directory_is_refused(tmp_path, builder):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside the case\n", encoding="utf-8")
+    case_dir = _prompt_path_case(tmp_path, "prompt.md")
+    (case_dir / "prompt.md").symlink_to(outside)
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_missing_prompt_file_is_named_in_the_error(tmp_path, builder):
+    case_dir = _prompt_path_case(tmp_path, "nope.md")
+
+    with pytest.raises(PromptPathError, match="nope.md"):
+        builder(case_dir)
+
+
+def test_a_prompt_in_a_subdirectory_of_the_case_directory_is_accepted(tmp_path):
+    case_dir = _prompt_path_case(tmp_path, "prompts/main.md")
+    (case_dir / "prompts").mkdir()
+    (case_dir / "prompts" / "main.md").write_text("Investigate the repo.\n", encoding="utf-8")
 
     assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n"
 

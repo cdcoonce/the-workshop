@@ -73,6 +73,10 @@ class AcceptanceLeakError(ValueError):
     """A case's prompt embeds text from its private ``acceptance.md``."""
 
 
+class PromptPathError(ValueError):
+    """``case.toml``'s ``prompt`` names a file the dispatcher must not read."""
+
+
 @dataclass(frozen=True)
 class Evidence:
     """Everything a case's scorers see about one attempt.
@@ -151,8 +155,29 @@ def _assert_no_acceptance_leak(case_dir: Path, text: str) -> None:
             )
 
 
+def _prompt_path(case_dir: Path, case_toml: dict) -> Path:
+    """Resolve ``case.toml``'s ``prompt`` to a file inside *case_dir*.
+
+    Raises
+    ------
+    PromptPathError
+        If the path resolves (symlinks and ``..`` included) outside
+        *case_dir*, names ``acceptance.md``, or is not an existing file.
+    """
+    prompt_name = case_toml["prompt"]
+    root = case_dir.resolve()
+    resolved = (case_dir / prompt_name).resolve()
+    if not resolved.is_relative_to(root):
+        raise PromptPathError(f"{case_dir}: prompt {prompt_name!r} resolves outside the case directory")
+    if resolved == (root / "acceptance.md").resolve():
+        raise PromptPathError(f"{case_dir}: prompt {prompt_name!r} names acceptance.md")
+    if not resolved.is_file():
+        raise PromptPathError(f"{case_dir}: prompt file {prompt_name!r} does not exist")
+    return resolved
+
+
 def _prompt_text(case_dir: Path, case_toml: dict) -> str:
-    text = (case_dir / case_toml["prompt"]).read_text(encoding="utf-8")
+    text = _prompt_path(case_dir, case_toml).read_text(encoding="utf-8")
     _assert_no_acceptance_leak(case_dir, text)
     return text
 

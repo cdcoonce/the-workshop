@@ -161,6 +161,30 @@
       "replace": ""
     },
     {
+      "label": "prompt path may escape the case directory",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_path_escaping_the_case_directory_is_refused and the absolute-path and symlink variants: a prompt outside the case directory would be read.",
+      "find": "    if not resolved.is_relative_to(root):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt may name acceptance.md",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_that_names_acceptance_md_is_refused: acceptance.md would be read as the prompt (only the line-level leak guard, a different error, would remain).",
+      "find": "    if resolved == (root / \"acceptance.md\").resolve():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt path is not resolved before the containment check",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the ../ and symlink tests: a lexical containment check passes 'case/../secret.txt' and a symlink pointing outside.",
+      "find": "    resolved = (case_dir / prompt_name).resolve()",
+      "replace": "    resolved = case_dir / prompt_name"
+    },
+    {
       "label": "[control] reword the Evidence docstring",
       "file": "../dispatch.py",
       "oracle": "real",
