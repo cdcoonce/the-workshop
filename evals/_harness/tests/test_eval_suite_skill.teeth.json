@@ -1,0 +1,69 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_eval_suite_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_eval_suite_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "entry-points table drops the report.write_report row",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_every_named_harness_entry_point: the table-scoped parse no longer finds report.write_report among the documented entry points.",
+      "find": "| `report.write_report` | #993 | Writes the red-run report. |",
+      "replace": ""
+    },
+    {
+      "label": "retry-loop rule states the wrong counted-attempt cap",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly: the counted-attempt cap of 3 is no longer stated.",
+      "find": "counted_attempts reaches 3,",
+      "replace": "counted_attempts reaches 4,"
+    },
+    {
+      "label": "retry-loop rule drops the reserve size",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly: the 2-attempt reserve size is no longer stated.",
+      "find": "reserve of 2",
+      "replace": "reserve"
+    },
+    {
+      "label": "[control] reword the skill's intro sentence",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "A harmless synonym swap in untested prose; no assertion reads this sentence.",
+      "find": "This skill documents how to run one named skill's eval suite.",
+      "replace": "This skill documents how to conduct one named skill's eval suite."
+    }
+  ]
+}

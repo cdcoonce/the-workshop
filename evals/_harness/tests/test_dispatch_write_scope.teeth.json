@@ -1,0 +1,68 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch_write_scope.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch_write_scope.py"
+  ],
+  "mutants": [
+    {
+      "label": "build_dispatch_prompt writes a stray debug file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_prompt_and_score_builders_write_nothing: a new file would appear beside the case directory even though build_dispatch_prompt is read-only.",
+      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
+      "replace": "    case_toml = _case_toml(case_dir)\n    (case_dir / \"debug.log\").write_text(\"dispatched\", encoding=\"utf-8\")\n    return _prompt_text(case_dir, case_toml)"
+    },
+    {
+      "label": "snapshot_end_state also writes beside the case directory, outside dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_writes_only_under_dest_and_never_tests_md: a file would appear under the case directory, outside the attempt's dest.",
+      "find": "        (dest / name).write_text(text, encoding=\"utf-8\")",
+      "replace": "        (dest / name).write_text(text, encoding=\"utf-8\")\n        (case_dir / name).write_text(text, encoding=\"utf-8\")"
+    },
+    {
+      "label": "snapshot_end_state writes a tests.md file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_writes_only_under_dest_and_never_tests_md: a file literally named tests.md would appear under dest.",
+      "find": "    dest.mkdir(parents=True, exist_ok=True)\n    module = _load_predicates(case_dir)",
+      "replace": "    dest.mkdir(parents=True, exist_ok=True)\n    (dest / \"tests.md\").write_text(\"x\", encoding=\"utf-8\")\n    module = _load_predicates(case_dir)"
+    },
+    {
+      "label": "[does-nothing] snapshot_end_state never writes anything",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_writes_only_under_dest_and_never_tests_md: dest would stay empty instead of gaining note.txt.",
+      "find": "    dest.mkdir(parents=True, exist_ok=True)\n    module = _load_predicates(case_dir)\n    end_state_fn = getattr(module, \"end_state\", None) if module is not None else None\n    if end_state_fn is None:\n        return\n    transcripts = [parse_transcript(path) for path in transcript_paths]\n    snapshot = end_state_fn(workdir, case_dir, transcripts)\n    for name, text in snapshot.items():\n        if not name or \"/\" in name or \"\\\\\" in name or name in (\".\", \"..\"):\n            raise ValueError(f\"{case_dir}: end_state returned an unsafe file name {name!r}\")\n        (dest / name).write_text(text, encoding=\"utf-8\")",
+      "replace": "    dest.mkdir(parents=True, exist_ok=True)"
+    }
+  ]
+}

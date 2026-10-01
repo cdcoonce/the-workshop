@@ -1,0 +1,141 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch.py"
+  ],
+  "mutants": [
+    {
+      "label": "case.toml 'mode' validation disabled",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_missing_mode_is_rejected and test_invalid_mode_is_rejected: with the check dropped, a case.toml with a missing or bogus mode no longer raises.",
+      "find": "    if mode not in _VALID_MODES:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "build_dispatch_prompt reads and appends acceptance.md",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_does_not_leak_acceptance_text_even_when_prompt_embeds_it: the acceptance-only marker text would leak into the dispatch prompt.",
+      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
+      "replace": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml) + (case_dir / \"acceptance.md\").read_text(encoding=\"utf-8\")"
+    },
+    {
+      "label": "[does-nothing] build_dispatch_prompt returns every file in the case directory concatenated",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_does_not_leak_acceptance_text_even_when_prompt_embeds_it: concatenating every file in the case directory includes acceptance.md's text.",
+      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
+      "replace": "    return \"\".join(p.read_text(encoding=\"utf-8\") for p in sorted(case_dir.iterdir()) if p.is_file())"
+    },
+    {
+      "label": "build_no_skill_prompt stops stripping the skill-naming lines",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the rostered skill's name would still appear in the no-skill prompt.",
+      "find": "    kept_lines = [line for line in prompt_text.splitlines() if skill not in line]",
+      "replace": "    kept_lines = prompt_text.splitlines()"
+    },
+    {
+      "label": "build_no_skill_prompt drops the do-not-invoke-any-skill instruction",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the fixed instruction sentence would no longer appear in the output.",
+      "find": "    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    return f\"{stripped}\\n\""
+    },
+    {
+      "label": "_combined_status ignores non-complete transcript statuses",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_truncated_transcript_is_indeterminate: a truncated transcript would be scored as if it were complete.",
+      "find": "        if transcript.status != \"complete\":",
+      "replace": "        if False:"
+    },
+    {
+      "label": "envelope_parsed always reports True",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_findings_envelope_parse_failure_scores_miss_with_parse_error: an unparseable findings envelope would no longer set parse_error.",
+      "find": "    envelope_parsed = all(per_transcript_ok) if uses_findings_envelope else True",
+      "replace": "    envelope_parsed = True"
+    },
+    {
+      "label": "[does-nothing] score_attempt never calls any item's scorer",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_hits_via_synthetic_predicate: every item would score a miss regardless of the transcript.",
+      "find": "    if status == \"complete\":\n        module = _load_predicates(case_dir)\n        item_hits = {\n            item[\"id\"]: bool(getattr(module, item[\"scorer\"])(evidence, **item.get(\"params\", {})))\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
+      "replace": "    item_hits = {item[\"id\"]: False for item in items}"
+    },
+    {
+      "label": "gated_ids validation dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_rejects_a_gated_id_not_in_case_toml: a gated id naming no item in case.toml would no longer raise.",
+      "find": "    unknown_gated_ids = gated_ids - item_ids\n    if unknown_gated_ids:\n        raise ValueError(\n            f\"{case_dir}: gated_ids {sorted(unknown_gated_ids)} name no item in case.toml\"\n        )",
+      "replace": "    unknown_gated_ids = set()"
+    },
+    {
+      "label": "unmatched-finding count always reports 0",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_counts_unmatched_findings_for_findings_envelope_case: the unrelated bar.py finding would no longer count as unmatched.",
+      "find": "    if uses_findings_envelope:\n        review_item_params = [\n            item[\"params\"]\n            for item in items\n            if isinstance(item.get(\"params\"), dict)\n            and \"file_suffix\" in item[\"params\"]\n            and \"regex\" in item[\"params\"]\n        ]\n        unmatched = count_unmatched(findings, review_item_params)\n    else:\n        unmatched = 0",
+      "replace": "    unmatched = 0"
+    },
+    {
+      "label": "score_attempt never loads end-state evidence",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_then_rescore_from_raws_matches_the_live_score: an end-state-based scorer would always see an empty end_state and miss.",
+      "find": "        end_state=_load_end_state(end_state_dir),",
+      "replace": "        end_state={},"
+    },
+    {
+      "label": "duplicate item-id detection disabled",
+      "file": "test_dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_within_one_skill_across_cases_is_detected: two cases sharing an item id within one skill would no longer be flagged.",
+      "find": "            if item_id in seen:\n                duplicates.add(item_id)",
+      "replace": "            pass"
+    },
+    {
+      "label": "[control] reword the Evidence docstring",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring wording; nothing parses or asserts on it, so no test can observe the change.",
+      "find": "\"\"\"Everything a case's scorers see about one attempt.",
+      "replace": "\"\"\"Everything a case's predicates see about one attempt."
+    }
+  ]
+}
