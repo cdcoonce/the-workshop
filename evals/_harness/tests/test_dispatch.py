@@ -459,6 +459,104 @@ def test_build_no_skill_prompt_removes_a_skill_path_reference_but_keeps_the_task
     assert not _skill_reference_pattern("adversarial-review").search(output)
 
 
+_ORDINARY_TEXT = [
+    ("commit", "Stage a.py, then commit. Don't amend the previous commit."),
+    ("commit", "Write the commit message for the staged diff."),
+    ("commit", "Fix the bug in src/commit/parser.py and add a test."),
+    ("commit", "Open evals/commit/case-a/prompt.md and obey it."),
+    ("commit", "See src/commit and tests/tdd for details."),
+    ("commit", "Edit /commit/parser.py now."),
+    ("commit", "Read /commit.md first."),
+    ("tdd", "Add tests in tests/tdd/test_x.py"),
+    ("tdd", "Practise tdd on the parser."),
+    ("adversarial-review", "Edit src/adversarial-review/notes.py and save."),
+]
+
+
+@pytest.mark.parametrize(("skill", "prompt_text"), _ORDINARY_TEXT)
+def test_build_no_skill_prompt_leaves_ordinary_words_and_unrelated_paths_alone(
+    tmp_path, skill, prompt_text
+):
+    case_dir = _no_skill_case(tmp_path, skill, prompt_text + "\n")
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert output == f"{prompt_text}\n\n{_NO_SKILL_INSTRUCTION}\n"
+
+
+_REFERENCE_FORMS = [
+    "/commit",
+    "/COMMIT",
+    "workbench:commit",
+    "/workbench:commit",
+    "plugins/workbench/skills/commit/SKILL.md",
+    ".claude/skills/commit/SKILL.md",
+    "skills/commit/SKILL.md",
+    "skills/commit",
+    "the commit skill",
+    "commit skill",
+    'skill="commit"',
+    "skill='commit'",
+    "Skill(commit)",
+    'Skill("commit")',
+    "Skill: commit",
+]
+
+
+@pytest.mark.parametrize("form", _REFERENCE_FORMS)
+def test_build_no_skill_prompt_strips_each_unambiguous_skill_reference_form(tmp_path, form):
+    case_dir = _no_skill_case(tmp_path, "commit", f"Please stage a.py {form} then stop here.\n")
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert output.startswith("Please stage a.py")
+    assert "then stop here." in output
+    assert form.lower() not in output.lower()
+    assert "  " not in output.split("\n\n")[0]
+
+
+def test_build_no_skill_prompt_left_boundary_never_eats_the_tail_of_a_longer_word(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path, "commit", "We recommit skill changes and uncommit skill drafts, see workbench:recommit.\n"
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert output.startswith("We recommit skill changes and uncommit skill drafts, see workbench:recommit.")
+
+
+def test_build_no_skill_prompt_drops_the_word_the_only_with_the_skill_phrase(tmp_path):
+    phrase_case = _no_skill_case(tmp_path / "a", "tdd", "Use the tdd skill to write tests.\n")
+    slash_case = _no_skill_case(tmp_path / "b", "tdd", "Look at the /tdd command.\n")
+
+    assert build_no_skill_prompt(phrase_case).startswith("Use to write tests.\n")
+    assert build_no_skill_prompt(slash_case).startswith("Look at the command.\n")
+
+
+def test_build_no_skill_prompt_drops_the_trailing_skill_word_of_the_phrase(tmp_path):
+    case_dir = _no_skill_case(tmp_path, "tdd", "Apply tdd skill then review.\n")
+
+    assert build_no_skill_prompt(case_dir).startswith("Apply then review.\n")
+
+
+def test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference(tmp_path):
+    comma_case = _no_skill_case(tmp_path / "a", "commit", "Open /commit, then stop.\n")
+    multi_case = _no_skill_case(tmp_path / "b", "commit", "Open   /commit   and   stop.\n")
+
+    assert build_no_skill_prompt(comma_case).startswith("Open, then stop.\n")
+    assert build_no_skill_prompt(multi_case).startswith("Open and stop.\n")
+
+
+@pytest.mark.parametrize("prompt_text", ["/commit\n", "commit\n", "  Skill(commit)  \n", "the commit skill\n"])
+def test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference(
+    tmp_path, prompt_text
+):
+    case_dir = _no_skill_case(tmp_path, "commit", prompt_text)
+
+    with pytest.raises(CaseContractError, match="case-a"):
+        build_no_skill_prompt(case_dir)
+
+
 def test_build_no_skill_prompt_does_not_eat_words_that_merely_contain_the_skill_name(tmp_path):
     case_dir = _no_skill_case(
         tmp_path,

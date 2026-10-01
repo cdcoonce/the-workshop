@@ -292,26 +292,45 @@ def build_dispatch_prompt(case_dir: Path) -> str:
     return text
 
 
-def _remove_skill_references(text: str, skill: str) -> str:
-    """Remove every whole-token reference to *skill* from *text*, keeping the rest.
+_PATH_SEGMENT = r"\.?[\w@-]+(?:\.[\w@-]+)*"
 
-    A reference is the skill name as a whole token (never a substring of a
-    longer word: ``commit`` does not match ``commitment``), matched case
-    insensitively, together with any namespace or path prefix glued to it
-    (``/workbench:``, ``plugins/workbench/skills/``), any path suffix
-    (``/SKILL.md``), a leading ``the`` and a trailing ``skill``. Only the
-    reference is removed, never the line it sits on, so the task text
-    around it survives.
+
+def _skill_reference_pattern(skill: str) -> re.Pattern[str]:
+    """Match the unambiguous ways a prompt can *name the rostered skill*.
+
+    Only these forms count, because a skill is often named like an ordinary
+    word or directory (``commit``, ``tdd``): ``skills/<name>/...`` and
+    ``plugins/<ns>/skills/<name>/...`` paths, ``ns:<name>`` and
+    ``/ns:<name>``, the ``/<name>`` slash form at a token start, the phrases
+    ``the <name> skill`` and ``<name> skill``, ``skill="<name>"``,
+    ``Skill(<name>)`` and ``Skill: <name>``. A hyphenated name
+    (``adversarial-review``) is never an ordinary word, so it is also matched
+    bare, unless it sits inside a path. Every form needs a left word
+    boundary, so ``recommit`` never matches ``commit``.
     """
-    segment = r"[\w@-]+(?:\.[\w@-]+)*"
-    reference = re.compile(
-        rf"(?:(?<![\w-])the[ \t]+)?"
-        rf"(?<![\w-])(?:/?{segment}[/:])*{re.escape(skill)}(?![\w-])"
-        rf"(?:/{segment})*/?"
-        rf"(?:[ \t]+skill\b)?",
-        re.IGNORECASE,
-    )
-    removed = reference.sub("", text)
+    name = re.escape(skill)
+    no_left = r"(?<![\w@./:-])"
+    forms = [
+        rf"(?<![\w@./-])(?:/?{_PATH_SEGMENT}/)*skills/{name}(?![\w-])(?:/{_PATH_SEGMENT})*/?",
+        rf"(?<![\w@./-])/?{_PATH_SEGMENT}:{name}(?![\w-])(?!/)",
+        rf"{no_left}/{name}(?![\w-])(?!/)(?!\.\w)",
+        rf"(?:(?<![\w-])the[ \t]+)?{no_left}{name}[ \t]+skill\b",
+        rf"\bskill[ \t]*=[ \t]*[\"']{name}[\"']",
+        rf"\bSkill\([ \t]*[\"']?{name}[\"']?[ \t]*\)",
+        rf"\bSkill:[ \t]*{name}(?![\w-])",
+    ]
+    if "-" in skill:
+        forms.append(rf"{no_left}{name}(?![\w-])(?!/)(?!\.\w)")
+    return re.compile("|".join(forms), re.IGNORECASE)
+
+
+def _remove_skill_references(text: str, skill: str) -> str:
+    """Remove every unambiguous reference to *skill* from *text*, keeping the rest.
+
+    Only the reference is removed, never the line it sits on, so the task
+    text around it survives; spacing left behind is tidied.
+    """
+    removed = _skill_reference_pattern(skill).sub("", text)
     removed = re.sub(r"[ \t]+([:,;.!?])", r"\1", removed)
     return re.sub(r"[ \t]{2,}", " ", removed)
 
@@ -330,16 +349,31 @@ def build_no_skill_prompt(case_dir: Path) -> str:
         The same prompt text as ``build_dispatch_prompt``, with every
         reference to the rostered skill (``case_dir.parent.name``) removed
         (the reference only, never the line around it), and a fixed
-        do-not-invoke-any-skill instruction appended.
+        do-not-invoke-any-skill instruction appended. Only the unambiguous
+        reference forms listed in ``_skill_reference_pattern`` are removed;
+        bare ordinary words (``commit``, ``tdd``) and unrelated path
+        segments (``src/commit/``) are left alone.
 
     Raises
     ------
     AcceptanceLeakError
         If the prompt embeds any line of the case's ``acceptance.md``.
+    CaseContractError
+        If the prompt is nothing but a reference to the skill, so removing it
+        leaves no task.
     """
     case_toml = _case_toml(case_dir)
     prompt_text = _prompt_text(case_dir, case_toml)
-    stripped = _remove_skill_references(prompt_text, case_dir.parent.name).rstrip("\n")
+    skill = case_dir.parent.name
+    if prompt_text.strip().casefold() == skill.casefold():
+        stripped = ""
+    else:
+        stripped = _remove_skill_references(prompt_text, skill).strip()
+    if not stripped:
+        raise CaseContractError(
+            f"{case_dir}: the prompt is nothing but a reference to the skill {skill!r}, so "
+            "removing it leaves no task for the no-skill arm"
+        )
     output = f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
     _assert_no_acceptance_leak(case_dir, output)
     return output

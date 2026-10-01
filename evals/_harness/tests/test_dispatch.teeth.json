@@ -105,22 +105,6 @@
       "replace": "        end_state={},"
     },
     {
-      "label": "build_no_skill_prompt stops removing the skill reference",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by the no-skill tests: the rostered skill's name would still appear in the no-skill prompt.",
-      "find": "    removed = reference.sub(\"\", text)",
-      "replace": "    removed = text"
-    },
-    {
-      "label": "build_no_skill_prompt deletes the whole line holding the skill name again",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_build_no_skill_prompt_keeps_task_text_when_skill_name_is_mid_line: the pre-fix whole-line deletion destroys the task text sharing a line with the skill name.",
-      "find": "    removed = reference.sub(\"\", text)",
-      "replace": "    removed = \"\\n\".join(line for line in text.splitlines() if not reference.search(line))"
-    },
-    {
       "label": "acceptance-leak guard never fires",
       "file": "../dispatch.py",
       "oracle": "real",
@@ -327,6 +311,102 @@
       "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: ids are one namespace per skill (checks.manifest is per skill), so a repeat in a sibling case must be reported.",
       "find": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        case_toml = tomllib",
       "replace": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        seen = set()\n        case_toml = tomllib"
+    },
+    {
+      "label": "build_no_skill_prompt stops removing the skill reference",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the no-skill removal tests: the rostered skill's name would still appear in the no-skill prompt.",
+      "find": "    removed = _skill_reference_pattern(skill).sub(\"\", text)",
+      "replace": "    removed = text"
+    },
+    {
+      "label": "build_no_skill_prompt deletes the whole line holding the skill name again",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the strip-form tests: the pre-fix whole-line deletion destroys the task text sharing a line with the reference.",
+      "find": "    removed = _skill_reference_pattern(skill).sub(\"\", text)",
+      "replace": "    removed = \"\\n\".join(line for line in text.splitlines() if not _skill_reference_pattern(skill).search(line))"
+    },
+    {
+      "label": "[R1] skill-reference left word boundary dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_left_boundary_never_eats_the_tail_of_a_longer_word and the ordinary-path tests: 'recommit skill' / 'src/commit' would be eaten.",
+      "find": "    no_left = r\"(?<![\\w@./:-])\"",
+      "replace": "    no_left = r\"\""
+    },
+    {
+      "label": "[R4] the skill phrase no longer drops the leading 'the'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_drops_the_word_the_only_with_the_skill_phrase.",
+      "find": "(?:(?<![\\w-])the[ \\t]+)?{no_left}{name}[ \\t]+skill",
+      "replace": "{no_left}{name}[ \\t]+skill"
+    },
+    {
+      "label": "[R7] the skill phrase leaves the trailing 'skill' word",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_drops_the_trailing_skill_word_of_the_phrase.",
+      "find": "{no_left}{name}[ \\t]+skill\\b\"",
+      "replace": "{no_left}{name}\""
+    },
+    {
+      "label": "[R8] punctuation spacing cleanup dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference.",
+      "find": "    removed = re.sub(r\"[ \\t]+([:,;.!?])\", r\"\\1\", removed)",
+      "replace": "    pass"
+    },
+    {
+      "label": "[R9] repeated-space collapse dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference.",
+      "find": "    return re.sub(r\"[ \\t]{2,}\", \" \", removed)",
+      "replace": "    return removed"
+    },
+    {
+      "label": "bare skill name stripped for every skill, not only hyphenated ones",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_leaves_ordinary_words_and_unrelated_paths_alone: 'then commit.' would lose its verb.",
+      "find": "    if \"-\" in skill:",
+      "replace": "    if True:"
+    },
+    {
+      "label": "slash form no longer requires a token start",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the ordinary-path cases: 'src/commit' would be eaten.",
+      "find": "    forms = [",
+      "replace": "    forms = [\n        rf\"/{name}(?![\\w-])\","
+    },
+    {
+      "label": "slash form eats a /name/ path",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '/commit/parser.py' and '/commit.md' ordinary cases.",
+      "find": "{no_left}/{name}(?![\\w-])(?!/)(?!\\.\\w)",
+      "replace": "{no_left}/{name}(?![\\w-])"
+    },
+    {
+      "label": "empty-after-removal guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference.",
+      "find": "    if not stripped:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt-that-is-only-the-skill-name shortcut dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'commit' case of test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference.",
+      "find": "    if prompt_text.strip().casefold() == skill.casefold():",
+      "replace": "    if False:"
     },
     {
       "label": "[control] reword the Evidence docstring",
