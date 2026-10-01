@@ -44,16 +44,16 @@
       "label": "build_dispatch_prompt reads and appends acceptance.md",
       "file": "../dispatch.py",
       "oracle": "real",
-      "why": "Killed by test_build_dispatch_prompt_does_not_leak_acceptance_text_even_when_prompt_embeds_it: the acceptance-only marker text would leak into the dispatch prompt.",
-      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
-      "replace": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml) + (case_dir / \"acceptance.md\").read_text(encoding=\"utf-8\")"
+      "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: the dispatched prompt would carry acceptance.md's text (and the leak guard is bypassed).",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    text = _prompt_text(case_dir, case_toml) + (case_dir / \"acceptance.md\").read_text(encoding=\"utf-8\")\n    return text"
     },
     {
       "label": "[does-nothing] build_dispatch_prompt returns every file in the case directory concatenated",
       "file": "../dispatch.py",
       "oracle": "real",
-      "why": "Killed by test_build_dispatch_prompt_does_not_leak_acceptance_text_even_when_prompt_embeds_it: concatenating every file in the case directory includes acceptance.md's text.",
-      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
+      "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: concatenating every file in the case directory includes acceptance.md's text and the case.toml.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    return \"\".join(p.read_text(encoding=\"utf-8\") for p in sorted(case_dir.iterdir()) if p.is_file())"
     },
     {
@@ -61,8 +61,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the fixed instruction sentence would no longer appear in the output.",
-      "find": "    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
-      "replace": "    return f\"{stripped}\\n\""
+      "find": "    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    output = f\"{stripped}\\n\""
     },
     {
       "label": "_combined_status ignores non-complete transcript statuses",
@@ -135,6 +135,30 @@
       "why": "Killed by test_build_no_skill_prompt_keeps_task_text_when_skill_name_is_mid_line: the pre-fix whole-line deletion destroys the task text sharing a line with the skill name.",
       "find": "    removed = reference.sub(\"\", text)",
       "replace": "    removed = \"\\n\".join(line for line in text.splitlines() if not reference.search(line))"
+    },
+    {
+      "label": "acceptance-leak guard never fires",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the test_*_refuses_a_prompt_that_embeds_* tests: a prompt embedding acceptance.md would come back unchanged.",
+      "find": "    if not acceptance_path.is_file():\n        return",
+      "replace": "    return"
+    },
+    {
+      "label": "acceptance-leak guard only catches a whole-file copy",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_refuses_a_prompt_that_embeds_a_single_acceptance_line and the bullet/indentation variant: a single leaked line is no longer caught, only the whole file verbatim.",
+      "find": "        if line in text_lines or embedded:",
+      "replace": "        if acceptance_path.read_text(encoding=\"utf-8\") in text:"
+    },
+    {
+      "label": "acceptance-leak guard flags markdown noise lines",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_ignores_markdown_noise_shared_with_acceptance: a bare rule shared with the prompt would be reported as a leak.",
+      "find": "        if not any(char.isalnum() for char in line):\n            continue",
+      "replace": ""
     },
     {
       "label": "[control] reword the Evidence docstring",

@@ -13,13 +13,15 @@ Public contract
     The exact prompt text sent to a case-agent (``mode = "subagent"``) or to
     each lens agent (``mode = "inline"``): the case's ``prompt.md`` (or
     whatever file ``case.toml``'s ``prompt`` key names), read verbatim. Never
-    reads ``acceptance.md``.
+    interpolates ``acceptance.md``; it reads that file only to refuse a
+    prompt that embeds any line of it (``AcceptanceLeakError``).
 
 ``build_no_skill_prompt(case_dir) -> str``
     The no-skill arm's prompt: the same prompt text with every reference to
     the rostered skill (the case's parent directory name) removed (the
     reference only, never the line around it), and a fixed
-    do-not-invoke-any-skill instruction appended.
+    do-not-invoke-any-skill instruction appended. The same
+    ``AcceptanceLeakError`` guard applies.
 
 ``Evidence``
     Frozen dataclass a case's ``predicates.py`` scorers receive:
@@ -67,6 +69,10 @@ _VALID_MODES = {"subagent", "inline"}
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 
 
+class AcceptanceLeakError(ValueError):
+    """A case's prompt embeds text from its private ``acceptance.md``."""
+
+
 @dataclass(frozen=True)
 class Evidence:
     """Everything a case's scorers see about one attempt.
@@ -106,8 +112,49 @@ def _case_toml(case_dir: Path) -> dict:
     return case_toml
 
 
+_LIST_MARKER = re.compile(r"^(?:[-*+>]|\d+[.)])\s+")
+_MIN_SUBSTRING_LEAK_CHARS = 24
+
+
+def _normalize_line(line: str) -> str:
+    """Collapse whitespace and drop one leading list/quote marker."""
+    return _LIST_MARKER.sub("", " ".join(line.split()))
+
+
+def _assert_no_acceptance_leak(case_dir: Path, text: str) -> None:
+    """Raise ``AcceptanceLeakError`` if *text* carries any line of ``acceptance.md``.
+
+    The comparison is per whole line, on whitespace- and bullet-normalised
+    text, so a single leaked criterion is caught, not only a verbatim copy of
+    the whole file. A line leaks when it equals a line of *text*, or (for
+    lines of at least 24 characters) appears anywhere inside it. Lines with
+    no letter or digit (rules, fences, bare bullets) carry no content and are
+    ignored. ``acceptance.md`` is read here only to compare against; its text
+    is never returned or interpolated.
+    """
+    acceptance_path = case_dir / "acceptance.md"
+    if not acceptance_path.is_file():
+        return
+    text_lines = {_normalize_line(line) for line in text.splitlines()}
+    flattened = " ".join(text.split())
+    for number, raw_line in enumerate(
+        acceptance_path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        line = _normalize_line(raw_line)
+        if not any(char.isalnum() for char in line):
+            continue
+        embedded = len(line) >= _MIN_SUBSTRING_LEAK_CHARS and line in flattened
+        if line in text_lines or embedded:
+            raise AcceptanceLeakError(
+                f"{case_dir}: line {number} of acceptance.md appears in the dispatched "
+                "prompt; acceptance.md is scorer-only and must never reach an agent"
+            )
+
+
 def _prompt_text(case_dir: Path, case_toml: dict) -> str:
-    return (case_dir / case_toml["prompt"]).read_text(encoding="utf-8")
+    text = (case_dir / case_toml["prompt"]).read_text(encoding="utf-8")
+    _assert_no_acceptance_leak(case_dir, text)
+    return text
 
 
 def _load_predicates(case_dir: Path) -> ModuleType | None:
@@ -148,10 +195,17 @@ def build_dispatch_prompt(case_dir: Path) -> str:
     -------
     str
         The content of the file ``case.toml``'s ``prompt`` key names, read
-        verbatim. Never reads ``acceptance.md``.
+        verbatim. Never interpolates ``acceptance.md``.
+
+    Raises
+    ------
+    AcceptanceLeakError
+        If the prompt embeds any line of the case's ``acceptance.md``.
     """
     case_toml = _case_toml(case_dir)
-    return _prompt_text(case_dir, case_toml)
+    text = _prompt_text(case_dir, case_toml)
+    _assert_no_acceptance_leak(case_dir, text)
+    return text
 
 
 def _remove_skill_references(text: str, skill: str) -> str:
@@ -193,11 +247,18 @@ def build_no_skill_prompt(case_dir: Path) -> str:
         reference to the rostered skill (``case_dir.parent.name``) removed
         (the reference only, never the line around it), and a fixed
         do-not-invoke-any-skill instruction appended.
+
+    Raises
+    ------
+    AcceptanceLeakError
+        If the prompt embeds any line of the case's ``acceptance.md``.
     """
     case_toml = _case_toml(case_dir)
     prompt_text = _prompt_text(case_dir, case_toml)
     stripped = _remove_skill_references(prompt_text, case_dir.parent.name).rstrip("\n")
-    return f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
+    output = f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
+    _assert_no_acceptance_leak(case_dir, output)
+    return output
 
 
 def _combined_status(transcripts: list[Transcript]) -> str:

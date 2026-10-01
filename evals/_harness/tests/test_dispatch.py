@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from evals._harness.dispatch import (
+    AcceptanceLeakError,
     build_dispatch_prompt,
     build_no_skill_prompt,
     score_attempt,
@@ -134,28 +135,95 @@ def test_build_dispatch_prompt_never_leaks_acceptance_text_for_committed_cases()
         assert acceptance_text not in output
 
 
-def test_build_dispatch_prompt_does_not_leak_acceptance_text_even_when_prompt_embeds_it(tmp_path):
-    """A synthetic case whose acceptance.md holds a unique marker.
+_ACCEPTANCE_TEXT = (
+    "# Acceptance\n"
+    "\n"
+    "- The reviewer must report the missing auth check in login.py.\n"
+    "- The reviewer must not rewrite the whole module.\n"
+)
 
-    Proves the leak check is meaningful: the corresponding teeth mutant makes
-    ``build_dispatch_prompt`` also read and append ``acceptance.md``, which
-    turns this assertion red; the real implementation never reads
-    ``acceptance.md`` at all, so it stays green.
-    """
-    case_dir = tmp_path / "leaky-case"
-    case_dir.mkdir()
-    acceptance_text = "ACCEPTANCE-ONLY: do not ship if the auth check is missing.\n"
-    (case_dir / "acceptance.md").write_text(acceptance_text, encoding="utf-8")
-    (case_dir / "prompt.md").write_text(
-        "Investigate the repo and report findings.\n", encoding="utf-8"
-    )
+
+def _leak_case(
+    tmp_path: Path, prompt_text: str, acceptance_text: str | None = _ACCEPTANCE_TEXT
+) -> Path:
+    case_dir = tmp_path / "skill-z" / "leak-case"
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text(prompt_text, encoding="utf-8")
+    if acceptance_text is not None:
+        (case_dir / "acceptance.md").write_text(acceptance_text, encoding="utf-8")
     (case_dir / "case.toml").write_text(
         'mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8"
     )
+    return case_dir
+
+
+def test_build_dispatch_prompt_refuses_a_prompt_that_embeds_acceptance_md_exactly(tmp_path):
+    """Spec test 2: a synthetic case whose prompt.md embeds acceptance.md's exact text.
+
+    Red before the leak guard (the prompt came back unchanged), green after.
+    """
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n\n" + _ACCEPTANCE_TEXT)
+
+    with pytest.raises(AcceptanceLeakError):
+        build_dispatch_prompt(case_dir)
+
+
+def test_build_dispatch_prompt_refuses_a_prompt_that_embeds_a_single_acceptance_line(tmp_path):
+    case_dir = _leak_case(
+        tmp_path,
+        "Investigate the repo and report.\n"
+        "Remember: The reviewer must report the missing auth check in login.py.\n",
+    )
+
+    with pytest.raises(AcceptanceLeakError):
+        build_dispatch_prompt(case_dir)
+
+
+def test_build_dispatch_prompt_refuses_a_leaked_line_whose_bullet_and_indentation_differ(tmp_path):
+    case_dir = _leak_case(
+        tmp_path,
+        "Investigate the repo.\n\n    * The  reviewer must not rewrite the whole module.\n",
+    )
+
+    with pytest.raises(AcceptanceLeakError):
+        build_dispatch_prompt(case_dir)
+
+
+def test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance(tmp_path):
+    case_dir = _leak_case(tmp_path, "Investigate the repo and report findings.\n")
 
     output = build_dispatch_prompt(case_dir)
 
-    assert acceptance_text not in output
+    assert output == "Investigate the repo and report findings.\n"
+    assert "missing auth check" not in output
+
+
+def test_build_dispatch_prompt_ignores_markdown_noise_shared_with_acceptance(tmp_path):
+    case_dir = _leak_case(
+        tmp_path,
+        "# Task\n\nInvestigate the repo.\n",
+        acceptance_text="# Task\n\n---\n- \nSomething only acceptance says here.\n",
+    )
+
+    # A heading-only or punctuation-only line is not acceptance content, but
+    # "# Task" is a real line of text shared with the prompt: it is short
+    # enough to count as a leak only if it is a whole line. It is.
+    with pytest.raises(AcceptanceLeakError):
+        build_dispatch_prompt(case_dir)
+
+    case_dir = _leak_case(
+        tmp_path / "second",
+        "Investigate the repo.\n---\n",
+        acceptance_text="---\n- \nSomething only acceptance says here.\n",
+    )
+
+    assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n---\n"
+
+
+def test_build_dispatch_prompt_works_without_an_acceptance_file(tmp_path):
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n", acceptance_text=None)
+
+    assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n"
 
 
 # ---------------------------------------------------------------------------
@@ -183,19 +251,30 @@ def test_build_no_skill_prompt_omits_skill_name_and_adds_instruction(tmp_path):
     assert "Focus on the auth module." in output
 
 
-def test_build_no_skill_prompt_never_leaks_acceptance_text_even_when_prompt_embeds_it(tmp_path):
-    case_dir = tmp_path / "skill-z" / "leaky-case"
-    case_dir.mkdir(parents=True)
-    acceptance_text = "ACCEPTANCE-ONLY: verify the retry cap is enforced.\n"
-    (case_dir / "acceptance.md").write_text(acceptance_text, encoding="utf-8")
-    (case_dir / "prompt.md").write_text("Investigate the retry loop.\n", encoding="utf-8")
-    (case_dir / "case.toml").write_text(
-        'mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8"
+def test_build_no_skill_prompt_refuses_a_prompt_that_embeds_acceptance_md(tmp_path):
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n\n" + _ACCEPTANCE_TEXT)
+
+    with pytest.raises(AcceptanceLeakError):
+        build_no_skill_prompt(case_dir)
+
+
+def test_build_no_skill_prompt_refuses_a_prompt_that_embeds_a_single_acceptance_line(tmp_path):
+    case_dir = _leak_case(
+        tmp_path,
+        "Investigate the repo.\nThe reviewer must report the missing auth check in login.py.\n",
     )
+
+    with pytest.raises(AcceptanceLeakError):
+        build_no_skill_prompt(case_dir)
+
+
+def test_build_no_skill_prompt_builds_a_clean_prompt_without_leaking_acceptance(tmp_path):
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n")
 
     output = build_no_skill_prompt(case_dir)
 
-    assert acceptance_text not in output
+    assert "missing auth check" not in output
+    assert output.startswith("Investigate the repo.")
 
 
 def _no_skill_case(tmp_path: Path, skill: str, prompt_text: str) -> Path:

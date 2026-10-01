@@ -37,8 +37,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_prompt_and_score_builders_write_nothing: a new file would appear beside the case directory even though build_dispatch_prompt is read-only.",
-      "find": "    case_toml = _case_toml(case_dir)\n    return _prompt_text(case_dir, case_toml)",
-      "replace": "    case_toml = _case_toml(case_dir)\n    (case_dir / \"debug.log\").write_text(\"dispatched\", encoding=\"utf-8\")\n    return _prompt_text(case_dir, case_toml)"
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    text = _prompt_text(case_dir, case_toml)\n    (case_dir / \"debug.log\").write_text(\"dispatched\", encoding=\"utf-8\")\n    return text"
     },
     {
       "label": "snapshot_end_state also writes beside the case directory, outside dest",
