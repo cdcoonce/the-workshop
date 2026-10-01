@@ -57,6 +57,7 @@ import importlib.util
 import re
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -69,11 +70,15 @@ _VALID_MODES = {"subagent", "inline"}
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 
 
-class AcceptanceLeakError(ValueError):
+class CaseContractError(ValueError):
+    """A case directory violates the case-directory contract."""
+
+
+class AcceptanceLeakError(CaseContractError):
     """A case's prompt embeds text from its private ``acceptance.md``."""
 
 
-class PromptPathError(ValueError):
+class PromptPathError(CaseContractError):
     """``case.toml``'s ``prompt`` names a file the dispatcher must not read."""
 
 
@@ -103,16 +108,37 @@ class Evidence:
 
 
 def _case_toml(case_dir: Path) -> dict:
-    """Parse and minimally validate *case_dir*'s ``case.toml``."""
+    """Parse and minimally validate *case_dir*'s ``case.toml``.
+
+    Raises
+    ------
+    CaseContractError
+        If ``mode`` is not the string ``"subagent"`` or ``"inline"``, if
+        ``prompt`` is not a non-empty string, or if an ``[[items]]`` table
+        lacks a string ``id`` or ``scorer`` or has a non-table ``params``.
+    """
     case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
     mode = case_toml.get("mode")
-    if mode not in _VALID_MODES:
-        raise ValueError(
+    if not isinstance(mode, str) or mode not in _VALID_MODES:
+        raise CaseContractError(
             f"{case_dir}: case.toml 'mode' must be one of {sorted(_VALID_MODES)}, got {mode!r}"
         )
     prompt = case_toml.get("prompt")
     if not isinstance(prompt, str) or not prompt:
-        raise ValueError(f"{case_dir}: case.toml must set a non-empty 'prompt' file name")
+        raise CaseContractError(f"{case_dir}: case.toml must set a non-empty 'prompt' file name")
+    items = case_toml.get("items", [])
+    if not isinstance(items, list):
+        raise CaseContractError(f"{case_dir}: case.toml 'items' must be an array of tables")
+    for position, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            raise CaseContractError(f"{case_dir}: items[{position}] is not a table")
+        for key in ("id", "scorer"):
+            if not isinstance(item.get(key), str) or not item[key]:
+                raise CaseContractError(
+                    f"{case_dir}: items[{position}] must set a non-empty string {key!r}"
+                )
+        if not isinstance(item.get("params", {}), dict):
+            raise CaseContractError(f"{case_dir}: items[{position}] 'params' must be a table")
     return case_toml
 
 
@@ -203,9 +229,34 @@ def _load_predicates(case_dir: Path) -> ModuleType | None:
     sys.dont_write_bytecode = True
     try:
         spec.loader.exec_module(module)
+    except Exception as exc:
+        raise CaseContractError(
+            f"{case_dir}: predicates.py failed to import: {type(exc).__name__}: {exc}"
+        ) from exc
     finally:
         sys.dont_write_bytecode = previous_dont_write_bytecode
     return module
+
+
+def _resolve_scorers(case_dir: Path, items: list[dict]) -> dict[str, Callable]:
+    """Map every item id to its scorer function, or raise naming the defect."""
+    if not items:
+        return {}
+    module = _load_predicates(case_dir)
+    if module is None:
+        raise CaseContractError(
+            f"{case_dir}: case.toml declares items but the case has no predicates.py"
+        )
+    scorers: dict[str, Callable] = {}
+    for item in items:
+        scorer = getattr(module, item["scorer"], None)
+        if not callable(scorer):
+            raise CaseContractError(
+                f"{case_dir}: item {item['id']!r} names scorer {item['scorer']!r}, which "
+                "predicates.py does not define as a function"
+            )
+        scorers[item["id"]] = scorer
+    return scorers
 
 
 def build_dispatch_prompt(case_dir: Path) -> str:
@@ -298,8 +349,10 @@ def _combined_status(transcripts: list[Transcript]) -> str:
 def _load_end_state(end_state_dir: Path | None) -> dict[str, str]:
     if end_state_dir is None or not end_state_dir.is_dir():
         return {}
+    # ``errors="replace"``: a stray non-UTF-8 file (a ``.DS_Store``, a copied
+    # binary) must not crash a re-score; it loads as replacement-character text.
     return {
-        path.name: path.read_text(encoding="utf-8")
+        path.name: path.read_text(encoding="utf-8", errors="replace")
         for path in sorted(end_state_dir.iterdir())
         if path.is_file()
     }
@@ -328,11 +381,17 @@ def snapshot_end_state(
 
     Raises
     ------
-    ValueError
-        If the case's ``predicates.py`` ``end_state`` function returns a name
-        that is not a plain file name (contains a path separator, or is
-        ``"."``/``".."``).
+    CaseContractError
+        If ``dest`` is a symlink or already holds a symlink at a name the
+        snapshot would write (the snapshot never writes through a link), or if
+        the case's ``predicates.py`` ``end_state`` function returns anything
+        but a ``{name: text}`` mapping of strings, a name that is not a plain
+        file name (empty, ``"."``/``".."``, containing a path separator or a
+        NUL), or the name ``tests.md`` in any letter case. Every name is
+        validated before any file is written.
     """
+    if dest.is_symlink():
+        raise CaseContractError(f"{case_dir}: snapshot dest {dest} is a symlink")
     dest.mkdir(parents=True, exist_ok=True)
     module = _load_predicates(case_dir)
     end_state_fn = getattr(module, "end_state", None) if module is not None else None
@@ -340,10 +399,29 @@ def snapshot_end_state(
         return
     transcripts = [parse_transcript(path) for path in transcript_paths]
     snapshot = end_state_fn(workdir, case_dir, transcripts)
+    if not isinstance(snapshot, dict):
+        raise CaseContractError(f"{case_dir}: end_state must return a dict of name -> text")
     for name, text in snapshot.items():
-        if not name or "/" in name or "\\" in name or name in (".", ".."):
-            raise ValueError(f"{case_dir}: end_state returned an unsafe file name {name!r}")
+        _check_snapshot_name(case_dir, name)
+        if not isinstance(text, str):
+            raise CaseContractError(f"{case_dir}: end_state text for {name!r} is not a string")
+        if (dest / name).is_symlink():
+            raise CaseContractError(f"{case_dir}: {dest / name} is a symlink; refusing to write")
+    for name, text in snapshot.items():
         (dest / name).write_text(text, encoding="utf-8")
+
+
+def _check_snapshot_name(case_dir: Path, name: object) -> None:
+    unsafe = (
+        not isinstance(name, str)
+        or not name
+        or name in (".", "..")
+        or any(separator in name for separator in ("/", "\\", "\0"))
+    )
+    if unsafe:
+        raise CaseContractError(f"{case_dir}: end_state returned an unsafe file name {name!r}")
+    if name.casefold() == "tests.md":
+        raise CaseContractError(f"{case_dir}: end_state may not write a file named tests.md")
 
 
 def score_attempt(
@@ -387,9 +465,20 @@ def score_attempt(
     tuple[Attempt, int]
         #991's ``classify_attempt`` result, and the trend unmatched-finding
         count (0 for a case without ``envelope = "findings"``).
+
+    Raises
+    ------
+    CaseContractError
+        If ``case.toml`` is malformed, the case has items but no
+        ``predicates.py``, or an item names a scorer ``predicates.py`` does
+        not define as a function. Checked before the transcripts are
+        consulted, so a case defect is never disguised as harness breakage.
     """
     case_toml = _case_toml(case_dir)
     items = case_toml.get("items", [])
+    # Resolved before anything else so a broken case surfaces as itself, never
+    # disguised as harness breakage (which would burn a reserve draw).
+    scorers = _resolve_scorers(case_dir, items)
     # ``gated_ids`` is the skill-wide manifest set, so it routinely names items
     # that live in sibling cases; nothing here depends on it. Gating applies
     # downstream, in ``compute_verdict``'s per-item ``gated`` flag.
@@ -415,9 +504,8 @@ def score_attempt(
     )
 
     if status == "complete":
-        module = _load_predicates(case_dir)
         item_hits = {
-            item["id"]: bool(getattr(module, item["scorer"])(evidence, **item.get("params", {})))
+            item["id"]: bool(scorers[item["id"]](evidence, **item.get("params", {})))
             for item in items
         }
     else:

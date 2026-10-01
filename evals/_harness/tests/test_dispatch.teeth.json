@@ -37,7 +37,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_missing_mode_is_rejected and test_invalid_mode_is_rejected: with the check dropped, a case.toml with a missing or bogus mode no longer raises.",
-      "find": "    if mode not in _VALID_MODES:",
+      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:",
       "replace": "    if False:"
     },
     {
@@ -85,7 +85,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_score_attempt_hits_via_synthetic_predicate: every item would score a miss regardless of the transcript.",
-      "find": "    if status == \"complete\":\n        module = _load_predicates(case_dir)\n        item_hits = {\n            item[\"id\"]: bool(getattr(module, item[\"scorer\"])(evidence, **item.get(\"params\", {})))\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
+      "find": "    if status == \"complete\":\n        item_hits = {\n            item[\"id\"]: bool(scorers[item[\"id\"]](evidence, **item.get(\"params\", {})))\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
       "replace": "    item_hits = {item[\"id\"]: False for item in items}"
     },
     {
@@ -183,6 +183,86 @@
       "why": "Killed by test_score_attempt_tolerates_gated_ids_that_belong_to_a_sibling_case: the per-skill manifest set names items of other cases, and a conductor passing it whole would crash.",
       "find": "    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items",
       "replace": "    if gated_ids - {item[\"id\"] for item in items}:\n        raise ValueError(\"gated_ids name an item outside this case\")\n    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items"
+    },
+    {
+      "label": "[U1] snapshot_end_state unsafe file-name guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: '../x', an absolute path, 'a/b', '..', '.', '' and backslash names would be accepted.",
+      "find": "    if unsafe:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "snapshot_end_state NUL-in-name check dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'a\\0b' case of test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: the NUL name would only fail later, at write time, after earlier files were already written.",
+      "find": "(\"/\", \"\\\\\", \"\\0\")",
+      "replace": "(\"/\", \"\\\\\")"
+    },
+    {
+      "label": "snapshot_end_state tests.md guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'tests.md' case of test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: the spec's anti-scope bans writing any tests.md.",
+      "find": "    if name.casefold() == \"tests.md\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "snapshot_end_state tests.md guard becomes case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Tests.MD' case: on a case-insensitive filesystem that name is tests.md.",
+      "find": "    if name.casefold() == \"tests.md\":",
+      "replace": "    if name == \"tests.md\":"
+    },
+    {
+      "label": "snapshot_end_state writes through a symlinked file in dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_refuses_to_write_through_a_symlinked_file_in_dest and the dangling-symlink variant.",
+      "find": "        if (dest / name).is_symlink():",
+      "replace": "        if False:"
+    },
+    {
+      "label": "snapshot_end_state accepts a symlinked dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_refuses_a_dest_that_is_itself_a_symlink.",
+      "find": "    if dest.is_symlink():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "scorer lookup no longer checks the scorer is a defined function",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the missing-scorer tests: a None scorer would be called and raise a bare TypeError instead of naming the case and scorer.",
+      "find": "        if not callable(scorer):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "case.toml 'mode' check no longer rejects a non-string mode",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_non_string_mode_is_a_value_error_like_any_other_bad_mode: mode = [\"subagent\"] would raise TypeError (unhashable list), not ValueError.",
+      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:",
+      "replace": "    if mode not in _VALID_MODES:"
+    },
+    {
+      "label": "item 'params' type check dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_missing_id_or_scorer_or_with_bad_params_is_named: a non-table params would surface as a bare TypeError at call time.",
+      "find": "        if not isinstance(item.get(\"params\", {}), dict):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "end-state loader stops tolerating non-UTF-8 files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_binary_file_in_the_end_state_directory_does_not_crash_scoring.",
+      "find": "path.read_text(encoding=\"utf-8\", errors=\"replace\")",
+      "replace": "path.read_text(encoding=\"utf-8\")"
     },
     {
       "label": "[control] reword the Evidence docstring",

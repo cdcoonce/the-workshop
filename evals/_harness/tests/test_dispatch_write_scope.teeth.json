@@ -61,8 +61,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_snapshot_end_state_writes_only_under_dest_and_never_tests_md: dest would stay empty instead of gaining note.txt.",
-      "find": "    dest.mkdir(parents=True, exist_ok=True)\n    module = _load_predicates(case_dir)\n    end_state_fn = getattr(module, \"end_state\", None) if module is not None else None\n    if end_state_fn is None:\n        return\n    transcripts = [parse_transcript(path) for path in transcript_paths]\n    snapshot = end_state_fn(workdir, case_dir, transcripts)\n    for name, text in snapshot.items():\n        if not name or \"/\" in name or \"\\\\\" in name or name in (\".\", \"..\"):\n            raise ValueError(f\"{case_dir}: end_state returned an unsafe file name {name!r}\")\n        (dest / name).write_text(text, encoding=\"utf-8\")",
-      "replace": "    dest.mkdir(parents=True, exist_ok=True)"
+      "find": "    for name, text in snapshot.items():\n        (dest / name).write_text(text, encoding=\"utf-8\")",
+      "replace": "    pass"
     }
   ]
 }

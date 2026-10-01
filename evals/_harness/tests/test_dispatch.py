@@ -18,6 +18,7 @@ import pytest
 
 from evals._harness.dispatch import (
     AcceptanceLeakError,
+    CaseContractError,
     PromptPathError,
     build_dispatch_prompt,
     build_no_skill_prompt,
@@ -762,3 +763,206 @@ def test_snapshot_end_state_without_end_state_fn_leaves_dest_empty(tmp_path):
 
     assert dest.is_dir()
     assert list(dest.iterdir()) == []
+
+
+# ---------------------------------------------------------------------------
+# a malformed case names its own defect
+# ---------------------------------------------------------------------------
+
+
+def _bare_case(tmp_path: Path, case_toml_text: str, predicates: str | None = None) -> Path:
+    case_dir = tmp_path / "skill-q" / "case-q"
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text("Investigate.\n", encoding="utf-8")
+    (case_dir / "case.toml").write_text(case_toml_text, encoding="utf-8")
+    if predicates is not None:
+        (case_dir / "predicates.py").write_text(predicates, encoding="utf-8")
+    return case_dir
+
+
+_ONE_ITEM_TOML = (
+    'mode = "subagent"\nprompt = "prompt.md"\n\n'
+    '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\n'
+)
+
+
+def _complete_transcript(tmp_path: Path) -> Path:
+    path = tmp_path / "q.jsonl"
+    _write_final_text_transcript(path, "done")
+    return path
+
+
+def test_score_attempt_names_the_case_when_predicates_py_is_missing(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=None)
+
+    with pytest.raises(CaseContractError, match=r"case-q.*predicates\.py|predicates\.py.*case-q"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_score_attempt_names_the_case_and_scorer_when_the_scorer_is_not_defined(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates="def other(evidence):\n    return True\n")
+
+    with pytest.raises(CaseContractError) as excinfo:
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert "case-q" in str(excinfo.value)
+    assert "scorer_q" in str(excinfo.value)
+
+
+def test_score_attempt_names_the_scorer_when_it_is_not_callable(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates="scorer_q = 3\n")
+
+    with pytest.raises(CaseContractError, match="scorer_q"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_a_broken_scorer_reference_is_reported_even_when_the_attempt_is_indeterminate(tmp_path):
+    """A case bug must not hide behind harness breakage and burn the reserve."""
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates="def other(evidence):\n    return True\n")
+    bad_transcript = tmp_path / "bad.jsonl"
+    _write_truncated_transcript(bad_transcript)
+
+    with pytest.raises(CaseContractError, match="scorer_q"):
+        score_attempt(case_dir, [bad_transcript], None, set())
+
+
+@pytest.mark.parametrize("mode_literal", ['["subagent"]', "3", "true", '{ a = "subagent" }'])
+def test_a_non_string_mode_is_a_value_error_like_any_other_bad_mode(tmp_path, mode_literal):
+    case_dir = _bare_case(tmp_path, f'mode = {mode_literal}\nprompt = "prompt.md"\n')
+
+    with pytest.raises(ValueError):
+        build_dispatch_prompt(case_dir)
+
+
+@pytest.mark.parametrize(
+    "items_toml",
+    [
+        '[[items]]\nkind = "trend"\nscorer = "scorer_q"\n',
+        '[[items]]\nid = "item-q"\nkind = "trend"\n',
+        '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\nparams = 3\n',
+    ],
+)
+def test_an_item_missing_id_or_scorer_or_with_bad_params_is_named(tmp_path, items_toml):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n\n' + items_toml,
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="case-q"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_a_binary_file_in_the_end_state_directory_does_not_crash_scoring(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates=(
+            "def scorer_q(evidence):\n"
+            "    return sorted(evidence.end_state) == ['blob.bin', 'note.txt'] "
+            "and evidence.end_state['note.txt'] == 'hello'\n"
+        ),
+    )
+    end_state_dir = tmp_path / "end_state"
+    end_state_dir.mkdir()
+    (end_state_dir / "note.txt").write_text("hello", encoding="utf-8")
+    (end_state_dir / "blob.bin").write_bytes(b"\xff\xfe\x00\x80binary")
+
+    attempt, _ = score_attempt(
+        case_dir, [_complete_transcript(tmp_path)], None, set(), end_state_dir=end_state_dir
+    )
+
+    assert attempt.item_hits == {"item-q": "hit"}
+
+
+# ---------------------------------------------------------------------------
+# snapshot_end_state: file-name guard, symlinks
+# ---------------------------------------------------------------------------
+
+
+def _snapshot_case(tmp_path: Path, returned_literal: str) -> Path:
+    return _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates=(
+            "def scorer_q(evidence):\n    return True\n\n"
+            "def end_state(workdir, case_dir, transcripts):\n"
+            f"    return {returned_literal}\n"
+        ),
+    )
+
+
+def _written_files(root: Path) -> list[str]:
+    return sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["../x", "/abs/path", "a/b", "..", ".", "", "a\\b", "a\0b", "tests.md", "Tests.MD"],
+)
+def test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing(tmp_path, name):
+    case_dir = _snapshot_case(tmp_path, f'{{"ok.txt": "fine", {name!r}: "bad"}}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    dest = tmp_path / "attempt" / "end_state"
+
+    with pytest.raises(ValueError):
+        snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert _written_files(tmp_path / "attempt") == []
+    assert not (tmp_path / "x").exists()
+
+
+def test_snapshot_end_state_rejects_a_non_string_name_or_text(tmp_path):
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    for returned in ('{5: "x"}', '{"a.txt": 5}', '["a.txt"]'):
+        case_dir = _snapshot_case(tmp_path / returned.replace('"', "").replace(" ", ""), returned)
+        with pytest.raises(ValueError):
+            snapshot_end_state(case_dir, workdir, [], tmp_path / "dest-types")
+
+
+def test_snapshot_end_state_refuses_to_write_through_a_symlinked_file_in_dest(tmp_path):
+    case_dir = _snapshot_case(tmp_path, '{"note.txt": "new"}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_text("original", encoding="utf-8")
+    dest = tmp_path / "end_state"
+    dest.mkdir()
+    (dest / "note.txt").symlink_to(victim)
+
+    with pytest.raises(ValueError):
+        snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert victim.read_text(encoding="utf-8") == "original"
+
+
+def test_snapshot_end_state_refuses_a_dangling_symlink_in_dest(tmp_path):
+    case_dir = _snapshot_case(tmp_path, '{"note.txt": "new"}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    dest = tmp_path / "end_state"
+    dest.mkdir()
+    target = tmp_path / "created-by-attack.txt"
+    (dest / "note.txt").symlink_to(target)
+
+    with pytest.raises(ValueError):
+        snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert not target.exists()
+
+
+def test_snapshot_end_state_refuses_a_dest_that_is_itself_a_symlink(tmp_path):
+    case_dir = _snapshot_case(tmp_path, '{"note.txt": "new"}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    dest = tmp_path / "end_state"
+    dest.symlink_to(elsewhere)
+
+    with pytest.raises(ValueError):
+        snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert list(elsewhere.iterdir()) == []
