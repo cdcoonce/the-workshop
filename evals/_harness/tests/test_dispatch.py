@@ -680,6 +680,139 @@ def test_score_attempt_counts_unmatched_findings_for_findings_envelope_case(tmp_
 
 
 # ---------------------------------------------------------------------------
+# score_attempt: inline mode scores one transcript per lens agent
+# ---------------------------------------------------------------------------
+
+
+def _write_inline_lens_case(case_dir: Path) -> None:
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text("Review the diff.\n", encoding="utf-8")
+    (case_dir / "predicates.py").write_text(
+        "def both_lenses_reported(evidence):\n"
+        "    files = {f['file'] for f in evidence.findings}\n"
+        "    return {'one.py', 'two.py'} <= files\n",
+        encoding="utf-8",
+    )
+    (case_dir / "case.toml").write_text(
+        'mode = "inline"\n'
+        'prompt = "prompt.md"\n'
+        'envelope = "findings"\n'
+        "\n"
+        "[[items]]\n"
+        'id = "item-lens"\n'
+        'kind = "gate-candidate"\n'
+        'scorer = "both_lenses_reported"\n',
+        encoding="utf-8",
+    )
+
+
+def _findings_reply(file: str) -> str:
+    return json.dumps({"findings": [{"file": file, "line": 1, "description": "a bug"}]})
+
+
+@pytest.fixture
+def lens_case(tmp_path):
+    case_dir = tmp_path / "skill-lens" / "case-lens"
+    _write_inline_lens_case(case_dir)
+    return case_dir
+
+
+def _lens_transcripts(tmp_path: Path, *kinds: str) -> list[Path]:
+    """One transcript per lens agent: 'one'/'two' = findings, 'prose' = parse failure, 'bad' = truncated."""
+    paths = []
+    for index, kind in enumerate(kinds):
+        path = tmp_path / f"lens-{index}.jsonl"
+        if kind == "bad":
+            _write_truncated_transcript(path)
+        elif kind == "prose":
+            _write_final_text_transcript(path, "I found nothing structured to report.")
+        else:
+            _write_final_text_transcript(path, _findings_reply(f"{kind}.py"))
+        paths.append(path)
+    return paths
+
+
+def test_inline_findings_are_the_union_across_every_lens_transcript(tmp_path, lens_case):
+    transcripts = _lens_transcripts(tmp_path, "one", "two")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.classification == "counted"
+    assert attempt.parse_error is False
+    assert attempt.item_hits == {"item-lens": "hit"}
+
+
+def test_inline_findings_union_includes_a_later_transcript_when_the_first_has_none(
+    tmp_path, lens_case
+):
+    transcripts = _lens_transcripts(tmp_path, "prose", "one", "two")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.item_hits == {"item-lens": "miss"}
+    assert attempt.parse_error is True
+
+
+def test_inline_one_unparseable_lens_reply_sets_parse_error_for_the_whole_attempt(
+    tmp_path, lens_case
+):
+    transcripts = _lens_transcripts(tmp_path, "one", "prose", "two")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.classification == "counted"
+    assert attempt.parse_error is True
+    assert attempt.item_hits == {"item-lens": "miss"}
+
+
+def test_inline_an_incomplete_later_lens_transcript_makes_the_attempt_indeterminate(
+    tmp_path, lens_case
+):
+    transcripts = _lens_transcripts(tmp_path, "one", "bad", "two")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.classification == "indeterminate"
+    assert attempt.item_hits == {"item-lens": "indeterminate"}
+    assert attempt.parse_error is False
+
+
+def test_inline_an_incomplete_first_lens_transcript_makes_the_attempt_indeterminate(
+    tmp_path, lens_case
+):
+    transcripts = _lens_transcripts(tmp_path, "bad", "one", "two")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.classification == "indeterminate"
+
+
+def test_inline_incomplete_outranks_a_parse_failure_among_the_lens_transcripts(tmp_path, lens_case):
+    transcripts = _lens_transcripts(tmp_path, "one", "prose", "bad")
+
+    attempt, _ = score_attempt(lens_case, transcripts, None, {"item-lens"})
+
+    assert attempt.classification == "indeterminate"
+    assert attempt.parse_error is False
+
+
+def test_inline_a_dispatch_error_override_wins_over_complete_lens_transcripts(tmp_path, lens_case):
+    transcripts = _lens_transcripts(tmp_path, "one", "two")
+
+    attempt, _ = score_attempt(
+        lens_case, transcripts, None, {"item-lens"}, transcript_status="dispatch_error"
+    )
+
+    assert attempt.classification == "indeterminate"
+
+
+def test_inline_with_no_transcripts_is_indeterminate(tmp_path, lens_case):
+    attempt, _ = score_attempt(lens_case, [], None, {"item-lens"})
+
+    assert attempt.classification == "indeterminate"
+
+
+# ---------------------------------------------------------------------------
 # snapshot_end_state + score_attempt re-scoring from raws
 # ---------------------------------------------------------------------------
 

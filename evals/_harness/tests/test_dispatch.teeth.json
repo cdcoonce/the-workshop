@@ -265,6 +265,38 @@
       "replace": "path.read_text(encoding=\"utf-8\")"
     },
     {
+      "label": "[E1] envelope_parsed requires only ANY lens transcript to parse (all -> any)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_one_unparseable_lens_reply_sets_parse_error_for_the_whole_attempt: one parseable lens reply would hide another lens's unparseable reply.",
+      "find": "all(per_transcript_ok) if uses_findings_envelope",
+      "replace": "any(per_transcript_ok) if uses_findings_envelope"
+    },
+    {
+      "label": "[S1] combined status reads only the first lens transcript",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_an_incomplete_later_lens_transcript_makes_the_attempt_indeterminate: a truncated second or third lens transcript would be scored as complete.",
+      "find": "    for transcript in transcripts:\n        if transcript.status != \"complete\":",
+      "replace": "    for transcript in transcripts[:1]:\n        if transcript.status != \"complete\":"
+    },
+    {
+      "label": "[F1] findings union keeps only the first transcript's findings",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_findings_are_the_union_across_every_lens_transcript: the second lens agent's finding would be dropped.",
+      "find": "        findings.extend(transcript_findings)",
+      "replace": "        findings.extend(transcript_findings if not findings else [])"
+    },
+    {
+      "label": "combined status of no transcripts reads as complete",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_with_no_transcripts_is_indeterminate: an attempt that produced no transcript at all would be scored.",
+      "find": "        return \"missing\"",
+      "replace": "        return \"complete\""
+    },
+    {
       "label": "[control] reword the Evidence docstring",
       "file": "../dispatch.py",
       "oracle": "real",
