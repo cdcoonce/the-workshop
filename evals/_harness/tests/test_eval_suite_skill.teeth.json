@@ -57,6 +57,86 @@
       "replace": "reserve"
     },
     {
+      "label": "[K1] snapshot-before-scoring step replaced by 'Do nothing'",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_snapshots_end_state_before_scoring_every_attempt: section 4 no longer names snapshot_end_state ahead of score_attempt (the table row elsewhere cannot satisfy a section-scoped assertion).",
+      "find": "1. Snapshot end-state evidence with\n   `evals._harness.dispatch.snapshot_end_state(case_dir, workdir, transcript_paths, dest)`",
+      "replace": "1. Do nothing"
+    },
+    {
+      "label": "[K2] gated set is no longer passed to score_attempt",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_routes_the_gated_set_to_all_three_places.",
+      "find": "- passed as `score_attempt`'s `gated_ids` argument;",
+      "replace": "- ignored;"
+    },
+    {
+      "label": "[K3] hard execution cap states 9 instead of 5",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly.",
+      "find": "counted_attempts + reserve_used reaches 5",
+      "replace": "counted_attempts + reserve_used reaches 9"
+    },
+    {
+      "label": "[K4] inline lens-dispatch text removed",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_assigns_lens_agent_dispatch_to_the_conductor_for_inline_mode: the conductor's lens-agent dispatch responsibility is gone from section 3.",
+      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, and collects one transcript per lens agent.",
+      "replace": "- `mode = \"inline\"`: skip"
+    },
+    {
+      "label": "[K5] manifest rule inverted (gated iff NOT listed)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_derives_gated_items_from_the_manifest_with_the_right_polarity.",
+      "find": "An item is\ngated iff its id appears there; every item whose id is absent is a trend\nitem.",
+      "replace": "An item is\ngated iff its id is absent there; every listed id is a trend\nitem."
+    },
+    {
+      "label": "[K6] the scorer is said to read the manifest",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_conductor_reads_the_manifest_and_the_scorer_never_does: the negation 'the scorer never reads it' is a required rule, not just a keyword.",
+      "find": "The conductor is the only reader of this file — the scorer\n(`evals._harness.scorer`) never reads it itself.",
+      "replace": "The scorer reads it itself."
+    },
+    {
+      "label": "[K7] fixture dest must be pre-existing and populated (contradicts the spec)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation.",
+      "find": "Prepare a fresh, **not-yet-existing** temporary",
+      "replace": "Prepare a pre-existing populated"
+    },
+    {
+      "label": "[K8] landing section dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_lands_the_run_as_a_test_evals_pr_into_dev_and_leaves_campaigns_by_hand.",
+      "find": "The run lands as its own `test(evals):` PR into `dev`, or riding along with\nthe skill PR that triggered it.",
+      "replace": "The run is not landed."
+    },
+    {
+      "label": "run-file step no longer names ledger.write_run",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
+      "find": "- Write the run file, plus every attempt's raws (including its `end_state/`\n  snapshot), with `evals._harness.ledger.write_run(runs_dir, run, raw_sources)`.",
+      "replace": "- Write the run file by hand."
+    },
+    {
+      "label": "red report step no longer calls report.write_report",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
+      "find": "- If the run's verdict is `\"red\"`, write the report with\n  `evals._harness.report.write_report(run_file)`.",
+      "replace": "- If the run's verdict is `\"red\"`, do nothing."
+    },
+    {
       "label": "[control] reword the skill's intro sentence",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
