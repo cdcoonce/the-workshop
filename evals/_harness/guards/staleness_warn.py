@@ -6,8 +6,8 @@ its run files whose ``verdict`` is ``green`` — and warns if that run's
 ``fingerprint.run_date`` is more than 30 days before today. A newer red or
 void run file never suppresses the warning: it is the newest GREEN run's
 age that matters. Never fails, and skips inactive skills entirely. A
-schema-valid but calendar-invalid ``run_date`` (``2026-02-30``) warns naming
-the run file instead of crashing.
+missing, empty, null or calendar-invalid ``run_date`` (``2026-02-30``) warns
+naming the run file instead of crashing or being skipped silently.
 """
 
 from __future__ import annotations
@@ -64,25 +64,26 @@ def check(ctx: GuardContext) -> list[Result]:
             continue
 
         newest_green_file, newest_green = green_runs[-1]
-        run_date_str = newest_green.get("fingerprint", {}).get("run_date")
-        if not run_date_str:
-            continue
-
+        fingerprint = newest_green.get("fingerprint")
+        run_date_str = fingerprint.get("run_date") if isinstance(fingerprint, dict) else None
         try:
+            if not isinstance(run_date_str, str):
+                raise ValueError("run_date is missing, null or not a string")
             run_date = datetime.strptime(run_date_str, "%Y-%m-%d").date()
         except ValueError:
-            # The run-file schema only checks the \d{4}-\d{2}-\d{2} shape, so
-            # a value like 2026-02-30 is schema-valid but not a date. This
-            # guard never fails and must not crash: surface it as a warn
-            # (staleness cannot be judged) rather than skip it silently.
+            # A missing/empty/null run_date, or one the run-file schema's
+            # \d{4}-\d{2}-\d{2} shape check lets through that is not a real
+            # date (2026-02-30), cannot be aged. This guard never fails and
+            # must not crash: surface it as a warn naming the file rather than
+            # skip it silently.
             results.append(
                 Result(
                     level="warn",
                     guard=_GUARD_NAME,
                     message=(
                         f"{skill}: cannot judge staleness; {newest_green_file.name} "
-                        f"has a run_date that is not a real calendar date "
-                        f"(run_date={run_date_str})"
+                        f"has a run_date that is missing or not a real calendar date "
+                        f"(run_date={run_date_str!r})"
                     ),
                 )
             )

@@ -114,6 +114,22 @@
       "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: the warning must say which skill it is about.",
       "find": "                        f\"{skill}: cannot judge staleness; {newest_green_file.name} \"",
       "replace": "                        f\"cannot judge staleness; {newest_green_file.name} \""
+    },
+    {
+      "label": "a missing, empty or null run_date is skipped silently instead of warning",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_or_unusable_run_date_warns_like_a_calendar_invalid_one: an unusable run_date must be surfaced, as a calendar-invalid one is.",
+      "find": "            if not isinstance(run_date_str, str):\n                raise ValueError(\"run_date is missing, null or not a string\")",
+      "replace": "            if not run_date_str:\n                continue"
+    },
+    {
+      "label": "a null fingerprint is dereferenced without a guard",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_or_unusable_run_date_warns_like_a_calendar_invalid_one[null-fingerprint]: a null fingerprint must warn, not crash a never-fail guard.",
+      "find": "fingerprint.get(\"run_date\") if isinstance(fingerprint, dict) else None",
+      "replace": "fingerprint.get(\"run_date\")"
     }
   ]
 }

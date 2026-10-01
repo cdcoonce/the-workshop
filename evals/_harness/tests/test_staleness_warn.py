@@ -163,3 +163,43 @@ def test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises(tmp_
     assert results[0].message.startswith("commit:")
     assert "20260101T000000Z-aaa.json" in results[0].message
     assert bad_date in results[0].message
+
+
+def _run_file_with_fingerprint(fingerprint) -> str:
+    return json.dumps(
+        {
+            "skill": "commit",
+            "verdict": "green",
+            "fingerprint": fingerprint,
+            "tokens": 0,
+            "wall_time_s": 0,
+            "cases": [],
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "fingerprint",
+    [
+        pytest.param({"run_date": ""}, id="empty-run-date"),
+        pytest.param({"run_date": None}, id="null-run-date"),
+        pytest.param({}, id="missing-run-date"),
+        pytest.param(None, id="null-fingerprint"),
+        pytest.param({"run_date": 20260101}, id="non-string-run-date"),
+    ],
+)
+def test_a_missing_or_unusable_run_date_warns_like_a_calendar_invalid_one(tmp_path, fingerprint):
+    # Consistent with a calendar-invalid run_date: staleness cannot be judged,
+    # so say so, naming the skill and the file -- never raise, never fail.
+    _activate(tmp_path)
+    _write(
+        tmp_path,
+        "evals/commit/runs/20260101T000000Z-aaa.json",
+        _run_file_with_fingerprint(fingerprint),
+    )
+
+    results = check(GuardContext(base="unused", repo_root=tmp_path))
+
+    assert [result.level for result in results] == ["warn"]
+    assert results[0].message.startswith("commit:")
+    assert "20260101T000000Z-aaa.json" in results[0].message
