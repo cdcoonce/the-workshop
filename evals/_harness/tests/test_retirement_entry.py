@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from evals._harness.guards import GuardContext
 from evals._harness.guards.retirement_entry import check
 
@@ -182,3 +184,54 @@ def test_no_fail_when_no_gated_id_is_removed(tmp_path):
     results = check(GuardContext(base=base_sha, repo_root=repo))
 
     assert results == []
+
+
+def _diverged_repo(tmp_path: Path) -> tuple[Path, str]:
+    """Fork at F; base branch moves on; the PR branch changes only an unrelated file.
+
+    Returns (repo, base_branch_name) with HEAD checked out on the PR branch.
+    The base branch TIP differs from the merge-base in exactly the ways every
+    guard here reads: it adds gated id ``y``, adds retired entry ``z``, and
+    edits a direct-tier file. A guard that reads the TIP of base instead of
+    the merge-base sees all of that as the PR removing/editing it.
+    """
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo, "evals/commit/checks.manifest", "x A description\n")
+    _write(repo, "evals/commit/retired.md", "")
+    _write(repo, "evals/commit/marker.txt", "original\n")
+    _write(repo, "evals/commit/deps", 'direct = ["evals/commit/marker.txt"]\ninjection = []\n')
+    _commit(repo, "fork point")
+    base_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _write(repo, "unrelated.txt", "pr change\n")
+    _commit(repo, "pr: unrelated change")
+
+    _git(repo, "checkout", "-q", base_branch)
+    _write(repo, "evals/commit/checks.manifest", "x A description\ny B description\n")
+    _write(
+        repo,
+        "evals/commit/retired.md",
+        "## z\n- date: 2026-01-01\n- reason: noise\n- evidence: flaked repeatedly\n",
+    )
+    _write(repo, "evals/commit/marker.txt", "base moved on\n")
+    _commit(repo, "base moves on after the fork")
+
+    _git(repo, "checkout", "-q", "pr")
+    return repo, base_branch
+
+
+def test_reads_base_content_at_the_merge_base_not_the_base_tip(tmp_path):
+    repo, base_branch = _diverged_repo(tmp_path)
+
+    results = check(GuardContext(base=base_branch, repo_root=repo))
+
+    assert results == []
+
+
+def test_fails_loudly_when_the_base_ref_cannot_be_resolved(tmp_path):
+    repo, _base_branch = _diverged_repo(tmp_path)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        check(GuardContext(base="no-such-ref", repo_root=repo))

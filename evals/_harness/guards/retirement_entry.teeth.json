@@ -99,6 +99,22 @@
       "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
       "find": "Never reimplements the ``checks.manifest``/``retired.md`` parsers",
       "replace": "This guard never reimplements the ``checks.manifest``/``retired.md`` parsers"
+    },
+    {
+      "label": "check reads base content at the base tip instead of the merge-base",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_reads_base_content_at_the_merge_base_not_the_base_tip: a base branch that moved on after the fork must not read as the PR undoing its changes.",
+      "find": "    base_ref = merge_base(ctx.repo_root, ctx.base)",
+      "replace": "    base_ref = ctx.base"
+    },
+    {
+      "label": "merge_base swallows an unresolvable base ref instead of failing",
+      "file": "./base_ref.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_loudly_when_the_base_ref_cannot_be_resolved: an unresolvable base must not read as 'file absent at base', which silently passes this guard.",
+      "find": "        capture_output=True,\n        text=True,\n        check=True,\n    )\n    return result.stdout.strip()",
+      "replace": "        capture_output=True,\n        text=True,\n        check=False,\n    )\n    return result.stdout.strip()"
     }
   ]
 }

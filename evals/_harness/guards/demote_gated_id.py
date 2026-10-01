@@ -15,12 +15,12 @@ of whether the skill is active at base, at head, or ever.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from evals._harness.activation import ROSTERED_SKILLS, parse_checks_manifest
 from evals._harness.deps import parse_deps, tree_hash
 from evals._harness.guards import GuardContext, Result
+from evals._harness.guards.base_ref import merge_base, show_at
 
 _GUARD_NAME = "demote_gated_id"
 
@@ -46,6 +46,7 @@ def check(ctx: GuardContext) -> list[Result]:
         between base and head while a gated ID was removed from its
         manifest in the same diff.
     """
+    base_ref = merge_base(ctx.repo_root, ctx.base)
     results: list[Result] = []
     for skill in ROSTERED_SKILLS:
         eval_dir = ctx.repo_root / "evals" / skill
@@ -55,19 +56,12 @@ def check(ctx: GuardContext) -> list[Result]:
 
         direct_paths = parse_deps(deps_path.read_text(encoding="utf-8"))["direct"]
         head_hash = tree_hash(direct_paths, ref="HEAD", repo=ctx.repo_root)
-        base_hash = tree_hash(direct_paths, ref=ctx.base, repo=ctx.repo_root)
+        base_hash = tree_hash(direct_paths, ref=base_ref, repo=ctx.repo_root)
         if head_hash == base_hash:
             continue
 
         manifest_rel = f"evals/{skill}/checks.manifest"
-        base_result = subprocess.run(
-            ["git", "-C", str(ctx.repo_root), "show", f"{ctx.base}:{manifest_rel}"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        base_manifest_text = base_result.stdout if base_result.returncode == 0 else ""
-        base_ids = set(parse_checks_manifest(base_manifest_text))
+        base_ids = set(parse_checks_manifest(show_at(ctx.repo_root, base_ref, manifest_rel)))
         head_ids = set(parse_checks_manifest(_read_at_head(ctx.repo_root, manifest_rel)))
 
         if base_ids - head_ids:
