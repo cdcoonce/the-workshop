@@ -85,8 +85,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: builtin open() in write mode is recorded.",
-      "find": "    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
-      "replace": "    open(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w3.txt\"), \"w\").close()\n    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\""
+      "find": "    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    open(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w3.txt\"), \"w\").close()\n    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\""
     },
     {
       "label": "[W4] score_attempt creates a stray directory with os.makedirs",

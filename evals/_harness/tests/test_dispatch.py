@@ -9,18 +9,22 @@ case directories.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import unicodedata
 from pathlib import Path
 
 import pytest
 
 from evals._harness.dispatch import (
     AcceptanceLeakError,
+    LEAK_MIN_TOKENS,
     CaseContractError,
     PromptPathError,
     build_dispatch_prompt,
     build_no_skill_prompt,
+    find_acceptance_leaks,
     find_duplicate_item_ids,
     find_invalid_modes,
     score_attempt,
@@ -230,26 +234,180 @@ def test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance(
     assert "missing auth check" not in output
 
 
-def test_build_dispatch_prompt_ignores_markdown_noise_shared_with_acceptance(tmp_path):
+_LEAK_LINE = "The reviewer must report the missing auth check in login.py."
+
+
+def _leak_pair(tmp_path: Path, acceptance_line: str, prompt_text: str) -> Path:
+    return _leak_case(tmp_path, prompt_text, acceptance_text=f"# Acceptance\n\n{acceptance_line}\n")
+
+
+_MISSES = {
+    "case change": (_LEAK_LINE, _LEAK_LINE.upper() + "\n"),
+    "checkbox and bold on the acceptance side": (f"- [ ] **{_LEAK_LINE}**", _LEAK_LINE + "\n"),
+    "heading on the acceptance side": (f"## {_LEAK_LINE}", _LEAK_LINE + "\n"),
+    "table row on the acceptance side": (
+        "| The reviewer must report the missing auth check | in login.py. |",
+        _LEAK_LINE + "\n",
+    ),
+    "nested ordered list on the acceptance side": (f"- 1. {_LEAK_LINE}", _LEAK_LINE + "\n"),
+    "dropped trailing period": (_LEAK_LINE, _LEAK_LINE.rstrip(".") + "\n"),
+    "decomposed unicode": (
+        unicodedata.normalize("NFC", "The r\u00e9viewer must report the missing auth check."),
+        unicodedata.normalize("NFD", "The r\u00e9viewer must report the missing auth check.") + "\n",
+    ),
+    "curly quotes": (
+        "The reviewer mustn't skip the auth check in login.py.",
+        "The reviewer mustn\u2019t skip the auth check in login.py.\n",
+    ),
+    "zero-width space": (_LEAK_LINE, _LEAK_LINE.replace("missing", "mis\u200bsing") + "\n"),
+    "short line inside a sentence": (
+        "Must report auth bug.",
+        "Please be sure you note that you must report auth bug, thanks for helping.\n",
+    ),
+    "re-wrapped across two prompt lines": (
+        _LEAK_LINE,
+        "Investigate the repo.\nThe reviewer must report the\nmissing auth check in login.py.\n",
+    ),
+    "nested list marker with the line inside a longer prompt sentence": (
+        f"- 1. {_LEAK_LINE}",
+        f"Note: {_LEAK_LINE.rstrip('.')}, thanks for helping out today.\n",
+    ),
+    "checked checkbox with the line inside a longer prompt sentence": (
+        f"- [x] {_LEAK_LINE}",
+        f"Note: {_LEAK_LINE.rstrip('.')}, thanks for helping out today.\n",
+    ),
+    "re-wrapped across two longer prompt lines": (
+        _LEAK_LINE,
+        "Please: the reviewer must report the\nmissing auth check in login.py today.\n",
+    ),
+    "tabs and runs of spaces": (_LEAK_LINE, "The\treviewer   must  report the missing\tauth check in   login.py.\n"),
+    "a prompt line that is a fragment of an acceptance line": (
+        _LEAK_LINE,
+        "Investigate the repo.\nreport the missing auth check\n",
+    ),
+    "a prompt line spanning two acceptance lines": (
+        "The reviewer must report the missing auth check.\nThen the reviewer must stop immediately.",
+        "check. Then the reviewer must\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_MISSES))
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_copied_acceptance_line_is_caught_despite_cosmetic_changes(tmp_path, builder, name):
+    acceptance_line, prompt_text = _MISSES[name]
+    case_dir = _leak_pair(tmp_path, acceptance_line, prompt_text)
+
+    with pytest.raises(AcceptanceLeakError):
+        builder(case_dir)
+    assert find_acceptance_leaks(case_dir, prompt_text) != []
+
+
+_BOILERPLATE = [
+    "```python",
+    "```json",
+    "Context",
+    "Steps:",
+    "Done.",
+    "---",
+    "| --- | --- |",
+    "# Acceptance Criteria Expected Results",
+    "**Notes**",
+]
+
+
+@pytest.mark.parametrize("shared", _BOILERPLATE)
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_shared_boilerplate_is_not_a_leak(tmp_path, builder, shared):
     case_dir = _leak_case(
         tmp_path,
-        "# Task\n\nInvestigate the repo.\n",
-        acceptance_text="# Task\n\n---\n- \nSomething only acceptance says here.\n",
+        f"{shared}\nInvestigate the repo and report what you find.\n{shared}\n",
+        acceptance_text=f"{shared}\nSomething only acceptance says about login handling here.\n{shared}\n",
     )
 
-    # A heading-only or punctuation-only line is not acceptance content, but
-    # "# Task" is a real line of text shared with the prompt: it is short
-    # enough to count as a leak only if it is a whole line. It is.
-    with pytest.raises(AcceptanceLeakError):
+    assert "Investigate the repo" in builder(case_dir)
+    assert find_acceptance_leaks(case_dir, "Investigate the repo and report what you find.") == []
+
+
+def test_the_leak_threshold_is_four_tokens_in_both_directions(tmp_path):
+    assert LEAK_MIN_TOKENS == 4
+    three, four = "Report the bug", "Report the auth bug"
+    for direction in ("acceptance_line_in_prompt", "prompt_line_in_acceptance"):
+        for line, leaks in ((three, False), (four, True)):
+            if direction == "acceptance_line_in_prompt":
+                acceptance = f"{line}\nUnrelated criterion about retries and caching."
+                prompt = f"Please investigate: {line} and then finish up.\n"
+            else:
+                acceptance = f"Always {line} when asked to review the module.\nOther unrelated criterion text."
+                prompt = f"{line}\nInvestigate the repo.\n"
+            case_dir = _leak_case(tmp_path / f"{direction}-{leaks}-{len(line)}", prompt, acceptance_text=acceptance)
+            assert (find_acceptance_leaks(case_dir, prompt) != []) is leaks, (direction, line)
+
+
+def test_find_acceptance_leaks_is_empty_for_a_clean_prompt_and_without_acceptance_md(tmp_path):
+    clean = _leak_case(tmp_path / "a", "Investigate the repo.\n")
+    absent = _leak_case(tmp_path / "b", "Investigate the repo.\n", acceptance_text=None)
+
+    assert find_acceptance_leaks(clean, "Investigate the repo.\n") == []
+    assert find_acceptance_leaks(absent, _ACCEPTANCE_TEXT) == []
+
+
+def test_find_acceptance_leaks_never_returns_acceptance_text(tmp_path):
+    case_dir = _leak_pair(tmp_path, _LEAK_LINE, _LEAK_LINE + "\n")
+
+    assert all("auth check" not in leak for leak in find_acceptance_leaks(case_dir, _LEAK_LINE))
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_binary_acceptance_md_is_a_named_error(tmp_path, builder):
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n", acceptance_text=None)
+    (case_dir / "acceptance.md").write_bytes(b"\xff\xfe\x00\x80 not utf-8")
+
+    with pytest.raises(CaseContractError, match="acceptance.md"):
+        builder(case_dir)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file modes")
+def test_an_unreadable_acceptance_md_is_a_named_error(tmp_path):
+    case_dir = _leak_case(tmp_path, "Investigate the repo.\n")
+    (case_dir / "acceptance.md").chmod(0)
+    try:
+        with pytest.raises(CaseContractError, match="acceptance.md"):
+            build_dispatch_prompt(case_dir)
+    finally:
+        (case_dir / "acceptance.md").chmod(0o600)
+
+
+@pytest.mark.parametrize(
+    "reserved", ["case.toml", "predicates.py", "provenance.toml", "calibration.json", "fixture.py", "prompt"]
+)
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_prompt_must_be_a_markdown_or_text_file_never_a_reserved_case_file(
+    tmp_path, builder, reserved
+):
+    case_dir = _prompt_path_case(tmp_path, reserved)
+    for name in ("predicates.py", "provenance.toml", "calibration.json", "fixture.py", "prompt"):
+        (case_dir / name).write_text("Investigate the repo.\n", encoding="utf-8")
+
+    with pytest.raises(PromptPathError):
+        builder(case_dir)
+
+
+def test_a_prompt_symlink_to_a_reserved_file_is_refused(tmp_path):
+    case_dir = _prompt_path_case(tmp_path, "prompt.md")
+    (case_dir / "predicates.py").write_text("x = 1\n", encoding="utf-8")
+    (case_dir / "prompt.md").symlink_to(case_dir / "predicates.py")
+
+    with pytest.raises(PromptPathError):
         build_dispatch_prompt(case_dir)
 
-    case_dir = _leak_case(
-        tmp_path / "second",
-        "Investigate the repo.\n---\n",
-        acceptance_text="---\n- \nSomething only acceptance says here.\n",
-    )
 
-    assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n---\n"
+@pytest.mark.parametrize("name", ["prompt.md", "PROMPT.MD", "prompt.txt", "story.v2.md"])
+def test_markdown_and_text_prompts_are_accepted(tmp_path, name):
+    case_dir = _prompt_path_case(tmp_path, name)
+    (case_dir / name).write_text("Investigate the repo.\n", encoding="utf-8")
+
+    assert build_dispatch_prompt(case_dir) == "Investigate the repo.\n"
 
 
 def test_build_dispatch_prompt_works_without_an_acceptance_file(tmp_path):

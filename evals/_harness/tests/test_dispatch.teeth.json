@@ -61,8 +61,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the fixed instruction sentence would no longer appear in the output.",
-      "find": "    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
-      "replace": "    output = f\"{stripped}\\n\""
+      "find": "    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    return f\"{stripped}\\n\""
     },
     {
       "label": "_combined_status ignores non-complete transcript statuses",
@@ -103,30 +103,6 @@
       "why": "Killed by test_snapshot_end_state_then_rescore_from_raws_matches_the_live_score: an end-state-based scorer would always see an empty end_state and miss.",
       "find": "        end_state=_load_end_state(end_state_dir),",
       "replace": "        end_state={},"
-    },
-    {
-      "label": "acceptance-leak guard never fires",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by the test_*_refuses_a_prompt_that_embeds_* tests: a prompt embedding acceptance.md would come back unchanged.",
-      "find": "    if not acceptance_path.is_file():\n        return",
-      "replace": "    return"
-    },
-    {
-      "label": "acceptance-leak guard only catches a whole-file copy",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_build_dispatch_prompt_refuses_a_prompt_that_embeds_a_single_acceptance_line and the bullet/indentation variant: a single leaked line is no longer caught, only the whole file verbatim.",
-      "find": "        if line in text_lines or embedded:",
-      "replace": "        if acceptance_path.read_text(encoding=\"utf-8\") in text:"
-    },
-    {
-      "label": "acceptance-leak guard flags markdown noise lines",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_build_dispatch_prompt_ignores_markdown_noise_shared_with_acceptance: a bare rule shared with the prompt would be reported as a leak.",
-      "find": "        if not any(char.isalnum() for char in line):\n            continue",
-      "replace": ""
     },
     {
       "label": "prompt path may escape the case directory",
@@ -407,6 +383,142 @@
       "why": "Killed by the 'commit' case of test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference.",
       "find": "    if prompt_text.strip().casefold() == skill.casefold():",
       "replace": "    if False:"
+    },
+    {
+      "label": "acceptance-leak guard never fires",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by every test_a_copied_acceptance_line_* and the exact-embed tests: a prompt embedding acceptance.md would come back unchanged.",
+      "find": "    if leaks:\n        raise AcceptanceLeakError(",
+      "replace": "    if False:\n        raise AcceptanceLeakError("
+    },
+    {
+      "label": "[Q2] leak comparison is case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'case change' case of test_a_copied_acceptance_line_is_caught_despite_cosmetic_changes.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "unicodedata.normalize(\"NFKC\", text)"
+    },
+    {
+      "label": "[Q2] leak comparison skips unicode normalisation",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'decomposed unicode' case.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "text.casefold()"
+    },
+    {
+      "label": "[Q2] zero-width characters are no longer ignored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'zero-width space' case: an invisible character would split a word and hide the copy.",
+      "find": "if unicodedata.category(char) != \"Cf\"",
+      "replace": "if True"
+    },
+    {
+      "label": "[Q2] markdown list/heading/checkbox prefixes are no longer stripped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'nested ordered list' case: the stray '1' token breaks the contiguous match.",
+      "find": "    return _tokens(_LINE_PREFIX.sub(\"\", line))",
+      "replace": "    return _tokens(line)"
+    },
+    {
+      "label": "[L5] leak threshold lowered to 3 tokens",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_threshold_is_four_tokens_in_both_directions and the boilerplate tests: a 3-token shared line would be a leak.",
+      "find": "LEAK_MIN_TOKENS = 4",
+      "replace": "LEAK_MIN_TOKENS = 3"
+    },
+    {
+      "label": "[L6] leak threshold raised to 5 tokens",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_threshold_is_four_tokens_in_both_directions and the 'short line inside a sentence' case.",
+      "find": "LEAK_MIN_TOKENS = 4",
+      "replace": "LEAK_MIN_TOKENS = 5"
+    },
+    {
+      "label": "[Q2] generic-word-only lines count as leaks",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_shared_boilerplate_is_not_a_leak ('# Acceptance Criteria Expected Results').",
+      "find": "    return len(tokens) >= LEAK_MIN_TOKENS and not set(tokens) <= _GENERIC_TOKENS",
+      "replace": "    return len(tokens) >= LEAK_MIN_TOKENS"
+    },
+    {
+      "label": "[Q2] prompt-line-inside-acceptance direction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'fragment of an acceptance line' case.",
+      "find": "        if _countable(tokens) and _contains_run(acceptance_stream, tokens):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] acceptance-line-inside-prompt direction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'case change' and 'short line inside a sentence' cases.",
+      "find": "        if _countable(tokens) and _contains_run(prompt_stream, tokens):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] prompt is searched line by line, not as one stream",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 're-wrapped across two prompt lines' case.",
+      "find": "_countable(tokens) and _contains_run(prompt_stream, tokens)",
+      "replace": "_countable(tokens) and any(_contains_run(line, tokens) for line in prompt_lines)"
+    },
+    {
+      "label": "[Q2] acceptance.md is searched line by line, not as one stream",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'prompt line spanning two acceptance lines' case.",
+      "find": "_countable(tokens) and _contains_run(acceptance_stream, tokens)",
+      "replace": "_countable(tokens) and any(_contains_run(line, tokens) for line in acceptance_lines)"
+    },
+    {
+      "label": "[Q2] a binary acceptance.md is no longer a named error",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_binary_acceptance_md_is_a_named_error.",
+      "find": "    except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "    except OSError as exc:"
+    },
+    {
+      "label": "[Q2] an unreadable acceptance.md is no longer a named error",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_unreadable_acceptance_md_is_a_named_error.",
+      "find": "    except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "    except UnicodeDecodeError as exc:"
+    },
+    {
+      "label": "[Q2] prompt suffix restriction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_must_be_a_markdown_or_text_file_never_a_reserved_case_file.",
+      "find": "        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] prompt suffix checked only on the declared name, not the resolved file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_symlink_to_a_reserved_file_is_refused.",
+      "find": "    for candidate in (Path(prompt_name), resolved):",
+      "replace": "    for candidate in (Path(prompt_name),):"
+    },
+    {
+      "label": "[Q2] prompt suffix check is case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_markdown_and_text_prompts_are_accepted (PROMPT.MD).",
+      "find": "        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:",
+      "replace": "        if candidate.suffix not in _PROMPT_SUFFIXES:"
     },
     {
       "label": "[control] reword the Evidence docstring",

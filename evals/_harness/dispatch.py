@@ -65,6 +65,7 @@ import importlib.util
 import re
 import sys
 import tomllib
+import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,6 +76,7 @@ from evals._harness.scorer import Attempt, classify_attempt
 from evals._harness.transcript import Transcript, parse_transcript
 
 _VALID_MODES = {"subagent", "inline"}
+_PROMPT_SUFFIXES = {".md", ".txt"}
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 
 
@@ -150,43 +152,117 @@ def _case_toml(case_dir: Path) -> dict:
     return case_toml
 
 
-_LIST_MARKER = re.compile(r"^(?:[-*+>]|\d+[.)])\s+")
-_MIN_SUBSTRING_LEAK_CHARS = 24
+# A leak is a run of at least this many consecutive tokens shared between the
+# prompt and acceptance.md. Below it, shared words are boilerplate ("Context",
+# "Steps:", a "```python" fence, "Done.") and never count.
+LEAK_MIN_TOKENS = 4
+
+# Words that make up generic headings and boilerplate. A line made only of these
+# never counts as a leak however long it is.
+_GENERIC_TOKENS = frozenset(
+    "acceptance criteria context steps step done notes note summary overview task tasks goal "
+    "goals background requirements requirement expected result results output input example "
+    "examples description setup instructions checklist details section the a an and or of for "
+    "to in is are".split()
+)
+
+_LINE_PREFIX = re.compile(r"^\s*(?:(?:[-*+>]|#{1,6}|\d+[.)])\s+|\[[ xX]\]\s*)+")
+_TOKEN = re.compile(r"[^\W_]+")
 
 
-def _normalize_line(line: str) -> str:
-    """Collapse whitespace and drop one leading list/quote marker."""
-    return _LIST_MARKER.sub("", " ".join(line.split()))
+def _tokens(text: str) -> list[str]:
+    """Casefolded NFKC alphanumeric tokens of *text*, ignoring markdown and invisibles.
+
+    Format characters (zero-width spaces, joiners) are dropped before
+    tokenising, so they cannot split a word; every other non-alphanumeric
+    character, markdown syntax and quote style included, is only a separator.
+    """
+    normalized = unicodedata.normalize("NFKC", text).casefold()
+    visible = "".join(char for char in normalized if unicodedata.category(char) != "Cf")
+    return _TOKEN.findall(visible)
+
+
+def _line_tokens(line: str) -> list[str]:
+    return _tokens(_LINE_PREFIX.sub("", line))
+
+
+def _countable(tokens: list[str]) -> bool:
+    return len(tokens) >= LEAK_MIN_TOKENS and not set(tokens) <= _GENERIC_TOKENS
+
+
+def _contains_run(stream: list[str], run: list[str]) -> bool:
+    width = len(run)
+    return any(stream[start : start + width] == run for start in range(len(stream) - width + 1))
+
+
+def _read_acceptance(case_dir: Path) -> str | None:
+    acceptance_path = case_dir / "acceptance.md"
+    if not acceptance_path.is_file():
+        return None
+    try:
+        return acceptance_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CaseContractError(
+            f"{case_dir}: acceptance.md is unreadable ({type(exc).__name__}); cannot prove the "
+            "prompt does not leak it"
+        ) from exc
+
+
+def find_acceptance_leaks(case_dir: Path, text: str) -> list[str]:
+    """Return a description of every way *text* carries ``acceptance.md``'s content.
+
+    Both directions are checked on token lists (see ``_tokens``), with the
+    lines of each side joined first so a re-wrapped line is still caught: a
+    prompt line of at least ``LEAK_MIN_TOKENS`` tokens that is a contiguous
+    piece of acceptance.md's token stream, and an acceptance line of at least
+    that many tokens found anywhere in the prompt's token stream. Shorter
+    lines, generic-word headings, fences and punctuation-only lines never
+    count. ``acceptance.md`` is read here only to compare; its text is never
+    returned.
+
+    Parameters
+    ----------
+    case_dir : Path
+        The case directory, which may hold an ``acceptance.md``.
+    text : str
+        Prompt text about to be dispatched.
+
+    Returns
+    -------
+    list[str]
+        One description per leak (line numbers, no acceptance text); empty
+        when there is no ``acceptance.md`` or nothing leaks.
+
+    Raises
+    ------
+    CaseContractError
+        If ``acceptance.md`` exists but cannot be read as UTF-8 text.
+    """
+    acceptance = _read_acceptance(case_dir)
+    if acceptance is None:
+        return []
+    acceptance_lines = [_line_tokens(line) for line in acceptance.splitlines()]
+    prompt_lines = [_line_tokens(line) for line in text.splitlines()]
+    acceptance_stream = [token for tokens in acceptance_lines for token in tokens]
+    prompt_stream = [token for tokens in prompt_lines for token in tokens]
+    leaks: list[str] = []
+    for number, tokens in enumerate(prompt_lines, start=1):
+        if _countable(tokens) and _contains_run(acceptance_stream, tokens):
+            leaks.append(f"prompt line {number} reproduces acceptance.md")
+    for number, tokens in enumerate(acceptance_lines, start=1):
+        if _countable(tokens) and _contains_run(prompt_stream, tokens):
+            leaks.append(f"acceptance.md line {number} appears in the prompt")
+    return leaks
 
 
 def _assert_no_acceptance_leak(case_dir: Path, text: str) -> None:
-    """Raise ``AcceptanceLeakError`` if *text* carries any line of ``acceptance.md``.
-
-    The comparison is per whole line, on whitespace- and bullet-normalised
-    text, so a single leaked criterion is caught, not only a verbatim copy of
-    the whole file. A line leaks when it equals a line of *text*, or (for
-    lines of at least 24 characters) appears anywhere inside it. Lines with
-    no letter or digit (rules, fences, bare bullets) carry no content and are
-    ignored. ``acceptance.md`` is read here only to compare against; its text
-    is never returned or interpolated.
-    """
-    acceptance_path = case_dir / "acceptance.md"
-    if not acceptance_path.is_file():
-        return
-    text_lines = {_normalize_line(line) for line in text.splitlines()}
-    flattened = " ".join(text.split())
-    for number, raw_line in enumerate(
-        acceptance_path.read_text(encoding="utf-8").splitlines(), start=1
-    ):
-        line = _normalize_line(raw_line)
-        if not any(char.isalnum() for char in line):
-            continue
-        embedded = len(line) >= _MIN_SUBSTRING_LEAK_CHARS and line in flattened
-        if line in text_lines or embedded:
-            raise AcceptanceLeakError(
-                f"{case_dir}: line {number} of acceptance.md appears in the dispatched "
-                "prompt; acceptance.md is scorer-only and must never reach an agent"
-            )
+    """Raise ``AcceptanceLeakError`` if *text* carries acceptance.md's content."""
+    leaks = find_acceptance_leaks(case_dir, text)
+    if leaks:
+        raise AcceptanceLeakError(
+            f"{case_dir}: {'; '.join(leaks)}; acceptance.md is scorer-only and must never "
+            "reach an agent"
+        )
 
 
 def _prompt_path(case_dir: Path, case_toml: dict) -> Path:
@@ -205,6 +281,12 @@ def _prompt_path(case_dir: Path, case_toml: dict) -> Path:
         raise PromptPathError(f"{case_dir}: prompt {prompt_name!r} resolves outside the case directory")
     if resolved == (root / "acceptance.md").resolve():
         raise PromptPathError(f"{case_dir}: prompt {prompt_name!r} names acceptance.md")
+    for candidate in (Path(prompt_name), resolved):
+        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:
+            raise PromptPathError(
+                f"{case_dir}: prompt {prompt_name!r} must be a .md or .txt file; case.toml, "
+                "predicates.py, provenance.toml and calibration.json hold scorer material"
+            )
     if not resolved.is_file():
         raise PromptPathError(f"{case_dir}: prompt file {prompt_name!r} does not exist")
     return resolved
@@ -374,9 +456,8 @@ def build_no_skill_prompt(case_dir: Path) -> str:
             f"{case_dir}: the prompt is nothing but a reference to the skill {skill!r}, so "
             "removing it leaves no task for the no-skill arm"
         )
-    output = f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
-    _assert_no_acceptance_leak(case_dir, output)
-    return output
+    _assert_no_acceptance_leak(case_dir, stripped)
+    return f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
 
 
 def _combined_status(transcripts: list[Transcript]) -> str:
