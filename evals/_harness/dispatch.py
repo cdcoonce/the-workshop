@@ -586,7 +586,8 @@ def snapshot_end_state(
         the case's ``predicates.py`` ``end_state`` function returns anything
         but a ``{name: text}`` mapping of strings, a name that is not a plain
         file name (empty, ``"."``/``".."``, containing a path separator or a
-        NUL), or the name ``tests.md`` in any letter case. Every name is
+        NUL), or the name ``tests.md`` in any letter case, or if ``end_state()``
+        itself raises (the original error is chained). Every name is
         validated before any file is written.
     """
     if dest.is_symlink():
@@ -602,7 +603,12 @@ def snapshot_end_state(
     if end_state_fn is None:
         return
     transcripts = [parse_transcript(path) for path in transcript_paths]
-    snapshot = end_state_fn(workdir, case_dir, transcripts)
+    try:
+        snapshot = end_state_fn(workdir, case_dir, transcripts)
+    except Exception as exc:
+        raise CaseContractError(
+            f"{case_dir}: end_state() raised {type(exc).__name__}: {exc}"
+        ) from exc
     if not isinstance(snapshot, dict):
         raise CaseContractError(f"{case_dir}: end_state must return a dict of name -> text")
     for name, text in snapshot.items():

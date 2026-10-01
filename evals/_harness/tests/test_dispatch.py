@@ -2130,3 +2130,105 @@ def test_discovery_on_an_empty_evals_tree_finds_nothing(tmp_path):
 def test_discovery_over_the_real_evals_tree_never_returns_the_harness():
     assert all(case.parent.name != "_harness" for case in discover_case_dirs(_EVALS_ROOT))
     assert all(skill.name != "_harness" for skill in discover_skill_dirs(_EVALS_ROOT))
+
+
+# ---------------------------------------------------------------------------
+# round-4 pins
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "    return {'x.txt': (workdir / 'does-not-exist.txt').read_text(encoding='utf-8')}\n",
+        "    return {'x.txt': [][0]}\n",
+        "    raise RuntimeError('end_state blew up')\n",
+    ],
+    ids=["FileNotFoundError", "IndexError", "RuntimeError"],
+)
+def test_an_end_state_function_that_raises_is_a_named_error(tmp_path, body):
+    case_dir = _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates="def scorer_q(evidence):\n    return True\n\ndef end_state(workdir, case_dir, transcripts):\n" + body,
+    )
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+
+    with pytest.raises(CaseContractError, match="case-q") as excinfo:
+        snapshot_end_state(case_dir, workdir, [], tmp_path / "attempt" / "end_state")
+
+    assert "end_state" in str(excinfo.value)
+    assert excinfo.value.__cause__ is not None
+
+
+def test_the_no_skill_leak_check_also_runs_after_the_reference_is_stripped(tmp_path):
+    """Refused only by the post-strip check: stripping '/commit' joins the two halves of a criterion."""
+    case_dir = _leak_case(
+        tmp_path,
+        "Please: the agent must flag /commit the null check now.\n",
+        acceptance_text="the agent must flag the null check now\n",
+    )
+    skill_case = tmp_path / "commit" / "case-a"
+    skill_case.mkdir(parents=True)
+    for name in ("prompt.md", "acceptance.md", "case.toml"):
+        (skill_case / name).write_text((case_dir / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    assert find_acceptance_leaks(skill_case, (skill_case / "prompt.md").read_text(encoding="utf-8")) == []
+    assert build_dispatch_prompt(skill_case).startswith("Please:")
+    with pytest.raises(AcceptanceLeakError):
+        build_no_skill_prompt(skill_case)
+
+
+def test_unmatched_findings_are_zero_without_an_envelope_even_when_the_reply_holds_findings_json(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "item-q"\nkind = "trend"\n'
+        'scorer = "scorer_q"\nparams = { file_suffix = "foo.py", regex = "bug" }\n',
+        predicates="def scorer_q(evidence, file_suffix, regex):\n    return True\n",
+    )
+    transcript_path = tmp_path / "prose-with-json.jsonl"
+    _write_final_text_transcript(
+        transcript_path,
+        'Here you go: {"findings": [{"file": "bar.py", "line": 1, "description": "unrelated"}]}',
+    )
+
+    attempt, unmatched = score_attempt(case_dir, [transcript_path], None, set())
+
+    assert attempt.parse_error is False
+    assert unmatched == 0
+
+
+def test_a_prompt_declared_as_a_non_text_name_is_refused_even_when_it_symlinks_to_markdown(tmp_path):
+    case_dir = _prompt_path_case(tmp_path, "prompt.py")
+    (case_dir / "real.md").write_text("Investigate the repo.\n", encoding="utf-8")
+    (case_dir / "prompt.py").symlink_to(case_dir / "real.md")
+
+    with pytest.raises(PromptPathError, match="prompt.py"):
+        build_dispatch_prompt(case_dir)
+
+
+def test_a_subdirectory_inside_the_end_state_directory_is_skipped_when_loading(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates="def scorer_q(evidence):\n    return sorted(evidence.end_state) == ['note.txt']\n",
+    )
+    end_state_dir = tmp_path / "end_state"
+    (end_state_dir / "sub").mkdir(parents=True)
+    (end_state_dir / "sub" / "nested.txt").write_text("ignored", encoding="utf-8")
+    (end_state_dir / "note.txt").write_text("kept", encoding="utf-8")
+
+    attempt, _ = score_attempt(
+        case_dir, [_complete_transcript(tmp_path)], None, set(), end_state_dir=end_state_dir
+    )
+
+    assert attempt.item_hits == {"item-q": "hit"}
+
+
+def test_discovery_skips_dot_directories_but_not_ordinary_skills(tmp_path):
+    (tmp_path / ".hidden" / "case-1").mkdir(parents=True)
+    (tmp_path / ".hidden" / "case-1" / "case.toml").write_text('mode = "subagent"\n', encoding="utf-8")
+    (tmp_path / "skill-a").mkdir()
+
+    assert discover_skill_dirs(tmp_path) == [tmp_path / "skill-a"]

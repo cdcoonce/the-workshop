@@ -937,6 +937,70 @@
       "replace": "    return \"\\0\".join(run) in haystack"
     },
     {
+      "label": "[F3] an end_state() exception propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_end_state_function_that_raises_is_a_named_error.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: end_state() raised",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: end_state() raised"
+    },
+    {
+      "label": "[M31] the post-strip acceptance-leak check is dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_no_skill_leak_check_also_runs_after_the_reference_is_stripped: stripping '/commit' joins a criterion the source prompt only half-contained.",
+      "find": "    _assert_no_acceptance_leak(case_dir, stripped)\n",
+      "replace": ""
+    },
+    {
+      "label": "[N8] unmatched findings are counted without an envelope",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_unmatched_findings_are_zero_without_an_envelope_even_when_the_reply_holds_findings_json.",
+      "find": "    if uses_findings_envelope:\n        review_item_params = [",
+      "replace": "    if findings:\n        review_item_params = ["
+    },
+    {
+      "label": "[M27] prompt suffix checked only on the resolved file, not the declared name",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_declared_as_a_non_text_name_is_refused_even_when_it_symlinks_to_markdown.",
+      "find": "    for candidate in (Path(prompt_name), resolved):",
+      "replace": "    for candidate in (resolved,):"
+    },
+    {
+      "label": "[N3] a subdirectory of end_state/ is read as if it were a file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_subdirectory_inside_the_end_state_directory_is_skipped_when_loading (IsADirectoryError).",
+      "find": "        for path in sorted(end_state_dir.iterdir())\n        if path.is_file()",
+      "replace": "        for path in sorted(end_state_dir.iterdir())"
+    },
+    {
+      "label": "[N9] skill discovery stops skipping dot-directories",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_skips_dot_directories_but_not_ordinary_skills.",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir() and not path.name.startswith(\"_\")"
+    },
+    {
+      "label": "[N19] the generic-word set loses 'details' and 'section'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_generic_word_set_is_exactly_the_documented_one.",
+      "find": "checklist details section the a an",
+      "replace": "checklist the a an"
+    },
+    {
+      "label": "[N19] the generic-word set loses 'the'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_generic_word_set_is_exactly_the_documented_one.",
+      "find": "details section the a an and",
+      "replace": "details section a an and"
+    },
+    {
       "label": "[control] reword the Evidence docstring",
       "file": "../dispatch.py",
       "oracle": "real",
