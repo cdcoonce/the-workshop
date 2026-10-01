@@ -63,6 +63,46 @@
       "why": "Killed by test_snapshot_end_state_writes_only_under_dest_and_never_tests_md: dest would stay empty instead of gaining note.txt.",
       "find": "    for name, text in snapshot.items():\n        (dest / name).write_text(text, encoding=\"utf-8\")",
       "replace": "    pass"
+    },
+    {
+      "label": "[W1] build_dispatch_prompt writes a stray file outside tmp_path (system temp dir)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: the recorder sees (and blocks) the write even though it lands nowhere near tmp_path, where the old before/after diff could not look.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    __import__(\"pathlib\").Path(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w1.txt\").write_text(\"x\")\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
+    },
+    {
+      "label": "[W2] snapshot_end_state writes a tests.md outside tmp_path (system temp dir)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_writes_only_under_dest_anywhere_on_disk: a tests.md written outside the attempt's dest is recorded and blocked.",
+      "find": "    dest.mkdir(parents=True, exist_ok=True)\n    module = _load_predicates(case_dir)",
+      "replace": "    dest.mkdir(parents=True, exist_ok=True)\n    __import__(\"pathlib\").Path(__import__(\"tempfile\").gettempdir(), \"tests.md\").write_text(\"x\")\n    module = _load_predicates(case_dir)"
+    },
+    {
+      "label": "[W3] build_no_skill_prompt writes a stray file with builtin open()",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: builtin open() in write mode is recorded.",
+      "find": "    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    open(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w3.txt\"), \"w\").close()\n    output = f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\""
+    },
+    {
+      "label": "[W4] score_attempt creates a stray directory with os.makedirs",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.mkdir (reached through os.makedirs) is recorded.",
+      "find": "    scorers = _resolve_scorers(case_dir, items)",
+      "replace": "    __import__(\"os\").makedirs(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w4\"), exist_ok=True)\n    scorers = _resolve_scorers(case_dir, items)"
+    },
+    {
+      "label": "[W5] snapshot_end_state writes tests.md relative to the current directory",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_writes_only_under_dest_anywhere_on_disk: the sandboxed cwd means a relative stray write is both recorded and visible in the sandbox.",
+      "find": "    dest.mkdir(parents=True, exist_ok=True)\n    module = _load_predicates(case_dir)",
+      "replace": "    dest.mkdir(parents=True, exist_ok=True)\n    __import__(\"pathlib\").Path(\"tests.md\").write_text(\"x\")\n    module = _load_predicates(case_dir)"
     }
   ]
 }
