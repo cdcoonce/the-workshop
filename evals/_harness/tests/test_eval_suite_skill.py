@@ -8,9 +8,17 @@ acceptance criteria require it to cover — they never invoke the skill.
 
 from __future__ import annotations
 
+import ast
+import copy
+import importlib
+import inspect
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
+
+import jsonschema
+import pytest
 
 _SKILL_PATH = (
     Path(__file__).resolve().parents[3] / ".claude" / "skills" / "eval-suite" / "SKILL.md"
@@ -302,3 +310,369 @@ def test_skill_names_the_manifest_parser():
     section = _section("2")
     assert "evals._harness.activation.parse_checks_manifest(text)" in section
     assert re.search(r"rather than hand-parsing it", section)
+
+
+# ---------------------------------------------------------------------------
+# the skill's claims about the harness are checked against the harness itself
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CALL_SPAN = re.compile(r"`evals\._harness\.(\w+)\.(\w+)\((.*?)\)(?: -> [^`]*)?`")
+
+
+def _harness_function(module_name: str, function_name: str):
+    module = importlib.import_module(f"evals._harness.{module_name}")
+    function = getattr(module, function_name, None)
+    assert callable(function), f"evals._harness.{module_name}.{function_name} does not exist"
+    return function
+
+
+def _split_arguments(text: str) -> list[str]:
+    arguments, depth, current = [], 0, ""
+    for char in text:
+        if char in "<([{":
+            depth += 1
+        elif char in ">)]}":
+            depth -= 1
+        if char == "," and depth == 0:
+            arguments.append(current.strip())
+            current = ""
+        else:
+            current += char
+    if current.strip():
+        arguments.append(current.strip())
+    return arguments
+
+
+def _cited_calls() -> list[tuple[str, str, list[str]]]:
+    return [
+        (module, function, _split_arguments(arguments))
+        for module, function, arguments in _CALL_SPAN.findall(_normalize(_skill_text()))
+    ]
+
+
+def test_the_skill_cites_at_least_every_entry_point_it_calls():
+    cited = {f"{module}.{function}" for module, function, _ in _cited_calls()}
+    assert {
+        "dispatch.build_dispatch_prompt",
+        "dispatch.snapshot_end_state",
+        "dispatch.score_attempt",
+        "scorer.should_retry",
+        "scorer.compute_verdict",
+        "calibration.fixture_fingerprint",
+        "ledger.write_run",
+        "report.write_report",
+        "activation.parse_checks_manifest",
+        "fingerprint.compute_fingerprint",
+        "deps.parse_deps",
+    } <= cited
+
+
+def test_every_required_entry_point_exists_and_is_callable():
+    for entry_point in _REQUIRED_ENTRY_POINTS:
+        module_name, function_name = entry_point.split(".")
+        _harness_function(module_name, function_name)
+
+
+def test_every_harness_call_the_skill_cites_matches_the_real_signature():
+    for module_name, function_name, arguments in _cited_calls():
+        function = _harness_function(module_name, function_name)
+        parameters = list(inspect.signature(function).parameters)
+        for position, argument in enumerate(arguments):
+            if argument in ("...", "") or argument.startswith("<"):
+                continue
+            if "=" in argument:
+                name = argument.split("=", 1)[0].strip()
+                assert name in parameters, f"{function_name}: no parameter {name!r}"
+            else:
+                assert position < len(parameters), f"{function_name}: too many arguments cited"
+                assert parameters[position] == argument, (
+                    f"{function_name}: argument {position} is documented as {argument!r} "
+                    f"but the parameter is {parameters[position]!r}"
+                )
+
+
+def test_the_documented_should_retry_example_returns_what_the_skill_says():
+    text = _normalize(_skill_text())
+    match = re.search(r"`should_retry\((\{.*?\}), (\d+), (\d+)\)` is `(True|False)`", text)
+    assert match, "the skill no longer shows a should_retry example"
+    item_states = ast.literal_eval(match.group(1))
+    result = _harness_function("scorer", "should_retry")(
+        item_states, int(match.group(2)), int(match.group(3))
+    )
+    assert result is (match.group(4) == "True")
+
+
+def test_the_documented_retry_caps_are_the_real_boundaries():
+    section = _section("5")
+    counted_cap = int(re.search(r"counted_attempts reaches (\d+),", section).group(1))
+    execution_cap = int(re.search(r"counted_attempts \+ reserve_used reaches (\d+)", section).group(1))
+    should_retry = _harness_function("scorer", "should_retry")
+    unmet = {"a": False}
+
+    assert should_retry(unmet, counted_cap - 1, 0) is True
+    assert should_retry(unmet, counted_cap, 0) is False
+    assert should_retry(unmet, 0, execution_cap - 1) is True
+    assert should_retry(unmet, 0, execution_cap) is False
+
+
+def test_the_documented_item_states_rule_is_any_counted_attempt_hit():
+    section = _section("5")
+    assert re.search(r"maps each \*gated\* item id to whether any counted attempt has hit it so far", section)
+    should_retry = _harness_function("scorer", "should_retry")
+
+    assert should_retry({"a": True, "b": False}, 1, 0) is True
+    assert should_retry({"a": True, "b": True}, 1, 0) is False
+
+
+def test_the_documented_verdict_precedence_is_the_real_one():
+    section = _section("5")
+    assert re.search(r"red beat(?:s)? void beat(?:s)? green", section)
+    compute_verdict = _harness_function("scorer", "compute_verdict")
+    red = (True, ["miss", "miss", "miss"])
+    void = (True, ["indeterminate"])
+    green = (True, ["hit"])
+
+    assert compute_verdict({"r": red, "v": void, "g": green}) == "red"
+    assert compute_verdict({"v": void, "g": green}) == "void"
+    assert compute_verdict({"g": green}) == "green"
+    assert compute_verdict({"t": (False, ["miss", "miss", "miss"]), "g": green}) == "green"
+
+
+def test_the_skill_says_compute_verdict_is_called_once_per_run_not_per_case():
+    section = _section("5")
+    assert re.search(r"called once with every case's items merged into one mapping", section)
+    assert not re.search(r"averag", section)
+
+
+def test_the_documented_manifest_format_matches_parse_checks_manifest():
+    section = _section("2")
+    assert re.search(r"one `<id> <one-line description>` per line, `#` comments and blank lines ignored", section)
+    assert re.search(r"takes the file's text and returns the gated ids in file order", section)
+    parse = _harness_function("activation", "parse_checks_manifest")
+    assert list(inspect.signature(parse).parameters) == ["text"]
+
+    assert parse("# a comment\n\nitem-a first item\n  # indented comment\nitem-b second\n") == [
+        "item-a",
+        "item-b",
+    ]
+
+
+def test_the_skill_says_an_unmatched_manifest_id_is_a_conductor_error_to_surface():
+    section = _section("2")
+    assert re.search(r"manifest id that names no item in any case of the skill is a conductor error", section)
+    assert re.search(r"surface it and stop", section)
+
+
+def test_score_attempt_really_ignores_gated_ids_of_sibling_cases_as_the_skill_says(tmp_path):
+    assert re.search(r"`score_attempt` ignores ids that belong to a sibling case", _section("2"))
+    case_dir = tmp_path / "skill-x" / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text("Do it.\n", encoding="utf-8")
+    (case_dir / "predicates.py").write_text("def scorer_a(evidence):\n    return True\n", encoding="utf-8")
+    (case_dir / "case.toml").write_text(
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "a"\nkind = "trend"\nscorer = "scorer_a"\n',
+        encoding="utf-8",
+    )
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text(
+        json.dumps({"type": "assistant", "message": {"model": "m", "content": [{"type": "text", "text": "ok"}]}})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    attempt, _ = _harness_function("dispatch", "score_attempt")(case_dir, [transcript], None, {"a", "from-a-sibling"})
+
+    assert attempt.item_hits == {"a": "hit"}
+
+
+def test_the_skill_says_each_case_is_one_prompt_with_zero_user_turns():
+    text = _normalize(_skill_text())
+    assert "Every case is a single prompt with zero user turns, regardless of mode." in text
+    assert not re.search(r"follow-up user turns", text)
+
+
+def test_the_skill_names_where_transcripts_and_python_come_from():
+    skill = _normalize(_skill_text())
+    transcript_doc = _normalize(importlib.import_module("evals._harness.transcript").__doc__)
+    assert "`<session>/subagents/agent-<id>.jsonl`" in skill
+    assert "<session>/subagents/agent-<id>.jsonl" in transcript_doc
+    assert "uv run --with jsonschema python" in skill
+    makefile = (_REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "uv run --with jsonschema python -m evals._harness.guards" in makefile
+    assert re.search(r"from the checkout root", skill)
+
+
+def test_the_skill_names_where_run_dict_scalars_and_versions_come_from():
+    section = _section("6")
+    schema = json.loads(_RUN_SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert schema["properties"]["tokens"]["type"] == "integer"
+    assert schema["properties"]["wall_time_s"]["type"] == "number"
+    assert re.search(r"`tokens` \(an integer: the total tokens", section)
+    assert re.search(r"`wall_time_s` \(a number: the run's wall-clock seconds[,)]", section)
+    assert re.search(r"`plugin_version` is the `version` in `plugins/<plugin>/\.claude-plugin/plugin\.json`", section)
+    assert re.search(r"`claude_code_version` is the output of `claude --version`", section)
+    assert re.search(r"all five fingerprint keys are required", section)
+    plugin_json = json.loads((_REPO_ROOT / "plugins/workbench/.claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert "version" in plugin_json
+
+
+def test_the_skill_states_the_builder_key_beats_a_local_build_fixture_script():
+    section = _section("1")
+    assert re.search(r"`builder` key wins over a case-local `build_fixture.py`", section)
+
+
+def test_the_skill_says_reserve_used_is_recorded_after_the_replacement_draw():
+    section = _section("5")
+    assert re.search(
+        r"`reserve_used` counts how many of the fixture's indeterminate reserve of 2 have been drawn", section
+    )
+    assert re.search(r"Record an attempt's `reserve_used` after that step", section)
+    assert re.search(r"an indeterminate attempt's own record carries the count including the draw that replaces it", section)
+
+
+def test_the_skill_says_gated_items_is_the_cases_own_gated_ids_recorded_verbatim():
+    section = _section("2")
+    assert re.search(r"recorded verbatim as the case's `gated_items` field in the run file", section)
+    assert re.search(r"list of that case's gated item ids from step 2, recorded verbatim", _section("6"))
+    assert "entire manifest" not in _section("6")
+
+
+def test_the_skill_says_the_snapshot_dest_must_be_fresh():
+    section = _section("4")
+    assert re.search(r"`dest` must be a fresh, empty `end_state/` directory", section)
+    assert re.search(r"a populated one is refused", section)
+
+
+def test_snapshot_end_state_really_refuses_a_populated_dest_as_the_skill_says(tmp_path):
+    case_dir = tmp_path / "skill-x" / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "case.toml").write_text('mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8")
+    (case_dir / "predicates.py").write_text("def end_state(w, c, t):\n    return {'a.txt': 'x'}\n", encoding="utf-8")
+    dest = tmp_path / "end_state"
+    dest.mkdir()
+    (dest / "stale.txt").write_text("old", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        _harness_function("dispatch", "snapshot_end_state")(case_dir, tmp_path, [], dest)
+
+
+# ---------------------------------------------------------------------------
+# the documented run dict, built exactly as shown and run through the real writers
+# ---------------------------------------------------------------------------
+
+_FIXED_NOW = datetime(2026, 9, 30, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _documented_run() -> dict:
+    section_text = re.split(r"^## +", _skill_text(), flags=re.MULTILINE)
+    section = next(part for part in section_text if part.startswith("6."))
+    blocks = re.findall(r"```json\n(.*?)```", section, flags=re.DOTALL)
+    assert len(blocks) == 1, "section 6 must hold exactly one fenced json run example"
+    return json.loads(blocks[0])
+
+
+def _raw_sources_for(run: dict, base: Path) -> dict[str, Path]:
+    sources: dict[str, Path] = {}
+    for case in run["cases"]:
+        for attempt in case["attempts"]:
+            source = base / attempt["raw"].strip("/").replace("/", "_")
+            (source / "end_state").mkdir(parents=True, exist_ok=True)
+            (source / "end_state" / "note.txt").write_text("snapshot", encoding="utf-8")
+            (source / "agent-0001.jsonl").write_text(
+                json.dumps({"type": "assistant", "message": {"model": "claude-test", "content": [{"type": "text", "text": "done"}]}})
+                + "\n",
+                encoding="utf-8",
+            )
+            sources[attempt["raw"]] = source
+    return sources
+
+
+def test_the_documented_run_example_has_exactly_the_keys_the_schema_requires():
+    schema = json.loads(_RUN_SCHEMA_PATH.read_text(encoding="utf-8"))
+    run = _documented_run()
+    case_schema = schema["properties"]["cases"]["items"]
+    attempt_schema = case_schema["properties"]["attempts"]["items"]
+
+    assert set(run) == set(schema["required"])
+    assert set(run["fingerprint"]) == set(schema["properties"]["fingerprint"]["required"])
+    for case in run["cases"]:
+        assert set(case) == set(case_schema["required"]) - {"model_ids"}
+        for attempt in case["attempts"]:
+            assert set(attempt) == set(attempt_schema["required"])
+
+
+def test_the_documented_run_example_is_written_by_the_real_write_run_and_validates(tmp_path):
+    run = _documented_run()
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+    ledger_write_run = _harness_function("ledger", "write_run")
+
+    run_file = ledger_write_run(runs_dir, copy.deepcopy(run), _raw_sources_for(run, tmp_path / "raw"), now=_FIXED_NOW)
+
+    written = json.loads(run_file.read_text(encoding="utf-8"))
+    jsonschema.validate(written, json.loads(_RUN_SCHEMA_PATH.read_text(encoding="utf-8")))
+    assert written["cases"][0]["model_ids"] == ["claude-test"]
+    assert all(attempt["raw"].startswith(f"{run_file.stem}/") for attempt in written["cases"][0]["attempts"])
+    assert run_file.parent == runs_dir
+
+
+def test_write_run_refuses_to_overwrite_an_existing_run_file_as_the_skill_says(tmp_path):
+    assert re.search(r"refuses to overwrite an existing run file", _section("6"))
+    run = _documented_run()
+    runs_dir = tmp_path / "runs"
+    ledger_write_run = _harness_function("ledger", "write_run")
+    ledger_write_run(runs_dir, copy.deepcopy(run), _raw_sources_for(run, tmp_path / "raw"), now=_FIXED_NOW)
+
+    with pytest.raises(FileExistsError):
+        ledger_write_run(runs_dir, copy.deepcopy(run), _raw_sources_for(run, tmp_path / "raw2"), now=_FIXED_NOW)
+
+
+def test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_never_seen_as_the_skill_says(tmp_path):
+    assert re.search(r"a transcript placed in a subdirectory is never seen", _section("6"))
+    run = _documented_run()
+    sources = _raw_sources_for(run, tmp_path / "raw")
+    for source in sources.values():
+        (source / "transcripts").mkdir()
+        (source / "agent-0001.jsonl").rename(source / "transcripts" / "agent-0001.jsonl")
+
+    run_file = _harness_function("ledger", "write_run")(tmp_path / "runs", copy.deepcopy(run), sources, now=_FIXED_NOW)
+
+    assert json.loads(run_file.read_text(encoding="utf-8"))["cases"][0]["model_ids"] == []
+
+
+def test_the_documented_fingerprint_keys_are_what_compute_fingerprint_returns():
+    fingerprint = _harness_function("fingerprint", "compute_fingerprint")(
+        direct_paths=[],
+        injection_paths=[],
+        plugin_version="1.0.0",
+        claude_code_version="2.0.0",
+        run_date="2026-09-30",
+    )
+
+    assert set(fingerprint) == set(_documented_run()["fingerprint"])
+
+
+def test_write_report_on_a_documented_red_run_writes_a_report(tmp_path):
+    run = _documented_run()
+    run["verdict"] = "red"
+    run_file = _harness_function("ledger", "write_run")(
+        tmp_path / "runs", run, _raw_sources_for(run, tmp_path / "raw"), now=_FIXED_NOW
+    )
+
+    report_path = _harness_function("report", "write_report")(run_file)
+
+    assert report_path is not None and report_path.is_file()
+
+
+def test_the_skill_says_dispatch_error_is_the_only_status_override_and_score_attempt_enforces_it(tmp_path):
+    assert re.search(r"it accepts no other value", _section("4"))
+    case_dir = tmp_path / "skill-x" / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "case.toml").write_text('mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8")
+    (case_dir / "prompt.md").write_text("Do it.\n", encoding="utf-8")
+
+    score_attempt = _harness_function("dispatch", "score_attempt")
+    attempt, _ = score_attempt(case_dir, [], None, set(), transcript_status="dispatch_error")
+    assert attempt.classification == "indeterminate"
+    with pytest.raises(ValueError):
+        score_attempt(case_dir, [], None, set(), transcript_status="complete")

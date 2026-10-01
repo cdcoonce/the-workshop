@@ -23,10 +23,14 @@ in full). This skill never scaffolds a case directory and never edits
 `checks.manifest`, `gaps.md`, `retired.md`, or `deps` — those are populated
 by #996 (per-skill scaffolding) and #998–#1002 (case directories).
 
-The steps below apply to one named skill at a time. The worked examples use
-`adversarial-review`, since it is the only skill whose fixture list includes
-an inline lens-mode case (`A2`) — every step applies identically to any
-other rostered skill.
+The steps below apply to one named skill at a time. Only `adversarial-review`
+has an inline lens-mode fixture (`A2`); every step otherwise applies
+identically to any other rostered skill.
+
+Run every harness call from the checkout root with
+`uv run --with jsonschema python` (the way `make test-evals` runs the
+harness): `evals/` is imported as the `evals._harness` package from the root,
+and `ledger` needs `jsonschema`.
 
 ## Case-directory contract (summary)
 
@@ -67,7 +71,10 @@ listing every entry. For each fixture:
    - A case with a builder (a case-local `build_fixture.py`, or a `builder =
      "<repo-relative path>"` key in `case.toml`): run
      `python <builder> <dest>` into the not-yet-existing `<dest>` (the
-     builder reads the case's `fixture/` itself when both are present).
+     builder reads the case's `fixture/` itself when both are present). When
+     a case has both a `builder` key and a case-local `build_fixture.py`, the
+     `builder` key wins over a case-local `build_fixture.py`
+     (`calibration.fixture_fingerprint` resolves them the same way).
 3. Before the fixture's *first* attempt, fingerprint it with
    `evals._harness.calibration.fixture_fingerprint(case_dir)`, and record the
    result as the run file's `cases[].fixture_fingerprint`.
@@ -85,7 +92,10 @@ Parse the file with `evals._harness.activation.parse_checks_manifest(text)`
 than hand-parsing it: it owns the comment, blank-line, and id-grammar rules.
 Every case of the skill shares this one gated set, because item ids are one
 namespace per skill; `score_attempt` ignores ids that belong to a sibling
-case.
+case. For the same reason, a manifest id that names no item in any case of
+the skill is a conductor error: check every id against the items of all the
+skill's cases, surface it and stop. `score_attempt` would otherwise ignore the
+typo and the item would silently never gate.
 
 This gated/trend split is used in three places once derived:
 
@@ -120,7 +130,13 @@ After every attempt (subagent or inline), before scoring it:
    `evals._harness.dispatch.snapshot_end_state(case_dir, workdir, transcript_paths, dest)`,
    writing into the attempt's own `end_state/` directory inside its
    collected raw directory. This lets the attempt be re-scored later from
-   raws alone, with no live repo state.
+   raws alone, with no live repo state. `dest` must be a fresh, empty
+   `end_state/` directory: a populated one is refused, so stale files from an
+   earlier snapshot can never pass for this attempt's evidence. `transcript_paths`
+   are the attempt's transcript JSONL files, one per case-agent (one per lens
+   agent, inline): a subagent's transcript is
+   `<session>/subagents/agent-<id>.jsonl`, as `evals._harness.transcript`
+   documents.
 2. Score the attempt with
    `evals._harness.dispatch.score_attempt(case_dir, transcript_paths, workdir, gated_ids, transcript_status=None, end_state_dir=<the end_state/ directory just snapshotted>)`.
    This parses every transcript, builds an `Evidence` object, runs every
@@ -130,8 +146,8 @@ After every attempt (subagent or inline), before scoring it:
    `extract_findings`) only for a case that sets `envelope = "findings"`;
    every other case passes it as `True`. Pass
    `transcript_status="dispatch_error"` only when the attempt never
-   produced a transcript at all (dispatch itself failed) — otherwise leave
-   it `None` so `score_attempt` derives the status from the transcripts.
+   produced a transcript at all (dispatch itself failed); it accepts no other
+   value, and with `None` it derives the status from the transcripts.
 
 ## 5. The retry loop
 
@@ -139,7 +155,7 @@ A fixture is re-executed while any of its gated items is still unmet. The
 loop is driven by
 `evals._harness.scorer.should_retry(item_states, counted_attempts, reserve_used) -> bool`,
 stated here exactly as #991 implements it: counted_attempts counts only
-non-indeterminate (non-harness-breakage) attempts, and reserve_used counts
+non-indeterminate (non-harness-breakage) attempts, and `reserve_used` counts
 how many of the fixture's indeterminate reserve of 2 have been drawn;
 `item_states` maps each *gated* item id to whether any counted attempt has hit
 it so far. An
@@ -158,7 +174,11 @@ conductor must stop drawing reserve attempts itself once `reserve_used`
 reaches 2: a third indeterminate attempt is not replaced, and the fixture's
 unresolved gated items end void. Increment `reserve_used` each time an
 indeterminate attempt is replaced, and never call `should_retry` with a
-`reserve_used` above 2.
+`reserve_used` above 2. Record an attempt's `reserve_used` after that step:
+an indeterminate attempt's own record carries the count including the draw
+that replaces it (a lone indeterminate attempt that is replaced records
+`reserve_used` 1), and a counted attempt carries the running count
+unchanged.
 
 Once every fixture's loop has ended (every gated item met, or `should_retry`
 returned `False`), compute the run's verdict with
@@ -178,8 +198,10 @@ Build one `run` dict for the whole run, then write it. Its shape is the one
 `evals/_harness/schemas/run-file.schema.json` validates:
 
 - `run` has the keys `skill` (the skill name), `verdict`, `fingerprint`,
-  `tokens` (an integer: the total tokens the run spent), `wall_time_s` (a
-  number: the run's wall-clock seconds), and `cases`.
+  `tokens` (an integer: the total tokens the run spent, summed over every
+  execution's token usage as the dispatch tool reports it, replacements and
+  indeterminate attempts included), `wall_time_s` (a number: the run's
+  wall-clock seconds, from the first dispatch to the last), and `cases`.
 - `run["verdict"]` is the result of `compute_verdict` (step 5): `"green"`,
   `"red"`, or `"void"`.
 - `run["fingerprint"]` is
@@ -188,9 +210,12 @@ Build one `run` dict for the whole run, then write it. Its shape is the one
   run_date=...)`, where `direct_paths` and `injection_paths` are the
   `"direct"` and `"injection"` lists that
   `evals._harness.deps.parse_deps(<text of evals/<skill>/deps>)` returns,
-  `plugin_version` is the shipping plugin's version, `claude_code_version` is
-  the Claude Code version the run executed under, and `run_date` is
-  `YYYY-MM-DD`.
+  `plugin_version` is the `version` in
+  `plugins/<plugin>/.claude-plugin/plugin.json` of the plugin that ships the
+  skill under test, `claude_code_version` is the output of
+  `claude --version` for the session that ran the dispatches, and `run_date`
+  is `YYYY-MM-DD`. The schema has no defaults: all five fingerprint keys are
+  required, so look the two versions up rather than guessing.
 - `run["cases"]` has one entry per fixture, with the keys `case` (the case
   directory's name), `fixture_fingerprint` (from step 1), `gated_items` (the
   list of that case's gated item ids from step 2, recorded verbatim), and
@@ -205,6 +230,53 @@ Build one `run` dict for the whole run, then write it. Its shape is the one
   running count of reserve draws once this attempt is recorded, the same
   value you hand `should_retry`), and `raw` (any string you choose; it is
   only the key into `raw_sources`).
+
+A complete example of the `run` dict, as `write_run` takes it (a case with one
+indeterminate attempt, replaced from the reserve, then one counted attempt;
+`model_ids` is absent because `write_run` fills it in):
+
+```json
+{
+  "skill": "adversarial-review",
+  "verdict": "green",
+  "fingerprint": {
+    "direct_tier_hash": "<sha256 from compute_fingerprint>",
+    "injection_tier_hash": "<sha256 from compute_fingerprint>",
+    "plugin_version": "8.27.0",
+    "claude_code_version": "2.1.0",
+    "run_date": "2026-09-30"
+  },
+  "tokens": 123456,
+  "wall_time_s": 412.5,
+  "cases": [
+    {
+      "case": "A1",
+      "fixture_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "gated_items": ["item-a"],
+      "attempts": [
+        {
+          "attempt": 1,
+          "classification": "indeterminate",
+          "items": {"item-a": "indeterminate", "item-t": "indeterminate"},
+          "parse_error": false,
+          "unmatched_findings": 0,
+          "reserve_used": 1,
+          "raw": "A1/attempt-1"
+        },
+        {
+          "attempt": 2,
+          "classification": "counted",
+          "items": {"item-a": "hit", "item-t": "miss"},
+          "parse_error": false,
+          "unmatched_findings": 2,
+          "reserve_used": 1,
+          "raw": "A1/attempt-2"
+        }
+      ]
+    }
+  ]
+}
+```
 
 Collect each attempt's raws in one directory: its transcripts as `*.jsonl`
 files at that directory's root, beside the `end_state/` snapshot directory
