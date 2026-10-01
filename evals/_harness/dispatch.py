@@ -35,7 +35,8 @@ Public contract
 ``snapshot_end_state(case_dir, workdir, transcript_paths, dest) -> None``
     Creates ``dest`` and, when the case's ``predicates.py`` defines
     ``end_state``, writes each file it returns into ``dest``. Leaves ``dest``
-    empty otherwise.
+    empty otherwise. Validates every returned name before writing any, and
+    never writes a ``tests.md`` or through a symlink.
 
 ``score_attempt(case_dir, transcript_paths, workdir, gated_ids, transcript_status=None, end_state_dir=None) -> tuple[Attempt, int]``
     Parses every transcript, builds ``Evidence``, runs every item's scorer,
@@ -44,6 +45,13 @@ Public contract
     ``transcript_status`` defaults to the worst status among the parsed
     transcripts; the conductor overrides it with ``"dispatch_error"`` when an
     attempt never produced a transcript at all.
+
+``find_invalid_modes(case_dirs)`` / ``find_duplicate_item_ids(skill_dir)``
+    The ``mode`` and per-skill item-id rules the tests apply to committed
+    cases and to synthetic ones alike.
+
+Every case-contract violation raises ``CaseContractError`` (a ``ValueError``);
+``AcceptanceLeakError`` and ``PromptPathError`` are its subclasses.
 
 This module only imports #991's ``scorer.py``, #992's ``matchers.py`` and
 ``transcript.py`` — it never edits them, and it never reads
