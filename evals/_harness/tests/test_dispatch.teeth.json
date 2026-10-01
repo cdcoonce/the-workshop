@@ -729,6 +729,54 @@
       "replace": "_VALID_MODES = {\"inline\"}"
     },
     {
+      "label": "[T2] case discovery globs the wrong depth",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down.",
+      "find": "evals_root.glob(\"*/*/case.toml\")",
+      "replace": "evals_root.glob(\"*/*/*/case.toml\")"
+    },
+    {
+      "label": "case discovery recurses into nested case.toml files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down: fixture trees and raws hold case.toml files too.",
+      "find": "evals_root.glob(\"*/*/case.toml\")",
+      "replace": "evals_root.glob(\"**/case.toml\")"
+    },
+    {
+      "label": "case discovery includes the _harness package",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down.",
+      "find": "        if not path.parent.parent.name.startswith(\"_\")\n",
+      "replace": ""
+    },
+    {
+      "label": "[T2] skill discovery finds nothing",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files.",
+      "find": "    return sorted(\n        path\n        for path in evals_root.iterdir()",
+      "replace": "    return []\n    return sorted(\n        path\n        for path in evals_root.iterdir()"
+    },
+    {
+      "label": "skill discovery includes the _harness package and dot-directories",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files.",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir()"
+    },
+    {
+      "label": "skill discovery drops directories without cases",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files (skill-c has no case yet).",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir() and any(path.glob(\"*/case.toml\")) and not path.name.startswith(\"_\")"
+    },
+    {
       "label": "[control] reword the Evidence docstring",
       "file": "../dispatch.py",
       "oracle": "real",

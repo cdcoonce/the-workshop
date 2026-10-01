@@ -780,3 +780,48 @@ def find_duplicate_item_ids(skill_dir: Path) -> set[str]:
                 duplicates.add(item_id)
             seen.add(item_id)
     return duplicates
+
+
+def discover_case_dirs(evals_root: Path) -> list[Path]:
+    """Return every ``<evals_root>/<skill>/<case>/`` directory that holds a ``case.toml``.
+
+    Skill directories whose name starts with ``_`` (the ``_harness`` package)
+    are skipped, and so is anything nested deeper than a case (a fixture
+    tree's own ``case.toml``, a ``runs/`` raw directory).
+
+    Parameters
+    ----------
+    evals_root : Path
+        The ``evals/`` directory.
+
+    Returns
+    -------
+    list[Path]
+        The case directories, sorted.
+    """
+    return sorted(
+        path.parent
+        for path in evals_root.glob("*/*/case.toml")
+        if not path.parent.parent.name.startswith("_")
+    )
+
+
+def discover_skill_dirs(evals_root: Path) -> list[Path]:
+    """Return every skill directory under *evals_root*, skipping ``_``-prefixed ones.
+
+    Parameters
+    ----------
+    evals_root : Path
+        The ``evals/`` directory.
+
+    Returns
+    -------
+    list[Path]
+        The ``evals/<skill>/`` directories, sorted. A skill with no cases yet
+        is still a skill.
+    """
+    return sorted(
+        path
+        for path in evals_root.iterdir()
+        if path.is_dir() and not path.name.startswith(("_", "."))
+    )

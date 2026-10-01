@@ -26,6 +26,8 @@ from evals._harness.dispatch import (
     PromptPathError,
     build_dispatch_prompt,
     build_no_skill_prompt,
+    discover_case_dirs,
+    discover_skill_dirs,
     find_acceptance_leaks,
     find_duplicate_item_ids,
     find_invalid_modes,
@@ -39,11 +41,11 @@ _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 
 
 def _committed_case_dirs() -> list[Path]:
-    return sorted(p.parent for p in _EVALS_ROOT.glob("*/*/case.toml"))
+    return discover_case_dirs(_EVALS_ROOT)
 
 
 def _committed_skill_dirs() -> list[Path]:
-    return sorted(p for p in _EVALS_ROOT.iterdir() if p.is_dir() and p.name != "_harness")
+    return discover_skill_dirs(_EVALS_ROOT)
 
 
 def _assert_case_modes_valid(case_dirs: list[Path]) -> None:
@@ -504,24 +506,52 @@ def test_a_prompt_in_a_subdirectory_of_the_case_directory_is_accepted(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_build_no_skill_prompt_omits_skill_name_and_adds_instruction(tmp_path):
-    skill_dir = tmp_path / "adversarial-review"
-    case_dir = skill_dir / "case-a"
+def _assert_no_skill_arm_valid(case_dir: Path, build=build_no_skill_prompt) -> None:
+    """Spec test 3, as a test would run it: the arm omits the skill and says not to invoke one."""
+    skill = case_dir.parent.name
+    output = build(case_dir)
+    assert not _skill_reference_pattern(skill).search(output), "the output still names the skill"
+    assert _NO_SKILL_INSTRUCTION in output, "the do-not-invoke instruction is missing"
+
+
+def _named_skill_case(tmp_path: Path) -> Path:
+    case_dir = tmp_path / "adversarial-review" / "case-a"
     case_dir.mkdir(parents=True)
     (case_dir / "prompt.md").write_text(
-        "Use the adversarial-review skill to review this change.\n"
-        "Focus on the auth module.\n",
+        "Use the adversarial-review skill to review this change.\nFocus on the auth module.\n",
         encoding="utf-8",
     )
-    (case_dir / "case.toml").write_text(
-        'mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8"
-    )
+    (case_dir / "case.toml").write_text('mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8")
+    return case_dir
 
-    output = build_no_skill_prompt(case_dir)
 
-    assert "adversarial-review" not in output
-    assert _NO_SKILL_INSTRUCTION in output
-    assert "Focus on the auth module." in output
+def test_build_no_skill_prompt_omits_skill_name_and_adds_instruction(tmp_path):
+    case_dir = _named_skill_case(tmp_path)
+
+    _assert_no_skill_arm_valid(case_dir)
+
+    assert "Focus on the auth module." in build_no_skill_prompt(case_dir)
+
+
+def test_the_no_skill_check_goes_red_when_the_skill_is_still_named(tmp_path):
+    """Spec test 3: a synthetic arm that still names the skill turns THE TEST red."""
+    case_dir = _named_skill_case(tmp_path)
+
+    def still_names_skill(_case_dir: Path) -> str:
+        return f"Use the adversarial-review skill.\n\n{_NO_SKILL_INSTRUCTION}\n"
+
+    with pytest.raises(AssertionError, match="still names the skill"):
+        _assert_no_skill_arm_valid(case_dir, build=still_names_skill)
+
+
+def test_the_no_skill_check_goes_red_when_the_instruction_is_missing(tmp_path):
+    case_dir = _named_skill_case(tmp_path)
+
+    def no_instruction(_case_dir: Path) -> str:
+        return "Review this change.\n"
+
+    with pytest.raises(AssertionError, match="instruction is missing"):
+        _assert_no_skill_arm_valid(case_dir, build=no_instruction)
 
 
 def test_build_no_skill_prompt_refuses_a_prompt_that_embeds_acceptance_md(tmp_path):
@@ -1849,3 +1879,58 @@ def test_bad_params_are_reported_even_for_an_attempt_that_never_runs_its_scorers
 
     with pytest.raises(CaseContractError, match="params"):
         score_attempt(case_dir, [bad_transcript], None, set())
+
+
+# ---------------------------------------------------------------------------
+# discovery of committed cases and skills
+# ---------------------------------------------------------------------------
+
+
+def _synthetic_evals_tree(root: Path) -> None:
+    for relative in (
+        "skill-a/case-1/case.toml",
+        "skill-a/case-2/case.toml",
+        "skill-b/case-1/case.toml",
+        "_harness/fake-case/case.toml",
+        "_harness/tests/case.toml",
+        "skill-a/case-1/fixture/deep/case.toml",
+        "skill-a/runs/20260101T000000Z-aaaaaaaa/case-1/attempt-1/case.toml",
+        "skill-a/case.toml",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('mode = "subagent"\n', encoding="utf-8")
+    (root / "skill-c").mkdir()
+    (root / "skill-a" / "deps").write_text("direct = []\n", encoding="utf-8")
+    (root / "__pycache__").mkdir()
+    (root / "README.md").write_text("not a skill\n", encoding="utf-8")
+
+
+def test_discovery_finds_exactly_the_case_directories_two_levels_down(tmp_path):
+    _synthetic_evals_tree(tmp_path)
+
+    found = discover_case_dirs(tmp_path)
+
+    assert found == [
+        tmp_path / "skill-a" / "case-1",
+        tmp_path / "skill-a" / "case-2",
+        tmp_path / "skill-b" / "case-1",
+    ]
+
+
+def test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files(tmp_path):
+    _synthetic_evals_tree(tmp_path)
+
+    found = discover_skill_dirs(tmp_path)
+
+    assert found == [tmp_path / "skill-a", tmp_path / "skill-b", tmp_path / "skill-c"]
+
+
+def test_discovery_on_an_empty_evals_tree_finds_nothing(tmp_path):
+    assert discover_case_dirs(tmp_path) == []
+    assert discover_skill_dirs(tmp_path) == []
+
+
+def test_discovery_over_the_real_evals_tree_never_returns_the_harness():
+    assert all(case.parent.name != "_harness" for case in discover_case_dirs(_EVALS_ROOT))
+    assert all(skill.name != "_harness" for skill in discover_skill_dirs(_EVALS_ROOT))
