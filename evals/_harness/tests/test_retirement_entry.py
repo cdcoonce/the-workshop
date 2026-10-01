@@ -157,16 +157,15 @@ def test_fails_when_the_new_entry_has_no_evidence(tmp_path):
     assert results[0].level == "fail"
 
 
-def test_fires_even_though_the_skill_reads_inactive_at_both_base_and_head(tmp_path):
+def test_fires_even_though_the_skill_reads_inactive_at_head(tmp_path):
     """The floor guard (#997 empty_gated_set) is the only guard in this issue
     scoped to active skills. This one must fire unconditionally: making the
     skill inactive by removing its last gated ID must not be a way to skip
     filing a retired.md entry for that ID.
     """
     repo, base_sha = _base_repo(tmp_path)
-    # At base the skill is active (one gated id, no retired entries). At head
-    # it reads inactive too (empty manifest, empty retired.md) -- the guard
-    # must still fail.
+    # At base the skill is active (one gated id). At head it reads inactive
+    # (empty manifest, empty retired.md) -- the guard must still fail.
     _write(repo, "evals/commit/checks.manifest", "")
     _commit(repo, "remove the only gated id, going inactive")
 
