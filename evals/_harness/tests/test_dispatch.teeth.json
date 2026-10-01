@@ -89,14 +89,6 @@
       "replace": "    item_hits = {item[\"id\"]: False for item in items}"
     },
     {
-      "label": "gated_ids validation dropped",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_score_attempt_rejects_a_gated_id_not_in_case_toml: a gated id naming no item in case.toml would no longer raise.",
-      "find": "    unknown_gated_ids = gated_ids - item_ids\n    if unknown_gated_ids:\n        raise ValueError(\n            f\"{case_dir}: gated_ids {sorted(unknown_gated_ids)} name no item in case.toml\"\n        )",
-      "replace": "    unknown_gated_ids = set()"
-    },
-    {
       "label": "unmatched-finding count always reports 0",
       "file": "../dispatch.py",
       "oracle": "real",
@@ -183,6 +175,14 @@
       "why": "Killed by the ../ and symlink tests: a lexical containment check passes 'case/../secret.txt' and a symlink pointing outside.",
       "find": "    resolved = (case_dir / prompt_name).resolve()",
       "replace": "    resolved = case_dir / prompt_name"
+    },
+    {
+      "label": "score_attempt rejects gated ids that belong to a sibling case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_tolerates_gated_ids_that_belong_to_a_sibling_case: the per-skill manifest set names items of other cases, and a conductor passing it whole would crash.",
+      "find": "    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items",
+      "replace": "    if gated_ids - {item[\"id\"] for item in items}:\n        raise ValueError(\"gated_ids name an item outside this case\")\n    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items"
     },
     {
       "label": "[control] reword the Evidence docstring",

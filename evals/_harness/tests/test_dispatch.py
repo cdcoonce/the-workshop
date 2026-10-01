@@ -518,14 +518,57 @@ def test_score_attempt_truncated_transcript_is_indeterminate(tmp_path):
     assert unmatched == 0
 
 
-def test_score_attempt_rejects_a_gated_id_not_in_case_toml(tmp_path):
+def _write_item_case(case_dir: Path, item_id: str) -> None:
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text("Investigate.\n", encoding="utf-8")
+    (case_dir / "predicates.py").write_text(
+        "def marker_scorer(evidence, marker):\n"
+        "    return any(marker in t.final_text for t in evidence.transcripts)\n",
+        encoding="utf-8",
+    )
+    (case_dir / "case.toml").write_text(
+        'mode = "subagent"\n'
+        'prompt = "prompt.md"\n'
+        "\n"
+        "[[items]]\n"
+        f'id = "{item_id}"\n'
+        'kind = "gate-candidate"\n'
+        'scorer = "marker_scorer"\n'
+        'params = { marker = "MARKER_HIT" }\n',
+        encoding="utf-8",
+    )
+
+
+def test_score_attempt_tolerates_gated_ids_that_belong_to_a_sibling_case(tmp_path):
+    """``checks.manifest`` is per skill, so the conductor passes the whole manifest set.
+
+    A two-case skill: the manifest gates one item in each case, and the
+    conductor hands both ids to every case's ``score_attempt``. Each case
+    scores only its own items.
+    """
+    skill_dir = tmp_path / "skill-two"
+    _write_item_case(skill_dir / "case-a", "item-a")
+    _write_item_case(skill_dir / "case-b", "item-b")
+    transcript_path = tmp_path / "hit.jsonl"
+    _write_final_text_transcript(transcript_path, "saw MARKER_HIT")
+    manifest_gated = {"item-a", "item-b"}
+
+    attempt_a, _ = score_attempt(skill_dir / "case-a", [transcript_path], None, manifest_gated)
+    attempt_b, _ = score_attempt(skill_dir / "case-b", [transcript_path], None, manifest_gated)
+
+    assert attempt_a.item_hits == {"item-a": "hit"}
+    assert attempt_b.item_hits == {"item-b": "hit"}
+
+
+def test_score_attempt_tolerates_a_gated_id_naming_no_item_in_the_case(tmp_path):
     case_dir = tmp_path / "skill-x" / "case-a"
     _write_marker_case(case_dir)
     transcript_path = tmp_path / "hit.jsonl"
     _write_final_text_transcript(transcript_path, "done, saw MARKER_HIT")
 
-    with pytest.raises(ValueError):
-        score_attempt(case_dir, [transcript_path], None, {"no-such-item"})
+    attempt, _ = score_attempt(case_dir, [transcript_path], None, {"no-such-item"})
+
+    assert attempt.item_hits == {"item-a": "hit"}
 
 
 # ---------------------------------------------------------------------------

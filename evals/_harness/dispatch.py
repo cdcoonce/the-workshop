@@ -367,9 +367,11 @@ def score_attempt(
         The attempt's built fixture directory, or ``None`` when re-scoring
         from raws alone.
     gated_ids : set[str]
-        The case's gated item ids, read by the conductor from the skill's
-        ``checks.manifest``. Every id must name an item declared in this
-        case's ``case.toml``.
+        The skill's gated item ids, read by the conductor from the skill's
+        ``checks.manifest`` and passed whole. The manifest is per skill, so
+        the set routinely names items that belong to sibling cases; ids this
+        case does not declare are ignored, and every item this case declares
+        is scored regardless.
     transcript_status : str | None
         Overrides the status derived from *transcript_paths* — the conductor
         passes ``"dispatch_error"`` when an attempt never produced a
@@ -385,21 +387,12 @@ def score_attempt(
     tuple[Attempt, int]
         #991's ``classify_attempt`` result, and the trend unmatched-finding
         count (0 for a case without ``envelope = "findings"``).
-
-    Raises
-    ------
-    ValueError
-        If any id in *gated_ids* does not name an item in this case's
-        ``case.toml``.
     """
     case_toml = _case_toml(case_dir)
     items = case_toml.get("items", [])
-    item_ids = {item["id"] for item in items}
-    unknown_gated_ids = gated_ids - item_ids
-    if unknown_gated_ids:
-        raise ValueError(
-            f"{case_dir}: gated_ids {sorted(unknown_gated_ids)} name no item in case.toml"
-        )
+    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items
+    # that live in sibling cases; nothing here depends on it. Gating applies
+    # downstream, in ``compute_verdict``'s per-item ``gated`` flag.
 
     transcripts = [parse_transcript(path) for path in transcript_paths]
     status = transcript_status if transcript_status is not None else _combined_status(transcripts)
