@@ -49,16 +49,16 @@
       "file": "./staleness_warn.py",
       "oracle": "real",
       "why": "Killed by test_warns_for_an_active_skill_with_a_stale_newest_green_run and test_no_result_when_no_green_run_exists together: only green runs count toward staleness.",
-      "find": "        green_runs = [run for run in _load_runs(runs_dir) if run.get(\"verdict\") == \"green\"]",
-      "replace": "        green_runs = [run for run in _load_runs(runs_dir) if run.get(\"verdict\") != \"green\"]"
+      "find": "            if run.get(\"verdict\") == \"green\"",
+      "replace": "            if run.get(\"verdict\") != \"green\""
     },
     {
       "label": "check picks the oldest green run instead of the newest",
       "file": "./staleness_warn.py",
       "oracle": "real",
       "why": "Killed by test_uses_the_newest_green_run_when_multiple_exist: filename order is ascending, so the newest green run is the LAST element, not the first.",
-      "find": "        newest_green = green_runs[-1]",
-      "replace": "        newest_green = green_runs[0]"
+      "find": "        newest_green_file, newest_green = green_runs[-1]",
+      "replace": "        newest_green_file, newest_green = green_runs[0]"
     },
     {
       "label": "check computes age_days with the subtraction reversed",
@@ -98,6 +98,14 @@
       "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
       "find": "Never fails, and skips inactive skills entirely.",
       "replace": "This guard never fails, and skips inactive skills entirely."
+    },
+    {
+      "label": "check no longer catches a calendar-invalid run_date",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: strptime raises ValueError on 2026-02-30 and a warn-only guard must not crash.",
+      "find": "        except ValueError:",
+      "replace": "        except KeyError:"
     }
   ]
 }

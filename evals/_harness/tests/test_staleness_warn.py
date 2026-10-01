@@ -6,6 +6,8 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 from evals._harness.guards import GuardContext
 from evals._harness.guards.staleness_warn import check
 
@@ -142,3 +144,21 @@ def test_no_result_when_no_runs_dir_exists(tmp_path):
     results = check(GuardContext(base="unused", repo_root=tmp_path))
 
     assert results == []
+
+
+@pytest.mark.parametrize("bad_date", ["2026-02-30", "2026-13-01", "9999-99-99"])
+def test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises(tmp_path, bad_date):
+    # The schema's pattern accepts any \d{4}-\d{2}-\d{2}, so these are
+    # schema-valid but not real dates. A warn-only guard must not crash on them.
+    _activate(tmp_path)
+    _write(
+        tmp_path,
+        "evals/commit/runs/20260101T000000Z-aaa.json",
+        _run_file(verdict="green", run_date=bad_date),
+    )
+
+    results = check(GuardContext(base="unused", repo_root=tmp_path))
+
+    assert [result.level for result in results] == ["warn"]
+    assert "20260101T000000Z-aaa.json" in results[0].message
+    assert bad_date in results[0].message
