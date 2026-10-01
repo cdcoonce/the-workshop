@@ -98,6 +98,22 @@
       "why": "Killed by test_fails_loudly_when_the_base_ref_cannot_be_resolved: an unresolvable base must raise, not fall back to HEAD (which reads as 'no tier change' and silently passes).",
       "find": "check=True,\n    ).stdout.strip()",
       "replace": "check=False,\n    ).stdout.strip() or \"HEAD\""
+    },
+    {
+      "label": "check hashes the direct tier at the base tip instead of the merge-base",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_ok_when_the_pr_retires_an_id_and_only_the_base_branch_moved_the_tier: a tier edit made only on the base branch must not read as the PR's tier change.",
+      "find": "tree_hash(direct_paths, ref=merge_base,",
+      "replace": "tree_hash(direct_paths, ref=ctx.base,"
+    },
+    {
+      "label": "check reads the base manifest at the base tip instead of the merge-base",
+      "file": "./demote_gated_id.py",
+      "oracle": "real",
+      "why": "Killed by test_ok_when_the_pr_edits_the_tier_and_the_base_branch_independently_added_an_id: an id the base branch added after the fork is not one the PR removed.",
+      "find": "_show_at(ctx.repo_root, merge_base, manifest_rel)",
+      "replace": "_show_at(ctx.repo_root, ctx.base, manifest_rel)"
     }
   ]
 }

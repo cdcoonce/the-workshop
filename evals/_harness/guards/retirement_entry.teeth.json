@@ -115,6 +115,14 @@
       "why": "Killed by test_fails_loudly_when_the_base_ref_cannot_be_resolved: an unresolvable base must raise, not read as 'file absent at base', which silently passes this guard.",
       "find": "check=True,\n    ).stdout.strip()",
       "replace": "check=False,\n    ).stdout.strip()"
+    },
+    {
+      "label": "check reads the base retired.md at the base tip instead of the merge-base",
+      "file": "./retirement_entry.py",
+      "oracle": "real",
+      "why": "Killed by test_ok_when_the_pr_adds_entry_y_and_the_base_branch_independently_added_entry_y: at the tip the PR's own entry stops counting as new in this diff.",
+      "find": "_show_at(ctx.repo_root, merge_base, retired_rel)",
+      "replace": "_show_at(ctx.repo_root, ctx.base, retired_rel)"
     }
   ]
 }

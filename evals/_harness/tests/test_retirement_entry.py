@@ -234,3 +234,28 @@ def test_fails_loudly_when_the_base_ref_cannot_be_resolved(tmp_path):
 
     with pytest.raises(subprocess.CalledProcessError):
         check(GuardContext(base="no-such-ref", repo_root=repo))
+
+
+def test_ok_when_the_pr_adds_entry_y_and_the_base_branch_independently_added_entry_y(tmp_path):
+    # With a tip-of-base read, base already holds an identical entry y, so the
+    # PR's own entry would stop counting as "new in this diff" and the guard
+    # would falsely fail. At the merge-base the entry is absent, so it counts.
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    entry = "## y\n- date: 2026-01-01\n- reason: noise\n- evidence: flaked repeatedly\n"
+    _write(repo, "evals/commit/checks.manifest", "x A description\ny B description\n")
+    _write(repo, "evals/commit/retired.md", "")
+    _commit(repo, "fork point")
+    base_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _write(repo, "evals/commit/checks.manifest", "x A description\n")
+    _write(repo, "evals/commit/retired.md", entry)
+    _commit(repo, "pr: retire y")
+    _git(repo, "checkout", "-q", base_branch)
+    _write(repo, "evals/commit/retired.md", entry)
+    _commit(repo, "base: files the same entry")
+    _git(repo, "checkout", "-q", "pr")
+
+    results = check(GuardContext(base=base_branch, repo_root=repo))
+
+    assert results == []

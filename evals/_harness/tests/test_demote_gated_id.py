@@ -154,3 +154,48 @@ def test_fails_loudly_when_the_base_ref_cannot_be_resolved(tmp_path):
 
     with pytest.raises(subprocess.CalledProcessError):
         check(GuardContext(base="no-such-ref", repo_root=repo))
+
+
+def _forked_repo(tmp_path: Path) -> tuple[Path, str]:
+    """A fork point with gated ids x and y and a direct-tier marker, on the base branch."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo, "evals/commit/checks.manifest", "x A description\ny B description\n")
+    _write(repo, "evals/commit/marker.txt", "original\n")
+    _write(repo, "evals/commit/deps", 'direct = ["evals/commit/marker.txt"]\ninjection = []\n')
+    _commit(repo, "fork point")
+    return repo, _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+
+
+def test_ok_when_the_pr_retires_an_id_and_only_the_base_branch_moved_the_tier(tmp_path):
+    # The tier hash at the base TIP differs from the PR's, but the PR itself did
+    # not touch the tier -- so removing y here is not a demotion.
+    repo, base_branch = _forked_repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _write(repo, "evals/commit/checks.manifest", "x A description\n")
+    _commit(repo, "pr: retire y")
+    _git(repo, "checkout", "-q", base_branch)
+    _write(repo, "evals/commit/marker.txt", "base moved the tier\n")
+    _commit(repo, "base: edit the tier")
+    _git(repo, "checkout", "-q", "pr")
+
+    results = check(GuardContext(base=base_branch, repo_root=repo))
+
+    assert results == []
+
+
+def test_ok_when_the_pr_edits_the_tier_and_the_base_branch_independently_added_an_id(tmp_path):
+    # The base TIP manifest has z, which the PR's manifest lacks -- but the PR
+    # never had z, so it did not remove anything.
+    repo, base_branch = _forked_repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _write(repo, "evals/commit/marker.txt", "pr edits the tier\n")
+    _commit(repo, "pr: edit the tier")
+    _git(repo, "checkout", "-q", base_branch)
+    _write(repo, "evals/commit/checks.manifest", "x A description\ny B description\nz C description\n")
+    _commit(repo, "base: add z")
+    _git(repo, "checkout", "-q", "pr")
+
+    results = check(GuardContext(base=base_branch, repo_root=repo))
+
+    assert results == []
