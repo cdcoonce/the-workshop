@@ -373,3 +373,57 @@ def test_no_sentence_forbids_the_reader_to_execute() -> None:
     lowered = _flat(COLD_READ.read_text()).lower()
     for phrase in ("never execute", "not execute", "never run code", "read-only"):
         assert phrase not in lowered, f"command.md forbids execution: {phrase!r}"
+
+
+# --- Guard criteria under a teeth check (afk-agent-system#1552) --------------
+
+
+def _detector(n: int) -> str:
+    """Detector n: the text from `\\nn. ` to the next numbered detector,
+    flattened."""
+    text = COLD_READ.read_text()
+    start = text.index(f"\n{n}. **")
+    end = text.index(f"\n{n + 1}. **", start + 1)
+    return _flat(text[start:end])
+
+
+def test_probe_builds_run_the_new_tests_on_the_baseline_of_teeth_checked_repos() -> None:
+    """afk's F3 loop reverts any epoch whose added tests already pass on the
+    base tree, so a reader must measure which new tests are guard tests."""
+    section = _cold_section(PROBE_HEADING)
+    for phrase in (
+        "Baseline run of the new tests (teeth-checked repos)",
+        'autonomy_frontier = "F3"',
+        "`[loop]` table",
+        "ONLY the build's new tests against the UNCHANGED baseline source",
+        "Every new test that passes there is a guard test",
+        "passing test ids",
+    ):
+        assert phrase in section, f"probe builds lacks {phrase!r}"
+
+
+def test_detector_3_rejects_guard_criteria_on_teeth_checked_repos() -> None:
+    """A criterion that requires a test green on the base tree can never land
+    through F3; the fix is a diff-shape check, never a required new test."""
+    detector = _detector(3)
+    for phrase in (
+        "Guard criterion under a teeth check",
+        "can never land",
+        "BLOCKING",
+        "git diff -U0 origin/main...HEAD",
+        "no new test is required: already true on the current tree",
+        "never as a required new test",
+        "must-flip criterion",
+        "hand-built",
+    ):
+        assert phrase in detector, f"detector 3 lacks {phrase!r}"
+
+
+def test_a_build_on_a_teeth_checked_repo_states_the_baseline_run() -> None:
+    section = _cold_section("## Anti-rubber-stamp")
+    for phrase in (
+        "baseline run",
+        "how many new tests it ran and how many passed there (0 required)",
+        "makes the BUILD degraded",
+    ):
+        assert phrase in section, f"anti-rubber-stamp lacks {phrase!r}"
