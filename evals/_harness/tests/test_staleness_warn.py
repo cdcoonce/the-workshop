@@ -160,5 +160,6 @@ def test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises(tmp_
     results = check(GuardContext(base="unused", repo_root=tmp_path))
 
     assert [result.level for result in results] == ["warn"]
+    assert results[0].message.startswith("commit:")
     assert "20260101T000000Z-aaa.json" in results[0].message
     assert bad_date in results[0].message

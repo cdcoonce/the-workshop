@@ -106,6 +106,14 @@
       "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: strptime raises ValueError on 2026-02-30 and a warn-only guard must not crash.",
       "find": "        except ValueError:",
       "replace": "        except KeyError:"
+    },
+    {
+      "label": "invalid-run_date warn drops the skill-name prefix",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: the warning must say which skill it is about.",
+      "find": "                        f\"{skill}: cannot judge staleness; {newest_green_file.name} \"",
+      "replace": "                        f\"cannot judge staleness; {newest_green_file.name} \""
     }
   ]
 }
