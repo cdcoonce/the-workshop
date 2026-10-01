@@ -57,7 +57,7 @@ import importlib.util
 import re
 import sys
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -526,3 +526,64 @@ def score_attempt(
         unmatched = 0
 
     return attempt, unmatched
+
+
+def find_invalid_modes(case_dirs: Iterable[Path]) -> list[tuple[Path, str]]:
+    """Return every case whose ``case.toml`` does not declare a valid ``mode``.
+
+    The committed-case test and its synthetic counterparts both call this, so a
+    defect in the rule is caught by the synthetic cases, not only by a scan of
+    ``evals/``.
+
+    Parameters
+    ----------
+    case_dirs : Iterable[Path]
+        Case directories (each holding a ``case.toml``) to check.
+
+    Returns
+    -------
+    list[tuple[Path, str]]
+        ``(case_dir, problem)`` for each case whose ``case.toml`` is
+        unreadable, unparseable, or whose ``mode`` is missing or not the string
+        ``"subagent"`` / ``"inline"``. Empty when every case is valid.
+    """
+    problems: list[tuple[Path, str]] = []
+    for case_dir in case_dirs:
+        try:
+            case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            problems.append((case_dir, f"case.toml unreadable: {exc}"))
+            continue
+        mode = case_toml.get("mode")
+        if not isinstance(mode, str) or mode not in _VALID_MODES:
+            problems.append((case_dir, f"mode must be one of {sorted(_VALID_MODES)}, got {mode!r}"))
+    return problems
+
+
+def find_duplicate_item_ids(skill_dir: Path) -> set[str]:
+    """Return every ``[[items]]`` id declared more than once under *skill_dir*.
+
+    Item ids share one namespace per skill, because ``checks.manifest`` is per
+    skill: an id repeated across two cases (or inside one) is ambiguous.
+
+    Parameters
+    ----------
+    skill_dir : Path
+        A skill's ``evals/<skill>/`` directory; every ``*/case.toml`` under it
+        is read.
+
+    Returns
+    -------
+    set[str]
+        The ids that appear more than once; empty when all are unique.
+    """
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for case_toml_path in sorted(skill_dir.glob("*/case.toml")):
+        case_toml = tomllib.loads(case_toml_path.read_text(encoding="utf-8"))
+        for item in case_toml.get("items", []):
+            item_id = item["id"]
+            if item_id in seen:
+                duplicates.add(item_id)
+            seen.add(item_id)
+    return duplicates

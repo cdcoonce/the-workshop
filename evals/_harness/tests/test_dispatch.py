@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -22,6 +21,8 @@ from evals._harness.dispatch import (
     PromptPathError,
     build_dispatch_prompt,
     build_no_skill_prompt,
+    find_duplicate_item_ids,
+    find_invalid_modes,
     score_attempt,
     snapshot_end_state,
 )
@@ -39,18 +40,16 @@ def _committed_skill_dirs() -> list[Path]:
     return sorted(p for p in _EVALS_ROOT.iterdir() if p.is_dir() and p.name != "_harness")
 
 
-def _find_duplicate_item_ids(skill_dir: Path) -> set[str]:
-    """Item ids share one namespace per skill (``checks.manifest`` is per skill)."""
-    seen: set[str] = set()
-    duplicates: set[str] = set()
-    for case_toml_path in sorted(skill_dir.glob("*/case.toml")):
-        case_toml = tomllib.loads(case_toml_path.read_text(encoding="utf-8"))
-        for item in case_toml.get("items", []):
-            item_id = item["id"]
-            if item_id in seen:
-                duplicates.add(item_id)
-            seen.add(item_id)
-    return duplicates
+def _assert_case_modes_valid(case_dirs: list[Path]) -> None:
+    """The mode check, as a test would run it: red on any invalid or missing ``mode``."""
+    problems = find_invalid_modes(case_dirs)
+    assert problems == [], problems
+
+
+def _assert_no_duplicate_item_ids(skill_dirs: list[Path]) -> None:
+    """The per-skill id-namespace check, as a test would run it."""
+    for skill_dir in skill_dirs:
+        assert find_duplicate_item_ids(skill_dir) == set(), skill_dir
 
 
 def _write_final_text_transcript(path: Path, final_text: str, model: str = "claude-test") -> None:
@@ -97,9 +96,40 @@ def _write_marker_case(case_dir: Path) -> None:
 
 
 def test_committed_cases_declare_valid_mode():
-    for case_dir in _committed_case_dirs():
-        case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
-        assert case_toml.get("mode") in {"subagent", "inline"}, case_dir
+    _assert_case_modes_valid(_committed_case_dirs())
+
+
+@pytest.mark.parametrize(
+    "case_toml_text",
+    [
+        'prompt = "prompt.md"\n',
+        'mode = "bogus"\nprompt = "prompt.md"\n',
+        'mode = ["subagent"]\nprompt = "prompt.md"\n',
+        'mode = "subagent\n',
+    ],
+    ids=["missing", "bogus", "list", "unparseable"],
+)
+def test_the_committed_case_mode_check_goes_red_on_a_synthetic_bad_case(tmp_path, case_toml_text):
+    """Spec test 1: a synthetic case with a missing or invalid mode turns THE TEST red."""
+    bad_case = tmp_path / "skill-m" / "bad-case"
+    bad_case.mkdir(parents=True)
+    (bad_case / "case.toml").write_text(case_toml_text, encoding="utf-8")
+
+    with pytest.raises(AssertionError):
+        _assert_case_modes_valid([bad_case])
+
+
+def test_the_committed_case_mode_check_stays_green_on_valid_synthetic_cases(tmp_path):
+    case_dirs = []
+    for mode in ("subagent", "inline"):
+        case_dir = tmp_path / "skill-m" / f"case-{mode}"
+        case_dir.mkdir(parents=True)
+        (case_dir / "case.toml").write_text(
+            f'mode = "{mode}"\nprompt = "prompt.md"\n', encoding="utf-8"
+        )
+        case_dirs.append(case_dir)
+
+    _assert_case_modes_valid(case_dirs)
 
 
 def test_missing_mode_is_rejected(tmp_path):
@@ -451,27 +481,52 @@ def test_build_no_skill_prompt_does_not_eat_words_that_merely_contain_the_skill_
 
 
 def test_committed_cases_have_no_duplicate_item_ids_within_a_skill():
-    for skill_dir in _committed_skill_dirs():
-        assert _find_duplicate_item_ids(skill_dir) == set(), skill_dir
+    _assert_no_duplicate_item_ids(_committed_skill_dirs())
 
 
-def test_duplicate_item_id_within_one_skill_across_cases_is_detected(tmp_path):
+def _write_item_ids_case(case_dir: Path, *item_ids: str) -> None:
+    case_dir.mkdir(parents=True)
+    items = "".join(
+        f'\n[[items]]\nid = "{item_id}"\nkind = "trend"\nscorer = "always_true"\n'
+        for item_id in item_ids
+    )
+    (case_dir / "case.toml").write_text(
+        'mode = "subagent"\nprompt = "prompt.md"\n' + items, encoding="utf-8"
+    )
+
+
+def test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red(tmp_path):
+    """Spec test: two synthetic cases sharing an id make THE TEST go red."""
     skill_dir = tmp_path / "skill-y"
-    for case_name in ("case-a", "case-b"):
-        case_dir = skill_dir / case_name
-        case_dir.mkdir(parents=True)
-        (case_dir / "case.toml").write_text(
-            'mode = "subagent"\n'
-            'prompt = "prompt.md"\n'
-            "\n"
-            "[[items]]\n"
-            'id = "shared-id"\n'
-            'kind = "trend"\n'
-            'scorer = "always_true"\n',
-            encoding="utf-8",
-        )
+    _write_item_ids_case(skill_dir / "case-a", "shared-id", "only-a")
+    _write_item_ids_case(skill_dir / "case-b", "shared-id", "only-b")
 
-    assert _find_duplicate_item_ids(skill_dir) == {"shared-id"}
+    assert find_duplicate_item_ids(skill_dir) == {"shared-id"}
+    with pytest.raises(AssertionError):
+        _assert_no_duplicate_item_ids([skill_dir])
+
+
+def test_duplicate_item_id_inside_a_single_case_is_also_a_duplicate(tmp_path):
+    skill_dir = tmp_path / "skill-y"
+    _write_item_ids_case(skill_dir / "case-a", "twice", "twice")
+
+    assert find_duplicate_item_ids(skill_dir) == {"twice"}
+
+
+def test_distinct_item_ids_across_cases_stay_green(tmp_path):
+    skill_dir = tmp_path / "skill-y"
+    _write_item_ids_case(skill_dir / "case-a", "a-1", "a-2")
+    _write_item_ids_case(skill_dir / "case-b", "b-1")
+
+    assert find_duplicate_item_ids(skill_dir) == set()
+    _assert_no_duplicate_item_ids([skill_dir])
+
+
+def test_the_same_item_id_in_two_different_skills_is_not_a_duplicate(tmp_path):
+    _write_item_ids_case(tmp_path / "skill-1" / "case-a", "shared-id")
+    _write_item_ids_case(tmp_path / "skill-2" / "case-a", "shared-id")
+
+    _assert_no_duplicate_item_ids([tmp_path / "skill-1", tmp_path / "skill-2"])
 
 
 # ---------------------------------------------------------------------------

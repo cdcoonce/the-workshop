@@ -37,8 +37,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_missing_mode_is_rejected and test_invalid_mode_is_rejected: with the check dropped, a case.toml with a missing or bogus mode no longer raises.",
-      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:",
-      "replace": "    if False:"
+      "find": "    mode = case_toml.get(\"mode\")\n    if not isinstance(mode, str) or mode not in _VALID_MODES:",
+      "replace": "    mode = case_toml.get(\"mode\")\n    if False:"
     },
     {
       "label": "build_dispatch_prompt reads and appends acceptance.md",
@@ -103,14 +103,6 @@
       "why": "Killed by test_snapshot_end_state_then_rescore_from_raws_matches_the_live_score: an end-state-based scorer would always see an empty end_state and miss.",
       "find": "        end_state=_load_end_state(end_state_dir),",
       "replace": "        end_state={},"
-    },
-    {
-      "label": "duplicate item-id detection disabled",
-      "file": "test_dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_duplicate_item_id_within_one_skill_across_cases_is_detected: two cases sharing an item id within one skill would no longer be flagged.",
-      "find": "            if item_id in seen:\n                duplicates.add(item_id)",
-      "replace": "            pass"
     },
     {
       "label": "build_no_skill_prompt stops removing the skill reference",
@@ -245,8 +237,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_a_non_string_mode_is_a_value_error_like_any_other_bad_mode: mode = [\"subagent\"] would raise TypeError (unhashable list), not ValueError.",
-      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:",
-      "replace": "    if mode not in _VALID_MODES:"
+      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:\n        raise CaseContractError(",
+      "replace": "    if mode not in _VALID_MODES:\n        raise CaseContractError("
     },
     {
       "label": "item 'params' type check dropped",
@@ -295,6 +287,46 @@
       "why": "Killed by test_inline_with_no_transcripts_is_indeterminate: an attempt that produced no transcript at all would be scored.",
       "find": "        return \"missing\"",
       "replace": "        return \"complete\""
+    },
+    {
+      "label": "[T4] find_duplicate_item_ids never reports a duplicate",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: two synthetic cases sharing an id would no longer turn the committed-case test red (the rule's logic lives in dispatch.py, so this mutant is in the rule itself, not the test).",
+      "find": "            if item_id in seen:\n                duplicates.add(item_id)",
+      "replace": "            seen.add(item_id)"
+    },
+    {
+      "label": "[T4] find_invalid_modes never reports an invalid mode",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_committed_case_mode_check_goes_red_on_a_synthetic_bad_case (missing, bogus, list): a synthetic case with a missing or invalid mode would no longer turn the committed-case mode test red.",
+      "find": "        mode = case_toml.get(\"mode\")\n        if not isinstance(mode, str) or mode not in _VALID_MODES:",
+      "replace": "        mode = case_toml.get(\"mode\")\n        if False:"
+    },
+    {
+      "label": "find_invalid_modes skips an unparseable case.toml instead of reporting it",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'unparseable' case of test_the_committed_case_mode_check_goes_red_on_a_synthetic_bad_case.",
+      "find": "            problems.append((case_dir, f\"case.toml unreadable: {exc}\"))\n            continue",
+      "replace": "            continue"
+    },
+    {
+      "label": "find_duplicate_item_ids stops counting a repeat inside one case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_inside_a_single_case_is_also_a_duplicate.",
+      "find": "        for item in case_toml.get(\"items\", []):\n            item_id = item[\"id\"]\n            if item_id in seen:\n                duplicates.add(item_id)\n            seen.add(item_id)",
+      "replace": "        ids = {item[\"id\"] for item in case_toml.get(\"items\", [])}\n        duplicates |= ids & seen\n        seen |= ids"
+    },
+    {
+      "label": "find_duplicate_item_ids namespace shrinks from per-skill to per-case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: ids are one namespace per skill (checks.manifest is per skill), so a repeat in a sibling case must be reported.",
+      "find": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        case_toml = tomllib",
+      "replace": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        seen = set()\n        case_toml = tomllib"
     },
     {
       "label": "[control] reword the Evidence docstring",
