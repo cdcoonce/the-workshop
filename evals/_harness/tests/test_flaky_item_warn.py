@@ -128,16 +128,38 @@ def test_no_result_with_a_single_flaky_run_only(tmp_path):
 
 
 def test_ignores_runs_older_than_the_last_three(tmp_path):
+    # The OLDEST runs are flaky and the latest three are clean, so slicing the
+    # wrong end of the history (the oldest three) flips the outcome to a warn.
     _gate(tmp_path, _ITEM)
     runs_dir = tmp_path / "evals" / "commit" / "runs"
-    _write_run(runs_dir, "20251230T000000Z-zzz.json", _run("2025-12-30", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20251229T000000Z-xxx.json", _run("2025-12-29", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20251230T000000Z-yyy.json", _run("2025-12-30", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20251231T000000Z-zzz.json", _run("2025-12-31", {_ITEM: ["miss"]}))
     _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["hit"]}))
     _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["hit"]}))
-    _write_run(runs_dir, "20260103T000000Z-ccc.json", _run("2026-01-03", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20260103T000000Z-ccc.json", _run("2026-01-03", {_ITEM: ["hit"]}))
 
     results = check(GuardContext(base="unused", repo_root=tmp_path))
 
     assert results == []
+
+
+def test_warns_on_the_most_recent_three_runs_when_the_oldest_are_clean(tmp_path):
+    # Mirror of the case above: clean oldest runs, flaky latest three.
+    _gate(tmp_path, _ITEM)
+    runs_dir = tmp_path / "evals" / "commit" / "runs"
+    _write_run(runs_dir, "20251229T000000Z-xxx.json", _run("2025-12-29", {_ITEM: ["hit"]}))
+    _write_run(runs_dir, "20251230T000000Z-yyy.json", _run("2025-12-30", {_ITEM: ["hit"]}))
+    _write_run(runs_dir, "20251231T000000Z-zzz.json", _run("2025-12-31", {_ITEM: ["hit"]}))
+    _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["miss", "hit"]}))
+    _write_run(runs_dir, "20260103T000000Z-ccc.json", _run("2026-01-03", {_ITEM: ["hit"]}))
+
+    results = check(GuardContext(base="unused", repo_root=tmp_path))
+
+    assert len(results) == 1
+    assert results[0].level == "warn"
+    assert "2 of its last 3 runs" in results[0].message
 
 
 def test_only_counts_runs_where_the_item_is_present(tmp_path):
