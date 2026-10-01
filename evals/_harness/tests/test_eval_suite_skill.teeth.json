@@ -85,7 +85,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_assigns_lens_agent_dispatch_to_the_conductor_for_inline_mode: the conductor's lens-agent dispatch responsibility is gone from section 3.",
-      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, and collects one transcript per lens agent.",
+      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
       "replace": "- `mode = \"inline\"`: skip"
     },
     {
@@ -121,20 +121,100 @@
       "replace": "The run is not landed."
     },
     {
-      "label": "run-file step no longer names ledger.write_run",
+      "label": "run-file step no longer names ledger.write_run(runs_dir, run, raw_sources)",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
-      "find": "- Write the run file, plus every attempt's raws (including its `end_state/`\n  snapshot), with `evals._harness.ledger.write_run(runs_dir, run, raw_sources)`.",
-      "replace": "- Write the run file by hand."
+      "find": "`evals._harness.ledger.write_run(runs_dir, run, raw_sources)`, where",
+      "replace": "`write_run`, where"
     },
     {
       "label": "red report step no longer calls report.write_report",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
-      "find": "- If the run's verdict is `\"red\"`, write the report with\n  `evals._harness.report.write_report(run_file)`.",
+      "find": "- If the run's verdict is `\"red\"`, write the report with\n  `evals._harness.report.write_report(run_file)`, where `run_file` is the\n  path `write_run` returned.",
       "replace": "- If the run's verdict is `\"red\"`, do nothing."
+    },
+    {
+      "label": "[S1a] run dict's verdict is no longer said to come from compute_verdict",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_verdict_comes_from_compute_verdict.",
+      "find": "- `run[\"verdict\"]` is the result of `compute_verdict` (step 5): `\"green\"`,\n  `\"red\"`, or `\"void\"`.",
+      "replace": "- `run[\"verdict\"]` is `\"green\"`, `\"red\"`, or `\"void\"`."
+    },
+    {
+      "label": "[S1a] run dict's fingerprint is no longer said to come from compute_fingerprint",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_fingerprint_comes_from_compute_fingerprint.",
+      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\n  injection_paths=..., plugin_version=..., claude_code_version=...,\n  run_date=...)`, where",
+      "replace": "- `run[\"fingerprint\"]` is built by hand, where"
+    },
+    {
+      "label": "[S1a] runs_dir no longer pinned to evals/<skill>/runs/",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_runs_dir_is_the_skills_runs_directory.",
+      "find": "`runs_dir` is `evals/<skill>/runs/`",
+      "replace": "`runs_dir` is any directory"
+    },
+    {
+      "label": "[S1a] run-dict key 'unmatched_findings' undocumented",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_names_every_run_file_key_the_schema_requires: a key the schema requires is no longer named in the run-file section.",
+      "find": "`unmatched_findings` (the\n  second member of the tuple `score_attempt` returned)",
+      "replace": "`unmatched_count` (the\n  second member of the tuple `score_attempt` returned)"
+    },
+    {
+      "label": "[S1a] model_ids said to be supplied by the conductor",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_write_run_computes_model_ids_and_rewrites_raw.",
+      "find": "`model_ids`, but it is computed by\n  `write_run` from the case's raw transcripts, so leave it out.",
+      "replace": "`model_ids`, which you must supply\n  from each transcript."
+    },
+    {
+      "label": "[S1b] raw layout moves transcripts into a subdirectory",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_raw_directory_layout.",
+      "find": "its transcripts as `*.jsonl`\nfiles at that directory's root, beside the `end_state/` snapshot directory\nfrom step 4. `ledger.write_run` globs `*.jsonl` at that root to compute\n`model_ids`, so a transcript placed in a subdirectory is never seen.",
+      "replace": "its transcripts in a\n`transcripts/` subdirectory, beside the `end_state/` snapshot directory\nfrom step 4."
+    },
+    {
+      "label": "[S1c] inline lens agents no longer told to get build_dispatch_prompt's text",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_tells_the_inline_conductor_to_hand_lens_agents_the_built_prompt.",
+      "find": "  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
+      "replace": "  conversation, and\n  collects one transcript per lens agent."
+    },
+    {
+      "label": "[S1d] conductor no longer told to stop at 2 reserve draws",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_conductor_enforces_the_reserve_because_should_retry_does_not.",
+      "find": "The\nconductor must stop drawing reserve attempts itself once `reserve_used`\nreaches 2:",
+      "replace": "The\nretry loop stops on its own once reserve is used up:"
+    },
+    {
+      "label": "[S1e] a fixture is every case directory directly under evals/<skill>/ again",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_defines_a_fixture_as_a_directory_containing_case_toml.",
+      "find": "Every directory under `evals/<skill>/` that contains a `case.toml` is one\nfixture (`evals/<skill>/<case>/`).",
+      "replace": "Every case directory directly under `evals/<skill>/` is one fixture."
+    },
+    {
+      "label": "[S1f] manifest parsed by hand instead of parse_checks_manifest",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_names_the_manifest_parser.",
+      "find": "Parse the file with `evals._harness.activation.parse_checks_manifest(text)`\n(it takes the file's text and returns the gated ids in file order), rather\nthan hand-parsing it:",
+      "replace": "Parse the file by hand:"
     },
     {
       "label": "[control] reword the skill's intro sentence",

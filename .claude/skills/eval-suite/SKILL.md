@@ -53,7 +53,11 @@ other rostered skill.
 
 ## 1. Enumerate and prepare the skill's fixtures
 
-Every case directory directly under `evals/<skill>/` is one fixture. For each:
+Every directory under `evals/<skill>/` that contains a `case.toml` is one
+fixture (`evals/<skill>/<case>/`). Nothing else there is a fixture: `runs/`,
+`deps`, `checks.manifest`, `gaps.md`, and `retired.md` also live in
+`evals/<skill>/`, so list fixtures by the presence of `case.toml`, never by
+listing every entry. For each fixture:
 
 1. Read `case.toml` to find its dispatch mode (`subagent` or `inline`) and
    its fixture source.
@@ -76,6 +80,13 @@ gated iff its id appears there; every item whose id is absent is a trend
 item. The conductor is the only reader of this file — the scorer
 (`evals._harness.scorer`) never reads it itself.
 
+Parse the file with `evals._harness.activation.parse_checks_manifest(text)`
+(it takes the file's text and returns the gated ids in file order), rather
+than hand-parsing it: it owns the comment, blank-line, and id-grammar rules.
+Every case of the skill shares this one gated set, because item ids are one
+namespace per skill; `score_attempt` ignores ids that belong to a sibling
+case.
+
 This gated/trend split is used in three places once derived:
 
 - passed as `score_attempt`'s `gated_ids` argument;
@@ -95,7 +106,9 @@ This gated/trend split is used in three places once derived:
   inline. The conductor plays adversarial-review's own conductor role
   itself — it does not dispatch a subagent that then dispatches lens
   agents. It dispatches each lens agent directly, from the same running
-  conversation, and collects one transcript per lens agent.
+  conversation, giving each the prompt text
+  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and
+  collects one transcript per lens agent.
 
 Every case is a single prompt with zero user turns, regardless of mode.
 
@@ -136,21 +149,79 @@ counted_attempts; it is replaced from the reserve instead. `should_retry`
 returns `False` once counted_attempts reaches 3, or once
 counted_attempts + reserve_used reaches 5 — whichever comes first. 5 is
 therefore the hard execution cap per fixture (3 counted plus, at most, 2
-reserve draws).
+reserve draws — the conductor enforces the 2, see below).
 
-Once the loop ends (every gated item met, or `should_retry` returned
-`False`), compute the fixture's verdict with
-`evals._harness.scorer.compute_verdict(items)`, where `items` maps each
-item id to `(gated, outcomes)` — `outcomes` being one
+`should_retry` does not enforce the reserve size: it bounds only
+`counted_attempts + reserve_used` (at 5), never `reserve_used` itself
+(`should_retry({"a": False}, 0, 4)` is `True`). The
+conductor must stop drawing reserve attempts itself once `reserve_used`
+reaches 2: a third indeterminate attempt is not replaced, and the fixture's
+unresolved gated items end void. Increment `reserve_used` each time an
+indeterminate attempt is replaced, and never call `should_retry` with a
+`reserve_used` above 2.
+
+Once every fixture's loop has ended (every gated item met, or `should_retry`
+returned `False`), compute the run's verdict with
+`evals._harness.scorer.compute_verdict(items)`, called once with every case's
+items merged into one mapping (ids are unique per skill, so they cannot
+collide; this is the same as taking each case's verdict and letting red beat
+void beat green). `items` maps each item id to `(gated, outcomes)` —
+`gated` from step 2, and `outcomes` being one
 `"hit"`/`"miss"`/`"indeterminate"` per execution, accumulated by the
-conductor across every attempt of that fixture.
+conductor across every attempt of that item's fixture (each attempt's
+`Attempt.item_hits[item_id]`, in execution order). The result is the run's
+`verdict` (see step 6).
 
 ## 6. Write the run file and, on red, the report
 
-- Write the run file, plus every attempt's raws (including its `end_state/`
-  snapshot), with `evals._harness.ledger.write_run(runs_dir, run, raw_sources)`.
+Build one `run` dict for the whole run, then write it. Its shape is the one
+`evals/_harness/schemas/run-file.schema.json` validates:
+
+- `run` has the keys `skill` (the skill name), `verdict`, `fingerprint`,
+  `tokens` (an integer: the total tokens the run spent), `wall_time_s` (a
+  number: the run's wall-clock seconds), and `cases`.
+- `run["verdict"]` is the result of `compute_verdict` (step 5): `"green"`,
+  `"red"`, or `"void"`.
+- `run["fingerprint"]` is
+  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,
+  injection_paths=..., plugin_version=..., claude_code_version=...,
+  run_date=...)`, where `direct_paths` and `injection_paths` are the
+  `"direct"` and `"injection"` lists that
+  `evals._harness.deps.parse_deps(<text of evals/<skill>/deps>)` returns,
+  `plugin_version` is the shipping plugin's version, `claude_code_version` is
+  the Claude Code version the run executed under, and `run_date` is
+  `YYYY-MM-DD`.
+- `run["cases"]` has one entry per fixture, with the keys `case` (the case
+  directory's name), `fixture_fingerprint` (from step 1), `gated_items` (the
+  list of that case's gated item ids from step 2, recorded verbatim), and
+  `attempts`. The schema also requires `model_ids`, but it is computed by
+  `write_run` from the case's raw transcripts, so leave it out.
+- `attempts` has one entry per execution, counted or not, in order: `attempt`
+  (the 1-based execution number within the case), `classification` (from
+  `Attempt.classification`), `items` (from `Attempt.item_hits`: every item
+  id of the case mapped to `"hit"`, `"miss"`, or `"indeterminate"`),
+  `parse_error` (from `Attempt.parse_error`), `unmatched_findings` (the
+  second member of the tuple `score_attempt` returned), `reserve_used` (the
+  running count of reserve draws once this attempt is recorded, the same
+  value you hand `should_retry`), and `raw` (any string you choose; it is
+  only the key into `raw_sources`).
+
+Collect each attempt's raws in one directory: its transcripts as `*.jsonl`
+files at that directory's root, beside the `end_state/` snapshot directory
+from step 4. `ledger.write_run` globs `*.jsonl` at that root to compute
+`model_ids`, so a transcript placed in a subdirectory is never seen.
+
+Then write the run file, plus every attempt's raws (including its
+`end_state/` snapshot), with
+`evals._harness.ledger.write_run(runs_dir, run, raw_sources)`, where
+`runs_dir` is `evals/<skill>/runs/` and `raw_sources` maps each attempt's
+`raw` key to that attempt's raw directory. `write_run` overwrites each `raw`
+with its own `<stem>/<case>/attempt-<n>/` path, refuses to overwrite an
+existing run file, and returns the written run file's path.
+
 - If the run's verdict is `"red"`, write the report with
-  `evals._harness.report.write_report(run_file)`.
+  `evals._harness.report.write_report(run_file)`, where `run_file` is the
+  path `write_run` returned.
 
 This skill documents calling these entry points; it does not reimplement
 any of them, and it never edits `scorer.py`, `ledger.py`, `report.py`, or
@@ -175,3 +246,6 @@ inside this skill.
 | `calibration.fixture_fingerprint` | #994 | Fingerprints a case's fixture before its first attempt. |
 | `ledger.write_run` | #993 | Writes the run file and every attempt's raws. |
 | `report.write_report` | #993 | Writes the red-run report. |
+| `activation.parse_checks_manifest` | harness | Parses `checks.manifest` text into the gated ids (step 2). |
+| `deps.parse_deps` | harness | Parses a skill's `deps` file into the direct and injection path lists (step 6). |
+| `fingerprint.compute_fingerprint` | harness | Builds `run["fingerprint"]` (step 6). |

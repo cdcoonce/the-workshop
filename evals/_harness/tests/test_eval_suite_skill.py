@@ -8,11 +8,16 @@ acceptance criteria require it to cover — they never invoke the skill.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 _SKILL_PATH = (
     Path(__file__).resolve().parents[3] / ".claude" / "skills" / "eval-suite" / "SKILL.md"
+)
+
+_RUN_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[1] / "schemas" / "run-file.schema.json"
 )
 
 _REQUIRED_ENTRY_POINTS = {
@@ -207,3 +212,93 @@ def test_skill_states_it_executes_nothing_itself_and_is_never_run_by_afk_or_ci()
 def test_skill_front_matter_names_the_skill():
     text = _skill_text()
     assert re.match(r"---\nname: eval-suite\n", text)
+
+
+# ---------------------------------------------------------------------------
+# what a conductor needs in order to build the run file without guessing
+# ---------------------------------------------------------------------------
+
+
+def _backticked_names(section: str) -> set[str]:
+    return set(re.findall(r"`([A-Za-z_][A-Za-z0-9_.\[\]]*)`", section))
+
+
+def test_skill_names_every_run_file_key_the_schema_requires():
+    schema = json.loads(_RUN_SCHEMA_PATH.read_text(encoding="utf-8"))
+    case_schema = schema["properties"]["cases"]["items"]
+    attempt_schema = case_schema["properties"]["attempts"]["items"]
+    required = (
+        set(schema["required"]) | set(case_schema["required"]) | set(attempt_schema["required"])
+    )
+    documented = _backticked_names(_section("6"))
+    assert required - documented == set()
+
+
+def test_skill_says_write_run_computes_model_ids_and_rewrites_raw():
+    section = _section("6")
+    assert re.search(r"`model_ids`.{0,120}computed by\s*`write_run`", section)
+    assert re.search(r"`raw`.{0,160}key into `raw_sources`", section)
+    assert re.search(r"`write_run` .{0,40}overwrites? .{0,40}`raw`", section)
+
+
+def test_skill_says_runs_dir_is_the_skills_runs_directory():
+    assert re.search(r"`runs_dir` is `evals/<skill>/runs/`", _section("6"))
+
+
+def test_skill_says_the_fingerprint_comes_from_compute_fingerprint():
+    section = _section("6")
+    assert "evals._harness.fingerprint.compute_fingerprint(" in section
+    assert re.search(r"`run\[\"fingerprint\"\]`", section)
+    for keyword in ("direct_paths", "injection_paths", "plugin_version", "claude_code_version", "run_date"):
+        assert f"{keyword}=" in section, keyword
+    assert "evals._harness.deps.parse_deps" in section
+
+
+def test_skill_says_the_verdict_comes_from_compute_verdict():
+    section = _section("6")
+    assert re.search(r"`run\[\"verdict\"\]` is the result of `compute_verdict`", section)
+
+
+def test_skill_maps_each_attempt_field_to_its_source():
+    section = _section("6")
+    assert re.search(r"`items`.{0,80}`Attempt.item_hits`", section)
+    assert re.search(r"`classification`.{0,80}`Attempt.classification`", section)
+    assert re.search(r"`parse_error`.{0,80}`Attempt.parse_error`", section)
+    assert re.search(r"`unmatched_findings`.{0,100}second", section)
+    assert re.search(r"`attempt`.{0,100}1-based", section)
+    assert re.search(r"`reserve_used`.{0,160}running (?:count|total)", section)
+
+
+def test_skill_states_the_raw_directory_layout():
+    section = _section("6")
+    assert re.search(r"transcripts?.{0,60}`\*\.jsonl`.{0,80}root", section)
+    assert re.search(r"beside .{0,30}`end_state/`", section)
+    assert re.search(r"`ledger.write_run` globs `\*\.jsonl` at that root to compute `model_ids`", section)
+
+
+def test_skill_tells_the_inline_conductor_to_hand_lens_agents_the_built_prompt():
+    section = _section("3")
+    inline = section[section.index('`mode = "inline"`'):]
+    assert re.search(r"lens agent.{0,200}build_dispatch_prompt\(case_dir\)", inline)
+
+
+def test_skill_says_the_conductor_enforces_the_reserve_because_should_retry_does_not():
+    section = _section("5")
+    assert re.search(r"`should_retry` does not enforce the reserve", section)
+    assert re.search(r"conductor (?:itself )?must stop", section)
+    assert re.search(r"reserve_used.{0,60}(?:reaches|is) 2", section)
+
+
+def test_skill_defines_a_fixture_as_a_directory_containing_case_toml():
+    section = _section("1")
+    assert re.search(
+        r"every directory under `evals/<skill>/` that contains a `case.toml`", section, re.IGNORECASE
+    )
+    assert "directly under" not in section
+    assert re.search(r"`runs/`", section)
+
+
+def test_skill_names_the_manifest_parser():
+    section = _section("2")
+    assert "evals._harness.activation.parse_checks_manifest(text)" in section
+    assert re.search(r"rather than hand-parsing it", section)
