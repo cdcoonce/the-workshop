@@ -33,24 +33,48 @@
       "file": "../tests/test_ci_workflow_paths.py",
       "oracle": "real",
       "why": "Killed by test_detects_a_paths_trigger_key and test_detects_a_paths_ignore_trigger_key: a no-op detector would never flag a real path filter, defeating the whole check.",
-      "find": "    return bool(_PATH_FILTER_KEY_PATTERN.search(text))",
+      "find": "    return bool(_PATH_FILTER_KEY_PATTERN.search(_strip_comments(text)))",
       "replace": "    return False"
     },
     {
       "label": "_PATH_FILTER_KEY_PATTERN drops the paths-ignore alternative",
       "file": "../tests/test_ci_workflow_paths.py",
       "oracle": "real",
-      "why": "Killed by test_detects_a_paths_ignore_trigger_key.",
-      "find": "r\"^\\s*paths(-ignore)?\\s*:\"",
-      "replace": "r\"^\\s*paths\\s*:\""
+      "why": "Killed by test_detects_every_yaml_spelling_of_a_path_filter_key[flow-after-comma] and the block paths-ignore cases, and test_detects_a_paths_ignore_trigger_key.",
+      "find": "paths(?:-ignore)?",
+      "replace": "paths"
     },
     {
-      "label": "_PATH_FILTER_KEY_PATTERN drops the line-start anchor, matching any substring",
+      "label": "_PATH_FILTER_KEY_PATTERN drops the boundary before the key, matching any substring",
       "file": "../tests/test_ci_workflow_paths.py",
       "oracle": "real",
-      "why": "Killed by test_does_not_flag_an_unrelated_paths_substring: without the anchor, casual prose mentioning 'paths' would false-positive as a trigger key.",
-      "find": "r\"^\\s*paths(-ignore)?\\s*:\", re.MULTILINE",
-      "replace": "r\"paths(-ignore)?\\s*:\", re.MULTILINE"
+      "why": "Killed by test_does_not_flag_text_that_is_not_a_path_filter_key[key-merely-ending-in-paths]: without a line-start/whitespace/flow boundary, `filepaths:` would false-positive as a trigger key.",
+      "find": "(?:^|[\\s{,\\[])",
+      "replace": ""
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the flow-mapping boundary characters",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by the flow-mapping-after-brace, flow-after-comma and fully-flow-style spellings: `{paths: [a]}` and `,paths-ignore:` have no whitespace before the key.",
+      "find": "(?:^|[\\s{,\\[])",
+      "replace": "(?:^|\\s)"
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the optional quotes around the key",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by the double-quoted-key and single-quoted-key spellings.",
+      "find": "[\\\"']?paths(?:-ignore)?[\\\"']?",
+      "replace": "paths(?:-ignore)?"
+    },
+    {
+      "label": "_has_path_filter_key searches the text without stripping comments first",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_flag_text_that_is_not_a_path_filter_key[comment-line], [indented-comment] and [trailing-comment]: `# paths: x` has whitespace before `paths:` so the boundary alone cannot reject it.",
+      "find": "search(_strip_comments(text))",
+      "replace": "search(text)"
     },
     {
       "label": "[control] reword the module docstring",
