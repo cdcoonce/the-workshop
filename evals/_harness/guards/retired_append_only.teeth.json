@@ -89,8 +89,16 @@
       "file": "./retired_append_only.py",
       "oracle": "real",
       "why": "Killed by test_reads_base_content_at_the_merge_base_not_the_base_tip: a base branch that moved on after the fork must not read as the PR undoing its changes.",
-      "find": "    base_ref = merge_base(ctx.repo_root, ctx.base)",
-      "replace": "    base_ref = ctx.base"
+      "find": "        [\"git\", \"-C\", str(ctx.repo_root), \"merge-base\", ctx.base, \"HEAD\"],",
+      "replace": "        [\"git\", \"-C\", str(ctx.repo_root), \"rev-parse\", ctx.base],"
+    },
+    {
+      "label": "merge-base resolution swallows an unresolvable base ref instead of failing",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_loudly_when_the_base_ref_cannot_be_resolved: an unresolvable base must raise, not read as 'file absent at base', which silently passes this guard.",
+      "find": "check=True,\n    ).stdout.strip()",
+      "replace": "check=False,\n    ).stdout.strip()"
     }
   ]
 }

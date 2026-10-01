@@ -22,17 +22,28 @@ imported from ``evals._harness.activation`` (owned by #996).
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 from evals._harness.activation import ROSTERED_SKILLS, parse_checks_manifest, parse_retired_entries
 from evals._harness.guards import GuardContext, Result
-from evals._harness.guards.base_ref import merge_base, show_at
 
 _GUARD_NAME = "retirement_entry"
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _REASON_PATTERN = re.compile(
     r"^(noise|upkeep|removed-by-design|superseded-by:[A-Za-z0-9][A-Za-z0-9._-]*)$"
 )
+
+
+def _show_at(repo_root: Path, ref: str, rel_path: str) -> str:
+    """Return *rel_path*'s text at the resolved commit *ref*, or "" if absent there."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "show", f"{ref}:{rel_path}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else ""
 
 
 def _read_at_head(repo_root: Path, rel_path: str) -> str:
@@ -63,18 +74,27 @@ def check(ctx: GuardContext) -> list[Result]:
         One ``fail`` per gated ID removed from a skill's manifest without a
         valid, newly-added ``retired.md`` entry for it in the same diff.
     """
-    base_ref = merge_base(ctx.repo_root, ctx.base)
+    # Three-dot semantics: read base-side content at the merge-base of the base
+    # ref and HEAD, not the base tip, so a base branch that moved on after the
+    # fork never reads as the PR undoing its changes. check=True: an
+    # unresolvable base raises instead of reading as "absent at base".
+    merge_base = subprocess.run(
+        ["git", "-C", str(ctx.repo_root), "merge-base", ctx.base, "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     results: list[Result] = []
     for skill in ROSTERED_SKILLS:
         manifest_rel = f"evals/{skill}/checks.manifest"
-        base_ids = set(parse_checks_manifest(show_at(ctx.repo_root, base_ref, manifest_rel)))
+        base_ids = set(parse_checks_manifest(_show_at(ctx.repo_root, merge_base, manifest_rel)))
         head_ids = set(parse_checks_manifest(_read_at_head(ctx.repo_root, manifest_rel)))
         removed_ids = base_ids - head_ids
         if not removed_ids:
             continue
 
         retired_rel = f"evals/{skill}/retired.md"
-        base_entries = parse_retired_entries(show_at(ctx.repo_root, base_ref, retired_rel))
+        base_entries = parse_retired_entries(_show_at(ctx.repo_root, merge_base, retired_rel))
         head_entries = parse_retired_entries(_read_at_head(ctx.repo_root, retired_rel))
 
         new_entries_by_id: dict[str, list[dict[str, str]]] = {}
