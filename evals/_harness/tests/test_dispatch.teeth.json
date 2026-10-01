@@ -85,7 +85,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_score_attempt_hits_via_synthetic_predicate: every item would score a miss regardless of the transcript.",
-      "find": "    if status == \"complete\":\n        item_hits = {\n            item[\"id\"]: bool(scorers[item[\"id\"]](evidence, **item.get(\"params\", {})))\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
+      "find": "    if status == \"complete\":\n        item_hits = {\n            item[\"id\"]: _run_scorer(case_dir, item, scorers[item[\"id\"]], evidence)\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
       "replace": "    item_hits = {item[\"id\"]: False for item in items}"
     },
     {
@@ -93,8 +93,8 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_score_attempt_counts_unmatched_findings_for_findings_envelope_case: the unrelated bar.py finding would no longer count as unmatched.",
-      "find": "    if uses_findings_envelope:\n        review_item_params = [\n            item[\"params\"]\n            for item in items\n            if isinstance(item.get(\"params\"), dict)\n            and \"file_suffix\" in item[\"params\"]\n            and \"regex\" in item[\"params\"]\n        ]\n        unmatched = count_unmatched(findings, review_item_params)\n    else:\n        unmatched = 0",
-      "replace": "    unmatched = 0"
+      "find": "        try:\n            unmatched = count_unmatched(findings, review_item_params)\n        except Exception as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting unmatched findings failed ({type(exc).__name__}: {exc}); \"\n                \"check the review items' file_suffix/regex params\"\n            ) from exc\n    else:\n        unmatched = 0",
+      "replace": "        unmatched = 0\n    else:\n        unmatched = 0"
     },
     {
       "label": "score_attempt never loads end-state evidence",
@@ -167,14 +167,6 @@
       "why": "Killed by the 'Tests.MD' case: on a case-insensitive filesystem that name is tests.md.",
       "find": "    if name.casefold() == \"tests.md\":",
       "replace": "    if name == \"tests.md\":"
-    },
-    {
-      "label": "snapshot_end_state writes through a symlinked file in dest",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_snapshot_end_state_refuses_to_write_through_a_symlinked_file_in_dest and the dangling-symlink variant.",
-      "find": "        if (dest / name).is_symlink():",
-      "replace": "        if False:"
     },
     {
       "label": "snapshot_end_state accepts a symlinked dest",
@@ -277,16 +269,16 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_duplicate_item_id_inside_a_single_case_is_also_a_duplicate.",
-      "find": "        for item in case_toml.get(\"items\", []):\n            item_id = item[\"id\"]\n            if item_id in seen:\n                duplicates.add(item_id)\n            seen.add(item_id)",
-      "replace": "        ids = {item[\"id\"] for item in case_toml.get(\"items\", [])}\n        duplicates |= ids & seen\n        seen |= ids"
+      "find": "        for item in items:\n            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):\n                raise CaseContractError(f\"{case_name}: an [[items]] table has no string 'id'\")\n            item_id = item[\"id\"]\n            if item_id in seen:\n                duplicates.add(item_id)\n            seen.add(item_id)",
+      "replace": "        seen_before = set(seen)\n        for item in items:\n            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):\n                raise CaseContractError(f\"{case_name}: an [[items]] table has no string 'id'\")\n            item_id = item[\"id\"]\n            if item_id in seen_before:\n                duplicates.add(item_id)\n            seen.add(item_id)"
     },
     {
       "label": "find_duplicate_item_ids namespace shrinks from per-skill to per-case",
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: ids are one namespace per skill (checks.manifest is per skill), so a repeat in a sibling case must be reported.",
-      "find": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        case_toml = tomllib",
-      "replace": "    for case_toml_path in sorted(skill_dir.glob(\"*/case.toml\")):\n        seen = set()\n        case_toml = tomllib"
+      "find": "        case_name = case_toml_path.parent.name\n",
+      "replace": "        case_name = case_toml_path.parent.name\n        seen = set()\n"
     },
     {
       "label": "build_no_skill_prompt stops removing the skill reference",
@@ -519,6 +511,222 @@
       "why": "Killed by test_markdown_and_text_prompts_are_accepted (PROMPT.MD).",
       "find": "        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:",
       "replace": "        if candidate.suffix not in _PROMPT_SUFFIXES:"
+    },
+    {
+      "label": "[Q3] transcript_status override validation dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_dispatch_error_is_an_allowed_transcript_status_override and the forced-complete test: a forced 'complete' over no transcripts would run scorers that index transcripts[0].",
+      "find": "    if transcript_status not in (None, \"dispatch_error\"):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[S1] scorers run even when the attempt is not complete",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dispatch_error_attempt_with_no_transcripts_is_indeterminate_and_runs_no_scorer and test_scorers_are_never_called_on_an_incomplete_attempt.",
+      "find": "    if status == \"complete\":\n        item_hits = {",
+      "replace": "    if True:\n        item_hits = {"
+    },
+    {
+      "label": "[S2] transcript_status override ignored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dispatch_error_override_wins_over_a_complete_transcript.",
+      "find": "    status = transcript_status if transcript_status is not None else _combined_status(transcripts)",
+      "replace": "    status = _combined_status(transcripts)"
+    },
+    {
+      "label": "[S3] item params are not passed to the scorer",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_hits_via_synthetic_predicate (the marker param).",
+      "find": "bool(scorer(evidence, **item.get(\"params\", {})))",
+      "replace": "bool(scorer(evidence))"
+    },
+    {
+      "label": "[S4] envelope parsing always on",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_envelope_findings_turns_on_envelope_parsing.",
+      "find": "    uses_findings_envelope = case_toml.get(\"envelope\") == \"findings\"",
+      "replace": "    uses_findings_envelope = True"
+    },
+    {
+      "label": "[S4] envelope parsing always off",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the findings-envelope parse-failure test.",
+      "find": "    uses_findings_envelope = case_toml.get(\"envelope\") == \"findings\"",
+      "replace": "    uses_findings_envelope = False"
+    },
+    {
+      "label": "[S5] review-item filter accepts an item with only one of file_suffix/regex",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_items_with_both_file_suffix_and_regex_params_feed_the_unmatched_count.",
+      "find": "            and \"file_suffix\" in item[\"params\"]\n            and \"regex\" in item[\"params\"]",
+      "replace": "            and (\"file_suffix\" in item[\"params\"]\n            or \"regex\" in item[\"params\"])"
+    },
+    {
+      "label": "[S6] Evidence.workdir is never the attempt's workdir",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_evidence_carries_the_workdir_and_the_parsed_transcripts_to_the_scorer.",
+      "find": "        workdir=workdir,\n        end_state=_load_end_state",
+      "replace": "        workdir=None,\n        end_state=_load_end_state"
+    },
+    {
+      "label": "[S7] a missing end_state_dir is no longer treated as empty",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_end_state_dir_is_treated_as_an_empty_snapshot.",
+      "find": "    if end_state_dir is None or not end_state_dir.is_dir():",
+      "replace": "    if end_state_dir is None:"
+    },
+    {
+      "label": "[S9] a predicates.py import failure is not wrapped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_predicates_that_fail_to_import_are_a_named_error.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: predicates.py failed",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: predicates.py failed"
+    },
+    {
+      "label": "[S10] end_state is called with no transcripts",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_end_state_is_called_with_the_parsed_transcripts_not_an_empty_list.",
+      "find": "    snapshot = end_state_fn(workdir, case_dir, transcripts)",
+      "replace": "    snapshot = end_state_fn(workdir, case_dir, [])"
+    },
+    {
+      "label": "[B1] bytecode caching left on while loading predicates",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_loading_predicates_leaves_no_bytecode_and_restores_the_flag.",
+      "find": "    sys.dont_write_bytecode = True\n    try:",
+      "replace": "    try:"
+    },
+    {
+      "label": "[B2] the bytecode flag is not restored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the flag-restored tests.",
+      "find": "        sys.dont_write_bytecode = previous_dont_write_bytecode\n    return module",
+      "replace": "        pass\n    return module"
+    },
+    {
+      "label": "a duplicate item id inside one case is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_duplicate_item_id_inside_one_case_is_a_named_error: the later scorer would silently win.",
+      "find": "    if repeated:\n        raise CaseContractError(",
+      "replace": "    if False:\n        raise CaseContractError("
+    },
+    {
+      "label": "the item id grammar is not enforced",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_id_must_match_the_id_grammar.",
+      "find": "        if not _ITEM_ID.match(item[\"id\"]):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "the item kind is not validated",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_kind_must_be_a_known_kind (calibration needs kind).",
+      "find": "        if item.get(\"kind\") not in _ITEM_KINDS:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "an unknown envelope value is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_unknown_envelope_value_is_a_named_error.",
+      "find": "    if case_toml.get(\"envelope\", \"findings\") != \"findings\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a raising scorer propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_raising_scorer_is_a_named_error_naming_case_and_item and the bad-params test.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: scorer",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: scorer"
+    },
+    {
+      "label": "an invalid regex param propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_invalid_regex_param_is_a_named_error.",
+      "find": "        except Exception as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting",
+      "replace": "        except ZeroDivisionError as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting"
+    },
+    {
+      "label": "find_duplicate_item_ids lets a TOML error through raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:",
+      "replace": "        except OSError as exc:"
+    },
+    {
+      "label": "find_duplicate_item_ids lets an id-less item through raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):",
+      "replace": "            if False:"
+    },
+    {
+      "label": "find_duplicate_item_ids lets a non-list items through",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "        if not isinstance(items, list):\n            raise CaseContractError(f\"{case_name}",
+      "replace": "        if False:\n            raise CaseContractError(f\"{case_name}"
+    },
+    {
+      "label": "find_duplicate_item_ids globs nested case.toml files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_ignores_case_toml_files_nested_below_a_case.",
+      "find": "skill_dir.glob(\"*/case.toml\")",
+      "replace": "skill_dir.glob(\"**/case.toml\")"
+    },
+    {
+      "label": "snapshot_end_state accepts a populated dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_refuses_a_populated_dest_so_stale_files_never_leak_in.",
+      "find": "    if any(dest.iterdir()):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a non-string or empty prompt name is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_file_name_must_be_a_non_empty_string.",
+      "find": "    if not isinstance(prompt, str) or not prompt:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[I1] inline mode rejected",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_mode_value_is_checked_for_both_valid_modes and the inline lens tests.",
+      "find": "_VALID_MODES = {\"subagent\", \"inline\"}",
+      "replace": "_VALID_MODES = {\"subagent\"}"
+    },
+    {
+      "label": "[I2] subagent mode rejected",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_mode_value_is_checked_for_both_valid_modes.",
+      "find": "_VALID_MODES = {\"subagent\", \"inline\"}",
+      "replace": "_VALID_MODES = {\"inline\"}"
     },
     {
       "label": "[control] reword the Evidence docstring",

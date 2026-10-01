@@ -12,11 +12,13 @@ import json
 import os
 import re
 import shutil
+import sys
 import unicodedata
 from pathlib import Path
 
 import pytest
 
+from evals._harness import dispatch
 from evals._harness.dispatch import (
     AcceptanceLeakError,
     LEAK_MIN_TOKENS,
@@ -1410,3 +1412,440 @@ def test_snapshot_end_state_refuses_a_dest_that_is_itself_a_symlink(tmp_path):
         snapshot_end_state(case_dir, workdir, [], dest)
 
     assert list(elsewhere.iterdir()) == []
+
+
+# ---------------------------------------------------------------------------
+# score_attempt: scorers only run when there is something to score
+# ---------------------------------------------------------------------------
+
+_FIRST_TRANSCRIPT_SCORER = (
+    "def scorer_q(evidence):\n    return evidence.transcripts[0].final_text == 'done'\n"
+)
+
+
+def test_a_complete_status_override_is_refused_rather_than_run_over_no_transcripts(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=_FIRST_TRANSCRIPT_SCORER)
+
+    with pytest.raises(ValueError, match="transcript_status"):
+        score_attempt(case_dir, [], None, set(), transcript_status="complete")
+
+
+@pytest.mark.parametrize("status", ["complete", "weird", "truncated", "missing", ""])
+def test_only_dispatch_error_is_an_allowed_transcript_status_override(tmp_path, status):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=_FIRST_TRANSCRIPT_SCORER)
+
+    with pytest.raises(ValueError, match="transcript_status"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set(), transcript_status=status)
+
+
+def test_a_dispatch_error_attempt_with_no_transcripts_is_indeterminate_and_runs_no_scorer(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=_FIRST_TRANSCRIPT_SCORER)
+
+    attempt, unmatched = score_attempt(case_dir, [], None, set(), transcript_status="dispatch_error")
+
+    assert attempt.classification == "indeterminate"
+    assert attempt.item_hits == {"item-q": "indeterminate"}
+    assert unmatched == 0
+
+
+def test_an_attempt_with_no_transcripts_and_no_override_is_indeterminate_and_runs_no_scorer(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=_FIRST_TRANSCRIPT_SCORER)
+
+    attempt, _ = score_attempt(case_dir, [], None, set())
+
+    assert attempt.classification == "indeterminate"
+
+
+def test_a_dispatch_error_override_wins_over_a_complete_transcript(tmp_path):
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates=_FIRST_TRANSCRIPT_SCORER)
+
+    attempt, _ = score_attempt(
+        case_dir, [_complete_transcript(tmp_path)], None, set(), transcript_status="dispatch_error"
+    )
+
+    assert attempt.classification == "indeterminate"
+
+
+def test_scorers_are_never_called_on_an_incomplete_attempt(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates="def scorer_q(evidence):\n    raise AssertionError('scorer ran on a broken attempt')\n",
+    )
+    bad_transcript = tmp_path / "bad.jsonl"
+    _write_truncated_transcript(bad_transcript)
+
+    attempt, _ = score_attempt(case_dir, [bad_transcript], None, set())
+
+    assert attempt.classification == "indeterminate"
+
+
+# ---------------------------------------------------------------------------
+# score_attempt: what the scorer is handed
+# ---------------------------------------------------------------------------
+
+
+def test_evidence_carries_the_workdir_and_the_parsed_transcripts_to_the_scorer(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates=(
+            "def scorer_q(evidence):\n"
+            "    return (evidence.workdir is not None and evidence.workdir.name == 'the-workdir'\n"
+            "            and len(evidence.transcripts) == 1)\n"
+        ),
+    )
+    workdir = tmp_path / "the-workdir"
+    workdir.mkdir()
+
+    with_workdir, _ = score_attempt(case_dir, [_complete_transcript(tmp_path)], workdir, set())
+    without_workdir, _ = score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert with_workdir.item_hits == {"item-q": "hit"}
+    assert without_workdir.item_hits == {"item-q": "miss"}
+
+
+def test_a_missing_end_state_dir_is_treated_as_an_empty_snapshot(tmp_path):
+    case_dir = _bare_case(
+        tmp_path, _ONE_ITEM_TOML, predicates="def scorer_q(evidence):\n    return evidence.end_state == {}\n"
+    )
+
+    attempt, _ = score_attempt(
+        case_dir,
+        [_complete_transcript(tmp_path)],
+        None,
+        set(),
+        end_state_dir=tmp_path / "never-created",
+    )
+
+    assert attempt.item_hits == {"item-q": "hit"}
+
+
+def test_end_state_is_called_with_the_parsed_transcripts_not_an_empty_list(tmp_path):
+    case_dir = _snapshot_case_with_transcript_use(tmp_path)
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    dest = tmp_path / "attempt" / "end_state"
+
+    snapshot_end_state(case_dir, workdir, [_complete_transcript(tmp_path)], dest)
+
+    assert (dest / "seen.txt").read_text(encoding="utf-8") == "1:done"
+
+
+def _snapshot_case_with_transcript_use(tmp_path: Path) -> Path:
+    return _bare_case(
+        tmp_path,
+        _ONE_ITEM_TOML,
+        predicates=(
+            "def scorer_q(evidence):\n    return True\n\n"
+            "def end_state(workdir, case_dir, transcripts):\n"
+            "    return {'seen.txt': f'{len(transcripts)}:' + ''.join(t.final_text for t in transcripts)}\n"
+        ),
+    )
+
+
+def test_predicates_that_fail_to_import_are_a_named_error(tmp_path):
+    for index, source in enumerate(("raise RuntimeError('boom at import')\n", "def scorer_q(:\n")):
+        case_dir = _bare_case(tmp_path / str(index), _ONE_ITEM_TOML, predicates=source)
+
+        with pytest.raises(CaseContractError, match="predicates.py"):
+            score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_loading_predicates_leaves_no_bytecode_and_restores_the_flag(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates="def scorer_q(evidence):\n    return True\n")
+
+    score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert not (case_dir / "__pycache__").exists()
+    assert sys.dont_write_bytecode is False
+
+
+def test_the_bytecode_flag_is_restored_even_when_predicates_fail_to_import(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    case_dir = _bare_case(tmp_path, _ONE_ITEM_TOML, predicates="raise RuntimeError('boom')\n")
+
+    with pytest.raises(CaseContractError):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert sys.dont_write_bytecode is False
+
+
+# ---------------------------------------------------------------------------
+# score_attempt: envelope trigger and the unmatched-finding item filter
+# ---------------------------------------------------------------------------
+
+
+def _findings_case(tmp_path: Path, envelope_line: str, items_toml: str, predicates: str) -> Path:
+    return _bare_case(
+        tmp_path,
+        f'mode = "subagent"\nprompt = "prompt.md"\n{envelope_line}\n{items_toml}',
+        predicates=predicates,
+    )
+
+
+def _prose_transcript(tmp_path: Path) -> Path:
+    path = tmp_path / "prose.jsonl"
+    _write_final_text_transcript(path, "plain prose, no findings object")
+    return path
+
+
+def test_only_envelope_findings_turns_on_envelope_parsing(tmp_path):
+    case_dir = _findings_case(
+        tmp_path / "off",
+        "",
+        '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\n',
+        "def scorer_q(evidence):\n    return True\n",
+    )
+    on_dir = _findings_case(
+        tmp_path / "on",
+        'envelope = "findings"',
+        '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\n',
+        "def scorer_q(evidence):\n    return True\n",
+    )
+
+    off, _ = score_attempt(case_dir, [_prose_transcript(tmp_path)], None, set())
+    on, _ = score_attempt(on_dir, [_prose_transcript(tmp_path)], None, set())
+
+    assert off.parse_error is False
+    assert on.parse_error is True
+
+
+def test_an_unknown_envelope_value_is_a_named_error(tmp_path):
+    case_dir = _findings_case(
+        tmp_path,
+        'envelope = "finding"',
+        '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\n',
+        "def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="envelope"):
+        score_attempt(case_dir, [_prose_transcript(tmp_path)], None, set())
+
+
+def test_only_items_with_both_file_suffix_and_regex_params_feed_the_unmatched_count(tmp_path):
+    items = (
+        '[[items]]\nid = "review"\nkind = "gate-candidate"\nscorer = "any_scorer"\n'
+        'params = { file_suffix = "foo.py", regex = "bug" }\n'
+        '[[items]]\nid = "suffix-only"\nkind = "trend"\nscorer = "any_scorer"\n'
+        'params = { file_suffix = "bar.py" }\n'
+        '[[items]]\nid = "regex-only"\nkind = "trend"\nscorer = "any_scorer"\n'
+        'params = { regex = "unrelated" }\n'
+    )
+    case_dir = _findings_case(
+        tmp_path,
+        'envelope = "findings"',
+        items,
+        "def any_scorer(evidence, **params):\n    return True\n",
+    )
+    reply = json.dumps(
+        {
+            "findings": [
+                {"file": "foo.py", "line": 1, "description": "has a bug"},
+                {"file": "bar.py", "line": 2, "description": "unrelated thing"},
+            ]
+        }
+    )
+    transcript_path = tmp_path / "f.jsonl"
+    _write_final_text_transcript(transcript_path, reply)
+
+    _, unmatched = score_attempt(case_dir, [transcript_path], None, set())
+
+    assert unmatched == 1
+
+
+# ---------------------------------------------------------------------------
+# a malformed case: duplicates, grammar, kinds, raising scorers
+# ---------------------------------------------------------------------------
+
+
+def _items_toml(*pairs: tuple[str, str]) -> str:
+    return "".join(
+        f'\n[[items]]\nid = "{item_id}"\nkind = "{kind}"\nscorer = "scorer_q"\n' for item_id, kind in pairs
+    )
+
+
+def test_a_duplicate_item_id_inside_one_case_is_a_named_error(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n' + _items_toml(("dup", "trend"), ("dup", "trend")),
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="dup"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+@pytest.mark.parametrize("bad_id", ["../x y", "-lead", ".lead", "has space", "a/b", "é"])
+def test_an_item_id_must_match_the_id_grammar(tmp_path, bad_id):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n' + _items_toml((bad_id, "trend")),
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="id"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+@pytest.mark.parametrize("good_id", ["a", "A1", "item-a", "item_a", "item.a", "9x"])
+def test_item_ids_following_the_grammar_are_accepted(tmp_path, good_id):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n' + _items_toml((good_id, "trend")),
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    attempt, _ = score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert attempt.item_hits == {good_id: "hit"}
+
+
+@pytest.mark.parametrize("kind_line", ['kind = "nonsense"\n', "kind = 3\n", ""])
+def test_an_item_kind_must_be_a_known_kind(tmp_path, kind_line):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "item-q"\n' + kind_line + 'scorer = "scorer_q"\n',
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="kind"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_the_accepted_kinds_and_id_grammar_match_the_siblings_that_consume_them():
+    from evals._harness import activation, calibration
+
+    assert dispatch._ITEM_KINDS == calibration._VALID_KINDS
+    assert dispatch._ITEM_ID.pattern == activation._ID_PATTERN.pattern
+
+
+def test_a_raising_scorer_is_a_named_error_naming_case_and_item(tmp_path):
+    case_dir = _bare_case(
+        tmp_path, _ONE_ITEM_TOML, predicates="def scorer_q(evidence):\n    raise RuntimeError('boom')\n"
+    )
+
+    with pytest.raises(CaseContractError) as excinfo:
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+    assert "case-q" in str(excinfo.value)
+    assert "item-q" in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+
+
+def test_a_scorer_called_with_params_it_does_not_accept_is_a_named_error(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "item-q"\nkind = "trend"\n'
+        'scorer = "scorer_q"\nparams = { unexpected = 1 }\n',
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+
+    with pytest.raises(CaseContractError, match="item-q"):
+        score_attempt(case_dir, [_complete_transcript(tmp_path)], None, set())
+
+
+def test_an_invalid_regex_param_is_a_named_error(tmp_path):
+    case_dir = _findings_case(
+        tmp_path,
+        'envelope = "findings"',
+        '[[items]]\nid = "item-q"\nkind = "trend"\nscorer = "scorer_q"\n'
+        'params = { file_suffix = "a.py", regex = "[bad" }\n',
+        "def scorer_q(evidence, file_suffix, regex):\n    return True\n",
+    )
+    transcript_path = tmp_path / "f.jsonl"
+    _write_final_text_transcript(
+        transcript_path, json.dumps({"findings": [{"file": "a.py", "line": 1, "description": "x"}]})
+    )
+
+    with pytest.raises(CaseContractError, match="case-q"):
+        score_attempt(case_dir, [transcript_path], None, set())
+
+
+def test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing(tmp_path):
+    skill_dir = tmp_path / "skill-d"
+    for name, text in {
+        "broken-toml": "mode = \n",
+        "no-id": '[[items]]\nkind = "trend"\nscorer = "s"\n',
+        "items-not-a-list": "items = 3\n",
+    }.items():
+        (skill_dir / name).mkdir(parents=True)
+        (skill_dir / name / "case.toml").write_text(text, encoding="utf-8")
+
+    for name in ("broken-toml", "no-id", "items-not-a-list"):
+        only = tmp_path / f"only-{name}"
+        (only / name).mkdir(parents=True)
+        (only / name / "case.toml").write_text((skill_dir / name / "case.toml").read_text(encoding="utf-8"), encoding="utf-8")
+        with pytest.raises(CaseContractError, match=name):
+            find_duplicate_item_ids(only)
+
+
+def test_find_duplicate_item_ids_ignores_case_toml_files_nested_below_a_case(tmp_path):
+    skill_dir = tmp_path / "skill-n"
+    _write_item_ids_case(skill_dir / "case-a", "only-a")
+    nested = skill_dir / "case-a" / "fixture" / "deep"
+    _write_item_ids_case(nested, "only-a")
+
+    assert find_duplicate_item_ids(skill_dir) == set()
+
+
+def test_a_prompt_file_name_must_be_a_non_empty_string(tmp_path):
+    for toml_text in ('mode = "subagent"\nprompt = ""\n', 'mode = "subagent"\nprompt = 3\n', 'mode = "subagent"\n'):
+        case_dir = _bare_case(tmp_path / str(abs(hash(toml_text))), toml_text)
+
+        with pytest.raises(CaseContractError, match="prompt"):
+            build_dispatch_prompt(case_dir)
+
+
+def test_a_mode_value_is_checked_for_both_valid_modes(tmp_path):
+    for mode in ("subagent", "inline"):
+        case_dir = _bare_case(tmp_path / mode, f'mode = "{mode}"\nprompt = "prompt.md"\n')
+
+        assert build_dispatch_prompt(case_dir) == "Investigate.\n"
+
+
+# ---------------------------------------------------------------------------
+# snapshot_end_state: a fresh dest per attempt
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_end_state_refuses_a_populated_dest_so_stale_files_never_leak_in(tmp_path):
+    """Spec: ``dest`` is the attempt's own new ``end_state/``. A populated one is stale evidence."""
+    case_dir = _snapshot_case(tmp_path, '{"note.txt": "new"}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    dest = tmp_path / "end_state"
+    dest.mkdir()
+    (dest / "stale.txt").write_text("from a previous attempt", encoding="utf-8")
+
+    with pytest.raises(CaseContractError, match="not empty"):
+        snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert sorted(path.name for path in dest.iterdir()) == ["stale.txt"]
+
+
+def test_snapshot_end_state_accepts_an_existing_empty_dest(tmp_path):
+    case_dir = _snapshot_case(tmp_path, '{"note.txt": "new"}')
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    dest = tmp_path / "end_state"
+    dest.mkdir()
+
+    snapshot_end_state(case_dir, workdir, [], dest)
+
+    assert (dest / "note.txt").read_text(encoding="utf-8") == "new"
+
+
+def test_bad_params_are_reported_even_for_an_attempt_that_never_runs_its_scorers(tmp_path):
+    case_dir = _bare_case(
+        tmp_path,
+        'mode = "subagent"\nprompt = "prompt.md"\n\n[[items]]\nid = "item-q"\nkind = "trend"\n'
+        'scorer = "scorer_q"\nparams = 3\n',
+        predicates="def scorer_q(evidence):\n    return True\n",
+    )
+    bad_transcript = tmp_path / "bad.jsonl"
+    _write_truncated_transcript(bad_transcript)
+
+    with pytest.raises(CaseContractError, match="params"):
+        score_attempt(case_dir, [bad_transcript], None, set())

@@ -76,6 +76,10 @@ from evals._harness.scorer import Attempt, classify_attempt
 from evals._harness.transcript import Transcript, parse_transcript
 
 _VALID_MODES = {"subagent", "inline"}
+# Mirrors ``calibration._VALID_KINDS`` and ``activation._ID_PATTERN``; a test pins
+# both against the siblings so they cannot drift.
+_ITEM_KINDS = {"gate-candidate", "triggering", "trend"}
+_ITEM_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _PROMPT_SUFFIXES = {".md", ".txt"}
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 
@@ -124,8 +128,10 @@ def _case_toml(case_dir: Path) -> dict:
     ------
     CaseContractError
         If ``mode`` is not the string ``"subagent"`` or ``"inline"``, if
-        ``prompt`` is not a non-empty string, or if an ``[[items]]`` table
-        lacks a string ``id`` or ``scorer`` or has a non-table ``params``.
+        ``prompt`` is not a non-empty string, if ``envelope`` is set to
+        anything but ``"findings"``, or if an ``[[items]]`` table lacks a
+        string ``id`` (matching the id grammar, unique within the case),
+        ``scorer`` or known ``kind``, or has a non-table ``params``.
     """
     case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
     mode = case_toml.get("mode")
@@ -147,8 +153,26 @@ def _case_toml(case_dir: Path) -> dict:
                 raise CaseContractError(
                     f"{case_dir}: items[{position}] must set a non-empty string {key!r}"
                 )
+        if not _ITEM_ID.match(item["id"]):
+            raise CaseContractError(
+                f"{case_dir}: items[{position}] id {item['id']!r} does not match {_ITEM_ID.pattern}"
+            )
+        if item.get("kind") not in _ITEM_KINDS:
+            raise CaseContractError(
+                f"{case_dir}: item {item['id']!r} kind must be one of {sorted(_ITEM_KINDS)}, "
+                f"got {item.get('kind')!r}"
+            )
         if not isinstance(item.get("params", {}), dict):
             raise CaseContractError(f"{case_dir}: items[{position}] 'params' must be a table")
+    ids = [item["id"] for item in items]
+    repeated = sorted({item_id for item_id in ids if ids.count(item_id) > 1})
+    if repeated:
+        raise CaseContractError(f"{case_dir}: item id(s) {repeated} are declared more than once")
+    if case_toml.get("envelope", "findings") != "findings":
+        raise CaseContractError(
+            f"{case_dir}: case.toml 'envelope' may only be \"findings\", got "
+            f"{case_toml['envelope']!r}"
+        )
     return case_toml
 
 
@@ -505,8 +529,9 @@ def snapshot_end_state(
     Raises
     ------
     CaseContractError
-        If ``dest`` is a symlink or already holds a symlink at a name the
-        snapshot would write (the snapshot never writes through a link), or if
+        If ``dest`` is a symlink or already holds any file (each attempt
+        snapshots into its own fresh ``end_state/``, so stale evidence from an
+        earlier snapshot never mixes in), or if
         the case's ``predicates.py`` ``end_state`` function returns anything
         but a ``{name: text}`` mapping of strings, a name that is not a plain
         file name (empty, ``"."``/``".."``, containing a path separator or a
@@ -516,6 +541,11 @@ def snapshot_end_state(
     if dest.is_symlink():
         raise CaseContractError(f"{case_dir}: snapshot dest {dest} is a symlink")
     dest.mkdir(parents=True, exist_ok=True)
+    if any(dest.iterdir()):
+        raise CaseContractError(
+            f"{case_dir}: snapshot dest {dest} is not empty; each attempt snapshots into its "
+            "own fresh end_state/ directory, so stale files cannot pass for this attempt's evidence"
+        )
     module = _load_predicates(case_dir)
     end_state_fn = getattr(module, "end_state", None) if module is not None else None
     if end_state_fn is None:
@@ -528,8 +558,6 @@ def snapshot_end_state(
         _check_snapshot_name(case_dir, name)
         if not isinstance(text, str):
             raise CaseContractError(f"{case_dir}: end_state text for {name!r} is not a string")
-        if (dest / name).is_symlink():
-            raise CaseContractError(f"{case_dir}: {dest / name} is a symlink; refusing to write")
     for name, text in snapshot.items():
         (dest / name).write_text(text, encoding="utf-8")
 
@@ -545,6 +573,16 @@ def _check_snapshot_name(case_dir: Path, name: object) -> None:
         raise CaseContractError(f"{case_dir}: end_state returned an unsafe file name {name!r}")
     if name.casefold() == "tests.md":
         raise CaseContractError(f"{case_dir}: end_state may not write a file named tests.md")
+
+
+def _run_scorer(case_dir: Path, item: dict, scorer: Callable, evidence: Evidence) -> bool:
+    try:
+        return bool(scorer(evidence, **item.get("params", {})))
+    except Exception as exc:
+        raise CaseContractError(
+            f"{case_dir}: scorer {item['scorer']!r} for item {item['id']!r} raised "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
 
 def score_attempt(
@@ -574,10 +612,13 @@ def score_attempt(
         case does not declare are ignored, and every item this case declares
         is scored regardless.
     transcript_status : str | None
-        Overrides the status derived from *transcript_paths* — the conductor
-        passes ``"dispatch_error"`` when an attempt never produced a
-        transcript at all. ``None`` derives the worst status among the
-        parsed transcripts.
+        ``None`` (the default) derives the status from *transcript_paths*:
+        the first non-complete transcript's status, ``"missing"`` when there
+        are none. The only override is ``"dispatch_error"``, which the
+        conductor passes when an attempt never produced a transcript at all;
+        any other value is refused, because a real attempt's status comes
+        from its transcripts. Scorers run only for a complete attempt that
+        has transcripts.
     end_state_dir : Path | None
         A directory of end-state snapshot files from a prior
         ``snapshot_end_state`` call, or ``None``/absent for a case that took
@@ -591,12 +632,20 @@ def score_attempt(
 
     Raises
     ------
+    ValueError
+        If *transcript_status* is neither ``None`` nor ``"dispatch_error"``.
     CaseContractError
-        If ``case.toml`` is malformed, the case has items but no
+        If a scorer or the unmatched-finding count raises (naming the case
+        and item), if ``case.toml`` is malformed, the case has items but no
         ``predicates.py``, or an item names a scorer ``predicates.py`` does
         not define as a function. Checked before the transcripts are
         consulted, so a case defect is never disguised as harness breakage.
     """
+    if transcript_status not in (None, "dispatch_error"):
+        raise ValueError(
+            f"transcript_status may only be None or 'dispatch_error' (the status of a real "
+            f"attempt is derived from its transcripts), got {transcript_status!r}"
+        )
     case_toml = _case_toml(case_dir)
     items = case_toml.get("items", [])
     # Resolved before anything else so a broken case surfaces as itself, never
@@ -628,7 +677,7 @@ def score_attempt(
 
     if status == "complete":
         item_hits = {
-            item["id"]: bool(scorers[item["id"]](evidence, **item.get("params", {})))
+            item["id"]: _run_scorer(case_dir, item, scorers[item["id"]], evidence)
             for item in items
         }
     else:
@@ -644,7 +693,13 @@ def score_attempt(
             and "file_suffix" in item["params"]
             and "regex" in item["params"]
         ]
-        unmatched = count_unmatched(findings, review_item_params)
+        try:
+            unmatched = count_unmatched(findings, review_item_params)
+        except Exception as exc:
+            raise CaseContractError(
+                f"{case_dir}: counting unmatched findings failed ({type(exc).__name__}: {exc}); "
+                "check the review items' file_suffix/regex params"
+            ) from exc
     else:
         unmatched = 0
 
@@ -699,12 +754,27 @@ def find_duplicate_item_ids(skill_dir: Path) -> set[str]:
     -------
     set[str]
         The ids that appear more than once; empty when all are unique.
+
+    Raises
+    ------
+    CaseContractError
+        If a case's ``case.toml`` cannot be parsed or an item has no string
+        ``id``; the error names the case.
     """
     seen: set[str] = set()
     duplicates: set[str] = set()
     for case_toml_path in sorted(skill_dir.glob("*/case.toml")):
-        case_toml = tomllib.loads(case_toml_path.read_text(encoding="utf-8"))
-        for item in case_toml.get("items", []):
+        case_name = case_toml_path.parent.name
+        try:
+            case_toml = tomllib.loads(case_toml_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+            raise CaseContractError(f"{case_toml_path}: case.toml unreadable: {exc}") from exc
+        items = case_toml.get("items", [])
+        if not isinstance(items, list):
+            raise CaseContractError(f"{case_name}: case.toml 'items' must be an array of tables")
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                raise CaseContractError(f"{case_name}: an [[items]] table has no string 'id'")
             item_id = item["id"]
             if item_id in seen:
                 duplicates.add(item_id)
