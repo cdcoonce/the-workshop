@@ -215,9 +215,36 @@ def _countable(tokens: list[str]) -> bool:
     return len(tokens) >= LEAK_MIN_TOKENS and not set(tokens) <= _GENERIC_TOKENS
 
 
-def _contains_run(stream: list[str], run: list[str]) -> bool:
-    width = len(run)
-    return any(stream[start : start + width] == run for start in range(len(stream) - width + 1))
+def _windows(lines: list[list[str]]) -> list[tuple[int, list[str]]]:
+    """Each countable token window of *lines*, as ``(line number, tokens)``.
+
+    A line of at least ``LEAK_MIN_TOKENS`` tokens is its own window. A shorter
+    one is widened with the following consecutive lines until the window
+    reaches that many tokens, so a terse list ("Tests pass" / "No
+    regressions" / ...) cannot hide by being short line by line. A window that
+    never reaches the threshold, or is made only of generic words, is dropped.
+    """
+    windows: list[tuple[int, list[str]]] = []
+    for index, tokens in enumerate(lines):
+        if not tokens:
+            continue
+        window = list(tokens)
+        following = index + 1
+        while len(window) < LEAK_MIN_TOKENS and following < len(lines):
+            window.extend(lines[following])
+            following += 1
+        if _countable(window):
+            windows.append((index + 1, window))
+    return windows
+
+
+def _haystack(stream: list[str]) -> str:
+    """The token stream as one NUL-delimited string, searchable in linear time."""
+    return "\0" + "\0".join(stream) + "\0"
+
+
+def _contains_run(haystack: str, run: list[str]) -> bool:
+    return "\0" + "\0".join(run) + "\0" in haystack
 
 
 def _read_acceptance(case_dir: Path) -> str | None:
@@ -238,11 +265,13 @@ def find_acceptance_leaks(case_dir: Path, text: str) -> list[str]:
 
     Both directions are checked on token lists (see ``_tokens``), with the
     lines of each side joined first so a re-wrapped line is still caught: a
-    prompt line of at least ``LEAK_MIN_TOKENS`` tokens that is a contiguous
-    piece of acceptance.md's token stream, and an acceptance line of at least
-    that many tokens found anywhere in the prompt's token stream. Shorter
-    lines, generic-word headings, fences and punctuation-only lines never
-    count. ``acceptance.md`` is read here only to compare; its text is never
+    prompt line that is a contiguous piece of acceptance.md's token stream,
+    and an acceptance line found anywhere in the prompt's token stream. A line
+    needs ``LEAK_MIN_TOKENS`` tokens; a shorter one is widened with the
+    following lines until it has them (so a terse pasted list is caught), and
+    a line that never gets there, generic-word headings, fences and
+    punctuation-only lines never count (a sole line like "All tests pass." is
+    too generic to flag). ``acceptance.md`` is read here only to compare; its text is never
     returned.
 
     Parameters
@@ -268,14 +297,14 @@ def find_acceptance_leaks(case_dir: Path, text: str) -> list[str]:
         return []
     acceptance_lines = [_line_tokens(line) for line in acceptance.splitlines()]
     prompt_lines = [_line_tokens(line) for line in text.splitlines()]
-    acceptance_stream = [token for tokens in acceptance_lines for token in tokens]
-    prompt_stream = [token for tokens in prompt_lines for token in tokens]
+    acceptance_haystack = _haystack([token for tokens in acceptance_lines for token in tokens])
+    prompt_haystack = _haystack([token for tokens in prompt_lines for token in tokens])
     leaks: list[str] = []
-    for number, tokens in enumerate(prompt_lines, start=1):
-        if _countable(tokens) and _contains_run(acceptance_stream, tokens):
+    for number, window in _windows(prompt_lines):
+        if _contains_run(acceptance_haystack, window):
             leaks.append(f"prompt line {number} reproduces acceptance.md")
-    for number, tokens in enumerate(acceptance_lines, start=1):
-        if _countable(tokens) and _contains_run(prompt_stream, tokens):
+    for number, window in _windows(acceptance_lines):
+        if _contains_run(prompt_haystack, window):
             leaks.append(f"acceptance.md line {number} appears in the prompt")
     return leaks
 

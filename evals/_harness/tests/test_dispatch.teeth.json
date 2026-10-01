@@ -445,7 +445,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by the 'fragment of an acceptance line' case.",
-      "find": "        if _countable(tokens) and _contains_run(acceptance_stream, tokens):",
+      "find": "        if _contains_run(acceptance_haystack, window):",
       "replace": "        if False:"
     },
     {
@@ -453,7 +453,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by the 'case change' and 'short line inside a sentence' cases.",
-      "find": "        if _countable(tokens) and _contains_run(prompt_stream, tokens):",
+      "find": "        if _contains_run(prompt_haystack, window):",
       "replace": "        if False:"
     },
     {
@@ -461,16 +461,16 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by the 're-wrapped across two prompt lines' case.",
-      "find": "_countable(tokens) and _contains_run(prompt_stream, tokens)",
-      "replace": "_countable(tokens) and any(_contains_run(line, tokens) for line in prompt_lines)"
+      "find": "        if _contains_run(prompt_haystack, window):",
+      "replace": "        if any(_contains_run(_haystack(line), window) for line in prompt_lines):"
     },
     {
       "label": "[Q2] acceptance.md is searched line by line, not as one stream",
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by the 'prompt line spanning two acceptance lines' case.",
-      "find": "_countable(tokens) and _contains_run(acceptance_stream, tokens)",
-      "replace": "_countable(tokens) and any(_contains_run(line, tokens) for line in acceptance_lines)"
+      "find": "        if _contains_run(acceptance_haystack, window):",
+      "replace": "        if any(_contains_run(_haystack(line), window) for line in acceptance_lines):"
     },
     {
       "label": "[Q2] a binary acceptance.md is no longer a named error",
@@ -895,6 +895,46 @@
       "why": "Killed by the 'fullwidth and ligature compatibility characters' leak case.",
       "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
       "replace": "unicodedata.normalize(\"NFC\", text).casefold()"
+    },
+    {
+      "label": "[F2] short-line widening disabled",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_terse_acceptance_file_pasted_verbatim_is_a_leak and the terse-sentence and short-prompt-line tests.",
+      "find": "        while len(window) < LEAK_MIN_TOKENS and following < len(lines):",
+      "replace": "        while False:"
+    },
+    {
+      "label": "[F2] a widened window skips the generic-word filter",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_all_generic_widened_window_is_never_a_leak: 'Context / Steps: / Done. / Notes' widened into one all-generic window.",
+      "find": "        if _countable(window):",
+      "replace": "        if len(window) >= LEAK_MIN_TOKENS:"
+    },
+    {
+      "label": "[F2] a short line is never a window (threshold on the single line)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the terse-paste tests (equivalent to disabling widening for every line but the last).",
+      "find": "        window = list(tokens)\n        following = index + 1",
+      "replace": "        window = list(tokens)\n        following = len(lines)"
+    },
+    {
+      "label": "[F4] the leak search reverts to scanning slices of the token list",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_search_stays_fast_on_twenty_thousand_tokens_per_side: the O(n^2) scan took ~7s against a 2s bound (a wall-clock kill, with a ~3.5x margin).",
+      "find": "    return \"\\0\" + \"\\0\".join(run) + \"\\0\" in haystack",
+      "replace": "    tokens = haystack.split(\"\\0\")\n    width = len(run)\n    return any(tokens[start : start + width] == run for start in range(len(tokens)))"
+    },
+    {
+      "label": "[F4] token boundaries dropped from the leak search",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_leak_matching_is_on_whole_tokens_never_inside_a_word.",
+      "find": "    return \"\\0\" + \"\\0\".join(run) + \"\\0\" in haystack",
+      "replace": "    return \"\\0\".join(run) in haystack"
     },
     {
       "label": "[control] reword the Evidence docstring",

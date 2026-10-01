@@ -311,6 +311,111 @@ def test_a_copied_acceptance_line_is_caught_despite_cosmetic_changes(tmp_path, b
     assert find_acceptance_leaks(case_dir, prompt_text) != []
 
 
+_TERSE_ACCEPTANCE = "Tests pass\nNo regressions\nAtomic commit\nClean history\n"
+
+
+@pytest.mark.parametrize("builder", [build_dispatch_prompt, build_no_skill_prompt])
+def test_a_terse_acceptance_file_pasted_verbatim_is_a_leak(tmp_path, builder):
+    """Every acceptance line is under LEAK_MIN_TOKENS; the window widens across lines."""
+    case_dir = _leak_case(
+        tmp_path, f"Investigate the repo.\n\n{_TERSE_ACCEPTANCE}", acceptance_text=_TERSE_ACCEPTANCE
+    )
+
+    with pytest.raises(AcceptanceLeakError):
+        builder(case_dir)
+
+
+def test_a_terse_acceptance_sentence_in_the_prompt_is_a_leak(tmp_path):
+    prompt = "Investigate the repo. Remember: tests pass, no regressions, atomic commit.\n"
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=_TERSE_ACCEPTANCE)
+
+    assert find_acceptance_leaks(case_dir, prompt) != []
+
+
+def test_a_short_prompt_line_is_widened_with_its_neighbours_before_comparing(tmp_path):
+    acceptance = "The reviewer must report the missing auth check in login.py.\nUnrelated closing criterion text.\n"
+    prompt = "Investigate.\nauth check\nin login.py\n"
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=acceptance)
+
+    assert find_acceptance_leaks(case_dir, prompt) != []
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Tests pass\nSomething unrelated about the parser module\nNo regressions\n",
+        "Clean history\nAtomic commit\nNo regressions\nTests pass\n",
+        "Investigate the repo. Make sure tests pass. Also be tidy. No regressions please.\n",
+        "All tests pass.\n",
+        "Tests pass\n",
+    ],
+    ids=["non-adjacent", "reversed order", "scattered in prose", "single short sentence", "below threshold"],
+)
+def test_unrelated_or_out_of_order_short_lines_are_not_a_leak(tmp_path, prompt):
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=_TERSE_ACCEPTANCE)
+
+    assert find_acceptance_leaks(case_dir, prompt) == []
+
+
+def test_boilerplate_headings_and_fences_never_leak_even_with_widening(tmp_path):
+    acceptance = "```python\nContext\nSteps:\nSomething only acceptance says about login handling.\n```\n"
+    prompt = "```python\nContext\nSteps:\nInvestigate the parser and report back to me.\n```\n"
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=acceptance)
+
+    assert find_acceptance_leaks(case_dir, prompt) == []
+
+
+def test_an_all_generic_widened_window_is_never_a_leak(tmp_path):
+    generic = "Context\nSteps:\nDone.\nNotes\n"
+    prompt = f"Investigate.\n{generic}Then report.\n"
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=f"Other text.\n{generic}More text.\n")
+
+    assert find_acceptance_leaks(case_dir, prompt) == []
+
+
+def test_leak_matching_is_on_whole_tokens_never_inside_a_word(tmp_path):
+    prompt = "attests pass no regressionsx today\n"
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text="tests pass no regressions\nunrelated tail\n")
+
+    assert find_acceptance_leaks(case_dir, prompt) == []
+
+
+def test_the_generic_word_set_is_exactly_the_documented_one():
+    assert dispatch._GENERIC_TOKENS == frozenset(
+        "acceptance criteria context steps step done notes note summary overview task tasks goal "
+        "goals background requirements requirement expected result results output input example "
+        "examples description setup instructions checklist details section the a an and or of for "
+        "to in is are".split()
+    )
+
+
+@pytest.mark.parametrize("word", sorted(dispatch._GENERIC_TOKENS))
+def test_a_line_made_only_of_one_generic_word_repeated_is_never_a_leak(tmp_path, word):
+    line = " ".join([word] * LEAK_MIN_TOKENS)
+    case_dir = _leak_case(tmp_path, f"{line}\nInvestigate.\n", acceptance_text=f"{line}\nOther text here.\n")
+
+    assert find_acceptance_leaks(case_dir, f"{line}\nInvestigate.\n") == []
+
+
+def test_the_leak_search_stays_fast_on_twenty_thousand_tokens_per_side(tmp_path):
+    import time
+
+    def lines(prefix: str) -> str:
+        return "\n".join(
+            " ".join(f"{prefix}{line}x{column}" for column in range(10)) for line in range(2000)
+        )
+
+    prompt, acceptance = lines("p"), lines("a")
+    case_dir = _leak_case(tmp_path, prompt, acceptance_text=acceptance)
+
+    started = time.perf_counter()
+    leaks = find_acceptance_leaks(case_dir, prompt)
+    elapsed = time.perf_counter() - started
+
+    assert leaks == []
+    assert elapsed < 2.0, f"leak search took {elapsed:.1f}s on 20k tokens per side"
+
+
 _BOILERPLATE = [
     "```python",
     "```json",
