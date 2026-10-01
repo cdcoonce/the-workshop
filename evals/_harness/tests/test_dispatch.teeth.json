@@ -57,14 +57,6 @@
       "replace": "    return \"\".join(p.read_text(encoding=\"utf-8\") for p in sorted(case_dir.iterdir()) if p.is_file())"
     },
     {
-      "label": "build_no_skill_prompt stops stripping the skill-naming lines",
-      "file": "../dispatch.py",
-      "oracle": "real",
-      "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the rostered skill's name would still appear in the no-skill prompt.",
-      "find": "    kept_lines = [line for line in prompt_text.splitlines() if skill not in line]",
-      "replace": "    kept_lines = prompt_text.splitlines()"
-    },
-    {
       "label": "build_no_skill_prompt drops the do-not-invoke-any-skill instruction",
       "file": "../dispatch.py",
       "oracle": "real",
@@ -127,6 +119,22 @@
       "why": "Killed by test_duplicate_item_id_within_one_skill_across_cases_is_detected: two cases sharing an item id within one skill would no longer be flagged.",
       "find": "            if item_id in seen:\n                duplicates.add(item_id)",
       "replace": "            pass"
+    },
+    {
+      "label": "build_no_skill_prompt stops removing the skill reference",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the no-skill tests: the rostered skill's name would still appear in the no-skill prompt.",
+      "find": "    removed = reference.sub(\"\", text)",
+      "replace": "    removed = text"
+    },
+    {
+      "label": "build_no_skill_prompt deletes the whole line holding the skill name again",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_keeps_task_text_when_skill_name_is_mid_line: the pre-fix whole-line deletion destroys the task text sharing a line with the skill name.",
+      "find": "    removed = reference.sub(\"\", text)",
+      "replace": "    removed = \"\\n\".join(line for line in text.splitlines() if not reference.search(line))"
     },
     {
       "label": "[control] reword the Evidence docstring",

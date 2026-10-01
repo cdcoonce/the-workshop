@@ -9,6 +9,7 @@ case directories.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tomllib
 from pathlib import Path
@@ -195,6 +196,91 @@ def test_build_no_skill_prompt_never_leaks_acceptance_text_even_when_prompt_embe
     output = build_no_skill_prompt(case_dir)
 
     assert acceptance_text not in output
+
+
+def _no_skill_case(tmp_path: Path, skill: str, prompt_text: str) -> Path:
+    case_dir = tmp_path / skill / "case-a"
+    case_dir.mkdir(parents=True)
+    (case_dir / "prompt.md").write_text(prompt_text, encoding="utf-8")
+    (case_dir / "case.toml").write_text(
+        'mode = "subagent"\nprompt = "prompt.md"\n', encoding="utf-8"
+    )
+    return case_dir
+
+
+def _skill_reference_pattern(skill: str) -> re.Pattern[str]:
+    """A case-insensitive whole-token reference to *skill* (bare, namespaced, or in a path)."""
+    return re.compile(rf"(?<![\w-]){re.escape(skill)}(?![\w-])", re.IGNORECASE)
+
+
+def test_build_no_skill_prompt_keeps_task_text_when_skill_name_is_mid_line(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path,
+        "adversarial-review",
+        "Review this code with adversarial-review: look at auth.py line 3 for a SQL injection bug.\n"
+        "Also check tdd.\n",
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert "look at auth.py line 3 for a SQL injection bug." in output
+    assert "Also check tdd." in output
+    assert "Review this code" in output
+    assert not _skill_reference_pattern("adversarial-review").search(output)
+
+
+def test_build_no_skill_prompt_keeps_a_single_line_prompt_that_names_the_skill(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path, "adversarial-review", "Run /workbench:adversarial-review on it."
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert output.startswith("Run")
+    assert "on it." in output
+    assert not _skill_reference_pattern("adversarial-review").search(output)
+
+
+def test_build_no_skill_prompt_removes_the_skill_name_case_insensitively(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path, "adversarial-review", "Adversarial-Review is great. Find the bug in foo.py.\n"
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert "Find the bug in foo.py." in output
+    assert not _skill_reference_pattern("adversarial-review").search(output)
+
+
+def test_build_no_skill_prompt_removes_a_skill_path_reference_but_keeps_the_task(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path,
+        "adversarial-review",
+        "Read plugins/workbench/skills/adversarial-review/SKILL.md first, then fix parser.py.\n",
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert "then fix parser.py." in output
+    assert "plugins/workbench/skills/" not in output
+    assert "SKILL.md" not in output
+    assert not _skill_reference_pattern("adversarial-review").search(output)
+
+
+def test_build_no_skill_prompt_does_not_eat_words_that_merely_contain_the_skill_name(tmp_path):
+    case_dir = _no_skill_case(
+        tmp_path,
+        "commit",
+        "Use the commit skill for this.\n"
+        "The commitment to quality matters.\n"
+        "We are committing to the plan.\n",
+    )
+
+    output = build_no_skill_prompt(case_dir)
+
+    assert "The commitment to quality matters." in output
+    assert "We are committing to the plan." in output
+    assert not _skill_reference_pattern("commit").search(output)
 
 
 # ---------------------------------------------------------------------------

@@ -16,10 +16,10 @@ Public contract
     reads ``acceptance.md``.
 
 ``build_no_skill_prompt(case_dir) -> str``
-    The no-skill arm's prompt: the same prompt text with every line naming
-    the rostered skill (the case's parent directory name) removed, and a
-    fixed do-not-invoke-any-skill instruction appended. Never reads
-    ``acceptance.md``.
+    The no-skill arm's prompt: the same prompt text with every reference to
+    the rostered skill (the case's parent directory name) removed (the
+    reference only, never the line around it), and a fixed
+    do-not-invoke-any-skill instruction appended.
 
 ``Evidence``
     Frozen dataclass a case's ``predicates.py`` scorers receive:
@@ -52,6 +52,7 @@ from that file and passes the set in).
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -153,6 +154,30 @@ def build_dispatch_prompt(case_dir: Path) -> str:
     return _prompt_text(case_dir, case_toml)
 
 
+def _remove_skill_references(text: str, skill: str) -> str:
+    """Remove every whole-token reference to *skill* from *text*, keeping the rest.
+
+    A reference is the skill name as a whole token (never a substring of a
+    longer word: ``commit`` does not match ``commitment``), matched case
+    insensitively, together with any namespace or path prefix glued to it
+    (``/workbench:``, ``plugins/workbench/skills/``), any path suffix
+    (``/SKILL.md``), a leading ``the`` and a trailing ``skill``. Only the
+    reference is removed, never the line it sits on, so the task text
+    around it survives.
+    """
+    segment = r"[\w@-]+(?:\.[\w@-]+)*"
+    reference = re.compile(
+        rf"(?:(?<![\w-])the[ \t]+)?"
+        rf"(?<![\w-])(?:/?{segment}[/:])*{re.escape(skill)}(?![\w-])"
+        rf"(?:/{segment})*/?"
+        rf"(?:[ \t]+skill\b)?",
+        re.IGNORECASE,
+    )
+    removed = reference.sub("", text)
+    removed = re.sub(r"[ \t]+([:,;.!?])", r"\1", removed)
+    return re.sub(r"[ \t]{2,}", " ", removed)
+
+
 def build_no_skill_prompt(case_dir: Path) -> str:
     """Return the no-skill arm's prompt text.
 
@@ -164,16 +189,14 @@ def build_no_skill_prompt(case_dir: Path) -> str:
     Returns
     -------
     str
-        The same prompt text as ``build_dispatch_prompt``, with every line
-        naming the rostered skill (``case_dir.parent.name``) removed, and a
-        fixed do-not-invoke-any-skill instruction appended. Never reads
-        ``acceptance.md``.
+        The same prompt text as ``build_dispatch_prompt``, with every
+        reference to the rostered skill (``case_dir.parent.name``) removed
+        (the reference only, never the line around it), and a fixed
+        do-not-invoke-any-skill instruction appended.
     """
     case_toml = _case_toml(case_dir)
     prompt_text = _prompt_text(case_dir, case_toml)
-    skill = case_dir.parent.name
-    kept_lines = [line for line in prompt_text.splitlines() if skill not in line]
-    stripped = "\n".join(kept_lines).rstrip("\n")
+    stripped = _remove_skill_references(prompt_text, case_dir.parent.name).rstrip("\n")
     return f"{stripped}\n\n{_NO_SKILL_INSTRUCTION}\n"
 
 
