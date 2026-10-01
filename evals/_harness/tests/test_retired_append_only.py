@@ -66,6 +66,7 @@ def test_fails_when_an_existing_entrys_date_is_edited(tmp_path):
     assert results[0].level == "fail"
     assert results[0].guard == "retired_append_only"
     assert "commit" in results[0].message
+    assert "gated.old" in results[0].message
 
 
 def test_fails_when_an_existing_entrys_reason_is_edited(tmp_path):
