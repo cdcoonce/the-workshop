@@ -1,0 +1,104 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_retired_append_only.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_retired_append_only.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never appends a fail result",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_an_existing_entry_is_deleted: this guard's whole purpose is to catch a lost or edited entry.",
+      "find": "            results.append(\n                Result(\n                    level=\"fail\",\n                    guard=_GUARD_NAME,\n                    message=(\n                        f\"{skill}: retired.md entry {base_entry['id']!r} was \"\n                        \"edited or removed\"\n                    ),\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "[control] check drops the base-entries-empty skip",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Provably inert: when base_entries is empty the `for base_entry in base_entries` loop below iterates zero times either way, so skipping ahead of it or falling through to it produces the same empty result set. Kept in source purely to skip the needless head-side retired.md read.",
+      "find": "        if not base_entries:\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check treats any same-id entry as matching regardless of field equality",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_an_existing_entrys_date_is_edited and its sibling field-edit tests: a same-id entry with a changed field must still fail.",
+      "find": "            if base_entry in candidates:",
+      "replace": "            if candidates:"
+    },
+    {
+      "label": "check inverts the membership test, failing unchanged entries and passing lost ones",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_only_appending_new_entries (an unchanged base entry would now wrongly fail) and test_fails_when_an_existing_entry_is_deleted (a deleted entry would now wrongly pass) together — the positive and negative conjuncts of the same check.",
+      "find": "            if base_entry in candidates:",
+      "replace": "            if base_entry not in candidates:"
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"retired_append_only\"",
+      "replace": "_GUARD_NAME = \"retired_append_only_guard\""
+    },
+    {
+      "label": "check drops the entry id from the fail message",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "find": "                        f\"{skill}: retired.md entry {base_entry['id']!r} was \"\n                        \"edited or removed\"",
+      "replace": "                        f\"{skill}: retired.md entry was \"\n                        \"edited or removed\""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never reimplements the ``retired.md`` parser",
+      "replace": "This guard never reimplements the ``retired.md`` parser"
+    },
+    {
+      "label": "check reads base content at the base tip instead of the merge-base",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_reads_base_content_at_the_merge_base_not_the_base_tip: a base branch that moved on after the fork must not read as the PR undoing its changes.",
+      "find": "        [\"git\", \"-C\", str(ctx.repo_root), \"merge-base\", ctx.base, \"HEAD\"],",
+      "replace": "        [\"git\", \"-C\", str(ctx.repo_root), \"rev-parse\", ctx.base],"
+    },
+    {
+      "label": "merge-base resolution swallows an unresolvable base ref instead of failing",
+      "file": "./retired_append_only.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_loudly_when_the_base_ref_cannot_be_resolved: an unresolvable base must raise, not read as 'file absent at base', which silently passes this guard.",
+      "find": "check=True,\n    ).stdout.strip()",
+      "replace": "check=False,\n    ).stdout.strip()"
+    }
+  ]
+}

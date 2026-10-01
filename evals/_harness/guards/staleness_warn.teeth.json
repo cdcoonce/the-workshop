@@ -1,0 +1,135 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_staleness_warn.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_staleness_warn.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never appends a warn result",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_for_an_active_skill_with_a_stale_newest_green_run: this guard's whole purpose is to warn on a stale newest-green run.",
+      "find": "            results.append(\n                Result(\n                    level=\"warn\",\n                    guard=_GUARD_NAME,\n                    message=(\n                        f\"{skill}: newest green run is {age_days} days old \"\n                        f\"(run_date={run_date_str})\"\n                    ),\n                )\n            )",
+      "replace": "            pass"
+    },
+    {
+      "label": "check drops the is_active conjunct, evaluating inactive skills too",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_no_result_for_an_inactive_skill_even_with_a_stale_green_run: an inactive skill must never be evaluated, regardless of its run history.",
+      "find": "        if not skill_dir.is_dir() or not is_active(skill_dir):",
+      "replace": "        if not skill_dir.is_dir():"
+    },
+    {
+      "label": "check inverts the green-verdict filter",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_for_an_active_skill_with_a_stale_newest_green_run and test_no_result_when_no_green_run_exists together: only green runs count toward staleness.",
+      "find": "            if run.get(\"verdict\") == \"green\"",
+      "replace": "            if run.get(\"verdict\") != \"green\""
+    },
+    {
+      "label": "check picks the oldest green run instead of the newest",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_uses_the_newest_green_run_when_multiple_exist: filename order is ascending, so the newest green run is the LAST element, not the first.",
+      "find": "        newest_green_file, newest_green = green_runs[-1]",
+      "replace": "        newest_green_file, newest_green = green_runs[0]"
+    },
+    {
+      "label": "check computes age_days with the subtraction reversed",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_for_an_active_skill_with_a_stale_newest_green_run: reversing the subtraction makes every age negative, so a genuinely stale run would never exceed the threshold.",
+      "find": "        age_days = (date.today() - run_date).days",
+      "replace": "        age_days = (run_date - date.today()).days"
+    },
+    {
+      "label": "check flips the staleness comparison",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_no_result_for_an_active_skill_with_a_recent_green_run and test_warns_for_an_active_skill_with_a_stale_newest_green_run together: only an age strictly over 30 days must warn.",
+      "find": "        if age_days > _STALE_AFTER_DAYS:",
+      "replace": "        if age_days < _STALE_AFTER_DAYS:"
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"staleness_warn\"",
+      "replace": "_GUARD_NAME = \"staleness_warn_guard\""
+    },
+    {
+      "label": "check drops the skill name from the warn message",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "find": "                        f\"{skill}: newest green run is {age_days} days old \"\n                        f\"(run_date={run_date_str})\"",
+      "replace": "                        f\"newest green run is {age_days} days old \"\n                        f\"(run_date={run_date_str})\""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Never fails, and skips inactive skills entirely.",
+      "replace": "This guard never fails, and skips inactive skills entirely."
+    },
+    {
+      "label": "check no longer catches a calendar-invalid run_date",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: strptime raises ValueError on 2026-02-30 and a warn-only guard must not crash.",
+      "find": "        except ValueError:",
+      "replace": "        except KeyError:"
+    },
+    {
+      "label": "invalid-run_date warn drops the skill-name prefix",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_calendar_invalid_run_date_warns_naming_the_file_and_never_raises: the warning must say which skill it is about.",
+      "find": "                        f\"{skill}: cannot judge staleness; {newest_green_file.name} \"",
+      "replace": "                        f\"cannot judge staleness; {newest_green_file.name} \""
+    },
+    {
+      "label": "a missing, empty or null run_date is skipped silently instead of warning",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_or_unusable_run_date_warns_like_a_calendar_invalid_one: an unusable run_date must be surfaced, as a calendar-invalid one is.",
+      "find": "            if not isinstance(run_date_str, str):\n                raise ValueError(\"run_date is missing, null or not a string\")",
+      "replace": "            if not run_date_str:\n                continue"
+    },
+    {
+      "label": "a null fingerprint is dereferenced without a guard",
+      "file": "./staleness_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_or_unusable_run_date_warns_like_a_calendar_invalid_one[null-fingerprint]: a null fingerprint must warn, not crash a never-fail guard.",
+      "find": "fingerprint.get(\"run_date\") if isinstance(fingerprint, dict) else None",
+      "replace": "fingerprint.get(\"run_date\")"
+    }
+  ]
+}

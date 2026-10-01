@@ -1,0 +1,79 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_injection_tier_warn.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_injection_tier_warn.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] check never returns a warn result",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_when_a_watched_path_changed: this guard's whole purpose is to warn on a watched-path change.",
+      "find": "    if not touched:\n        return []\n    return [\n        Result(\n            level=\"warn\",\n            guard=_GUARD_NAME,\n            message=f\"injection-tier paths changed: {', '.join(touched)}\",\n        )\n    ]",
+      "replace": "    return []"
+    },
+    {
+      "label": "check warns unconditionally regardless of what changed",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_no_result_when_no_watched_path_changed: an unrelated change must not warn — the positive conjunct.",
+      "find": "    if not touched:\n        return []",
+      "replace": "    pass"
+    },
+    {
+      "label": "check emits fail instead of warn",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "find": "            level=\"warn\",",
+      "replace": "            level=\"fail\","
+    },
+    {
+      "label": "check reports the wrong guard name",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "find": "_GUARD_NAME = \"injection_tier_warn\"",
+      "replace": "_GUARD_NAME = \"injection_tier_warn_guard\""
+    },
+    {
+      "label": "_WATCHED_PATHS drops the skill router hook script",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_warns_when_a_watched_path_changed[plugins/workbench/hooks/scripts/inject-skill-router.py]: every named path must independently trigger the warn.",
+      "find": "    \"plugins/workbench/hooks/scripts/inject-skill-router.py\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./injection_tier_warn.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "the hooks wiring and\nthe skill-router",
+      "replace": "the hooks wiring plus\nthe skill-router"
+    }
+  ]
+}

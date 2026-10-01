@@ -1,0 +1,121 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ci_workflow_paths.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_ci_workflow_paths.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] _has_path_filter_key always returns False",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_detects_a_paths_trigger_key and test_detects_a_paths_ignore_trigger_key: a no-op detector would never flag a real path filter, defeating the whole check.",
+      "find": "    return bool(_PATH_FILTER_KEY_PATTERN.search(_strip_comments(text)))",
+      "replace": "    return False"
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the paths-ignore alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_detects_every_yaml_spelling_of_a_path_filter_key[flow-after-comma] and the block paths-ignore cases, and test_detects_a_paths_ignore_trigger_key.",
+      "find": "paths(?:-ignore)?",
+      "replace": "paths"
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the boundary before the key, matching any substring",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_flag_text_that_is_not_a_path_filter_key[key-merely-ending-in-paths]: without a line-start/whitespace/flow boundary, `filepaths:` would false-positive as a trigger key.",
+      "find": "(?:^|[\\s{,\\[])",
+      "replace": ""
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the flow-mapping boundary characters",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by the flow-mapping-after-brace, flow-after-comma and fully-flow-style spellings: `{paths: [a]}` and `,paths-ignore:` have no whitespace before the key.",
+      "find": "(?:^|[\\s{,\\[])",
+      "replace": "(?:^|\\s)"
+    },
+    {
+      "label": "_PATH_FILTER_KEY_PATTERN drops the optional quotes around the key",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by the double-quoted-key and single-quoted-key spellings.",
+      "find": "[\\\"']?paths(?:-ignore)?[\\\"']?",
+      "replace": "paths(?:-ignore)?"
+    },
+    {
+      "label": "_has_path_filter_key searches the text without stripping comments first",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_flag_text_that_is_not_a_path_filter_key[comment-line], [indented-comment] and [trailing-comment]: `# paths: x` has whitespace before `paths:` so the boundary alone cannot reject it.",
+      "find": "search(_strip_comments(text))",
+      "replace": "search(text)"
+    },
+    {
+      "label": "[control] reword the module docstring",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "A `paths`/`paths-ignore` trigger key on the workflow would let an evals-only",
+      "replace": "A stray `paths`/`paths-ignore` trigger key on the workflow would let an evals-only"
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the quoted-string alternatives, stripping a # inside quotes",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-double-quotes-before-key and hash-in-single-quotes-before-key: `[\"a #b\"], paths: [x]` loses its real key to the comment strip.",
+      "find": "(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\n]|'')*')|",
+      "replace": "(x^)|"
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the double-quoted alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-double-quotes-before-key.",
+      "find": "\"(?:[^\"\\\\\\n]|\\\\.)*\"|",
+      "replace": ""
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the single-quoted alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-single-quotes-before-key.",
+      "find": "|'(?:[^'\\n]|'')*'",
+      "replace": ""
+    },
+    {
+      "label": "_COMMENT_PATTERN treats a # glued to a token as a comment start",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-glued-to-a-token-is-not-a-comment: in YAML a # only starts a comment at line start or after whitespace.",
+      "find": "(?:(?<=\\s)|^)#[^\\n]*",
+      "replace": "#[^\\n]*"
+    }
+  ]
+}
