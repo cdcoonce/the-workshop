@@ -263,6 +263,10 @@ _MISSES = {
         "The reviewer mustn't skip the auth check in login.py.",
         "The reviewer mustn\u2019t skip the auth check in login.py.\n",
     ),
+    "fullwidth and ligature compatibility characters": (
+        "\uff34\uff48\uff45 reviewer must \ufb01x the \ufb02aky auth check in login.py.",
+        "The reviewer must fix the flaky auth check in login.py.\n",
+    ),
     "zero-width space": (_LEAK_LINE, _LEAK_LINE.replace("missing", "mis\u200bsing") + "\n"),
     "short line inside a sentence": (
         "Must report auth bug.",
@@ -510,7 +514,13 @@ def _assert_no_skill_arm_valid(case_dir: Path, build=build_no_skill_prompt) -> N
     """Spec test 3, as a test would run it: the arm omits the skill and says not to invoke one."""
     skill = case_dir.parent.name
     output = build(case_dir)
-    assert not _skill_reference_pattern(skill).search(output), "the output still names the skill"
+    # A literal, case-insensitive whole-token check that does not go through the
+    # module's own reference pattern, so a form that pattern misses stays visible.
+    # (Only for hyphenated names: a bare ordinary word like "commit" may stay.)
+    if "-" in skill:
+        literal = re.compile(rf"(?<![\w-]){re.escape(skill)}(?![\w-])", re.IGNORECASE)
+        assert not literal.search(output), "the output still names the skill"
+    assert not _bare_skill_token(skill).search(output) or "-" not in skill, "the output still names the skill"
     assert _NO_SKILL_INSTRUCTION in output, "the do-not-invoke instruction is missing"
 
 
@@ -590,7 +600,7 @@ def _no_skill_case(tmp_path: Path, skill: str, prompt_text: str) -> Path:
     return case_dir
 
 
-def _skill_reference_pattern(skill: str) -> re.Pattern[str]:
+def _bare_skill_token(skill: str) -> re.Pattern[str]:
     """A case-insensitive whole-token reference to *skill* (bare, namespaced, or in a path)."""
     return re.compile(rf"(?<![\w-]){re.escape(skill)}(?![\w-])", re.IGNORECASE)
 
@@ -608,7 +618,7 @@ def test_build_no_skill_prompt_keeps_task_text_when_skill_name_is_mid_line(tmp_p
     assert "look at auth.py line 3 for a SQL injection bug." in output
     assert "Also check tdd." in output
     assert "Review this code" in output
-    assert not _skill_reference_pattern("adversarial-review").search(output)
+    assert not _bare_skill_token("adversarial-review").search(output)
 
 
 def test_build_no_skill_prompt_keeps_a_single_line_prompt_that_names_the_skill(tmp_path):
@@ -620,7 +630,7 @@ def test_build_no_skill_prompt_keeps_a_single_line_prompt_that_names_the_skill(t
 
     assert output.startswith("Run")
     assert "on it." in output
-    assert not _skill_reference_pattern("adversarial-review").search(output)
+    assert not _bare_skill_token("adversarial-review").search(output)
 
 
 def test_build_no_skill_prompt_removes_the_skill_name_case_insensitively(tmp_path):
@@ -631,7 +641,7 @@ def test_build_no_skill_prompt_removes_the_skill_name_case_insensitively(tmp_pat
     output = build_no_skill_prompt(case_dir)
 
     assert "Find the bug in foo.py." in output
-    assert not _skill_reference_pattern("adversarial-review").search(output)
+    assert not _bare_skill_token("adversarial-review").search(output)
 
 
 def test_build_no_skill_prompt_removes_a_skill_path_reference_but_keeps_the_task(tmp_path):
@@ -646,7 +656,7 @@ def test_build_no_skill_prompt_removes_a_skill_path_reference_but_keeps_the_task
     assert "then fix parser.py." in output
     assert "plugins/workbench/skills/" not in output
     assert "SKILL.md" not in output
-    assert not _skill_reference_pattern("adversarial-review").search(output)
+    assert not _bare_skill_token("adversarial-review").search(output)
 
 
 _ORDINARY_TEXT = [
@@ -737,6 +747,87 @@ def test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference(tmp_
     assert build_no_skill_prompt(multi_case).startswith("Open and stop.\n")
 
 
+_WRAPPED_FORMS = [
+    "Use the `commit` skill now.",
+    'Use the "commit" skill now.',
+    "Use the 'commit' skill now.",
+    'Use {"skill": "commit"} now.',
+    'Use Skill(skill: "commit") now.',
+    "Use the skill called commit now.",
+    "Use the skill named commit now.",
+    "Use the Skill tool with commit now.",
+    "Use the Commit-Skill now.",
+    "Use `commit` skill now.",
+    "Use skill=commit now.",
+    'Use skill="commit" now.',
+    "Use Skill(`commit`) now.",
+    "Use Skill: `commit` now.",
+]
+
+
+@pytest.mark.parametrize("prompt_text", _WRAPPED_FORMS)
+def test_build_no_skill_prompt_strips_a_wrapped_or_phrased_skill_reference(tmp_path, prompt_text):
+    case_dir = _no_skill_case(tmp_path, "commit", f"Stage a.py. {prompt_text} Then stop.\n")
+
+    output = build_no_skill_prompt(case_dir)
+
+    expected_use = "Use {} now." if '{"skill"' in prompt_text else "Use now."
+    assert output.startswith(f"Stage a.py. {expected_use} Then stop.\n"), output
+    assert not re.search(r"commit", output.split("\n\n")[0], re.IGNORECASE), output
+
+
+_NOT_A_SKILL_REFERENCE = [
+    "Open ~/commit now and read it.",
+    "Run with --dir=/commit and stop.",
+    "Copy it to host:/commit now.",
+    "Set scope:commit for the linter.",
+    "The tdd skills are many.",
+    "Read Skill: commit-message for the format.",
+    "See workbench:commit/notes.txt for details.",
+    "Do my tdd skillset review.",
+]
+
+
+@pytest.mark.parametrize("prompt_text", _NOT_A_SKILL_REFERENCE)
+def test_build_no_skill_prompt_leaves_lookalikes_that_are_not_skill_references(tmp_path, prompt_text):
+    skill = "tdd" if "tdd" in prompt_text else "commit"
+    case_dir = _no_skill_case(tmp_path, skill, prompt_text + "\n")
+
+    assert build_no_skill_prompt(case_dir) == f"{prompt_text}\n\n{_NO_SKILL_INSTRUCTION}\n"
+
+
+@pytest.mark.parametrize(
+    ("skill", "prompt_text", "expected_start"),
+    [
+        ("commit", "Please commit skill file updates.", "Please file updates."),
+        ("commit", "I need to commit skill changes.", "I need to changes."),
+        ("tdd", "That is my tdd skill level.", "That is my level."),
+    ],
+)
+def test_build_no_skill_prompt_documents_the_accepted_limitation_for_prose_using_the_phrase(
+    tmp_path, skill, prompt_text, expected_start
+):
+    """``<name> skill`` is a reference even in prose; the phrase is ambiguous and is stripped.
+
+    Pinned so a change to this behaviour is a deliberate one.
+    """
+    case_dir = _no_skill_case(tmp_path, skill, prompt_text + "\n")
+
+    assert build_no_skill_prompt(case_dir).startswith(expected_start)
+
+
+def test_a_slash_command_with_a_namespace_is_a_reference_but_a_bare_non_plugin_prefix_is_not(tmp_path):
+    case_dir = _no_skill_case(tmp_path, "commit", "Run /anyns:commit and scope:commit then workbench:commit.\n")
+
+    assert build_no_skill_prompt(case_dir).startswith("Run and scope:commit then.")
+
+
+def test_the_plugin_namespaces_match_the_plugins_directory():
+    plugins = {path.name for path in (_REPO_ROOT / "plugins").iterdir() if path.is_dir()}
+
+    assert set(dispatch._plugin_namespaces()) == plugins | {"workbench"}
+
+
 @pytest.mark.parametrize("prompt_text", ["/commit\n", "commit\n", "  Skill(commit)  \n", "the commit skill\n"])
 def test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference(
     tmp_path, prompt_text
@@ -760,7 +851,7 @@ def test_build_no_skill_prompt_does_not_eat_words_that_merely_contain_the_skill_
 
     assert "The commitment to quality matters." in output
     assert "We are committing to the plan." in output
-    assert not _skill_reference_pattern("commit").search(output)
+    assert not _bare_skill_token("commit").search(output)
 
 
 # ---------------------------------------------------------------------------

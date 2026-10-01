@@ -301,7 +301,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_no_skill_prompt_left_boundary_never_eats_the_tail_of_a_longer_word and the ordinary-path tests: 'recommit skill' / 'src/commit' would be eaten.",
-      "find": "    no_left = r\"(?<![\\w@./:-])\"",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
       "replace": "    no_left = r\"\""
     },
     {
@@ -309,16 +309,16 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_no_skill_prompt_drops_the_word_the_only_with_the_skill_phrase.",
-      "find": "(?:(?<![\\w-])the[ \\t]+)?{no_left}{name}[ \\t]+skill",
-      "replace": "{no_left}{name}[ \\t]+skill"
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b",
+      "replace": "{no_left}{quoted}[ \\t]+skill\\b"
     },
     {
       "label": "[R7] the skill phrase leaves the trailing 'skill' word",
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_no_skill_prompt_drops_the_trailing_skill_word_of_the_phrase.",
-      "find": "{no_left}{name}[ \\t]+skill\\b\"",
-      "replace": "{no_left}{name}\""
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b\"",
+      "replace": "{the}{no_left}{quoted}\""
     },
     {
       "label": "[R8] punctuation spacing cleanup dropped",
@@ -775,6 +775,126 @@
       "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files (skill-c has no case yet).",
       "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
       "replace": "        if path.is_dir() and any(path.glob(\"*/case.toml\")) and not path.name.startswith(\"_\")"
+    },
+    {
+      "label": "[F1] 'skill' phrase word boundary loosened to skill\\w*",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_leaves_lookalikes_that_are_not_skill_references ('The tdd skills are many.').",
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b\"",
+      "replace": "{the}{no_left}{quoted}[ \\t]+skill\\w*\""
+    },
+    {
+      "label": "[F1] 'Skill: name' loses its trailing boundary",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Skill: commit-message' lookalike.",
+      "find": "rf\"\\bSkill:[ \\t]*{quoted}(?![\\w-])\"",
+      "replace": "rf\"\\bSkill:[ \\t]*{quoted}\""
+    },
+    {
+      "label": "[F1] plugin-namespaced form loses its '/' boundary",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'workbench:commit/notes.txt' lookalike.",
+      "find": "{no_left}(?:{namespaces}):{name}(?![\\w-])(?!/)",
+      "replace": "{no_left}(?:{namespaces}):{name}(?![\\w-])"
+    },
+    {
+      "label": "[F1] any 'word:name' counts as a namespaced reference",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'scope:commit' lookalike.",
+      "find": "{no_left}(?:{namespaces}):{name}(?![\\w-])(?!/)",
+      "replace": "{no_left}{_PATH_SEGMENT}:{name}(?![\\w-])(?!/)"
+    },
+    {
+      "label": "[F1] left boundary stops excluding '~'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '~/commit' lookalike.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./:=-])\""
+    },
+    {
+      "label": "[F1] left boundary stops excluding '='",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '--dir=/commit' lookalike.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./:~-])\""
+    },
+    {
+      "label": "[F1] left boundary stops excluding ':'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'scope:commit' lookalike and the slash-command test.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./=~-])\""
+    },
+    {
+      "label": "[F1] quotes and backticks around the name are not allowed",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the wrapped-form tests ('the `commit` skill').",
+      "find": "    quote = r\"[\\\"'`]?\"",
+      "replace": "    quote = r\"\""
+    },
+    {
+      "label": "[F1] the Name-Skill form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Commit-Skill' case.",
+      "find": "        rf\"{the}{no_left}{name}-skill(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] the JSON \"skill\": \"name\" form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '{\"skill\": \"commit\"}' case.",
+      "find": "        rf\"[\\\"']skill[\\\"'][ \\t]*:[ \\t]*[\\\"']{name}[\\\"']\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] Skill(skill: name) loses its keyword prefix",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Skill(skill: \"commit\")' case.",
+      "find": "(?:skill[ \\t]*[:=][ \\t]*)?{quoted}[ \\t]*\\)",
+      "replace": "{quoted}[ \\t]*\\)"
+    },
+    {
+      "label": "[F1] 'skill called|named name' form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'the skill called commit' / 'the skill named commit' cases.",
+      "find": "        rf\"{the}\\bskill[ \\t]+(?:called|named)[ \\t]+{quoted}(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] 'Skill tool with name' form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'the Skill tool with commit' case.",
+      "find": "        rf\"{the}\\bSkill[ \\t]+tool[ \\t]+with[ \\t]+{quoted}(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] skill=name requires quotes again",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'skill=commit' case.",
+      "find": "rf\"\\bskill[ \\t]*=[ \\t]*{quoted}(?![\\w-])\"",
+      "replace": "rf\"\\bskill[ \\t]*=[ \\t]*[\\\"']{name}[\\\"']\""
+    },
+    {
+      "label": "[F1] leak comparison normalises with NFC instead of NFKC",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'fullwidth and ligature compatibility characters' leak case.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "unicodedata.normalize(\"NFC\", text).casefold()"
     },
     {
       "label": "[control] reword the Evidence docstring",

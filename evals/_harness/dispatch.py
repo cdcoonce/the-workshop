@@ -61,6 +61,7 @@ from that file and passes the set in).
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import re
 import sys
@@ -401,29 +402,50 @@ def build_dispatch_prompt(case_dir: Path) -> str:
 _PATH_SEGMENT = r"\.?[\w@-]+(?:\.[\w@-]+)*"
 
 
+@functools.cache
+def _plugin_namespaces() -> tuple[str, ...]:
+    """Plugin names a skill can be namespaced under (``workbench:commit``)."""
+    plugins_dir = Path(__file__).resolve().parents[2] / "plugins"
+    found = {path.name for path in plugins_dir.iterdir() if path.is_dir()} if plugins_dir.is_dir() else set()
+    return tuple(sorted(found | {"workbench"}))
+
+
 def _skill_reference_pattern(skill: str) -> re.Pattern[str]:
     """Match the unambiguous ways a prompt can *name the rostered skill*.
 
     Only these forms count, because a skill is often named like an ordinary
     word or directory (``commit``, ``tdd``): ``skills/<name>/...`` and
-    ``plugins/<ns>/skills/<name>/...`` paths, ``ns:<name>`` and
-    ``/ns:<name>``, the ``/<name>`` slash form at a token start, the phrases
-    ``the <name> skill`` and ``<name> skill``, ``skill="<name>"``,
-    ``Skill(<name>)`` and ``Skill: <name>``. A hyphenated name
-    (``adversarial-review``) is never an ordinary word, so it is also matched
-    bare, unless it sits inside a path. Every form needs a left word
-    boundary, so ``recommit`` never matches ``commit``.
+    ``plugins/<ns>/skills/<name>/...`` paths; ``/<ns>:<name>`` and
+    ``<plugin>:<name>`` (a bare ``scope:commit`` is not a skill); the
+    ``/<name>`` slash form at a token start (not ``~/commit`` or
+    ``--dir=/commit``); the phrases ``the <name> skill``, ``<name> skill`` and
+    ``<Name>-Skill``; ``skill=<name>``, ``"skill": "<name>"``,
+    ``Skill(<name>)``, ``Skill(skill: <name>)`` and ``Skill: <name>``;
+    ``the skill called|named <name>``; and ``the Skill tool with <name>``. The
+    name may sit in quotes or backticks in the phrase and keyword forms. A
+    hyphenated name (``adversarial-review``) is never an ordinary word, so it
+    is also matched bare, unless it sits inside a path. Every form needs a
+    left word boundary, so ``recommit`` never matches ``commit``.
     """
     name = re.escape(skill)
-    no_left = r"(?<![\w@./:-])"
+    quote = r"[\"'`]?"
+    quoted = rf"{quote}{name}{quote}"
+    no_left = r"(?<![\w@./:=~-])"
+    the = r"(?:(?<![\w-])the[ \t]+)?"
+    namespaces = "|".join(re.escape(namespace) for namespace in _plugin_namespaces())
     forms = [
         rf"(?<![\w@./-])(?:/?{_PATH_SEGMENT}/)*skills/{name}(?![\w-])(?:/{_PATH_SEGMENT})*/?",
-        rf"(?<![\w@./-])/?{_PATH_SEGMENT}:{name}(?![\w-])(?!/)",
+        rf"{no_left}/{_PATH_SEGMENT}:{name}(?![\w-])(?!/)",
+        rf"{no_left}(?:{namespaces}):{name}(?![\w-])(?!/)",
         rf"{no_left}/{name}(?![\w-])(?!/)(?!\.\w)",
-        rf"(?:(?<![\w-])the[ \t]+)?{no_left}{name}[ \t]+skill\b",
-        rf"\bskill[ \t]*=[ \t]*[\"']{name}[\"']",
-        rf"\bSkill\([ \t]*[\"']?{name}[\"']?[ \t]*\)",
-        rf"\bSkill:[ \t]*{name}(?![\w-])",
+        rf"{the}{no_left}{quoted}[ \t]+skill\b",
+        rf"{the}{no_left}{name}-skill(?![\w-])",
+        rf"\bskill[ \t]*=[ \t]*{quoted}(?![\w-])",
+        rf"[\"']skill[\"'][ \t]*:[ \t]*[\"']{name}[\"']",
+        rf"\bSkill\([ \t]*(?:skill[ \t]*[:=][ \t]*)?{quoted}[ \t]*\)",
+        rf"\bSkill:[ \t]*{quoted}(?![\w-])",
+        rf"{the}\bskill[ \t]+(?:called|named)[ \t]+{quoted}(?![\w-])",
+        rf"{the}\bSkill[ \t]+tool[ \t]+with[ \t]+{quoted}(?![\w-])",
     ]
     if "-" in skill:
         forms.append(rf"{no_left}{name}(?![\w-])(?!/)(?!\.\w)")
