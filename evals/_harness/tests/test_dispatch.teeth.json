@@ -1,0 +1,1013 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_dispatch.py"
+  ],
+  "mutants": [
+    {
+      "label": "case.toml 'mode' validation disabled",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_missing_mode_is_rejected and test_invalid_mode_is_rejected: with the check dropped, a case.toml with a missing or bogus mode no longer raises.",
+      "find": "    mode = case_toml.get(\"mode\")\n    if not isinstance(mode, str) or mode not in _VALID_MODES:",
+      "replace": "    mode = case_toml.get(\"mode\")\n    if False:"
+    },
+    {
+      "label": "build_dispatch_prompt reads and appends acceptance.md",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: the dispatched prompt would carry acceptance.md's text (and the leak guard is bypassed).",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    text = _prompt_text(case_dir, case_toml) + (case_dir / \"acceptance.md\").read_text(encoding=\"utf-8\")\n    return text"
+    },
+    {
+      "label": "[does-nothing] build_dispatch_prompt returns every file in the case directory concatenated",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: concatenating every file in the case directory includes acceptance.md's text and the case.toml.",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "    return \"\".join(p.read_text(encoding=\"utf-8\") for p in sorted(case_dir.iterdir()) if p.is_file())"
+    },
+    {
+      "label": "build_no_skill_prompt drops the do-not-invoke-any-skill instruction",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_omits_skill_name_and_adds_instruction: the fixed instruction sentence would no longer appear in the output.",
+      "find": "    return f\"{stripped}\\n\\n{_NO_SKILL_INSTRUCTION}\\n\"",
+      "replace": "    return f\"{stripped}\\n\""
+    },
+    {
+      "label": "_combined_status ignores non-complete transcript statuses",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_truncated_transcript_is_indeterminate: a truncated transcript would be scored as if it were complete.",
+      "find": "        if transcript.status != \"complete\":",
+      "replace": "        if False:"
+    },
+    {
+      "label": "envelope_parsed always reports True",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_findings_envelope_parse_failure_scores_miss_with_parse_error: an unparseable findings envelope would no longer set parse_error.",
+      "find": "    envelope_parsed = all(per_transcript_ok) if uses_findings_envelope else True",
+      "replace": "    envelope_parsed = True"
+    },
+    {
+      "label": "[does-nothing] score_attempt never calls any item's scorer",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_hits_via_synthetic_predicate: every item would score a miss regardless of the transcript.",
+      "find": "    if status == \"complete\":\n        item_hits = {\n            item[\"id\"]: _run_scorer(case_dir, item, scorers[item[\"id\"]], evidence)\n            for item in items\n        }\n    else:\n        item_hits = {item[\"id\"]: False for item in items}",
+      "replace": "    item_hits = {item[\"id\"]: False for item in items}"
+    },
+    {
+      "label": "unmatched-finding count always reports 0",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_counts_unmatched_findings_for_findings_envelope_case: the unrelated bar.py finding would no longer count as unmatched.",
+      "find": "        try:\n            unmatched = count_unmatched(findings, review_item_params)\n        except Exception as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting unmatched findings failed ({type(exc).__name__}: {exc}); \"\n                \"check the review items' file_suffix/regex params\"\n            ) from exc\n    else:\n        unmatched = 0",
+      "replace": "        unmatched = 0\n    else:\n        unmatched = 0"
+    },
+    {
+      "label": "score_attempt never loads end-state evidence",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_then_rescore_from_raws_matches_the_live_score: an end-state-based scorer would always see an empty end_state and miss.",
+      "find": "        end_state=_load_end_state(end_state_dir),",
+      "replace": "        end_state={},"
+    },
+    {
+      "label": "prompt path may escape the case directory",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_path_escaping_the_case_directory_is_refused and the absolute-path and symlink variants: a prompt outside the case directory would be read.",
+      "find": "    if not resolved.is_relative_to(root):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt may name acceptance.md",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_that_names_acceptance_md_is_refused: acceptance.md would be read as the prompt (only the line-level leak guard, a different error, would remain).",
+      "find": "    if resolved == (root / \"acceptance.md\").resolve():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt path is not resolved before the containment check",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the ../ and symlink tests: a lexical containment check passes 'case/../secret.txt' and a symlink pointing outside.",
+      "find": "    resolved = (case_dir / prompt_name).resolve()",
+      "replace": "    resolved = case_dir / prompt_name"
+    },
+    {
+      "label": "score_attempt rejects gated ids that belong to a sibling case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_tolerates_gated_ids_that_belong_to_a_sibling_case: the per-skill manifest set names items of other cases, and a conductor passing it whole would crash.",
+      "find": "    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items",
+      "replace": "    if gated_ids - {item[\"id\"] for item in items}:\n        raise ValueError(\"gated_ids name an item outside this case\")\n    # ``gated_ids`` is the skill-wide manifest set, so it routinely names items"
+    },
+    {
+      "label": "[U1] snapshot_end_state unsafe file-name guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: '../x', an absolute path, 'a/b', '..', '.', '' and backslash names would be accepted.",
+      "find": "    if unsafe:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "snapshot_end_state NUL-in-name check dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'a\\0b' case of test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: the NUL name would only fail later, at write time, after earlier files were already written.",
+      "find": "(\"/\", \"\\\\\", \"\\0\")",
+      "replace": "(\"/\", \"\\\\\")"
+    },
+    {
+      "label": "snapshot_end_state tests.md guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'tests.md' case of test_snapshot_end_state_rejects_an_unsafe_file_name_and_writes_nothing: the spec's anti-scope bans writing any tests.md.",
+      "find": "    if name.casefold() == \"tests.md\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "snapshot_end_state tests.md guard becomes case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Tests.MD' case: on a case-insensitive filesystem that name is tests.md.",
+      "find": "    if name.casefold() == \"tests.md\":",
+      "replace": "    if name == \"tests.md\":"
+    },
+    {
+      "label": "snapshot_end_state accepts a symlinked dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_refuses_a_dest_that_is_itself_a_symlink.",
+      "find": "    if dest.is_symlink():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "scorer lookup no longer checks the scorer is a defined function",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the missing-scorer tests: a None scorer would be called and raise a bare TypeError instead of naming the case and scorer.",
+      "find": "        if not callable(scorer):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "case.toml 'mode' check no longer rejects a non-string mode",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_non_string_mode_is_a_value_error_like_any_other_bad_mode: mode = [\"subagent\"] would raise TypeError (unhashable list), not ValueError.",
+      "find": "    if not isinstance(mode, str) or mode not in _VALID_MODES:\n        raise CaseContractError(",
+      "replace": "    if mode not in _VALID_MODES:\n        raise CaseContractError("
+    },
+    {
+      "label": "item 'params' type check dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_missing_id_or_scorer_or_with_bad_params_is_named: a non-table params would surface as a bare TypeError at call time.",
+      "find": "        if not isinstance(item.get(\"params\", {}), dict):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "end-state loader stops tolerating non-UTF-8 files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_binary_file_in_the_end_state_directory_does_not_crash_scoring.",
+      "find": "path.read_text(encoding=\"utf-8\", errors=\"replace\")",
+      "replace": "path.read_text(encoding=\"utf-8\")"
+    },
+    {
+      "label": "[E1] envelope_parsed requires only ANY lens transcript to parse (all -> any)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_one_unparseable_lens_reply_sets_parse_error_for_the_whole_attempt: one parseable lens reply would hide another lens's unparseable reply.",
+      "find": "all(per_transcript_ok) if uses_findings_envelope",
+      "replace": "any(per_transcript_ok) if uses_findings_envelope"
+    },
+    {
+      "label": "[S1] combined status reads only the first lens transcript",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_an_incomplete_later_lens_transcript_makes_the_attempt_indeterminate: a truncated second or third lens transcript would be scored as complete.",
+      "find": "    for transcript in transcripts:\n        if transcript.status != \"complete\":",
+      "replace": "    for transcript in transcripts[:1]:\n        if transcript.status != \"complete\":"
+    },
+    {
+      "label": "[F1] findings union keeps only the first transcript's findings",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_findings_are_the_union_across_every_lens_transcript: the second lens agent's finding would be dropped.",
+      "find": "        findings.extend(transcript_findings)",
+      "replace": "        findings.extend(transcript_findings if not findings else [])"
+    },
+    {
+      "label": "combined status of no transcripts reads as complete",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_inline_with_no_transcripts_is_indeterminate: an attempt that produced no transcript at all would be scored.",
+      "find": "        return \"missing\"",
+      "replace": "        return \"complete\""
+    },
+    {
+      "label": "[T4] find_duplicate_item_ids never reports a duplicate",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: two synthetic cases sharing an id would no longer turn the committed-case test red (the rule's logic lives in dispatch.py, so this mutant is in the rule itself, not the test).",
+      "find": "            if item_id in seen:\n                duplicates.add(item_id)",
+      "replace": "            seen.add(item_id)"
+    },
+    {
+      "label": "[T4] find_invalid_modes never reports an invalid mode",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_committed_case_mode_check_goes_red_on_a_synthetic_bad_case (missing, bogus, list): a synthetic case with a missing or invalid mode would no longer turn the committed-case mode test red.",
+      "find": "        mode = case_toml.get(\"mode\")\n        if not isinstance(mode, str) or mode not in _VALID_MODES:",
+      "replace": "        mode = case_toml.get(\"mode\")\n        if False:"
+    },
+    {
+      "label": "find_invalid_modes skips an unparseable case.toml instead of reporting it",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'unparseable' case of test_the_committed_case_mode_check_goes_red_on_a_synthetic_bad_case.",
+      "find": "            problems.append((case_dir, f\"case.toml unreadable: {exc}\"))\n            continue",
+      "replace": "            continue"
+    },
+    {
+      "label": "find_duplicate_item_ids stops counting a repeat inside one case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_inside_a_single_case_is_also_a_duplicate.",
+      "find": "        for item in items:\n            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):\n                raise CaseContractError(f\"{case_name}: an [[items]] table has no string 'id'\")\n            item_id = item[\"id\"]\n            if item_id in seen:\n                duplicates.add(item_id)\n            seen.add(item_id)",
+      "replace": "        seen_before = set(seen)\n        for item in items:\n            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):\n                raise CaseContractError(f\"{case_name}: an [[items]] table has no string 'id'\")\n            item_id = item[\"id\"]\n            if item_id in seen_before:\n                duplicates.add(item_id)\n            seen.add(item_id)"
+    },
+    {
+      "label": "find_duplicate_item_ids namespace shrinks from per-skill to per-case",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_duplicate_item_id_across_two_cases_of_one_skill_turns_the_test_red: ids are one namespace per skill (checks.manifest is per skill), so a repeat in a sibling case must be reported.",
+      "find": "        case_name = case_toml_path.parent.name\n",
+      "replace": "        case_name = case_toml_path.parent.name\n        seen = set()\n"
+    },
+    {
+      "label": "build_no_skill_prompt stops removing the skill reference",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the no-skill removal tests: the rostered skill's name would still appear in the no-skill prompt.",
+      "find": "    removed = _skill_reference_pattern(skill).sub(\"\", text)",
+      "replace": "    removed = text"
+    },
+    {
+      "label": "build_no_skill_prompt deletes the whole line holding the skill name again",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the strip-form tests: the pre-fix whole-line deletion destroys the task text sharing a line with the reference.",
+      "find": "    removed = _skill_reference_pattern(skill).sub(\"\", text)",
+      "replace": "    removed = \"\\n\".join(line for line in text.splitlines() if not _skill_reference_pattern(skill).search(line))"
+    },
+    {
+      "label": "[R1] skill-reference left word boundary dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_left_boundary_never_eats_the_tail_of_a_longer_word and the ordinary-path tests: 'recommit skill' / 'src/commit' would be eaten.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"\""
+    },
+    {
+      "label": "[R4] the skill phrase no longer drops the leading 'the'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_drops_the_word_the_only_with_the_skill_phrase.",
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b",
+      "replace": "{no_left}{quoted}[ \\t]+skill\\b"
+    },
+    {
+      "label": "[R7] the skill phrase leaves the trailing 'skill' word",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_drops_the_trailing_skill_word_of_the_phrase.",
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b\"",
+      "replace": "{the}{no_left}{quoted}\""
+    },
+    {
+      "label": "[R8] punctuation spacing cleanup dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference.",
+      "find": "    removed = re.sub(r\"[ \\t]+([:,;.!?])\", r\"\\1\", removed)",
+      "replace": "    pass"
+    },
+    {
+      "label": "[R9] repeated-space collapse dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_cleans_up_spacing_around_a_removed_reference.",
+      "find": "    return re.sub(r\"[ \\t]{2,}\", \" \", removed)",
+      "replace": "    return removed"
+    },
+    {
+      "label": "bare skill name stripped for every skill, not only hyphenated ones",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_leaves_ordinary_words_and_unrelated_paths_alone: 'then commit.' would lose its verb.",
+      "find": "    if \"-\" in skill:",
+      "replace": "    if True:"
+    },
+    {
+      "label": "slash form no longer requires a token start",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the ordinary-path cases: 'src/commit' would be eaten.",
+      "find": "    forms = [",
+      "replace": "    forms = [\n        rf\"/{name}(?![\\w-])\","
+    },
+    {
+      "label": "slash form eats a /name/ path",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '/commit/parser.py' and '/commit.md' ordinary cases.",
+      "find": "{no_left}/{name}(?![\\w-])(?!/)(?!\\.\\w)",
+      "replace": "{no_left}/{name}(?![\\w-])"
+    },
+    {
+      "label": "empty-after-removal guard dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference.",
+      "find": "    if not stripped:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "prompt-that-is-only-the-skill-name shortcut dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'commit' case of test_build_no_skill_prompt_refuses_a_prompt_that_is_nothing_but_the_skill_reference.",
+      "find": "    if prompt_text.strip().casefold() == skill.casefold():",
+      "replace": "    if False:"
+    },
+    {
+      "label": "acceptance-leak guard never fires",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by every test_a_copied_acceptance_line_* and the exact-embed tests: a prompt embedding acceptance.md would come back unchanged.",
+      "find": "    if leaks:\n        raise AcceptanceLeakError(",
+      "replace": "    if False:\n        raise AcceptanceLeakError("
+    },
+    {
+      "label": "[Q2] leak comparison is case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'case change' case of test_a_copied_acceptance_line_is_caught_despite_cosmetic_changes.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "unicodedata.normalize(\"NFKC\", text)"
+    },
+    {
+      "label": "[Q2] leak comparison skips unicode normalisation",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'decomposed unicode' case.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "text.casefold()"
+    },
+    {
+      "label": "[Q2] zero-width characters are no longer ignored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'zero-width space' case: an invisible character would split a word and hide the copy.",
+      "find": "if unicodedata.category(char) != \"Cf\"",
+      "replace": "if True"
+    },
+    {
+      "label": "[Q2] markdown list/heading/checkbox prefixes are no longer stripped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'nested ordered list' case: the stray '1' token breaks the contiguous match.",
+      "find": "    return _tokens(_LINE_PREFIX.sub(\"\", line))",
+      "replace": "    return _tokens(line)"
+    },
+    {
+      "label": "[L5] leak threshold lowered to 3 tokens",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_threshold_is_four_tokens_in_both_directions and the boilerplate tests: a 3-token shared line would be a leak.",
+      "find": "LEAK_MIN_TOKENS = 4",
+      "replace": "LEAK_MIN_TOKENS = 3"
+    },
+    {
+      "label": "[L6] leak threshold raised to 5 tokens",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_threshold_is_four_tokens_in_both_directions and the 'short line inside a sentence' case.",
+      "find": "LEAK_MIN_TOKENS = 4",
+      "replace": "LEAK_MIN_TOKENS = 5"
+    },
+    {
+      "label": "[Q2] generic-word-only lines count as leaks",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_shared_boilerplate_is_not_a_leak ('# Acceptance Criteria Expected Results').",
+      "find": "    return len(tokens) >= LEAK_MIN_TOKENS and not set(tokens) <= _GENERIC_TOKENS",
+      "replace": "    return len(tokens) >= LEAK_MIN_TOKENS"
+    },
+    {
+      "label": "[Q2] prompt-line-inside-acceptance direction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'fragment of an acceptance line' case.",
+      "find": "        if _contains_run(acceptance_haystack, window):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] acceptance-line-inside-prompt direction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'case change' and 'short line inside a sentence' cases.",
+      "find": "        if _contains_run(prompt_haystack, window):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] prompt is searched line by line, not as one stream",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 're-wrapped across two prompt lines' case.",
+      "find": "        if _contains_run(prompt_haystack, window):",
+      "replace": "        if any(_contains_run(_haystack(line), window) for line in prompt_lines):"
+    },
+    {
+      "label": "[Q2] acceptance.md is searched line by line, not as one stream",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'prompt line spanning two acceptance lines' case.",
+      "find": "        if _contains_run(acceptance_haystack, window):",
+      "replace": "        if any(_contains_run(_haystack(line), window) for line in acceptance_lines):"
+    },
+    {
+      "label": "[Q2] a binary acceptance.md is no longer a named error",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_binary_acceptance_md_is_a_named_error.",
+      "find": "    except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "    except OSError as exc:"
+    },
+    {
+      "label": "[Q2] an unreadable acceptance.md is no longer a named error",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_unreadable_acceptance_md_is_a_named_error.",
+      "find": "    except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "    except UnicodeDecodeError as exc:"
+    },
+    {
+      "label": "[Q2] prompt suffix restriction dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_must_be_a_markdown_or_text_file_never_a_reserved_case_file.",
+      "find": "        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "[Q2] prompt suffix checked only on the declared name, not the resolved file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_symlink_to_a_reserved_file_is_refused.",
+      "find": "    for candidate in (Path(prompt_name), resolved):",
+      "replace": "    for candidate in (Path(prompt_name),):"
+    },
+    {
+      "label": "[Q2] prompt suffix check is case-sensitive",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_markdown_and_text_prompts_are_accepted (PROMPT.MD).",
+      "find": "        if candidate.suffix.casefold() not in _PROMPT_SUFFIXES:",
+      "replace": "        if candidate.suffix not in _PROMPT_SUFFIXES:"
+    },
+    {
+      "label": "[Q3] transcript_status override validation dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_dispatch_error_is_an_allowed_transcript_status_override and the forced-complete test: a forced 'complete' over no transcripts would run scorers that index transcripts[0].",
+      "find": "    if transcript_status not in (None, \"dispatch_error\"):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[S1] scorers run even when the attempt is not complete",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dispatch_error_attempt_with_no_transcripts_is_indeterminate_and_runs_no_scorer and test_scorers_are_never_called_on_an_incomplete_attempt.",
+      "find": "    if status == \"complete\":\n        item_hits = {",
+      "replace": "    if True:\n        item_hits = {"
+    },
+    {
+      "label": "[S2] transcript_status override ignored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dispatch_error_override_wins_over_a_complete_transcript.",
+      "find": "    status = transcript_status if transcript_status is not None else _combined_status(transcripts)",
+      "replace": "    status = _combined_status(transcripts)"
+    },
+    {
+      "label": "[S3] item params are not passed to the scorer",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_hits_via_synthetic_predicate (the marker param).",
+      "find": "bool(scorer(evidence, **item.get(\"params\", {})))",
+      "replace": "bool(scorer(evidence))"
+    },
+    {
+      "label": "[S4] envelope parsing always on",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_envelope_findings_turns_on_envelope_parsing.",
+      "find": "    uses_findings_envelope = case_toml.get(\"envelope\") == \"findings\"",
+      "replace": "    uses_findings_envelope = True"
+    },
+    {
+      "label": "[S4] envelope parsing always off",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the findings-envelope parse-failure test.",
+      "find": "    uses_findings_envelope = case_toml.get(\"envelope\") == \"findings\"",
+      "replace": "    uses_findings_envelope = False"
+    },
+    {
+      "label": "[S5] review-item filter accepts an item with only one of file_suffix/regex",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_only_items_with_both_file_suffix_and_regex_params_feed_the_unmatched_count.",
+      "find": "            and \"file_suffix\" in item[\"params\"]\n            and \"regex\" in item[\"params\"]",
+      "replace": "            and (\"file_suffix\" in item[\"params\"]\n            or \"regex\" in item[\"params\"])"
+    },
+    {
+      "label": "[S6] Evidence.workdir is never the attempt's workdir",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_evidence_carries_the_workdir_and_the_parsed_transcripts_to_the_scorer.",
+      "find": "        workdir=workdir,\n        end_state=_load_end_state",
+      "replace": "        workdir=None,\n        end_state=_load_end_state"
+    },
+    {
+      "label": "[S7] a missing end_state_dir is no longer treated as empty",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_end_state_dir_is_treated_as_an_empty_snapshot.",
+      "find": "    if end_state_dir is None or not end_state_dir.is_dir():",
+      "replace": "    if end_state_dir is None:"
+    },
+    {
+      "label": "[S9] a predicates.py import failure is not wrapped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_predicates_that_fail_to_import_are_a_named_error.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: predicates.py failed",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: predicates.py failed"
+    },
+    {
+      "label": "[S10] end_state is called with no transcripts",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_end_state_is_called_with_the_parsed_transcripts_not_an_empty_list.",
+      "find": "    snapshot = end_state_fn(workdir, case_dir, transcripts)",
+      "replace": "    snapshot = end_state_fn(workdir, case_dir, [])"
+    },
+    {
+      "label": "[B1] bytecode caching left on while loading predicates",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_loading_predicates_leaves_no_bytecode_and_restores_the_flag.",
+      "find": "    sys.dont_write_bytecode = True\n    try:",
+      "replace": "    try:"
+    },
+    {
+      "label": "[B2] the bytecode flag is not restored",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the flag-restored tests.",
+      "find": "        sys.dont_write_bytecode = previous_dont_write_bytecode\n    return module",
+      "replace": "        pass\n    return module"
+    },
+    {
+      "label": "a duplicate item id inside one case is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_duplicate_item_id_inside_one_case_is_a_named_error: the later scorer would silently win.",
+      "find": "    if repeated:\n        raise CaseContractError(",
+      "replace": "    if False:\n        raise CaseContractError("
+    },
+    {
+      "label": "the item id grammar is not enforced",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_id_must_match_the_id_grammar.",
+      "find": "        if not _ITEM_ID.match(item[\"id\"]):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "the item kind is not validated",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_item_kind_must_be_a_known_kind (calibration needs kind).",
+      "find": "        if item.get(\"kind\") not in _ITEM_KINDS:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "an unknown envelope value is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_unknown_envelope_value_is_a_named_error.",
+      "find": "    if case_toml.get(\"envelope\", \"findings\") != \"findings\":",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a raising scorer propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_raising_scorer_is_a_named_error_naming_case_and_item and the bad-params test.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: scorer",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: scorer"
+    },
+    {
+      "label": "an invalid regex param propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_invalid_regex_param_is_a_named_error.",
+      "find": "        except Exception as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting",
+      "replace": "        except ZeroDivisionError as exc:\n            raise CaseContractError(\n                f\"{case_dir}: counting"
+    },
+    {
+      "label": "find_duplicate_item_ids lets a TOML error through raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:",
+      "replace": "        except OSError as exc:"
+    },
+    {
+      "label": "find_duplicate_item_ids lets an id-less item through raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "            if not isinstance(item, dict) or not isinstance(item.get(\"id\"), str):",
+      "replace": "            if False:"
+    },
+    {
+      "label": "find_duplicate_item_ids lets a non-list items through",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_names_a_malformed_case_instead_of_crashing.",
+      "find": "        if not isinstance(items, list):\n            raise CaseContractError(f\"{case_name}",
+      "replace": "        if False:\n            raise CaseContractError(f\"{case_name}"
+    },
+    {
+      "label": "find_duplicate_item_ids globs nested case.toml files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_find_duplicate_item_ids_ignores_case_toml_files_nested_below_a_case.",
+      "find": "skill_dir.glob(\"*/case.toml\")",
+      "replace": "skill_dir.glob(\"**/case.toml\")"
+    },
+    {
+      "label": "snapshot_end_state accepts a populated dest",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_snapshot_end_state_refuses_a_populated_dest_so_stale_files_never_leak_in.",
+      "find": "    if any(dest.iterdir()):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a non-string or empty prompt name is accepted",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_file_name_must_be_a_non_empty_string.",
+      "find": "    if not isinstance(prompt, str) or not prompt:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[I1] inline mode rejected",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_mode_value_is_checked_for_both_valid_modes and the inline lens tests.",
+      "find": "_VALID_MODES = {\"subagent\", \"inline\"}",
+      "replace": "_VALID_MODES = {\"subagent\"}"
+    },
+    {
+      "label": "[I2] subagent mode rejected",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_mode_value_is_checked_for_both_valid_modes.",
+      "find": "_VALID_MODES = {\"subagent\", \"inline\"}",
+      "replace": "_VALID_MODES = {\"inline\"}"
+    },
+    {
+      "label": "[T2] case discovery globs the wrong depth",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down.",
+      "find": "evals_root.glob(\"*/*/case.toml\")",
+      "replace": "evals_root.glob(\"*/*/*/case.toml\")"
+    },
+    {
+      "label": "case discovery recurses into nested case.toml files",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down: fixture trees and raws hold case.toml files too.",
+      "find": "evals_root.glob(\"*/*/case.toml\")",
+      "replace": "evals_root.glob(\"**/case.toml\")"
+    },
+    {
+      "label": "case discovery includes the _harness package",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_exactly_the_case_directories_two_levels_down.",
+      "find": "        if not path.parent.parent.name.startswith(\"_\")\n",
+      "replace": ""
+    },
+    {
+      "label": "[T2] skill discovery finds nothing",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files.",
+      "find": "    return sorted(\n        path\n        for path in evals_root.iterdir()",
+      "replace": "    return []\n    return sorted(\n        path\n        for path in evals_root.iterdir()"
+    },
+    {
+      "label": "skill discovery includes the _harness package and dot-directories",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files.",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir()"
+    },
+    {
+      "label": "skill discovery drops directories without cases",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_finds_every_skill_directory_and_skips_the_harness_and_files (skill-c has no case yet).",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir() and any(path.glob(\"*/case.toml\")) and not path.name.startswith(\"_\")"
+    },
+    {
+      "label": "[F1] 'skill' phrase word boundary loosened to skill\\w*",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_build_no_skill_prompt_leaves_lookalikes_that_are_not_skill_references ('The tdd skills are many.').",
+      "find": "{the}{no_left}{quoted}[ \\t]+skill\\b\"",
+      "replace": "{the}{no_left}{quoted}[ \\t]+skill\\w*\""
+    },
+    {
+      "label": "[F1] 'Skill: name' loses its trailing boundary",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Skill: commit-message' lookalike.",
+      "find": "rf\"\\bSkill:[ \\t]*{quoted}(?![\\w-])\"",
+      "replace": "rf\"\\bSkill:[ \\t]*{quoted}\""
+    },
+    {
+      "label": "[F1] plugin-namespaced form loses its '/' boundary",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'workbench:commit/notes.txt' lookalike.",
+      "find": "{no_left}(?:{namespaces}):{name}(?![\\w-])(?!/)",
+      "replace": "{no_left}(?:{namespaces}):{name}(?![\\w-])"
+    },
+    {
+      "label": "[F1] any 'word:name' counts as a namespaced reference",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'scope:commit' lookalike.",
+      "find": "{no_left}(?:{namespaces}):{name}(?![\\w-])(?!/)",
+      "replace": "{no_left}{_PATH_SEGMENT}:{name}(?![\\w-])(?!/)"
+    },
+    {
+      "label": "[F1] left boundary stops excluding '~'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '~/commit' lookalike.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./:=-])\""
+    },
+    {
+      "label": "[F1] left boundary stops excluding '='",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '--dir=/commit' lookalike.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./:~-])\""
+    },
+    {
+      "label": "[F1] left boundary stops excluding ':'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'scope:commit' lookalike and the slash-command test.",
+      "find": "    no_left = r\"(?<![\\w@./:=~-])\"",
+      "replace": "    no_left = r\"(?<![\\w@./=~-])\""
+    },
+    {
+      "label": "[F1] quotes and backticks around the name are not allowed",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the wrapped-form tests ('the `commit` skill').",
+      "find": "    quote = r\"[\\\"'`]?\"",
+      "replace": "    quote = r\"\""
+    },
+    {
+      "label": "[F1] the Name-Skill form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Commit-Skill' case.",
+      "find": "        rf\"{the}{no_left}{name}-skill(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] the JSON \"skill\": \"name\" form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the '{\"skill\": \"commit\"}' case.",
+      "find": "        rf\"[\\\"']skill[\\\"'][ \\t]*:[ \\t]*[\\\"']{name}[\\\"']\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] Skill(skill: name) loses its keyword prefix",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'Skill(skill: \"commit\")' case.",
+      "find": "(?:skill[ \\t]*[:=][ \\t]*)?{quoted}[ \\t]*\\)",
+      "replace": "{quoted}[ \\t]*\\)"
+    },
+    {
+      "label": "[F1] 'skill called|named name' form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'the skill called commit' / 'the skill named commit' cases.",
+      "find": "        rf\"{the}\\bskill[ \\t]+(?:called|named)[ \\t]+{quoted}(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] 'Skill tool with name' form dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'the Skill tool with commit' case.",
+      "find": "        rf\"{the}\\bSkill[ \\t]+tool[ \\t]+with[ \\t]+{quoted}(?![\\w-])\",\n",
+      "replace": ""
+    },
+    {
+      "label": "[F1] skill=name requires quotes again",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'skill=commit' case.",
+      "find": "rf\"\\bskill[ \\t]*=[ \\t]*{quoted}(?![\\w-])\"",
+      "replace": "rf\"\\bskill[ \\t]*=[ \\t]*[\\\"']{name}[\\\"']\""
+    },
+    {
+      "label": "[F1] leak comparison normalises with NFC instead of NFKC",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the 'fullwidth and ligature compatibility characters' leak case.",
+      "find": "unicodedata.normalize(\"NFKC\", text).casefold()",
+      "replace": "unicodedata.normalize(\"NFC\", text).casefold()"
+    },
+    {
+      "label": "[F2] short-line widening disabled",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_terse_acceptance_file_pasted_verbatim_is_a_leak and the terse-sentence and short-prompt-line tests.",
+      "find": "        while len(window) < LEAK_MIN_TOKENS and following < len(lines):",
+      "replace": "        while False:"
+    },
+    {
+      "label": "[F2] a widened window skips the generic-word filter",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_all_generic_widened_window_is_never_a_leak: 'Context / Steps: / Done. / Notes' widened into one all-generic window.",
+      "find": "        if _countable(window):",
+      "replace": "        if len(window) >= LEAK_MIN_TOKENS:"
+    },
+    {
+      "label": "[F2] a short line is never a window (threshold on the single line)",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the terse-paste tests (equivalent to disabling widening for every line but the last).",
+      "find": "        window = list(tokens)\n        following = index + 1",
+      "replace": "        window = list(tokens)\n        following = len(lines)"
+    },
+    {
+      "label": "[F4] the leak search reverts to scanning slices of the token list",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_leak_search_stays_fast_on_twenty_thousand_tokens_per_side: the O(n^2) scan took ~7s against a 2s bound (a wall-clock kill, with a ~3.5x margin).",
+      "find": "    return \"\\0\" + \"\\0\".join(run) + \"\\0\" in haystack",
+      "replace": "    tokens = haystack.split(\"\\0\")\n    width = len(run)\n    return any(tokens[start : start + width] == run for start in range(len(tokens)))"
+    },
+    {
+      "label": "[F4] token boundaries dropped from the leak search",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_leak_matching_is_on_whole_tokens_never_inside_a_word.",
+      "find": "    return \"\\0\" + \"\\0\".join(run) + \"\\0\" in haystack",
+      "replace": "    return \"\\0\".join(run) in haystack"
+    },
+    {
+      "label": "[F3] an end_state() exception propagates raw",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_end_state_function_that_raises_is_a_named_error.",
+      "find": "    except Exception as exc:\n        raise CaseContractError(\n            f\"{case_dir}: end_state() raised",
+      "replace": "    except ZeroDivisionError as exc:\n        raise CaseContractError(\n            f\"{case_dir}: end_state() raised"
+    },
+    {
+      "label": "[M31] the post-strip acceptance-leak check is dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_no_skill_leak_check_also_runs_after_the_reference_is_stripped: stripping '/commit' joins a criterion the source prompt only half-contained.",
+      "find": "    _assert_no_acceptance_leak(case_dir, stripped)\n",
+      "replace": ""
+    },
+    {
+      "label": "[N8] unmatched findings are counted without an envelope",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_unmatched_findings_are_zero_without_an_envelope_even_when_the_reply_holds_findings_json.",
+      "find": "    if uses_findings_envelope:\n        review_item_params = [",
+      "replace": "    if findings:\n        review_item_params = ["
+    },
+    {
+      "label": "[M27] prompt suffix checked only on the resolved file, not the declared name",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_prompt_declared_as_a_non_text_name_is_refused_even_when_it_symlinks_to_markdown.",
+      "find": "    for candidate in (Path(prompt_name), resolved):",
+      "replace": "    for candidate in (resolved,):"
+    },
+    {
+      "label": "[N3] a subdirectory of end_state/ is read as if it were a file",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_a_subdirectory_inside_the_end_state_directory_is_skipped_when_loading (IsADirectoryError).",
+      "find": "        for path in sorted(end_state_dir.iterdir())\n        if path.is_file()",
+      "replace": "        for path in sorted(end_state_dir.iterdir())"
+    },
+    {
+      "label": "[N9] skill discovery stops skipping dot-directories",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_discovery_skips_dot_directories_but_not_ordinary_skills.",
+      "find": "        if path.is_dir() and not path.name.startswith((\"_\", \".\"))",
+      "replace": "        if path.is_dir() and not path.name.startswith(\"_\")"
+    },
+    {
+      "label": "[N19] the generic-word set loses 'details' and 'section'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_generic_word_set_is_exactly_the_documented_one.",
+      "find": "checklist details section the a an",
+      "replace": "checklist the a an"
+    },
+    {
+      "label": "[N19] the generic-word set loses 'the'",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_generic_word_set_is_exactly_the_documented_one.",
+      "find": "details section the a an and",
+      "replace": "details section a an and"
+    },
+    {
+      "label": "[control] reword the Evidence docstring",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Pure docstring wording; nothing parses or asserts on it, so no test can observe the change.",
+      "find": "\"\"\"Everything a case's scorers see about one attempt.",
+      "replace": "\"\"\"Everything a case's predicates see about one attempt."
+    }
+  ]
+}

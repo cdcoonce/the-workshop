@@ -1,0 +1,501 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_eval_suite_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_eval_suite_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "entry-points table drops the report.write_report row",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_every_named_harness_entry_point: the table-scoped parse no longer finds report.write_report among the documented entry points.",
+      "find": "| `report.write_report` | #993 | Writes the red-run report. |",
+      "replace": ""
+    },
+    {
+      "label": "retry-loop rule states the wrong counted-attempt cap",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly: the counted-attempt cap of 3 is no longer stated.",
+      "find": "counted_attempts reaches 3,",
+      "replace": "counted_attempts reaches 4,"
+    },
+    {
+      "label": "retry-loop rule drops the reserve size",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly: the 2-attempt reserve size is no longer stated.",
+      "find": "reserve of 2",
+      "replace": "reserve"
+    },
+    {
+      "label": "[K1] snapshot-before-scoring step replaced by 'Do nothing'",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_snapshots_end_state_before_scoring_every_attempt: section 4 no longer names snapshot_end_state ahead of score_attempt (the table row elsewhere cannot satisfy a section-scoped assertion).",
+      "find": "1. Snapshot end-state evidence with\n   `evals._harness.dispatch.snapshot_end_state(case_dir, workdir, transcript_paths, dest)`",
+      "replace": "1. Do nothing"
+    },
+    {
+      "label": "[K2] gated set is no longer passed to score_attempt",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_routes_the_gated_set_to_all_three_places.",
+      "find": "- passed as `score_attempt`'s `gated_ids` argument;",
+      "replace": "- ignored;"
+    },
+    {
+      "label": "[K3] hard execution cap states 9 instead of 5",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_retry_rule_exactly.",
+      "find": "counted_attempts + reserve_used reaches 5",
+      "replace": "counted_attempts + reserve_used reaches 9"
+    },
+    {
+      "label": "[K4] inline lens-dispatch text removed",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_assigns_lens_agent_dispatch_to_the_conductor_for_inline_mode: the conductor's lens-agent dispatch responsibility is gone from section 3.",
+      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
+      "replace": "- `mode = \"inline\"`: skip"
+    },
+    {
+      "label": "[K5] manifest rule inverted (gated iff NOT listed)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_derives_gated_items_from_the_manifest_with_the_right_polarity.",
+      "find": "An item is\ngated iff its id appears there; every item whose id is absent is a trend\nitem.",
+      "replace": "An item is\ngated iff its id is absent there; every listed id is a trend\nitem."
+    },
+    {
+      "label": "[K6] the scorer is said to read the manifest",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_conductor_reads_the_manifest_and_the_scorer_never_does: the negation 'the scorer never reads it' is a required rule, not just a keyword.",
+      "find": "The conductor is the only reader of this file — the scorer\n(`evals._harness.scorer`) never reads it itself.",
+      "replace": "The scorer reads it itself."
+    },
+    {
+      "label": "[K7] fixture dest must be pre-existing and populated (contradicts the spec)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation.",
+      "find": "Prepare a fresh, **not-yet-existing** temporary",
+      "replace": "Prepare a pre-existing populated"
+    },
+    {
+      "label": "[K8] landing section dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_lands_the_run_as_a_test_evals_pr_into_dev_and_leaves_campaigns_by_hand.",
+      "find": "The run lands as its own `test(evals):` PR into `dev`, or riding along with\nthe skill PR that triggered it.",
+      "replace": "The run is not landed."
+    },
+    {
+      "label": "run-file step no longer names ledger.write_run(runs_dir, run, raw_sources)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
+      "find": "`evals._harness.ledger.write_run(runs_dir, run, raw_sources)`, where",
+      "replace": "`write_run`, where"
+    },
+    {
+      "label": "red report step no longer calls report.write_report",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_writes_the_run_file_and_the_red_report.",
+      "find": "- If the run's verdict is `\"red\"`, write the report with\n  `evals._harness.report.write_report(run_file)`, where `run_file` is the\n  path `write_run` returned.",
+      "replace": "- If the run's verdict is `\"red\"`, do nothing."
+    },
+    {
+      "label": "[S1a] run dict's verdict is no longer said to come from compute_verdict",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_verdict_comes_from_compute_verdict.",
+      "find": "- `run[\"verdict\"]` is the result of `compute_verdict` (step 5): `\"green\"`,\n  `\"red\"`, or `\"void\"`.",
+      "replace": "- `run[\"verdict\"]` is `\"green\"`, `\"red\"`, or `\"void\"`."
+    },
+    {
+      "label": "[S1a] run dict's fingerprint is no longer said to come from compute_fingerprint",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_fingerprint_comes_from_compute_fingerprint.",
+      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\n  injection_paths=..., plugin_version=..., claude_code_version=...,\n  run_date=...)`, where",
+      "replace": "- `run[\"fingerprint\"]` is built by hand, where"
+    },
+    {
+      "label": "[S1a] runs_dir no longer pinned to evals/<skill>/runs/",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_runs_dir_is_the_skills_runs_directory.",
+      "find": "`runs_dir` is `evals/<skill>/runs/`",
+      "replace": "`runs_dir` is any directory"
+    },
+    {
+      "label": "[S1a] run-dict key 'unmatched_findings' undocumented",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_names_every_run_file_key_the_schema_requires: a key the schema requires is no longer named in the run-file section.",
+      "find": "`unmatched_findings` (the\n  second member of the tuple `score_attempt` returned)",
+      "replace": "`unmatched_count` (the\n  second member of the tuple `score_attempt` returned)"
+    },
+    {
+      "label": "[S1a] model_ids said to be supplied by the conductor",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_write_run_computes_model_ids_and_rewrites_raw.",
+      "find": "`model_ids`, but it is computed by\n  `write_run` from the case's raw transcripts, so leave it out.",
+      "replace": "`model_ids`, which you must supply\n  from each transcript."
+    },
+    {
+      "label": "[S1b] raw layout moves transcripts into a subdirectory",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_states_the_raw_directory_layout.",
+      "find": "its transcripts as `*.jsonl`\nfiles at that directory's root, beside the `end_state/` snapshot directory\nfrom step 4. `ledger.write_run` globs `*.jsonl` at that root to compute\n`model_ids`, so a transcript placed in a subdirectory is never seen.",
+      "replace": "its transcripts in a\n`transcripts/` subdirectory, beside the `end_state/` snapshot directory\nfrom step 4."
+    },
+    {
+      "label": "[S1c] inline lens agents no longer told to get build_dispatch_prompt's text",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_tells_the_inline_conductor_to_hand_lens_agents_the_built_prompt.",
+      "find": "  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
+      "replace": "  conversation, and\n  collects one transcript per lens agent."
+    },
+    {
+      "label": "[S1d] conductor no longer told to stop at 2 reserve draws",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_the_conductor_enforces_the_reserve_because_should_retry_does_not.",
+      "find": "The\nconductor must stop drawing reserve attempts itself once `reserve_used`\nreaches 2:",
+      "replace": "The\nretry loop stops on its own once reserve is used up:"
+    },
+    {
+      "label": "[S1e] a fixture is every case directory directly under evals/<skill>/ again",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_defines_a_fixture_as_a_directory_containing_case_toml.",
+      "find": "Every directory under `evals/<skill>/` that contains a `case.toml` is one\nfixture (`evals/<skill>/<case>/`).",
+      "replace": "Every case directory directly under `evals/<skill>/` is one fixture."
+    },
+    {
+      "label": "[S1f] manifest parsed by hand instead of parse_checks_manifest",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_names_the_manifest_parser.",
+      "find": "Parse the file with `evals._harness.activation.parse_checks_manifest(text)`\n(it takes the file's text and returns the gated ids in file order), rather\nthan hand-parsing it:",
+      "replace": "Parse the file by hand:"
+    },
+    {
+      "label": "[SK3] parse_checks_manifest is said to take a path and return a set",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_manifest_format_matches_parse_checks_manifest.",
+      "find": "(it takes the file's text and returns the gated ids in file order)",
+      "replace": "(it takes the file's path and returns a set of ids)"
+    },
+    {
+      "label": "[SK3] the cited parse_checks_manifest signature names the wrong parameter",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_every_harness_call_the_skill_cites_matches_the_real_signature: inspect.signature has `text`, not `path`.",
+      "find": "`evals._harness.activation.parse_checks_manifest(text)`",
+      "replace": "`evals._harness.activation.parse_checks_manifest(path)`"
+    },
+    {
+      "label": "[SK6] write_run is said to silently overwrite",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_write_run_refuses_to_overwrite_an_existing_run_file_as_the_skill_says.",
+      "find": "refuses to overwrite an\nexisting run file",
+      "replace": "silently overwrites an\nexisting run file"
+    },
+    {
+      "label": "[SK11] item_states is said to track only the latest attempt",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_item_states_rule_is_any_counted_attempt_hit.",
+      "find": "`item_states` maps each *gated* item id to whether any counted attempt has hit\nit so far.",
+      "replace": "`item_states` maps each item id to whether the latest attempt hit it."
+    },
+    {
+      "label": "[SK12] verdict precedence flipped (void beats red)",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_verdict_precedence_is_the_real_one.",
+      "find": "letting red beat\nvoid beat green",
+      "replace": "letting void beat\nred beat green"
+    },
+    {
+      "label": "[SK13] compute_verdict said to run per case and be averaged",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_compute_verdict_is_called_once_per_run_not_per_case.",
+      "find": "called once with every case's\nitems merged into one mapping",
+      "replace": "called once per case,\nthen the verdicts are averaged"
+    },
+    {
+      "label": "[SK14] tokens typed as a string",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_run_dict_scalars_and_versions_come_from.",
+      "find": "`tokens` (an integer: the total tokens the run spent",
+      "replace": "`tokens` (a string: the model name"
+    },
+    {
+      "label": "[SK15] wall_time_s typed as integer milliseconds",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_run_dict_scalars_and_versions_come_from.",
+      "find": "`wall_time_s` (a number: the run's\n  wall-clock seconds",
+      "replace": "`wall_time_s` (an integer: the run's\n  wall-clock milliseconds"
+    },
+    {
+      "label": "[SK16] reserve_used said to count every indeterminate attempt without limit",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_reserve_used_is_recorded_after_the_replacement_draw.",
+      "find": "`reserve_used` counts\nhow many of the fixture's indeterminate reserve of 2 have been drawn;",
+      "replace": "`reserve_used` counts\nhow many attempts have been indeterminate in total, with no limit;"
+    },
+    {
+      "label": "[SK17] the should_retry example's result flipped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_should_retry_example_returns_what_the_skill_says, which executes the example.",
+      "find": "(`should_retry({\"a\": False}, 0, 4)` is `True`)",
+      "replace": "(`should_retry({\"a\": False}, 0, 4)` is `False`)"
+    },
+    {
+      "label": "[SK18] gated_items said to be the whole manifest",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_gated_items_is_the_cases_own_gated_ids_recorded_verbatim.",
+      "find": "(the\n  list of that case's gated item ids from step 2, recorded verbatim)",
+      "replace": "(the\n  entire manifest, including ids of other cases)"
+    },
+    {
+      "label": "[SK20] inline cases said to take follow-up user turns",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_each_case_is_one_prompt_with_zero_user_turns.",
+      "find": "Every case is a single prompt with zero user turns, regardless of mode.",
+      "replace": "Every case may take follow-up user turns in inline mode."
+    },
+    {
+      "label": "[SK21] raw said to be a path the conductor computes",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_says_write_run_computes_model_ids_and_rewrites_raw.",
+      "find": "`raw` (any string you choose; it is\n  only the key into `raw_sources`)",
+      "replace": "`raw` (the final path under runs_dir, which you must compute yourself)"
+    },
+    {
+      "label": "[SK22] '#' lines said to be ids",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_manifest_format_matches_parse_checks_manifest.",
+      "find": "`#` comments and blank lines ignored (scaffolded by #996)",
+      "replace": "`#` comments are ids (scaffolded by #996)"
+    },
+    {
+      "label": "[SK23] score_attempt said to raise on sibling ids",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_score_attempt_really_ignores_gated_ids_of_sibling_cases_as_the_skill_says.",
+      "find": "`score_attempt` ignores ids that belong to a sibling\ncase.",
+      "replace": "`score_attempt` raises on ids that belong to a sibling\ncase."
+    },
+    {
+      "label": "[SK24] transcripts said to be found in subdirectories",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_never_seen_as_the_skill_says and test_skill_states_the_raw_directory_layout.",
+      "find": "`ledger.write_run` globs `*.jsonl` at that root to compute\n`model_ids`, so a transcript placed in a subdirectory is never seen.",
+      "replace": "`ledger.write_run` globs `**/*.jsonl` to compute\n`model_ids`, so a transcript placed in a subdirectory is also seen."
+    },
+    {
+      "label": "[SK25] snapshot dest said to be mergeable",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_the_snapshot_dest_must_be_fresh.",
+      "find": "`dest` must be a fresh, empty\n   `end_state/` directory: a populated one is refused",
+      "replace": "`dest` may be any\n   directory: a populated one is merged"
+    },
+    {
+      "label": "[SK26] transcripts said to live elsewhere",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_transcripts_and_python_come_from, which cross-checks transcript.py's docstring.",
+      "find": "`<session>/subagents/agent-<id>.jsonl`",
+      "replace": "`<session>/transcript.json`"
+    },
+    {
+      "label": "[SK27] python said to be run bare",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_transcripts_and_python_come_from, which cross-checks the Makefile.",
+      "find": "`uv run --with jsonschema python`",
+      "replace": "`python3`"
+    },
+    {
+      "label": "[SK28] plugin_version said to come from pyproject.toml",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_run_dict_scalars_and_versions_come_from.",
+      "find": "`version` in\n  `plugins/<plugin>/.claude-plugin/plugin.json`",
+      "replace": "`version` in\n  the repo's `pyproject.toml`"
+    },
+    {
+      "label": "[SK29] claude_code_version said to come from uname",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_names_where_run_dict_scalars_and_versions_come_from.",
+      "find": "`claude --version`",
+      "replace": "`uname -a`"
+    },
+    {
+      "label": "[SK30] builder precedence reversed",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_states_the_builder_key_beats_a_local_build_fixture_script.",
+      "find": "`builder` key wins over a case-local `build_fixture.py`",
+      "replace": "case-local `build_fixture.py` wins over the `builder` key"
+    },
+    {
+      "label": "[SK31] reserve_used said to be recorded before the replacement draw",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_reserve_used_is_recorded_after_the_replacement_draw.",
+      "find": "Record an attempt's `reserve_used` after that step:",
+      "replace": "Record an attempt's `reserve_used` before that step:"
+    },
+    {
+      "label": "[SK32] an unmatched manifest id said to be harmless",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_an_unmatched_manifest_id_is_a_conductor_error_to_surface.",
+      "find": "is a conductor error: check every id against the items of all the\nskill's cases, surface it and stop.",
+      "replace": "is harmless and ignored."
+    },
+    {
+      "label": "[SK35] any transcript_status override said to be accepted",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_dispatch_error_is_the_only_status_override_and_score_attempt_enforces_it.",
+      "find": "it accepts no other\n   value,",
+      "replace": "it accepts any\n   value,"
+    },
+    {
+      "label": "[SK36] run example loses its tokens and wall_time_s keys",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_run_example_has_exactly_the_keys_the_schema_requires.",
+      "find": "  \"tokens\": 123456,\n  \"wall_time_s\": 412.5,\n",
+      "replace": ""
+    },
+    {
+      "label": "[SK37] run example gives parse_error a string",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_documented_run_example_is_written_by_the_real_write_run_and_validates: the real schema rejects it.",
+      "find": "          \"parse_error\": false,\n          \"unmatched_findings\": 2,",
+      "replace": "          \"parse_error\": \"no\",\n          \"unmatched_findings\": 2,"
+    },
+    {
+      "label": "[SK38] run example's fingerprint drops a key",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by the documented-fingerprint-keys and example-keys tests.",
+      "find": "    \"run_date\": \"2026-09-30\"\n",
+      "replace": "    \"run_date_x\": \"2026-09-30\"\n"
+    },
+    {
+      "label": "[SK39] a cited call names a function that does not exist",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_every_harness_call_the_skill_cites_matches_the_real_signature.",
+      "find": "`evals._harness.ledger.write_run(runs_dir, run, raw_sources)`",
+      "replace": "`evals._harness.ledger.write_run_file(runs_dir, run, raw_sources)`"
+    },
+    {
+      "label": "[F5] the dispatch_error snapshot skip dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_to_skip_the_snapshot_for_a_dispatch_error_attempt.",
+      "find": "Skip this step for an attempt\n   that ended in `dispatch_error`: it has no transcripts and may have no\n   workdir, so there is nothing to snapshot, and `score_attempt` runs no\n   scorers for it.",
+      "replace": "Snapshot every attempt,\n   dispatch errors included."
+    },
+    {
+      "label": "[F5] the fresh end_state/ per attempt rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_a_resnapshot_needs_a_fresh_end_state_directory, which also executes a repeat snapshot and sees it refused.",
+      "find": "Use a new `end_state/` directory for every attempt;\n   re-snapshotting an attempt (after fixing `end_state()`, say) needs a new\n   path, or the old `end_state/` deleted first.",
+      "replace": "Snapshots may be repeated into the same directory."
+    },
+    {
+      "label": "[F5] the no-gated-items rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_a_case_with_no_gated_items_is_never_retried.",
+      "find": "A case with no gated items makes `should_retry` return `False` at once\n(`should_retry({}, 0, 0)` is `False`), so an indeterminate first attempt of\nsuch a case is not replaced.",
+      "replace": "A case with no gated items is retried like any other."
+    },
+    {
+      "label": "[F5] the no-gated-items example flipped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_every_documented_should_retry_example_returns_what_the_skill_says, which executes both examples.",
+      "find": "(`should_retry({}, 0, 0)` is `False`)",
+      "replace": "(`should_retry({}, 0, 0)` is `True`)"
+    },
+    {
+      "label": "[F5] the conductor-script root rule dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_says_how_to_run_a_conductor_script_and_that_it_is_true, which runs a script inside and outside the root.",
+      "find": "Run a conductor script with `python -c` or\n`python -m`, or with `PYTHONPATH=.`, from the checkout root: a script saved\noutside the checkout root fails with `No module named 'evals'`.",
+      "replace": "Run a conductor script from anywhere."
+    },
+    {
+      "label": "[control] reword the skill's intro sentence",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "A harmless synonym swap in untested prose; no assertion reads this sentence.",
+      "find": "This skill documents how to run one named skill's eval suite.",
+      "replace": "This skill documents how to conduct one named skill's eval suite."
+    }
+  ]
+}
