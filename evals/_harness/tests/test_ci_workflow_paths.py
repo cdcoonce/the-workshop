@@ -16,8 +16,13 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
-# A YAML comment starts at a `#` that begins the line or follows whitespace.
-_COMMENT_PATTERN = re.compile(r"(^|\s)#.*$", re.MULTILINE)
+# A YAML comment starts at a `#` that begins the line or follows whitespace --
+# but not one inside a quoted string (`branches: ["a #b"], paths: [x]`). Quoted
+# strings (double with backslash escapes, single with `''` escapes) are matched
+# first and kept, so only a real comment is removed.
+_COMMENT_PATTERN = re.compile(
+    r"""("(?:[^"\\\n]|\\.)*"|'(?:[^'\n]|'')*')|(?:(?<=\s)|^)#[^\n]*""", re.MULTILINE
+)
 # The key may be a block key at line start, follow whitespace or a `- ` dash
 # (`- paths: [a]`), or follow a flow-mapping `{` or `,` (`{push: {paths: [a]}}`,
 # `{a: 1,paths: [x]}`); it may be quoted. PyYAML is not a dependency of the
@@ -28,7 +33,7 @@ _PATH_FILTER_KEY_PATTERN = re.compile(
 
 
 def _strip_comments(text: str) -> str:
-    return _COMMENT_PATTERN.sub(lambda match: match.group(1), text)
+    return _COMMENT_PATTERN.sub(lambda match: match.group(1) or "", text)
 
 
 def _has_path_filter_key(text: str) -> bool:
@@ -73,6 +78,12 @@ def test_does_not_flag_an_unrelated_paths_substring():
         pytest.param("on:\n  - push\n  - paths: [a]\n", id="inline-after-dash"),
         pytest.param("on:\n  push:\n    paths  :\n      - a\n", id="space-before-colon"),
         pytest.param("on:\n  push:\n    paths: [a]  # only these\n", id="trailing-comment"),
+        pytest.param('on: {push: {branches: ["a #b"], paths: [x]}}\n', id="hash-in-double-quotes-before-key"),
+        pytest.param("on:\n  push: {branches: ['a #b'], paths-ignore: [x]}\n", id="hash-in-single-quotes-before-key"),
+        pytest.param("on:\n  push:\n    branches: ['#x']\n    paths: [a]\n", id="quoted-hash-on-an-earlier-line"),
+        pytest.param("on:\n  push:\n    paths: ['a #b']\n", id="hash-inside-the-keys-own-value"),
+        pytest.param("on: {push: {branches: [a#b], paths: [x]}}\n", id="hash-glued-to-a-token-is-not-a-comment"),
+        pytest.param("on:\n  push:\n    branches: ['it''s #x'] # c\n    paths: [a]\n", id="yaml-escaped-single-quote"),
     ],
 )
 def test_detects_every_yaml_spelling_of_a_path_filter_key(text):
@@ -87,6 +98,8 @@ def test_detects_every_yaml_spelling_of_a_path_filter_key(text):
         pytest.param("on:\n  push:\n    branches: [main]  # no paths: filter here\n", id="trailing-comment"),
         pytest.param("env:\n  filepaths: x\n  subpaths-ignore: y\n", id="key-merely-ending-in-paths"),
         pytest.param("jobs:\n  t:\n    steps:\n      - run: make test\n", id="no-key"),
+        pytest.param("on:\n  push:\n    branches: [\"a #b\"]  # no paths: here\n", id="comment-after-a-quoted-hash"),
+        pytest.param("# it's not a paths: filter\n", id="apostrophe-inside-a-comment"),
     ],
 )
 def test_does_not_flag_text_that_is_not_a_path_filter_key(text):

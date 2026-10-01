@@ -84,6 +84,38 @@
       "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
       "find": "A `paths`/`paths-ignore` trigger key on the workflow would let an evals-only",
       "replace": "A stray `paths`/`paths-ignore` trigger key on the workflow would let an evals-only"
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the quoted-string alternatives, stripping a # inside quotes",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-double-quotes-before-key and hash-in-single-quotes-before-key: `[\"a #b\"], paths: [x]` loses its real key to the comment strip.",
+      "find": "(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\n]|'')*')|",
+      "replace": "(x^)|"
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the double-quoted alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-double-quotes-before-key.",
+      "find": "\"(?:[^\"\\\\\\n]|\\\\.)*\"|",
+      "replace": ""
+    },
+    {
+      "label": "_COMMENT_PATTERN drops the single-quoted alternative",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-in-single-quotes-before-key.",
+      "find": "|'(?:[^'\\n]|'')*'",
+      "replace": ""
+    },
+    {
+      "label": "_COMMENT_PATTERN treats a # glued to a token as a comment start",
+      "file": "../tests/test_ci_workflow_paths.py",
+      "oracle": "real",
+      "why": "Killed by hash-glued-to-a-token-is-not-a-comment: in YAML a # only starts a comment at line start or after whitespace.",
+      "find": "(?:(?<=\\s)|^)#[^\\n]*",
+      "replace": "#[^\\n]*"
     }
   ]
 }
