@@ -98,6 +98,14 @@
       "why": "Killed by test_only_warns_for_items_in_the_skills_current_gated_set: a retired item still present in old run files is not a gated item and must not be reported.",
       "find": "        for item_id in sorted(gated_ids):",
       "replace": "        for item_id in sorted({i for entry in recent for i in entry[\"items\"]}):"
+    },
+    {
+      "label": "check reads checks.manifest unconditionally and crashes when it is absent",
+      "file": "./flaky_item_warn.py",
+      "oracle": "real",
+      "why": "Killed by test_no_result_and_no_crash_when_the_skill_has_runs_but_no_checks_manifest: a skill with run files but no manifest has an empty gated set, not an error.",
+      "find": "manifest_path.read_text(encoding=\"utf-8\") if manifest_path.exists() else \"\"",
+      "replace": "manifest_path.read_text(encoding=\"utf-8\")"
     }
   ]
 }

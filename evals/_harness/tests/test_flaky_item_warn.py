@@ -204,3 +204,15 @@ def test_only_warns_for_items_in_the_skills_current_gated_set(tmp_path):
     assert [result.level for result in results] == ["warn"]
     assert "'other'" in results[0].message
     assert not any("gone" in result.message for result in results)
+
+
+def test_no_result_and_no_crash_when_the_skill_has_runs_but_no_checks_manifest(tmp_path):
+    # No manifest means no gated set, so there is nothing to be flaky -- even
+    # though the run files record an item that needed multiple attempts.
+    runs_dir = tmp_path / "evals" / "commit" / "runs"
+    _write_run(runs_dir, "20260101T000000Z-aaa.json", _run("2026-01-01", {_ITEM: ["miss"]}))
+    _write_run(runs_dir, "20260102T000000Z-bbb.json", _run("2026-01-02", {_ITEM: ["miss"]}))
+
+    results = check(GuardContext(base="unused", repo_root=tmp_path))
+
+    assert results == []
