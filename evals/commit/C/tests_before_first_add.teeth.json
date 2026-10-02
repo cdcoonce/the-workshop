@@ -94,22 +94,43 @@
     },
     {
       "label": "`--just-print` is not recognised as a dry run",
-      "find": "(\"--dry-run\", \"--just-print\", \"--recon\")",
-      "replace": "(\"--dry-run\", \"--recon\")",
+      "find": "\"--dry-run\", \"--just-print\", \"--recon\", \"--question\", \"--touch\"",
+      "replace": "\"--dry-run\", \"--recon\", \"--question\", \"--touch\"",
       "file": "predicates.py",
       "oracle": "real"
     },
     {
       "label": "`--recon` is not recognised as a dry run",
-      "find": "(\"--dry-run\", \"--just-print\", \"--recon\")",
-      "replace": "(\"--dry-run\", \"--just-print\")",
+      "find": "\"--dry-run\", \"--just-print\", \"--recon\", \"--question\", \"--touch\"",
+      "replace": "\"--dry-run\", \"--just-print\", \"--question\", \"--touch\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`--question` is not recognised as a mode that runs no recipe",
+      "find": "\"--dry-run\", \"--just-print\", \"--recon\", \"--question\", \"--touch\"",
+      "replace": "\"--dry-run\", \"--just-print\", \"--recon\", \"--touch\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`--touch` is not recognised as a mode that runs no recipe",
+      "find": "\"--dry-run\", \"--just-print\", \"--recon\", \"--question\", \"--touch\"",
+      "replace": "\"--dry-run\", \"--just-print\", \"--recon\", \"--question\"",
       "file": "predicates.py",
       "oracle": "real"
     },
     {
       "label": "`-n` inside a short-flag cluster (`-ns`) is not recognised as a dry run",
-      "find": "            if letter == \"n\":",
-      "replace": "            if letter == \"x\":",
+      "find": "            if letter in \"nqt\":",
+      "replace": "            if letter in \"qt\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`-q` / `-t` inside a short-flag cluster are not recognised as modes that run no recipe",
+      "find": "            if letter in \"nqt\":",
+      "replace": "            if letter == \"n\":",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -161,13 +182,6 @@
       "label": "`bash -c '...'` payloads are not looked into",
       "find": "    if payload is not None:",
       "replace": "    if False:",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "`bash -lc '...'` (a flag cluster ending in c) is not recognised as a script",
-      "find": "        if not word.startswith(\"--\") and \"c\" in word:",
-      "replace": "        if word == \"-c\":",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -271,15 +285,15 @@
     },
     {
       "label": "`$(...)` inside double quotes is not read as commands",
-      "find": "            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":",
-      "replace": "            elif False:",
+      "find": "            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":\n                inner, j = self.paren_body(j + 2)\n                self.stmt.pre.extend",
+      "replace": "            elif False:\n                inner, j = self.paren_body(j + 2)\n                self.stmt.pre.extend",
       "file": "predicates.py",
       "oracle": "real"
     },
     {
       "label": "backticks inside double quotes are not read as commands",
-      "find": "            elif c == \"`\":\n                inner, j = self.backtick_body(j)",
-      "replace": "            elif False:\n                inner, j = self.backtick_body(j)",
+      "find": "            elif c == \"`\":\n                inner, j = self.backtick_body(j)\n                self.stmt.pre.extend",
+      "replace": "            elif False:\n                inner, j = self.backtick_body(j)\n                self.stmt.pre.extend",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -434,6 +448,160 @@
       "label": "`git` is matched only as the bare word, so `/usr/bin/git add -A` is not seen",
       "find": "    if not words or _basename(words[0]) != \"git\":",
       "replace": "    if not words or words[0] != \"git\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a redirection's target word is kept as a command word, so `make lint > test` reads as `make test`",
+      "find": "        self.redirect_target = \"herestring\" if text[i:j] == \"<<<\" else \"skip\"",
+      "replace": "        self.redirect_target = None",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the fd digit of `2>&1` is kept as a command word",
+      "find": "        if self.in_word and \"\".join(self.word).isdigit():",
+      "replace": "        if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`>&` is split at the `&`, so `2>&1 git add -A` reads `1` as the command",
+      "find": "        if text[j : j + 1] == \"&\" and j > i and text[j - 1] in \"<>\":",
+      "replace": "        if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`&>` is read as a background `&`, splitting `git add &> out -A`",
+      "find": "            elif c in \"<>\" or (c == \"&\" and text[i + 1 : i + 2] == \">\"):",
+      "replace": "            elif c in \"<>\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the text of a here-string (`bash <<<'...'`) is dropped like any redirection target",
+      "find": "\"herestring\" if text[i:j] == \"<<<\" else \"skip\"",
+      "replace": "\"skip\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[fail-open] past the nesting limit the reader silently returns no commands",
+      "find": "    if depth > _MAX_DEPTH:\n        raise ValueError(",
+      "replace": "    if depth > _MAX_DEPTH:\n        return []\n    if False:\n        raise ValueError(",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the nesting limit is back down to 8, so ordinary nesting raises",
+      "find": "_MAX_DEPTH = 50",
+      "replace": "_MAX_DEPTH = 8",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[fail-open] a Bash call past the statement limit is no longer refused",
+      "find": "            if len(commands) >= _SEGMENT_BUDGET:",
+      "replace": "            if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[fail-open] a Bash call's statements are silently truncated at 1000",
+      "find": "            for position, words in enumerate(commands):",
+      "replace": "            for position, words in enumerate(commands[:1000]):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`--rcfile F` is not skipped as an option with a value",
+      "find": "        if word in _SHELL_VALUE_OPTIONS:",
+      "replace": "        if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the value after `o`/`O` in a cluster (`-euo pipefail`) is not skipped",
+      "find": "            if \"o\" in letters or \"O\" in letters:",
+      "replace": "            if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`-c` is recognised only as a lone `-c`, not inside a cluster (`-euc`, `-lc`)",
+      "find": "            has_c = has_c or \"c\" in letters",
+      "replace": "            has_c = has_c or letters == \"c\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`--` does not end the shell's options, so a payload starting with `-` is read as one",
+      "find": "        if word == \"--\":\n            index += 1\n            break",
+      "replace": "        if False:\n            index += 1\n            break",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$(...)` in an UNQUOTED heredoc body is not read",
+      "find": "            if not quoted:  # an unquoted delimiter: `$(...)` and backticks in the body run",
+      "replace": "            if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$(...)` in a QUOTED heredoc body is read as if it ran",
+      "find": "            if not quoted:  # an unquoted delimiter: `$(...)` and backticks in the body run",
+      "replace": "            if True:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a backslash-delimited heredoc (`<<\\EOF`) is treated as unquoted",
+      "find": "        quoted = quote in (\"'\", '\"', \"\\\\\")",
+      "replace": "        quoted = quote in (\"'\", '\"')",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an escaped `\\$(...)` in an unquoted heredoc body is read as a substitution",
+      "find": "            if c == \"\\\\\":\n                j += 2\n            elif c == \"$\" and text.startswith(\"$((\", j):\n                j = self.arithmetic_end(j + 3)\n            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":\n                inner, j = self.paren_body(j + 2)\n                found.extend",
+      "replace": "            if False:\n                j += 2\n            elif c == \"$\" and text.startswith(\"$((\", j):\n                j = self.arithmetic_end(j + 3)\n            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":\n                inner, j = self.paren_body(j + 2)\n                found.extend",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "backticks in an unquoted heredoc body are not read",
+      "find": "            elif c == \"`\":\n                inner, j = self.backtick_body(j)\n                found.extend",
+      "replace": "            elif False:\n                inner, j = self.backtick_body(j)\n                found.extend",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$(...)` in an unquoted heredoc body is not read (parenthesis branch)",
+      "find": "            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":\n                inner, j = self.paren_body(j + 2)\n                found.extend",
+      "replace": "            elif False:\n                inner, j = self.paren_body(j + 2)\n                found.extend",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a statement that only owns a heredoc is dropped before its body is attached",
+      "find": "        owns_heredoc = any(owner is self.stmt for owner, _, _ in self.pending)",
+      "replace": "        owns_heredoc = False",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git add --al` (an abbreviation of --all) is not blanket",
+      "find": "    return len(argument) >= 4 and \"--all\".startswith(argument)",
+      "replace": "    return argument == \"--all\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git add --a` (ambiguous, rejected by git) is called blanket",
+      "find": "    return len(argument) >= 4 and \"--all\".startswith(argument)",
+      "replace": "    return len(argument) >= 3 and \"--all\".startswith(argument)",
       "file": "predicates.py",
       "oracle": "real"
     }
