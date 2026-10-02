@@ -537,7 +537,7 @@ def test_scores_every_transcript_of_an_attempt_not_just_the_first(tmp_path):
     """
     repo, _ = _scenario(tmp_path, [_attempt("hit", raw="miss")])
     raw_dir = f"evals/{_SKILL}/runs/{_STAMP}/{_CASE}/attempt-1"
-    _write(repo, f"{raw_dir}/transcript-2.jsonl", _transcript_line(_RAW_TEXT["hit"]) + "\n")
+    _write(repo, f"{raw_dir}/transcript2.jsonl", _transcript_line(_RAW_TEXT["hit"]) + "\n")
     base = _commit_base_then_touch(repo)
 
     assert _run(repo, base) == []
