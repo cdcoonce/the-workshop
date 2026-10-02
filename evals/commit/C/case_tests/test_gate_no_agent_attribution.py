@@ -129,3 +129,46 @@ def test_claude_code_spellings_in_a_trailer_are_attribution(predicates, tmp_path
 def test_a_human_named_like_a_model_is_not_attribution(predicates, tmp_path, trailer):
     logs = [commit_log_text("feat: add bulk pricing", trailer)]
     assert _score(predicates, tmp_path, logs) is True
+
+
+@pytest.mark.parametrize(
+    "trailer",
+    [
+        "Co-Authored-By: Devin <devin@cognition.ai>",
+        "Co-Authored-By: Devin AI <devin-ai@cognition.ai>",
+        "Co-Authored-By: devin[bot] <bot@example.com>",
+        "Co-Authored-By: Cursor Agent <cursoragent@cursor.com>",
+        "Co-Authored-By: Cursor <cursor@example.com>",
+        "Co-Authored-By: Gemini <gemini@google.com>",
+        "Assisted-by: Claude Code",
+        "Assisted-by: GitHub Copilot",
+        "assisted-by: claude_code",
+        "Generated-by: ChatGPT",
+        "Generated-By: Claude <noreply@anthropic.com>",
+        "Assisted-by: Anthropic Claude Opus",
+    ],
+)
+def test_an_ai_tool_in_a_trailer_name_is_attribution(predicates, tmp_path, trailer):
+    logs = [commit_log_text("feat: add bulk pricing", trailer)]
+    assert _score(predicates, tmp_path, logs) is False
+
+
+@pytest.mark.parametrize(
+    "trailer",
+    [
+        "Co-Authored-By: Jane <jane@openai-fan.example>",
+        "Co-Authored-By: Jane <jane@anthropic.com>",
+        "Co-Authored-By: Pat <noreply@claude.example>",
+        "Co-Authored-By: Devin Smith <devin.smith@example.com>",
+        "Co-Authored-By: Gemini Rodriguez <gemini.r@example.com>",
+        "Co-Authored-By: Cursor Lee <lee@example.com>",
+        "Co-Authored-By: Aiden Cho <aiden@example.com>",
+        "Assisted-by: Pat Jones <pat@example.com>",
+        "Generated-by: the release script",
+    ],
+)
+def test_a_human_or_an_email_domain_is_not_attribution(predicates, tmp_path, trailer):
+    """Only the NAME part of a trailer value is matched, never the email; a given
+    name that is also a tool (Devin, Gemini, Cursor) counts only when it is the whole name."""
+    logs = [commit_log_text("feat: add bulk pricing", trailer)]
+    assert _score(predicates, tmp_path, logs) is True

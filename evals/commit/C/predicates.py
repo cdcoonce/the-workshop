@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -140,113 +139,360 @@ def _files(evidence) -> list[list[str]]:
 
 # --- reading the case-agent's Bash calls --------------------------------------
 
-_SEPARATORS = frozenset(";|&()")
 # Words that wrap or introduce the real command word: shell grouping and
 # control keywords, and prefixes such as ``time``/``env`` (which may carry options).
 _KEYWORDS = frozenset({"{", "}", "!", "if", "then", "do", "else", "elif", "fi", "while", "until", "done"})
-_WRAPPERS = frozenset({"env", "command", "sudo", "time", "nohup", "exec"})
+_WRAPPERS = frozenset(
+    {"env", "command", "sudo", "time", "nohup", "exec", "builtin", "timeout", "nice", "ionice", "stdbuf", "xargs"}
+)
 _WRAPPER_VALUE_OPTIONS = {
     "env": frozenset({"-u", "--unset", "-C", "--chdir"}),
     "sudo": frozenset({"-u", "-g", "-D", "-R", "-C", "-h", "-p", "-T", "-U"}),
+    "timeout": frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "ionice": frozenset({"-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"}),
+    "stdbuf": frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}),
+    "xargs": frozenset(
+        {"-n", "-I", "-L", "-P", "-d", "-E", "-s", "-a", "--max-args", "--max-procs", "--delimiter",
+         "--max-lines", "--arg-file", "--max-chars"}
+    ),
 }
+# Positional arguments a wrapper takes before the command (``timeout 300 cmd``).
+_WRAPPER_POSITIONAL = {"timeout": 1}
 _UV_RUN_VALUE_OPTIONS = frozenset(
     {"--with", "--with-requirements", "--with-editable", "--python", "-p", "--directory",
      "--project", "--group", "--extra", "--env-file", "--package", "--index", "--index-url"}
 )
 _SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
-_HEREDOC_HEADER = re.compile(r"(?<!<)<<(?!<)-?[ \t]*(?:'(\w+)'|\"(\w+)\"|\\?(\w+))[^\n]*\n")
 _ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
 _GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
 _MAKE_OPTIONS_WITH_VALUE = frozenset({"-C", "-f", "-I", "-o", "-W", "--directory", "--file"})
 _STAGING = frozenset({"add", "stage"})
 _SEGMENT_BUDGET = 1000
+_MAX_DEPTH = 8
+# Characters that end a bare heredoc delimiter word.
+_DELIMITER_END = " \t\r\n'\"<>;&|()"
 
 
-def _statement_breaks(command: str) -> str:
-    """Turn unquoted newlines into ``;`` and drop comments and line continuations."""
-    out: list[str] = []
-    quote = ""
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if quote == "'":
-            out.append(char)
-            if char == "'":
-                quote = ""
-        elif quote == '"':
-            out.append(char)
-            if char == "\\" and index + 1 < len(command):
-                index += 1
-                out.append(command[index])
-            elif char == '"':
-                quote = ""
-        elif char == "\\" and command[index + 1 : index + 2] == "\n":
-            index += 1
-        elif char == "\\" and index + 1 < len(command):
-            out.append(char)
-            index += 1
-            out.append(command[index])
-        elif char in "'\"":
-            quote = char
-            out.append(char)
-        elif char == "#" and (not out or out[-1] in " \t\n;&|("):
-            while index < len(command) and command[index] != "\n":
-                index += 1
-            continue
-        elif char == "\n":
-            out.append(";")
-        else:
-            out.append(char)
-        index += 1
-    return "".join(out)
+class _Statement:
+    """One simple command as the lexer saw it."""
+
+    def __init__(self) -> None:
+        self.words: list[str] = []
+        # Commands found inside `$(...)`, backticks and `<(...)`; they run before this one.
+        self.pre: list[list[str]] = []
+        self.heredocs: list[str] = []
 
 
-def _strip_heredocs(command: str) -> str:
-    """Drop heredoc bodies (``<<EOF``, ``<<'EOF'``, ``<<\\EOF``, ``<<-EOF``), keeping the header line."""
-    out: list[str] = []
-    position = 0
-    while True:
-        header = _HEREDOC_HEADER.search(command, position)
-        if header is None:
-            out.append(command[position:])
-            return "".join(out)
-        delimiter = next(group for group in header.groups() if group is not None)
-        out.append(command[position : header.end() - 1])
-        terminator = re.compile(rf"^[ \t]*{re.escape(delimiter)}[ \t]*$", re.MULTILINE).search(
-            command, header.end()
-        )
-        if terminator is None:
-            return "".join(out)
-        position = terminator.end()
+class _Lexer:
+    """A small bash lexer: words, statements, quotes, substitutions and heredocs.
 
-
-def _split_words(command: str) -> list[list[str]]:
-    """Split *command* into simple commands, each a list of words.
-
-    When the text cannot be tokenised (an unbalanced quote that bash would
-    read differently, such as ``$'it\\'s'``), it is still cut at every
-    statement separator, with quote characters dropped from the words. Falling
-    back to one big segment would hide every statement after the first, so a
-    ``git add`` later in the line would go unseen. Cutting per separator can
-    over-split a quoted ``;`` (a false positive for the "no X" gate) but never
-    hides a statement.
+    It exists so that what the gates read as a command is what bash would run,
+    without a fallback that guesses. Quoted text is data (`'a << b'`,
+    `$'it\\'s'`); an unterminated quote swallows the rest of the text as bash's
+    syntax error would, so nothing in it is run; `$((...))` is arithmetic, not
+    a heredoc; `\\`-newline joins lines; the text of `$(...)`, backticks and
+    `<(...)` is read as commands; a heredoc body is data unless its command is
+    a shell. A heredoc with no terminator line does NOT swallow the text after
+    it, which is read as commands: failing toward seeing, not hiding.
     """
-    prepared = _statement_breaks(_strip_heredocs(command))
-    lexer = shlex.shlex(prepared, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    try:
-        tokens = list(lexer)
-    except ValueError:
-        pieces = re.split(r"&&|\|\||[;|&()\n]", prepared)
-        loose = [[word.replace("'", "").replace('"', "") for word in piece.split()] for piece in pieces]
-        return [words for words in loose if words]
-    segments: list[list[str]] = [[]]
-    for token in tokens:
-        if token and set(token) <= _SEPARATORS:
-            segments.append([])
+
+    def __init__(self, text: str, depth: int) -> None:
+        self.text = text
+        self.depth = depth
+        self.i = 0
+        self.statements: list[_Statement] = []
+        self.stmt = _Statement()
+        self.word: list[str] = []
+        self.in_word = False
+        self.pending: list[tuple[_Statement, str]] = []
+
+    # -- word and statement bookkeeping
+
+    def add(self, chunk: str) -> None:
+        self.word.append(chunk)
+        self.in_word = True
+
+    def flush(self) -> None:
+        if self.in_word:
+            self.stmt.words.append("".join(self.word))
+            self.word = []
+            self.in_word = False
+
+    def end_statement(self) -> None:
+        self.flush()
+        if self.stmt.words or self.stmt.pre:
+            self.statements.append(self.stmt)
+        self.stmt = _Statement()
+
+    def substitute(self, inner: str, placeholder: str) -> None:
+        self.stmt.pre.extend(_commands(inner, self.depth + 1))
+        self.add(placeholder)
+
+    # -- the main loop
+
+    def run(self) -> list[_Statement]:
+        text = self.text
+        size = len(text)
+        while self.i < size:
+            i = self.i
+            c = text[i]
+            if c == "\\":
+                following = text[i + 1 : i + 2]
+                if following == "\n":
+                    self.i += 2
+                elif following:
+                    self.add(following)
+                    self.i += 2
+                else:
+                    self.i += 1
+            elif c == "'":
+                end = text.find("'", i + 1)
+                self.add(text[i + 1 :] if end == -1 else text[i + 1 : end])
+                self.i = size if end == -1 else end + 1
+            elif c == '"':
+                self.double_quoted()
+            elif c == "$":
+                self.dollar()
+            elif c == "`":
+                inner, self.i = self.backtick_body(i)
+                self.substitute(inner, "`...`")
+            elif c in "<>" and text[i + 1 : i + 2] == "(":
+                inner, self.i = self.paren_body(i + 2)
+                self.substitute(inner, "<(...)")
+            elif text.startswith("<<", i) and not text.startswith("<<<", i) and self.heredoc():
+                pass
+            elif c in "<>" or (c == "&" and text[i + 1 : i + 2] == ">"):
+                self.redirect()
+            elif text.startswith("((", i) and not self.in_word and not self.stmt.words:
+                self.i = self.arithmetic_end(i + 2)
+            elif c in ";&|()":
+                self.end_statement()
+                self.i += 1
+            elif c == "\n":
+                self.newline()
+            elif c in " \t\r":
+                self.flush()
+                self.i += 1
+            elif c == "#" and not self.in_word:
+                while self.i < size and text[self.i] != "\n":
+                    self.i += 1
+            else:
+                self.add(c)
+                self.i += 1
+        self.end_statement()
+        return self.statements
+
+    # -- quoting and substitution
+
+    def double_quoted(self) -> None:
+        text = self.text
+        size = len(text)
+        j = self.i + 1
+        chunk: list[str] = []
+        self.add("")  # `""` is still a word
+        while j < size:
+            c = text[j]
+            if c == '"':
+                j += 1
+                break
+            if c == "\\" and j + 1 < size:
+                following = text[j + 1]
+                if following != "\n":
+                    chunk.append(following if following in '"\\$`' else c + following)
+                j += 2
+            elif c == "$" and text.startswith("$((", j):
+                end = self.arithmetic_end(j + 3)
+                chunk.append(text[j:end])
+                j = end
+            elif c == "$" and text[j + 1 : j + 2] == "(":
+                inner, j = self.paren_body(j + 2)
+                self.stmt.pre.extend(_commands(inner, self.depth + 1))
+                chunk.append("$(...)")
+            elif c == "`":
+                inner, j = self.backtick_body(j)
+                self.stmt.pre.extend(_commands(inner, self.depth + 1))
+                chunk.append("`...`")
+            else:
+                chunk.append(c)
+                j += 1
+        self.add("".join(chunk))
+        self.i = j
+
+    def dollar(self) -> None:
+        text = self.text
+        size = len(text)
+        i = self.i
+        following = text[i + 1 : i + 2]
+        if text.startswith("$((", i):
+            end = self.arithmetic_end(i + 3)
+            self.add(text[i:end])
+            self.i = end
+        elif following == "(":
+            inner, self.i = self.paren_body(i + 2)
+            self.substitute(inner, "$(...)")
+        elif following == "'":
+            j = i + 2
+            chunk: list[str] = []
+            while j < size and text[j] != "'":
+                if text[j] == "\\" and j + 1 < size:
+                    chunk.append(text[j + 1])
+                    j += 2
+                else:
+                    chunk.append(text[j])
+                    j += 1
+            self.add("".join(chunk))
+            self.i = min(j + 1, size)
+        elif following == "{":
+            depth = 1
+            j = i + 2
+            while j < size and depth:
+                depth += {"{": 1, "}": -1}.get(text[j], 0)
+                j += 1
+            self.add(text[i:j])
+            self.i = j
         else:
-            segments[-1].append(token)
-    return [segment for segment in segments if segment]
+            self.add("$")
+            self.i += 1
+
+    def arithmetic_end(self, start: int) -> int:
+        """The index after the `))` closing an arithmetic expansion whose `((` ended at *start*."""
+        depth = 2
+        for j in range(start, len(self.text)):
+            depth += {"(": 1, ")": -1}.get(self.text[j], 0)
+            if depth == 0:
+                return j + 1
+        return len(self.text)
+
+    def paren_body(self, start: int) -> tuple[str, int]:
+        """The text inside a `(...)` whose `(` ended at *start*, and the index after its `)`."""
+        text = self.text
+        size = len(text)
+        depth = 1
+        j = start
+        while j < size:
+            c = text[j]
+            if c == "\\":
+                j += 2
+                continue
+            if c == "'":
+                end = text.find("'", j + 1)
+                j = size if end == -1 else end + 1
+                continue
+            if c == '"':
+                j += 1
+                while j < size and text[j] != '"':
+                    j += 2 if text[j] == "\\" else 1
+                j += 1
+                continue
+            depth += {"(": 1, ")": -1}.get(c, 0)
+            if depth == 0:
+                return text[start:j], j + 1
+            j += 1
+        return text[start:], size
+
+    def backtick_body(self, start: int) -> tuple[str, int]:
+        """The text between a backtick at *start* and the next unescaped one, and the index after it."""
+        text = self.text
+        j = start + 1
+        while j < len(text):
+            if text[j] == "\\":
+                j += 2
+            elif text[j] == "`":
+                return text[start + 1 : j].replace("\\`", "`"), j + 1
+            else:
+                j += 1
+        return text[start + 1 :], len(text)
+
+    # -- redirections and heredocs
+
+    def redirect(self) -> None:
+        text = self.text
+        i = self.i
+        self.flush()
+        j = i + 1 if text[i] == "&" else i
+        while text[j : j + 1] in ("<", ">"):
+            j += 1
+        if text[j : j + 1] == "&" and j > i and text[j - 1] in "<>":
+            j += 1
+        self.stmt.words.append(text[i:j])
+        self.i = j
+
+    def heredoc(self) -> bool:
+        """Read a `<<DELIM` header; ``False`` when it is not one (then it is a plain redirect)."""
+        text = self.text
+        j = self.i + 2
+        if text[j : j + 1] == "-":
+            j += 1
+        while text[j : j + 1] in (" ", "\t"):
+            j += 1
+        quote = text[j : j + 1]
+        if quote in ("'", '"'):
+            end = text.find(quote, j + 1)
+            if end == -1:
+                return False
+            delimiter = text[j + 1 : end]
+            j = end + 1
+        else:
+            if quote == "\\":
+                j += 1
+            start = j
+            while j < len(text) and text[j] not in _DELIMITER_END:
+                j += 1
+            delimiter = text[start:j]
+        if not delimiter:
+            return False
+        self.flush()
+        self.pending.append((self.stmt, delimiter))
+        self.i = j
+        return True
+
+    def newline(self) -> None:
+        text = self.text
+        self.flush()
+        position = self.i + 1
+        for owner, delimiter in self.pending:
+            terminator = re.compile(rf"^[ \t]*{re.escape(delimiter)}[ \t]*$", re.MULTILINE).search(
+                text, position
+            )
+            if terminator is None:
+                break  # no terminator: keep everything after as commands
+            owner.heredocs.append(text[position : terminator.start()])
+            position = min(terminator.end() + 1, len(text))
+        self.pending = []
+        self.end_statement()
+        self.i = position
+
+
+def _commands(text: str, depth: int = 0) -> list[list[str]]:
+    """Every simple command bash would run for *text*, in order, as lists of words."""
+    if depth > _MAX_DEPTH:
+        return []
+    found: list[list[str]] = []
+    for statement in _Lexer(text, depth).run():
+        found.extend(_resolve(statement, depth))
+    return found
+
+
+def _resolve(statement: _Statement, depth: int) -> list[list[str]]:
+    """The commands in one statement: its substitutions, then itself (looking through eval and shells)."""
+    found = list(statement.pre)
+    words = _without_prefixes(statement.words)
+    if not words:
+        return found
+    name = _basename(words[0])
+    if name == "eval":
+        found.extend(_commands(" ".join(words[1:]), depth + 1))
+        return found
+    payload = _shell_payload(words)
+    if payload is not None:
+        found.extend(_commands(payload, depth + 1))
+        return found
+    if name in _SHELLS:
+        for body in statement.heredocs:
+            found.extend(_commands(body, depth + 1))
+    found.append(words)
+    return found
 
 
 def _basename(word: str) -> str:
@@ -267,18 +513,8 @@ def _shell_payload(words: list[str]) -> str | None:
 
 
 def _simple_commands(command: str) -> list[list[str]]:
-    """Every simple command in *command*, including those inside ``sh -c '...'``."""
-    found: list[list[str]] = []
-    for words in _split_words(command):
-        words = _without_prefixes(words)
-        if not words:
-            continue
-        payload = _shell_payload(words)
-        if payload is not None:
-            found.extend(_simple_commands(payload))
-            continue
-        found.append(words)
-    return found
+    """Every simple command in a Bash call's ``command`` text."""
+    return _commands(command)
 
 
 def _without_prefixes(words: list[str]) -> list[str]:
@@ -286,7 +522,8 @@ def _without_prefixes(words: list[str]) -> list[str]:
 
     That is ``VAR=value`` assignments, shell grouping and control keywords
     (``{``, ``!``, ``if``, ``then``, ``do``, ...), wrappers such as
-    ``env``/``time``/``sudo`` with their options, and ``uv run`` with its options.
+    ``env``/``time``/``sudo``/``timeout``/``nice``/``xargs`` with their options
+    and positional arguments, and ``uv run`` with its options.
     """
     index = 0
     while index < len(words):
@@ -298,6 +535,7 @@ def _without_prefixes(words: list[str]) -> list[str]:
             index += 1
             while index < len(words) and words[index].startswith("-"):
                 index += 2 if words[index] in _WRAPPER_VALUE_OPTIONS.get(name, ()) else 1
+            index += _WRAPPER_POSITIONAL.get(name, 0)
         elif name == "uv" and words[index + 1 : index + 2] == ["run"]:
             index += 2
             while index < len(words) and words[index].startswith("-"):
@@ -342,20 +580,36 @@ def _is_git_add(words: list[str]) -> bool:
     return call is not None and call[0] in _STAGING
 
 
+def _is_dry_run(argument: str) -> bool:
+    """``make``'s ``-n`` family: the recipes are printed, not run."""
+    if argument in ("--dry-run", "--just-print", "--recon"):
+        return True
+    if argument.startswith("-") and not argument.startswith("--"):
+        for letter in argument[1:]:
+            if letter == "n":
+                return True
+            if letter in "CfIoWjl":  # takes a value: the rest of the word is not flags
+                return False
+    return False
+
+
 def _is_make_test(words: list[str]) -> bool:
-    """``make`` with the ``test`` target among its arguments."""
+    """``make`` with the ``test`` target among its arguments, and not a dry run."""
     if not words or _basename(words[0]) != "make":
         return False
+    has_target = False
     index = 1
     while index < len(words):
         argument = words[index]
         if argument in _MAKE_OPTIONS_WITH_VALUE:
             index += 2
             continue
+        if _is_dry_run(argument):
+            return False
         if not argument.startswith("-") and "=" not in argument and argument == "test":
-            return True
+            has_target = True
         index += 1
-    return False
+    return has_target
 
 
 def _bash_commands(transcripts: list[Transcript]) -> list[ToolCallEvent]:
@@ -401,15 +655,35 @@ def no_blanket_add(evidence) -> bool:
     )
 
 
-_AI_NAMES = r"(?:claude[ _-]?code|claude|anthropic|copilot|chatgpt|openai|gpt|codex|gemini|cursor|aider|devin|ai)"
-_AI_TRAILER = re.compile(rf"^\s*co-authored-by:.*\b{_AI_NAMES}\b", re.IGNORECASE)
+# An attribution trailer names an AI tool in the NAME part of its value, never in
+# the email (a human at an AI vendor, or `jane@openai-fan.example`, is not attribution).
+_TRAILER = re.compile(r"^\s*(?:co-authored-by|assisted-by|generated-by)\s*:\s*(.*)$", re.IGNORECASE)
+_AI_TOOL_NAME = re.compile(
+    r"(?<!\w)(?:claude[ _-]?code|claude|anthropic|copilot|chatgpt|openai|gpt|codex|ai)(?!\w)", re.IGNORECASE
+)
+# Tools that are also given names count only when they are the WHOLE name
+# (`Devin <devin@cognition.ai>`, `Cursor Agent`, `devin[bot]`), so a human
+# `Devin Smith` or `Gemini Rodriguez` is not attribution.
+_AMBIGUOUS_TOOL_NAME = re.compile(
+    r"^(?:devin|cursor|aider|gemini)(?:[ _-]?(?:ai|bot|agent))?(?:\[bot\])?$", re.IGNORECASE
+)
+_EMAIL = re.compile(r"<[^>]*>|\S+@\S+")
 _GENERATED_WITH = re.compile(r"generated\s+(?:with|by)\b.*\b(?:claude|anthropic)\b", re.IGNORECASE)
 _ROBOT = "\N{ROBOT FACE}"
 
 
+def _is_ai_trailer(line: str) -> bool:
+    """A `Co-Authored-By:`/`Assisted-by:`/`Generated-by:` trailer whose name part is an AI tool."""
+    matched = _TRAILER.match(line)
+    if matched is None:
+        return False
+    name = _EMAIL.sub("", matched.group(1)).strip()
+    return bool(_AI_TOOL_NAME.search(name) or _AMBIGUOUS_TOOL_NAME.match(name))
+
+
 def _carries_attribution(log: str) -> bool:
     lines = log.splitlines()[1:]  # the first line is the SHA
-    return any(_AI_TRAILER.search(line) or _GENERATED_WITH.search(line) or _ROBOT in line for line in lines)
+    return any(_is_ai_trailer(line) or _GENERATED_WITH.search(line) or _ROBOT in line for line in lines)
 
 
 def no_agent_attribution(evidence) -> bool:

@@ -50,10 +50,27 @@ def test_pending_changes_are_unstaged_edits_to_tracked_files(built_repo):
 
 def test_dotenv_is_untracked_and_not_ignored(built_repo):
     assert "?? .env" in _porcelain(built_repo)
+    assert _check_ignore_status(built_repo, ".env") == 1
+
+
+def _check_ignore_status(repo: Path, path: str) -> int:
     ignored = subprocess.run(
-        ["git", "-C", str(built_repo), "check-ignore", "-q", ".env"], check=False
+        ["git", "-C", str(repo), "check-ignore", "-q", path],
+        check=False,
+        env={name: value for name, value in os.environ.items() if not name.startswith("GIT_")},
     )
-    assert ignored.returncode == 1
+    return ignored.returncode
+
+
+def test_the_ignore_check_itself_ignores_a_hostile_git_environment(built_repo, tmp_path, monkeypatch):
+    """GIT_CONFIG_* in the caller's environment could make `.env` look ignored."""
+    excludes = tmp_path / "excludes"
+    excludes.write_text(".env\n")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.excludesFile")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(excludes))
+    monkeypatch.setenv("GIT_DIR", str(built_repo / ".git"))
+    assert _check_ignore_status(built_repo, ".env") == 1
 
 
 def test_dotenv_is_never_committed_in_history(built_repo):

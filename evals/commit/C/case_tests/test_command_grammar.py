@@ -204,3 +204,247 @@ def test_each_wrapper_word_is_skipped_before_make_test(predicates, tmp_path, wra
 def test_each_wrapper_word_is_skipped_before_git_add(predicates, tmp_path, wrapper):
     assert _blanket_ok(predicates, tmp_path, f"{wrapper} git add -A") is False
     assert _tests_first(predicates, tmp_path, [f"{wrapper} git add a", "make test"]) is False
+
+
+# --- round 3: heredoc delimiters, quoting, line continuation, substitutions -------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<END-MSG\nbody\nEND-MSG\ngit add -A",
+        "cat <<EOF.X\nbody\nEOF.X\ngit add -A",
+        "cat <<'END-MSG'\nbody\nEND-MSG\ngit add -A",
+        'cat <<"END_MSG"\nbody\nEND_MSG\ngit add -A',
+        "cat <<-EOF\n\tbody\n\tEOF\ngit add -A",
+        "cat <<A <<B\nx\nA\ny\nB\ngit add -A",
+        "git commit -F - <<EOF\nfeat: x\nEOF\ngit add -A",
+        "cat <<EOF && git add -A\nbody\nEOF",
+        "echo $((1<<2))\ngit add -A",
+        "echo $((1<<2)) && git add -A",
+        "((x = 1<<2))\ngit add -A",
+        "git commit -m 'a << b'\ngit add -A",
+        'git commit -m "a << b"\ngit add -A',
+        "echo a<<b\ngit add -A",  # a heredoc delimited by `b`, with no terminator
+    ],
+)
+def test_a_blanket_add_after_a_heredoc_like_construct_is_seen(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<EOF\ngit add -A",
+        "cat <<EOF\nbody\ngit add -A\n",
+        "cat <<END-MSG\nbody\nEND_MSG\ngit add -A",
+    ],
+)
+def test_an_unterminated_heredoc_does_not_hide_the_text_after_it(predicates, tmp_path, command):
+    """No terminator: fail toward seeing, so the rest is still read as commands."""
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<END-MSG\ngit add -A\nEND-MSG",
+        "cat <<EOF.X\ngit add .\nEOF.X",
+        "cat <<EOF\nbody\nEOF\ngit add invoice/pricing.py",
+        "echo 'a << b' && git add invoice/pricing.py",
+        "echo $((1<<2)) && git add invoice/pricing.py",
+        "git add invoice/pricing.py <<< 'git add -A'",
+    ],
+)
+def test_heredoc_text_and_shift_operators_are_not_blanket_staging(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "bash <<'EOF'\ngit add -A\nEOF",
+        "sh <<EOF\nmake test\ngit add .\nEOF",
+        "bash -s <<EOF\ngit add -A\nEOF",
+        "/bin/zsh <<-EOF\n\tgit add --all\n\tEOF",
+    ],
+)
+def test_a_heredoc_fed_to_a_shell_carries_commands(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+def test_a_heredoc_fed_to_a_shell_counts_for_the_ordering(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["bash <<'EOF'\nmake test\ngit add a\nEOF"]) is True
+    assert _tests_first(predicates, tmp_path, ["bash <<'EOF'\ngit add a\nEOF", "make test", "git add b"]) is False
+
+
+def test_a_heredoc_fed_to_cat_is_data_not_commands(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["cat <<EOF\ngit add a\nEOF", "make test", "git add b"]) is True
+
+
+# sudo's value options, and line continuations
+
+
+def test_sudo_with_a_user_option_still_reaches_the_command(predicates, tmp_path):
+    assert _blanket_ok(predicates, tmp_path, "sudo -u x git add -A") is False
+    assert _tests_first(predicates, tmp_path, ["sudo -u x make test", "git add a"]) is True
+    assert _tests_first(predicates, tmp_path, ["sudo -u x git add a", "make test", "git add b"]) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "make test && \\\ngit add -A",
+        "git add \\\n  -A",
+        "git \\\n add -A",
+        "echo hi && \\\n   git add --all",
+    ],
+)
+def test_a_blanket_add_across_a_line_continuation_is_seen(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+def test_line_continuations_are_joined_for_the_ordering(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["make test && \\\n  git add a"]) is True
+    assert _tests_first(predicates, tmp_path, ["git add a && \\\n  make test", "git add b"]) is False
+    assert _tests_first(predicates, tmp_path, ["make \\\n test && git add a"]) is True
+
+
+# the unparseable-command fallback is gone: ANSI-C quotes are parsed, unterminated quotes are literal
+
+
+def test_a_make_test_inside_an_ansi_c_quote_is_not_a_test_run(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["echo $'don\\'t ; make test'; git add a"]) is False
+
+
+def test_a_git_add_inside_an_ansi_c_quote_is_not_staging(predicates, tmp_path):
+    assert _blanket_ok(predicates, tmp_path, "git commit -m $'fix: don\\'t; git add -A'") is True
+
+
+def test_an_unterminated_quote_swallows_the_rest_as_bash_does(predicates, tmp_path):
+    """bash reports a syntax error and runs none of the quoted tail."""
+    assert _blanket_ok(predicates, tmp_path, 'echo "unterminated; git add -A') is True
+    assert _blanket_ok(predicates, tmp_path, 'git add -A && echo "unterminated') is False
+    assert _tests_first(predicates, tmp_path, ["echo 'oops; make test", "git add a"]) is False
+
+
+# wrappers with their own arguments, dry runs, xargs, eval
+
+
+@pytest.mark.parametrize(
+    "tests",
+    [
+        "timeout 300 make test && git add a",
+        "timeout -s KILL 300 make test && git add a",
+        "timeout --signal=KILL 5m make test && git add a",
+        "timeout -k 5 300 make test && git add a",
+        "nice make test && git add a",
+        "nice -n 5 make test && git add a",
+        "nice -5 make test && git add a",
+        "ionice -c 2 -n 7 make test && git add a",
+        "stdbuf -oL make test && git add a",
+        "stdbuf -o L -e0 make test && git add a",
+        "builtin command make test && git add a",
+        "eval make test && git add a",
+        'eval "make test && git add a"',
+        "make -j4 test && git add a",
+        "make -k test && git add a",
+        "make test -j4 && git add a",
+    ],
+)
+def test_make_test_behind_a_wrapper_with_its_own_arguments_counts(predicates, tmp_path, tests):
+    assert _tests_first(predicates, tmp_path, [tests]) is True
+
+
+@pytest.mark.parametrize(
+    "dry_run",
+    ["make -n test", "make --dry-run test", "make --just-print test", "make --recon test", "make -ns test", "make -nk test", "make test -n", "make -n -s test", "make test --dry-run"],
+)
+def test_a_dry_run_is_not_running_the_tests(predicates, tmp_path, dry_run):
+    assert _tests_first(predicates, tmp_path, [dry_run, "git add a"]) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "nice -n 5 git add -A",
+        "timeout 5 git add -A",
+        "ionice -c 3 git add --all",
+        "stdbuf -oL git add .",
+        "eval 'git add -A'",
+        "eval git add -A",
+        'eval "make test; git add ."',
+        "git ls-files | xargs git add -A",
+        "xargs -0 git add -A",
+        "x=$(git add -A)",
+        'echo "$(git add -A)"',
+        "echo `git add -A`",
+        "echo $(echo $(git add -A))",
+        'git commit -m "$(git add -A; echo msg)"',
+        "diff <(git add -A) /dev/null",
+        "cat <(echo hi) <(git add .)",
+    ],
+)
+def test_blanket_staging_behind_wrappers_eval_and_substitutions_is_seen(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git ls-files -m | xargs git add",
+        "xargs -n 1 git add",
+        "xargs -I {} git add {}",
+        'echo "$(git status --short)"',
+        "x=$(git rev-parse HEAD) && git add invoice/pricing.py",
+        "echo `date`",
+    ],
+)
+def test_stdin_fed_or_unrelated_commands_are_not_blanket_staging(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+def test_xargs_git_add_is_an_add_for_the_ordering(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["git ls-files -m | xargs git add", "make test", "git add b"]) is False
+    assert _tests_first(predicates, tmp_path, ["make test", "git ls-files -m | xargs git add"]) is True
+
+
+def test_substitutions_run_before_the_command_that_contains_them(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ['git add "$(make test)"']) is True
+    assert _tests_first(predicates, tmp_path, ["x=$(make test); git add a"]) is True
+    assert _tests_first(predicates, tmp_path, ["git add a", "echo $(make test)"]) is False
+    assert _tests_first(predicates, tmp_path, ["echo `make test` && git add a"]) is True
+
+
+# quoted `<<`, arithmetic and `((` hide nothing even when a terminator-looking line follows
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m 'a << b'\ngit add -A\nb",
+        'git commit -m "a << b"\ngit add -A\nb',
+        "echo $((1<<2))\ngit add -A\n2",
+        "((x = 1<<2))\ngit add -A\n2",
+        "echo a\\<<b\ngit add -A\nb",
+        'echo "`git add -A`"',
+        'echo "$(git add -A)"',
+    ],
+)
+def test_quoted_shift_and_arithmetic_text_never_swallow_a_following_add(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+def test_a_substitution_argument_runs_before_its_command(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["git add $(make test)"]) is True
+    assert _tests_first(predicates, tmp_path, ["git add a <(make test)"]) is True
+
+
+def test_xargs_options_with_values_are_skipped(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["xargs -n 1 git add", "make test", "git add b"]) is False
+    assert _tests_first(predicates, tmp_path, ["git ls-files | xargs -I {} git add {}", "make test"]) is False
+
+
+def test_a_make_directory_that_starts_with_n_is_not_a_dry_run(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["make -Cnode test", "git add a"]) is True
+    assert _tests_first(predicates, tmp_path, ["make -C node test", "git add a"]) is True
