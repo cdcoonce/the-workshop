@@ -161,7 +161,9 @@ def test_a_reverted_run_uses_the_fixture_src_not_the_workdirs(predicates, tmp_pa
     assert _last_line(snapshot["pytest-src-reverted.txt"]) == "exit=0"
 
 
-def test_end_state_leaves_the_workdir_and_the_fixture_untouched(predicates, solved):
+def test_end_state_leaves_the_workdir_and_the_fixture_untouched(predicates, solved, monkeypatch):
+    # The ambient environment may already forbid bytecode (the teeth rig does); the snapshot must not rely on it.
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
     workdir, transcript_path = solved
     fixture_before = _tree(FIXTURE)
     workdir_before = _tree(workdir)
