@@ -1,0 +1,24 @@
+mode = "subagent"
+prompt = "prompt.md"
+
+[[items]]
+id = "T1"
+kind = "gate-candidate"
+scorer = "t1_test_first_and_effective"
+
+[[items]]
+id = "T2"
+kind = "trend"
+scorer = "t2_interleaved_red_green_cycles"
+
+[items.params]
+min_cycles = 2
+
+[[items]]
+id = "T3"
+kind = "trend"
+scorer = "t3_tautology_fixed_or_flagged"
+
+[items.params]
+test_file = "tests/test_cart.py"
+tautology = "assert subtotal_cents(items) == subtotal_cents(items)"
