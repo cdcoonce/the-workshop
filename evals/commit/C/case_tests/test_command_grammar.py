@@ -448,3 +448,15 @@ def test_xargs_options_with_values_are_skipped(predicates, tmp_path):
 def test_a_make_directory_that_starts_with_n_is_not_a_dry_run(predicates, tmp_path):
     assert _tests_first(predicates, tmp_path, ["make -Cnode test", "git add a"]) is True
     assert _tests_first(predicates, tmp_path, ["make -C node test", "git add a"]) is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git add invoice/pricing.py # ; git add -A",
+        "git add invoice/pricing.py  # && git add .",
+        "echo ok\n# note; git add -A\nls",
+    ],
+)
+def test_a_comment_hides_nothing_but_is_not_a_command_either(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
