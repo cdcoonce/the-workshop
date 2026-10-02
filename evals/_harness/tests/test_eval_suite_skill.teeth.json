@@ -365,7 +365,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_the_skill_names_where_transcripts_and_python_come_from, which cross-checks the Makefile.",
-      "find": "`uv run --with jsonschema python`",
+      "find": "`uv run --with pytest --with jsonschema python`",
       "replace": "`python3`"
     },
     {
