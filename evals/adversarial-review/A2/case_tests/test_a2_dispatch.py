@@ -173,3 +173,34 @@ def test_a_prompt_that_really_embeds_an_acceptance_line_is_refused_by_both_build
         build_dispatch_prompt(copied_case)
     with pytest.raises(AcceptanceLeakError):
         build_no_skill_prompt(copied_case)
+
+
+# --- the prompt is a plain whole-diff request that points at two files only --------------
+
+
+def test_the_prompt_names_exactly_the_two_review_files_by_explicit_path(case_dir):
+    prompt = (case_dir / "prompt.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"[\w./-]+\.(?:md|patch|json|py|toml|txt|jsonl)\b", prompt))
+    assert named == {"spec.md", "diff.patch"}
+    assert "`spec.md`" in prompt and "`diff.patch`" in prompt
+
+
+def test_the_prompt_never_mentions_the_answer_key_or_the_raws(case_dir):
+    prompt = (case_dir / "prompt.md").read_text(encoding="utf-8")
+    for word in ("defects", "ground truth", "answer", "acceptance", "calibration", "ab_raws", "fixture", "injected", "doctored"):
+        assert word not in prompt.lower(), word
+
+
+def test_the_prompt_enumerates_no_category_of_defect(case_dir):
+    """A plain request: listing what to look for would hand the no-skill baseline the lens checklist."""
+    prompt = (case_dir / "prompt.md").read_text(encoding="utf-8").lower()
+    for phrase in ("style", "naming", "preference", "scope", "unrequested", "never asked", "would not catch",
+                   "tests that", "requirements", "report only", "defects only", "failure scenario"):
+        assert phrase not in prompt, phrase
+
+
+def test_acceptance_tells_the_calibration_run_to_copy_only_the_two_review_files(case_dir):
+    acceptance = (case_dir / "acceptance.md").read_text(encoding="utf-8")
+    assert "defects.json" in acceptance
+    assert re.search(r"copy only[^\n]*diff\.patch[^\n]*spec\.md", acceptance), "must say to copy only diff.patch and spec.md"
+    assert re.search(r"never[^\n]*(defects\.json)", acceptance)

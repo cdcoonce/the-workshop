@@ -40,6 +40,12 @@ One plain reviewer, one pass over the whole diff, no lens split, given the case
 prompt with any skill reference removed plus the do-not-invoke-skills line. Nothing
 from the skill's own files may reach it, or the baseline stops being a baseline.
 
+## What the agents may see
+
+`fixture/` is copied whole by the conductor's default step, and it holds `defects.json`, the answer key (the spec places it there).
+The hand-run calibration (#989) should copy only diff.patch and spec.md into the agents' working directory, and never defects.json or ab_raws.
+The prompt names those two review files by path and nothing else, which is the only other thing keeping a lens agent off the key.
+
 ## Raws
 
 The saved replies are for matcher development and the cross-match audit. They are
