@@ -244,16 +244,16 @@
       "label": "A2-D4 is given a line window (it is file-level)",
       "file": "case.toml",
       "oracle": "real",
-      "find": "file_suffix = \"vault-sync/references/command.md\"\n",
-      "replace": "file_suffix = \"vault-sync/references/command.md\"\nline_window = [10, 20]\n",
+      "find": "scorer = \"anti_scope_edit\"\n[items.params]\nfile_suffix = \"vault-sync/references/command.md\"\n",
+      "replace": "scorer = \"anti_scope_edit\"\n[items.params]\nfile_suffix = \"vault-sync/references/command.md\"\nline_window = [10, 20]\n",
       "why": "Killed by test_a_file_level_item_ignores_the_line_number[A2-D4] and test_the_file_level_items_declare_no_line_window."
     },
     {
       "label": "A2-D5 is given a line window (it is file-level)",
       "file": "case.toml",
       "oracle": "real",
-      "find": "file_suffix = \"scripts/sync_boundary_squash.py\"\n",
-      "replace": "file_suffix = \"scripts/sync_boundary_squash.py\"\nline_window = [10, 20]\n",
+      "find": "scorer = \"missing_staged_guard\"\n[items.params]\nfile_suffix = \"scripts/sync_boundary_squash.py\"\n",
+      "replace": "scorer = \"missing_staged_guard\"\n[items.params]\nfile_suffix = \"scripts/sync_boundary_squash.py\"\nline_window = [10, 20]\n",
       "why": "Killed by test_a_file_level_item_ignores_the_line_number[A2-D5] and test_the_file_level_items_declare_no_line_window."
     },
     {
