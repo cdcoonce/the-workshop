@@ -36,7 +36,7 @@
       "label": "prompt.md embeds a line of SKILL.md",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Review the change against that specification.",
+      "find": "Review the change against that description.",
       "replace": "If nothing you ran or checked could have come back the other way, you have not",
       "why": "Killed by test_the_no_skill_prompt_contains_no_line_of_the_skills_own_files and test_the_dispatch_prompt_contains_no_line_of_the_skills_own_files_either."
     },
@@ -44,7 +44,7 @@
       "label": "prompt.md embeds a line of references/pr-lens-review.md",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Review the change against that specification.",
+      "find": "Review the change against that description.",
       "replace": "A lens that died on dispatch and a lens that read the whole diff and found nothing",
       "why": "Killed by test_the_no_skill_prompt_contains_no_line_of_the_skills_own_files."
     },
@@ -52,15 +52,15 @@
       "label": "prompt.md names another skill",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Do not run code or use the network.",
-      "replace": "Do not run code or use the network. Follow the tdd skill if it helps.",
+      "find": "Read only those two files.",
+      "replace": "Read only those two files. Follow the tdd skill if it helps.",
       "why": "Killed by test_the_no_skill_prompt_names_no_skill (the harness strips only the rostered skill's own name)."
     },
     {
       "label": "prompt.md embeds a line of acceptance.md",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Review the change against that specification.",
+      "find": "Review the change against that description.",
       "replace": "One plain reviewer, one pass over the whole diff, no lens split, given the case",
       "why": "Killed by test_no_dispatch_prompt_carries_acceptance_text (and #995's committed-case leakage test)."
     },
@@ -68,8 +68,8 @@
       "label": "prompt.md splits the review into lenses",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Review the change against that specification.",
-      "replace": "Review the change against that specification, through one lens at a time.",
+      "find": "Review the change against that description.",
+      "replace": "Review the change against that description, through one lens at a time.",
       "why": "Killed by test_the_no_skill_arm_is_a_single_whole_diff_pass_with_no_lens_split."
     },
     {
@@ -79,6 +79,38 @@
       "find": "Reply with a single JSON object and nothing else",
       "replace": "Reply with a single JSON object and nothing else. Reply with a single JSON object and nothing else",
       "why": "Killed by test_the_no_skill_arm_is_a_single_whole_diff_pass_with_no_lens_split (the single-reply count)."
+    },
+    {
+      "label": "prompt.md points at the answer key",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Read only those two files.",
+      "replace": "Read only those two files, not fixture/defects.json.",
+      "why": "Killed by test_the_prompt_never_mentions_the_answer_key_or_the_raws and test_the_prompt_names_exactly_the_two_review_files_by_explicit_path."
+    },
+    {
+      "label": "prompt.md names a third file",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Read only those two files.",
+      "replace": "Read only those two files, then `notes.md`.",
+      "why": "Killed by test_the_prompt_names_exactly_the_two_review_files_by_explicit_path."
+    },
+    {
+      "label": "prompt.md enumerates a defect category",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Review the change against that description.",
+      "replace": "Review the change against that description, and flag tests that would not catch what they claim.",
+      "why": "Killed by test_the_prompt_enumerates_no_category_of_defect."
+    },
+    {
+      "label": "acceptance.md drops the copy-only note",
+      "file": "acceptance.md",
+      "oracle": "real",
+      "find": "should copy only diff.patch and spec.md",
+      "replace": "should copy the fixture",
+      "why": "Killed by test_acceptance_tells_the_calibration_run_to_copy_only_the_two_review_files."
     },
     {
       "label": "case.toml runs the case as a subagent",
@@ -158,7 +190,7 @@
       "oracle": "real",
       "find": "- inverted bias for credential-exposure findings: the doctored diff carries no secret, token or live network call, so the credential lens (and its uphold-unless-impossible refuter) never fires",
       "replace": "- inverted bias for credential-exposure findings:",
-      "why": "Killed by test_every_nonblank_gaps_line_is_a_wellformed_entry."
+      "why": "Killed by test_every_line_a2_added_is_a_wellformed_entry."
     },
     {
       "label": "[control] reword a sentence of prompt.md that neither guard reads",
@@ -166,8 +198,8 @@
       "oracle": "real",
       "expect": "survived",
       "why": "The sentence is plain English with no token run shared with the skill's files or acceptance.md, no skill name, and no lens vocabulary, so every dispatch test reads the same prompt shape; inert for the tests in this directory. Not inert for a model reading it, which is what calibration, not make test, measures.",
-      "find": "Leave out style, naming and personal preference.",
-      "replace": "Leave out matters of style, naming and personal preference."
+      "find": "If you find nothing wrong, reply with an empty findings list.",
+      "replace": "If you find nothing wrong, reply with an empty list of findings."
     }
   ]
 }
