@@ -28,9 +28,12 @@ has an inline lens-mode fixture (`A2`); every step otherwise applies
 identically to any other rostered skill.
 
 Run every harness call from the checkout root with
-`uv run --with jsonschema python` (the way `make test-evals` runs the
-harness): `evals/` is imported as the `evals._harness` package from the root,
-and `ledger` needs `jsonschema`. Run a conductor script with `python -c` or
+`uv run --with pytest --with jsonschema python` (the way `make test-evals`
+runs the harness): `evals/` is imported as the `evals._harness` package from
+the root, `ledger` needs `jsonschema`, and a case's `end_state` snapshot runs
+the fixture's pytest through the harness interpreter, so that interpreter
+needs `pytest` too (without it every attempt silently records a miss).
+Run a conductor script with `python -c` or
 `python -m`, or with `PYTHONPATH=.`, from the checkout root: a script saved
 outside the checkout root fails with `No module named 'evals'`.
 
