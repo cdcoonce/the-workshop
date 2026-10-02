@@ -1,0 +1,16 @@
+# The fixture-listed surface set for the coverage-bound item (A1-coverage-bound).
+#
+# `files`: every tracked file in the built fixture that the `fix/settlement-rounding`
+# branch diff against `main` does NOT touch. A test rebuilds the fixture and asserts
+# this list equals `git ls-files` minus `git diff --name-only main...fix/settlement-rounding`.
+#
+# `phrase_class`: regexes (case-insensitive) for the "real or production settlement
+# data" class, the data the review could not have used.
+files = [
+  "src/settlement/__init__.py",
+  "src/settlement/invoice.py",
+  "pytest.ini",
+]
+phrase_class = [
+  '\b(?:real|production|prod|live)\W+(?:\w+\W+){0,3}settlement\s+data',
+]

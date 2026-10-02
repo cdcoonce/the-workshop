@@ -1,0 +1,9 @@
+# prompt.md is copied from the "Kept scenarios" table (scenario ID 1, its Scenario
+# cell) of the adversarial-review skill's tests.md. build_fixture.py is run in
+# place by case.toml's `builder` key and never copied, so it has no entry here.
+resolved_ref = "c205087684d0d8e3958aa2ba3ef5678a4b866621"  # origin/dev when copied
+
+[[files]]
+file = "prompt.md"
+source_path = "plugins/workbench/skills/adversarial-review/tests.md"
+source_blob_sha = "a294dfc30093a67b7653e97ca801882299e35e94"
