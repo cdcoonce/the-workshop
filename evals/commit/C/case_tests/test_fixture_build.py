@@ -180,13 +180,21 @@ def test_the_build_ignores_the_callers_git_identity_env(tmp_path, monkeypatch, n
     assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)
 
 
-def test_the_build_ignores_the_callers_git_configuration(tmp_path, monkeypatch):
+@pytest.mark.parametrize("where", ["home-gitconfig", "GIT_CONFIG_GLOBAL"])
+def test_the_build_ignores_the_callers_git_configuration(tmp_path, monkeypatch, where):
     """A global config that would break or alter a commit must never reach the build."""
     hostile = tmp_path / "hostile-gitconfig"
     hostile.write_text("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n")
     baseline = tmp_path / "baseline"
     build(CASE_DIR, baseline)
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hostile))
+    if where == "home-gitconfig":
+        home = tmp_path / "home"
+        home.mkdir()
+        (home / ".gitconfig").write_text(hostile.read_text())
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    else:
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hostile))
     other = tmp_path / "other"
     build(CASE_DIR, other)
     assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)
