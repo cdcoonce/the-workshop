@@ -673,6 +673,7 @@ def test_make_modes_that_run_no_recipe_are_not_running_the_tests(predicates, tmp
         "git add &> out -A",
         "bash -c -- '-x; git add -A'",
         "<<EOF\n$(git add -A)\nEOF",
+        "<<EOF; true\n$(git add -A)\nEOF",
         "git add -A &>/dev/null",
     ],
 )
