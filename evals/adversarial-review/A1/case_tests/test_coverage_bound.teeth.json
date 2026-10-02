@@ -36,21 +36,21 @@
       "label": "[does-nothing] the scorer never credits any section",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "            if any(pattern.search(section) for pattern in patterns):\n                return True",
-      "replace": "            if any(pattern.search(section) for pattern in patterns):\n                return False"
+      "find": "            if _surface_hit(section):\n                return True",
+      "replace": "            if _surface_hit(section):\n                return False"
     },
     {
       "label": "[does-nothing] a reply with no Could-not-verify section is credited (the agent does nothing)",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "            if any(pattern.search(section) for pattern in patterns):\n                return True\n    return False",
-      "replace": "            if any(pattern.search(section) for pattern in patterns):\n                return True\n    return True"
+      "find": "            if _surface_hit(section):\n                return True\n    return False",
+      "replace": "            if _surface_hit(section):\n                return True\n    return True"
     },
     {
       "label": "regex dropped: any section, even an empty one, credits",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "if any(pattern.search(section) for pattern in patterns):",
+      "find": "if _surface_hit(section):",
       "replace": "if True:"
     },
     {
@@ -85,22 +85,71 @@
       "label": "production-data phrase class dropped",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "    patterns.extend(re.compile(phrase, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
-      "replace": "    patterns.extend([])"
+      "find": "    return any(re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
+      "replace": "    return False"
     },
     {
-      "label": "left word boundary dropped: test_invoice.py names invoice.py",
+      "label": "phrase class loosened: bare `data` credits, no real or production word needed",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production|prod|live)\\W+(?:\\w+\\W+){0,3}data\\b',",
+      "replace": "'\\bdata\\b',"
+    },
+    {
+      "label": "phrase class narrowed: no intervening word allowed between real and data",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production|prod|live)\\W+(?:\\w+\\W+){0,3}data\\b',",
+      "replace": "'\\b(?:real|production|prod|live)\\W+data\\b',"
+    },
+    {
+      "label": "foreign directory prefix accepted: any prefix before a listed path counts",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "rf\"(?<![\\w.-])(?:[\\w.-]+/)*{re.escape",
-      "replace": "rf\"(?:[\\w.-]+/)*{re.escape"
+      "find": "                if token == suffix and not bare_and_ambiguous:",
+      "replace": "                if (token == suffix or token.endswith(\"/\" + suffix)) and not bare_and_ambiguous:"
+    },
+    {
+      "label": "absolute path accepted on its basename alone (foreign directory)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if token.endswith(\"/\" + path):",
+      "replace": "                if token.endswith(\"/\" + basename):"
+    },
+    {
+      "label": "stem-only match: the extension is dropped from both sides",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if token == suffix and not bare_and_ambiguous:",
+      "replace": "                if token.rsplit(\".\", 1)[0] == suffix.rsplit(\".\", 1)[0] and not bare_and_ambiguous:"
+    },
+    {
+      "label": "bare basename credited even when two listed files share it",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                bare_and_ambiguous = is_bare and basenames.count(basename) > 1",
+      "replace": "                bare_and_ambiguous = is_bare and basenames.count(basename) > 99"
+    },
+    {
+      "label": "leading ./ no longer stripped",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        token = token.removeprefix(\"./\")",
+      "replace": "        token = token"
+    },
+    {
+      "label": "trailing sentence punctuation no longer stripped from a path token",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        token = raw.casefold().rstrip(\".-\")",
+      "replace": "        token = raw.casefold()"
     },
     {
       "label": "only the first transcript's reply is read",
       "file": "../predicates.py",
       "oracle": "real",
-      "find": "    patterns = _surface_patterns()\n    for reply in _final_replies(evidence):",
-      "replace": "    patterns = _surface_patterns()\n    for reply in _final_replies(evidence)[:1]:"
+      "find": "    for reply in _final_replies(evidence):\n        for section in _could_not_verify_sections(reply):",
+      "replace": "    for reply in _final_replies(evidence)[:1]:\n        for section in _could_not_verify_sections(reply):"
     },
     {
       "label": "surface set widened with a file the fix branch touches",
@@ -120,10 +169,10 @@
       "label": "[control] eager list inside any() instead of a generator",
       "file": "../predicates.py",
       "oracle": "real",
+      "find": "    return any(re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
+      "replace": "    return any([re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"]])",
       "expect": "survived",
-      "why": "pattern.search is pure, so evaluating every pattern eagerly instead of short-circuiting returns the same truth value on every input; the only difference is wasted regex work. It holds for any text, as no pattern has side effects.",
-      "find": "if any(pattern.search(section) for pattern in patterns):",
-      "replace": "if any([pattern.search(section) for pattern in patterns]):"
+      "why": "re.search is pure, so evaluating every phrase pattern eagerly instead of short-circuiting returns the same truth value on every input; the only difference is wasted regex work. It holds for any text, as no pattern has side effects."
     }
   ]
 }

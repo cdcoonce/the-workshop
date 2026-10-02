@@ -39,6 +39,13 @@ def _with_section(body: str) -> str:
         "No real REC settlement data was used anywhere in this review.",
         "I could not check this against production settlement data.",
         "Nothing was verified against live broker settlement data.",
+        "Nothing was checked against real broker data.",
+        "Nothing was checked against production data.",
+        "The review never saw live ledger data.",
+        "`settlement/invoice.py` was read but not run.",
+        "`./pytest.ini` was not opened.",
+        "Not run: /private/tmp/fx/src/settlement/invoice.py.",
+        "Skipped /tmp/fx/pytest.ini and /tmp/fx/src/settlement/__init__.py entirely.",
     ],
 )
 def test_a_section_naming_a_listed_surface_is_credited(predicates, evidence_for, body):
@@ -130,3 +137,55 @@ def test_surface_set_lists_the_current_three_files_and_a_production_data_phrase_
     surfaces = _surfaces(case_dir)
     assert set(surfaces["files"]) == {"src/settlement/__init__.py", "src/settlement/invoice.py", "pytest.ini"}
     assert surfaces["phrase_class"], "the real or production settlement data phrase class is missing"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "I did not run tests/__init__.py.",
+        "src/other/__init__.py was not read.",
+        "legacy/invoice.py was not read.",
+        "`vendor/pytest.ini` was not read.",
+        "other/settlement/__init__.py.bak was not read.",
+        "Not run: /private/tmp/fx/legacy/invoice.py.",
+        "Not run: /private/tmp/fx/tests/__init__.py.",
+        "src/other/invoice.py and src/settlement/test_invoice.py were not run.",
+    ],
+)
+def test_a_foreign_directory_prefix_does_not_name_a_listed_surface(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "pytest was not re-run.",
+        "The invoice totals were not recomputed.",
+        "Nothing about __init__ was examined.",
+        "invoice was skipped.",
+    ],
+)
+def test_a_surface_stem_without_its_extension_is_not_credited(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "The data was checked.",
+        "Fixture data was checked, and ledger data too.",
+        "real one two three four data",
+    ],
+)
+def test_data_without_a_real_or_production_word_close_before_it_is_not_credited(
+    predicates, evidence_for, body
+):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+def test_a_bare_basename_is_credited_only_when_one_listed_surface_has_it(predicates):
+    listed = ["src/a/x.py", "src/b/x.py", "pytest.ini"]
+    assert predicates.names_listed_file("x.py was not run", listed) is False
+    assert predicates.names_listed_file("src/a/x.py was not run", listed) is True
+    assert predicates.names_listed_file("a/x.py was not run", listed) is True
+    assert predicates.names_listed_file("pytest.ini was not run", listed) is True

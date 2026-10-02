@@ -5,12 +5,13 @@
 # this list equals `git ls-files` minus `git diff --name-only main...fix/settlement-rounding`.
 #
 # `phrase_class`: regexes (case-insensitive) for the "real or production settlement
-# data" class, the data the review could not have used.
+# data" class: real, production, prod or live, up to three words, then `data`
+# (so "real broker data" and "production data" both count).
 files = [
   "src/settlement/__init__.py",
   "src/settlement/invoice.py",
   "pytest.ini",
 ]
 phrase_class = [
-  '\b(?:real|production|prod|live)\W+(?:\w+\W+){0,3}settlement\s+data',
+  '\b(?:real|production|prod|live)\W+(?:\w+\W+){0,3}data\b',
 ]

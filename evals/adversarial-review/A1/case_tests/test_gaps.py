@@ -25,7 +25,15 @@ def test_gaps_md_keeps_its_header_and_every_line_is_well_formed(case_dir):
         assert _ENTRY.match(line), line
 
 
-def test_a1_appended_the_behaviors_a_single_prompt_cannot_exercise(case_dir):
-    text = "\n".join(_lines(case_dir))
-    assert "- three-attempt ceiling" in text
-    assert "- refusing an author's pressure" in text
+def test_a1_appended_one_behavior_per_line_for_what_a_single_prompt_cannot_exercise(case_dir):
+    mine = [
+        line
+        for line in _lines(case_dir)
+        if line.startswith(
+            ("- three-attempt ceiling", "- PLAUSIBLE ceiling", "- refusing an author's pressure")
+        )
+    ]
+    assert len(mine) == 3, mine
+    for line in mine:
+        behavior = line[2:].split(":", 1)[0]
+        assert " and " not in behavior, f"one behavior per line: {line!r}"

@@ -30,6 +30,7 @@ _SECTION_HEADING = re.compile(r"^## Could not verify[ \t]*$", re.IGNORECASE | re
 _NEXT_LEVEL_TWO_HEADING = re.compile(r"^## ", re.MULTILINE)
 _LIST_ITEM_START = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
 _PY_PATH = re.compile(r"[\w./-]+\.py")
+_PATH_TOKEN = re.compile(r"[\w./-]+")
 
 
 def _final_replies(evidence: Evidence) -> list[str]:
@@ -51,17 +52,47 @@ def _could_not_verify_sections(text: str) -> list[str]:
     return sections
 
 
-def _surface_patterns() -> list[re.Pattern[str]]:
-    """Compile one regex per listed file plus the production-data phrase class."""
+def names_listed_file(text: str, files: list[str]) -> bool:
+    """Whether *text* names one of the listed *files*, by path token.
+
+    A path token (a run of word characters, ``.``, ``/`` and ``-``) names a
+    listed file when it is:
+
+    - a trailing, segment-aligned suffix of the listed path (``src/settlement/invoice.py``,
+      ``settlement/invoice.py``), with an optional leading ``./``;
+    - the bare basename, only when exactly one listed file has that basename;
+    - an absolute path that ends in the listed path in full.
+
+    A directory the listed path does not have in that position
+    (``legacy/invoice.py``, ``tests/__init__.py``) never names it, and neither
+    does a stem without its extension (``invoice``, ``pytest``).
+    """
+    listed = [path.casefold() for path in files]
+    basenames = [path.rsplit("/", 1)[-1] for path in listed]
+    for raw in _PATH_TOKEN.findall(text):
+        token = raw.casefold().rstrip(".-")
+        token = token.removeprefix("./")
+        for path, basename in zip(listed, basenames):
+            if token.startswith("/"):
+                if token.endswith("/" + path):
+                    return True
+                continue
+            segments = path.split("/")
+            for start in range(len(segments)):
+                suffix = "/".join(segments[start:])
+                is_bare = start == len(segments) - 1 and len(segments) > 1
+                bare_and_ambiguous = is_bare and basenames.count(basename) > 1
+                if token == suffix and not bare_and_ambiguous:
+                    return True
+    return False
+
+
+def _surface_hit(section: str) -> bool:
+    """Whether *section* names a listed file or matches the production-data phrase class."""
     surfaces = tomllib.loads(_SURFACES_PATH.read_text(encoding="utf-8"))
-    patterns = [
-        # Any directory prefix is accepted, but the basename must stand alone:
-        # `test_invoice.py` and `x.invoice.py` never name `invoice.py`.
-        re.compile(rf"(?<![\w.-])(?:[\w.-]+/)*{re.escape(path.rsplit('/', 1)[-1])}(?!\w)", re.IGNORECASE)
-        for path in surfaces["files"]
-    ]
-    patterns.extend(re.compile(phrase, re.IGNORECASE) for phrase in surfaces["phrase_class"])
-    return patterns
+    if names_listed_file(section, surfaces["files"]):
+        return True
+    return any(re.search(phrase, section, re.IGNORECASE) for phrase in surfaces["phrase_class"])
 
 
 def coverage_bound(evidence: Evidence) -> bool:
@@ -76,13 +107,13 @@ def coverage_bound(evidence: Evidence) -> bool:
     -------
     bool
         ``True`` only when some reply has the section (location) AND a
-        ``surfaces.toml`` surface regex hits inside it. A missing or empty
+        ``surfaces.toml`` surface (a listed file, or the production-data phrase
+        class) is named inside it. A missing or empty
         section, or a surface named only outside it, is a miss.
     """
-    patterns = _surface_patterns()
     for reply in _final_replies(evidence):
         for section in _could_not_verify_sections(reply):
-            if any(pattern.search(section) for pattern in patterns):
+            if _surface_hit(section):
                 return True
     return False
 

@@ -88,19 +88,23 @@ def test_prompt_is_the_scenario_1_cell_of_the_kept_scenarios_table_verbatim(case
     assert (case_dir / "prompt.md").read_text(encoding="utf-8").strip() == _scenario_1_cell(repo_root)
 
 
-def test_provenance_records_the_copied_prompts_source_path_and_current_blob_sha(case_dir, repo_root):
+def test_provenance_records_the_copied_prompts_source_path_and_its_blob_sha_at_the_resolved_ref(
+    case_dir, repo_root
+):
     provenance = tomllib.loads((case_dir / "provenance.toml").read_text(encoding="utf-8"))
     by_file = {entry["file"]: entry for entry in provenance["files"]}
     assert set(by_file) == {"prompt.md"}, "only prompt.md is copied; the builder is run in place"
     entry = by_file["prompt.md"]
     assert entry["source_path"] == _TESTS_MD
     assert re.fullmatch(r"[0-9a-f]{40}", entry["source_blob_sha"])
-    current = subprocess.run(
-        ["git", "-C", str(repo_root), "hash-object", _TESTS_MD], check=True, capture_output=True, text=True
+    # Pinned at the recorded ref, so a later edit to tests.md never turns this red.
+    at_ref = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", f"{provenance['resolved_ref']}:{_TESTS_MD}"],
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
-    assert entry["source_blob_sha"] == current, (
-        "tests.md changed since prompt.md was copied: re-copy scenario 1 and update source_blob_sha"
-    )
+    assert entry["source_blob_sha"] == at_ref
 
 
 def test_dispatch_prompt_is_prompt_md_and_carries_no_text_from_acceptance_md(case_dir):
@@ -127,8 +131,8 @@ def test_built_fixture_has_main_and_the_claimed_fix_branch(build_fixture, tmp_pa
     assert set(branches) == {"main", "fix/settlement-rounding"}
 
 
-def test_builder_is_untouched_and_not_copied_into_evals(repo_root, case_dir):
-    # Content pins, not a diff: the builder's own source stays the single copy.
+def test_no_copy_of_the_builder_exists_under_evals(repo_root):
+    # Only the plugin's own build_fixture.py exists; this case runs it in place.
     copies = [p for p in (repo_root / "evals").rglob("build_fixture.py")]
     assert copies == []
 
