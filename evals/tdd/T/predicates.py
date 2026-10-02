@@ -72,14 +72,6 @@ def _failed_test_before_first_source_edit(evidence: Evidence) -> bool:
     return _matchers.test_failed_before_first_source_edit(evidence.transcripts[0].events)
 
 
-def _normalized_relative(path: str) -> str | None:
-    """Return *path* normalized, or ``None`` when it is absolute or escapes upward."""
-    normalized = posixpath.normpath(path) if path else ""
-    if not normalized or normalized == "." or normalized.startswith("/") or normalized.split("/")[0] == "..":
-        return None
-    return normalized
-
-
 def _edited_paths(end_state: dict[str, str]) -> list[str] | None:
     try:
         entries = json.loads(end_state.get("edited-paths.json", ""))
@@ -94,11 +86,9 @@ def _edited_under_src(end_state: dict[str, str]) -> bool:
     paths = _edited_paths(end_state)
     if paths is None:
         return False
-    for path in paths:
-        normalized = _normalized_relative(path)
-        if normalized is not None and normalized.startswith("src/"):
-            return True
-    return False
+    # Normalized first, so "src/../tests/x.py" is a tests path and "./src/x.py" a src path.
+    # A path that is absolute or climbs out ("../src/x.py") never starts with "src/".
+    return any(posixpath.normpath(path).startswith("src/") for path in paths if path)
 
 
 def _exit_code(text: str) -> int | None:

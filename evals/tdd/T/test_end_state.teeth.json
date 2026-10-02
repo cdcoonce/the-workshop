@@ -1,0 +1,143 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/tdd/T/case_tests/test_end_state.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/tdd/T/case_tests/test_end_state.py"
+  ],
+  "mutants": [
+    {
+      "label": "[snapshot] the reverted run reuses the workdir's own src, not the fixture base (predicted red: test_pytest_src_reverted_runs_the_final_tests_against_the_fixture_base_src)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    base_src = case_dir / \"fixture\" / \"src\"",
+      "replace": "    base_src = workdir / \"src\""
+    },
+    {
+      "label": "[snapshot] the reverted run is run on the untouched workdir (predicted red: test_pytest_src_reverted_runs_the_final_tests_against_the_fixture_base_src)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        return _run_pytest(tree)",
+      "replace": "        return _run_pytest(workdir)"
+    },
+    {
+      "label": "[snapshot] stderr comes before stdout (predicted red: test_pytest_output_is_stdout_then_stderr_then_the_exit_line)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "completed.stdout + completed.stderr",
+      "replace": "completed.stderr + completed.stdout"
+    },
+    {
+      "label": "[snapshot] the exit line is not forced onto its own line (predicted red: test_pytest_output_is_stdout_then_stderr_then_the_exit_line)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if output and not output.endswith(\"\\n\"):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[snapshot] the suite's real exit code is replaced by 0 (predicted red: test_a_failing_final_suite_is_recorded_with_its_nonzero_exit_code)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        code = completed.returncode",
+      "replace": "        code = 0"
+    },
+    {
+      "label": "[snapshot] a timeout is recorded as a pass (predicted red: test_a_hung_suite_is_cut_off_and_recorded_as_a_failure)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        code = _TIMEOUT_EXIT_CODE",
+      "replace": "        code = 0"
+    },
+    {
+      "label": "[snapshot] bytecode is written into the workdir (predicted red: test_end_state_leaves_the_workdir_and_the_fixture_untouched)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    env = {**os.environ, \"PYTHONDONTWRITEBYTECODE\": \"1\"}",
+      "replace": "    env = {**os.environ}"
+    },
+    {
+      "label": "[snapshot] pytest's cache provider is left on (predicted red: test_end_state_leaves_the_workdir_and_the_fixture_untouched)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "\"-q\", \"-p\", \"no:cacheprovider\"],\n            cwd=cwd,",
+      "replace": "\"-q\"],\n            cwd=cwd,"
+    },
+    {
+      "label": "[snapshot] edited paths stay absolute (predicted red: test_edited_paths_are_relative_to_the_workdir_in_transcript_order_with_timestamps)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            return absolute.relative_to(root).as_posix()",
+      "replace": "            return str(absolute)"
+    },
+    {
+      "label": "[snapshot] a symlinked path is not resolved (predicted red: test_edited_paths_resolve_a_symlinked_workdir)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        return absolute.resolve().relative_to(workdir.resolve()).as_posix()",
+      "replace": "        raise ValueError"
+    },
+    {
+      "label": "[snapshot] edit timestamps are dropped (predicted red: test_edited_paths_are_relative_to_the_workdir_in_transcript_order_with_timestamps)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "\"timestamp\": event.timestamp",
+      "replace": "\"timestamp\": None"
+    },
+    {
+      "label": "[snapshot] NotebookEdit events are not recorded (predicted red: test_edited_paths_cover_edit_write_and_notebook_edit_only)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "_EDIT_TOOLS = (\"Edit\", \"Write\", \"NotebookEdit\")",
+      "replace": "_EDIT_TOOLS = (\"Edit\", \"Write\")"
+    },
+    {
+      "label": "[snapshot] events with no path are recorded with an empty path (predicted red: test_edited_paths_skip_an_event_with_no_path)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if not path:\n                continue\n",
+      "replace": ""
+    },
+    {
+      "label": "[snapshot] only the first transcript's edits are recorded (predicted red: test_edited_paths_concatenate_every_transcript_in_order)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    for transcript in transcripts:\n        for event in transcript.events:\n            if event.name not in _EDIT_TOOLS:",
+      "replace": "    for transcript in transcripts[:1]:\n        for event in transcript.events:\n            if event.name not in _EDIT_TOOLS:"
+    },
+    {
+      "label": "[control] the reverted-run scratch directory is given a different prefix",
+      "file": "predicates.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The prefix only names a throwaway directory that is deleted on exit; nothing reads it back, and pytest's rootdir comes from the copied pyproject.toml, not the directory name. Holds for any prefix that is a valid directory name.",
+      "find": "tempfile.TemporaryDirectory(prefix=\"tdd-T-reverted-\")",
+      "replace": "tempfile.TemporaryDirectory(prefix=\"tdd-T-base-\")"
+    }
+  ]
+}
