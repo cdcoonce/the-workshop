@@ -52,7 +52,7 @@
       "label": "_added_or_modified uses a two-dot range, leaking base-only history",
       "file": "./schema_validate.py",
       "oracle": "real",
-      "why": "Killed by test_ignores_a_base_only_change_via_the_three_dot_range: the diff must be merge-base relative, or an invalid file the base branch added after the fork fails a branch that never touched it.",
+      "why": "Killed by test_ignores_a_base_only_change_via_the_three_dot_range: the diff must be merge-base relative, or a file the base branch deleted after the fork (still present, unchanged, on this branch) reads as added and is validated though this branch never touched it.",
       "find": "f\"{base}...HEAD\",",
       "replace": "f\"{base}..HEAD\","
     },

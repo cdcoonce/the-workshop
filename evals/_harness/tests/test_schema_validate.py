@@ -389,15 +389,18 @@ def test_validates_each_artifact_against_its_own_schema(tmp_path):
 
 
 def test_ignores_a_base_only_change_via_the_three_dot_range(tmp_path):
-    """The diff is base...HEAD (merge-base relative): an invalid run file the BASE
-    branch added after this branch forked is not this branch's change.
+    """The diff is base...HEAD (merge-base relative): an invalid run file that this
+    branch inherited from the fork, and that the BASE branch has since deleted,
+    is not this branch's change. A two-dot diff would read it as added here.
     """
-    repo, fork = _base_repo(tmp_path)
+    repo, _ = _base_repo(tmp_path)
+    _write_json(repo, _RUN, {"skill": "incomplete"})
+    fork = _commit(repo, "an invalid run file at the fork")
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     _git(repo, "branch", "base-line", fork)
     _git(repo, "checkout", "-q", "base-line")
-    _write_json(repo, _RUN, {"skill": "incomplete"})
-    base_head = _commit(repo, "base adds an incomplete run file")
+    (repo / _RUN).unlink()
+    base_head = _commit(repo, "base deletes the run file")
     _git(repo, "checkout", "-q", branch)
     _write_text(repo, "unrelated.txt", "hello\n")
     _commit(repo, "this branch touches something else")
