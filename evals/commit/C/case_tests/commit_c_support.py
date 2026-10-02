@@ -31,6 +31,11 @@ GIT_TEST_ENV = {
 }
 
 
+def _without_git_vars() -> dict[str, str]:
+    """The environment with every inherited ``GIT_*`` variable removed."""
+    return {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+
+
 def git(repo: Path, *args: str) -> str:
     """Run ``git`` in *repo* with the test identity and return its stdout."""
     result = subprocess.run(
@@ -38,7 +43,7 @@ def git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         check=True,
-        env={**os.environ, **GIT_TEST_ENV},
+        env={**_without_git_vars(), **GIT_TEST_ENV},
     )
     return result.stdout
 

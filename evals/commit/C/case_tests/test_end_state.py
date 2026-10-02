@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from commit_c_support import git, write_transcript
@@ -102,3 +104,27 @@ def test_the_harness_names_are_safe_file_names(built_repo, case_dir, tmp_path):
         snapshot_end_state(case_dir, built_repo, [], tmp_path / "end_state")
     except CaseContractError as error:  # pragma: no cover - the failure being guarded
         pytest.fail(str(error))
+
+
+def test_end_state_ignores_a_hostile_git_environment(predicates, built_repo, case_dir, tmp_path, monkeypatch):
+    """A caller's GIT_DIR must not point the snapshot at some other repository."""
+    sha = _commit(built_repo, "feat: add bulk pricing", "invoice/pricing.py")
+    other = tmp_path / "other-repo"
+    other.mkdir()
+    subprocess.run(["git", "-C", str(other), "init", "--quiet"], check=True)
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(other / ".git" / "index"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+
+    snapshot = predicates.end_state(built_repo, case_dir, [])
+
+    assert snapshot["commit-1.log"].startswith(sha + "\n")
+    assert sorted(snapshot) == ["commit-1.files", "commit-1.log"]
+
+
+def test_the_test_helper_ignores_a_hostile_git_environment(built_repo, tmp_path, monkeypatch):
+    other = tmp_path / "other-repo"
+    other.mkdir()
+    subprocess.run(["git", "-C", str(other), "init", "--quiet"], check=True)
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    assert int(git(built_repo, "rev-list", "--all", "--count").strip()) >= 3

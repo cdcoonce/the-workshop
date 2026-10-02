@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -189,3 +190,53 @@ def test_the_build_ignores_the_callers_git_configuration(tmp_path, monkeypatch):
     other = tmp_path / "other"
     build(CASE_DIR, other)
     assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)
+
+
+def _outer_repo(tmp_path: Path) -> Path:
+    """A separate git repo with one commit, to be pointed at by hostile GIT_* variables."""
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    for args in (
+        ["init", "--quiet"],
+        ["config", "user.name", "Outer"],
+        ["config", "user.email", "outer@example.invalid"],
+    ):
+        subprocess.run(["git", "-C", str(outer), *args], check=True, env=env)
+    (outer / "outer.txt").write_text("outer\n")
+    subprocess.run(["git", "-C", str(outer), "add", "outer.txt"], check=True, env=env)
+    subprocess.run(["git", "-C", str(outer), "commit", "--quiet", "-m", "outer"], check=True, env=env)
+    return outer
+
+
+def _outer_state(outer: Path) -> tuple[str, str, str]:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    run = lambda *args: subprocess.run(  # noqa: E731
+        ["git", "-C", str(outer), *args], capture_output=True, text=True, check=True, env=env
+    ).stdout
+    return run("rev-parse", "HEAD"), run("status", "--porcelain"), run("rev-list", "--all", "--count")
+
+
+@pytest.mark.parametrize("hostile", ["GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "all-three"])
+def test_the_build_ignores_a_hostile_git_environment(tmp_path, monkeypatch, hostile):
+    """GIT_DIR and friends in the caller's environment must never redirect the build."""
+    baseline = tmp_path / "baseline"
+    build(CASE_DIR, baseline)
+    outer = _outer_repo(tmp_path)
+    before = _outer_state(outer)
+
+    values = {
+        "GIT_DIR": str(outer / ".git"),
+        "GIT_INDEX_FILE": str(outer / ".git" / "index"),
+        "GIT_WORK_TREE": str(outer),
+    }
+    chosen = values if hostile == "all-three" else {hostile: values[hostile]}
+    for name, value in chosen.items():
+        monkeypatch.setenv(name, value)
+    other = tmp_path / "other"
+    build(CASE_DIR, other)
+
+    assert _outer_state(outer) == before
+    assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)
+    assert (other / ".git").is_dir()

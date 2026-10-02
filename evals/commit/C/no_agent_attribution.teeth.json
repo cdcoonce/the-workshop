@@ -85,8 +85,8 @@
     },
     {
       "label": "`Anthropic` is dropped from the named tools",
-      "find": "(?:claude|anthropic|copilot",
-      "replace": "(?:claude|copilot",
+      "find": "|claude|anthropic|copilot",
+      "replace": "|claude|copilot",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -94,6 +94,20 @@
       "label": "a bare `AI` is dropped from the named tools",
       "find": "|devin|ai)",
       "replace": "|devin)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "only the LAST non-empty line of the message is scanned",
+      "find": "_ROBOT in line for line in lines)",
+      "replace": "_ROBOT in line for line in [l for l in lines if l.strip()][-1:])",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`claude_code` / `claudecode` spellings are not recognised",
+      "find": "(?:claude[ _-]?code|claude|",
+      "replace": "(?:claude|",
       "file": "predicates.py",
       "oracle": "real"
     },

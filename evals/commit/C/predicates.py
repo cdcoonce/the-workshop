@@ -27,6 +27,7 @@ Public contract
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
@@ -49,12 +50,22 @@ _FILES_NAME = re.compile(r"^commit-(\d+)\.files$")
 # --- end-state snapshot -------------------------------------------------------
 
 
+def _git_env() -> dict[str, str]:
+    """The caller's environment minus every ``GIT_*`` variable.
+
+    ``GIT_DIR``, ``GIT_WORK_TREE`` and ``GIT_INDEX_FILE`` in the conductor's
+    environment would point these reads at some other repository.
+    """
+    return {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+
+
 def _git(workdir: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(workdir), "-c", "log.showSignature=false", *args],
         capture_output=True,
         text=True,
         check=True,
+        env=_git_env(),
     )
     return result.stdout
 
@@ -113,9 +124,16 @@ def _logs(evidence) -> list[str]:
     return _numbered(evidence.end_state, _LOG_NAME)
 
 
+def _unquote(path: str) -> str:
+    """Strip the double quotes git puts around a path with non-ASCII or special characters."""
+    if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
+        return path[1:-1]
+    return path
+
+
 def _files(evidence) -> list[list[str]]:
     return [
-        [line for line in text.splitlines() if line]
+        [_unquote(line) for line in text.splitlines() if line]
         for text in _numbered(evidence.end_state, _FILES_NAME)
     ]
 
@@ -123,9 +141,20 @@ def _files(evidence) -> list[list[str]]:
 # --- reading the case-agent's Bash calls --------------------------------------
 
 _SEPARATORS = frozenset(";|&()")
+# Words that wrap or introduce the real command word: shell grouping and
+# control keywords, and prefixes such as ``time``/``env`` (which may carry options).
+_KEYWORDS = frozenset({"{", "}", "!", "if", "then", "do", "else", "elif", "fi", "while", "until", "done"})
 _WRAPPERS = frozenset({"env", "command", "sudo", "time", "nohup", "exec"})
-_SHELLS = frozenset({"bash", "sh", "zsh"})
-_HEREDOC = re.compile(r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n.*?\n[ \t]*\3[ \t]*(?=\n|\Z)", re.DOTALL)
+_WRAPPER_VALUE_OPTIONS = {
+    "env": frozenset({"-u", "--unset", "-C", "--chdir"}),
+    "sudo": frozenset({"-u", "-g", "-D", "-R", "-C", "-h", "-p", "-T", "-U"}),
+}
+_UV_RUN_VALUE_OPTIONS = frozenset(
+    {"--with", "--with-requirements", "--with-editable", "--python", "-p", "--directory",
+     "--project", "--group", "--extra", "--env-file", "--package", "--index", "--index-url"}
+)
+_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
+_HEREDOC_HEADER = re.compile(r"(?<!<)<<(?!<)-?[ \t]*(?:'(\w+)'|\"(\w+)\"|\\?(\w+))[^\n]*\n")
 _ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
 _GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
 _MAKE_OPTIONS_WITH_VALUE = frozenset({"-C", "-f", "-I", "-o", "-W", "--directory", "--file"})
@@ -172,16 +201,45 @@ def _statement_breaks(command: str) -> str:
     return "".join(out)
 
 
+def _strip_heredocs(command: str) -> str:
+    """Drop heredoc bodies (``<<EOF``, ``<<'EOF'``, ``<<\\EOF``, ``<<-EOF``), keeping the header line."""
+    out: list[str] = []
+    position = 0
+    while True:
+        header = _HEREDOC_HEADER.search(command, position)
+        if header is None:
+            out.append(command[position:])
+            return "".join(out)
+        delimiter = next(group for group in header.groups() if group is not None)
+        out.append(command[position : header.end() - 1])
+        terminator = re.compile(rf"^[ \t]*{re.escape(delimiter)}[ \t]*$", re.MULTILINE).search(
+            command, header.end()
+        )
+        if terminator is None:
+            return "".join(out)
+        position = terminator.end()
+
+
 def _split_words(command: str) -> list[list[str]]:
-    """Split *command* into simple commands, each a list of words."""
-    prepared = _statement_breaks(_HEREDOC.sub(r"\1", command))
+    """Split *command* into simple commands, each a list of words.
+
+    When the text cannot be tokenised (an unbalanced quote that bash would
+    read differently, such as ``$'it\\'s'``), it is still cut at every
+    statement separator, with quote characters dropped from the words. Falling
+    back to one big segment would hide every statement after the first, so a
+    ``git add`` later in the line would go unseen. Cutting per separator can
+    over-split a quoted ``;`` (a false positive for the "no X" gate) but never
+    hides a statement.
+    """
+    prepared = _statement_breaks(_strip_heredocs(command))
     lexer = shlex.shlex(prepared, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
     except ValueError:
-        tokens = re.split(r"[;|&()\s]+", prepared)
-        return [[token for token in tokens if token]]
+        pieces = re.split(r"&&|\|\||[;|&()\n]", prepared)
+        loose = [[word.replace("'", "").replace('"', "") for word in piece.split()] for piece in pieces]
+        return [words for words in loose if words]
     segments: list[list[str]] = [[]]
     for token in tokens:
         if token and set(token) <= _SEPARATORS:
@@ -191,6 +249,23 @@ def _split_words(command: str) -> list[list[str]]:
     return [segment for segment in segments if segment]
 
 
+def _basename(word: str) -> str:
+    return word.rsplit("/", 1)[-1]
+
+
+def _shell_payload(words: list[str]) -> str | None:
+    """The script of ``bash -c '...'`` / ``bash -lc '...'``, else ``None``."""
+    if _basename(words[0]) not in _SHELLS:
+        return None
+    for index in range(1, len(words)):
+        word = words[index]
+        if not word.startswith("-"):
+            return None
+        if not word.startswith("--") and "c" in word:
+            return words[index + 1] if index + 1 < len(words) else None
+    return None
+
+
 def _simple_commands(command: str) -> list[list[str]]:
     """Every simple command in *command*, including those inside ``sh -c '...'``."""
     found: list[list[str]] = []
@@ -198,26 +273,43 @@ def _simple_commands(command: str) -> list[list[str]]:
         words = _without_prefixes(words)
         if not words:
             continue
-        if words[0] in _SHELLS and "-c" in words[1:]:
-            payload = words.index("-c") + 1
-            if payload < len(words):
-                found.extend(_simple_commands(words[payload]))
+        payload = _shell_payload(words)
+        if payload is not None:
+            found.extend(_simple_commands(payload))
             continue
         found.append(words)
     return found
 
 
 def _without_prefixes(words: list[str]) -> list[str]:
-    """Drop leading ``VAR=value`` assignments and wrappers such as ``env``/``time``."""
+    """Drop what comes before the command word.
+
+    That is ``VAR=value`` assignments, shell grouping and control keywords
+    (``{``, ``!``, ``if``, ``then``, ``do``, ...), wrappers such as
+    ``env``/``time``/``sudo`` with their options, and ``uv run`` with its options.
+    """
     index = 0
-    while index < len(words) and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):
-        index += 1
+    while index < len(words):
+        word = words[index]
+        name = _basename(word)
+        if _ASSIGNMENT.match(word) or word in _KEYWORDS:
+            index += 1
+        elif name in _WRAPPERS:
+            index += 1
+            while index < len(words) and words[index].startswith("-"):
+                index += 2 if words[index] in _WRAPPER_VALUE_OPTIONS.get(name, ()) else 1
+        elif name == "uv" and words[index + 1 : index + 2] == ["run"]:
+            index += 2
+            while index < len(words) and words[index].startswith("-"):
+                index += 2 if words[index] in _UV_RUN_VALUE_OPTIONS else 1
+        else:
+            break
     return words[index:]
 
 
 def _git_subcommand(words: list[str]) -> tuple[str, list[str]] | None:
     """``(subcommand, arguments)`` for a ``git`` invocation, else ``None``."""
-    if not words or words[0] != "git":
+    if not words or _basename(words[0]) != "git":
         return None
     index = 1
     while index < len(words) and words[index].startswith("-"):
@@ -252,7 +344,7 @@ def _is_git_add(words: list[str]) -> bool:
 
 def _is_make_test(words: list[str]) -> bool:
     """``make`` with the ``test`` target among its arguments."""
-    if not words or words[0] != "make":
+    if not words or _basename(words[0]) != "make":
         return False
     index = 1
     while index < len(words):
@@ -309,7 +401,7 @@ def no_blanket_add(evidence) -> bool:
     )
 
 
-_AI_NAMES = r"(?:claude|anthropic|copilot|chatgpt|openai|gpt|codex|gemini|cursor|aider|devin|ai)"
+_AI_NAMES = r"(?:claude[ _-]?code|claude|anthropic|copilot|chatgpt|openai|gpt|codex|gemini|cursor|aider|devin|ai)"
 _AI_TRAILER = re.compile(rf"^\s*co-authored-by:.*\b{_AI_NAMES}\b", re.IGNORECASE)
 _GENERATED_WITH = re.compile(r"generated\s+(?:with|by)\b.*\b(?:claude|anthropic)\b", re.IGNORECASE)
 _ROBOT = "\N{ROBOT FACE}"

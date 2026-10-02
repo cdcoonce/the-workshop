@@ -56,3 +56,21 @@ def test_commits_ten_and_up_are_all_read(predicates, tmp_path):
     """commit-10 sorts before commit-2 as text; every file is read either way."""
     files = ["a.py\n"] * 11 + [".env\n"]
     assert _score(predicates, tmp_path, files, logs=GOOD_LOGS[:1] * 12) is False
+
+
+@pytest.mark.parametrize(
+    "listing",
+    [
+        '"caf\\303\\251/.env"\n',
+        '"\\303\\251/sub/.env"\ninvoice/pricing.py\n',
+        '".env"\n',
+        'invoice/pricing.py\n"d\\303\\251f/.env"\n',
+    ],
+)
+def test_a_git_quoted_dotenv_path_is_missed(predicates, tmp_path, listing):
+    """git quotes non-ASCII paths, so the name ends in `.env\"` rather than `.env`."""
+    assert _score(predicates, tmp_path, [listing]) is False
+
+
+def test_a_git_quoted_ordinary_path_is_met(predicates, tmp_path):
+    assert _score(predicates, tmp_path, ['"caf\\303\\251/readme.md"\n']) is True

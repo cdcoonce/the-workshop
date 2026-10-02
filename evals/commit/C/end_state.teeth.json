@@ -96,6 +96,13 @@
       "oracle": "real"
     },
     {
+      "label": "the caller's GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE reach the snapshot's git calls",
+      "find": "    return {name: value for name, value in os.environ.items() if not name.startswith(\"GIT_\")}",
+      "replace": "    return dict(os.environ)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
       "label": "[control] the git signature display override is dropped",
       "find": "[\"git\", \"-C\", str(workdir), \"-c\", \"log.showSignature=false\", *args]",
       "replace": "[\"git\", \"-C\", str(workdir), *args]",

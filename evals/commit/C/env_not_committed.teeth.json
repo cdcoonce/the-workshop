@@ -70,6 +70,13 @@
       "oracle": "real"
     },
     {
+      "label": "a git-quoted path (`\"caf\\303\\251/.env\"`) is not unquoted, so its name ends in a quote",
+      "find": "        [_unquote(line) for line in text.splitlines() if line]",
+      "replace": "        [line for line in text.splitlines() if line]",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
       "label": "commit numbers past 9 are not read (single-digit file-name pattern)",
       "find": "_FILES_NAME = re.compile(r\"^commit-(\\d+)\\.files$\")",
       "replace": "_FILES_NAME = re.compile(r\"^commit-(\\d)\\.files$\")",

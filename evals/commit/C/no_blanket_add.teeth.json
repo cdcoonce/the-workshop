@@ -14,6 +14,7 @@
     "--rootdir=evals",
     "--import-mode=importlib",
     "evals/commit/C/case_tests/test_gate_no_blanket_add.py",
+    "evals/commit/C/case_tests/test_command_grammar.py",
     "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
   ],
   "collect_command": [
@@ -31,6 +32,7 @@
     "--rootdir=evals",
     "--import-mode=importlib",
     "evals/commit/C/case_tests/test_gate_no_blanket_add.py",
+    "evals/commit/C/case_tests/test_command_grammar.py",
     "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
   ],
   "mutants": [
@@ -85,15 +87,64 @@
     },
     {
       "label": "`bash -c '...'` payloads are not looked into",
-      "find": "if words[0] in _SHELLS and \"-c\" in words[1:]:",
-      "replace": "if False and words[0] in _SHELLS and \"-c\" in words[1:]:",
+      "find": "        if payload is not None:",
+      "replace": "        if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`bash -lc '...'` (a flag cluster ending in c) is not recognised as a script",
+      "find": "        if not word.startswith(\"--\") and \"c\" in word:",
+      "replace": "        if word == \"-c\":",
       "file": "predicates.py",
       "oracle": "real"
     },
     {
       "label": "heredoc bodies are read as commands, so message text is mistaken for a call",
-      "find": "    prepared = _statement_breaks(_HEREDOC.sub(r\"\\1\", command))",
+      "find": "    prepared = _statement_breaks(_strip_heredocs(command))",
       "replace": "    prepared = _statement_breaks(command)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a backslash-quoted heredoc delimiter (`<<\\EOF`) is not recognised",
+      "find": "|\\\\?(\\w+))[^\\n]*\\n\")",
+      "replace": "|(\\w+))[^\\n]*\\n\")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[fail-open] an unparseable command collapses to ONE segment, hiding every statement after the first",
+      "find": "        pieces = re.split(r\"&&|\\|\\||[;|&()\\n]\", prepared)",
+      "replace": "        pieces = [prepared]",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "shell keywords and grouping (`{`, `if`, `then`, `!`) are not skipped before the command word",
+      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
+      "replace": "        if _ASSIGNMENT.match(word):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git` is matched only as the bare word, so `/usr/bin/git add -A` is not seen",
+      "find": "    if not words or _basename(words[0]) != \"git\":",
+      "replace": "    if not words or words[0] != \"git\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the wrapper words (`time`, `env`, `command`, ...) are not skipped",
+      "find": "        elif name in _WRAPPERS:",
+      "replace": "        elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "wrapper options (`env -i`) are not skipped",
+      "find": "        elif name in _WRAPPERS:\n            index += 1\n            while index < len(words) and words[index].startswith(\"-\"):",
+      "replace": "        elif name in _WRAPPERS:\n            index += 1\n            while False and index < len(words) and words[index].startswith(\"-\"):",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -113,8 +164,8 @@
     },
     {
       "label": "leading `VAR=value` assignments are not skipped",
-      "find": "    while index < len(words) and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
-      "replace": "    while False and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
+      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
+      "replace": "        if word in _KEYWORDS:",
       "file": "predicates.py",
       "oracle": "real"
     },

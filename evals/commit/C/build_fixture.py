@@ -67,7 +67,10 @@ _HISTORY = [
 
 def _git(repo: Path, *args: str, message: str | None = None) -> str:
     env = {
-        **os.environ,
+        # Every inherited GIT_* variable is dropped first: a GIT_DIR (or
+        # GIT_WORK_TREE, GIT_INDEX_FILE) in the caller's environment would
+        # redirect these commits into some other repository.
+        **{name: value for name, value in os.environ.items() if not name.startswith("GIT_")},
         **_PINNED_IDENTITY,
         # Nothing from the caller's or the machine's git configuration may
         # reach the build (signing, hooks, line-ending rules, templates).

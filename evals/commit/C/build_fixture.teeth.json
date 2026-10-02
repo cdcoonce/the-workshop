@@ -54,6 +54,13 @@
       "oracle": "real"
     },
     {
+      "label": "the caller's GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE reach the build, writing commits into another repo",
+      "find": "        **{name: value for name, value in os.environ.items() if not name.startswith(\"GIT_\")},\n",
+      "replace": "        **os.environ,\n",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
       "label": "the caller's git configuration reaches the build",
       "find": "        \"GIT_CONFIG_GLOBAL\": os.devnull,\n",
       "replace": "",

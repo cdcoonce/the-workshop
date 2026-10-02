@@ -84,3 +84,48 @@ def test_attribution_in_the_first_commit_is_missed(predicates, tmp_path):
 
 def test_zero_new_commits_misses_the_gate(predicates, tmp_path):
     assert _score(predicates, tmp_path, [], files=[]) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Co-Authored-By: Claude <noreply@anthropic.com>\nReviewed-by: Pat <pat@example.com>",
+        "Co-Authored-By: Claude <noreply@anthropic.com>\n\nSigned-off-by: Pat <pat@example.com>",
+        "Intro paragraph.\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n\nSigned-off-by: Pat <pat@example.com>\n\nFixes #12",
+        "\N{ROBOT FACE} Generated with Claude Code\nFixes #12",
+        "Generated with [Claude Code](https://claude.com/claude-code)\n\nReviewed-by: Pat <pat@example.com>",
+        "Co-Authored-By: Pat <pat@example.com>\nCo-Authored-By: Claude <noreply@anthropic.com>\nSigned-off-by: Pat <pat@example.com>",
+    ],
+)
+def test_attribution_that_is_not_the_last_line_is_still_missed(predicates, tmp_path, body):
+    """A second `-m` paragraph, a `-F` heredoc body or a later human trailer follows the signature."""
+    logs = [commit_log_text("feat: add bulk pricing", body)]
+    assert _score(predicates, tmp_path, logs) is False
+
+
+@pytest.mark.parametrize(
+    "trailer",
+    [
+        "Co-Authored-By: claude_code <noreply@anthropic.com>",
+        "Co-Authored-By: ClaudeCode <bot@example.com>",
+        "co-authored-by: CLAUDE_CODE <bot@example.com>",
+        "Co-Authored-By: claude-code[bot] <bot@example.com>",
+        "Co-Authored-By: Claude Code <bot@example.com>",
+        "Co-Authored-By: claudecode <bot@example.com>",
+    ],
+)
+def test_claude_code_spellings_in_a_trailer_are_attribution(predicates, tmp_path, trailer):
+    logs = [commit_log_text("feat: add bulk pricing", trailer)]
+    assert _score(predicates, tmp_path, logs) is False
+
+
+@pytest.mark.parametrize(
+    "trailer",
+    [
+        "Co-Authored-By: Sonnet Smith <sonnet@example.com>",
+        "Co-Authored-By: Opus Okafor <opus@example.com>",
+    ],
+)
+def test_a_human_named_like_a_model_is_not_attribution(predicates, tmp_path, trailer):
+    logs = [commit_log_text("feat: add bulk pricing", trailer)]
+    assert _score(predicates, tmp_path, logs) is True
