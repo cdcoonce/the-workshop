@@ -1,0 +1,173 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A2/case_tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A2/case_tests"
+  ],
+  "mutants": [
+    {
+      "label": "prompt.md embeds a line of SKILL.md",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Review the change against that specification.",
+      "replace": "If nothing you ran or checked could have come back the other way, you have not",
+      "why": "Killed by test_the_no_skill_prompt_contains_no_line_of_the_skills_own_files and test_the_dispatch_prompt_contains_no_line_of_the_skills_own_files_either."
+    },
+    {
+      "label": "prompt.md embeds a line of references/pr-lens-review.md",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Review the change against that specification.",
+      "replace": "A lens that died on dispatch and a lens that read the whole diff and found nothing",
+      "why": "Killed by test_the_no_skill_prompt_contains_no_line_of_the_skills_own_files."
+    },
+    {
+      "label": "prompt.md names another skill",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Do not run code or use the network.",
+      "replace": "Do not run code or use the network. Follow the tdd skill if it helps.",
+      "why": "Killed by test_the_no_skill_prompt_names_no_skill (the harness strips only the rostered skill's own name)."
+    },
+    {
+      "label": "prompt.md embeds a line of acceptance.md",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Review the change against that specification.",
+      "replace": "One plain reviewer, one pass over the whole diff, no lens split, given the case",
+      "why": "Killed by test_no_dispatch_prompt_carries_acceptance_text (and #995's committed-case leakage test)."
+    },
+    {
+      "label": "prompt.md splits the review into lenses",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Review the change against that specification.",
+      "replace": "Review the change against that specification, through one lens at a time.",
+      "why": "Killed by test_the_no_skill_arm_is_a_single_whole_diff_pass_with_no_lens_split."
+    },
+    {
+      "label": "prompt.md asks for a second reply shape",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Reply with a single JSON object and nothing else",
+      "replace": "Reply with a single JSON object and nothing else. Reply with a single JSON object and nothing else",
+      "why": "Killed by test_the_no_skill_arm_is_a_single_whole_diff_pass_with_no_lens_split (the single-reply count)."
+    },
+    {
+      "label": "case.toml runs the case as a subagent",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "mode = \"inline\"",
+      "replace": "mode = \"subagent\"",
+      "why": "Killed by test_case_runs_inline_with_the_findings_envelope."
+    },
+    {
+      "label": "case.toml drops the findings envelope",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "envelope = \"findings\"\n",
+      "replace": "",
+      "why": "Killed by test_case_runs_inline_with_the_findings_envelope."
+    },
+    {
+      "label": "case.toml gains a builder",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "envelope = \"findings\"\n",
+      "replace": "envelope = \"findings\"\nbuilder = \"x.py\"\n",
+      "why": "Killed by test_case_has_a_static_fixture_and_no_builder_of_its_own."
+    },
+    {
+      "label": "case.toml loses the never-calibration-input note",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "never calibration input",
+      "replace": "calibration input",
+      "why": "Killed by test_the_ab_raws_are_never_read_as_calibration_input."
+    },
+    {
+      "label": "provenance.toml records a wrong blob sha",
+      "file": "provenance.toml",
+      "oracle": "real",
+      "find": "source_blob_sha = \"2457897dc71c90f7adf49db239106dfcd9d44700\"",
+      "replace": "source_blob_sha = \"2457897dc71c90f7adf49db239106dfcd9d447000\"",
+      "why": "Killed by test_each_source_blob_sha_is_what_git_resolves_at_the_resolved_ref and test_each_copy_is_byte_identical_to_its_source_blob."
+    },
+    {
+      "label": "provenance.toml forgets one copied raw",
+      "file": "provenance.toml",
+      "oracle": "real",
+      "find": "[[files]]\nfile = \"ab_raws/a2/spec_conformance-r2.txt\"\nsource_path = \"docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/spec_conformance-r2.txt\"\nsource_blob_sha = \"15216c85825ebb384f64a71ad2c6949b107277de\"\n\n",
+      "replace": "",
+      "why": "Killed by test_every_copied_ab_raw_has_a_provenance_entry."
+    },
+    {
+      "label": "provenance.toml forgets a copied fixture file",
+      "file": "provenance.toml",
+      "oracle": "real",
+      "find": "[[files]]\nfile = \"fixture/defects.json\"\nsource_path = \"docs/experiments/2026-09-21-terse-lens-contract-ab/fixture/defects.json\"\nsource_blob_sha = \"2457897dc71c90f7adf49db239106dfcd9d44700\"\n\n",
+      "replace": "",
+      "why": "Killed by test_every_copied_fixture_file_has_a_provenance_entry."
+    },
+    {
+      "label": "gaps.md loses one of A2's lines",
+      "file": "../gaps.md",
+      "oracle": "real",
+      "find": "- inverted bias for credential-exposure findings: the doctored diff carries no secret, token or live network call, so the credential lens (and its uphold-unless-impossible refuter) never fires\n",
+      "replace": "",
+      "why": "Killed by test_a2_appended_one_line_per_behavior_it_cannot_exercise."
+    },
+    {
+      "label": "gaps.md's first A2 line is edited to cover two behaviors",
+      "file": "../gaps.md",
+      "oracle": "real",
+      "find": "- refutation pass over surviving lens findings:",
+      "replace": "- refutation pass over surviving lens findings and the freeze rule:",
+      "why": "Killed by test_each_a2_line_guards_exactly_one_behavior (and the exact-heading test)."
+    },
+    {
+      "label": "gaps.md's last A2 line loses its reason",
+      "file": "../gaps.md",
+      "oracle": "real",
+      "find": "- inverted bias for credential-exposure findings: the doctored diff carries no secret, token or live network call, so the credential lens (and its uphold-unless-impossible refuter) never fires",
+      "replace": "- inverted bias for credential-exposure findings:",
+      "why": "Killed by test_every_nonblank_gaps_line_is_a_wellformed_entry."
+    },
+    {
+      "label": "[control] reword a sentence of prompt.md that neither guard reads",
+      "file": "prompt.md",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The sentence is plain English with no token run shared with the skill's files or acceptance.md, no skill name, and no lens vocabulary, so every dispatch test reads the same prompt shape; inert for the tests in this directory. Not inert for a model reading it, which is what calibration, not make test, measures.",
+      "find": "Leave out style, naming and personal preference.",
+      "replace": "Leave out matters of style, naming and personal preference."
+    }
+  ]
+}
