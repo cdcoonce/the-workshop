@@ -17,7 +17,7 @@ with ``outcomes`` read from the run file's recorded per-attempt item outcomes
 (``old_verdict``) or from the recomputed ``Attempt.item_hits`` (``new_verdict``).
 Never the run file's top-level ``verdict``, and never a single attempt.
 
-Every item whose verdict flips needs a matching entry in
+Every item recorded in the run file and still scored by its case whose verdict flips needs a matching entry in
 ``evals/<skill>/rescore-declarations.json`` as that file stands at HEAD (an
 entry already present at the base still counts: run files are immutable, so a
 flip declared once recurs identically on every later scoring-code change). An
@@ -149,9 +149,15 @@ def _rescore_case(
             new_outcomes.setdefault(item, []).append(outcome)
 
     results: list[Result] = []
-    for item in sorted(set(old_outcomes) | set(new_outcomes)):
-        old = _verdict(old_outcomes.get(item, []))
-        new = _verdict(new_outcomes.get(item, []))
+    # A flip needs a verdict on BOTH sides: only items recorded in the run file AND
+    # still scored by the case at HEAD are compared. An item only in the run file
+    # (removed from the case) or only in the re-score (added to the case after the
+    # run) has no recorded verdict to flip, so it is skipped rather than compared
+    # against an empty outcome list (which would read void and demand one
+    # declaration per historical run file).
+    for item in sorted(set(old_outcomes) & set(new_outcomes)):
+        old = _verdict(old_outcomes[item])
+        new = _verdict(new_outcomes[item])
         if old != new and not _is_declared(declarations, run_rel, item, old, new):
             results.append(
                 _fail(

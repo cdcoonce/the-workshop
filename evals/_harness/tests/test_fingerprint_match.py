@@ -294,6 +294,21 @@ def test_compares_the_newest_run_that_records_the_case_not_the_newest_run_of_the
     assert "20260101T000000Z" in results[0].message
 
 
+def test_finds_the_case_when_it_is_not_the_first_entry_of_the_newest_run_file(tmp_path):
+    repo, _ = _gated_repo(tmp_path)
+    _write_run(
+        repo,
+        "20260101T000000Z",
+        [_recorded("some-other-case", _HEX), _recorded("case-a", _HEX)],
+    )
+    _commit(repo, "a run whose second entry is case-a, with a stale fingerprint")
+
+    results = _run(repo)
+
+    assert len(results) == 1
+    assert "case-a" in results[0].message
+
+
 def test_an_older_stale_run_does_not_fail_when_the_newest_run_matches(tmp_path):
     repo, case_dir = _gated_repo(tmp_path)
     _write_run(repo, "20260101T000000Z", [_recorded("case-a", _HEX)])

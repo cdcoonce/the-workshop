@@ -1,7 +1,8 @@
 """Guard: every run file and calibration record the diff touches matches its schema.
 
 Diffs ``$(VERSION_BASE)...HEAD`` (the ``ctx.base`` ref the runner passes) with
-``--no-renames`` and validates every file the diff adds or modifies:
+``--no-renames`` and validates every file the diff adds, modifies or type-changes (a symlink swapped
+in is read through, and fails loudly if it dangles):
 
 - a run file — a ``.json`` file directly under ``evals/<skill>/runs/`` (its
   deeper files are raws, never run files) — against
@@ -39,7 +40,7 @@ def _load_schema(name: str) -> dict:
 def _added_or_modified(repo_root: Path, base: str) -> list[str]:
     output = subprocess.run(
         [
-            "git", "-C", str(repo_root), "diff", "--no-renames", "--diff-filter=AM",
+            "git", "-C", str(repo_root), "diff", "--no-renames", "--diff-filter=AMT",
             "--name-only", "-z", f"{base}...HEAD",
         ],
         capture_output=True,

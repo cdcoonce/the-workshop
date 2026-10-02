@@ -531,6 +531,74 @@ def test_re_scores_with_no_workdir(tmp_path):
     assert _run(repo, base) == []
 
 
+def test_scores_every_transcript_of_an_attempt_not_just_the_first(tmp_path):
+    """An inline lens-style attempt holds one transcript per lens agent: the hit is
+    in the second, so dropping it would re-score the recorded hit to a miss.
+    """
+    repo, _ = _scenario(tmp_path, [_attempt("hit", raw="miss")])
+    raw_dir = f"evals/{_SKILL}/runs/{_STAMP}/{_CASE}/attempt-1"
+    _write(repo, f"{raw_dir}/transcript-2.jsonl", _transcript_line(_RAW_TEXT["hit"]) + "\n")
+    base = _commit_base_then_touch(repo)
+
+    assert _run(repo, base) == []
+
+
+def test_a_matching_declaration_before_an_unrelated_one_still_counts(tmp_path):
+    repo, run_rel = _scenario(tmp_path, _flipping_attempts())
+    base = _commit(repo, "base")
+    _touch(repo, "evals/_harness/scorer.py")
+    _declare(repo, [_entry(run_rel), _entry(run_rel, item="item-other")])
+    _commit(repo, "the matching entry comes first")
+
+    assert _run(repo, base) == []
+
+
+def test_a_newly_added_item_is_not_a_flip(tmp_path):
+    """The run file records no verdict for an item added to the case after the run:
+    there is no recorded verdict to flip, so nothing needs declaring.
+    """
+    repo = _new_repo(tmp_path)
+    _add_case(repo)
+    _add_run(repo, [_attempt("hit", raw="hit")])
+    base = _commit(repo, "a case with one item and a run of it")
+    _add_case(repo, items=("item-a", "item-new"))
+    _commit(repo, "add a second item and its scorer to the case")
+    _touch(repo, "evals/_harness/scorer.py")
+    _commit(repo, "change the scorer")
+
+    assert _run(repo, base) == []
+
+
+def test_an_item_removed_from_the_case_is_not_a_flip(tmp_path):
+    repo = _new_repo(tmp_path)
+    _add_case(repo, items=("item-a", "item-s"))
+    _add_run(repo, [_attempt({"item-a": "hit", "item-s": "hit"}, raw="hit", end_state="READY")])
+    base = _commit(repo, "a case with two items and a run of both")
+    _add_case(repo, items=("item-a",))
+    _commit(repo, "remove item-s from the case")
+    _touch(repo, "evals/_harness/scorer.py")
+    _commit(repo, "change the scorer")
+
+    assert _run(repo, base) == []
+
+
+def test_a_genuine_flip_on_a_co_existing_item_still_fails_beside_an_added_item(tmp_path):
+    repo = _new_repo(tmp_path)
+    _add_case(repo)
+    _add_run(repo, [_attempt("hit", raw="miss")])
+    base = _commit(repo, "a recorded hit whose raw re-scores to a miss")
+    _add_case(repo, items=("item-a", "item-new"))
+    _commit(repo, "add a second item")
+    _touch(repo, "evals/_harness/scorer.py")
+    _commit(repo, "change the scorer")
+
+    results = _run(repo, base)
+
+    assert len(results) == 1
+    assert "item-a" in results[0].message
+    assert "item-new" not in results[0].message
+
+
 def test_checks_every_case_of_a_run_file(tmp_path):
     repo, _ = _scenario(tmp_path, [_attempt("hit", raw="hit")])
     _add_case(repo, case="case-b")

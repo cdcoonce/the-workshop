@@ -37,7 +37,7 @@
       "file": "./schema_validate.py",
       "oracle": "real",
       "why": "Killed by test_does_not_validate_a_deleted_run_file: a file the diff only deletes has nothing to validate (runs_immutable owns deletions); reading it would fail as unreadable.",
-      "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--diff-filter=AM\",",
+      "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--diff-filter=AMT\",",
       "replace": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\","
     },
     {
@@ -45,8 +45,16 @@
       "file": "./schema_validate.py",
       "oracle": "real",
       "why": "Killed by test_fails_a_run_file_that_existed_at_base_and_is_modified_into_an_invalid_one and test_fails_a_calibration_file_modified_into_an_invalid_one: a file already at base and edited into an invalid one is a changed file.",
-      "find": "\"--diff-filter=AM\",",
+      "find": "\"--diff-filter=AMT\",",
       "replace": "\"--diff-filter=A\","
+    },
+    {
+      "label": "_added_or_modified skips type changes, so a symlink swapped in for calibration.json escapes validation",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_validates_a_calibration_file_replaced_by_a_symlink_to_a_malformed_map and test_fails_loudly_on_a_calibration_file_replaced_by_a_dangling_symlink: a regular file replaced by a symlink is a changed file and is read through, not skipped.",
+      "find": "\"--diff-filter=AMT\",",
+      "replace": "\"--diff-filter=AM\","
     },
     {
       "label": "_added_or_modified uses a two-dot range, leaking base-only history",

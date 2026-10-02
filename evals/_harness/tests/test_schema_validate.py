@@ -406,3 +406,37 @@ def test_ignores_a_base_only_change_via_the_three_dot_range(tmp_path):
     _commit(repo, "this branch touches something else")
 
     assert _run(repo, base_head) == []
+
+
+def test_validates_a_calibration_file_replaced_by_a_symlink_to_a_malformed_map(tmp_path):
+    """A type change (regular file -> symlink) is still a changed file: the guard
+    reads through the link and validates the target, not skips it.
+    """
+    repo, _ = _base_repo(tmp_path)
+    _write_json(repo, _CALIBRATION, {"item-a": _valid_record()})
+    base = _commit(repo, "a valid calibration at base")
+    record = _valid_record()
+    del record["audit"]
+    _write_json(repo, "evals/example-skill/case-a/malformed-target.json", {"item-a": record})
+    (repo / _CALIBRATION).unlink()
+    (repo / _CALIBRATION).symlink_to("malformed-target.json")
+    _commit(repo, "replace calibration.json with a symlink to a malformed map")
+
+    results = _run(repo, base)
+
+    assert len(results) == 1
+    assert _CALIBRATION in results[0].message
+
+
+def test_fails_loudly_on_a_calibration_file_replaced_by_a_dangling_symlink(tmp_path):
+    repo, _ = _base_repo(tmp_path)
+    _write_json(repo, _CALIBRATION, {"item-a": _valid_record()})
+    base = _commit(repo, "a valid calibration at base")
+    (repo / _CALIBRATION).unlink()
+    (repo / _CALIBRATION).symlink_to("does-not-exist.json")
+    _commit(repo, "replace calibration.json with a dangling symlink")
+
+    results = _run(repo, base)
+
+    assert len(results) == 1
+    assert _CALIBRATION in results[0].message

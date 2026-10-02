@@ -57,6 +57,14 @@
       "replace": "            if isinstance(recorded, dict):"
     },
     {
+      "label": "_recorded_fingerprint looks only at the first case entry of a run file",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_finds_the_case_when_it_is_not_the_first_entry_of_the_newest_run_file: a run file records many cases, and the target case may be any entry.",
+      "find": "        for recorded in cases:",
+      "replace": "        for recorded in cases[:1]:"
+    },
+    {
       "label": "_recorded_fingerprint searches runs/ recursively, reading raws as run files",
       "file": "./fingerprint_match.py",
       "oracle": "real",

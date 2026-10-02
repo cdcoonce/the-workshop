@@ -225,6 +225,30 @@
       "replace": "sorted(raw_dir.glob(\"*.json\")),"
     },
     {
+      "label": "_rescore_case scores only the first transcript of an attempt",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_scores_every_transcript_of_an_attempt_not_just_the_first: an inline attempt holds one transcript per lens agent, and a hit in the second must still count.",
+      "find": "sorted(raw_dir.glob(\"*.jsonl\")),",
+      "replace": "sorted(raw_dir.glob(\"*.jsonl\"))[:1],"
+    },
+    {
+      "label": "_is_declared honours only the last declaration",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_matching_declaration_before_an_unrelated_one_still_counts: a matching entry counts wherever it sits in the file.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    return any(entry == expected for entry in declarations[-1:])"
+    },
+    {
+      "label": "_rescore_case compares items present on only one side against an empty outcome list",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_newly_added_item_is_not_a_flip and test_an_item_removed_from_the_case_is_not_a_flip: a flip needs a verdict on both sides, so an item only in the run file or only in the re-score is skipped, not read as void.",
+      "find": "    for item in sorted(set(old_outcomes) & set(new_outcomes)):\n        old = _verdict(old_outcomes[item])\n        new = _verdict(new_outcomes[item])",
+      "replace": "    for item in sorted(set(old_outcomes) | set(new_outcomes)):\n        old = _verdict(old_outcomes.get(item, []))\n        new = _verdict(new_outcomes.get(item, []))"
+    },
+    {
       "label": "_rescore_case drops the missing-case-directory check",
       "file": "./rescore.py",
       "oracle": "real",
