@@ -6,6 +6,7 @@ solution below stands in for a case-agent's source fix.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -159,6 +160,45 @@ def test_a_reverted_run_uses_the_fixture_src_not_the_workdirs(predicates, tmp_pa
     snapshot = predicates.end_state(workdir, CASE_DIR, [])
     assert _last_line(snapshot["pytest-final.txt"]) != "exit=0"  # nothing to import
     assert _last_line(snapshot["pytest-src-reverted.txt"]) == "exit=0"
+
+
+def test_a_module_the_agent_added_under_src_is_gone_from_the_reverted_run(predicates, tmp_path):
+    # src/ is replaced by the fixture's src/, not overlaid: a new module must not survive the revert.
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "src/shop/loyalty.py").write_text("def points(total):\n    return total // 100\n", encoding="utf-8")
+    (workdir / "tests/test_loyalty.py").write_text(
+        "from shop.loyalty import points\n\n\ndef test_points():\n    assert points(250) == 2\n",
+        encoding="utf-8",
+    )
+    snapshot = predicates.end_state(workdir, CASE_DIR, [])
+    assert _last_line(snapshot["pytest-final.txt"]) == "exit=0"
+    reverted = snapshot["pytest-src-reverted.txt"]
+    assert re.fullmatch(r"exit=[1-9]\d*", _last_line(reverted)), reverted
+    assert "shop.loyalty" in reverted
+
+
+def test_end_state_refuses_loudly_when_the_harness_interpreter_has_no_pytest(
+    predicates, tmp_path, monkeypatch
+):
+    workdir = _copy_fixture(tmp_path)
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name, *a, **k: None if name == "pytest" else real_find_spec(name, *a, **k)
+    )
+    with pytest.raises(RuntimeError, match=r"uv run --with pytest"):
+        predicates.end_state(workdir, CASE_DIR, [])
+
+
+def test_a_snapshot_is_refused_not_recorded_when_pytest_is_missing(predicates, tmp_path, monkeypatch):
+    workdir = _copy_fixture(tmp_path)
+    dest = tmp_path / "end_state"
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name, *a, **k: None if name == "pytest" else real_find_spec(name, *a, **k)
+    )
+    with pytest.raises(CaseContractError, match=r"uv run --with pytest"):
+        snapshot_end_state(CASE_DIR, workdir, [], dest)
+    assert list(dest.iterdir()) == []
 
 
 def test_end_state_leaves_the_workdir_and_the_fixture_untouched(predicates, solved, monkeypatch):

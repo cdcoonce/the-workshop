@@ -154,6 +154,9 @@ def test_t1_misses_when_the_final_suite_snapshot_is_absent(t1, make_snapshot):
         "exit=\n",
         "",
         "5 passed\nexit=0 \nstray\n",
+        "5 passed\nexit=0 done\n",
+        "5 passed\nlast exit=0\n",
+        "5 passed\nexit=0;\n",
     ],
 )
 def test_t1_final_suite_needs_exit_zero_as_the_last_line(t1, make_snapshot, text):
@@ -191,7 +194,18 @@ def test_t1_any_nonzero_reverted_exit_counts_as_a_failing_final_test(t1, make_sn
     assert t1("disciplined_two_cycles", make_snapshot(reverted_exit=code)) is True
 
 
-@pytest.mark.parametrize("text", ["", "1 failed\n", "1 failed\nexit=\n", "exit=1\n1 failed\n", "exit=abc\n"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "1 failed\n",
+        "1 failed\nexit=\n",
+        "exit=1\n1 failed\n",
+        "exit=abc\n",
+        "1 failed\nexit=1 done\n",
+        "1 failed\nlast exit=1\n",
+    ],
+)
 def test_t1_reverted_run_needs_a_parsable_exit_line_last(t1, make_snapshot, text):
     end_state = make_snapshot()
     end_state["pytest-src-reverted.txt"] = text

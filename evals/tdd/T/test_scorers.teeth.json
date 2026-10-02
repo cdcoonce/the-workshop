@@ -215,6 +215,13 @@
       "replace": "    return bool(transcript.final_text)"
     },
     {
+      "label": "[T1 c3/c4] the exit line is matched anywhere in the last line, not as the whole line (predicted red: test_t1_final_suite_needs_exit_zero_as_the_last_line, test_t1_reverted_run_needs_a_parsable_exit_line_last)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "_EXIT_LINE.fullmatch(lines[-1])",
+      "replace": "_EXIT_LINE.search(lines[-1])"
+    },
+    {
       "label": "[control] reorder two independent local assignments in the T2 red branch",
       "file": "predicates.py",
       "oracle": "real",

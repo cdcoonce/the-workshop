@@ -131,6 +131,20 @@
       "replace": "    for transcript in transcripts[:1]:\n        for event in transcript.events:\n            if event.name not in _EDIT_TOOLS:"
     },
     {
+      "label": "[snapshot] src/ is overlaid with the fixture's src/ instead of replaced, so an agent-added module survives the revert (predicted red: test_a_module_the_agent_added_under_src_is_gone_from_the_reverted_run)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        shutil.rmtree(tree / \"src\", ignore_errors=True)\n        shutil.copytree(base_src, tree / \"src\", ignore=_COPY_IGNORE)",
+      "replace": "        shutil.copytree(base_src, tree / \"src\", ignore=_COPY_IGNORE, dirs_exist_ok=True)"
+    },
+    {
+      "label": "[snapshot] the pytest-importable check is removed, so a missing pytest is recorded as a false miss (predicted red: test_end_state_refuses_loudly_when_the_harness_interpreter_has_no_pytest, test_a_snapshot_is_refused_not_recorded_when_pytest_is_missing)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if importlib.util.find_spec(\"pytest\") is None:\n        raise RuntimeError(",
+      "replace": "    if False:\n        raise RuntimeError("
+    },
+    {
       "label": "[control] the reverted-run scratch directory is given a different prefix",
       "file": "predicates.py",
       "oracle": "real",

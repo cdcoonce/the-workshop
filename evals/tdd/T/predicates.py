@@ -30,6 +30,7 @@ runs a model; the only subprocess is ``pytest`` against a fixture copy.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import posixpath
@@ -344,6 +345,12 @@ def end_state(workdir: Path, case_dir: Path, transcripts: list[Transcript]) -> d
     transcripts : list[Transcript]
         The attempt's parsed transcripts, in the order their events are listed.
 
+    Raises
+    ------
+    RuntimeError
+        If the harness interpreter cannot import ``pytest``; refusing beats a
+        snapshot of ``No module named pytest`` that would score every attempt a miss.
+
     Returns
     -------
     dict[str, str]
@@ -354,6 +361,12 @@ def end_state(workdir: Path, case_dir: Path, transcripts: list[Transcript]) -> d
         ``NotebookEdit`` event, in transcript order, with each path relative to
         *workdir*.
     """
+    if importlib.util.find_spec("pytest") is None:
+        raise RuntimeError(
+            "tdd/T end_state runs pytest with the harness interpreter, and this one cannot import it. "
+            "Run the conductor with `uv run --with pytest --with jsonschema python` so the snapshot "
+            "is refused here instead of recording a false T1 miss."
+        )
     return {
         "pytest-final.txt": _run_pytest(workdir),
         "pytest-src-reverted.txt": _run_with_src_reverted(workdir, case_dir),
