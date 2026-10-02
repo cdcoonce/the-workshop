@@ -1,0 +1,129 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_coverage_bound.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_coverage_bound.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the scorer never credits any section",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "            if any(pattern.search(section) for pattern in patterns):\n                return True",
+      "replace": "            if any(pattern.search(section) for pattern in patterns):\n                return False"
+    },
+    {
+      "label": "[does-nothing] a reply with no Could-not-verify section is credited (the agent does nothing)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "            if any(pattern.search(section) for pattern in patterns):\n                return True\n    return False",
+      "replace": "            if any(pattern.search(section) for pattern in patterns):\n                return True\n    return True"
+    },
+    {
+      "label": "regex dropped: any section, even an empty one, credits",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "if any(pattern.search(section) for pattern in patterns):",
+      "replace": "if True:"
+    },
+    {
+      "label": "location dropped: surfaces are searched in the whole reply, not the section",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        for section in _could_not_verify_sections(reply):",
+      "replace": "        for section in [reply]:"
+    },
+    {
+      "label": "section no longer ends at the next level-two heading",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        sections.append(rest[: following.start()] if following else rest)",
+      "replace": "        sections.append(rest)"
+    },
+    {
+      "label": "section ends at a level-three heading too",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_NEXT_LEVEL_TWO_HEADING = re.compile(r\"^## \", re.MULTILINE)",
+      "replace": "_NEXT_LEVEL_TWO_HEADING = re.compile(r\"^#{2,3} \", re.MULTILINE)"
+    },
+    {
+      "label": "heading no longer anchored to a line start (MULTILINE dropped)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "re.IGNORECASE | re.MULTILINE)\n_NEXT",
+      "replace": "re.IGNORECASE)\n_NEXT"
+    },
+    {
+      "label": "production-data phrase class dropped",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "    patterns.extend(re.compile(phrase, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
+      "replace": "    patterns.extend([])"
+    },
+    {
+      "label": "left word boundary dropped: test_invoice.py names invoice.py",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "rf\"(?<![\\w.-])(?:[\\w.-]+/)*{re.escape",
+      "replace": "rf\"(?:[\\w.-]+/)*{re.escape"
+    },
+    {
+      "label": "only the first transcript's reply is read",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "    patterns = _surface_patterns()\n    for reply in _final_replies(evidence):",
+      "replace": "    patterns = _surface_patterns()\n    for reply in _final_replies(evidence)[:1]:"
+    },
+    {
+      "label": "surface set widened with a file the fix branch touches",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "  \"pytest.ini\",\n]",
+      "replace": "  \"pytest.ini\",\n  \"src/settlement/rounding.py\",\n]"
+    },
+    {
+      "label": "surface set loses pytest.ini",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "  \"pytest.ini\",\n]",
+      "replace": "]"
+    },
+    {
+      "label": "[control] eager list inside any() instead of a generator",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "pattern.search is pure, so evaluating every pattern eagerly instead of short-circuiting returns the same truth value on every input; the only difference is wasted regex work. It holds for any text, as no pattern has side effects.",
+      "find": "if any(pattern.search(section) for pattern in patterns):",
+      "replace": "if any([pattern.search(section) for pattern in patterns]):"
+    }
+  ]
+}
