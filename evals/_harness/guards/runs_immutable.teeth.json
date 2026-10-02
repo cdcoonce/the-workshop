@@ -1,0 +1,133 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_runs_immutable.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_runs_immutable.py"
+  ],
+  "mutants": [
+    {
+      "label": "_changed_entries drops --no-renames, so a rename out of runs/ hides its protected old path",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_an_existing_run_file_is_renamed_out_of_runs: with rename detection on, git reports one R entry whose last field is the new, unprotected path, so the protected old path vanishes from the diff.",
+      "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--name-status\", \"-z\",",
+      "replace": "\"git\", \"-C\", str(repo_root), \"diff\", \"--name-status\", \"-z\","
+    },
+    {
+      "label": "check drops the add-is-allowed conjunct, so a new run fails too",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_diff_that_only_adds_new_runs and test_passes_when_a_file_outside_runs_is_renamed_into_runs: only an existing file is protected; adding runs is the normal path.",
+      "find": "        if status.startswith(\"A\"):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "check protects only modifications, so a deletion escapes",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_an_existing_run_file_is_deleted and test_fails_when_an_existing_raw_is_deleted: a deleted run file is as much a rewrite of history as a modified one.",
+      "find": "        if status.startswith(\"A\"):\n            continue",
+      "replace": "        if status != \"M\":\n            continue"
+    },
+    {
+      "label": "check drops the runs-directory conjunct, so every changed file fails",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_diff_that_changes_only_files_outside_runs: only paths under a skill's runs/ are protected.",
+      "find": "        if not _RUNS_PATH.match(path):\n            continue",
+      "replace": "        pass"
+    },
+    {
+      "label": "_RUNS_PATH matches runs/ at any depth, protecting a nested non-skill runs directory",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_change_to_a_runs_directory_that_is_not_a_skills_runs_directory: only evals/<skill>/runs/ is protected, not any directory that happens to be named runs.",
+      "find": "_RUNS_PATH = re.compile(r\"^evals/[^/]+/runs/\")",
+      "replace": "_RUNS_PATH = re.compile(r\"evals/.*/runs/\")"
+    },
+    {
+      "label": "_RUNS_PATH is pinned to one skill's runs directory",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_protects_every_skills_runs_directory: the protection covers every skill's runs/ directory, not a fixed one.",
+      "find": "_RUNS_PATH = re.compile(r\"^evals/[^/]+/runs/\")",
+      "replace": "_RUNS_PATH = re.compile(r\"^evals/example-skill/runs/\")"
+    },
+    {
+      "label": "_changed_entries uses a two-dot range, leaking base-only history",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_a_base_only_change_via_the_three_dot_range: the diff must be merge-base relative, or a protected file the base branch rewrote after the fork fails a branch that never touched it.",
+      "find": "f\"{base}...HEAD\",",
+      "replace": "f\"{base}..HEAD\","
+    },
+    {
+      "label": "check keeps only the first violation, hiding the rest",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_reports_every_protected_file_that_changed: every changed protected file is reported, not just the first.",
+      "find": "    return results\n",
+      "replace": "    return results[:1]\n"
+    },
+    {
+      "label": "check emits warn instead of fail",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by every fails_when test: a warn never fails the runner, so a rewritten run file would pass make test.",
+      "find": "                level=\"fail\",",
+      "replace": "                level=\"warn\","
+    },
+    {
+      "label": "check drops the path from the message",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_an_existing_run_file_is_modified (asserts the path is named): an author must be told which protected file changed.",
+      "find": "                    f\"{path}: an existing file under a skill's runs/ directory was changed \"",
+      "replace": "                    f\"an existing file under a skill's runs/ directory was changed \""
+    },
+    {
+      "label": "[does-nothing] check never appends a result",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "why": "Killed by every fails_when test: the guard's whole purpose is to fail on a changed protected file, so a check that returns no results lets every rewrite through.",
+      "find": "        results.append(\n            Result(\n                level=\"fail\",\n                guard=_GUARD_NAME,\n                message=(\n                    f\"{path}: an existing file under a skill's runs/ directory was changed \"\n                    f\"(git status {status}); run files and raws are write-once\"\n                ),\n            )\n        )",
+      "replace": "        pass"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./runs_immutable.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Run files are write-once (the ledger writer refuses to overwrite one)",
+      "replace": "Run files are write-once (the ledger writer refuses to clobber one)"
+    }
+  ]
+}
