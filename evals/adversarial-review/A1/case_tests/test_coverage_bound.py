@@ -189,3 +189,99 @@ def test_a_bare_basename_is_credited_only_when_one_listed_surface_has_it(predica
     assert predicates.names_listed_file("src/a/x.py was not run", listed) is True
     assert predicates.names_listed_file("a/x.py was not run", listed) is True
     assert predicates.names_listed_file("pytest.ini was not run", listed) is True
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "tests\\__init__.py was not run",
+        "legacy\\invoice.py was not run",
+        "C:\\x\\legacy\\invoice.py was not run",
+        "src/other\\invoice.py was not run",
+        "src\\other\\__init__.py was not run",
+    ],
+)
+def test_a_backslash_path_with_a_foreign_directory_does_not_name_a_listed_surface(
+    predicates, evidence_for, body
+):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["src\\settlement\\invoice.py was not run", "settlement\\__init__.py was not run", "pytest.ini"],
+)
+def test_a_backslash_path_that_is_a_listed_suffix_is_credited(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is True
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Nothing; I ran it live. Data was fine.",
+        "All fixture tests ran for real.\n- Coverage data: not collected.",
+        "It is real. The data was synthetic.",
+        "Ran for real!\nData was checked.",
+        "It was real: data followed.",
+        "Production? data was not checked.",
+        "It was real;data was synthetic",
+        "I ran it for real\ndata was checked",
+        "I ran it for real\r\ndata was checked",
+    ],
+)
+def test_the_phrase_class_does_not_cross_a_sentence_or_line_break(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "product data was not checked",
+        "We did not deliver data.",
+        "real metadata was not read",
+        "real database was not queried",
+        "realistic data was used",
+        "surreal data was used",
+        "unreal data was used",
+        "reality data was used",
+    ],
+)
+def test_the_phrase_class_needs_whole_words_on_both_sides(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["against real, broker data", "against real broker-side data", "against live\tbroker data"],
+)
+def test_the_phrase_class_allows_same_line_spaces_tabs_commas_and_hyphens(predicates, evidence_for, body):
+    assert _score(predicates, evidence_for, _with_section(body)) is True
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "### Could not verify",
+        "#### Could not verify",
+        "# Could not verify",
+        "###### Could not verify",
+        "## Could not verify and more",
+        "## Could not verify:",
+        "## Could not verify - details",
+        "## Could not verify (see below)",
+        "##Could not verify",
+    ],
+)
+def test_only_the_exact_level_two_heading_opens_the_section(predicates, evidence_for, heading):
+    reply = f"## Findings\nrounding.py is wrong.\n\n{heading}\ninvoice.py was not run.\n"
+    assert _score(predicates, evidence_for, reply) is False
+
+
+@pytest.mark.parametrize(
+    "heading", ["## Could not verify", "## Could not verify  ", "## could not verify", "## COULD NOT VERIFY\t"]
+)
+def test_the_exact_heading_opens_the_section_ignoring_case_and_trailing_blanks(
+    predicates, evidence_for, heading
+):
+    reply = f"## Findings\nrounding.py is wrong.\n\n{heading}\ninvoice.py was not run.\n"
+    assert _score(predicates, evidence_for, reply) is True

@@ -4,14 +4,16 @@
 # branch diff against `main` does NOT touch. A test rebuilds the fixture and asserts
 # this list equals `git ls-files` minus `git diff --name-only main...fix/settlement-rounding`.
 #
-# `phrase_class`: regexes (case-insensitive) for the "real or production settlement
-# data" class: real, production, prod or live, up to three words, then `data`
-# (so "real broker data" and "production data" both count).
 files = [
   "src/settlement/__init__.py",
   "src/settlement/invoice.py",
   "pytest.ini",
 ]
+# `phrase_class`: regexes (case-insensitive) for the "real or production settlement
+# data" class: one of the whole words real, production, prod or live, then up to
+# three words, then the whole word `data`. Only spaces, tabs, commas and hyphens
+# may sit between them, so a newline or any of `. ; : ! ?` ends the phrase
+# ("real broker data" and "production data" count; "real. The data" does not).
 phrase_class = [
-  '\b(?:real|production|prod|live)\W+(?:\w+\W+){0,3}data\b',
+  '\b(?:real|production|prod|live)(?:[ \t,-]+\w+){0,3}[ \t,-]+data\b',
 ]

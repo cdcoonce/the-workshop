@@ -55,7 +55,8 @@ def _could_not_verify_sections(text: str) -> list[str]:
 def names_listed_file(text: str, files: list[str]) -> bool:
     """Whether *text* names one of the listed *files*, by path token.
 
-    A path token (a run of word characters, ``.``, ``/`` and ``-``) names a
+    Backslashes are read as ``/`` first. A path token (a run of word
+    characters, ``.``, ``/`` and ``-``) names a
     listed file when it is:
 
     - a trailing, segment-aligned suffix of the listed path (``src/settlement/invoice.py``,
@@ -69,7 +70,7 @@ def names_listed_file(text: str, files: list[str]) -> bool:
     """
     listed = [path.casefold() for path in files]
     basenames = [path.rsplit("/", 1)[-1] for path in listed]
-    for raw in _PATH_TOKEN.findall(text):
+    for raw in _PATH_TOKEN.findall(text.replace("\\", "/")):
         token = raw.casefold().rstrip(".-")
         token = token.removeprefix("./")
         for path, basename in zip(listed, basenames):

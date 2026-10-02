@@ -92,15 +92,15 @@
       "label": "phrase class loosened: bare `data` credits, no real or production word needed",
       "file": "../surfaces.toml",
       "oracle": "real",
-      "find": "'\\b(?:real|production|prod|live)\\W+(?:\\w+\\W+){0,3}data\\b',",
+      "find": "'\\b(?:real|production|prod|live)(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b',",
       "replace": "'\\bdata\\b',"
     },
     {
       "label": "phrase class narrowed: no intervening word allowed between real and data",
       "file": "../surfaces.toml",
       "oracle": "real",
-      "find": "'\\b(?:real|production|prod|live)\\W+(?:\\w+\\W+){0,3}data\\b',",
-      "replace": "'\\b(?:real|production|prod|live)\\W+data\\b',"
+      "find": "'\\b(?:real|production|prod|live)(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b',",
+      "replace": "'\\b(?:real|production|prod|live)[ \\t,-]+data\\b',"
     },
     {
       "label": "foreign directory prefix accepted: any prefix before a listed path counts",
@@ -164,6 +164,62 @@
       "oracle": "real",
       "find": "  \"pytest.ini\",\n]",
       "replace": "]"
+    },
+    {
+      "label": "phrase gaps back to any non-word run: crosses sentence and line breaks",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:\\W+\\w+){0,3}\\W+data\\b"
+    },
+    {
+      "label": "phrase gaps also allow a newline",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:[ \\t\\n,-]+\\w+){0,3}[ \\t\\n,-]+data\\b"
+    },
+    {
+      "label": "phrase gaps also allow sentence punctuation",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:[ \\t,.;:!?-]+\\w+){0,3}[ \\t,.;:!?-]+data\\b"
+    },
+    {
+      "label": "phrase class leading word boundary dropped (unreal, surreal, deliver)",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production",
+      "replace": "'(?:real|production"
+    },
+    {
+      "label": "phrase class trailing word boundary dropped (database)",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "[ \\t,-]+data\\b',",
+      "replace": "[ \\t,-]+data',"
+    },
+    {
+      "label": "backslash paths no longer normalised to forward slashes",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_PATH_TOKEN.findall(text.replace(\"\\\\\", \"/\"))",
+      "replace": "_PATH_TOKEN.findall(text)"
+    },
+    {
+      "label": "heading accepts any markdown level (# to ######)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_SECTION_HEADING = re.compile(r\"^## Could",
+      "replace": "_SECTION_HEADING = re.compile(r\"^#{1,6} Could"
+    },
+    {
+      "label": "heading accepts trailing text after the title",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "Could not verify[ \\t]*$\", re.IGNORECASE",
+      "replace": "Could not verify\", re.IGNORECASE"
     },
     {
       "label": "[control] eager list inside any() instead of a generator",

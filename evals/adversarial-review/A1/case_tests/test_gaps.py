@@ -37,3 +37,10 @@ def test_a1_appended_one_behavior_per_line_for_what_a_single_prompt_cannot_exerc
     for line in mine:
         behavior = line[2:].split(":", 1)[0]
         assert " and " not in behavior, f"one behavior per line: {line!r}"
+
+
+def test_a_blank_line_separates_the_header_from_the_appended_list(case_dir):
+    lines = _lines(case_dir)
+    assert lines[:3] == _HEADER
+    assert lines[3] == ""
+    assert lines[4].startswith("- ")
