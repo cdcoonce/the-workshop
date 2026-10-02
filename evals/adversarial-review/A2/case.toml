@@ -1,0 +1,73 @@
+# A2: lens-mode review of the doctored PR #896 diff (the terse-lens-contract A/B's fixture).
+# Run inline: the conductor plays adversarial-review's own conductor role and dispatches
+# the lens agents itself, giving each the prompt text build_dispatch_prompt returns, with
+# the lens narrowing taken from the skill's own references/pr-lens-review.md. The case
+# supplies the story (prompt.md) and the fixture; it supplies no lens text.
+#
+# The fixture is a static, committed copy (fixture/, see provenance.toml): the harness
+# fingerprints it as the deps.tree_hash of that directory, this case computes nothing.
+#
+# ab_raws/ holds the experiment's saved lens replies. They are matcher-development and
+# cross-match-audit material only: never calibration input. Nothing scored reads them;
+# calibration for gating happens only through the hand-run issue #989 executing this case.
+mode = "inline"
+prompt = "prompt.md"
+envelope = "findings"
+
+# Every matcher is #992's conjunctive review_match: location AND regex, no disjunctive
+# fallback (the experiment's score_arm.py:65 `in_window or bool(regex.search(desc))` is
+# retired). A window item needs the file suffix AND a line in the window AND the regex; a
+# file-level item needs the file suffix AND the regex.
+
+[[items]]
+id = "A2-D1"
+kind = "gate-candidate"
+scorer = "pushed_prefix_off_by_one"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+line_window = [105, 125]
+regex = 'classify_pushed_prefix|first_unpushed|prefix.{0,40}(off.by.one|\+\s*1|one too|incorrect|wrong|misclassif)'
+
+[[items]]
+id = "A2-D2"
+kind = "gate-candidate"
+scorer = "ancestor_argument_swap"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+line_window = [197, 217]
+regex = '_is_ancestor.{0,80}(swap|revers|invert|order|backward|wrong (way|direction))|ancestor.{0,60}(remote_head).{0,40}(sha|session)|pushed_flags.{0,60}(invert|revers|wrong|backward)'
+
+# D3 is a trend item: reported, never gated.
+[[items]]
+id = "A2-D3"
+kind = "trend"
+scorer = "weakened_collapse_assertion"
+[items.params]
+file_suffix = "tests/test_sync_boundary_squash.py"
+line_window = [139, 160]
+regex = '>=\s*1|at least (one|1)|weak|tautolog|vacuous|trivial|always (true|pass)|never fail|does not assert (exactly|the collapse)|passes (without|even)'
+
+# D4 and D5 are file-level: no line window, the file suffix is the whole location.
+[[items]]
+id = "A2-D4"
+kind = "gate-candidate"
+scorer = "anti_scope_edit"
+[items.params]
+file_suffix = "vault-sync/references/command.md"
+regex = 'vault-sync'
+
+# D5 is an absence. The experiment's regex was the bare alternation
+# `staged|--cached|uncommitted`, so any passing mention of those words credited it. The
+# tightened regex needs a negator (no, never, missing, lacks, does not, ...), a guard word
+# (check, guard, inspect, ...) and one of staged / uncommitted / --cached, in either order
+# (`no check for staged`, `no staged-changes guard`), inside ONE clause: the stretch
+# between them may not cross a newline, a full stop, a semicolon, a comma or a bracket.
+# Words match on boundaries, so `unstaged` and `nobody` count for nothing, and `no longer`
+# is not a negator.
+[[items]]
+id = "A2-D5"
+kind = "gate-candidate"
+scorer = "missing_staged_guard"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+regex = '(?<![\w-])(?:no(?!\s+longer)|never|not|nothing|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|fails?\s+to)(?![\w-])[^.\n;,()]{0,45}?(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus)\w*[^.\n;,()]{0,45}?(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)|(?<![\w-])(?:no(?!\s+longer)|never|not|nothing|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|fails?\s+to)(?![\w-])[^.\n;,()]{0,45}?(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)[^.\n;,()]{0,30}?(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus)\w*'
