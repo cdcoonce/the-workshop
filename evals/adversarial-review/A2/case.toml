@@ -58,16 +58,22 @@ regex = 'vault-sync'
 
 # D5 is an absence. The experiment's regex was the bare alternation
 # `staged|--cached|uncommitted`, so any passing mention of those words credited it. The
-# tightened regex needs a negator (no, never, missing, lacks, does not, ...), a guard word
-# (check, guard, inspect, ...) and one of staged / uncommitted / --cached, in either order
-# (`no check for staged`, `no staged-changes guard`), inside ONE clause: the stretch
-# between them may not cross a newline, a full stop, a semicolon, a comma or a bracket.
-# Words match on boundaries, so `unstaged` and `nobody` count for nothing, and `no longer`
-# is not a negator.
+# tightened regex credits only five shapes of "the guard is missing", each with a negator
+# or absence word, the guard's vocabulary (check, guard, inspect, ...) and one of
+# staged / uncommitted / --cached (or "the index" after an inspect-verb):
+#   1. negator, up to two plain words, guard word, up to five words, marker   (no check for staged)
+#   2. negator, up to four words, marker, up to two words, guard word        (no staged-changes guard)
+#   3. negator, up to two plain words, inspect-verb, "the index"             (never inspects the index)
+#   4. marker, guard word, "is missing|absent|not implemented"               (the staged-changes guard is missing)
+#   5. guard word, marker, "is missing|absent|not implemented"
+# Between a negator and the guard word no comma, colon, full stop or conjunction may sit,
+# so "No issue here: it checks staged changes" and "does not handle X but staged changes are
+# guarded" credit nothing. `not only`, `never fails to` and `no longer` are not negators.
+# Words match on boundaries, so `unstaged`, `un-staged`, `nobody` and `no-op` count for nothing.
 [[items]]
 id = "A2-D5"
 kind = "gate-candidate"
 scorer = "missing_staged_guard"
 [items.params]
 file_suffix = "scripts/sync_boundary_squash.py"
-regex = '(?<![\w-])(?:no(?!\s+longer)|never|not|nothing|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|fails?\s+to)(?![\w-])[^.\n;,()]{0,45}?(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus)\w*[^.\n;,()]{0,45}?(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)|(?<![\w-])(?:no(?!\s+longer)|never|not|nothing|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|fails?\s+to)(?![\w-])[^.\n;,()]{0,45}?(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)[^.\n;,()]{0,30}?(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus)\w*'
+regex = '(?<![\w-])(?:no(?!\s+longer)|never(?!\s+fails?\s+to)|not(?!\s+only)|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|(?<!never )fails?\s+to)(?![\w-])(?:[ \t]+(?!(?:but|and|or|yet|while|though|although|however|so|because)\b)[\w/`-]+){0,2}?[ \t]+(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus|look|examin|consult)\w*(?:,?[ \t]+(?!(?:but|and|or|yet|while|though|although|however|so|because)\b)[^\s.;:,]+){0,5}?,?[ \t]+(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)|(?<![\w-])(?:no(?!\s+longer)|never(?!\s+fails?\s+to)|not(?!\s+only)|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|(?<!never )fails?\s+to)(?![\w-])(?:[ \t]+(?!(?:but|and|or|yet|while|though|although|however|so|because)\b)[^\s.;:,]+){0,4}?[ \t]+(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:[ \t]+(?!(?:but|and|or|yet|while|though|although|however|so|because)\b)[\w/`-]+){0,2}?[ \t]+(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus|look|examin|consult)\w*|(?<![\w-])(?:no(?!\s+longer)|never(?!\s+fails?\s+to)|not(?!\s+only)|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|does\s+not|did\s+not|(?<!never )fails?\s+to)(?![\w-])(?:[ \t]+(?!(?:but|and|or|yet|while|though|although|however|so|because)\b)[\w/`-]+){0,2}?[ \t]+(?:inspect|look|examin|consult|read)\w*(?:[ \t]+at)?[ \t]+the[ \t]+index|(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:[ \t]+[\w/`-]+){0,2}?[ \t]+(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus|look|examin|consult)\w*(?:[ \t]+[\w/`-]+){0,3}?[ \t]+(?:is|was|are)[ \t]+(?:\w+ly[ \t]+)?(?:missing|absent|not[ \t]+(?:implemented|present|written|there|enforced))|(?<![\w-])(?:check|guard|inspect|detect|handl|verif|skip|refus|look|examin|consult)\w*(?:[ \t]+[\w/`-]+){0,3}?[ \t]+(?<![\w-])(?:staged|uncommitted|--cached)(?!\w)(?:[ \t]+[\w/`-]+){0,2}?[ \t]+(?:is|was|are)[ \t]+(?:\w+ly[ \t]+)?(?:missing|absent|not[ \t]+(?:implemented|present|written|there|enforced))'

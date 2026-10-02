@@ -45,6 +45,7 @@ _EXPECTED_CREDITS = [
     ('b', 1, 'test_veracity', 207, 'A2-D2'),
     ('b', 1, 'spec_conformance', 207, 'A2-D2'),
     ('b', 1, 'spec_conformance', 115, 'A2-D1'),
+    ('b', 1, 'spec_conformance', 168, 'A2-D5'),
     ('b', 1, 'spec_conformance', 3, 'A2-D4'),
     ('b', 2, 'domain', 115, 'A2-D1'),
     ('b', 2, 'domain', 207, 'A2-D2'),
@@ -145,3 +146,17 @@ def test_the_disjunctive_rule_credited_a_line_window_collision_the_repair_retire
     ]
     assert _experiment_rule(finding, defects["D3"]) is True
     assert not any(c[:4] == ("a", 2, "test_veracity", 148) for c in _credits(case_dir, items, predicates))
+
+
+def test_every_genuine_d5_finding_is_credited_and_no_passing_mention_is(case_dir, items, predicates):
+    """The audit counts on the 18 raws: 8 genuine absence findings, 2 passing mentions, all on the script."""
+    genuine = {
+        ("a", 1, "domain", 168), ("a", 1, "spec_conformance", 233), ("a", 2, "spec_conformance", 158),
+        ("b", 1, "domain", 168), ("b", 1, "spec_conformance", 168), ("b", 2, "test_veracity", 127),
+        ("a2", 1, "spec_conformance", 153), ("a2", 2, "spec_conformance", 234),
+    }
+    passing = {("a2", 1, "spec_conformance", 118), ("a2", 2, "spec_conformance", 153)}
+    credited = {c[:4] for c in _credits(case_dir, items, predicates) if c[4] == "A2-D5"}
+    assert genuine <= credited, sorted(genuine - credited)
+    assert not (passing & credited), sorted(passing & credited)
+    assert credited == genuine
