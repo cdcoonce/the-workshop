@@ -11,6 +11,37 @@ the end-state snapshot (``evidence.end_state``: ``commit-<k>.log`` and
 from its raws alone. The two that judge what the agent did read transcript
 evidence (``evidence.transcripts``).
 
+Known limits
+------------
+The transcript gates read each Bash call with a small bash lexer (``_Lexer``)
+rather than a shell, so a command whose meaning only bash itself could work out
+is read incompletely. None of these is fixed here; each is a place where the
+reading can differ from what ran. Past its size limits the reader raises (a
+loud case error) rather than guessing.
+
+Opaque contexts that hide a command from the lexer:
+
+* ``$(( $(git add -A) 1 ))`` (a substitution inside arithmetic), ``${u:-$(git
+  add -A)}`` and ``${u:-"}"}`` (a substitution, or a quote, inside a parameter
+  expansion), a case-pattern ``)`` inside ``$(case ... esac)``, and
+  ``((git add -A) )``, which bash re-parses as a subshell.
+* Piping into a shell (``... | bash``), ``function f {...}; f``, ``coproc``,
+  ``exec -a name cmd``, ``env -S 'cmd'``, ``$"git"``, ``$'\\x67it'``, and brace
+  expansion (``git add {.,README}``): the lexer sees words, not what they expand to.
+
+Control flow it does not model:
+
+* Gated execution: ``false && make test; git add x`` is credited as tests run
+  before the add, and ``exec make test`` is read as a test run that replaced the
+  shell. Every simple command in a call counts as run, in text order.
+
+Dialect: the grammar is bash's, even when the agent's shell is zsh.
+
+The attribution gate reads trailer NAMES and a few signature lines. It cannot
+see a signature that names no tool in its name part: an email-only trailer
+(``noreply@anthropic.com``), ``ClaudeAI``, ``Gemini CLI``. The name list is
+deliberately not broadened: a false hit on a human is worse than a miss here.
+
 Public contract
 ----------------
 ``end_state(workdir, case_dir, transcripts) -> dict[str, str]``
@@ -168,8 +199,11 @@ _ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
 _GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
 _MAKE_OPTIONS_WITH_VALUE = frozenset({"-C", "-f", "-I", "-o", "-W", "--directory", "--file"})
 _STAGING = frozenset({"add", "stage"})
-_SEGMENT_BUDGET = 1000
-_MAX_DEPTH = 8
+# Limits are generous so ordinary input never reaches them; past them the reader
+# RAISES (the harness turns a raising scorer into a loud case error) rather than
+# dropping commands, which would read as credit.
+_SEGMENT_BUDGET = 100_000
+_MAX_DEPTH = 50
 # Characters that end a bare heredoc delimiter word.
 _DELIMITER_END = " \t\r\n'\"<>;&|()"
 
@@ -205,7 +239,11 @@ class _Lexer:
         self.stmt = _Statement()
         self.word: list[str] = []
         self.in_word = False
-        self.pending: list[tuple[_Statement, str]] = []
+        # (owner statement, delimiter, quoted) for each heredoc awaiting its body
+        self.pending: list[tuple[_Statement, str, bool]] = []
+        # What the next word is: None (a word), "skip" (a redirection target, dropped)
+        # or "herestring" (the text fed to the command, kept like a heredoc body).
+        self.redirect_target: str | None = None
 
     # -- word and statement bookkeeping
 
@@ -214,16 +252,24 @@ class _Lexer:
         self.in_word = True
 
     def flush(self) -> None:
-        if self.in_word:
-            self.stmt.words.append("".join(self.word))
-            self.word = []
-            self.in_word = False
+        if not self.in_word:
+            return
+        text = "".join(self.word)
+        self.word = []
+        self.in_word = False
+        target, self.redirect_target = self.redirect_target, None
+        if target == "herestring":
+            self.stmt.heredocs.append(text)
+        elif target is None:
+            self.stmt.words.append(text)
 
     def end_statement(self) -> None:
         self.flush()
-        if self.stmt.words or self.stmt.pre:
+        owns_heredoc = any(owner is self.stmt for owner, _, _ in self.pending)
+        if self.stmt.words or self.stmt.pre or owns_heredoc:
             self.statements.append(self.stmt)
         self.stmt = _Statement()
+        self.redirect_target = None
 
     def substitute(self, inner: str, placeholder: str) -> None:
         self.stmt.pre.extend(_commands(inner, self.depth + 1))
@@ -406,16 +452,47 @@ class _Lexer:
 
     # -- redirections and heredocs
 
+    def body_substitutions(self) -> list[list[str]]:
+        """Commands run by `$(...)` and backticks in this text read as an unquoted heredoc body."""
+        text = self.text
+        found: list[list[str]] = []
+        j = 0
+        while j < len(text):
+            c = text[j]
+            if c == "\\":
+                j += 2
+            elif c == "$" and text.startswith("$((", j):
+                j = self.arithmetic_end(j + 3)
+            elif c == "$" and text[j + 1 : j + 2] == "(":
+                inner, j = self.paren_body(j + 2)
+                found.extend(_commands(inner, self.depth + 1))
+            elif c == "`":
+                inner, j = self.backtick_body(j)
+                found.extend(_commands(inner, self.depth + 1))
+            else:
+                j += 1
+        return found
+
     def redirect(self) -> None:
+        """Consume a redirection operator (`>`, `2>&1`, `&>`, `<<<`, ...).
+
+        The operator, its fd prefix (`2` in `2>&1`) and its target word are not
+        command words and are dropped, so `2>&1 git add -A` is a `git` command
+        and `make lint > test` is not `make test`. The target of `<<<` is kept,
+        as the text fed to the command.
+        """
         text = self.text
         i = self.i
+        if self.in_word and "".join(self.word).isdigit():
+            self.word = []  # `2` in `2>&1` is a file descriptor, not an argument
+            self.in_word = False
         self.flush()
         j = i + 1 if text[i] == "&" else i
         while text[j : j + 1] in ("<", ">"):
             j += 1
         if text[j : j + 1] == "&" and j > i and text[j - 1] in "<>":
             j += 1
-        self.stmt.words.append(text[i:j])
+        self.redirect_target = "herestring" if text[i:j] == "<<<" else "skip"
         self.i = j
 
     def heredoc(self) -> bool:
@@ -427,6 +504,7 @@ class _Lexer:
         while text[j : j + 1] in (" ", "\t"):
             j += 1
         quote = text[j : j + 1]
+        quoted = quote in ("'", '"', "\\")
         if quote in ("'", '"'):
             end = text.find(quote, j + 1)
             if end == -1:
@@ -443,7 +521,7 @@ class _Lexer:
         if not delimiter:
             return False
         self.flush()
-        self.pending.append((self.stmt, delimiter))
+        self.pending.append((self.stmt, delimiter, quoted))
         self.i = j
         return True
 
@@ -451,13 +529,16 @@ class _Lexer:
         text = self.text
         self.flush()
         position = self.i + 1
-        for owner, delimiter in self.pending:
+        for owner, delimiter, quoted in self.pending:
             terminator = re.compile(rf"^[ \t]*{re.escape(delimiter)}[ \t]*$", re.MULTILINE).search(
                 text, position
             )
             if terminator is None:
                 break  # no terminator: keep everything after as commands
-            owner.heredocs.append(text[position : terminator.start()])
+            body = text[position : terminator.start()]
+            owner.heredocs.append(body)
+            if not quoted:  # an unquoted delimiter: `$(...)` and backticks in the body run
+                owner.pre.extend(_Lexer(body, self.depth + 1).body_substitutions())
             position = min(terminator.end() + 1, len(text))
         self.pending = []
         self.end_statement()
@@ -467,7 +548,10 @@ class _Lexer:
 def _commands(text: str, depth: int = 0) -> list[list[str]]:
     """Every simple command bash would run for *text*, in order, as lists of words."""
     if depth > _MAX_DEPTH:
-        return []
+        raise ValueError(
+            f"commands nested more than {_MAX_DEPTH} levels deep (eval, $(...), backticks, "
+            "heredoc bodies); refusing to guess what such a command does"
+        )
     found: list[list[str]] = []
     for statement in _Lexer(text, depth).run():
         found.extend(_resolve(statement, depth))
@@ -499,16 +583,39 @@ def _basename(word: str) -> str:
     return word.rsplit("/", 1)[-1]
 
 
+_SHELL_VALUE_OPTIONS = frozenset({"-o", "-O", "+o", "+O", "--rcfile", "--init-file"})
+
+
 def _shell_payload(words: list[str]) -> str | None:
-    """The script of ``bash -c '...'`` / ``bash -lc '...'``, else ``None``."""
+    """The script of ``bash -c '...'``, however its options are spelled, else ``None``.
+
+    Skips option words (``--norc``), options that take a value (``-o pipefail``,
+    ``-O extglob``, ``--rcfile F``), clusters (``-euo pipefail``, ``-euc``,
+    ``-ic``; ``-c`` anywhere in a cluster counts, and an ``o``/``O`` in one
+    takes the next word) and a ``--``; the first word after them is the script.
+    """
     if _basename(words[0]) not in _SHELLS:
         return None
-    for index in range(1, len(words)):
+    has_c = False
+    index = 1
+    while index < len(words):
         word = words[index]
-        if not word.startswith("-"):
-            return None
-        if not word.startswith("--") and "c" in word:
-            return words[index + 1] if index + 1 < len(words) else None
+        if word == "--":
+            index += 1
+            break
+        if not word.startswith(("-", "+")):
+            break
+        if word in _SHELL_VALUE_OPTIONS:
+            index += 2
+            continue
+        if not word.startswith("--"):
+            letters = word[1:]
+            has_c = has_c or "c" in letters
+            if "o" in letters or "O" in letters:
+                index += 1  # the option's value
+        index += 1
+    if has_c and index < len(words):
+        return words[index]
     return None
 
 
@@ -557,6 +664,11 @@ def _git_subcommand(words: list[str]) -> tuple[str, list[str]] | None:
     return words[index], words[index + 1 :]
 
 
+def _is_all_option(argument: str) -> bool:
+    """``--all``, or an abbreviation git resolves to it (``--al``; ``--a`` is ambiguous)."""
+    return len(argument) >= 4 and "--all".startswith(argument)
+
+
 def _is_blanket_staging(words: list[str]) -> bool:
     """``git add``/``git stage`` of `.`, `-A` or `--all`."""
     call = _git_subcommand(words)
@@ -569,7 +681,8 @@ def _is_blanket_staging(words: list[str]) -> bool:
         elif argument in (".", "./"):
             return True
         elif not options_ended and (
-            argument == "--all" or (argument.startswith("-") and not argument.startswith("--") and "A" in argument)
+            _is_all_option(argument)
+            or (argument.startswith("-") and not argument.startswith("--") and "A" in argument)
         ):
             return True
     return False
@@ -581,12 +694,12 @@ def _is_git_add(words: list[str]) -> bool:
 
 
 def _is_dry_run(argument: str) -> bool:
-    """``make``'s ``-n`` family: the recipes are printed, not run."""
-    if argument in ("--dry-run", "--just-print", "--recon"):
+    """``make``'s modes that run no recipe: ``-n`` (print), ``-q`` (question), ``-t`` (touch)."""
+    if argument in ("--dry-run", "--just-print", "--recon", "--question", "--touch"):
         return True
     if argument.startswith("-") and not argument.startswith("--"):
         for letter in argument[1:]:
-            if letter == "n":
+            if letter in "nqt":
                 return True
             if letter in "CfIoWjl":  # takes a value: the rest of the word is not flags
                 return False
@@ -626,7 +739,13 @@ def _bash_commands(transcripts: list[Transcript]) -> list[ToolCallEvent]:
             command = event.input.get("command") if isinstance(event.input, dict) else None
             if event.name != "Bash" or not isinstance(command, str):
                 continue
-            for position, words in enumerate(_simple_commands(command)[:_SEGMENT_BUDGET]):
+            commands = _simple_commands(command)
+            if len(commands) >= _SEGMENT_BUDGET:
+                raise ValueError(
+                    f"a Bash call holds {len(commands)} statements, at or past the {_SEGMENT_BUDGET} "
+                    "this reader will order; refusing to truncate it"
+                )
+            for position, words in enumerate(commands):
                 ordinal = (transcript_index * 10**9 + event.ordinal) * _SEGMENT_BUDGET + position
                 events.append(replace(event, input={"words": words}, ordinal=ordinal))
     return events

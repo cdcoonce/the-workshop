@@ -460,3 +460,221 @@ def test_a_make_directory_that_starts_with_n_is_not_a_dry_run(predicates, tmp_pa
 )
 def test_a_comment_hides_nothing_but_is_not_a_command_either(predicates, tmp_path, command):
     assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+# --- round 4: redirections, limits, shell options, heredoc substitutions, abbreviations ----
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "2>&1 git add -A",
+        ">/dev/null git add -A",
+        "> /dev/null git add -A",
+        "</dev/null git add -A",
+        "&>/dev/null git add -A",
+        "&> /dev/null git add -A",
+        "git 2>/dev/null add -A",
+        "git add -A 2>&1",
+        "git add >/dev/null -A",
+        "1>out 2>err git add --all",
+        ">>log git add .",
+        "git add . <<< 'x'",
+        "git add -A >& /dev/null",
+        "git add -A <&0",
+        "3<file git add -A",
+    ],
+)
+def test_redirections_are_not_command_words(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git add invoice/pricing.py 2>&1",
+        "2>&1 git add invoice/pricing.py",
+        "git add a.py >/dev/null",
+    ],
+)
+def test_redirected_named_adds_are_not_blanket(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+@pytest.mark.parametrize(
+    "lint",
+    [
+        "make lint > test",
+        "make check >test",
+        "make lint 2> test",
+        "make lint >> test",
+        "make lint &> test",
+        "make lint < test",
+        "make lint >& test",
+    ],
+)
+def test_a_redirection_target_named_test_is_not_the_make_target(predicates, tmp_path, lint):
+    assert _tests_first(predicates, tmp_path, [lint, "git add a"]) is False
+
+
+@pytest.mark.parametrize(
+    "tests",
+    [
+        "2>&1 make test",
+        ">/dev/null make test",
+        "make 2>/dev/null test",
+        "make test 2>&1 | tail -5",
+        "make test > out.log 2>&1",
+    ],
+)
+def test_make_test_with_redirections_still_counts(predicates, tmp_path, tests):
+    assert _tests_first(predicates, tmp_path, [tests, "git add a"]) is True
+
+
+# limits: never silently drop commands
+
+
+def test_a_thousand_statements_before_a_blanket_add_are_all_read(predicates, tmp_path):
+    assert _blanket_ok(predicates, tmp_path, "true;" * 1000 + "git add -A") is False
+    assert _tests_first(predicates, tmp_path, ["true;" * 1500 + "git add a", "make test"]) is False
+
+
+def test_ordinary_nesting_is_read(predicates, tmp_path):
+    nested = "$(" * 20 + "git add -A" + ")" * 20
+    assert _blanket_ok(predicates, tmp_path, f"echo {nested}") is False
+
+
+def test_an_absurd_nesting_raises_instead_of_silently_dropping(predicates, tmp_path):
+    nested = "$(" * 1000 + "git add -A" + ")" * 1000
+    with pytest.raises(ValueError, match="nested"):
+        _blanket_ok(predicates, tmp_path, f"echo {nested}")
+
+
+def test_deeply_nested_eval_raises_too(predicates, tmp_path):
+    with pytest.raises(ValueError, match="nested"):
+        _blanket_ok(predicates, tmp_path, "eval " * 60 + "git add -A")
+
+
+def test_a_command_with_too_many_statements_raises(predicates, tmp_path):
+    with pytest.raises(ValueError, match="statements"):
+        _blanket_ok(predicates, tmp_path, "true;" * 100_001 + "git add -A")
+
+
+# shell option forms
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "bash -o pipefail -c 'git add -A'",
+        "bash -euo pipefail -c 'git add -A'",
+        "bash -O extglob -c 'git add -A'",
+        "bash -c -- 'git add -A'",
+        "bash -euc 'git add -A'",
+        "bash --norc -c 'git add -A'",
+        "bash --rcfile /dev/null -c 'git add -A'",
+        "bash --init-file /dev/null -ic 'git add -A'",
+        "sh -c 'git add -A' sh arg",
+        "bash <<<'git add -A'",
+        "bash <<< 'make test; git add .'",
+        'bash -s <<<"git add --all"',
+        "zsh -c 'git add .'",
+    ],
+)
+def test_shell_option_forms_still_reach_the_script(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "bash -o pipefail -c 'git add invoice/pricing.py'",
+        "bash -euo pipefail script.sh",
+        "bash script.sh 'git add -A'",
+        "bash -c 'echo hi'",
+        "bash <<<'git add invoice/pricing.py'",
+        "cat <<<'git add -A'",
+    ],
+)
+def test_shell_forms_that_do_not_stage_everything(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+def test_shell_options_count_for_the_ordering(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["bash -euo pipefail -c 'make test && git add a'"]) is True
+    assert _tests_first(predicates, tmp_path, ["bash -o pipefail -c 'git add a'", "make test", "git add b"]) is False
+    assert _tests_first(predicates, tmp_path, ["bash <<<'make test; git add a'"]) is True
+
+
+# substitutions inside an UNQUOTED heredoc body run; a quoted delimiter keeps the body inert
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<EOF\n$(git add -A)\nEOF",
+        "cat <<EOF\n`git add -A`\nEOF",
+        "cat <<-EOF\n\tmessage $(git add --all) tail\n\tEOF",
+        "cat <<EOF\nline one\nname: $(git add .)\nEOF\nls",
+        "git commit -F - <<EOF\nfeat: x\n\n$(git add -A)\nEOF",
+        "cat <<EOF\n$(echo $(git add -A))\nEOF",
+    ],
+)
+def test_substitutions_in_an_unquoted_heredoc_are_read(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<'EOF'\n$(git add -A)\nEOF",
+        'cat <<"EOF"\n$(git add -A)\nEOF',
+        "cat <<\\EOF\n$(git add -A)\nEOF",
+        "cat <<'EOF'\n`git add -A`\nEOF",
+        "cat <<EOF\n\\$(git add -A)\nEOF",
+        "cat <<EOF\n\\`git add -A\\`\nEOF",
+        "cat <<EOF\n$((1 + 2))\nEOF",
+        "cat <<EOF\nplain text git add -A\nEOF",
+    ],
+)
+def test_a_quoted_or_escaped_heredoc_body_stays_inert(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is True
+
+
+def test_a_heredoc_substitution_counts_for_the_ordering(predicates, tmp_path):
+    assert _tests_first(predicates, tmp_path, ["cat <<EOF\n$(git add a)\nEOF", "make test", "git add b"]) is False
+    assert _tests_first(predicates, tmp_path, ["cat <<'EOF'\n$(git add a)\nEOF", "make test", "git add b"]) is True
+
+
+# long-option abbreviations and the other make modes that run no recipe
+
+
+@pytest.mark.parametrize("flag", ["--all", "--al"])
+def test_unambiguous_abbreviations_of_all_are_blanket(predicates, tmp_path, flag):
+    assert _blanket_ok(predicates, tmp_path, f"git add {flag}") is False
+
+
+@pytest.mark.parametrize("flag", ["--a", "--allow", "--alx", "--no-all", "--ignore-errors", "--update"])
+def test_other_long_options_are_not_blanket(predicates, tmp_path, flag):
+    assert _blanket_ok(predicates, tmp_path, f"git add {flag} invoice/pricing.py") is True
+
+
+@pytest.mark.parametrize(
+    "no_recipe",
+    ["make -q test", "make -t test", "make --question test", "make --touch test", "make -kq test", "make -st test", "make test -q"],
+)
+def test_make_modes_that_run_no_recipe_are_not_running_the_tests(predicates, tmp_path, no_recipe):
+    assert _tests_first(predicates, tmp_path, [no_recipe, "git add a"]) is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git add &> out -A",
+        "bash -c -- '-x; git add -A'",
+        "<<EOF\n$(git add -A)\nEOF",
+        "git add -A &>/dev/null",
+    ],
+)
+def test_odd_redirect_and_option_spellings_still_reach_the_add(predicates, tmp_path, command):
+    assert _blanket_ok(predicates, tmp_path, command) is False
