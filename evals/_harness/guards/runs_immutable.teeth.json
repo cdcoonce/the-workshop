@@ -36,7 +36,7 @@
       "label": "_changed_entries drops --no-renames, so a rename out of runs/ hides its protected old path",
       "file": "./runs_immutable.py",
       "oracle": "real",
-      "why": "Killed by test_fails_when_an_existing_run_file_is_renamed_out_of_runs: with rename detection on, git reports one R entry whose last field is the new, unprotected path, so the protected old path vanishes from the diff.",
+      "why": "Killed by test_reports_a_rename_and_a_modification_in_the_same_diff: with rename detection on, git -z prints a third field for the rename, which shifts every status/path pair after it, so a protected file changed in the same diff is lost (a lone rename still parses by accident, so the single-rename tests alone cannot see the flag).",
       "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--name-status\", \"-z\",",
       "replace": "\"git\", \"-C\", str(repo_root), \"diff\", \"--name-status\", \"-z\","
     },

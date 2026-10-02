@@ -118,6 +118,21 @@ def test_fails_when_an_existing_run_file_is_renamed_out_of_runs(tmp_path):
     assert _RUN in results[0].message
 
 
+def test_reports_a_rename_and_a_modification_in_the_same_diff(tmp_path):
+    """Both protected files are reported. With rename detection on, git's
+    ``-z`` output carries a third field for the rename, which shifts every
+    status/path pair after it, so the modification would be lost.
+    """
+    repo, base = _base_repo(tmp_path)
+    _git(repo, "mv", _RUN, "evals/example-skill/elsewhere.json")
+    _write(repo, _RAW, "doctored raw\n")
+    _commit(repo, "rename one protected file and rewrite another")
+
+    results = _run(repo, base)
+
+    assert sorted(result.message.split(":")[0] for result in results) == sorted([_RUN, _RAW])
+
+
 def test_fails_when_an_existing_run_file_is_renamed_within_runs(tmp_path):
     repo, base = _base_repo(tmp_path)
     renamed = "evals/example-skill/runs/20260102T000000Z-bbbbbbbb.json"
