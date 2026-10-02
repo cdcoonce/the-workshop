@@ -43,7 +43,7 @@
     },
     {
       "label": "a Co-Authored-By trailer is not recognised",
-      "find": "_AI_TRAILER.search(line) or ",
+      "find": "_is_ai_trailer(line) or ",
       "replace": "",
       "file": "predicates.py",
       "oracle": "real"
@@ -71,15 +71,15 @@
     },
     {
       "label": "any Co-Authored-By trailer counts, so a human co-author is called attribution",
-      "find": "_AI_TRAILER = re.compile(rf\"^\\s*co-authored-by:.*\\b{_AI_NAMES}\\b\", re.IGNORECASE)",
-      "replace": "_AI_TRAILER = re.compile(r\"^\\s*co-authored-by:\", re.IGNORECASE)",
+      "find": "    return bool(_AI_TOOL_NAME.search(name) or _AMBIGUOUS_TOOL_NAME.match(name))",
+      "replace": "    return True",
       "file": "predicates.py",
       "oracle": "real"
     },
     {
-      "label": "the trailer match is case-sensitive",
-      "find": "\\b{_AI_NAMES}\\b\", re.IGNORECASE)",
-      "replace": "\\b{_AI_NAMES}\\b\")",
+      "label": "the trailer name match is case-sensitive",
+      "find": "|codex|ai)(?!\\w)\", re.IGNORECASE",
+      "replace": "|codex|ai)(?!\\w)\"",
       "file": "predicates.py",
       "oracle": "real"
     },
@@ -92,8 +92,36 @@
     },
     {
       "label": "a bare `AI` is dropped from the named tools",
-      "find": "|devin|ai)",
-      "replace": "|devin)",
+      "find": "|codex|ai)(?!\\w)",
+      "replace": "|codex)(?!\\w)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the email is matched too, so `Jane <jane@anthropic.com>` is called attribution",
+      "find": "    name = _EMAIL.sub(\"\", matched.group(1)).strip()",
+      "replace": "    name = matched.group(1).strip()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a given name that is also a tool counts anywhere in the name, so `Devin Smith` is flagged",
+      "find": "(?:\\[bot\\])?$\", re.IGNORECASE",
+      "replace": "(?:\\[bot\\])?\", re.IGNORECASE",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`Assisted-by:` trailers are not recognised",
+      "find": "(?:co-authored-by|assisted-by|generated-by)",
+      "replace": "(?:co-authored-by|generated-by)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`Generated-by:` trailers are not recognised",
+      "find": "(?:co-authored-by|assisted-by|generated-by)",
+      "replace": "(?:co-authored-by|assisted-by)",
       "file": "predicates.py",
       "oracle": "real"
     },

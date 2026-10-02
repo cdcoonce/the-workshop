@@ -79,97 +79,6 @@
       "oracle": "real"
     },
     {
-      "label": "chained commands are not split, so `cd repo && git add -A` is not seen",
-      "find": "_SEPARATORS = frozenset(\";|&()\")",
-      "replace": "_SEPARATORS = frozenset()",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "`bash -c '...'` payloads are not looked into",
-      "find": "        if payload is not None:",
-      "replace": "        if False:",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "`bash -lc '...'` (a flag cluster ending in c) is not recognised as a script",
-      "find": "        if not word.startswith(\"--\") and \"c\" in word:",
-      "replace": "        if word == \"-c\":",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "heredoc bodies are read as commands, so message text is mistaken for a call",
-      "find": "    prepared = _statement_breaks(_strip_heredocs(command))",
-      "replace": "    prepared = _statement_breaks(command)",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "a backslash-quoted heredoc delimiter (`<<\\EOF`) is not recognised",
-      "find": "|\\\\?(\\w+))[^\\n]*\\n\")",
-      "replace": "|(\\w+))[^\\n]*\\n\")",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "[fail-open] an unparseable command collapses to ONE segment, hiding every statement after the first",
-      "find": "        pieces = re.split(r\"&&|\\|\\||[;|&()\\n]\", prepared)",
-      "replace": "        pieces = [prepared]",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "shell keywords and grouping (`{`, `if`, `then`, `!`) are not skipped before the command word",
-      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
-      "replace": "        if _ASSIGNMENT.match(word):",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "`git` is matched only as the bare word, so `/usr/bin/git add -A` is not seen",
-      "find": "    if not words or _basename(words[0]) != \"git\":",
-      "replace": "    if not words or words[0] != \"git\":",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "the wrapper words (`time`, `env`, `command`, ...) are not skipped",
-      "find": "        elif name in _WRAPPERS:",
-      "replace": "        elif False:",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "wrapper options (`env -i`) are not skipped",
-      "find": "        elif name in _WRAPPERS:\n            index += 1\n            while index < len(words) and words[index].startswith(\"-\"):",
-      "replace": "        elif name in _WRAPPERS:\n            index += 1\n            while False and index < len(words) and words[index].startswith(\"-\"):",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "newlines no longer end a statement, so a command on the next line is hidden",
-      "find": "        elif char == \"\\n\":\n            out.append(\";\")",
-      "replace": "        elif char == \"\\n\":\n            out.append(\" \")",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "a comment is not cut before newlines are turned into `;`, hiding the next line",
-      "find": "        elif char == \"#\" and (not out or out[-1] in \" \\t\\n;&|(\"):",
-      "replace": "        elif False:",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
-      "label": "leading `VAR=value` assignments are not skipped",
-      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
-      "replace": "        if word in _KEYWORDS:",
-      "file": "predicates.py",
-      "oracle": "real"
-    },
-    {
       "label": "a non-Bash tool call carrying a `command` input is read as a Bash call",
       "find": "            if event.name != \"Bash\" or not isinstance(command, str):",
       "replace": "            if not isinstance(command, str):",
@@ -189,6 +98,293 @@
       "replace": "_STAGING = frozenset({\"stage\", \"add\"})",
       "expect": "survived",
       "why": "A frozenset literal has no order: both spellings build equal sets, so no input can tell them apart.",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "chained commands are not split, so `git status && git add -A` hides the add",
+      "find": "            elif c in \";&|()\":",
+      "replace": "            elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`bash -c '...'` payloads are not looked into",
+      "find": "    if payload is not None:",
+      "replace": "    if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`bash -lc '...'` (a flag cluster ending in c) is not recognised as a script",
+      "find": "        if not word.startswith(\"--\") and \"c\" in word:",
+      "replace": "        if word == \"-c\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "heredoc bodies are read as commands, so message text is mistaken for a call",
+      "find": "            position = min(terminator.end() + 1, len(text))",
+      "replace": "            pass",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a backslash-quoted heredoc delimiter (`<<\\EOF`) is not recognised",
+      "find": "            if quote == \"\\\\\":",
+      "replace": "            if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a heredoc delimiter is only the leading word characters again, so `<<END-MSG` is cut at the hyphen",
+      "find": "            while j < len(text) and text[j] not in _DELIMITER_END:",
+      "replace": "            while j < len(text) and (text[j].isalnum() or text[j] == \"_\"):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[fail-open] a heredoc with no terminator drops everything after it",
+      "find": "                break  # no terminator: keep everything after as commands",
+      "replace": "                position = len(text)\n                break",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "single quotes are not tracked, so `<<` inside 'a << b' opens a heredoc",
+      "find": "            elif c == \"'\":\n                end = text.find(\"'\", i + 1)",
+      "replace": "            elif False:\n                end = text.find(\"'\", i + 1)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "double quotes are not tracked, so `<<` inside \"a << b\" opens a heredoc",
+      "find": "            elif c == '\"':\n                self.double_quoted()",
+      "replace": "            elif False:\n                self.double_quoted()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an arithmetic expansion is not skipped, so `<<` inside `$((1<<2))` opens a heredoc",
+      "find": "        depth = 2\n        for j in range(start, len(self.text)):",
+      "replace": "        depth = 2\n        for j in range(start, start):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a `((...))` arithmetic command is not skipped, so `<<` inside it opens a heredoc",
+      "find": "            elif text.startswith(\"((\", i) and not self.in_word and not self.stmt.words:",
+      "replace": "            elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a backslash-newline line continuation is not joined",
+      "find": "                if following == \"\\n\":\n                    self.i += 2",
+      "replace": "                if False:\n                    self.i += 2",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an unterminated single quote no longer swallows the rest: its tail is read as commands",
+      "find": "                self.i = size if end == -1 else end + 1",
+      "replace": "                self.i = i + 1 if end == -1 else end + 1",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$'...'` ANSI-C quotes are not parsed, so an escaped quote ends the string early",
+      "find": "        elif following == \"'\":\n            j = i + 2",
+      "replace": "        elif False:\n            j = i + 2",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "newlines no longer end a statement",
+      "find": "            elif c == \"\\n\":\n                self.newline()",
+      "replace": "            elif False:\n                self.newline()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a `#` comment is not skipped, so its text is read as commands",
+      "find": "            elif c == \"#\" and not self.in_word:",
+      "replace": "            elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$(...)` outside quotes is not read as commands",
+      "find": "        elif following == \"(\":\n            inner, self.i = self.paren_body(i + 2)",
+      "replace": "        elif False:\n            inner, self.i = self.paren_body(i + 2)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`$(...)` inside double quotes is not read as commands",
+      "find": "            elif c == \"$\" and text[j + 1 : j + 2] == \"(\":",
+      "replace": "            elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "backticks inside double quotes are not read as commands",
+      "find": "            elif c == \"`\":\n                inner, j = self.backtick_body(j)",
+      "replace": "            elif False:\n                inner, j = self.backtick_body(j)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "backticks outside quotes are not read as commands",
+      "find": "            elif c == \"`\":\n                inner, self.i = self.backtick_body(i)",
+      "replace": "            elif False:\n                inner, self.i = self.backtick_body(i)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "shell keywords and grouping (`{`, `if`, `then`, `!`) are not skipped before the command word",
+      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
+      "replace": "        if _ASSIGNMENT.match(word):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "leading `VAR=value` assignments are not skipped",
+      "find": "        if _ASSIGNMENT.match(word) or word in _KEYWORDS:",
+      "replace": "        if word in _KEYWORDS:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the wrapper words (`time`, `env`, `command`, ...) are not skipped",
+      "find": "        elif name in _WRAPPERS:",
+      "replace": "        elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "wrapper options (`env -i`) are not skipped",
+      "find": "            index += 1\n            while index < len(words) and words[index].startswith(\"-\"):\n                index += 2 if words[index] in _WRAPPER_VALUE_OPTIONS.get(name, ()) else 1",
+      "replace": "            index += 1\n            while False and index < len(words) and words[index].startswith(\"-\"):\n                index += 2 if words[index] in _WRAPPER_VALUE_OPTIONS.get(name, ()) else 1",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "sudo's value options are not skipped, so `sudo -u x git add -A` reads `x` as the command",
+      "find": "    \"sudo\": frozenset({\"-u\", \"-g\", \"-D\", \"-R\", \"-C\", \"-h\", \"-p\", \"-T\", \"-U\"}),",
+      "replace": "    \"sudo\": frozenset(),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`timeout`'s positional duration is not skipped",
+      "find": "_WRAPPER_POSITIONAL = {\"timeout\": 1}",
+      "replace": "_WRAPPER_POSITIONAL = {}",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`timeout`'s value options (`-s KILL`) are not skipped",
+      "find": "    \"timeout\": frozenset({\"-s\", \"--signal\", \"-k\", \"--kill-after\"}),",
+      "replace": "    \"timeout\": frozenset(),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`nice -n 5` does not skip its value",
+      "find": "    \"nice\": frozenset({\"-n\", \"--adjustment\"}),",
+      "replace": "    \"nice\": frozenset(),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`ionice -c 2 -n 7` does not skip its values",
+      "find": "    \"ionice\": frozenset({\"-c\", \"-n\", \"-p\", \"-P\", \"-u\", \"--class\", \"--classdata\", \"--pid\", \"--pgid\", \"--uid\"}),",
+      "replace": "    \"ionice\": frozenset(),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`stdbuf -o L` does not skip its value",
+      "find": "    \"stdbuf\": frozenset({\"-i\", \"-o\", \"-e\", \"--input\", \"--output\", \"--error\"}),",
+      "replace": "    \"stdbuf\": frozenset(),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`xargs -n 1` does not skip its value",
+      "find": "        {\"-n\", \"-I\", \"-L\", \"-P\", \"-d\", \"-E\", \"-s\", \"-a\", \"--max-args\", \"--max-procs\", \"--delimiter\",",
+      "replace": "        {\"-I\", \"-L\", \"-P\", \"-d\", \"-E\", \"-s\", \"-a\", \"--max-args\", \"--max-procs\", \"--delimiter\",",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`nice` is not a wrapper",
+      "find": "\"timeout\", \"nice\", \"ionice\"",
+      "replace": "\"timeout\", \"ionice\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`ionice` is not a wrapper",
+      "find": "\"nice\", \"ionice\", \"stdbuf\"",
+      "replace": "\"nice\", \"stdbuf\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`stdbuf` is not a wrapper",
+      "find": "\"ionice\", \"stdbuf\", \"xargs\"",
+      "replace": "\"ionice\", \"xargs\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`xargs` is not a wrapper, so `xargs git add` is not an add",
+      "find": "\"stdbuf\", \"xargs\"}",
+      "replace": "\"stdbuf\"}",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`builtin` is not a wrapper",
+      "find": "\"exec\", \"builtin\", \"timeout\"",
+      "replace": "\"exec\", \"timeout\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`timeout` is not a wrapper",
+      "find": "\"builtin\", \"timeout\", \"nice\"",
+      "replace": "\"builtin\", \"nice\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`eval` is not looked through",
+      "find": "    if name == \"eval\":",
+      "replace": "    if False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`uv run make test` is not recognised as `make test`",
+      "find": "        elif name == \"uv\" and words[index + 1 : index + 2] == [\"run\"]:",
+      "replace": "        elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a heredoc fed to a shell is not read as commands",
+      "find": "    if name in _SHELLS:\n        for body in statement.heredocs:",
+      "replace": "    if False:\n        for body in statement.heredocs:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git` is matched only as the bare word, so `/usr/bin/git add -A` is not seen",
+      "find": "    if not words or _basename(words[0]) != \"git\":",
+      "replace": "    if not words or words[0] != \"git\":",
       "file": "predicates.py",
       "oracle": "real"
     }
