@@ -150,7 +150,7 @@
       "oracle": "real",
       "find": "- refutation pass over surviving lens findings:",
       "replace": "- refutation pass over surviving lens findings and the freeze rule:",
-      "why": "Killed by test_each_a2_line_guards_exactly_one_behavior (and the exact-heading test)."
+      "why": "Killed by test_a2_appended_one_line_per_behavior_it_cannot_exercise: the heading set is exact, so a line that grows a second behavior changes its heading."
     },
     {
       "label": "gaps.md's last A2 line loses its reason",

@@ -2,7 +2,7 @@
 
 Whatever sat in ``gaps.md`` at the resolved ref (recorded in
 ``provenance.toml``) must still be there, untouched and in order; A2's own
-lines come after it, one guarded behavior per line, in the ``- <behavior>:
+lines come after it, one guarded behavior per line (the heading set below is exact), in the ``- <behavior>:
 <reason>`` format #996 pins. Lines another child appends in between (A1 or A3)
 are not this test's business, so nothing here pins the file's total length.
 """
@@ -52,13 +52,6 @@ def test_a2_appended_one_line_per_behavior_it_cannot_exercise(case_dir):
         matching = [line for line in lines if line.startswith(f"- {behavior}:")]
         assert len(matching) == 1, (behavior, matching)
         assert _ENTRY.match(matching[0])
-
-
-def test_each_a2_line_guards_exactly_one_behavior(case_dir):
-    for line in _current(case_dir):
-        if line.startswith(tuple(f"- {b}:" for b in _A2_BEHAVIORS)):
-            behavior = line[2:].split(":", 1)[0]
-            assert " and " not in behavior and "," not in behavior, line
 
 
 def test_a2_lines_come_after_everything_that_was_there_at_the_resolved_ref(case_dir, git):
