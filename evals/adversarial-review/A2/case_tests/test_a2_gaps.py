@@ -40,10 +40,22 @@ def test_existing_gaps_lines_are_untouched_and_in_order(case_dir, git):
         assert any(line == candidate for candidate in now), f"gaps.md lost or reordered {line!r}"
 
 
-def test_every_nonblank_gaps_line_is_a_wellformed_entry(case_dir):
-    body = [line for line in _current(case_dir)[3:] if line.strip()]
-    for line in body:
+def _mine(case_dir) -> list[str]:
+    prefixes = tuple(f"- {behavior}:" for behavior in _A2_BEHAVIORS)
+    return [line for line in _current(case_dir) if line.startswith(prefixes)]
+
+
+def test_every_line_a2_added_is_a_wellformed_entry(case_dir):
+    """Only A2's own lines: a sibling's lines (A1, A3) and the header are not this child's to judge."""
+    mine = _mine(case_dir)
+    assert len(mine) == len(_A2_BEHAVIORS)
+    for line in mine:
         assert _ENTRY.match(line), line
+
+
+def test_a_wellformedness_check_over_a2_lines_goes_red_on_a_reasonless_line():
+    assert not _ENTRY.match("- inverted bias for credential-exposure findings:")
+    assert not _ENTRY.match("- inverted bias for credential-exposure findings: ")
 
 
 def test_a2_appended_one_line_per_behavior_it_cannot_exercise(case_dir):

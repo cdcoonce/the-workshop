@@ -63,7 +63,7 @@ _CASES = {
         file=VAULT_SYNC_COMMAND,
         line=3,
         description="The diff edits vault-sync/references/command.md although the spec says vault-sync is untouched.",
-        neutral="This edit is outside the scope the pull request description gives.",
+        neutral="The sentence added here names no script path and no starting commit.",
         wrong_file=WRAP_UP_COMMAND,
         outside_line=None,
     ),
@@ -276,3 +276,9 @@ def test_a_bare_filename_cannot_satisfy_a_suffix_with_a_directory_part(score, it
     suffix = items[item]["params"]["file_suffix"]
     finding = _finding(item, file=suffix.rsplit("/", 1)[-1])
     assert item not in _hits(score([finding]))
+
+
+@pytest.mark.parametrize("item", ALL_ITEMS)
+def test_a_path_exactly_equal_to_the_suffix_credits(score, items, item):
+    suffix = items[item]["params"]["file_suffix"]
+    assert item in _hits(score([_finding(item, file=suffix)]))

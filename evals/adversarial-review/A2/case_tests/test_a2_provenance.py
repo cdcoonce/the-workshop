@@ -65,9 +65,29 @@ def test_each_copy_is_byte_identical_to_its_source_blob(provenance, case_dir, gi
         assert copied == entry["source_blob_sha"], entry["file"]
 
 
-def test_the_experiment_directory_is_unmodified_since_the_resolved_ref(provenance, git):
+def _committed_experiment_changes(provenance, git) -> str:
+    """Committed changes to the experiment since the resolved ref; the working tree is not consulted."""
+    return git("diff", "--stat", f"{provenance['resolved_ref']}...HEAD", "--", _EXPERIMENT)
+
+
+def test_the_experiment_directory_has_no_committed_change_since_the_resolved_ref(provenance, git):
     """The experiment is a frozen record: A2 copies from it and never edits it."""
-    changed = git("diff", "--name-only", provenance["resolved_ref"], "--", _EXPERIMENT)
-    assert changed.strip() == "", changed
-    untracked = git("ls-files", "--others", "--exclude-standard", "--", _EXPERIMENT)
-    assert untracked.strip() == "", untracked
+    assert _committed_experiment_changes(provenance, git).strip() == ""
+
+
+def test_an_untracked_file_under_the_experiment_does_not_turn_a2_red(provenance, git, repo_root):
+    stray = repo_root / _EXPERIMENT / "results" / "stray-untracked-note.txt"
+    assert not stray.exists()
+    stray.write_text("a local scratch file A2 does not own\n", encoding="utf-8")
+    try:
+        assert _committed_experiment_changes(provenance, git).strip() == ""
+    finally:
+        stray.unlink()
+
+
+def test_the_committed_change_check_does_see_a_committed_edit(provenance, git):
+    """Teeth for the check itself: against the commit just before the experiment landed it is not empty."""
+    experiment_landed = git("log", "--diff-filter=A", "--format=%H", "-1", "--", f"{_EXPERIMENT}/prereg.md").strip()
+    parent = f"{experiment_landed}^"
+    stat = git("diff", "--stat", f"{parent}...{provenance['resolved_ref']}", "--", _EXPERIMENT)
+    assert stat.strip() != ""
