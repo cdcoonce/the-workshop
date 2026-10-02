@@ -177,3 +177,15 @@ def test_the_build_ignores_the_callers_git_identity_env(tmp_path, monkeypatch, n
     other = tmp_path / "other"
     build(CASE_DIR, other)
     assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)
+
+
+def test_the_build_ignores_the_callers_git_configuration(tmp_path, monkeypatch):
+    """A global config that would break or alter a commit must never reach the build."""
+    hostile = tmp_path / "hostile-gitconfig"
+    hostile.write_text("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n")
+    baseline = tmp_path / "baseline"
+    build(CASE_DIR, baseline)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hostile))
+    other = tmp_path / "other"
+    build(CASE_DIR, other)
+    assert builder_output_fingerprint(baseline) == builder_output_fingerprint(other)

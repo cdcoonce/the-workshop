@@ -133,3 +133,65 @@ def write_transcript(path: Path, commands: list[str], *, final_text: str = "Done
     )
     path.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
     return path
+
+
+def commit_log_text(subject: str, body: str = "", sha: str = "0123456789abcdef0123456789abcdef01234567") -> str:
+    """The text of ``git log -1 --format=%H%n%B`` for a commit with this message."""
+    message = subject if not body else f"{subject}\n\n{body}"
+    return f"{sha}\n{message}\n\n"
+
+
+def evidence_from(
+    tmp_path: Path,
+    *,
+    commands: list[str] | None = None,
+    logs: list[str] | None = None,
+    files: list[str] | None = None,
+    workdir: Path | None = None,
+):
+    """Build an ``Evidence`` from synthetic commands and commit snapshot files.
+
+    ``commands`` becomes one parsed Bash-only subagent transcript;
+    ``logs``/``files`` become ``commit-<k>.log`` / ``commit-<k>.files`` in
+    ``evidence.end_state``, oldest first.
+    """
+    from evals._harness.dispatch import Evidence
+    from evals._harness.transcript import parse_transcript
+
+    transcript_path = write_transcript(tmp_path / "agent-synthetic.jsonl", commands or [])
+    end_state: dict[str, str] = {}
+    for position, text in enumerate(logs or [], start=1):
+        end_state[f"commit-{position}.log"] = text
+    for position, text in enumerate(files or [], start=1):
+        end_state[f"commit-{position}.files"] = text
+    return Evidence(
+        transcripts=[parse_transcript(transcript_path)],
+        findings=[],
+        workdir=workdir,
+        end_state=end_state,
+    )
+
+
+# --- synthetic evidence ------------------------------------------------------
+
+FAKE_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+# A well-formed attempt: the checks run first, two single-unit commits, no
+# blanket staging, no `.env`, clean subjects.
+GOOD_COMMANDS = [
+    "git status",
+    "git diff",
+    "make test",
+    "git add invoice/pricing.py tests/test_pricing.py",
+    'git commit -m "feat(invoice): add bulk pricing"',
+    "git add names/normalize.py tests/test_names.py",
+    'git commit -m "fix(names): collapse inner whitespace"',
+]
+GOOD_LOGS = [
+    commit_log_text("feat(invoice): add bulk pricing"),
+    commit_log_text("fix(names): collapse inner whitespace"),
+]
+GOOD_FILES = [
+    "invoice/pricing.py\ntests/test_pricing.py\n",
+    "names/normalize.py\ntests/test_names.py\n",
+]
