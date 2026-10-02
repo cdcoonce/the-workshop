@@ -1,0 +1,157 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration_staleness.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_calibration_staleness.py"
+  ],
+  "mutants": [
+    {
+      "label": "_check_case never reports a gated item with no record",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_gated_case_with_no_calibration_record_at_all: a gated case with no calibration record at all fails.",
+      "find": "            results.append(_fail(f\"{label}: gated item {item!r} has no calibration record\"))",
+      "replace": "            pass"
+    },
+    {
+      "label": "_check_case never compares the stored hash with the recomputed one",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_calibrated_input_changed (every parametrized input), the builder staleness tests and the combined direct_tier scenario: a record whose stored hash differs from the fresh one is stale.",
+      "find": "        if stored_hash != current:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "_check_case inverts the hash comparison",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_fresh_record and test_passes_when_every_gated_item_has_a_fresh_record: a record matching the fresh hash must pass.",
+      "find": "        if stored_hash != current:",
+      "replace": "        if stored_hash == current:"
+    },
+    {
+      "label": "compute_input_hash is replaced by fixture_fingerprint, so only the fixture is compared",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_fresh_record (a record stored at the input hash never equals the bare fixture fingerprint) and, were it to pass there, by test_fails_when_a_calibrated_input_changed[the prompt]: the guard compares the full input hash, not the fixture alone.",
+      "find": "from evals._harness.calibration import compute_input_hash",
+      "replace": "from evals._harness.calibration import fixture_fingerprint as compute_input_hash"
+    },
+    {
+      "label": "_check_case checks only the first gated item of a case",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_gated_item_missing_from_an_existing_calibration_file and test_fails_when_one_of_two_gated_items_records_a_stale_hash: every gated item needs a fresh record, not just the first.",
+      "find": "    for item in gated_items:\n        record = (records or {}).get(item)",
+      "replace": "    for item in gated_items[:1]:\n        record = (records or {}).get(item)"
+    },
+    {
+      "label": "check keeps every item of a case as gated, not just the manifest's",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_check_an_ungated_items_record and test_does_not_fail_a_case_with_no_item_in_the_manifest_and_no_record: only items the skill's checks.manifest lists are gated.",
+      "find": "gated_items = [item for item in _item_ids(case_dir) if item in gated]",
+      "replace": "gated_items = [item for item in _item_ids(case_dir) if True]"
+    },
+    {
+      "label": "check runs the case check even for a case with no gated item",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_read_the_calibration_file_of_a_case_with_no_gated_item: an ungated case's calibration.json is never read here.",
+      "find": "            if gated_items:\n                results.extend(_check_case(skill_dir.name, case_dir, gated_items))",
+      "replace": "            results.extend(_check_case(skill_dir.name, case_dir, gated_items))"
+    },
+    {
+      "label": "check drops the skill-level empty-manifest skip, so a manifest-less skill's cases are read",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_read_the_case_toml_of_a_skill_that_gates_nothing: with no manifest id no case can be gated, so its case.toml is never parsed and a broken one must not fail.",
+      "find": "        gated = _gated_ids(skill_dir)\n        if not gated:\n            continue",
+      "replace": "        gated = _gated_ids(skill_dir)"
+    },
+    {
+      "label": "check passes a case whose case.toml cannot be read",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_an_unparseable_case_toml: whether the case is gated cannot be decided, so it fails closed.",
+      "find": "                results.append(\n                    _fail(f\"{skill_dir.name}/{case_dir.name}: case.toml cannot be read ({exc})\")\n                )\n                continue",
+      "replace": "                continue"
+    },
+    {
+      "label": "_check_case passes a case whose input hash cannot be recomputed",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_when_the_input_hash_cannot_be_recomputed: a record cannot be shown fresh when the hash cannot be recomputed, so it fails closed.",
+      "find": "        results.append(\n            _fail(\n                f\"{label}: the case's input hash cannot be recomputed \"\n                f\"({type(exc).__name__}: {exc}), so its calibration record cannot be checked\"\n            )\n        )\n        return results",
+      "replace": "        return results"
+    },
+    {
+      "label": "_check_case drops the case label from the stale message",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_calibrated_input_changed (asserts the case is named): the author must be told which case is stale.",
+      "find": "f\"{label}: the calibration record for gated item {item!r} is stale \"",
+      "replace": "f\"the calibration record for gated item {item!r} is stale \""
+    },
+    {
+      "label": "_check_case drops the item id from the stale message",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_one_of_two_gated_items_records_a_stale_hash (asserts item-b is named): the author must be told which item's record is stale.",
+      "find": "f\"{label}: the calibration record for gated item {item!r} is stale \"",
+      "replace": "f\"{label}: the calibration record is stale \""
+    },
+    {
+      "label": "_fail emits warn instead of fail",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test and the combined direct_tier scenario: a warn never fails the runner, so a stale record would pass make test.",
+      "find": "return Result(level=\"fail\", guard=_GUARD_NAME, message=message)",
+      "replace": "return Result(level=\"warn\", guard=_GUARD_NAME, message=message)"
+    },
+    {
+      "label": "[does-nothing] check walks no skill at all",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: the guard's purpose is to fail on a missing or stale record, so a check that walks no skill returns no results.",
+      "find": "    for skill_dir in discover_skill_dirs(evals_root):",
+      "replace": "    for skill_dir in []:"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./calibration_staleness.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "A gated case is one with at least one item whose id its skill's",
+      "replace": "A gated case is one holding at least one item whose id its skill's"
+    }
+  ]
+}
