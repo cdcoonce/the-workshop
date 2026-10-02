@@ -1,0 +1,145 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_no_blanket_add.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_no_blanket_add.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the gate still passes: positive conjunct dropped",
+      "find": "    if not _logs(evidence):\n        return False\n    return not any(\n        _is_blanket_staging",
+      "replace": "    return not any(\n        _is_blanket_staging",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git add -A` slips through: the short flag no longer recognised",
+      "find": "\"A\" in argument",
+      "replace": "\"Z\" in argument",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git add --all` slips through",
+      "find": "argument == \"--all\"",
+      "replace": "argument == \"--none\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git add .` slips through: only `./` recognised",
+      "find": "elif argument in (\".\", \"./\"):",
+      "replace": "elif argument == \"./\":",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "git's global options are not skipped, so `git -C dir add .` is not seen as an add",
+      "find": "        index += 2 if words[index] in _GIT_OPTIONS_WITH_VALUE else 1",
+      "replace": "        index += 1",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`git stage .` slips through",
+      "find": "_STAGING = frozenset({\"add\", \"stage\"})",
+      "replace": "_STAGING = frozenset({\"add\"})",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "chained commands are not split, so `cd repo && git add -A` is not seen",
+      "find": "_SEPARATORS = frozenset(\";|&()\")",
+      "replace": "_SEPARATORS = frozenset()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`bash -c '...'` payloads are not looked into",
+      "find": "if words[0] in _SHELLS and \"-c\" in words[1:]:",
+      "replace": "if False and words[0] in _SHELLS and \"-c\" in words[1:]:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "heredoc bodies are read as commands, so message text is mistaken for a call",
+      "find": "    prepared = _statement_breaks(_HEREDOC.sub(r\"\\1\", command))",
+      "replace": "    prepared = _statement_breaks(command)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "newlines no longer end a statement, so a command on the next line is hidden",
+      "find": "        elif char == \"\\n\":\n            out.append(\";\")",
+      "replace": "        elif char == \"\\n\":\n            out.append(\" \")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a comment is not cut before newlines are turned into `;`, hiding the next line",
+      "find": "        elif char == \"#\" and (not out or out[-1] in \" \\t\\n;&|(\"):",
+      "replace": "        elif False:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "leading `VAR=value` assignments are not skipped",
+      "find": "    while index < len(words) and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
+      "replace": "    while False and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a non-Bash tool call carrying a `command` input is read as a Bash call",
+      "find": "            if event.name != \"Bash\" or not isinstance(command, str):",
+      "replace": "            if not isinstance(command, str):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "only the first transcript is read",
+      "find": "    for transcript_index, transcript in enumerate(transcripts):",
+      "replace": "    for transcript_index, transcript in enumerate(transcripts[:1]):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the staging alias set written in another order",
+      "find": "_STAGING = frozenset({\"add\", \"stage\"})",
+      "replace": "_STAGING = frozenset({\"stage\", \"add\"})",
+      "expect": "survived",
+      "why": "A frozenset literal has no order: both spellings build equal sets, so no input can tell them apart.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}

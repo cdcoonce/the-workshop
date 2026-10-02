@@ -1,0 +1,117 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_tests_before_first_add.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_tests_before_first_add.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the gate still passes: positive conjunct dropped",
+      "find": "    if not _logs(evidence):\n        return False\n    return matchers.precedes(",
+      "replace": "    return matchers.precedes(",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "make test after the first git add counts as before: the two matchers are swapped",
+      "find": "        lambda event: _is_make_test(event.input[\"words\"]),\n        lambda event: _is_git_add(event.input[\"words\"]),",
+      "replace": "        lambda event: _is_git_add(event.input[\"words\"]),\n        lambda event: _is_make_test(event.input[\"words\"]),",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a hand-rolled ordering that ignores order replaces matchers.precedes",
+      "find": "    return matchers.precedes(",
+      "replace": "    return (lambda events, first, then: any(map(first, events)) and any(map(then, events)))(",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "any target starting with `test` counts as `make test`",
+      "find": "and argument == \"test\":",
+      "replace": "and argument.startswith(\"test\"):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`make -C <dir>` does not skip its directory argument",
+      "find": "_MAKE_OPTIONS_WITH_VALUE = frozenset({\"-C\", \"-f\", \"-I\", \"-o\", \"-W\", \"--directory\", \"--file\"})",
+      "replace": "_MAKE_OPTIONS_WITH_VALUE = frozenset()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "any command mentioning `test` counts, not only `make`",
+      "find": "    if not words or words[0] != \"make\":",
+      "replace": "    if not words:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "any git command counts as the first `git add`",
+      "find": "    return call is not None and call[0] in _STAGING",
+      "replace": "    return call is not None",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a chained `make test && git add x` is one event, so it is never strictly before",
+      "find": "* _SEGMENT_BUDGET + position",
+      "replace": "* _SEGMENT_BUDGET + 0",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "leading `VAR=value` assignments are not skipped",
+      "find": "    while index < len(words) and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
+      "replace": "    while False and (_ASSIGNMENT.match(words[index]) or words[index] in _WRAPPERS):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "chained commands are not split, so `cd repo && make test` is not seen",
+      "find": "_SEPARATORS = frozenset(\";|&()\")",
+      "replace": "_SEPARATORS = frozenset()",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the wrapper set written in another order",
+      "find": "_WRAPPERS = frozenset({\"env\", \"command\", \"sudo\", \"time\", \"nohup\", \"exec\"})",
+      "replace": "_WRAPPERS = frozenset({\"exec\", \"nohup\", \"time\", \"sudo\", \"command\", \"env\"})",
+      "expect": "survived",
+      "why": "A frozenset literal has no order: both spellings build equal sets, so no input can tell them apart.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_fixture_build.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_fixture_build.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the builder writes an empty `.env` instead of the recorded synthetic value",
+      "find": "    (dest / \".env\").write_bytes(DOTENV_SYNTHETIC.read_bytes())",
+      "replace": "    (dest / \".env\").write_bytes(b\"\")",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the base HEAD is written into the working tree, not inside .git",
+      "find": "    (dest / \".git\" / \"eval-base-head\").write_text(",
+      "replace": "    (dest / \"eval-base-head\").write_text(",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the pinned identity is not applied to the git subprocesses",
+      "find": "        **_PINNED_IDENTITY,\n",
+      "replace": "",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the caller's git configuration reaches the build",
+      "find": "        \"GIT_CONFIG_GLOBAL\": os.devnull,\n",
+      "replace": "",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the pending changes are never laid over the working tree",
+      "find": "    shutil.copytree(pending, dest, dirs_exist_ok=True)\n",
+      "replace": "",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the planted history stops after its first commit",
+      "find": "    for message, paths in _HISTORY:",
+      "replace": "    for message, paths in _HISTORY[:1]:",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an existing destination is accepted",
+      "find": "dest.mkdir(parents=True, exist_ok=False)",
+      "replace": "dest.mkdir(parents=True, exist_ok=True)",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the pinned author date moved to another fixed date",
+      "find": "\"GIT_AUTHOR_DATE\": \"2026-09-01T09:00:00+00:00\"",
+      "replace": "\"GIT_AUTHOR_DATE\": \"2026-09-02T09:00:00+00:00\"",
+      "expect": "survived",
+      "why": "Every test compares two builds of the same builder, or checks structure; none pins a SHA or a date. A moved fixed date builds just as deterministically. Holds for this suite only: a calibration record's fixture_fingerprint WOULD change, which is the point of the fingerprint.",
+      "file": "build_fixture.py",
+      "oracle": "real"
+    }
+  ]
+}

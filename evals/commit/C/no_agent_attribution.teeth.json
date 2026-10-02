@@ -1,0 +1,110 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_no_agent_attribution.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_no_agent_attribution.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the gate still passes: positive conjunct dropped",
+      "find": "    return bool(logs) and not any(_carries_attribution(log) for log in logs)",
+      "replace": "    return not any(_carries_attribution(log) for log in logs)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a Co-Authored-By trailer is not recognised",
+      "find": "_AI_TRAILER.search(line) or ",
+      "replace": "",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a Generated with [Claude Code] line is not recognised",
+      "find": " or _GENERATED_WITH.search(line)",
+      "replace": "",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a robot-emoji signature line is not recognised",
+      "find": " or _ROBOT in line",
+      "replace": "",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "only the first new commit's message is read",
+      "find": "not any(_carries_attribution(log) for log in logs)",
+      "replace": "not any(_carries_attribution(log) for log in logs[:1])",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "any Co-Authored-By trailer counts, so a human co-author is called attribution",
+      "find": "_AI_TRAILER = re.compile(rf\"^\\s*co-authored-by:.*\\b{_AI_NAMES}\\b\", re.IGNORECASE)",
+      "replace": "_AI_TRAILER = re.compile(r\"^\\s*co-authored-by:\", re.IGNORECASE)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the trailer match is case-sensitive",
+      "find": "\\b{_AI_NAMES}\\b\", re.IGNORECASE)",
+      "replace": "\\b{_AI_NAMES}\\b\")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "`Anthropic` is dropped from the named tools",
+      "find": "(?:claude|anthropic|copilot",
+      "replace": "(?:claude|copilot",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a bare `AI` is dropped from the named tools",
+      "find": "|devin|ai)",
+      "replace": "|devin)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the SHA line is no longer skipped before the attribution search",
+      "find": "    lines = log.splitlines()[1:]  # the first line is the SHA",
+      "replace": "    lines = log.splitlines()  # the first line is the SHA",
+      "expect": "survived",
+      "why": "The first line of a real log is `%H`, 40 hex digits, which can match neither a trailer, a Generated-with line nor the emoji. Holds for any input the snapshot can contain; it would not hold if the first line could be free text.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}
