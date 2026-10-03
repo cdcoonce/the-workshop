@@ -1,0 +1,197 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_schema_validate.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_schema_validate.py"
+  ],
+  "mutants": [
+    {
+      "label": "_added_or_modified drops --diff-filter, so a deleted run file is read and fails",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_validate_a_deleted_run_file: a file the diff only deletes has nothing to validate (runs_immutable owns deletions); reading it would fail as unreadable.",
+      "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--diff-filter=AMT\",",
+      "replace": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\","
+    },
+    {
+      "label": "_added_or_modified keeps only added files, so a modified file escapes validation",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_run_file_that_existed_at_base_and_is_modified_into_an_invalid_one and test_fails_a_calibration_file_modified_into_an_invalid_one: a file already at base and edited into an invalid one is a changed file.",
+      "find": "\"--diff-filter=AMT\",",
+      "replace": "\"--diff-filter=A\","
+    },
+    {
+      "label": "_added_or_modified skips type changes, so a symlink swapped in for calibration.json escapes validation",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_validates_a_calibration_file_replaced_by_a_symlink_to_a_malformed_map and test_fails_loudly_on_a_calibration_file_replaced_by_a_dangling_symlink: a regular file replaced by a symlink is a changed file and is read through, not skipped.",
+      "find": "\"--diff-filter=AMT\",",
+      "replace": "\"--diff-filter=AM\","
+    },
+    {
+      "label": "_added_or_modified uses a two-dot range, leaking base-only history",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_a_base_only_change_via_the_three_dot_range: the diff must be merge-base relative, or a file the base branch deleted after the fork (still present, unchanged, on this branch) reads as added and is validated though this branch never touched it.",
+      "find": "f\"{base}...HEAD\",",
+      "replace": "f\"{base}..HEAD\","
+    },
+    {
+      "label": "_RUN_FILE matches any depth under runs/, so a raw JSON is validated as a run file",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_validate_a_raw_under_the_stem_directory_as_a_run_file: only a .json directly under runs/ is a run file; deeper files are raws.",
+      "find": "_RUN_FILE = re.compile(r\"^evals/[^/]+/runs/[^/]+\\.json$\")",
+      "replace": "_RUN_FILE = re.compile(r\"^evals/[^/]+/runs/.+\\.json$\")"
+    },
+    {
+      "label": "_RUN_FILE drops the .json requirement, so a stray text file under runs/ is validated",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_validate_a_non_json_file_directly_under_runs: only a .json file is a run file.",
+      "find": "_RUN_FILE = re.compile(r\"^evals/[^/]+/runs/[^/]+\\.json$\")",
+      "replace": "_RUN_FILE = re.compile(r\"^evals/[^/]+/runs/[^/]+$\")"
+    },
+    {
+      "label": "_CALIBRATION_FILE matches a calibration.json at any depth",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_validate_a_calibration_json_that_is_not_directly_in_a_case_directory: only evals/<skill>/<case>/calibration.json is a case's calibration; a fixture's own file of that name is not.",
+      "find": "_CALIBRATION_FILE = re.compile(r\"^evals/[^/]+/[^/]+/calibration\\.json$\")",
+      "replace": "_CALIBRATION_FILE = re.compile(r\"^evals/.+/calibration\\.json$\")"
+    },
+    {
+      "label": "_check_calibration_file validates only the first record of the map",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_malformed_record_is_the_second_of_two: every record in the map is validated, not just the first.",
+      "find": "    for item_id, record in records.items():",
+      "replace": "    for item_id, record in list(records.items())[:1]:"
+    },
+    {
+      "label": "_check_calibration_file validates the map itself instead of each record",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_well_formed_added_run_file_and_calibration_file: the calibration schema describes one record; the file is a map of them.",
+      "find": "            jsonschema.validate(record, schema)\n        except jsonschema.ValidationError as exc:\n            results.append(",
+      "replace": "            jsonschema.validate(records, schema)\n        except jsonschema.ValidationError as exc:\n            results.append("
+    },
+    {
+      "label": "check validates a run file against the calibration schema",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_well_formed_added_run_file_and_calibration_file and test_validates_each_artifact_against_its_own_schema: each artifact has its own schema.",
+      "find": "results.extend(_check_run_file(path, rel_path, run_schema))",
+      "replace": "results.extend(_check_run_file(path, rel_path, calibration_schema))"
+    },
+    {
+      "label": "check validates a calibration file against the run-file schema",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_well_formed_added_run_file_and_calibration_file: a valid record map must not be held to the run-file schema.",
+      "find": "results.extend(_check_calibration_file(path, rel_path, calibration_schema))",
+      "replace": "results.extend(_check_calibration_file(path, rel_path, run_schema))"
+    },
+    {
+      "label": "_check_run_file treats an unreadable run file as valid",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_run_file_that_is_not_json: a run file that is not JSON cannot match the schema.",
+      "find": "        run = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return [_fail(f\"{rel_path}: not readable as JSON ({exc})\")]",
+      "replace": "        run = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return []"
+    },
+    {
+      "label": "_check_calibration_file treats an unreadable calibration file as valid",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_calibration_file_that_is_not_a_map_of_records[{not json]: a calibration file that is not JSON holds no valid records.",
+      "find": "        records = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return [_fail(f\"{rel_path}: not readable as JSON ({exc})\")]",
+      "replace": "        records = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return []"
+    },
+    {
+      "label": "_check_calibration_file accepts a file that is not a JSON object",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_calibration_file_that_is_not_a_map_of_records[[1, 2]] and [\"text\"]: a list or scalar is not a map of records and must fail by name, not crash.",
+      "find": "    if not isinstance(records, dict):\n        return [_fail(f\"{rel_path}: must be a JSON object mapping item id to record\")]",
+      "replace": "    if not isinstance(records, dict):\n        records = {}"
+    },
+    {
+      "label": "_check_run_file never validates the run file against the schema",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_run_file_missing_a_required_field, test_fails_a_run_file_with_a_wrong_type and test_fails_a_run_file_carrying_an_unknown_field: the schema check is the guard's purpose for run files.",
+      "find": "        jsonschema.validate(run, schema)\n    except jsonschema.ValidationError as exc:",
+      "replace": "        pass\n    except jsonschema.ValidationError as exc:"
+    },
+    {
+      "label": "_check_run_file drops the path from its message",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_a_run_file_missing_a_required_field (asserts the path is named): the author must be told which file is invalid.",
+      "find": "return [_fail(f\"{rel_path}: violates run-file.schema.json: {_validation_message(exc)}\")]",
+      "replace": "return [_fail(f\"violates run-file.schema.json: {_validation_message(exc)}\")]"
+    },
+    {
+      "label": "_check_calibration_file drops the item id from its message",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_malformed_record_is_the_second_of_two: the message names the malformed record's item id.",
+      "find": "                    f\"{rel_path}: record {item_id!r} violates \"",
+      "replace": "                    f\"{rel_path}: record violates \""
+    },
+    {
+      "label": "_fail emits warn instead of fail",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: a warn never fails the runner, so an invalid run file would pass make test.",
+      "find": "return Result(level=\"fail\", guard=_GUARD_NAME, message=message)",
+      "replace": "return Result(level=\"warn\", guard=_GUARD_NAME, message=message)"
+    },
+    {
+      "label": "[does-nothing] check inspects no file at all",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: the guard's purpose is to fail on an invalid touched file, so a check that walks no file returns no results and lets every one through.",
+      "find": "    for rel_path in _added_or_modified(ctx.repo_root, ctx.base):",
+      "replace": "    for rel_path in []:"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./schema_validate.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "The schemas (owned by #993) are loaded from the harness's own ``schemas/``",
+      "replace": "The schemas (owned by #993) are read from the harness's own ``schemas/``"
+    }
+  ]
+}

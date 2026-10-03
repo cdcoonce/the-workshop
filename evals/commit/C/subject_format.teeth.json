@@ -1,0 +1,117 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_subject_format.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_subject_format.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the gate still passes: positive conjunct dropped",
+      "find": "    return bool(logs) and all(",
+      "replace": "    return all(",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a subject with a trailing capital letter passes",
+      "find": "[^A-Z.]$\"",
+      "replace": "[^.]$\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a subject with a trailing period passes",
+      "find": "[^A-Z.]$\"",
+      "replace": "[^A-Z]$\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a capital letter in the middle of a subject passes",
+      "find": "[a-z0-9][^A-Z]*[^A-Z.]$\"",
+      "replace": "[a-z0-9].*[^A-Z.]$\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an unknown type (`feature`) passes",
+      "find": "SUBJECT_PATTERN = r\"^(feat|fix",
+      "replace": "SUBJECT_PATTERN = r\"^(feat|feature|fix",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a real type (`perf`) is rejected",
+      "find": "|chore|perf|ci)",
+      "replace": "|chore|ci)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the length limit is raised",
+      "find": "SUBJECT_MAX_LENGTH = 72",
+      "replace": "SUBJECT_MAX_LENGTH = 100",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the length limit is exclusive, rejecting exactly 72 characters",
+      "find": "<= SUBJECT_MAX_LENGTH",
+      "replace": "< SUBJECT_MAX_LENGTH",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the SHA line is read as the subject",
+      "find": "    return lines[1] if len(lines) > 1 else \"\"",
+      "replace": "    return lines[0] if len(lines) > 1 else \"\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "one good subject is enough (all weakened to any)",
+      "find": "    return bool(logs) and all(",
+      "replace": "    return bool(logs) and any(",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] `re.match` replaced by `re.search` on an already-anchored pattern",
+      "find": "_SUBJECT.match(_subject(log))",
+      "replace": "_SUBJECT.search(_subject(log))",
+      "expect": "survived",
+      "why": "SUBJECT_PATTERN starts with ^ and the subject is a single line (splitlines output), so a search can only succeed where a match at position 0 does; holds because ^ is not MULTILINE and the input has no newline.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}

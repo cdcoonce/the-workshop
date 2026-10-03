@@ -1,0 +1,189 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fingerprint_match.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fingerprint_match.py"
+  ],
+  "mutants": [
+    {
+      "label": "_recorded_fingerprint takes the OLDEST run that records the case",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_an_older_stale_run_does_not_fail_when_the_newest_run_matches and test_a_newer_stale_run_fails_even_when_an_older_run_matches: the comparison is against the newest run, never the oldest.",
+      "find": "for run_path in sorted(runs_dir.glob(\"*.json\"), key=lambda path: path.name, reverse=True):",
+      "replace": "for run_path in sorted(runs_dir.glob(\"*.json\"), key=lambda path: path.name, reverse=False):"
+    },
+    {
+      "label": "_recorded_fingerprint orders run files by modification time, not filename timestamp",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_orders_run_files_by_their_filename_timestamp_not_by_commit_order: the newest run is the one whose filename timestamp is newest, wherever and whenever the file was written.",
+      "find": "for run_path in sorted(runs_dir.glob(\"*.json\"), key=lambda path: path.name, reverse=True):",
+      "replace": "for run_path in sorted(runs_dir.glob(\"*.json\"), key=lambda path: path.stat().st_mtime, reverse=True):"
+    },
+    {
+      "label": "_recorded_fingerprint compares the newest run file of the skill whichever case it records",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_compares_the_newest_run_that_records_the_case_not_the_newest_run_of_the_skill: the newest run that records THIS case is the one compared; a newer run of another case must not mask an older run's mismatch.",
+      "find": "            if isinstance(recorded, dict) and recorded.get(\"case\") == case:",
+      "replace": "            if isinstance(recorded, dict):"
+    },
+    {
+      "label": "_recorded_fingerprint looks only at the first case entry of a run file",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_finds_the_case_when_it_is_not_the_first_entry_of_the_newest_run_file: a run file records many cases, and the target case may be any entry.",
+      "find": "        for recorded in cases:",
+      "replace": "        for recorded in cases[:1]:"
+    },
+    {
+      "label": "_recorded_fingerprint searches runs/ recursively, reading raws as run files",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_only_a_json_file_directly_under_runs_is_a_run_file: only a .json directly under runs/ is a run file; deeper files are raws.",
+      "find": "sorted(runs_dir.glob(\"*.json\")",
+      "replace": "sorted(runs_dir.rglob(\"*.json\")"
+    },
+    {
+      "label": "_recorded_fingerprint gives up at an unreadable run file instead of skipping it",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_skips_an_unreadable_run_file_and_falls_back_to_the_next_newest: a garbled newest run file is skipped (schema_validate owns it) and the next newest that records the case is compared.",
+      "find": "        except (OSError, UnicodeDecodeError, json.JSONDecodeError):\n            continue",
+      "replace": "        except (OSError, UnicodeDecodeError, json.JSONDecodeError):\n            return None"
+    },
+    {
+      "label": "check drops the gated-case conjunct, comparing ungated cases too",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_check_a_case_with_no_item_in_the_manifest: a case none of whose items is in checks.manifest is never checked.",
+      "find": "            if not is_gated:\n                continue",
+      "replace": "            pass"
+    },
+    {
+      "label": "check treats a case as gated only when ALL its items are in the manifest",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_checks_a_case_when_only_one_of_its_items_is_gated: one gated item is enough to gate the case.",
+      "find": "is_gated = bool(_item_ids(case_dir) & gated)",
+      "replace": "is_gated = _item_ids(case_dir) <= gated"
+    },
+    {
+      "label": "check fails a gated case that no run file records",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_check_a_gated_case_that_no_run_file_records and test_does_not_check_a_gated_case_in_a_skill_with_no_runs_directory: a case with no recorded run has nothing to compare against and is not checked.",
+      "find": "            if recorded is None:\n                continue",
+      "replace": "            if recorded is None:\n                results.append(_fail(f\"{skill_dir.name}/{case_dir.name}: no run records it\"))\n                continue"
+    },
+    {
+      "label": "check fingerprints the fixture before knowing a run records the case",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_fingerprint_a_gated_case_no_run_records_even_when_it_has_no_fixture: a builder must not run (and a missing fixture must not fail) for a case nothing recorded.",
+      "find": "            recorded = _recorded_fingerprint(skill_dir, case_dir.name)\n            if recorded is None:\n                continue\n            run_path, recorded_fingerprint = recorded\n            try:\n                current = fixture_fingerprint(case_dir)",
+      "replace": "            try:\n                current = fixture_fingerprint(case_dir)\n            except (ValueError, OSError, subprocess.CalledProcessError):\n                continue\n            recorded = _recorded_fingerprint(skill_dir, case_dir.name)\n            if recorded is None:\n                continue\n            run_path, recorded_fingerprint = recorded\n            try:\n                current = fixture_fingerprint(case_dir)"
+    },
+    {
+      "label": "check never compares the fingerprints",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_fixture_tree_changed_after_the_run and the other fails_* drift tests: the comparison is the guard's purpose.",
+      "find": "            if current != recorded_fingerprint:",
+      "replace": "            if False:"
+    },
+    {
+      "label": "check inverts the fingerprint comparison",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_the_recorded_fingerprint_matches_the_current_fixture: a matching fixture must pass.",
+      "find": "            if current != recorded_fingerprint:",
+      "replace": "            if current == recorded_fingerprint:"
+    },
+    {
+      "label": "check passes a gated case whose fixture cannot be fingerprinted",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_when_a_recorded_gated_case_can_no_longer_be_fingerprinted: a fixture that cannot be fingerprinted cannot be shown to match the recorded one, so it fails closed.",
+      "find": "                results.append(\n                    _fail(\n                        f\"{skill_dir.name}/{case_dir.name}: the fixture cannot be fingerprinted \"\n                        f\"({type(exc).__name__}: {exc}), so it cannot be compared with {run_path.name}\"\n                    )\n                )\n                continue",
+      "replace": "                continue"
+    },
+    {
+      "label": "check passes a case whose case.toml cannot be read",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_a_gated_skills_case_whose_case_toml_is_unparseable: whether the case is gated cannot be decided, so it fails closed.",
+      "find": "                results.append(\n                    _fail(f\"{skill_dir.name}/{case_dir.name}: case.toml cannot be read ({exc})\")\n                )\n                continue",
+      "replace": "                continue"
+    },
+    {
+      "label": "check drops the run file name from the drift message",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_fixture_tree_changed_after_the_run (asserts the run file is named): the author must be told which recorded run the fixture drifted from.",
+      "find": "f\"{skill_dir.name}/{case_dir.name}: the fixture no longer matches the one \"\n                        f\"recorded in {run_path.name} (recorded {recorded_fingerprint}, \"",
+      "replace": "f\"{skill_dir.name}/{case_dir.name}: the fixture no longer matches the one \"\n                        f\"recorded (recorded {recorded_fingerprint}, \""
+    },
+    {
+      "label": "check emits warn instead of fail",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: a warn never fails the runner, so drift would pass make test.",
+      "find": "return Result(level=\"fail\", guard=_GUARD_NAME, message=message)",
+      "replace": "return Result(level=\"warn\", guard=_GUARD_NAME, message=message)"
+    },
+    {
+      "label": "[does-nothing] check walks no skill at all",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: the guard's purpose is to fail on fixture drift, so a check that walks no skill returns no results and lets all drift through.",
+      "find": "    for skill_dir in discover_skill_dirs(evals_root):",
+      "replace": "    for skill_dir in []:"
+    },
+    {
+      "label": "check drops the skill-level empty-manifest skip, so a manifest-less skill's cases are read",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "why": "Killed by test_does_not_read_the_case_toml_of_a_skill_that_gates_nothing: with no manifest id no case can be gated, so its case.toml is never parsed and a broken one must not fail.",
+      "find": "        gated = _gated_ids(skill_dir)\n        if not gated:\n            continue",
+      "replace": "        gated = _gated_ids(skill_dir)"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./fingerprint_match.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "A gated case that no run file records is not checked. This guard reads fixture",
+      "replace": "A gated case that no run file records is skipped. This guard reads fixture"
+    }
+  ]
+}
