@@ -38,4 +38,4 @@ Each mapped fix becomes a rewrite target, and the failing scenario becomes a per
 
 ## Shipping Tests With the Skill
 
-Behavioral test prompts (pressure scenarios and their expected behavior, plus any RED-baseline rationalizations recorded) ship as `tests.md` in the skill's own directory — the same convention `improve-skill` and `tdd` already use. This keeps the behavioral contract re-runnable: any future edit to the skill can be re-scored by re-dispatching the same scenarios through `qa-tester` scenario-execution mode, rather than re-deriving what "good" looks like from scratch.
+Behavioral test prompts (pressure scenarios and their expected behavior, plus any RED-baseline rationalizations recorded) ship as `tests.md` in the skill's own directory — the same convention `improve-skill` already uses. This keeps the behavioral contract re-runnable: any future edit to the skill can be re-scored by re-dispatching the same scenarios through `qa-tester` scenario-execution mode, rather than re-deriving what "good" looks like from scratch.
