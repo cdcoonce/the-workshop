@@ -1,0 +1,12 @@
+{
+  "A3": {
+    "audit": [],
+    "audited_hits": 0,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 0,
+    "input_hash": "b4f05f200d416d89f61003963317ad59251dfe0167510aa8de992ff9ec7852f8",
+    "n": 6,
+    "no_skill_arm_result": null
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "C-atomic-split": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "C-env-not-committed": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "C-no-agent-attribution": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "C-no-blanket-add": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "C-subject-format": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "C-tests-before-first-add": {
+    "audit": [],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "gate",
+    "hits": 6,
+    "input_hash": "1d0cd4a50a605c9e0852135f0f8f9dbe8b9d3df5180d1649037be03c15c310d6",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 1,
+      "n": 3,
+      "replacements": 0
+    }
+  }
+}

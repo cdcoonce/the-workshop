@@ -1,0 +1,12 @@
+{
+  "T-trig": {
+    "audit": [],
+    "audited_hits": 0,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 0,
+    "input_hash": "4005c37e730791b09e2c80b77a8bac8edfabfae628f5504b69958a750ea426e7",
+    "n": 6,
+    "no_skill_arm_result": null
+  }
+}

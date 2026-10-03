@@ -1,0 +1,359 @@
+{
+  "A2-D1": {
+    "audit": [
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 1,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 3,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 1,
+        "raw": "A2/skill-1"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 4,
+        "raw": "A2/skill-1"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 1,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 6,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 9,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 2,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 8,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 12,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 1,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 3,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 1,
+        "raw": "A2/skill-3"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 5,
+        "raw": "A2/skill-3"
+      },
+      {
+        "audited_item": "A2-D1",
+        "credited_item": "A2-D1",
+        "finding": 7,
+        "raw": "A2/skill-3"
+      }
+    ],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "ef48115b97cad181bc2d28bdabfbef755c8a300d8e8253f19b49a26022524c48",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 2,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "A2-D2": {
+    "audit": [
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 2,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 5,
+        "raw": "A2/skill-1"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 5,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 1,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 13,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 2,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D2",
+        "credited_item": "A2-D2",
+        "finding": 6,
+        "raw": "A2/skill-3"
+      }
+    ],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "gate",
+    "hits": 6,
+    "input_hash": "ef48115b97cad181bc2d28bdabfbef755c8a300d8e8253f19b49a26022524c48",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 0,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "A2-D3": {
+    "audit": [
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 10,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 3,
+        "raw": "A2/skill-1"
+      },
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 6,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 7,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 6,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D3",
+        "credited_item": "A2-D3",
+        "finding": 11,
+        "raw": "A2/skill-3"
+      }
+    ],
+    "audited_hits": 5,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 5,
+    "input_hash": "ef48115b97cad181bc2d28bdabfbef755c8a300d8e8253f19b49a26022524c48",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 0,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "A2-D4": {
+    "audit": [
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 5,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 11,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 6,
+        "raw": "A2/skill-1"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 4,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 8,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 4,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 11,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 7,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 11,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D4",
+        "credited_item": "A2-D4",
+        "finding": 3,
+        "raw": "A2/skill-3"
+      }
+    ],
+    "audited_hits": 6,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 6,
+    "input_hash": "ef48115b97cad181bc2d28bdabfbef755c8a300d8e8253f19b49a26022524c48",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 3,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "A2-D5": {
+    "audit": [
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 4,
+        "raw": "A2/skill-6"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 2,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 10,
+        "raw": "A2/skill-2"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 3,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 9,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 14,
+        "raw": "A2/skill-5"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 4,
+        "raw": "A2/skill-4"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 2,
+        "raw": "A2/skill-3"
+      },
+      {
+        "audited_item": "A2-D5",
+        "credited_item": "A2-D5",
+        "finding": 8,
+        "raw": "A2/skill-3"
+      }
+    ],
+    "audited_hits": 5,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 5,
+    "input_hash": "ef48115b97cad181bc2d28bdabfbef755c8a300d8e8253f19b49a26022524c48",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 2,
+      "n": 3,
+      "replacements": 0
+    }
+  }
+}

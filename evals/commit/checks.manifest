@@ -1,0 +1,1 @@
+C-tests-before-first-add Runs the project make test target before the first git add (calibrated 2026-10-03: skill 6/6, no-skill 1/3)
