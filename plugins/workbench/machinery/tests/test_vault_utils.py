@@ -332,6 +332,13 @@ class TestReadBatchModel:
         owner_scope(BATCH_MODEL="")
         assert read_batch_model() == DEFAULT_BATCH_MODEL
 
+    def test_unimportable_module_falls_back_to_default(self, monkeypatch):
+        # A None entry in sys.modules makes `import vault_scope_resolved` raise
+        # ModuleNotFoundError, the documented "not importable" context. The
+        # sentinel default proves the caller's value is returned, not a constant.
+        monkeypatch.setitem(sys.modules, "vault_scope_resolved", None)
+        assert read_batch_model(default="sentinel-model") == "sentinel-model"
+
     def test_explicit_default_is_the_last_resort(self, owner_scope, monkeypatch):
         # #464 layering: owner value → shipped default → caller's default.
         # The shipped surface (vault_scope_defaults) interposes before the

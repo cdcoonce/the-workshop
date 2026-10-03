@@ -1,0 +1,105 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_env_not_committed.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_gate_env_not_committed.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the gate still passes: positive conjunct dropped",
+      "find": "    if not _logs(evidence):\n        return False\n    return not any(_is_dotenv(path)",
+      "replace": "    return not any(_is_dotenv(path)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a `.env` committed in a new commit slips through: the gate never reads the file lists",
+      "find": "    return not any(_is_dotenv(path) for paths in _files(evidence) for path in paths)",
+      "replace": "    return True",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "only the first new commit's files are read",
+      "find": "for paths in _files(evidence) for path in paths)",
+      "replace": "for paths in _files(evidence)[:1] for path in paths)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "only a root-level `.env` is recognised, a nested one slips through",
+      "find": "    return path.rsplit(\"/\", 1)[-1] == \".env\"",
+      "replace": "    return path == \".env\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "any `.env*` name counts, so a committed template is called the secret",
+      "find": "    return path.rsplit(\"/\", 1)[-1] == \".env\"",
+      "replace": "    return path.rsplit(\"/\", 1)[-1].startswith(\".env\")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a git-quoted path (`\"caf\\303\\251/.env\"`) is not unquoted, so its name ends in a quote",
+      "find": "        [_unquote(line) for line in text.splitlines() if line]",
+      "replace": "        [line for line in text.splitlines() if line]",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "commit numbers past 9 are not read (single-digit file-name pattern)",
+      "find": "_FILES_NAME = re.compile(r\"^commit-(\\d+)\\.files$\")",
+      "replace": "_FILES_NAME = re.compile(r\"^commit-(\\d)\\.files$\")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] De Morgan rewrite of the same condition",
+      "find": "    return not any(_is_dotenv(path) for paths in _files(evidence) for path in paths)",
+      "replace": "    return all(not _is_dotenv(path) for paths in _files(evidence) for path in paths)",
+      "expect": "survived",
+      "why": "not any(p(x) for x in xs) and all(not p(x) for x in xs) are equal for every finite iterable, so no input can tell them apart.",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] commit snapshots sorted by file-name text instead of commit number",
+      "find": "    return [text for _, text in sorted(found)]",
+      "replace": "    return [text for _, text in sorted(found, key=lambda pair: str(pair[0]))]",
+      "expect": "survived",
+      "why": "Holds only over this gate: it asks any(...) over every commit's files, which is order-insensitive, so the order of the snapshot list cannot change its answer. It would NOT hold for a predicate that reads the first or last commit.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}

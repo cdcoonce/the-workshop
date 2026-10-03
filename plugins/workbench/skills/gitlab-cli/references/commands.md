@@ -451,3 +451,12 @@ glab mr list --label="stale" --json=iid | jq -r '.[].iid' | xargs -I {} glab mr 
 # Approve multiple MRs
 for mr in 10 11 12; do glab mr approve $mr; done
 ```
+
+## Compact Queries
+
+Two scripts under this skill's `scripts/` directory (resolve against the announced base directory, run from the target repository) answer the two most common "what is wrong?" questions in a few lines instead of a full `glab ci trace` or `glab mr view` dump. Both derive the project from the `origin` remote (override with `--project`), and both exit `2` when they could not get an answer — never read silence as success.
+
+- **`failed_job_log.py`** — only the failing jobs of a pipeline, each with a cleaned log tail (ANSI, runner timestamps, progress frames and blanks removed). Passing jobs' logs are never fetched. Default is every non-green pipeline for `HEAD`; `--mr IID` uses the MR's head pipeline; `--pipeline ID` one pipeline; `--tail N` sets lines per job (default 40). Exit `0` no failed jobs, `1` failed jobs reported, `2` indeterminate.
+- **`mr_status.py [IID]`** — state, merge status, pipeline, approvals and unresolved threads in about six lines. Default is the open MR for the current branch. A fact it could not read prints as `unavailable`, never zero. Exit `0` if the MR was read, `2` otherwise.
+
+Reach for the raw `glab` commands when you need something these do not report. Downstream (bridge) pipeline failures are not followed; `failed_job_log.py` reads the pipeline it is given.
