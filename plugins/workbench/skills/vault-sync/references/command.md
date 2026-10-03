@@ -7,7 +7,7 @@ Manually trigger git synchronization. Useful when switching machines or wanting 
 ## Usage
 
 ```
-/sync          — commit and push all changes
+/sync          — commit and push the intended changes
 /sync pull     — pull latest from remote (with rebase)
 /sync status   — show git status without syncing
 ```
@@ -16,12 +16,21 @@ Manually trigger git synchronization. Useful when switching machines or wanting 
 
 ### Push (default)
 
-1. **Run the vault-health durability gate immediately before staging:** `uv run --script ci/vault_health.py`. If the configured script fails, times out, or cannot run, stop: leave all edits uncommitted and do not pull or push. A vault without this script remains compatible and may proceed.
-2. Stage the intended changes explicitly
+1. **Declare the intended files, then run the vault-health durability gate immediately before staging:** review both staged and unstaged changes and name exact vault-relative file paths, including both endpoints of a rename. Never infer intent from all dirty paths. If any staged path is outside that list, stop without resetting or unstaging it. The current health gate checks the whole working tree, so also stop if any other changed path is outside the list: an uncommitted foreign note could otherwise make a link check pass for a commit missing that note. Coordinate the unrelated work instead of widening the list automatically. Run `uv run --script ci/vault_health.py`; if it fails, times out, or cannot run, leave all edits uncommitted and do not pull or push. A vault without this script remains compatible and may proceed.
+2. Recheck scope after the health gate, then stage only the intended changed files with literal pathspecs. Already-staged deletions need no additional `git add`. Scope means whole working-tree files, including unstaged portions of a selected file; do not silently interpret it as preserving partial staging.
 3. Generate a descriptive commit message from the changes
-4. Run `git commit` with the message
+4. Use a path-limited commit: `git --literal-pathspecs commit --only -m <message> -- <intended changed paths>`. This keeps unrelated files staged by another process out of this commit.
 5. **Resolve the sync target, then `git pull --rebase origin <target>` first.** Run `python3 "<skill>/scripts/sync_target.py"` and read `target` from its JSON: the remote branch this checkout's work integrates into. It is **not** the current branch's name. In a desktop-app worktree on an unpublished `claude/*` branch (or a detached HEAD) it is origin's default branch (`source: remote-default`), because that branch name exists nowhere on the remote. Exit 1 (`error`) means nothing resolved: stop and alert the user. Under the concurrency model above (N same-day sessions plus two machines) the remote has usually moved since this session started, so rebase onto the target _before_ pushing instead of letting the push get rejected. If the rebase conflicts: abort it, then check the entry-replay fallback below — if every conflicting file is on its allowlist, run the fallback; otherwise list the conflicting files and alert the user. Never auto-resolve by hand.
 6. Run `git push origin HEAD:<target>` to sync with remote. Never accept git's `--set-upstream origin <branch>` hint for a session branch: it publishes a stray `claude/*` branch that no other session or machine pulls, which is how the 2026-09-10 and 2026-09-20 wrap-ups were stranded off `main`.
+
+The compatibility helper `session-stop.py` requires `--explicit-sync` and one
+`--path <vault-relative-file>` per intended file; without paths it refuses before
+running Git. Lifecycle Stop hooks do not supply authorization. Its Python
+`push(..., intended_paths=...)` API treats an empty list as a no-op; only direct
+Python callers omitting that argument retain the legacy all-changes behavior.
+The scope limits the new commit, not existing local commits a push may publish.
+It does not isolate concurrent edits to the same files or rebase/index activity;
+coordinate or isolate an actively shared checkout.
 
 ### Entry-replay fallback (allowlisted hub files only)
 

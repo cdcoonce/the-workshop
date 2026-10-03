@@ -16,7 +16,10 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
 ## Process
 
 1. **Acquire the apply-lock.** Run
-   `uv run python "<engine>/graph_gardener.py" --acquire-lock`. This writes `.brain/.garden-lock`
+   `uv run python "<engine>/graph_gardener.py" --acquire-lock`. Proceed only if it exits **0**.
+   Acquisition shares the producer's mutex: an active producer, existing fresh apply lease,
+   or unavailable lock returns **1**. Stop and retry later in that case; **do not release a
+   lease you failed to acquire**. Successful acquisition writes `.brain/.garden-lock`
    so the gardener's detached Stop-hook workers **bail instead of regenerating the queue** while you
    apply — without it, a worker can overwrite `.brain/gardener-<context>.md` mid-pass (the
    producer/consumer race; see `thinking/2026-06-27-gardener-apply-lock-race-fix-design.md`). The lock
@@ -116,7 +119,9 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
 
 7. **Release the apply-lock.** Run
    `uv run python "<engine>/graph_gardener.py" --release-lock`. This is the **last action of every
-   exit path** — the normal end, the "nothing pending" early-exit (step 2), and any error/abort.
+   exit path after successful acquisition** — the normal end, the "nothing pending" early-exit
+   (step 2), and any error/abort. Completion stamping and release share the producer's mutex.
+   If release exits **1**, report the failure and retry release; do not claim the lease was cleared.
    Leaving it set blocks queue regeneration until the 30-min TTL clears. Releasing also **stamps
    "last gardened"** (`last_applied_ts`), which drives the escalating session-start / `/standup` nudge —
    so running `/garden` resets the reminder.
@@ -125,8 +130,9 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
 
 ## Constraints
 
-- **Always release the lock** — acquire it first (step 1), release it on **every** exit path (step 7),
-  including "nothing pending" and any error. A held lock blocks the gardener until the 30-min TTL.
+- **Release only an acquired lock** — after successful acquisition (step 1), release it on
+  **every** exit path (step 7), including "nothing pending" and any error. If acquisition fails,
+  stop without releasing. A held lock blocks the gardener until the 30-min TTL.
 - **Every edit confirmed** — `/garden` proposes; Charles disposes. Nothing auto-applies.
 - **Reuse, don't rebuild** — link targets for orphans come from `/find`'s `semantic_index.py`; the
   proposals come from the gardener queue. No new analysis engine.

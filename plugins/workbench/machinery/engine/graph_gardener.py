@@ -22,10 +22,11 @@ suggestions).
 
 Fail-soft: ANY error → log to stderr, exit 0.  Never block the Stop hook.
 
-Hook dispatch model (mirrors notebook-update.py):
-    main_hook() returns in milliseconds — it records the session as gardened,
-    then spawns this same script in --worker mode detached.  The worker runs
-    Lane A + Lane B synchronously without touching debounce state.
+Hook dispatch model:
+    main_hook() returns promptly after spawning this script in detached --worker
+    mode. The worker rechecks completion under a per-Vault OS mutex, runs Lane A
+    and Lane B, then publishes the queue before recording completed progress.
+    Busy or failed work can retry on a later Stop; dispatch creates no reservation.
 
 Usage as Stop hook (wired by scripts/stamp.py into the plugin's hooks.json —
 this is the generated form, not something to hand-write):
@@ -48,9 +49,10 @@ import re
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -80,6 +82,8 @@ SCOPED_DIRS = GRAPH_NOTE_DIRS
 EXCLUDE_DIRS = GRAPH_EXCLUDED_DIRS
 
 STATE_FILE_REL = Path(".claude") / "data" / "gardener-state.json"
+MUTEX_FILE_REL = Path(".claude") / "data" / "gardener.lock"
+COMPLETION_PROTOCOL = 1
 GARDENER_LOG_REL = Path(".claude") / "data" / "gardener.log"
 DISMISSED_FILE_REL = Path(".claude") / "data" / "gardener-dismissed.json"
 
@@ -123,6 +127,41 @@ def read_context(vault_root: Path) -> str:
 # Debounce / state
 # ---------------------------------------------------------------------------
 
+@contextmanager
+def _gardener_mutex(vault_root: Path) -> Iterator[bool]:
+    """Try the per-Vault mutex; the OS releases ownership when the file closes.
+
+    Never unlink the stable lock inode. A busy or unavailable mutex means skip,
+    not permission to proceed unlocked. Both producer and apply mutators use it.
+    """
+    path = vault_root / MUTEX_FILE_REL
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        stream = path.open("a+b")
+    except OSError as exc:
+        log(vault_root, f"gardener mutex unavailable: {exc}")
+        yield False
+        return
+    with stream:
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                if stream.tell() == 0:
+                    stream.write(b"\0")
+                    stream.flush()
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        yield True
+
+
 def load_state(vault_root: Path) -> dict:
     """Load gardener state, returning empty dict on any parse failure."""
     path = vault_root / STATE_FILE_REL
@@ -134,19 +173,40 @@ def load_state(vault_root: Path) -> dict:
         return {}
 
 
-def save_state(vault_root: Path, state: dict) -> None:
-    """Persist gardener state (best-effort)."""
+def _atomic_write(path: Path, content: str) -> None:
+    """Publish one complete file, leaving the previous file intact on failure."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def save_state(vault_root: Path, state: dict) -> bool:
+    """Atomically persist state, returning success; mutating callers own the mutex."""
     try:
         path = vault_root / STATE_FILE_REL
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        _atomic_write(path, json.dumps(state, indent=2))
+        return True
     except Exception:
-        pass
+        return False
 
 
 def already_ran(state: dict, session_id: str) -> bool:
     """True if this session was already gardened."""
-    return session_id in state.get("gardened_session_ids", [])
+    return (
+        state.get("_completion_protocol") == COMPLETION_PROTOCOL
+        and session_id in state.get("gardened_session_ids", [])
+    )
 
 
 def record_run(state: dict, session_id: str) -> dict:
@@ -168,6 +228,12 @@ def record_run(state: dict, session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def apply_lock_active(vault_root: Path) -> bool:
+    """Report active/busy conservatively; stale-lease cleanup shares the mutex."""
+    with _gardener_mutex(vault_root) as acquired:
+        return not acquired or _apply_lock_active_unlocked(vault_root)
+
+
+def _apply_lock_active_unlocked(vault_root: Path) -> bool:
     """True if a fresh /garden apply-lock is held.
 
     A lock older than APPLY_LOCK_TTL_SECONDS (or unparseable) is stale: it is
@@ -192,38 +258,48 @@ def apply_lock_active(vault_root: Path) -> bool:
     return False
 
 
-def acquire_apply_lock(vault_root: Path, session_id: str) -> None:
-    """Write the /garden apply-lock (best-effort), overwriting any stale lock."""
-    try:
-        path = vault_root / APPLY_LOCK_REL
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"started": datetime.now().isoformat(), "session": session_id}),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+def acquire_apply_lock(vault_root: Path, session_id: str) -> bool:
+    """Acquire an apply lease only when no producer or fresh lease owns it."""
+    with _gardener_mutex(vault_root) as acquired:
+        if not acquired or _apply_lock_active_unlocked(vault_root):
+            return False
+        try:
+            _atomic_write(
+                vault_root / APPLY_LOCK_REL,
+                json.dumps({"started": datetime.now().isoformat(), "session": session_id}),
+            )
+            return True
+        except OSError:
+            return False
 
 
-def release_apply_lock(vault_root: Path) -> None:
-    """Remove the /garden apply-lock (best-effort; safe when absent)."""
-    try:
-        (vault_root / APPLY_LOCK_REL).unlink()
-    except OSError:
-        pass
+def release_apply_lock(vault_root: Path, *, mark_applied: bool = False) -> bool:
+    """Stamp completion and release the lease inside one mutex critical section."""
+    with _gardener_mutex(vault_root) as acquired:
+        if not acquired:
+            return False
+        if mark_applied and not _mark_applied_unlocked(vault_root):
+            return False
+        try:
+            (vault_root / APPLY_LOCK_REL).unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
 
 
-def mark_applied(vault_root: Path) -> None:
+def mark_applied(vault_root: Path) -> bool:
     """Record that a /garden pass just ran (stamps last_applied_ts in state).
 
     Drives the staleness escalation in queue_summary. Best-effort.
     """
-    try:
-        state = load_state(vault_root)
-        state["last_applied_ts"] = datetime.now().isoformat()
-        save_state(vault_root, state)
-    except Exception:
-        pass
+    with _gardener_mutex(vault_root) as acquired:
+        return acquired and _mark_applied_unlocked(vault_root)
+
+
+def _mark_applied_unlocked(vault_root: Path) -> bool:
+    state = load_state(vault_root)
+    state["last_applied_ts"] = datetime.now().isoformat()
+    return save_state(vault_root, state)
 
 
 # ---------------------------------------------------------------------------
@@ -1149,17 +1225,32 @@ def run_lane_b_headless(prompt: str, model: str) -> dict | None:
         ).strip()
 
     try:
-        return json.loads(out)
+        data = json.loads(out)
     except json.JSONDecodeError:
         return None
+    if not isinstance(data, dict):
+        return None
+    fields = {
+        "missing_links": ("note", "text", "suggested", "rationale"),
+        "orphans": ("note", "rationale"),
+    }
+    for category, required in fields.items():
+        items = data.get(category)
+        if not isinstance(items, list) or any(
+            not isinstance(item, dict)
+            or any(not isinstance(item.get(field), str) for field in required)
+            for item in items
+        ):
+            return None
+    return data
 
 
 def run_lane_b(
     notes: list[Path],
     vault_root: Path,
     skip: bool = False,
-) -> dict:
-    """Run the headless Lane B pass.  Returns structured dict or empty on skip/failure."""
+) -> dict | None:
+    """Return findings (possibly empty), or None when the headless pass failed."""
     empty: dict = {"missing_links": [], "orphans": []}
     if skip or not notes:
         return empty
@@ -1183,10 +1274,7 @@ def run_lane_b(
         return empty
 
     prompt = build_lane_b_prompt(notes_content)
-    data = run_lane_b_headless(prompt, read_batch_model())
-    if data is None:
-        return empty
-    return data
+    return run_lane_b_headless(prompt, read_batch_model())
 
 
 # ---------------------------------------------------------------------------
@@ -1376,8 +1464,7 @@ def write_queue(
         print(content)
         print("--- END QUEUE ---\n")
     else:
-        queue_path.parent.mkdir(parents=True, exist_ok=True)
-        queue_path.write_text(content, encoding="utf-8")
+        _atomic_write(queue_path, content)
 
     return queue_path
 
@@ -1469,6 +1556,28 @@ def run_gardener(
     skip_lane_b: bool = False,
     check_debounce: bool = True,
 ) -> int:
+    """Run one serialized producer pass; busy work can retry on a later Stop."""
+    try:
+        if dry_run:
+            return _run_gardener_locked(session_id, vault_root, dry_run, notes_override, skip_lane_b, check_debounce)
+        with _gardener_mutex(vault_root) as acquired:
+            if not acquired:
+                log(vault_root, "gardener busy — retry eligible on a later Stop")
+                return 0
+            return _run_gardener_locked(session_id, vault_root, dry_run, notes_override, skip_lane_b, check_debounce)
+    except Exception as exc:
+        log(vault_root, f"gardener failed: {exc}; retry eligible on a later Stop")
+        return 0
+
+
+def _run_gardener_locked(
+    session_id: str,
+    vault_root: Path,
+    dry_run: bool = False,
+    notes_override: list[Path] | None = None,
+    skip_lane_b: bool = False,
+    check_debounce: bool = True,
+) -> int:
     """Core gardener logic — callable directly or from the hook entry.
 
     Returns 0 always (fail-soft contract).
@@ -1483,9 +1592,17 @@ def run_gardener(
 
     # --- Apply-lock: don't clobber the queue while /garden is resolving it ---
     # (dry-run never writes, so it's exempt — it's how convergence is verified mid-pass.)
-    if not dry_run and apply_lock_active(vault_root):
+    if not dry_run and _apply_lock_active_unlocked(vault_root):
         log(vault_root, "apply-lock held (/garden in progress) — skip queue write")
         return 0
+
+    if not dry_run and state.get("_completion_protocol") != COMPLETION_PROTOCOL:
+        # Old IDs mixed pre-spawn reservations with completed work. Invalidate
+        # only that ambiguous debounce history once; preserve every other field.
+        state = {**state, "gardened_session_ids": [], "_completion_protocol": COMPLETION_PROTOCOL}
+        if not save_state(vault_root, state):
+            log(vault_root, "completion-state migration failed — skip")
+            return 0
 
     # --- Scope ---
     notes, new_cursor = collect_touched_notes(vault_root, state, override=notes_override)
@@ -1530,6 +1647,13 @@ def run_gardener(
 
     # --- Lane B ---
     lane_b = run_lane_b(notes, vault_root, skip=skip_lane_b)
+    if lane_b is None:
+        log(
+            vault_root,
+            f"lane_b=failed; {len(lane_a.applied)} Lane A repair(s) retained; "
+            "queue and progress preserved; retry eligible on a later Stop",
+        )
+        return 0
 
     # --- Stranded-branch detection (git boundary) ---
     stranded = detect_stranded_branches(vault_root)
@@ -1552,12 +1676,6 @@ def run_gardener(
         len(lane_b.get(k, []))
         for k in ("missing_links", "orphans")
     )
-    log(
-        vault_root,
-        f"done: {n_applied} auto-repair(s), {n_proposals} proposal(s) "
-        f"[lane_b={'skipped' if skip_lane_b else 'ran'}]",
-    )
-
     # --- Update state ---
     # Record gardened hashes (post-Lane-A, so auto-repaired notes don't re-propose).
     gardened = dict(state.get("gardened", {}))
@@ -1576,19 +1694,27 @@ def run_gardener(
             "gardened": gardened,
         }
         new_state = record_run(new_state, session_id)
-        save_state(vault_root, new_state)
+        if not save_state(vault_root, new_state):
+            log(vault_root, "completion publication failed; queue published, retry eligible on a later Stop")
+            return 0
+
+    log(
+        vault_root,
+        f"done: {n_applied} auto-repair(s), {n_proposals} proposal(s) "
+        f"[lane_b={'skipped' if skip_lane_b else 'succeeded'}]",
+    )
 
     return 0
 
 
 def main_hook() -> int:
-    """Stop-hook entry: read hook JSON from stdin, mark session gardened, spawn detached worker.
+    """Read hook JSON and spawn a worker without reserving or completing its session.
 
     Returns 0 immediately (in milliseconds) — never runs Lane A or Lane B
     synchronously, so the hook timeout is never a concern.  The actual gardening
     happens in the detached --worker subprocess.
 
-    Mirrors notebook-update.py's Popen pattern exactly.
+    The worker rechecks completion and apply-lease state under the OS mutex.
     """
     try:
         event = json.load(sys.stdin)
@@ -1604,7 +1730,7 @@ def main_hook() -> int:
     # --- Apply-lock: /garden owns the queue; don't spawn a worker that would clobber it.
     # Return WITHOUT recording debounce so a later Stop (after the lock clears) can regenerate.
     if apply_lock_active(vault_root):
-        log(vault_root, "apply-lock held (/garden in progress) — skip spawn")
+        log(vault_root, "gardener/apply operation active or unavailable — skip spawn")
         return 0
 
     # --- Debounce check (fast, no I/O beyond one JSON read) ---
@@ -1613,9 +1739,7 @@ def main_hook() -> int:
         log(vault_root, f"already ran for session {session_id[:8]} — skip")
         return 0
 
-    # --- Record NOW so subsequent Stop events this session don't re-spawn ---
-    new_state = record_run(state, session_id)
-    save_state(vault_root, new_state)
+    # Completion is recorded by the worker only after successful publication.
     log(vault_root, f"hook: spawning detached worker [session={session_id[:8] if session_id else 'unknown'}]")
 
     # --- Spawn detached worker (mirrors notebook-update.py) ---
@@ -1638,8 +1762,8 @@ def main_hook() -> int:
             ],
             **popen_kwargs,
         )
-    except OSError:
-        pass  # fail-soft — worker not launched, but debounce already recorded
+    except OSError as exc:
+        log(vault_root, f"worker launch failed: {exc}; retry eligible on a later Stop")
 
     return 0
 
@@ -1647,14 +1771,14 @@ def main_hook() -> int:
 def run_worker(session_id: str, vault_root: Path) -> int:
     """Worker mode: run gardening synchronously (spawned detached by main_hook).
 
-    Delegates to run_gardener with debounce disabled — main_hook already recorded
-    this session before spawning, so re-checking would always short-circuit.
+    Rechecks completed sessions under the mutex, because multiple Stop hooks can
+    dispatch before the first worker starts. Only successful publication debounces.
     """
     return run_gardener(
         session_id=session_id,
         vault_root=vault_root,
         dry_run=False,
-        check_debounce=False,
+        check_debounce=True,
     )
 
 
@@ -1736,12 +1860,15 @@ def main_cli() -> int:
 
     # --acquire-lock / --release-lock: /garden's apply-lock management, then exit.
     if args.acquire_lock:
-        acquire_apply_lock(vault_root, args.session)
-        return 0
+        if acquire_apply_lock(vault_root, args.session):
+            return 0
+        print("Gardener/apply operation busy or lock unavailable; apply lease not acquired.", file=sys.stderr)
+        return 1
     if args.release_lock:
-        release_apply_lock(vault_root)
-        mark_applied(vault_root)
-        return 0
+        if release_apply_lock(vault_root, mark_applied=True):
+            return 0
+        print("Gardener busy or state unavailable; apply lease not released. Retry later.", file=sys.stderr)
+        return 1
     if args.queue_summary:
         s = queue_summary(vault_root, read_context(vault_root))
         print(s if s else "🌱 nothing pending")

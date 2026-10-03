@@ -13,11 +13,9 @@ Covers the four shipped pieces:
   (schema 2) covering engine, agents, rendered surfaces, and both runtimes'
   skills trees.
 
-Fidelity proof: ``tests/fixtures/vault_live_claude_settings.json`` and
-``vault_live_codex_hooks.json`` are byte copies of the live vault's
-``.claude/settings.json`` and ``.codex/hooks.json``. The generator output is
-asserted equivalent to them, so the spec provably reproduces the wiring it
-canonicalizes. No test reads or writes the real vault checkout.
+The ``vault_live_*`` fixtures preserve historical live wiring. Expected
+output removes its unsafe automatic-sync authorization, retaining every
+other field. No test reads or writes the real vault checkout.
 """
 
 from __future__ import annotations
@@ -74,6 +72,15 @@ def map_gen():
 def _ordered(value) -> str:
     """Serialize preserving insertion order, so key order differences show."""
     return json.dumps(value, indent=2)
+
+
+def _safe_historical_wiring(value: dict) -> dict:
+    """Apply the one intentional migration to a freshly loaded fixture."""
+    for entry in value["hooks"]["Stop"]:
+        for hook in entry["hooks"]:
+            if hook["command"] == RUN_HOOK_PREFIX + "session-stop.py --explicit-sync":
+                hook["command"] = RUN_HOOK_PREFIX + "session-stop.py"
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +163,7 @@ class TestAgentsImport:
 
 class TestClaudeSettingsHooksRender:
     def test_rendered_file_matches_live_vault_hooks_key(self) -> None:
-        """Fidelity proof: the rendered hooks key is byte-equivalent (same
-        key order, same JSON shape, same serializer) to the hooks key of the
-        vault's live .claude/settings.json, captured as a fixture."""
+        """Historical wiring is preserved except for unsafe Stop authorization."""
         live = json.loads(
             (FIXTURES / "vault_live_claude_settings.json").read_text(
                 encoding="utf-8"
@@ -167,7 +172,7 @@ class TestClaudeSettingsHooksRender:
         rendered_text = (RENDERED_DIR / "claude-settings-hooks.json").read_text(
             encoding="utf-8"
         )
-        assert rendered_text == _ordered(live["hooks"]) + "\n"
+        assert rendered_text == _ordered(_safe_historical_wiring(live)["hooks"]) + "\n"
 
     def test_render_function_reproduces_live_hooks_key(self, wiring_gen) -> None:
         live = json.loads(
@@ -177,16 +182,16 @@ class TestClaudeSettingsHooksRender:
         )
         spec = wiring_gen.load_spec(MACHINERY_DIR)
         rendered = wiring_gen.render_claude_settings_hooks(spec)
-        assert _ordered(rendered) == _ordered(live["hooks"])
+        assert _ordered(rendered) == _ordered(_safe_historical_wiring(live)["hooks"])
 
-    def test_stop_chain_order_and_args_preserved(self, wiring_gen) -> None:
+    def test_stop_chain_does_not_authorize_sync(self, wiring_gen) -> None:
         spec = wiring_gen.load_spec(MACHINERY_DIR)
         rendered = wiring_gen.render_claude_settings_hooks(spec)
         stop_hooks = rendered["Stop"][0]["hooks"]
         assert [h["command"] for h in stop_hooks] == [
             RUN_HOOK_PREFIX + "notebook-update.py",
             RUN_HOOK_PREFIX + "graph_gardener.py",
-            RUN_HOOK_PREFIX + "session-stop.py --explicit-sync",
+            RUN_HOOK_PREFIX + "session-stop.py",
         ]
         assert [h["timeout"] for h in stop_hooks] == [10000, 30000, 60000]
 
@@ -255,8 +260,7 @@ class TestClaudeSettingsHooksRender:
 
 class TestCodexHooksRender:
     def test_rendered_file_matches_live_vault_semantically(self) -> None:
-        """The rendered .codex/hooks.json body carries exactly the live
-        vault file's wiring (dict equality — event order is not semantic)."""
+        """Codex receives the same safe migration as the Claude adapter."""
         live = json.loads(
             (FIXTURES / "vault_live_codex_hooks.json").read_text(
                 encoding="utf-8"
@@ -265,7 +269,7 @@ class TestCodexHooksRender:
         rendered = json.loads(
             (RENDERED_DIR / "codex-hooks.json").read_text(encoding="utf-8")
         )
-        assert rendered == live
+        assert rendered == _safe_historical_wiring(live)
 
     def test_codex_body_is_full_file_with_hooks_envelope(
         self, wiring_gen

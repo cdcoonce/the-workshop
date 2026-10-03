@@ -37,6 +37,23 @@ _Live session state · updated {stamp} · session {sid}_
 """
 
 
+def valid_session_id(value: object) -> bool:
+    """Whether an opaque session identity is safe inside a notebook filename.
+
+    Parameters
+    ----------
+    value : object
+        The session identity supplied by the runtime event.
+
+    Returns
+    -------
+    bool
+        True for a nonempty string without path separators or NUL characters.
+        No platform-specific UUID shape is assumed.
+    """
+    return isinstance(value, str) and bool(value) and not any(c in value for c in "/\\\0")
+
+
 def _block_text(message: dict) -> str:
     """Flatten an assistant/user message's content blocks to plain text."""
     content = message.get("content", "")
@@ -45,41 +62,72 @@ def _block_text(message: dict) -> str:
     parts: list[str] = []
     if isinstance(content, list):
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
+            if isinstance(block, dict) and block.get("type") in ("text", "input_text", "output_text"):
+                text = block.get("text", "")
+                if isinstance(text, str):
+                    parts.append(text)
     return "\n".join(parts)
 
 
 def latest_turn(transcript_path: Path, max_turn_chars: int = MAX_TURN_CHARS) -> tuple[str, str]:
-    """Return (last_user_text, last_assistant_text) from the JSONL transcript.
+    """Return the latest user/assistant text from a Claude or Codex transcript.
 
     Each side is truncated to its last ``max_turn_chars`` characters. Fail-soft:
     a missing/unreadable file or malformed lines yield empty strings, never a raise.
     """
+    try:
+        content = transcript_path.read_text(encoding="utf-8")
+    except OSError:
+        return "", ""
+    return latest_turn_from_text(content, max_turn_chars)
+
+
+def latest_turn_from_text(content: str, max_turn_chars: int = MAX_TURN_CHARS) -> tuple[str, str]:
+    """Parse the latest turn from one already-read transcript snapshot.
+
+    Parameters
+    ----------
+    content : str
+        Claude or Codex JSONL transcript text. Malformed records are skipped.
+    max_turn_chars : int
+        Maximum characters retained from the end of each side's latest text.
+
+    Returns
+    -------
+    tuple[str, str]
+        Latest user and assistant text; either side is empty when absent.
+    """
     last_user = ""
     last_assistant = ""
-    try:
-        for line in transcript_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        etype = entry.get("type")
+        message = entry.get("message")
+        if etype == "response_item":
+            # Native Codex rollout records wrap conversation messages in
+            # payload. event_msg contains duplicate notifications, not an
+            # additional turn, so only response_item is adapted here.
+            message = entry.get("payload")
+            if not isinstance(message, dict) or message.get("type") != "message":
                 continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            etype = entry.get("type")
-            message = entry.get("message")
-            if not isinstance(message, dict):
-                continue
-            text = _block_text(message).strip()
-            if not text:
-                continue
-            if etype == "user":
-                last_user = text
-            elif etype == "assistant":
-                last_assistant = text
-    except OSError:
-        pass
+            etype = message.get("role")
+        if not isinstance(message, dict):
+            continue
+        text = _block_text(message).strip()
+        if not text:
+            continue
+        if etype == "user":
+            last_user = text
+        elif etype == "assistant":
+            last_assistant = text
     return last_user[-max_turn_chars:], last_assistant[-max_turn_chars:]
 
 

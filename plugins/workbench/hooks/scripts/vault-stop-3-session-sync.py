@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook: commits and syncs the vault.
+"""Stop hook: checks the explicit sync boundary without authorizing a sync.
 
 Thin entry point. The implementation is ``machinery/engine/session-stop.py``, which is
 shared with the vault's own tooling and must stay importable there; this file
@@ -24,7 +24,9 @@ _TARGET = _ENGINE / "session-stop.py"
 # here is a real defect worth seeing on stderr -- but not worth blocking on.
 try:
     sys.path.insert(0, str(_ENGINE))
-    sys.argv = [str(_TARGET), "--explicit-sync"]
+    # A lifecycle Stop is not a request to commit. Preserve deliberate caller
+    # arguments, but never synthesize authorization for the registered hook.
+    sys.argv = [str(_TARGET), *sys.argv[1:]]
     runpy.run_path(str(_TARGET), run_name="__main__")
 except SystemExit:
     raise

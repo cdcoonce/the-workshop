@@ -29,6 +29,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from context_loader import condense_digest, load_context
+from notebook_core import valid_session_id
 from sync_manager import pull
 from vault_utils import find_vault_root, read_vault_context
 
@@ -46,7 +47,9 @@ def main() -> int:
         if isinstance(loaded, dict):
             raw_event = loaded
             source = raw_event.get("source", "startup")
-            session_id = raw_event.get("session_id", "")
+            identity = raw_event.get("session_id")
+            if valid_session_id(identity):
+                session_id = identity
     except (json.JSONDecodeError, ValueError):
         pass
 
@@ -106,14 +109,10 @@ def main() -> int:
     # of which to trust. The notebook and handoff are one memory at two
     # time-scales with one-directional flow (notebook → handoff at session end).
     #
-    # Detection: /clear preserves the session_id (empirically confirmed). So the
-    # signal is: does THIS session's own notebook exist and is it newer than the
-    # handoff? If yes → /clear was run and Stop already wrote notebook state →
-    # inject it. Otherwise → cold start → inject handoff.
-    #
-    # We do NOT fall back to other sessions' notebooks. A prior session's notebook
-    # being newer than the handoff just means it was recently active — that's a
-    # cold start and the handoff is the right thing to inject.
+    # Only the exact current session's notebook proves continuity. A runtime
+    # may preserve or replace the identity on /clear; without an explicit
+    # predecessor contract a new identity falls back to the curated handoff.
+    # A fresher notebook from another session is never a substitute (#111).
     #
     # Skeleton check: the distill might not have completed before SessionStart
     # fires after /clear. If the notebook still contains the unfilled placeholder
@@ -122,7 +121,7 @@ def main() -> int:
         context = read_vault_context(vault_root)
 
         # Placeholder lines written by ensure_stub() before the distiller runs.
-        # If ALL four are still present the notebook is an unfilled skeleton.
+        # At least three placeholders still present means an unfilled skeleton.
         _SKELETON_MARKERS = (
             "(what we're actively doing",
             "(durable facts and decisions locked",
@@ -137,39 +136,29 @@ def main() -> int:
         handoff_mtime = handoff_path.stat().st_mtime if handoff_path.exists() else 0.0
         now = time.time()
 
-        # Find the most recent non-skeleton notebook that is fresher than the
-        # handoff and within NOTEBOOK_FRESH_HOURS. SessionStart is ALWAYS
-        # source='startup' — /clear creates a new session_id every time — so
-        # there is no "exact current session" to match. We just want the freshest
-        # real notebook available, regardless of which session wrote it.
-        injected_notebook = False
         brain_dir = vault_root / ".brain"
-        best_mtime = handoff_mtime  # must beat the handoff to qualify
-        best_content: str | None = None
-        best_name: str = ""
-        for nb in brain_dir.glob(f"notebook-{context}-*.md"):
+        notebook = brain_dir / f"notebook-{context}-{session_id}.md"
+        notebook_content: str | None = None
+        if session_id:
             try:
-                mtime = nb.stat().st_mtime
+                mtime = notebook.stat().st_mtime
                 age_h = (now - mtime) / 3600
-                if mtime > best_mtime and age_h <= NOTEBOOK_FRESH_HOURS:
-                    content = nb.read_text(encoding="utf-8")
+                if mtime > handoff_mtime and age_h <= NOTEBOOK_FRESH_HOURS:
+                    content = notebook.read_text(encoding="utf-8")
                     if not _is_skeleton(content):
-                        best_mtime = mtime
-                        best_content = content
-                        best_name = nb.name
+                        notebook_content = content
             except OSError:
                 pass
 
-        if best_content is not None:
+        if notebook_content is not None:
             lines.append("")
             lines.append(f"## 📓 Session notebook ({context}) — recent session state")
-            lines.append(condense_digest(best_content, f".brain/{best_name}"))
-            injected_notebook = True
+            lines.append(condense_digest(notebook_content, f".brain/{notebook.name}"))
             try:
                 data_dir = vault_root / ".claude" / "data"
                 stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 (data_dir / "session-start.log").open("a", encoding="utf-8").write(
-                    f"[{stamp}] injected notebook: {best_name}\n"
+                    f"[{stamp}] injected notebook: {notebook.name}\n"
                 )
             except Exception:
                 pass

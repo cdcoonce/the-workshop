@@ -2,6 +2,8 @@ import importlib.util
 import subprocess as _sp
 from pathlib import Path
 
+import pytest
+
 _spec = importlib.util.spec_from_file_location(
     "graph_gardener", Path(__file__).resolve().parent.parent / "engine" / "graph_gardener.py"
 )
@@ -20,6 +22,8 @@ def _init_repo(tmp_path):
     _git(repo, "init")
     _git(repo, "config", "user.email", "t@t.t")
     _git(repo, "config", "user.name", "t")
+    _git(repo, "config", "core.hooksPath", "/dev/null")
+    _git(repo, "config", "commit.gpgsign", "false")
     (repo / "personal").mkdir()
     # Model a real machine: .vault-context present. read_context defaults to
     # "unknown" only when absent (that edge case is covered in test_vault_utils),
@@ -299,6 +303,106 @@ def test_release_lock_is_safe_when_absent(tmp_path):
 
 # --- run_gardener guard ---
 
+def _isolated_gardener(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path]:
+    repo = _init_repo(tmp_path)
+    note = _src_note(repo, "note to review")
+    monkeypatch.setattr(gg, "head_commit", lambda _: "new-head")
+    monkeypatch.setattr(gg, "broken_links_by_note", lambda _: {})
+    monkeypatch.setattr(gg, "run_lane_a", lambda *a, **k: gg.LaneAResult())
+    monkeypatch.setattr(gg, "detect_stranded_branches", lambda _: [])
+    monkeypatch.setattr(gg, "detect_auto_memory_drift", lambda _: {})
+    monkeypatch.setattr(gg, "detect_unprofiled_people", lambda *a, **k: [])
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    return repo, note
+
+
+def test_failed_lane_b_preserves_queue_progress_and_other_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    initial = {
+        "gardened_session_ids": ["previous"], "last_run_ts": "earlier", "_completion_protocol": 1,
+        "last_gardened_commit": "old-head", "sweep_cursor": "personal/old.md",
+        "gardened": {"personal/old.md": "old-hash"},
+    }
+    gg.save_state(repo, initial)
+    queue = repo / ".brain" / "gardener-personal.md"
+    queue.parent.mkdir()
+    queue.write_text("Preserve pending proposals\n")
+
+    def repair(*args: object, **kwargs: object) -> gg.LaneAResult:
+        note.write_text("Lane A repair already applied\n")
+        result = gg.LaneAResult()
+        result.applied.append("mechanical repair")
+        return result
+
+    other_state = {
+        **initial, "gardened_session_ids": ["previous", "other"],
+        "last_run_ts": "other-run", "last_gardened_commit": "other-head",
+        "sweep_cursor": "personal/other.md", "gardened": {"personal/other.md": "other-hash"},
+    }
+
+    def fail_after_other_session_updates(*args: object) -> None:
+        gg.save_state(repo, other_state)
+        return None
+
+    monkeypatch.setattr(gg, "run_lane_a", repair)
+    monkeypatch.setattr(gg, "run_lane_b_headless", fail_after_other_session_updates)
+
+    assert gg.run_gardener("current", repo, notes_override=[note], check_debounce=False) == 0
+    assert gg.load_state(repo) == other_state
+    assert queue.read_text() == "Preserve pending proposals\n"
+    assert note.read_text() == "Lane A repair already applied\n"
+    assert "lane_b=failed" in (repo / ".claude/data/gardener.log").read_text()
+
+
+@pytest.mark.parametrize("skip_lane_b", [False, True])
+def test_successful_empty_or_intentionally_skipped_lane_b_records_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, skip_lane_b: bool,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    calls = []
+
+    def successful_empty(*args: object) -> dict:
+        calls.append(args)
+        return {"missing_links": [], "orphans": []}
+
+    monkeypatch.setattr(gg, "run_lane_b_headless", successful_empty)
+    assert gg.run_gardener("current", repo, notes_override=[note], skip_lane_b=skip_lane_b) == 0
+    state = gg.load_state(repo)
+    assert state["gardened_session_ids"] == ["current"]
+    assert state["gardened"]["personal/src.md"] == gg.content_hash(note)
+    assert state["last_gardened_commit"] == "new-head"
+    assert (repo / ".brain/gardener-personal.md").exists()
+    outcome = "skipped" if skip_lane_b else "succeeded"
+    assert f"lane_b={outcome}" in (repo / ".claude/data/gardener.log").read_text()
+    assert len(calls) == (0 if skip_lane_b else 1)
+
+
+def test_failed_lane_b_retries_only_on_a_later_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    gg.save_state(repo, {"gardened_session_ids": ["current"]})
+    calls = []
+
+    def fail_then_succeed(*args: object) -> dict | None:
+        calls.append(args)
+        return None if len(calls) == 1 else {"missing_links": [], "orphans": []}
+
+    monkeypatch.setattr(gg, "run_lane_b_headless", fail_then_succeed)
+    assert gg.run_gardener("current", repo, notes_override=[note], check_debounce=False) == 0
+    assert len(calls) == 1
+    assert "personal/src.md" not in gg.load_state(repo).get("gardened", {})
+    assert gg.run_gardener("current", repo, notes_override=[note]) == 0
+    assert len(calls) == 2
+    assert gg.load_state(repo)["gardened"]["personal/src.md"] == gg.content_hash(note)
+    assert gg.run_gardener("current", repo, notes_override=[note]) == 0
+    assert len(calls) == 2  # successful completion still debounces later Stops
+
+
 def test_run_gardener_writes_queue_when_no_lock(tmp_path):
     repo = _init_repo(tmp_path)
     note = _broken_note(repo)
@@ -348,6 +452,56 @@ def test_run_gardener_dry_run_ignores_lock(tmp_path, capsys):
 
 
 # --- main_hook guard ---
+
+def test_spawn_does_not_mark_unfinished_session_completed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    # Legacy IDs can be abandoned reservations; dispatch must not trust them.
+    initial = {"gardened_session_ids": ["previous", "current"], "sweep_cursor": "preserved"}
+    gg.save_state(repo, initial)
+    monkeypatch.setattr(gg, "find_vault_root_from_env", lambda: repo)
+    monkeypatch.setattr(gg.sys, "stdin", _io.StringIO('{"session_id": "current"}'))
+    launches = []
+    monkeypatch.setattr(gg.subprocess, "Popen", lambda *a, **k: launches.append(a))
+
+    assert gg.main_hook() == 0
+    assert len(launches) == 1
+    assert gg.load_state(repo) == initial
+
+
+def test_failed_worker_launch_preserves_state_and_retries_later(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    gg.save_state(repo, {"gardened_session_ids": ["previous"], "sweep_cursor": "old"})
+    monkeypatch.setattr(gg, "find_vault_root_from_env", lambda: repo)
+    launches = []
+
+    def spawn(*args: object, **kwargs: object) -> None:
+        launches.append(args)
+        if len(launches) == 1:
+            fresh = gg.load_state(repo)
+            gg.save_state(repo, {
+                **fresh,
+                "gardened_session_ids": [*fresh["gardened_session_ids"], "other"],
+                "sweep_cursor": "other-session-progress",
+            })
+            raise OSError("cannot launch")
+
+    monkeypatch.setattr(gg.subprocess, "Popen", spawn)
+    monkeypatch.setattr(gg.sys, "stdin", _io.StringIO('{"session_id": "current"}'))
+    assert gg.main_hook() == 0
+    assert len(launches) == 1  # failure does not start a tight retry loop
+    after_failure = gg.load_state(repo)
+    assert after_failure["gardened_session_ids"] == ["previous", "other"]
+    assert after_failure["sweep_cursor"] == "other-session-progress"
+
+    monkeypatch.setattr(gg.sys, "stdin", _io.StringIO('{"session_id": "current"}'))
+    assert gg.main_hook() == 0
+    assert len(launches) == 2
+    assert gg.load_state(repo)["gardened_session_ids"] == ["previous", "other"]
+
 
 def test_main_hook_skips_spawn_when_locked(tmp_path, monkeypatch):
     repo = _init_vault(tmp_path)
@@ -883,6 +1037,25 @@ def test_write_queue_unprofiled_suppressed_when_dismissed(tmp_path):
 # ---------------------------------------------------------------------------
 
 _LANE_B_STDOUT = '{"missing_links": [], "orphans": []}'
+
+
+@pytest.mark.parametrize("response", [
+    None, "not JSON", "[]", "{}", '{"missing_links": ["bad item"], "orphans": []}',
+])
+def test_lane_b_failure_is_not_a_successful_empty_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str | None,
+) -> None:
+    repo = _init_repo(tmp_path)
+    note = _src_note(repo, "note to review")
+
+    def failed_run(argv: list[str], **kwargs: object) -> _sp.CompletedProcess[str]:
+        if response is None:
+            raise _sp.TimeoutExpired(argv, 90)
+        return _sp.CompletedProcess(argv, 0, stdout=response, stderr="")
+
+    monkeypatch.setattr(gg.subprocess, "run", failed_run)
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    assert gg.run_lane_b([note], repo) is None
 
 
 def _capture_claude_argv(monkeypatch, captured):

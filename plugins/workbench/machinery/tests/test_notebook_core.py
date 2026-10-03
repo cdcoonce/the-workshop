@@ -57,6 +57,69 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
 
 
 class TestLatestTurn:
+    def test_reads_native_codex_message_blocks(self, tmp_path: Path) -> None:
+        p = tmp_path / "codex.jsonl"
+        _write_jsonl(p, [
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "user",
+                "content": [{"type": "input_text", "text": "keep the merge gate"}],
+            }},
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "assistant", "channel": "final",
+                "content": [{"type": "output_text", "text": "waiting for approval"}],
+            }},
+        ])
+
+        assert latest_turn(p) == ("keep the merge gate", "waiting for approval")
+
+    def test_codex_turn_skips_noise_and_malformed_records(self, tmp_path: Path) -> None:
+        p = tmp_path / "codex.jsonl"
+        records = [
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "user",
+                "content": [{"type": "input_text", "text": "old question"}],
+            }},
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "assistant",
+                "content": [{"type": "output_text", "text": "old answer"}],
+            }},
+            None, [], "not a record", 42,
+            {"type": "response_item", "payload": None},
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "user",
+                "content": [{"type": "input_text", "text": "new question"}],
+            }},
+            {"type": "response_item", "payload": {
+                "type": "message", "role": "assistant",
+                "content": [None, {"type": "output_text", "text": None},
+                            {"type": "output_text", "text": {"bad": "value"}},
+                            {"type": "output_text", "text": "new answer"}],
+            }},
+            {"type": "event_msg", "payload": {
+                "type": "agent_message", "message": "duplicate notification",
+            }},
+            {"type": "event_msg", "payload": {
+                "type": "user_message", "message": "duplicate user notification",
+            }},
+            {"type": "response_item", "payload": {
+                "type": "function_call_output", "role": "assistant",
+                "content": [{"type": "output_text", "text": "tool result"}],
+            }},
+            {"type": "response_item", "payload": {
+                "type": "reasoning", "role": "assistant",
+                "content": [{"type": "output_text", "text": "reasoning"}],
+            }},
+        ]
+        for role in ("developer", "system"):
+            records.append({"type": "response_item", "payload": {
+                "type": "message", "role": role,
+                "content": [{"type": "input_text", "text": "not conversation"}],
+            }})
+        p.write_text("\n".join(json.dumps(r) for r in records) + "\ninvalid json\n")
+
+        assert latest_turn(p) == ("new question", "new answer")
+        assert latest_turn(p, max_turn_chars=6) == ("estion", "answer")
+
     def test_returns_last_user_and_assistant(self, tmp_path: Path) -> None:
         p = tmp_path / "t.jsonl"
         _write_jsonl(p, [

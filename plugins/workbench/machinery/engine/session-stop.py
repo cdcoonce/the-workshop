@@ -3,7 +3,8 @@
 
 Lifecycle Stop events are not evidence that the user ended the session. Syncing
 there can sweep unrelated work from the shared checkout, so callers must pass
-``--explicit-sync`` to authorize a commit and push.
+``--explicit-sync`` and repeatable ``--path`` arguments to authorize a commit
+and push of those whole files.
 
 Exit codes:
     0 — sync complete (or no changes)
@@ -12,6 +13,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -23,7 +25,6 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from glossary_manager import parse_glossary
 from session_terms import changed_files_since
 from sync_manager import push
 from term_tracker import record_terms
@@ -86,6 +87,17 @@ def main() -> int:
         )}))
         return 0
 
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument("--explicit-sync", action="store_true")
+    parser.add_argument("--path", action="append", default=[])
+    try:
+        args, unknown = parser.parse_known_args()
+        if unknown or not args.path or any(path == "" for path in args.path):
+            raise ValueError("Supply --path for each intended vault-relative file.")
+    except (argparse.ArgumentError, ValueError) as exc:
+        print(json.dumps({"systemMessage": f"Git sync skipped — {exc}"}))
+        return 1
+
     # Anchor to the project Claude Code launched in (the vault), NOT the shell's
     # current directory — a session may have `cd`'d into another repo, and we must
     # never auto-commit that repo. find_vault_root_from_env() additionally requires
@@ -115,7 +127,7 @@ def main() -> int:
 
     # Push changes — gated on vault health before staging, so a regression
     # (e.g. a broken wikilink) remains editable and never enters durable history.
-    result = push(vault_root, pre_push_check=_vault_health_check)
+    result = push(vault_root, pre_push_check=_vault_health_check, intended_paths=args.path)
     if result.success:
         lines.append(f"✓ Git: {result.message}")
     else:
@@ -125,6 +137,10 @@ def main() -> int:
     try:
         glossary_path = vault_root / "brain" / "Glossary.md"
         if glossary_path.exists():
+            # Optional glossary parsing depends on PyYAML. Ordinary lifecycle
+            # Stop must reach its no-op without loading that dependency.
+            from glossary_manager import parse_glossary
+
             # Only the files THIS session committed (empty on a no-op session) — fixes term
             # frequency drifting from a prior commit's files when nothing changed.
             changed_files = [

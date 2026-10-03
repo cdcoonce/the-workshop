@@ -25,7 +25,7 @@
         },
         {
           "type": "command",
-          "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/scripts/run-hook.sh session-stop.py --explicit-sync",
+          "command": "bash \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/scripts/run-hook.sh session-stop.py",
           "timeout": 60000
         }
       ]

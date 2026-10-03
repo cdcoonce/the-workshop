@@ -215,12 +215,10 @@ def test_remaining_vault_hooks_are_wired() -> None:
 
 
 def test_session_sync_runs_last_on_stop() -> None:
-    """Ordering is load-bearing: the sync commits what the others wrote.
+    """Keep the stable Stop surface and order while sync itself remains a no-op.
 
-    render_hooks_json sorts by script name, so the numeric prefixes in
-    `vault-stop-N-*.py` ARE the ordering mechanism. Renaming one without
-    renumbering would reorder the Stop chain silently, and the symptom would be
-    a session's notebook update landing one commit late.
+    The compatibility wrapper no longer authorizes a commit on ordinary Stop;
+    explicit callers must supply authorization and intended paths themselves.
     """
     stop = _vault_wiring().get("Stop", [])
     assert stop == [
