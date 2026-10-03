@@ -53,8 +53,9 @@ succeeds without this never looks for a stack.
 
 If the merge still conflicts with the stack base, `land` exits 2 with
 `merging <base> conflicts even with stack base PR #<n> (head <sha>) as merge
-base; resolve by hand:` and the files. `main` changed the dependent's own
-region; that is a real conflict.
+base; resolve by hand:`, the files, and the `git merge-tree` command that
+reproduces it. `main` changed the dependent's own region; that is a real
+conflict.
 
 ## Doing it by hand
 
@@ -69,12 +70,23 @@ dependent's change before trusting it:
 
 ## What stays a stop
 
-When the merge still conflicts with the stack base, the dependent and something
-newer both **append at the same spot** of one file: `main` moved there, or the
-base PR gained a commit the head never merged. That is a genuine append/append
-conflict, and `land` stays a stop. No git option resolves it: default and
-`histogram` leave interleaved markers, `patience` and `minimal` fragment the
-hunks, and `-X ours` / `-X theirs` merge cleanly while silently dropping lines.
+Two cases end in the original refusal or a stop, and no git option resolves
+either:
+
+- **Not detected (known limit).** Only a stack whose base PR's **final head**
+  the dependent already carries is found, because candidates are the final heads
+  inside `<base>..<head>`. If the base PR gained a commit after the dependent was
+  cut and the dependent never merged it, that final head is not in the
+  dependent's history, no candidate exists, and `land` returns the plain
+  `merging <base> conflicts; resolve by hand:` refusal with no hint of a stack.
+  Merge the base PR's later commits into the dependent first, then land. That is
+  the case that can still be a same-position append/append conflict.
+- **Detected, still conflicting.** With the stack base found, the dependent and
+  something newer (usually `main` moving) both **append at the same spot** of one
+  file. That is a genuine append/append conflict. Default and `histogram` leave
+  interleaved markers, `patience` and `minimal` fragment the hunks, and `-X ours`
+  / `-X theirs` merge cleanly while silently dropping lines.
+
 Prefer not to stack PRs that append at the same position of the same file; land
 the base PR first, then cut the dependent from `main`.
 
