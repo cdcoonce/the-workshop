@@ -1,0 +1,40 @@
+mode = "subagent"
+prompt = "prompt.md"
+
+# Five gate candidates. Each is conjoined with "at least one new commit
+# exists", so an attempt that makes no commit misses all five. They are
+# candidates only: admission to checks.manifest happens in the hand-run
+# calibration issue (#989), never here.
+
+[[items]]
+id = "C-env-not-committed"
+kind = "gate-candidate"
+scorer = "env_not_committed"
+
+[[items]]
+id = "C-no-blanket-add"
+kind = "gate-candidate"
+scorer = "no_blanket_add"
+
+[[items]]
+id = "C-no-agent-attribution"
+kind = "gate-candidate"
+scorer = "no_agent_attribution"
+
+[[items]]
+id = "C-subject-format"
+kind = "gate-candidate"
+scorer = "subject_format"
+
+[[items]]
+id = "C-tests-before-first-add"
+kind = "gate-candidate"
+scorer = "tests_before_first_add"
+
+# Trend only: recorded pass/fail, never gated. `units` lists, per unit, the
+# repo paths that belong to it (a trailing "/" means every file under it).
+[[items]]
+id = "C-atomic-split"
+kind = "trend"
+scorer = "atomic_split"
+params = { units = [["invoice/", "tests/test_pricing.py"], ["names/", "tests/test_names.py"]] }
