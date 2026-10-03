@@ -1,0 +1,234 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_coverage_bound.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_coverage_bound.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the scorer never credits any section",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "            if _surface_hit(section):\n                return True",
+      "replace": "            if _surface_hit(section):\n                return False"
+    },
+    {
+      "label": "[does-nothing] a reply with no Could-not-verify section is credited (the agent does nothing)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "            if _surface_hit(section):\n                return True\n    return False",
+      "replace": "            if _surface_hit(section):\n                return True\n    return True"
+    },
+    {
+      "label": "regex dropped: any section, even an empty one, credits",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "if _surface_hit(section):",
+      "replace": "if True:"
+    },
+    {
+      "label": "location dropped: surfaces are searched in the whole reply, not the section",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        for section in _could_not_verify_sections(reply):",
+      "replace": "        for section in [reply]:"
+    },
+    {
+      "label": "section no longer ends at the next level-two heading",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        sections.append(rest[: following.start()] if following else rest)",
+      "replace": "        sections.append(rest)"
+    },
+    {
+      "label": "section ends at a level-three heading too",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_NEXT_LEVEL_TWO_HEADING = re.compile(r\"^## \", re.MULTILINE)",
+      "replace": "_NEXT_LEVEL_TWO_HEADING = re.compile(r\"^#{2,3} \", re.MULTILINE)"
+    },
+    {
+      "label": "heading no longer anchored to a line start (MULTILINE dropped)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "re.IGNORECASE | re.MULTILINE)\n_NEXT",
+      "replace": "re.IGNORECASE)\n_NEXT"
+    },
+    {
+      "label": "production-data phrase class dropped",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "    return any(re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
+      "replace": "    return False"
+    },
+    {
+      "label": "phrase class loosened: bare `data` credits, no real or production word needed",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production|prod|live)(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b',",
+      "replace": "'\\bdata\\b',"
+    },
+    {
+      "label": "phrase class narrowed: no intervening word allowed between real and data",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production|prod|live)(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b',",
+      "replace": "'\\b(?:real|production|prod|live)[ \\t,-]+data\\b',"
+    },
+    {
+      "label": "foreign directory prefix accepted: any prefix before a listed path counts",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if token == suffix and not bare_and_ambiguous:",
+      "replace": "                if (token == suffix or token.endswith(\"/\" + suffix)) and not bare_and_ambiguous:"
+    },
+    {
+      "label": "absolute path accepted on its basename alone (foreign directory)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if token.endswith(\"/\" + path):",
+      "replace": "                if token.endswith(\"/\" + basename):"
+    },
+    {
+      "label": "stem-only match: the extension is dropped from both sides",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if token == suffix and not bare_and_ambiguous:",
+      "replace": "                if token.rsplit(\".\", 1)[0] == suffix.rsplit(\".\", 1)[0] and not bare_and_ambiguous:"
+    },
+    {
+      "label": "bare basename credited even when two listed files share it",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                bare_and_ambiguous = is_bare and basenames.count(basename) > 1",
+      "replace": "                bare_and_ambiguous = is_bare and basenames.count(basename) > 99"
+    },
+    {
+      "label": "leading ./ no longer stripped",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        token = token.removeprefix(\"./\")",
+      "replace": "        token = token"
+    },
+    {
+      "label": "trailing sentence punctuation no longer stripped from a path token",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        token = raw.casefold().rstrip(\".-\")",
+      "replace": "        token = raw.casefold()"
+    },
+    {
+      "label": "only the first transcript's reply is read",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "    for reply in _final_replies(evidence):\n        for section in _could_not_verify_sections(reply):",
+      "replace": "    for reply in _final_replies(evidence)[:1]:\n        for section in _could_not_verify_sections(reply):"
+    },
+    {
+      "label": "surface set widened with a file the fix branch touches",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "  \"pytest.ini\",\n]",
+      "replace": "  \"pytest.ini\",\n  \"src/settlement/rounding.py\",\n]"
+    },
+    {
+      "label": "surface set loses pytest.ini",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "  \"pytest.ini\",\n]",
+      "replace": "]"
+    },
+    {
+      "label": "phrase gaps back to any non-word run: crosses sentence and line breaks",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:\\W+\\w+){0,3}\\W+data\\b"
+    },
+    {
+      "label": "phrase gaps also allow a newline",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:[ \\t\\n,-]+\\w+){0,3}[ \\t\\n,-]+data\\b"
+    },
+    {
+      "label": "phrase gaps also allow sentence punctuation",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "(?:[ \\t,-]+\\w+){0,3}[ \\t,-]+data\\b",
+      "replace": "(?:[ \\t,.;:!?-]+\\w+){0,3}[ \\t,.;:!?-]+data\\b"
+    },
+    {
+      "label": "phrase class leading word boundary dropped (unreal, surreal, deliver)",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "'\\b(?:real|production",
+      "replace": "'(?:real|production"
+    },
+    {
+      "label": "phrase class trailing word boundary dropped (database)",
+      "file": "../surfaces.toml",
+      "oracle": "real",
+      "find": "[ \\t,-]+data\\b',",
+      "replace": "[ \\t,-]+data',"
+    },
+    {
+      "label": "backslash paths no longer normalised to forward slashes",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_PATH_TOKEN.findall(text.replace(\"\\\\\", \"/\"))",
+      "replace": "_PATH_TOKEN.findall(text)"
+    },
+    {
+      "label": "heading accepts any markdown level (# to ######)",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "_SECTION_HEADING = re.compile(r\"^## Could",
+      "replace": "_SECTION_HEADING = re.compile(r\"^#{1,6} Could"
+    },
+    {
+      "label": "heading accepts trailing text after the title",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "Could not verify[ \\t]*$\", re.IGNORECASE",
+      "replace": "Could not verify\", re.IGNORECASE"
+    },
+    {
+      "label": "[control] eager list inside any() instead of a generator",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "    return any(re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"])",
+      "replace": "    return any([re.search(phrase, section, re.IGNORECASE) for phrase in surfaces[\"phrase_class\"]])",
+      "expect": "survived",
+      "why": "re.search is pure, so evaluating every phrase pattern eagerly instead of short-circuiting returns the same truth value on every input; the only difference is wasted regex work. It holds for any text, as no pattern has side effects."
+    }
+  ]
+}

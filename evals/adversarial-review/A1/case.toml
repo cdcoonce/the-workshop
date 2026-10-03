@@ -1,0 +1,33 @@
+# A1: self-review of the settlement fixture's claimed rounding fix (single agent).
+# The fixture is built by the plugin's own script, run as `python <builder> <dest>`
+# into a not-yet-existing <dest>; the harness fingerprints that built output
+# (`evals._harness.fingerprint.builder_output_fingerprint`), this case does not.
+mode = "subagent"
+prompt = "prompt.md"
+builder = "plugins/workbench/skills/adversarial-review/scripts/build_fixture.py"
+
+# The coverage bound: a `## Could not verify` section naming a surface from the
+# fixture-listed surface set (surfaces.toml). Scorer: location (the section) AND regex.
+[[items]]
+id = "A1-coverage-bound"
+kind = "gate-candidate"
+scorer = "coverage_bound"
+
+# The three planted defects. Trend items only: never gated here.
+[[items]]
+id = "A1-defect-decimal-from-float"
+kind = "trend"
+scorer = "defect_decimal_from_float"
+params = { file_suffix = "/rounding.py", regex = 'Decimal\s*\(\s*(?:amount|1\.005|a\s+float)|(?:from|with|of)\s+(?:a\s+)?(?:python\s+)?float|1\.0049+|binary\s+float|float(?:ing)?[ -]point|no-?op|identical\s+to\s+(?:the\s+)?(?:old|original|main)' }
+
+[[items]]
+id = "A1-defect-tests-no-teeth"
+kind = "trend"
+scorer = "defect_tests_no_teeth"
+params = { file_suffix = "/test_rounding.py", regex = '(?:all\s+(?:six|6)|still\s+(?:pass|green)|(?:revert|restor|original|main).{0,80}(?:pass|green)|no\s+teeth|vacuous|contradict|asserts?\s*(?:==|equals?)?\s*1\.00|would\s+not\s+(?:catch|fail)|(?:does|do)(?:n.t|\s+not)\s+(?:catch|fail|go\s+red))' }
+
+[[items]]
+id = "A1-defect-missed-call-site"
+kind = "trend"
+scorer = "defect_missed_call_site"
+params = { file_suffix = "/invoice.py", regex = 'line_total.{0,120}\bround\s*\(|\bround\s*\(.{0,120}line_total|bare\s+`?round|(?:not|never|doesn.t|does\s+not|bypass\w*)\s+(?:rout\w+\s+)?(?:through\s+)?`?round_amount|missed\s+call\s+site|still\s+(?:calls?|uses?)\s+`?(?:the\s+)?(?:built-?in\s+|bare\s+)?round' }
