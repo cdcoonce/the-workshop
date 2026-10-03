@@ -1,0 +1,16 @@
+# C-trig: triggering fixture. A natural request to save the changes in a working tree that
+# never names the skill; the one item asks whether the Skill call for commit came before any
+# other work. The fixture is built by the case-local build_fixture.py (run as
+# `python build_fixture.py <dest>` into a not-yet-existing <dest>) into a throwaway git repo
+# with one pinned commit, uncommitted changes and no remote, so a case-agent can never commit
+# to the-workshop checkout.
+# A triggering item selects the skill-arm-only admission branch (6 executions, at least 5
+# hits, no no-skill arm); this file carries no calibration key of its own.
+mode = "subagent"
+prompt = "prompt.md"
+
+[[items]]
+id = "C-trig"
+kind = "triggering"
+scorer = "triggered_first"
+params = { skill = "commit" }
