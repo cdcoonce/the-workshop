@@ -33,60 +33,60 @@
   ],
   "mutants": [
     {
-      "label": "[no Skill call at all] the positive conjunct is dropped, so a transcript with no Skill call for the rostered skill counts as triggered (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[no_skill_call_at_all])",
-      "file": "../../_harness/matchers.py",
+      "label": "[no Skill call at all] the positive synthetic-transcript builder drops every Skill call, so no transcript holds a Skill call for the rostered skill (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[skill_is_the_only_tool_call])",
+      "file": "case_tests/conftest.py",
       "oracle": "real",
-      "find": "    if not skill_ordinals:\n        return False\n    trigger_ordinal = min(skill_ordinals)",
-      "replace": "    trigger_ordinal = min(skill_ordinals, default=-1)"
+      "find": "                call(\"Skill\", {\"skill\": step[1]}, f\"Launching skill: {step[1]}\")",
+      "replace": "                pass"
     },
     {
-      "label": "[ordering] the skill call no longer has to precede other tool calls (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[bash_runs_before_the_skill_call])",
-      "file": "../../_harness/matchers.py",
+      "label": "[ordering data] the Bash-before-Skill negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[bash_runs_before_the_skill_call])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "    if other_ordinals and trigger_ordinal >= min(other_ordinals):\n        return False\n",
-      "replace": "    pass\n"
+      "find": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), BASH, (\"skill\", QUALIFIED), (\"say\", FINAL)],",
+      "replace": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), BASH, (\"say\", FINAL)],"
     },
     {
-      "label": "[final text] the skill call no longer has to precede the final assistant text (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_arrives_after_the_final_text])",
-      "file": "../../_harness/matchers.py",
+      "label": "[final text data] the Skill-after-final-text negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_arrives_after_the_final_text])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "    if transcript.final_text_ordinal is not None and trigger_ordinal >= transcript.final_text_ordinal:\n        return False",
-      "replace": "    pass"
+      "find": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"say\", FINAL), (\"skill\", QUALIFIED)],",
+      "replace": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
     },
     {
-      "label": "[exemption narrowed] ToolSearch no longer exempt (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[toolsearch_and_another_skill_may_come_first])",
-      "file": "../../_harness/matchers.py",
+      "label": "[exemption data] a Read call is placed ahead of the exempt calls in the ToolSearch positive (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[toolsearch_and_another_skill_may_come_first])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\")",
-      "replace": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\",)"
+      "find": "        SEARCH,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,",
+      "replace": "        READ,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,"
     },
     {
-      "label": "[exemption widened] Read, Bash and Edit calls no longer count as work (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[read_runs_before_the_skill_call])",
-      "file": "../../_harness/matchers.py",
+      "label": "[name data] the bare-name negative is given the qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_bare_name_is_called])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\")",
-      "replace": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\", \"Read\", \"Bash\", \"Edit\")"
+      "find": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", SKILL), (\"say\", FINAL)],",
+      "replace": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
     },
     {
-      "label": "[wrong skill credited] any Skill call counts, not just the rostered skill's (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_for_a_different_skill_only])",
-      "file": "../../_harness/matchers.py",
+      "label": "[name data] the other plugin's copy is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_other_plugins_copy_is_called])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "\n        and event.input.get(\"skill\") == skill",
-      "replace": ""
+      "find": "        (\"skill\", f\"workshop-maintainer:{SKILL}\"),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
     },
     {
-      "label": "[loose name match] a Skill name that merely contains the rostered name counts (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_named_differently_suffix])",
-      "file": "../../_harness/matchers.py",
+      "label": "[name data] the different-skill negative is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_a_different_qualified_skill_is_called_first])",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "event.input.get(\"skill\") == skill",
-      "replace": "skill in str(event.input.get(\"skill\"))"
+      "find": "        (\"skill\", ANOTHER_SKILL),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
     },
     {
-      "label": "[last call counts] the latest rostered Skill call stands in for the first (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[skill_called_twice_the_first_call_counts])",
-      "file": "../../_harness/matchers.py",
+      "label": "[real-shape data] the replayed real-shape Skill line carries the bare name (predicted red: test_a_real_shape_qualified_skill_line_is_scored_a_hit)",
+      "file": "case_tests/test_triggering.py",
       "oracle": "real",
-      "find": "    trigger_ordinal = min(skill_ordinals)",
-      "replace": "    trigger_ordinal = max(skill_ordinals)"
+      "find": "transcript = parse_transcript(_real_shape_transcript(tmp_path, QUALIFIED))",
+      "replace": "transcript = parse_transcript(_real_shape_transcript(tmp_path, SKILL))"
     },
     {
       "label": "[scorer] an attempt with no transcript is credited (predicted red: test_scorer_does_not_credit_an_attempt_with_no_transcript)",
@@ -107,7 +107,7 @@
       "file": "predicates.py",
       "oracle": "real",
       "find": "skill_triggered_first(evidence.transcripts[0], skill)",
-      "replace": "skill_triggered_first(evidence.transcripts[0], \"using-workflow\")"
+      "replace": "skill_triggered_first(evidence.transcripts[0], \"workbench:using-workflow\")"
     },
     {
       "label": "[scorer] always credits (predicted red: test_scorer_never_credits_a_transcript_that_violates_the_order)",
@@ -131,11 +131,25 @@
       "replace": "kind = \"gate-candidate\""
     },
     {
-      "label": "[case.toml] the item names another skill (predicted red: test_the_item_names_the_rostered_skill_and_a_scorer_that_exists)",
+      "label": "[case.toml] the param names a skill that never appears in the transcripts (predicted red: test_the_item_names_the_rostered_skill_and_a_scorer_that_exists)",
       "file": "case.toml",
       "oracle": "real",
-      "find": "params = { skill = \"commit\" }",
-      "replace": "params = { skill = \"using-workflow\" }"
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workbench:using-workflow\" }"
+    },
+    {
+      "label": "[case.toml] the param is the bare name real transcripts never carry (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"commit\" }"
+    },
+    {
+      "label": "[case.toml] the param is the other plugin's copy (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workshop-maintainer:commit\" }"
     },
     {
       "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key_and_no_calibration_record)",
@@ -148,8 +162,8 @@
       "label": "[case.toml] a second item is added (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
       "file": "case.toml",
       "oracle": "real",
-      "find": "params = { skill = \"commit\" }",
-      "replace": "params = { skill = \"commit\" }\n\n[[items]]\nid = \"extra\"\nkind = \"trend\"\nscorer = \"triggered_first\""
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workbench:commit\" }\n\n[[items]]\nid = \"extra\"\nkind = \"trend\"\nscorer = \"triggered_first\""
     },
     {
       "label": "[case.toml] the case is dispatched inline (predicted red: test_case_declares_subagent_mode_and_a_prompt_file)",

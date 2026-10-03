@@ -117,6 +117,20 @@
       "replace": "\"commit\": \"C-trig\",\n    \"commit/\": \"C-trig\","
     },
     {
+      "label": "[param pin] the shared test expects the bare skill name as the item param, which real transcripts never carry (predicted red: test_each_case_names_its_own_skill_through_its_directory_and_item_params)",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "== [f\"workbench:{skill}\"]",
+      "replace": "== [skill]"
+    },
+    {
+      "label": "[checker compares the qualified name] a prompt naming the bare skill is no longer flagged (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill)",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "return _fold(skill) in _fold(prompt)",
+      "replace": "return _fold(f\"workbench:{skill}\") in _fold(prompt)"
+    },
+    {
       "label": "[control] a docstring sentence in the shared test is reworded",
       "file": "test_trigger_prompts_omit_skill_name.py",
       "oracle": "real",
