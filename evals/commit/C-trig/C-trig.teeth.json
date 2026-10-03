@@ -1,0 +1,299 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C-trig/case_tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C-trig/case_tests"
+  ],
+  "mutants": [
+    {
+      "label": "[no Skill call at all] the positive synthetic-transcript builder drops every Skill call, so no transcript holds a Skill call for the rostered skill (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[skill_is_the_only_tool_call])",
+      "file": "case_tests/conftest.py",
+      "oracle": "real",
+      "find": "                call(\"Skill\", {\"skill\": step[1]}, f\"Launching skill: {step[1]}\")",
+      "replace": "                pass"
+    },
+    {
+      "label": "[ordering data] the Bash-before-Skill negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[bash_runs_before_the_skill_call])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), BASH, (\"skill\", QUALIFIED), (\"say\", FINAL)],",
+      "replace": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), BASH, (\"say\", FINAL)],"
+    },
+    {
+      "label": "[final text data] the Skill-after-final-text negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_arrives_after_the_final_text])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"say\", FINAL), (\"skill\", QUALIFIED)],",
+      "replace": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
+    },
+    {
+      "label": "[exemption data] a Read call is placed ahead of the exempt calls in the ToolSearch positive (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[toolsearch_and_another_skill_may_come_first])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        SEARCH,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,",
+      "replace": "        READ,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,"
+    },
+    {
+      "label": "[name data] the bare-name negative is given the qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_bare_name_is_called])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", SKILL), (\"say\", FINAL)],",
+      "replace": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
+    },
+    {
+      "label": "[name data] the other plugin's copy is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_other_plugins_copy_is_called])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        (\"skill\", f\"workshop-maintainer:{SKILL}\"),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
+    },
+    {
+      "label": "[name data] the different-skill negative is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_a_different_qualified_skill_is_called_first])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        (\"skill\", ANOTHER_SKILL),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
+    },
+    {
+      "label": "[real-shape data] the replayed real-shape Skill line carries the bare name (predicted red: test_a_real_shape_qualified_skill_line_is_scored_a_hit)",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "transcript = parse_transcript(_real_shape_transcript(tmp_path, QUALIFIED))",
+      "replace": "transcript = parse_transcript(_real_shape_transcript(tmp_path, SKILL))"
+    },
+    {
+      "label": "[scorer] an attempt with no transcript is credited (predicted red: test_scorer_does_not_credit_an_attempt_with_no_transcript)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if len(evidence.transcripts) != 1:\n        return False",
+      "replace": "    if len(evidence.transcripts) != 1:\n        return True"
+    },
+    {
+      "label": "[scorer] only the first of several transcripts is read (predicted red: test_scorer_does_not_credit_a_second_transcript_that_rides_along)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "len(evidence.transcripts) != 1",
+      "replace": "len(evidence.transcripts) < 1"
+    },
+    {
+      "label": "[scorer] the item's skill param is ignored (predicted red: test_scorer_credits_a_transcript_where_the_skill_triggered_first)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "skill_triggered_first(evidence.transcripts[0], \"workbench:using-workflow\")"
+    },
+    {
+      "label": "[scorer] always credits (predicted red: test_scorer_never_credits_a_transcript_that_violates_the_order)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "    return True"
+    },
+    {
+      "label": "[reimplemented predicate] the harness predicate is replaced by a local look-alike (predicted red: test_the_predicate_the_scorer_uses_is_the_harness_predicate_not_a_copy)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "from evals._harness.matchers import skill_triggered_first\n",
+      "replace": "def skill_triggered_first(transcript, skill):\n    return any(event.name == \"Skill\" for event in transcript.events)\n"
+    },
+    {
+      "label": "[case.toml] the item stops being a triggering item (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"gate-candidate\""
+    },
+    {
+      "label": "[case.toml] the param names a skill that never appears in the transcripts (predicted red: test_the_item_names_the_rostered_skill_and_a_scorer_that_exists)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workbench:using-workflow\" }"
+    },
+    {
+      "label": "[case.toml] the param is the bare name real transcripts never carry (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"commit\" }"
+    },
+    {
+      "label": "[case.toml] the param is the other plugin's copy (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workshop-maintainer:commit\" }"
+    },
+    {
+      "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key_and_no_calibration_record)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"triggering\"\nno_skill_arm = true"
+    },
+    {
+      "label": "[case.toml] a second item is added (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:commit\" }",
+      "replace": "params = { skill = \"workbench:commit\" }\n\n[[items]]\nid = \"extra\"\nkind = \"trend\"\nscorer = \"triggered_first\""
+    },
+    {
+      "label": "[case.toml] the case is dispatched inline (predicted red: test_case_declares_subagent_mode_and_a_prompt_file)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "mode = \"subagent\"",
+      "replace": "mode = \"inline\""
+    },
+    {
+      "label": "[prompt] the commit discipline is smuggled in (predicted red: test_prompt_does_not_smuggle_the_discipline)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "write a good message for them",
+      "replace": "write a conventional message for them"
+    },
+    {
+      "label": "[prompt] the working-tree request is dropped (predicted red: test_prompt_is_a_natural_request_to_save_the_working_tree_changes_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "sitting in the working tree",
+      "replace": "sitting around"
+    },
+    {
+      "label": "[prompt] a user turn is scripted into the prompt (predicted red: test_prompt_is_a_natural_request_to_save_the_working_tree_changes_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "I will not be around",
+      "replace": "User: I will not be around"
+    },
+    {
+      "label": "[prompt] an acceptance line is copied into the prompt (predicted red: test_prompt_leaks_nothing_from_acceptance)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "I will not be around to answer questions, so use your judgement.",
+      "replace": "it, however tidy its history comes out. How the changes are grouped or worded is not graded here."
+    },
+    {
+      "label": "[builder] the author date is not pinned (predicted red: test_the_one_commit_pins_author_and_committer_name_email_and_date)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "\"GIT_AUTHOR_DATE\": _PINNED_DATE,",
+      "replace": "\"GIT_AUTHOR_DATE\": \"2030-01-01T00:00:00+00:00\","
+    },
+    {
+      "label": "[builder] the committer email is not pinned (predicted red: test_the_one_commit_pins_author_and_committer_name_email_and_date)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "\"GIT_COMMITTER_EMAIL\": _PINNED_EMAIL,",
+      "replace": "\"GIT_COMMITTER_EMAIL\": \"someone@example.com\","
+    },
+    {
+      "label": "[builder] the machine's global git config is read (predicted red: test_a_builder_run_under_hostile_git_settings_still_builds_the_same_commit)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "\"GIT_CONFIG_GLOBAL\": os.devnull,",
+      "replace": "\"GIT_CONFIG_GLOBAL_UNSET\": os.devnull,"
+    },
+    {
+      "label": "[builder] inherited GIT_* variables are kept (predicted red: test_a_builder_run_under_hostile_git_settings_still_builds_the_same_commit)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "if not key.startswith(\"GIT_\")}",
+      "replace": "if True}"
+    },
+    {
+      "label": "[builder] the default branch is not main (predicted red: test_builder_makes_a_repo_with_exactly_one_commit_and_no_remote)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "\"-b\", \"main\"",
+      "replace": "\"-b\", \"trunk\""
+    },
+    {
+      "label": "[builder] no local identity is configured (predicted red: test_the_built_repo_carries_a_local_identity_so_an_agent_can_commit_in_it)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    _git(dest, \"config\", \"user.name\", _PINNED_NAME)\n",
+      "replace": ""
+    },
+    {
+      "label": "[builder] the working changes are staged (predicted red: test_the_built_tree_has_uncommitted_modified_and_untracked_changes_and_nothing_staged)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    return dest",
+      "replace": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    _git(dest, \"add\", \"-A\")\n    return dest"
+    },
+    {
+      "label": "[builder] the working changes are committed too (predicted red: test_builder_makes_a_repo_with_exactly_one_commit_and_no_remote)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    return dest",
+      "replace": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    _git(dest, \"add\", \"-A\")\n    _git(dest, \"commit\", \"-q\", \"--no-verify\", \"-m\", \"wip\")\n    return dest"
+    },
+    {
+      "label": "[builder] a remote is added (predicted red: test_builder_makes_a_repo_with_exactly_one_commit_and_no_remote)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    return dest",
+      "replace": "    _write(dest, \"tests/test_shout.py\", _TEST_SHOUT)\n    _git(dest, \"remote\", \"add\", \"origin\", \"https://example.invalid/greeter.git\")\n    return dest"
+    },
+    {
+      "label": "[builder] the working changes cover only one concern (predicted red: test_the_uncommitted_changes_span_more_than_one_concern)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    _write(dest, \"README.md\", _README_WORKING)\n",
+      "replace": ""
+    },
+    {
+      "label": "[builder] the built tree's suite is broken (predicted red: test_the_built_tree_suite_passes)",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "return greet(name).upper()",
+      "replace": "return greet(name).lower()"
+    },
+    {
+      "label": "[control] the explicit existing-destination guard is removed",
+      "file": "build_fixture.py",
+      "oracle": "real",
+      "find": "    if dest.exists():\n        raise FileExistsError(f\"{dest} already exists; remove it or pick another path\")\n",
+      "replace": "",
+      "expect": "survived",
+      "why": "dest.mkdir(parents=True) on the next statement already raises FileExistsError for an existing destination, before any file is written, so the guard only improves the message. Inert for every destination that exists; it would not be inert if mkdir were given exist_ok=True."
+    },
+    {
+      "label": "[control] a docstring sentence in predicates.py is reworded",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "The ordering is #992's",
+      "replace": "The ordering is the harness's",
+      "expect": "survived",
+      "why": "Docstring text is never executed and no test reads predicates.py's module docstring. Inert on every path the suite drives; it would not be inert for a test that parsed the docstring."
+    }
+  ]
+}

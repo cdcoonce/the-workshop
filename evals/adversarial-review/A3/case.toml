@@ -1,0 +1,17 @@
+# A3: triggering fixture. A natural pre-merge-check request that never names the skill;
+# the one item asks whether the Skill call for adversarial-review came before any other work.
+# The param is the plugin-qualified name: real transcripts carry `workbench:<name>` in the Skill
+# call and the matcher compares exactly.
+# The fixture is the plugin's own settlement repo, built into a not-yet-existing <dest> by
+# `python <builder> <dest>`, so no case-agent ever runs inside the-workshop checkout.
+# A triggering item selects the skill-arm-only admission branch (6 executions, at least 5
+# hits, no no-skill arm); this file carries no calibration key of its own.
+mode = "subagent"
+prompt = "prompt.md"
+builder = "plugins/workbench/skills/adversarial-review/scripts/build_fixture.py"
+
+[[items]]
+id = "A3"
+kind = "triggering"
+scorer = "triggered_first"
+params = { skill = "workbench:adversarial-review" }

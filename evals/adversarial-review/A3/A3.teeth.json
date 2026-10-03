@@ -1,0 +1,220 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A3/case_tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A3/case_tests"
+  ],
+  "mutants": [
+    {
+      "label": "[no Skill call at all] the positive synthetic-transcript builder drops every Skill call, so no transcript holds a Skill call for the rostered skill (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[skill_is_the_only_tool_call])",
+      "file": "case_tests/conftest.py",
+      "oracle": "real",
+      "find": "                call(\"Skill\", {\"skill\": step[1]}, f\"Launching skill: {step[1]}\")",
+      "replace": "                pass"
+    },
+    {
+      "label": "[ordering data] the Bash-before-Skill negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[bash_runs_before_the_skill_call])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), BASH, (\"skill\", QUALIFIED), (\"say\", FINAL)],",
+      "replace": "\"bash_runs_before_the_skill_call\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), BASH, (\"say\", FINAL)],"
+    },
+    {
+      "label": "[final text data] the Skill-after-final-text negative is reordered into a hit (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_arrives_after_the_final_text])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"say\", FINAL), (\"skill\", QUALIFIED)],",
+      "replace": "\"skill_call_arrives_after_the_final_text\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
+    },
+    {
+      "label": "[exemption data] a Read call is placed ahead of the exempt calls in the ToolSearch positive (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[toolsearch_and_another_skill_may_come_first])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        SEARCH,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,",
+      "replace": "        READ,\n        (\"skill\", OTHER_SKILL),\n        SEARCH,"
+    },
+    {
+      "label": "[name data] the bare-name negative is given the qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_bare_name_is_called])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", SKILL), (\"say\", FINAL)],",
+      "replace": "\"only_the_bare_name_is_called\": [(\"prompt\", PROMPT), (\"skill\", QUALIFIED), (\"say\", FINAL)],"
+    },
+    {
+      "label": "[name data] the other plugin's copy is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_the_other_plugins_copy_is_called])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        (\"skill\", f\"workshop-maintainer:{SKILL}\"),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
+    },
+    {
+      "label": "[name data] the different-skill negative is given the rostered qualified name (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[only_a_different_qualified_skill_is_called_first])",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "        (\"skill\", ANOTHER_SKILL),\n",
+      "replace": "        (\"skill\", QUALIFIED),\n"
+    },
+    {
+      "label": "[real-shape data] the replayed real-shape Skill line carries the bare name (predicted red: test_a_real_shape_qualified_skill_line_is_scored_a_hit)",
+      "file": "case_tests/test_triggering.py",
+      "oracle": "real",
+      "find": "transcript = parse_transcript(_real_shape_transcript(tmp_path, QUALIFIED))",
+      "replace": "transcript = parse_transcript(_real_shape_transcript(tmp_path, SKILL))"
+    },
+    {
+      "label": "[scorer] an attempt with no transcript is credited (predicted red: test_scorer_does_not_credit_an_attempt_with_no_transcript)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if len(evidence.transcripts) != 1:\n        return False",
+      "replace": "    if len(evidence.transcripts) != 1:\n        return True"
+    },
+    {
+      "label": "[scorer] only the first of several transcripts is read (predicted red: test_scorer_does_not_credit_a_second_transcript_that_rides_along)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "len(evidence.transcripts) != 1",
+      "replace": "len(evidence.transcripts) < 1"
+    },
+    {
+      "label": "[scorer] the item's skill param is ignored (predicted red: test_scorer_credits_a_transcript_where_the_skill_triggered_first)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "skill_triggered_first(evidence.transcripts[0], \"workbench:using-workflow\")"
+    },
+    {
+      "label": "[scorer] always credits (predicted red: test_scorer_never_credits_a_transcript_that_violates_the_order)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "    return True"
+    },
+    {
+      "label": "[reimplemented predicate] the harness predicate is replaced by a local look-alike (predicted red: test_the_predicate_the_scorer_uses_is_the_harness_predicate_not_a_copy)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "from evals._harness.matchers import skill_triggered_first\n",
+      "replace": "def skill_triggered_first(transcript, skill):\n    return any(event.name == \"Skill\" for event in transcript.events)\n"
+    },
+    {
+      "label": "[case.toml] the item stops being a triggering item (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"gate-candidate\""
+    },
+    {
+      "label": "[case.toml] the param names a skill that never appears in the transcripts (predicted red: test_the_item_names_the_rostered_skill_and_a_scorer_that_exists)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:adversarial-review\" }",
+      "replace": "params = { skill = \"workbench:using-workflow\" }"
+    },
+    {
+      "label": "[case.toml] the param is the bare name real transcripts never carry (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:adversarial-review\" }",
+      "replace": "params = { skill = \"adversarial-review\" }"
+    },
+    {
+      "label": "[case.toml] the param is the other plugin's copy (predicted red: test_item_param_is_the_plugin_qualified_name_real_transcripts_carry)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:adversarial-review\" }",
+      "replace": "params = { skill = \"workshop-maintainer:adversarial-review\" }"
+    },
+    {
+      "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key_and_no_calibration_record)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"triggering\"\nno_skill_arm = true"
+    },
+    {
+      "label": "[case.toml] a second item is added (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"workbench:adversarial-review\" }",
+      "replace": "params = { skill = \"workbench:adversarial-review\" }\n\n[[items]]\nid = \"extra\"\nkind = \"trend\"\nscorer = \"triggered_first\""
+    },
+    {
+      "label": "[case.toml] the case is dispatched inline (predicted red: test_case_declares_subagent_mode_and_a_prompt_file)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "mode = \"subagent\"",
+      "replace": "mode = \"inline\""
+    },
+    {
+      "label": "[case.toml] the builder key is dropped, so the case-agent would run in a checkout (predicted red: test_case_uses_the_skills_own_builder_so_no_agent_runs_in_the_workshop_checkout)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "builder = \"plugins/workbench/skills/adversarial-review/scripts/build_fixture.py\"",
+      "replace": "# builder dropped"
+    },
+    {
+      "label": "[prompt] the review lens is smuggled in (predicted red: test_prompt_does_not_smuggle_the_review_lens)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "can you check it over and tell me",
+      "replace": "can you try to break it and tell me"
+    },
+    {
+      "label": "[prompt] the merge request is dropped (predicted red: test_prompt_is_a_pre_merge_check_request_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "I plan to merge it into main this afternoon.",
+      "replace": "I plan to ship it this afternoon."
+    },
+    {
+      "label": "[prompt] a user turn is scripted into the prompt (predicted red: test_prompt_is_a_pre_merge_check_request_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Before I do,",
+      "replace": "User: Before I do,"
+    },
+    {
+      "label": "[prompt] an acceptance line is copied into the prompt (predicted red: test_prompt_leaks_nothing_from_acceptance)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "A short answer is fine: ready or not, and why.",
+      "replace": "loads it after reading files, after running the tests, or only after writing its answer."
+    },
+    {
+      "label": "[control] a docstring sentence in predicates.py is reworded",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "The ordering is #992's",
+      "replace": "The ordering is the harness's",
+      "expect": "survived",
+      "why": "Docstring text is never executed and no test reads predicates.py's module docstring. Inert on every path the suite drives; it would not be inert for a test that parsed the docstring."
+    }
+  ]
+}

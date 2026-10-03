@@ -1,0 +1,143 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C-trig/case_tests/test_trigger_prompts_omit_skill_name.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C-trig/case_tests/test_trigger_prompts_omit_skill_name.py"
+  ],
+  "mutants": [
+    {
+      "label": "[A3 prompt names its skill] 'adversarial review' appears in A3's prompt (predicted red: test_a_triggering_prompt_does_not_contain_its_own_skills_name[adversarial-review-A3])",
+      "file": "../../../adversarial-review/A3/prompt.md",
+      "oracle": "real",
+      "find": "can you check it over and tell me",
+      "replace": "can you do an Adversarial Review and tell me"
+    },
+    {
+      "label": "[A3 prompt names its skill, hyphenated and upper-case] (predicted red: ...[adversarial-review-A3])",
+      "file": "../../../adversarial-review/A3/prompt.md",
+      "oracle": "real",
+      "find": "can you check it over and tell me",
+      "replace": "can you run ADVERSARIAL-REVIEW and tell me"
+    },
+    {
+      "label": "[T-trig prompt names its skill] 'TDD' appears in T-trig's prompt (predicted red: ...[tdd-T-trig])",
+      "file": "../../../tdd/T-trig/prompt.md",
+      "oracle": "real",
+      "find": "I would like this built test-first.",
+      "replace": "I would like this built test-first, TDD."
+    },
+    {
+      "label": "[C-trig prompt names its skill] the word 'commit' appears in C-trig's prompt (predicted red: ...[commit-C-trig])",
+      "file": "../../../commit/C-trig/prompt.md",
+      "oracle": "real",
+      "find": "Can you check in those changes for me",
+      "replace": "Can you commit those changes for me"
+    },
+    {
+      "label": "[C-trig prompt names its skill inside a longer word] 'committed' appears (predicted red: ...[commit-C-trig])",
+      "file": "../../../commit/C-trig/prompt.md",
+      "oracle": "real",
+      "find": "Nothing needs to be pushed",
+      "replace": "Nothing needs to be committed twice"
+    },
+    {
+      "label": "[checker is case-sensitive] (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill[adversarial-review-Please run ADVERSARIAL-REVIEW on this branch.])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "return re.sub(r\"[\\s_-]+\", \" \", text.lower()).strip()",
+      "replace": "return re.sub(r\"[\\s_-]+\", \" \", text).strip()"
+    },
+    {
+      "label": "[checker keeps hyphens apart] 'adversarial review' no longer matches 'adversarial-review' (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill[adversarial-review-Can you do an adversarial review before I merge?])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "r\"[\\s_-]+\"",
+      "replace": "r\"[\\s_]+\""
+    },
+    {
+      "label": "[checker keeps underscores apart] 'Adversarial_Review' no longer matches (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill[adversarial-review-Use the Adversarial_Review skill.])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "r\"[\\s_-]+\"",
+      "replace": "r\"[\\s-]+\""
+    },
+    {
+      "label": "[checker keeps whitespace runs apart] a line break inside the name no longer matches (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill[adversarial-review-Give it an adversarial\\n  review.])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "r\"[\\s_-]+\"",
+      "replace": "r\"[_-]+\""
+    },
+    {
+      "label": "[checker matches whole words only] 'committed' no longer counts (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill[commit-Everything should be committed by tonight.])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "return _fold(skill) in _fold(prompt)",
+      "replace": "return re.search(rf\"\\b{re.escape(_fold(skill))}\\b\", _fold(prompt)) is not None"
+    },
+    {
+      "label": "[checker never flags] (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill)",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "return _fold(skill) in _fold(prompt)",
+      "replace": "return False"
+    },
+    {
+      "label": "[table drift] the checker table names the wrong skill for C-trig (predicted red: test_each_case_names_its_own_skill_through_its_directory_and_item_params[commit-C-trig])",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "\"commit\": \"C-trig\",",
+      "replace": "\"commit\": \"C-trig\",\n    \"commit/\": \"C-trig\","
+    },
+    {
+      "label": "[param pin] the shared test expects the bare skill name as the item param, which real transcripts never carry (predicted red: test_each_case_names_its_own_skill_through_its_directory_and_item_params)",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "== [f\"workbench:{skill}\"]",
+      "replace": "== [skill]"
+    },
+    {
+      "label": "[checker compares the qualified name] a prompt naming the bare skill is no longer flagged (predicted red: test_the_checker_flags_a_prompt_that_names_the_skill)",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "return _fold(skill) in _fold(prompt)",
+      "replace": "return _fold(f\"workbench:{skill}\") in _fold(prompt)"
+    },
+    {
+      "label": "[control] a docstring sentence in the shared test is reworded",
+      "file": "test_trigger_prompts_omit_skill_name.py",
+      "oracle": "real",
+      "find": "A narrower rule would let a prompt name the skill by a spelling the",
+      "replace": "A narrower rule would let a prompt name the skill through a spelling the",
+      "expect": "survived",
+      "why": "Module docstring text is never executed and no test reads it. Inert on every path the suite drives; it would not be inert for a test that parsed the docstring."
+    }
+  ]
+}
