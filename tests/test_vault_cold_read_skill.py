@@ -627,6 +627,17 @@ def test_conductor_counts_the_cap_and_the_reader_prompt_carries_none() -> None:
     assert "carries no read or cap count" in _step(1)
 
 
+def test_cap_count_resets_on_a_delegated_subtract() -> None:
+    """Charles ruled 2026-10-03: a Subtract the conductor applies itself resets
+    the fresh-read count, as an approved body does."""
+    step8 = _step(8)
+    assert (
+        "since the last body Charles approved or the last delegated Subtract, whichever is later"
+        in step8
+    )
+    assert "since the last body Charles approved, from" not in step8
+
+
 def test_replay_ledger_lists_every_afk_app_row_with_class_and_source() -> None:
     """Clause F: the replay doc carries the 2026-10-03 rows; the guard here is
     the only reader of the ledger, so it pins each row's class and source."""
