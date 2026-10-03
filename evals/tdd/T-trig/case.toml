@@ -1,5 +1,7 @@
 # T-trig: triggering fixture. A natural build-this-test-first request that never names the
 # skill; the one item asks whether the Skill call for tdd came before any other work.
+# The param is the plugin-qualified name: real transcripts carry `workbench:<name>` in the Skill
+# call and the matcher compares exactly.
 # The fixture is a small committed uv/pytest tree (pytest pinned, no lockfile), copied into a
 # fresh <dest>, so no case-agent ever runs inside the-workshop checkout.
 # A triggering item selects the skill-arm-only admission branch (6 executions, at least 5
@@ -11,4 +13,4 @@ prompt = "prompt.md"
 id = "T-trig"
 kind = "triggering"
 scorer = "triggered_first"
-params = { skill = "tdd" }
+params = { skill = "workbench:tdd" }

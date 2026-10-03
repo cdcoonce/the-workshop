@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path
@@ -30,6 +31,13 @@ ROSTERED_SKILL = CASE_DIR.parent.name
 OTHER_SKILL = "using-workflow"
 
 ENVELOPE_TYPES = {"user", "assistant", "attachment"}
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_git_environment(monkeypatch):
+    """Drop inherited GIT_* variables (a hook environment sets GIT_DIR) so tests see only their own repos."""
+    for key in [name for name in os.environ if name.startswith("GIT_")]:
+        monkeypatch.delenv(key)
 
 
 @pytest.fixture(scope="session")

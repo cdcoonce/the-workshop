@@ -14,5 +14,9 @@ other tool call except Skill and ToolSearch calls, and precedes the agent's fina
 An agent that runs git status first, then loads the skill, misses; so does one that never loads
 it, however tidy its history comes out. How the changes are grouped or worded is not graded here.
 
+In real runs the Skill call's name is plugin-qualified (`workbench:commit`), so the item's
+param is that string. A hand run that shows the bare name has a different harness shape and must be
+investigated before its hits or misses are trusted.
+
 Calibration is skill arm only: 6 executions, at least 5 hits, no no-skill arm. The harness
 applies that for any triggering item; this case adds no calibration key.

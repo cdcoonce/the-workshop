@@ -14,5 +14,9 @@ An agent that writes tests first on its own but never loads the skill misses. So
 that loads it after reading the repository, after editing a file, or only in its closing reply.
 Whether the function ends up correct is not graded here.
 
+In real runs the Skill call's name is plugin-qualified (`workbench:tdd`), so the item's
+param is that string. A hand run that shows the bare name has a different harness shape and must be
+investigated before its hits or misses are trusted.
+
 Calibration is skill arm only: 6 executions, at least 5 hits, no no-skill arm. The harness
 applies that for any triggering item; this case adds no calibration key.

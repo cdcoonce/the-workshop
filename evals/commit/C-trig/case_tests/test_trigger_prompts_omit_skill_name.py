@@ -51,8 +51,11 @@ def test_a_triggering_prompt_does_not_contain_its_own_skills_name(skill, case):
 
 @pytest.mark.parametrize(("skill", "case"), sorted(_CASES.items()))
 def test_each_case_names_its_own_skill_through_its_directory_and_item_params(skill, case):
+    # Prompts are checked against the BARE name (above), but the item param is the plugin-qualified
+    # name: real transcripts always carry `workbench:<name>` in the Skill call's input.skill, and
+    # skill_triggered_first compares exactly, so a bare param would score every faithful run a miss.
     case_toml = tomllib.loads((_EVALS / skill / case / "case.toml").read_text(encoding="utf-8"))
-    assert [item["params"]["skill"] for item in case_toml["items"]] == [skill]
+    assert [item["params"]["skill"] for item in case_toml["items"]] == [f"workbench:{skill}"]
 
 
 @pytest.mark.parametrize(
@@ -70,6 +73,8 @@ def test_each_case_names_its_own_skill_through_its_directory_and_item_params(ski
         ("commit", "Make a COMMIT of my work."),
         ("commit", "Everything should be committed by tonight."),
         ("commit", "Use /commit for this."),
+        ("commit", "Use workbench:commit for this."),
+        ("tdd", "Use workbench:tdd for this."),
     ],
 )
 def test_the_checker_flags_a_prompt_that_names_the_skill(skill, prompt):

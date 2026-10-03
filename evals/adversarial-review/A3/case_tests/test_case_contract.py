@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -42,7 +43,9 @@ def test_case_has_exactly_one_item_and_it_is_a_triggering_item(case_toml):
 
 def test_the_item_names_the_rostered_skill_and_a_scorer_that_exists(case_toml, predicates, rostered_skill):
     item = case_toml["items"][0]
-    assert item["params"] == {"skill": rostered_skill}
+    # Real transcripts carry the plugin-qualified name in the Skill call's input.skill, and
+    # skill_triggered_first compares exactly, so the param must be "workbench:<name>".
+    assert item["params"] == {"skill": f"workbench:{rostered_skill}"}
     assert callable(getattr(predicates, item["scorer"]))
 
 
@@ -90,8 +93,10 @@ def test_built_fixture_is_a_repo_with_a_branch_checked_out_and_no_remote(case_to
     )
 
     def git(*args: str) -> str:
+        # No inherited GIT_* (a hook environment sets GIT_DIR): the repo under test is `dest`.
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
         return subprocess.run(
-            ["git", "-C", str(dest), *args], check=True, capture_output=True, text=True
+            ["git", "-C", str(dest), *args], check=True, capture_output=True, text=True, env=env
         ).stdout.strip()
 
     assert git("branch", "--show-current") not in ("", "main")
@@ -129,3 +134,9 @@ def test_acceptance_records_real_criteria(case_dir):
     acceptance = (case_dir / "acceptance.md").read_text(encoding="utf-8")
     assert "A3" in acceptance
     assert "Skill" in acceptance
+
+
+def test_acceptance_notes_that_real_runs_carry_the_plugin_qualified_skill_name(case_dir, rostered_skill):
+    acceptance = (case_dir / "acceptance.md").read_text(encoding="utf-8")
+    assert f"workbench:{rostered_skill}" in acceptance
+    assert "investigated" in acceptance

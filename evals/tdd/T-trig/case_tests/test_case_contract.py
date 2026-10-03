@@ -9,6 +9,7 @@ import sys
 import tomllib
 
 from evals._harness import calibration
+from evals._harness.deps import tree_hash
 from evals._harness.dispatch import build_dispatch_prompt, find_acceptance_leaks, find_invalid_modes
 
 # Words that belong to the discipline itself. A prompt carrying them would hand the
@@ -43,7 +44,9 @@ def test_case_has_exactly_one_item_and_it_is_a_triggering_item(case_toml):
 
 def test_the_item_names_the_rostered_skill_and_a_scorer_that_exists(case_toml, predicates, rostered_skill):
     item = case_toml["items"][0]
-    assert item["params"] == {"skill": rostered_skill}
+    # Real transcripts carry the plugin-qualified name in the Skill call's input.skill, and
+    # skill_triggered_first compares exactly, so the param must be "workbench:<name>".
+    assert item["params"] == {"skill": f"workbench:{rostered_skill}"}
     assert callable(getattr(predicates, item["scorer"]))
 
 
@@ -112,8 +115,22 @@ def test_fixture_does_not_already_ship_the_requested_function(case_dir):
     assert not any("truncate_words" in path.read_text(encoding="utf-8") for path in fixture.rglob("*.py"))
 
 
-def test_fixture_fingerprint_is_the_committed_fixture_tree_hash(case_dir):
-    assert re.fullmatch(r"[0-9a-f]{64}", calibration.fixture_fingerprint(case_dir))
+def test_fixture_fingerprint_is_the_committed_fixture_tree_hash(case_dir, repo_root):
+    """The fingerprint equals #995's tier hash of the committed fixture, computed independently."""
+    fixture_path = case_dir.relative_to(repo_root).as_posix() + "/fixture"
+    expected = tree_hash([fixture_path], repo=repo_root)
+    assert re.fullmatch(r"[0-9a-f]{64}", expected)
+    assert calibration.fixture_fingerprint(case_dir) == expected
+    # It hashes this fixture and nothing else: another tree gives another digest.
+    assert expected != tree_hash([case_dir.relative_to(repo_root).as_posix() + "/case_tests"], repo=repo_root)
+    # It reads committed blobs, so every fixture file must be tracked.
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", fixture_path], cwd=repo_root, capture_output=True, text=True, check=True
+    ).stdout.split()
+    on_disk = sorted(
+        path.relative_to(repo_root).as_posix() for path in (case_dir / "fixture").rglob("*") if path.is_file()
+    )
+    assert sorted(tracked) == on_disk
 
 
 def test_prompt_is_a_natural_test_first_request_with_no_user_turns(case_dir):
@@ -142,3 +159,9 @@ def test_acceptance_records_real_criteria(case_dir):
     acceptance = (case_dir / "acceptance.md").read_text(encoding="utf-8")
     assert "T-trig" in acceptance
     assert "Skill" in acceptance
+
+
+def test_acceptance_notes_that_real_runs_carry_the_plugin_qualified_skill_name(case_dir, rostered_skill):
+    acceptance = (case_dir / "acceptance.md").read_text(encoding="utf-8")
+    assert f"workbench:{rostered_skill}" in acceptance
+    assert "investigated" in acceptance

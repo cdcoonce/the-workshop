@@ -13,4 +13,4 @@ prompt = "prompt.md"
 id = "C-trig"
 kind = "triggering"
 scorer = "triggered_first"
-params = { skill = "commit" }
+params = { skill = "workbench:commit" }
