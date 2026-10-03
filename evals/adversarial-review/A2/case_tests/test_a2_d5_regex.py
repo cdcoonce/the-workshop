@@ -41,13 +41,27 @@ PASSING_MENTIONS = {
     "not-uncommitted": "This is not uncommitted work, so there is nothing to guard.",
     "un-staged": "There is no check for un-staged files in this helper.",
     "not-only-checks": "Not only checks staged files but also resets cleanly.",
-    "comma-before-the-guard-word": "There is no doubt, check staged changes first.",
+    "comma-before-the-guard-word": "Reviewer says no, check for staged changes first.",
     "word-ending-in-no": "A piano guard for staged files belongs to another module.",
     "identifier-starting-with-staged": "There is no check for staged_files handling in this helper.",
     "unstaged-guard-is-missing": "The unstaged-files guard is missing.",
     "un-staged-guard-is-absent": "The un-staged changes guard is absent.",
     "no-op": "The no-op path leaves staged files alone.",
     "guard-is-present": "The staged-changes guard is present.",
+    "r2-no-issue-here-as": "No issue here as staged changes are handled.",
+    "r2-no-problem-since": "No problem since staged files are checked first.",
+    "r2-no-defect-in-how": "There is no defect in how staged changes are checked.",
+    "r2-no-regression": "No regression for staged files handling.",
+    "r2-does-not-mention": "The docstring does not mention that staged files are checked first.",
+    "r2-no-guard-is-needed": "No guard is needed for staged files since reset --soft preserves them.",
+    "r2-unlike-the-staged-guard": "squash() does not check the reflog either, unlike the staged guard above it.",
+    "r2-before-the-staged-guard-runs": "never checks remote reachability before the staged guard runs",
+    "r2-without-checking-whether": "_is_ancestor is called without checking whether the staged base exists.",
+    "r2-not-handled-the-way": "The ls-remote failure is not handled the way the staged check is.",
+    "r2-without-the-staged-check": "Without the staged check the test still passes, so the test is weak.",
+    "r2-no-other-guard-is-needed": "No other guard is needed besides the staged check.",
+    "r2-if-there-were-no-guard": "If there were no staged-changes guard, the test would fail.",
+    "r2-no-staged-check-is-needed": "No staged check is needed here.",
     "word-alone": "staged",
     "cached-alone": "--cached",
     "uncommitted-alone": "uncommitted",
@@ -70,6 +84,17 @@ GENUINE_ABSENCES = {
     "never-looks-at": "squash() never looks at staged changes.",
     "missing-as-negator": "squash() is missing a check for staged changes.",
     "real-b-r1-spec-line-168": "squash() goes directly from the merge-commit check to gathering rev_list here without ever inspecting the index; no such check exists anywhere in the 295-line file.",
+    "spec-wording-guard-for": "The guard for staged-but-uncommitted changes is missing.",
+    "spec-wording-check-for": "The check for staged-but-uncommitted changes is absent.",
+    "was-never-implemented": "The guard for staged changes was never implemented.",
+    "does-not-exist": "The check for staged changes does not exist.",
+    "was-omitted": "The guard for staged changes was omitted.",
+    "forgets-to-check": "squash() forgets to check for staged changes.",
+    "backtick-before-the-marker": "There is no `staged` guard.",
+    "does-not-run-git-diff-cached": "squash() does not run `git diff --cached`.",
+    "never-calls-git-diff-cached-quiet": "squash() never calls `git diff --cached --quiet`.",
+    "newline-inside-one-sentence": "squash() has no check\nfor staged changes before the reset.",
+    "the-checks-are-missing": "The checks for staged changes are missing.",
     "shouting": "NEVER CHECKS FOR STAGED CHANGES before it resets.",
 }
 
@@ -107,3 +132,70 @@ def test_the_regex_alone_never_credits_a_passing_mention_in_the_right_file(items
     regex = items["A2-D5"]["params"]["regex"]
     for text in PASSING_MENTIONS.values():
         assert not re.search(regex, text, re.IGNORECASE), text
+
+
+# --- one sentence per negator word: each must be the only thing that makes its sentence credit ----
+
+NEGATOR_SENTENCES = {
+    "no": "There is no check for staged changes.",
+    "never": "squash() never checks for staged changes.",
+    "not": "squash() is not checking for staged changes.",
+    "did-not": "squash() did not check for staged changes.",
+    "does-not": "squash() does not check for staged changes.",
+    "nowhere": "Nowhere is there any check for staged changes.",
+    "without": "Without a check for staged files the reset sweeps them in.",
+    "missing": "squash() is missing a check for staged changes.",
+    "lacks": "squash() lacks a check for staged changes.",
+    "lacking": "squash() is lacking a check for staged changes.",
+    "absent": "Absent a check for staged changes, the reset sweeps them in.",
+    "omits": "squash() omits the check for staged changes.",
+    "omitted": "squash() omitted any check for staged changes.",
+    "doesnt": "squash() doesn't check for staged changes.",
+    "fails-to": "squash() fails to check for staged changes.",
+    "forgets-to": "squash() forgets to check for staged changes.",
+}
+
+
+@pytest.mark.parametrize("text", NEGATOR_SENTENCES.values(), ids=NEGATOR_SENTENCES.keys())
+def test_each_negator_word_credits_its_own_sentence(items, predicates, text):
+    assert _credits_d5(items, predicates, text) is True
+
+
+@pytest.mark.parametrize("verb", ["inspects", "looks at", "examines", "consults", "reads"])
+def test_each_inspect_verb_credits_never_reading_the_index(items, predicates, verb):
+    assert _credits_d5(items, predicates, f"squash() never {verb} the index.") is True
+
+
+@pytest.mark.parametrize("copula", ["is", "was", "are", "were"])
+def test_each_copula_credits_a_guard_that_is_missing(items, predicates, copula):
+    text = f"The checks for staged changes {copula} missing."
+    assert _credits_d5(items, predicates, text) is True
+
+
+# --- the bounds: a credit at N, none at N+1 -------------------------------------------------
+
+
+def _at_bound(items, predicates, template: str, filler: str, bound: int) -> tuple[bool, bool]:
+    at = _credits_d5(items, predicates, template.format(filler * bound))
+    over = _credits_d5(items, predicates, template.format(filler * (bound + 1)))
+    return at, over
+
+
+def test_shape_one_allows_five_words_between_the_guard_word_and_for(items, predicates):
+    assert _at_bound(items, predicates, "There is no check{} for staged changes.", " anywhere", 5) == (True, False)
+
+
+def test_shape_two_allows_four_qualifiers_between_the_negator_and_the_marker(items, predicates):
+    assert _at_bound(items, predicates, "There is no{} staged guard.", " dedicated", 4) == (True, False)
+
+
+def test_the_negator_to_guard_word_gap_allows_three_words(items, predicates):
+    assert _at_bound(items, predicates, "squash() never{} checks for staged changes.", " actually", 3) == (True, False)
+
+
+def test_shape_one_allows_two_filler_words_after_for(items, predicates):
+    assert _at_bound(items, predicates, "There is no check for{} staged changes.", " any", 2) == (True, False)
+
+
+def test_shape_five_allows_three_words_after_the_marker_phrase(items, predicates):
+    assert _at_bound(items, predicates, "The guard for staged changes{} is missing.", " in", 3) == (True, False)

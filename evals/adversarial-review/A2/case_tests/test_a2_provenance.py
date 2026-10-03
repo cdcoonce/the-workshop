@@ -9,7 +9,9 @@ references them in place.
 
 from __future__ import annotations
 
+import subprocess
 import tomllib
+from pathlib import Path
 
 import pytest
 _EXPERIMENT = "docs/experiments/2026-09-21-terse-lens-contract-ab"
@@ -65,29 +67,50 @@ def test_each_copy_is_byte_identical_to_its_source_blob(provenance, case_dir, gi
         assert copied == entry["source_blob_sha"], entry["file"]
 
 
-def _committed_experiment_changes(provenance, git) -> str:
-    """Committed changes to the experiment since the resolved ref; the working tree is not consulted."""
-    return git("diff", "--stat", f"{provenance['resolved_ref']}...HEAD", "--", _EXPERIMENT)
+def _committed_changes(repo: Path, ref: str, path: str) -> str:
+    """Committed changes under *path* since *ref*; the working tree is not consulted."""
+    result = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--stat", f"{ref}...HEAD", "--", path],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
 
 
-def test_the_experiment_directory_has_no_committed_change_since_the_resolved_ref(provenance, git):
+def _scratch_repo(tmp_path: Path) -> Path:
+    """A throwaway repo holding one tracked file under the experiment's path; the real repo is never written."""
+    repo = tmp_path / "scratch-repo"
+    (repo / _EXPERIMENT).mkdir(parents=True)
+    (repo / _EXPERIMENT / "prereg.md").write_text("frozen\n", encoding="utf-8")
+    env = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
+    for args in (["init", "-q"], ["add", "."], [*env, "commit", "-q", "-m", "base"]):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    return repo
+
+
+def test_the_experiment_directory_has_no_committed_change_since_the_resolved_ref(provenance, repo_root):
     """The experiment is a frozen record: A2 copies from it and never edits it."""
-    assert _committed_experiment_changes(provenance, git).strip() == ""
+    assert _committed_changes(repo_root, provenance["resolved_ref"], _EXPERIMENT).strip() == ""
 
 
-def test_an_untracked_file_under_the_experiment_does_not_turn_a2_red(provenance, git, repo_root):
-    stray = repo_root / _EXPERIMENT / "results" / "stray-untracked-note.txt"
-    assert not stray.exists()
-    stray.write_text("a local scratch file A2 does not own\n", encoding="utf-8")
-    try:
-        assert _committed_experiment_changes(provenance, git).strip() == ""
-    finally:
-        stray.unlink()
+def test_an_untracked_file_under_the_experiment_does_not_turn_the_check_red(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / _EXPERIMENT / "results").mkdir()
+    (repo / _EXPERIMENT / "results" / "stray-untracked-note.txt").write_text("local scratch\n", encoding="utf-8")
+    assert _committed_changes(repo, "HEAD", _EXPERIMENT).strip() == ""
 
 
-def test_the_committed_change_check_does_see_a_committed_edit(provenance, git):
-    """Teeth for the check itself: against the commit just before the experiment landed it is not empty."""
-    experiment_landed = git("log", "--diff-filter=A", "--format=%H", "-1", "--", f"{_EXPERIMENT}/prereg.md").strip()
-    parent = f"{experiment_landed}^"
-    stat = git("diff", "--stat", f"{parent}...{provenance['resolved_ref']}", "--", _EXPERIMENT)
-    assert stat.strip() != ""
+def test_an_uncommitted_edit_to_a_tracked_file_does_not_turn_the_check_red_either(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / _EXPERIMENT / "prereg.md").write_text("edited but not committed\n", encoding="utf-8")
+    assert _committed_changes(repo, "HEAD", _EXPERIMENT).strip() == ""
+
+
+def test_the_committed_change_check_does_see_a_committed_edit(tmp_path):
+    repo = _scratch_repo(tmp_path)
+    (repo / _EXPERIMENT / "prereg.md").write_text("edited and committed\n", encoding="utf-8")
+    env = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), *env, "commit", "-q", "-m", "edit"], check=True, capture_output=True)
+    assert _committed_changes(repo, "HEAD~1", _EXPERIMENT).strip() != ""
