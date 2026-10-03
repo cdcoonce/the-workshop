@@ -45,6 +45,10 @@ See [references/commands.md](references/commands.md) for exact syntax, flags, an
 
 Scope any command to another repository with `-R OWNER/REPO`.
 
+## Compact Queries (prefer over raw dumps)
+
+`scripts/failed_job_log.py` (failing jobs plus a cleaned log tail) and `scripts/mr_status.py` (state, pipeline, approvals, unresolved threads) answer "what is wrong?" in a few lines. Both exit `2` when they got no answer. Usage in [references/commands.md](references/commands.md#compact-queries).
+
 ## Common Flag Reference
 
 | Flag                    | Description                 |
