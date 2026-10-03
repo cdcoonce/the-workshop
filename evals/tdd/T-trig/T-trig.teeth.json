@@ -176,15 +176,15 @@
       "label": "[prompt] a user turn is scripted into the prompt (predicted red: test_prompt_is_a_natural_test_first_request_with_no_user_turns)",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "Nobody is around",
-      "replace": "User: Nobody is around"
+      "find": "I would like this built test-first. Nobody",
+      "replace": "User: I would like this built test-first. Nobody"
     },
     {
       "label": "[prompt] an acceptance line is copied into the prompt (predicted red: test_prompt_leaks_nothing_from_acceptance)",
       "file": "prompt.md",
       "oracle": "real",
       "find": "Nobody is around to answer questions, so make the calls yourself.",
-      "replace": "An agent that writes tests first on its own but never loads the skill misses."
+      "replace": "that loads it after reading the repository, after editing a file, or only in its closing reply."
     },
     {
       "label": "[fixture] pytest is no longer pinned (predicted red: test_fixture_pins_pytest_directly)",

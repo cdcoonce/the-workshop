@@ -8,8 +8,9 @@ uncommitted work, with no remote.
 Run as `python build_fixture.py <dest>`, into a `<dest>` that does not exist yet.
 
 The commit pins author and committer name, email and date, and every git setting
-that could leak in from the machine (global and system config, hooks, templates,
-signing, the default branch name, inherited GIT_* variables) is overridden, so two
+that could leak in from the machine is shut out: inherited GIT_* variables are dropped
+and the global and system config files are replaced by an empty one (that takes hooks,
+templates, signing and the default branch name with it), so two
 builds give the same commit id and the same `builder_output_fingerprint`, which
 hashes the full built working tree plus `git log --all --format=%H%x00%s`.
 
@@ -168,8 +169,7 @@ def build_fixture(dest: Path) -> Path:
         raise FileExistsError(f"{dest} already exists; remove it or pick another path")
 
     dest.mkdir(parents=True)
-    # An empty --template keeps machine-level hook or exclude templates out of .git.
-    _git(dest, "init", "-q", "-b", "main", "--template=")
+    _git(dest, "init", "-q", "-b", "main")
     _git(dest, "config", "user.name", _PINNED_NAME)
     _git(dest, "config", "user.email", _PINNED_EMAIL)
 
@@ -179,7 +179,7 @@ def build_fixture(dest: Path) -> Path:
     _write(dest, "src/greeter/format.py", _FORMAT_BASE)
     _write(dest, "tests/test_format.py", _TEST_FORMAT_BASE)
     _git(dest, "add", "-A")
-    _git(dest, "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "Add the greeting library")
+    _git(dest, "commit", "-q", "-m", "Add the greeting library")
 
     _write(dest, "README.md", _README_WORKING)
     _write(dest, "src/greeter/__init__.py", _INIT_WORKING)

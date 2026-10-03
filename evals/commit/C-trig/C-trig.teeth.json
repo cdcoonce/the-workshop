@@ -184,7 +184,7 @@
       "file": "prompt.md",
       "oracle": "real",
       "find": "I will not be around to answer questions, so use your judgement.",
-      "replace": "An agent that runs git status first, then loads the skill, misses; so does one that never loads"
+      "replace": "it, however tidy its history comes out. How the changes are grouped or worded is not graded here."
     },
     {
       "label": "[builder] the author date is not pinned (predicted red: test_the_one_commit_pins_author_and_committer_name_email_and_date)",
@@ -213,20 +213,6 @@
       "oracle": "real",
       "find": "if not key.startswith(\"GIT_\")}",
       "replace": "if True}"
-    },
-    {
-      "label": "[builder] hooks are not bypassed (predicted red: test_a_builder_run_under_hostile_git_settings_still_builds_the_same_commit)",
-      "file": "build_fixture.py",
-      "oracle": "real",
-      "find": "\"commit\", \"-q\", \"--no-verify\", \"-m\"",
-      "replace": "\"commit\", \"-q\", \"-m\""
-    },
-    {
-      "label": "[builder] signing is not overridden (predicted red: test_a_builder_run_under_hostile_git_settings_still_builds_the_same_commit)",
-      "file": "build_fixture.py",
-      "oracle": "real",
-      "find": "\"-c\", \"commit.gpgsign=false\", ",
-      "replace": ""
     },
     {
       "label": "[builder] the default branch is not main (predicted red: test_builder_makes_a_repo_with_exactly_one_commit_and_no_remote)",

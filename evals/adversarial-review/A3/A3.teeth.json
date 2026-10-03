@@ -183,15 +183,15 @@
       "label": "[prompt] a user turn is scripted into the prompt (predicted red: test_prompt_is_a_pre_merge_check_request_with_no_user_turns)",
       "file": "prompt.md",
       "oracle": "real",
-      "find": "A short answer is fine:",
-      "replace": "User: A short answer is fine:"
+      "find": "Before I do,",
+      "replace": "User: Before I do,"
     },
     {
       "label": "[prompt] an acceptance line is copied into the prompt (predicted red: test_prompt_leaks_nothing_from_acceptance)",
       "file": "prompt.md",
       "oracle": "real",
       "find": "A short answer is fine: ready or not, and why.",
-      "replace": "An agent that reviews the branch well but never loads the skill misses."
+      "replace": "loads it after reading files, after running the tests, or only after writing its answer."
     },
     {
       "label": "[control] a docstring sentence in predicates.py is reworded",
