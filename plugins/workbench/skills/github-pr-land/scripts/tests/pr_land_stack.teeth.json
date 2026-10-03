@@ -1,0 +1,112 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_stack.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_stack.py"
+  ],
+  "mutants": [
+    {
+      "label": "the delta guard's before-diff starts at the fork point, so it carries the base PR's commits (test_stacked_pr_refreshes_onto_a_squash_merged_base)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"diff\", \"--no-color\", \"--no-ext-diff\", stack.head_sha, head_sha]",
+      "replace": "[\"git\", \"diff\", \"--no-color\", \"--no-ext-diff\", fork_point.stdout.strip(), head_sha]"
+    },
+    {
+      "label": "a candidate PR that is not merged is accepted as the stack base (test_candidate_pr_not_merged_keeps_todays_refusal)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if not merged:\n                continue\n",
+      "replace": ""
+    },
+    {
+      "label": "a merged PR whose merge commit is not in the base's history is accepted (test_merge_commit_outside_the_base_keeps_todays_refusal)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if landed.returncode == 0:\n",
+      "replace": "            if landed.returncode in (0, 1):\n"
+    },
+    {
+      "label": "the oldest candidate is tried first instead of the newest (test_chain_refreshes_with_the_newest_merged_base)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    for sha in walked.stdout.split():\n",
+      "replace": "    for sha in reversed(walked.stdout.split()):\n"
+    },
+    {
+      "label": "a merge-tree conflict (exit 1) is ignored and its conflicted tree is committed (test_real_conflict_with_the_stack_base_refuses_and_names_it)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if tree.returncode == 1:\n        names = []\n        for line in lines[1:]:\n            if not line:\n                break\n            names.append(line)\n        files = \"\\n\".join(names) or \"(none listed)\"\n        reproduce = (\n            f\"git merge-tree --write-tree --name-only --merge-base={stack.head_sha} {info.head_sha} {info.base_sha}\"\n        )\n        return _refused(\n            info,\n            f\"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\\n{files}\\n{reproduce}\",\n        )\n    if tree.returncode != 0 or not lines[0]:\n",
+      "replace": "    if tree.returncode not in (0, 1) or not lines[0]:\n"
+    },
+    {
+      "label": "the PR's own head is not excluded from the candidates (test_own_pr_head_is_never_its_own_stack_base)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if number == info.number:\n                continue\n",
+      "replace": ""
+    },
+    {
+      "label": "the stack search also runs on a refresh that merged cleanly (test_clean_refresh_never_looks_for_a_stack)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "        merged = runner.run([\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)\n",
+      "replace": "        _stack_base(runner, repo, info)\n        merged = runner.run([\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)\n"
+    },
+    {
+      "label": "an ancestry-check error (rc other than 0/1) counts as landed (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if landed.returncode == 0:\n                return StackBase(number, sha, merge_commit)\n",
+      "replace": "            if landed.returncode != 1:\n                return StackBase(number, sha, merge_commit)\n"
+    },
+    {
+      "label": "an ancestry-check error moves on to the next candidate instead of giving up (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if landed.returncode != 1:\n                return None\n",
+      "replace": "            if landed.returncode != 1:\n                continue\n"
+    },
+    {
+      "label": "an unmerged candidate ends the search instead of being skipped (test_unmerged_newest_candidate_is_skipped_for_an_older_merged_one)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if not merged:\n                continue\n",
+      "replace": "            if not merged:\n                return None\n"
+    },
+    {
+      "label": "the candidate walk covers all of the head's history, not just base..head (test_a_commit_the_base_already_has_is_never_a_stack_base)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"rev-list\", \"--topo-order\", f\"{info.base_sha}..{info.head_sha}\"]",
+      "replace": "[\"git\", \"rev-list\", \"--topo-order\", info.head_sha]"
+    },
+    {
+      "label": "the pushed repair is a force-push (test_stack_repair_pushes_a_plain_fast_forward)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"push\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]",
+      "replace": "[\"git\", \"push\", \"--force\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]"
+    }
+  ]
+}

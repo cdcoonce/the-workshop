@@ -494,6 +494,127 @@ def _remove_worktree(runner: Runner, scratch: str) -> None:
     shutil.rmtree(scratch, ignore_errors=True)
 
 
+@dataclass(frozen=True)
+class StackBase:
+    """A squash-merged PR whose commits the dependent head still carries."""
+
+    pr: int
+    head_sha: str
+    merge_commit: str
+
+
+PULL_HEAD_LINE = re.compile(r"([0-9a-f]{40})\trefs/pull/(\d+)/head")
+
+
+def _pull_heads(runner: Runner) -> dict[str, list[int]] | None:
+    """Map each SHA that is some PR's final head to those PR numbers, newest PR first.
+
+    GitHub keeps ``refs/pull/<n>/head`` after the PR's branch is deleted.
+    Returns ``None`` when the listing fails; malformed lines are ignored.
+    """
+    listed = runner.run(["git", "ls-remote", "origin", "refs/pull/*/head"])
+    if listed.returncode != 0:
+        return None
+    heads: dict[str, list[int]] = {}
+    for line in listed.stdout.splitlines():
+        match = PULL_HEAD_LINE.fullmatch(line.strip())
+        if match is not None:
+            heads.setdefault(match.group(1), []).append(int(match.group(2)))
+    return {sha: sorted(numbers, reverse=True) for sha, numbers in heads.items()}
+
+
+def _stack_base(runner: Runner, repo: str, info: PrInfo) -> StackBase | None:
+    """Find the squash-merged PR the dependent head was stacked on, if any.
+
+    A candidate is a commit only the head carries that is some other PR's final
+    head. The newest merged candidate wins: in a chain A<-B<-C, B's final head
+    already contains A's. A merged PR counts only when its merge commit is an
+    ancestor of the base, so it really landed there.
+
+    Returns
+    -------
+    StackBase | None
+        ``None`` when no candidate qualifies, or when any command or API read
+        fails or returns an unexpected shape; the caller keeps today's refusal.
+    """
+    walked = runner.run(["git", "rev-list", "--topo-order", f"{info.base_sha}..{info.head_sha}"])
+    heads = _pull_heads(runner)
+    if walked.returncode != 0 or heads is None:
+        return None
+    for sha in walked.stdout.split():
+        for number in heads.get(sha, []):
+            if number == info.number:
+                continue
+            payload = _api_json(runner, repo, f"repos/{repo}/pulls/{number}")
+            merged = payload.get("merged") if isinstance(payload, dict) else None
+            merge_commit = payload.get("merge_commit_sha") if isinstance(payload, dict) else None
+            if not isinstance(merged, bool) or not isinstance(merge_commit, str):
+                return None
+            if not merged:
+                continue
+            if not FULL_SHA.fullmatch(merge_commit):
+                return None
+            landed = runner.run(["git", "merge-base", "--is-ancestor", merge_commit, info.base_sha])
+            if landed.returncode == 0:
+                return StackBase(number, sha, merge_commit)
+            if landed.returncode != 1:
+                return None
+    return None
+
+
+def _merge_with_stack_base(runner: Runner, info: PrInfo, stack: StackBase, scratch: str) -> RefreshResult | None:
+    """Merge the base into the scratch worktree's head with the stack base as merge base.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``git`` in *scratch*.
+    info : PrInfo
+        The PR being refreshed.
+    stack : StackBase
+        The squash-merged PR whose final head is the merge base.
+    scratch : str
+        Detached worktree at the PR head, left with no merge in progress.
+
+    Returns
+    -------
+    RefreshResult | None
+        ``None`` once *scratch* sits on a merge commit of the head and the base;
+        otherwise the refusal to return.
+    """
+    named = f"stack base PR #{stack.pr} (head {stack.head_sha})"
+    tree = runner.run(
+        ["git", "merge-tree", "--write-tree", "--name-only", f"--merge-base={stack.head_sha}", "HEAD", info.base_sha],
+        cwd=scratch,
+    )
+    lines = tree.stdout.split("\n")
+    if tree.returncode == 1:
+        names = []
+        for line in lines[1:]:
+            if not line:
+                break
+            names.append(line)
+        files = "\n".join(names) or "(none listed)"
+        reproduce = (
+            f"git merge-tree --write-tree --name-only --merge-base={stack.head_sha} {info.head_sha} {info.base_sha}"
+        )
+        return _refused(
+            info,
+            f"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\n{files}\n{reproduce}",
+        )
+    if tree.returncode != 0 or not lines[0]:
+        return _refused(info, f"git merge-tree with {named} as merge base failed: {tree.stderr.strip()}")
+    message = f"Merge {info.base_ref} into {info.head_ref} (stack base PR #{stack.pr})"
+    commit = runner.run(["git", "commit-tree", lines[0], "-p", "HEAD", "-p", info.base_sha, "-m", message], cwd=scratch)
+    if commit.returncode != 0 or not FULL_SHA.fullmatch(commit.stdout.strip()):
+        return _refused(info, f"git commit-tree with {named} as merge base failed: {commit.stderr.strip()}")
+    reset = runner.run(["git", "reset", "--hard", commit.stdout.strip()], cwd=scratch)
+    if reset.returncode != 0:
+        return _refused(info, f"git reset to the refreshed head failed: {reset.stderr.strip()}")
+    print(f"stack: refreshed with PR #{stack.pr} head {stack.head_sha[:7]} as merge base", file=sys.stderr)
+    return None
+
+
 def refresh_and_gate(
     runner: Runner,
     repo: str,
@@ -563,7 +684,13 @@ def refresh_and_gate(
             conflicted = runner.run(["git", "diff", "--name-only", "--diff-filter=U"], cwd=scratch)
             runner.run(["git", "merge", "--abort"], cwd=scratch)
             files = conflicted.stdout.strip() or "(none listed)"
-            return _refused(info, f"merging {info.base_ref} conflicts; resolve by hand:\n{files}")
+            stack = _stack_base(runner, repo, info)
+            if stack is None:
+                return _refused(info, f"merging {info.base_ref} conflicts; resolve by hand:\n{files}")
+            refusal = _merge_with_stack_base(runner, info, stack, scratch)
+            if refusal is not None:
+                return refusal
+            before = runner.run(["git", "diff", "--no-color", "--no-ext-diff", stack.head_sha, head_sha])
 
         after = runner.run(["git", "diff", "--no-color", "--no-ext-diff", base_sha, "HEAD"], cwd=scratch)
         if before.returncode != 0 or after.returncode != 0:
