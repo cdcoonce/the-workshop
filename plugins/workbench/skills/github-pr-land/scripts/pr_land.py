@@ -595,8 +595,12 @@ def _merge_with_stack_base(runner: Runner, info: PrInfo, stack: StackBase, scrat
                 break
             names.append(line)
         files = "\n".join(names) or "(none listed)"
+        reproduce = (
+            f"git merge-tree --write-tree --name-only --merge-base={stack.head_sha} {info.head_sha} {info.base_sha}"
+        )
         return _refused(
-            info, f"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\n{files}"
+            info,
+            f"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\n{files}\n{reproduce}",
         )
     if tree.returncode != 0 or not lines[0]:
         return _refused(info, f"git merge-tree with {named} as merge base failed: {tree.stderr.strip()}")

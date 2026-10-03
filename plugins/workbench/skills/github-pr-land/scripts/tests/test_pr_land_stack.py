@@ -338,6 +338,11 @@ def test_real_conflict_with_the_stack_base_refuses_and_names_it(world: World) ->
     assert f"PR #{A_PR}" in result.message
     assert stack.stack_head in result.message
     assert "t.txt" in result.message
+    reproduce = (
+        f"git merge-tree --write-tree --name-only --merge-base={stack.stack_head} "
+        f"{stack.info.head_sha} {stack.info.base_sha}"
+    )
+    assert result.message.endswith(reproduce)
     assert world.origin_ref("feat/b") == stack.info.head_sha
 
 

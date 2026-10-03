@@ -56,7 +56,7 @@
       "label": "a merge-tree conflict (exit 1) is ignored and its conflicted tree is committed (test_real_conflict_with_the_stack_base_refuses_and_names_it)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "    if tree.returncode == 1:\n        names = []\n        for line in lines[1:]:\n            if not line:\n                break\n            names.append(line)\n        files = \"\\n\".join(names) or \"(none listed)\"\n        return _refused(\n            info, f\"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\\n{files}\"\n        )\n    if tree.returncode != 0 or not lines[0]:\n",
+      "find": "    if tree.returncode == 1:\n        names = []\n        for line in lines[1:]:\n            if not line:\n                break\n            names.append(line)\n        files = \"\\n\".join(names) or \"(none listed)\"\n        reproduce = (\n            f\"git merge-tree --write-tree --name-only --merge-base={stack.head_sha} {info.head_sha} {info.base_sha}\"\n        )\n        return _refused(\n            info,\n            f\"merging {info.base_ref} conflicts even with {named} as merge base; resolve by hand:\\n{files}\\n{reproduce}\",\n        )\n    if tree.returncode != 0 or not lines[0]:\n",
       "replace": "    if tree.returncode not in (0, 1) or not lines[0]:\n"
     },
     {
