@@ -1,0 +1,70 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_vault_cold_read_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "A: delete the advisory bullet (reader-born REASONED finding is advisory)",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Advisory.** A REASONED finding whose target is a reader-born rule or its boundary is advisory: it never blocks, never gets a new criterion, and its default is an [outside-this-contract line](#subtract-first). This covers policy forks (detector 7), unenforced rules (detector 11) and survivors (detector 3), not only input-value mutants.\n",
+      "replace": ""
+    },
+    {
+      "label": "B: delete the standing-delegation bullet",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Standing delegation (Charles's decision, 2026-10-03).** The conductor applies Subtract itself, with no per-cap approval. It deletes each reader-born rule that a blocking or advisory rule-born finding rests on, rewrites each case as an outside-this-contract line, and lists every deletion and added line in the REWRITE comment under a `Subtracted (veto within the next read)` heading. Charles's silence is assent, and he may veto by name. A deletion of a traced rule is never delegated.\n",
+      "replace": ""
+    },
+    {
+      "label": "C: delete the read-2 trigger bullet",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Trigger.** Subtract runs from the second fresh read on, on any rule-born finding, and no longer waits for the cap. Rule-born origin is computed by the conductor from the previous REWRITE comment's reader-born list, never self-reported by the reader. (Precedent: afk-app#1-#4 had 8 cap events needing Charles, 7 chose Subtract, and the one Grow, #4, never converged.)\n",
+      "replace": ""
+    },
+    {
+      "label": "D: delete the empty-repo probe-builds bullet",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Empty repo (no fork point).** When the target has no commits on the integration target, there is nothing to archive. The digest says `no fork point: probe builds unavailable`. Detectors 3, 9 and 11 mutants are REASONED, and so advisory under the [evidence rule](#evidence-rule) unless traced, and the stamp's `target=` names only whatever `--repo-dir` and `--target` were passed (the stamp regex needs a branch and a SHA, so it cannot say `none`) and certifies nothing about the empty repo. Prefer sequencing: when slices depend on a foundation slice that builds the tree, read the foundation slice first and the siblings only after it has landed, so their reads get a fork point and real probe builds. The digest names this option. (Precedent: afk-app#1-#4 ran on an empty repo, so every detector 3, 9 and 11 mutant was REASONED and reachability failed closed on all of them; [the-workshop#1105](https://github.com/cdcoonce/the-workshop/issues/1105).)\n",
+      "replace": ""
+    },
+    {
+      "label": "E: delete the conductor-counts-the-cap sentences from step 8",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "The conductor counts the cap, never the reader. Count fresh reads since the last body Charles approved, from the comment history and the stamp record. The reader prompt carries no read or cap count. A reader that reports a cap is ignored. ",
+      "replace": ""
+    },
+    {
+      "label": "F: delete the negative-control row afk-app#1 read 5",
+      "file": "../docs/cold-read-reachability-replay.md",
+      "oracle": "real",
+      "find": "| afk-app#1 read 5: missing sibling line | REASONED, reader-born boundary |\n",
+      "replace": ""
+    }
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_vault_cold_read_skill.py"
+  ]
+}

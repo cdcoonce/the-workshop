@@ -479,7 +479,6 @@ def test_subtract_first_is_the_default_at_the_cap_and_binds_to_traced_rules() ->
         "Subtract is the default",
         "Grow is not offered",
         "Outside this contract: <case>.",
-        "Charles approved it by name",
         "rule-born: N of M blocking",
     ):
         assert phrase in section, f"subtract-first lacks {phrase!r}"
@@ -509,10 +508,10 @@ def test_step_8_requires_a_code_fact_search_and_the_edit_lint() -> None:
         assert phrase in step, f"step 8 lacks {phrase!r}"
 
 
-def test_step_8_shortening_exception_is_only_an_approved_subtraction() -> None:
+def test_step_8_shortening_exception_is_only_a_delegated_subtraction() -> None:
     step = _step(8)
     assert "never shortens acceptance criteria" in step
-    assert "The one exception is a [subtraction](#subtract-first) that Charles approved by name" in step
+    assert "The one exception is a [subtraction](#subtract-first) of reader-born rules, which the conductor applies under the standing delegation" in step
 
 
 def test_fidelity_defaults_obey_the_executor_contract() -> None:
@@ -529,3 +528,132 @@ def test_digest_reports_size_flag_rule_born_and_cap_number() -> None:
     step = _flat(procedure[procedure.index("\n9. ") :])
     for phrase in ("size-flag line", "rule-born: N of M blocking", "cap number"):
         assert phrase in step, f"digest lacks {phrase!r}"
+
+
+# --- the-workshop#1105: evidence rule, delegated Subtract, empty-repo rule ---
+# Precedent: afk-app#1-#4 took 30 fresh reads under the 8.31.0 rules. Each test
+# pins one clause AND the wording that clause supersedes, so deleting the
+# clause, or leaving the old rule standing beside it, turns a named test red.
+
+REPLAY = REPO_ROOT / "docs" / "cold-read-reachability-replay.md"
+
+
+def test_evidence_rule_makes_unevidenced_reader_born_findings_advisory() -> None:
+    """Clause A."""
+    section = _cold_section("## Evidence rule")
+    for phrase in (
+        "From a slice's second fresh read on, a finding blocks only when",
+        "traced",
+        "MEASURED",
+        "REACHABLE with a cited producer",
+        "The three bases are exhaustive",
+        "Read 1 is exempt",
+        "A REASONED finding whose target is a reader-born rule or its boundary is advisory",
+        "never gets a new criterion",
+        "outside-this-contract line",
+        "policy forks (detector 7), unenforced rules (detector 11) and survivors (detector 3)",
+        "A finding without a basis is advisory",
+    ):
+        assert phrase in section, f"evidence rule lacks {phrase!r}"
+
+
+def test_subtract_is_a_standing_delegation_with_a_veto_listing() -> None:
+    """Clause B: the conductor applies Subtract itself; the per-cap approval
+    requirement is gone everywhere it stood."""
+    section = _cold_section("## Subtract first")
+    for phrase in (
+        "Standing delegation",
+        "no per-cap approval",
+        "`Subtracted (veto within the next read)`",
+        "Charles's silence is assent",
+        "A deletion of a traced rule is never delegated",
+    ):
+        assert phrase in section, f"subtract-first lacks {phrase!r}"
+    whole = _flat(COLD_READ.read_text())
+    for stale in (
+        "approved it by name",
+        "approved by name",
+        "Charles approves deletions",
+        "only with Charles's approval",
+        "a line that Charles approved",
+        "that Charles approved.",
+    ):
+        assert stale not in whole, f"superseded wording still present: {stale!r}"
+    assert "approved by name" not in _step(8)
+
+
+def test_subtract_triggers_at_read_two_on_conductor_computed_origin() -> None:
+    """Clause C."""
+    section = _cold_section("## Subtract first")
+    for phrase in (
+        "from the second fresh read on, on any rule-born finding",
+        "computed by the conductor from the previous REWRITE comment's reader-born list",
+        "never self-reported by the reader",
+        "applies no new replacement text for traced findings",
+        "separate REWRITE edit",
+        "At the second cap, Grow is not offered",
+    ):
+        assert phrase in section, f"subtract-first lacks {phrase!r}"
+    assert "at least half" not in section, "the at-least-half trigger must be gone"
+
+
+def test_empty_repo_rule_names_the_digest_line_and_the_sequencing_option() -> None:
+    """Clause D."""
+    probe = _cold_section(PROBE_HEADING)
+    for phrase in (
+        "no fork point: probe builds unavailable",
+        "Detectors 3, 9 and 11 mutants are REASONED",
+        "advisory under the [evidence rule](#evidence-rule) unless traced",
+        "certifies nothing about the empty repo",
+        "read the foundation slice first and the siblings only after it has landed",
+    ):
+        assert phrase in probe, f"probe builds lacks {phrase!r}"
+    procedure = _section(COLD_READ.read_text(), "## Procedure")
+    step = _flat(procedure[procedure.index("\n9. ") :])
+    assert "`no fork point: probe builds unavailable`" in step
+    assert "sequencing" in step
+
+
+def test_conductor_counts_the_cap_and_the_reader_prompt_carries_none() -> None:
+    """Clause E."""
+    step8 = _step(8)
+    for phrase in (
+        "The conductor counts the cap",
+        "from the comment history and the stamp record",
+        "A reader that reports a cap is ignored",
+    ):
+        assert phrase in step8, f"step 8 lacks {phrase!r}"
+    assert "The reader prompt carries no read or cap count" in step8
+    assert "carries no read or cap count" in _step(1)
+
+
+def test_replay_ledger_lists_every_afk_app_row_with_class_and_source() -> None:
+    """Clause F: the replay doc carries the 2026-10-03 rows; the guard here is
+    the only reader of the ledger, so it pins each row's class and source."""
+    text = _flat(REPLAY.read_text())
+    section = text[text.index("## afk-app 30-read run") :]
+    blocking = (
+        "afk-app#4 read 8",
+        "`quarantine.py:183`",
+        "`telemetry.py:508`",
+        "`issue_source.py:604-605`",
+        "afk-app#4 read 3",
+        "afk-app#2 read 4",
+        "afk-app#4 read 2",
+        "`models.py`",
+        "afk-app#1 read 3",
+    )
+    advisory = (
+        "afk-app#3 read 6",
+        "afk-app#2 read 6",
+        "afk-app#4 read 9",
+        "afk-app#1 read 5",
+    )
+    for row in blocking + advisory:
+        assert row in section, f"replay ledger lacks {row!r}"
+    pos, neg = section.split("Negative controls", 1)
+    for row in blocking[:1] + blocking[4:5] + blocking[5:6] + blocking[6:7] + blocking[8:]:
+        assert row in pos, f"{row!r} must be a positive control"
+    for row in advisory:
+        assert row in neg, f"{row!r} must be a negative control"
+    assert "blocking" in pos and "advisory" in neg
