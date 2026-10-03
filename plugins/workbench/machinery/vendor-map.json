@@ -203,6 +203,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/cold_read_edit_lint.py",
+      "target": ".claude/scripts/cold_read_edit_lint.py"
+    },
+    {
+      "kind": "file",
       "source": "tools/machinery_check.py",
       "target": ".claude/scripts/machinery_check.py"
     },
