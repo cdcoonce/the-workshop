@@ -104,6 +104,8 @@ cd <worktree> && <repo gate command> \
 
 Invoking drain-queue on a named batch is Charles's explicit ask to merge those PRs with `pr_land.py land`.
 
+If `pr_land.py land` exits 2 on `merging <base> conflicts`, read github-pr-land's stacked-prs reference before hand-merging: `land` already retries a PR stacked on a squash-merged base, so a stop that remains is a real conflict for Charles.
+
 Confirm the issue actually closed. A linked-issue keyword that silently failed to fire leaves
 the ticket open and the queue miscounted. The next issue starts from the newly fetched tip.
 
