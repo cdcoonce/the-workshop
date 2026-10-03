@@ -72,6 +72,41 @@
       "oracle": "real",
       "find": "        merged = runner.run([\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)\n",
       "replace": "        _stack_base(runner, repo, info)\n        merged = runner.run([\"git\", \"merge\", \"--no-edit\", base_sha], cwd=scratch)\n"
+    },
+    {
+      "label": "an ancestry-check error (rc other than 0/1) counts as landed (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if landed.returncode == 0:\n                return StackBase(number, sha, merge_commit)\n",
+      "replace": "            if landed.returncode != 1:\n                return StackBase(number, sha, merge_commit)\n"
+    },
+    {
+      "label": "an ancestry-check error moves on to the next candidate instead of giving up (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if landed.returncode != 1:\n                return None\n",
+      "replace": "            if landed.returncode != 1:\n                continue\n"
+    },
+    {
+      "label": "an unmerged candidate ends the search instead of being skipped (test_unmerged_newest_candidate_is_skipped_for_an_older_merged_one)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if not merged:\n                continue\n",
+      "replace": "            if not merged:\n                return None\n"
+    },
+    {
+      "label": "the candidate walk covers all of the head's history, not just base..head (test_a_commit_the_base_already_has_is_never_a_stack_base)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"rev-list\", \"--topo-order\", f\"{info.base_sha}..{info.head_sha}\"]",
+      "replace": "[\"git\", \"rev-list\", \"--topo-order\", info.head_sha]"
+    },
+    {
+      "label": "the pushed repair is a force-push (test_stack_repair_pushes_a_plain_fast_forward)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "[\"git\", \"push\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]",
+      "replace": "[\"git\", \"push\", \"--force\", \"origin\", f\"HEAD:refs/heads/{info.head_ref}\"]"
     }
   ]
 }

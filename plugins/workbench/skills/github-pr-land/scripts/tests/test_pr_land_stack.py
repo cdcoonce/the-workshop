@@ -221,8 +221,12 @@ def test_own_pr_head_is_never_its_own_stack_base(world: World) -> None:
     assert not [a for a in world.argvs() if a[:3] == ["gh", "api", f"repos/{REPO}/pulls/{B_PR}"]]
 
 
-def chained(world: World) -> Stack:
-    """A, B (cut from A) and C (cut from B) with A then B squash-merged: C lands against main."""
+def chained(world: World, *, b_merged: bool = True) -> Stack:
+    """A, B (cut from A) and C (cut from B) with A then B squash-merged: C lands against main.
+
+    With ``b_merged`` false B is never landed (GitHub reports it unmerged), so A's
+    final head is the only usable stack base.
+    """
     world.commit("main", "t.txt", LINES, "chore: t")
     world.branch("feat/a")
     a_head = world.commit("feat/a", "t.txt", LINES + BLOCK_A, "feat: a")
@@ -231,14 +235,15 @@ def chained(world: World) -> Stack:
     world.branch("feat/c", "feat/b")
     c_head = world.commit("feat/c", "t.txt", LINES + BLOCK_A + BLOCK_B + BLOCK_C, "feat: c")
     squash_a = world.squash("feat/a", "feat: a (#5)")
-    squash_b = world.squash("feat/b", "feat: b (#6)")
+    squash_b = world.squash("feat/b", "feat: b (#6)") if b_merged else squash_a
     assert_plain_merge_conflicts(world, "feat/c")
     world.publish(a_head, A_PR)
     world.publish(b_head, B_PR)
     world.publish(c_head, C_PR)
     world.serve_pr(A_PR, merged=True, merge_commit=squash_a)
-    world.serve_pr(B_PR, merged=True, merge_commit=squash_b)
-    return Stack(world.info(c_head, squash_b, head_ref="feat/c", number=C_PR), b_head, a_head, squash_b)
+    world.serve_pr(B_PR, merged=b_merged, merge_commit=squash_b)
+    stack_head = b_head if b_merged else a_head
+    return Stack(world.info(c_head, squash_b, head_ref="feat/c", number=C_PR), stack_head, a_head, squash_b)
 
 
 def test_chain_refreshes_with_the_newest_merged_base(world: World) -> None:
@@ -256,6 +261,36 @@ def test_chain_refreshes_with_the_newest_merged_base(world: World) -> None:
     assert git(world.origin, "diff", stack.base, result.tested_sha) == git(
         world.origin, "diff", b_head, stack.info.head_sha
     )
+
+
+def test_unmerged_newest_candidate_is_skipped_for_an_older_merged_one(world: World) -> None:
+    """Guards against an unmerged candidate ending the search: B is open, but A's head under it is a valid base."""
+    stack = chained(world, b_merged=False)
+    a_head, c_head = stack.stack_head, stack.info.head_sha
+    result = run(world, stack)
+    assert (result.exit_code, result.pushed, result.message) == (0, True, "")
+    tip = result.tested_sha
+    assert git(world.origin, "rev-parse", f"{tip}^1", f"{tip}^2").split() == [c_head, stack.base]
+    assert git(world.origin, "rev-parse", f"{tip}^{{tree}}") == own_change_tree(world, stack.base, a_head, c_head)
+    reads = [a[2] for a in world.argvs() if a[:2] == ["gh", "api"]]
+    assert reads == [f"repos/{REPO}/pulls/{B_PR}", f"repos/{REPO}/pulls/{A_PR}"]
+    merge_trees = [a for a in world.argvs() if a[:2] == ["git", "merge-tree"]]
+    assert [f"--merge-base={a_head}" in a for a in merge_trees] == [True]
+
+
+def test_ancestry_check_error_gives_up_without_trying_an_older_candidate(world: World) -> None:
+    """Guards against a git error on the ancestry check reading as landed, or as a reason to try the next candidate."""
+    stack = chained(world)
+    # The prefix names the merge commit then the base: with base == B's merge commit, the earlier
+    # head-contains-base call also starts with that sha, so a shorter prefix would hit it instead.
+    prefix = ["git", "merge-base", "--is-ancestor", stack.base, stack.info.base_sha]
+    world.runner.overlay(prefix, returncode=128)
+    result = run(world, stack)
+    assert (result.exit_code, result.pushed, result.message) == (2, False, TODAYS_REFUSAL)
+    assert world.origin_ref("feat/c") == stack.info.head_sha
+    assert [a for a in world.argvs() if a[: len(prefix)] == prefix] == [prefix]
+    assert not [a for a in world.argvs() if a[:3] == ["gh", "api", f"repos/{REPO}/pulls/{A_PR}"]]
+    assert not [a for a in world.argvs() if a[:2] == ["git", "merge-tree"]]
 
 
 def test_candidate_pr_not_merged_keeps_todays_refusal(world: World) -> None:
@@ -304,6 +339,32 @@ def test_real_conflict_with_the_stack_base_refuses_and_names_it(world: World) ->
     assert stack.stack_head in result.message
     assert "t.txt" in result.message
     assert world.origin_ref("feat/b") == stack.info.head_sha
+
+
+def test_a_commit_the_base_already_has_is_never_a_stack_base(world: World) -> None:
+    """Guards against the candidate walk covering all of the head's history, not just what only the head carries."""
+    world.commit("main", "t.txt", LINES, "chore: t")
+    fork = git(world.author, "rev-parse", "HEAD")
+    world.branch("feat/x")
+    head = world.commit("feat/x", "t.txt", LINES.replace("5\n", "five\n"), "feat: five")
+    base = world.commit("main", "t.txt", LINES.replace("5\n", "FIVE\n"), "chore: FIVE")
+    world.publish(fork, 9)
+    world.serve_pr(9, merged=True, merge_commit=base)
+    info = world.info(head, base, head_ref="feat/x", number=B_PR)
+    result = refresh_and_gate(world.runner, REPO, info, gate="true")
+    assert (result.exit_code, result.pushed, result.message) == (2, False, TODAYS_REFUSAL)
+    assert world.origin_ref("feat/x") == head
+    assert not [a for a in world.argvs() if a[:3] == ["gh", "api", f"repos/{REPO}/pulls/9"]]
+
+
+def test_stack_repair_pushes_a_plain_fast_forward(world: World) -> None:
+    """Guards against the repaired head being force-pushed, which would invalidate the CI run the land is pinned to."""
+    stack = stacked(world)
+    serve_squashed(world, stack)
+    result = run(world, stack)
+    assert (result.exit_code, result.pushed) == (0, True)
+    pushes = [a for a in world.argvs() if a[:2] == ["git", "push"]]
+    assert pushes == [["git", "push", "origin", "HEAD:refs/heads/feat/b"]]
 
 
 def test_delta_beyond_the_dependents_own_change_refuses(world: World) -> None:
