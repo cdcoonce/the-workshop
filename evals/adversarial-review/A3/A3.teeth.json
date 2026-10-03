@@ -1,0 +1,178 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A3/case_tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A3/case_tests"
+  ],
+  "mutants": [
+    {
+      "label": "[no Skill call at all] the positive conjunct is dropped, so a transcript with no Skill call for the rostered skill counts as triggered (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[no_skill_call_at_all])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    if not skill_ordinals:\n        return False\n    trigger_ordinal = min(skill_ordinals)",
+      "replace": "    trigger_ordinal = min(skill_ordinals, default=-1)"
+    },
+    {
+      "label": "[ordering] the skill call no longer has to precede other tool calls (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[bash_runs_before_the_skill_call])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    if other_ordinals and trigger_ordinal >= min(other_ordinals):\n        return False\n",
+      "replace": "    pass\n"
+    },
+    {
+      "label": "[final text] the skill call no longer has to precede the final assistant text (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_arrives_after_the_final_text])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    if transcript.final_text_ordinal is not None and trigger_ordinal >= transcript.final_text_ordinal:\n        return False",
+      "replace": "    pass"
+    },
+    {
+      "label": "[exemption narrowed] ToolSearch no longer exempt (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[toolsearch_and_another_skill_may_come_first])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\")",
+      "replace": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\",)"
+    },
+    {
+      "label": "[exemption widened] Read, Bash and Edit calls no longer count as work (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[read_runs_before_the_skill_call])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\")",
+      "replace": "_TRIGGERING_EXEMPT_TOOLS = (\"Skill\", \"ToolSearch\", \"Read\", \"Bash\", \"Edit\")"
+    },
+    {
+      "label": "[wrong skill credited] any Skill call counts, not just the rostered skill's (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_for_a_different_skill_only])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "\n        and event.input.get(\"skill\") == skill",
+      "replace": ""
+    },
+    {
+      "label": "[loose name match] a Skill name that merely contains the rostered name counts (predicted red: test_predicate_is_false_on_a_transcript_that_violates_the_order[skill_call_named_differently_suffix])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "event.input.get(\"skill\") == skill",
+      "replace": "skill in str(event.input.get(\"skill\"))"
+    },
+    {
+      "label": "[last call counts] the latest rostered Skill call stands in for the first (predicted red: test_predicate_is_true_when_the_skill_call_precedes_every_other_tool_call_and_the_final_text[skill_called_twice_the_first_call_counts])",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    trigger_ordinal = min(skill_ordinals)",
+      "replace": "    trigger_ordinal = max(skill_ordinals)"
+    },
+    {
+      "label": "[scorer] an attempt with no transcript is credited (predicted red: test_scorer_does_not_credit_an_attempt_with_no_transcript)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if len(evidence.transcripts) != 1:\n        return False",
+      "replace": "    if len(evidence.transcripts) != 1:\n        return True"
+    },
+    {
+      "label": "[scorer] only the first of several transcripts is read (predicted red: test_scorer_does_not_credit_a_second_transcript_that_rides_along)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "len(evidence.transcripts) != 1",
+      "replace": "len(evidence.transcripts) < 1"
+    },
+    {
+      "label": "[scorer] the item's skill param is ignored (predicted red: test_scorer_credits_a_transcript_where_the_skill_triggered_first)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "skill_triggered_first(evidence.transcripts[0], \"using-workflow\")"
+    },
+    {
+      "label": "[scorer] always credits (predicted red: test_scorer_never_credits_a_transcript_that_violates_the_order)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return skill_triggered_first(evidence.transcripts[0], skill)",
+      "replace": "    return True"
+    },
+    {
+      "label": "[reimplemented predicate] the harness predicate is replaced by a local look-alike (predicted red: test_the_predicate_the_scorer_uses_is_the_harness_predicate_not_a_copy)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "from evals._harness.matchers import skill_triggered_first\n",
+      "replace": "def skill_triggered_first(transcript, skill):\n    return any(event.name == \"Skill\" for event in transcript.events)\n"
+    },
+    {
+      "label": "[case.toml] the item stops being a triggering item (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"gate-candidate\""
+    },
+    {
+      "label": "[case.toml] the item names another skill (predicted red: test_the_item_names_the_rostered_skill_and_a_scorer_that_exists)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"adversarial-review\" }",
+      "replace": "params = { skill = \"using-workflow\" }"
+    },
+    {
+      "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key_and_no_calibration_record)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "kind = \"triggering\"",
+      "replace": "kind = \"triggering\"\nno_skill_arm = true"
+    },
+    {
+      "label": "[case.toml] a second item is added (predicted red: test_case_has_exactly_one_item_and_it_is_a_triggering_item)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "params = { skill = \"adversarial-review\" }",
+      "replace": "params = { skill = \"adversarial-review\" }\n\n[[items]]\nid = \"extra\"\nkind = \"trend\"\nscorer = \"triggered_first\""
+    },
+    {
+      "label": "[case.toml] the case is dispatched inline (predicted red: test_case_declares_subagent_mode_and_a_prompt_file)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "mode = \"subagent\"",
+      "replace": "mode = \"inline\""
+    },
+    {
+      "label": "[case.toml] the builder key is dropped, so the case-agent would run in a checkout (predicted red: test_case_uses_the_skills_own_builder_so_no_agent_runs_in_the_workshop_checkout)",
+      "file": "case.toml",
+      "oracle": "real",
+      "find": "builder = \"plugins/workbench/skills/adversarial-review/scripts/build_fixture.py\"",
+      "replace": "# builder dropped"
+    },
+    {
+      "label": "[control] a docstring sentence in predicates.py is reworded",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "The ordering is #992's",
+      "replace": "The ordering is the harness's",
+      "expect": "survived",
+      "why": "Docstring text is never executed and no test reads predicates.py's module docstring. Inert on every path the suite drives; it would not be inert for a test that parsed the docstring."
+    }
+  ]
+}
