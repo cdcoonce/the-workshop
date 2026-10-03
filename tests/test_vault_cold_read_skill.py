@@ -604,7 +604,7 @@ def test_empty_repo_rule_names_the_digest_line_and_the_sequencing_option() -> No
         "no fork point: probe builds unavailable",
         "Detectors 3, 9 and 11 mutants are REASONED",
         "advisory under the [evidence rule](#evidence-rule) unless traced",
-        "`target=` is recorded as `none`",
+        "certifies nothing about the empty repo",
         "read the foundation slice first and the siblings only after it has landed",
     ):
         assert phrase in probe, f"probe builds lacks {phrase!r}"
