@@ -185,8 +185,8 @@
       "label": "R15 prompt_text dropped from the hashed payload",
       "file": "../calibration.py",
       "oracle": "real",
-      "find": "[prompt_text, fixture_component, items, predicates_hash],",
-      "replace": "[None, fixture_component, items, predicates_hash],",
+      "find": "components: list = [prompt_text, fixture_component, items, predicates_hash]",
+      "replace": "components: list = [None, fixture_component, items, predicates_hash]",
       "why": "Kills test_compute_input_hash_changes_when_prompt_text_changes."
     },
     {

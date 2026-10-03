@@ -31,7 +31,8 @@ Public contract
 
 ``compute_input_hash(case_dir) -> str``
     Hashes every calibrated input for a case: its prompt, its fixture or
-    builder, its items, and its predicates.
+    builder, its items, its predicates, and ``invoke_skill = true`` when the
+    case sets it.
 
 ``fixture_fingerprint(case_dir) -> str``
     Hashes a case's fixture alone (builder output, or committed ``fixture/``).
@@ -324,7 +325,10 @@ def compute_input_hash(case_dir: Path) -> str:
     content of the file ``case.toml``'s ``prompt`` key names. ``items`` is
     the case's ``[[items]]`` tables (ids, kinds, scorer names and params).
     ``predicates_hash`` is the sha256 of the case's ``predicates.py`` bytes,
-    ``None`` if absent.
+    ``None`` if absent. A case that sets ``invoke_skill = true`` (which changes
+    the skill arm's dispatched prompt) appends a fifth element,
+    ``{"invoke_skill": true}``; a case without the key, or with it ``false``,
+    hashes exactly as it did before the key existed.
 
     Parameters
     ----------
@@ -357,8 +361,12 @@ def compute_input_hash(case_dir: Path) -> str:
         else None
     )
 
+    components: list = [prompt_text, fixture_component, items, predicates_hash]
+    if case_toml.get("invoke_skill") is True:
+        components.append({"invoke_skill": True})
+
     payload = json.dumps(
-        [prompt_text, fixture_component, items, predicates_hash],
+        components,
         sort_keys=True,
         separators=(",", ":"),
     )

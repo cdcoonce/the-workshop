@@ -37,7 +37,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_prompt_and_score_builders_write_nothing: a new file would appear beside the case directory even though build_dispatch_prompt is read-only.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    text = _prompt_text(case_dir, case_toml)\n    (case_dir / \"debug.log\").write_text(\"dispatched\", encoding=\"utf-8\")\n    return text"
     },
     {
@@ -69,7 +69,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: the recorder sees (and blocks) the write even though it lands nowhere near tmp_path, where the old before/after diff could not look.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"pathlib\").Path(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w1.txt\").write_text(\"x\")\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
@@ -109,7 +109,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: the audit hook sees subprocess.Popen, which the old open/os patching could not.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"subprocess\").run([\"touch\", __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w6\")], check=False)\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
@@ -117,7 +117,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.system is audited.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"os\").system(\"touch \" + __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w7\"))\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
@@ -125,7 +125,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: sqlite3.connect is audited.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"sqlite3\").connect(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w8.db\")).close()\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
@@ -157,7 +157,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: os.symlink is audited.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"os\").symlink(\"/dev/null\", __import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w12\"))\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
@@ -173,7 +173,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_read_only_entry_points_write_nothing_anywhere_on_disk: FileIO opens are audited.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    __import__(\"io\").FileIO(__import__(\"os\").path.join(__import__(\"tempfile\").gettempdir(), \"eval_suite_stray_w14\"), \"w\").close()\n    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text"
     },
     {
