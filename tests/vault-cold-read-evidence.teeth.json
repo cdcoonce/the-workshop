@@ -44,7 +44,7 @@
       "label": "E: delete the conductor-counts-the-cap sentences from step 8",
       "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
       "oracle": "real",
-      "find": "The conductor counts the cap, never the reader. Count fresh reads since the last body Charles approved, from the comment history and the stamp record. The reader prompt carries no read or cap count. A reader that reports a cap is ignored. ",
+      "find": "The conductor counts the cap, never the reader. Count fresh reads since the last body Charles approved or the last delegated Subtract, whichever is later (a Subtract the conductor applies itself resets the count, as an approved body does), from the comment history and the stamp record. The reader prompt carries no read or cap count. A reader that reports a cap is ignored. ",
       "replace": ""
     },
     {
