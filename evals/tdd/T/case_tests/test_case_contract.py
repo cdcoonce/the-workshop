@@ -20,6 +20,20 @@ from evals._harness.dispatch import (
 _CASE_DIR = Path(__file__).resolve().parents[1]
 _FIXTURE = _CASE_DIR / "fixture"
 _TAUTOLOGY = "assert subtotal_cents(items) == subtotal_cents(items)"
+_PREAMBLE = "Use the workbench:tdd skill for this task.\n\n"
+
+
+def _prompt_body() -> str:
+    """The dispatched prompt minus the one harness-owned preamble line (``invoke_skill``).
+
+    The vocabulary guards below police what the case wrote, so they read this: the prompt
+    file's text exactly as it reaches the agent, without the line that names the skill on
+    purpose. ``test_the_skill_arm_prompt_is_the_preamble_then_the_prompt_file_verbatim`` pins
+    that the remainder is the file, byte for byte.
+    """
+    built = build_dispatch_prompt(_CASE_DIR)
+    assert built.startswith(_PREAMBLE), built[:80]
+    return built.removeprefix(_PREAMBLE)
 
 
 def _case_toml() -> dict:
@@ -115,7 +129,7 @@ def test_prompt_requests_two_behaviors_and_applies_just_make_it_pass_pressure():
 
 
 def test_prompt_never_names_the_skill_or_the_trap():
-    prompt = build_dispatch_prompt(_CASE_DIR).lower()
+    prompt = _prompt_body().lower()
     for needle in ("tdd", "test-driven", "tautolog", "red-green", "test first"):
         assert needle not in prompt, needle
 
@@ -123,7 +137,8 @@ def test_prompt_never_names_the_skill_or_the_trap():
 def test_prompt_leaks_nothing_from_acceptance():
     prompt = (_CASE_DIR / "prompt.md").read_text(encoding="utf-8")
     assert find_acceptance_leaks(_CASE_DIR, prompt) == []
-    assert build_dispatch_prompt(_CASE_DIR) == prompt
+    assert build_dispatch_prompt(_CASE_DIR) == _PREAMBLE + prompt
+    assert find_acceptance_leaks(_CASE_DIR, build_dispatch_prompt(_CASE_DIR)) == []
     assert build_no_skill_prompt(_CASE_DIR).startswith(prompt.rstrip().splitlines()[0])
 
 
@@ -136,3 +151,36 @@ def test_built_prompt_contains_no_acceptance_line():
     assert acceptance_lines, "acceptance.md should carry real criteria"
     prompt = build_dispatch_prompt(_CASE_DIR)
     assert [line for line in acceptance_lines if line in prompt] == []
+
+
+def test_case_opts_in_to_explicit_skill_invocation_for_its_skill_arm():
+    case = _case_toml()
+    assert case["invoke_skill"] is True
+    assert all(item["kind"] != "triggering" for item in case["items"])
+
+
+def test_the_skill_arm_prompt_is_the_preamble_then_the_prompt_file_verbatim():
+    prompt = (_CASE_DIR / "prompt.md").read_text(encoding="utf-8")
+    built = build_dispatch_prompt(_CASE_DIR)
+    assert built.splitlines()[0] == "Use the workbench:tdd skill for this task."
+    assert built == _PREAMBLE + prompt
+    assert _prompt_body() == prompt
+
+
+def test_the_no_skill_prompt_never_carries_the_preamble():
+    no_skill = build_no_skill_prompt(_CASE_DIR)
+    assert "workbench" not in no_skill
+    assert "Use the" not in no_skill.splitlines()[0]
+    assert no_skill.endswith("Do not invoke any skill while completing this task.\n")
+
+
+def test_prompt_file_itself_stays_free_of_the_skill_name_and_the_trap_vocabulary():
+    prompt = (_CASE_DIR / "prompt.md").read_text(encoding="utf-8").lower()
+    for needle in ("tdd", "workbench", "test-driven", "tautolog", "red-green", "test first", "skill"):
+        assert needle not in prompt, needle
+
+
+def test_case_toml_documents_the_explicit_invocation_key():
+    header = (_CASE_DIR / "case.toml").read_text(encoding="utf-8").split("mode =", 1)[0]
+    assert "invoke_skill" in header
+    assert "measures" in header and "T-trig" in header

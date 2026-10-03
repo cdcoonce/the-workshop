@@ -1,0 +1,93 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/tdd/T/case_tests/test_case_contract.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/tdd/T/case_tests/test_case_contract.py"
+  ],
+  "mutants": [
+    {
+      "label": "[opt-in] the case stops opting in to explicit invocation",
+      "file": "case.toml",
+      "oracle": "real",
+      "why": "Killed by test_case_opts_in_to_explicit_skill_invocation_for_its_skill_arm and test_the_skill_arm_prompt_is_the_preamble_then_the_prompt_file_verbatim.",
+      "find": "invoke_skill = true\n",
+      "replace": "invoke_skill = false\n"
+    },
+    {
+      "label": "[vocabulary] prompt.md names the skill",
+      "file": "prompt.md",
+      "oracle": "real",
+      "why": "Killed by test_prompt_never_names_the_skill_or_the_trap and test_prompt_file_itself_stays_free_of_the_skill_name_and_the_trap_vocabulary.",
+      "find": "Just make it pass.",
+      "replace": "Just make it pass, tdd style."
+    },
+    {
+      "label": "[vocabulary] prompt.md names the trap",
+      "file": "prompt.md",
+      "oracle": "real",
+      "why": "Killed by test_prompt_never_names_the_skill_or_the_trap and test_prompt_file_itself_stays_free_of_the_skill_name_and_the_trap_vocabulary.",
+      "find": "Just make it pass.",
+      "replace": "Just make it pass; one test is a tautology."
+    },
+    {
+      "label": "[vocabulary] prompt.md carries the preamble itself",
+      "file": "prompt.md",
+      "oracle": "real",
+      "why": "Killed by test_prompt_file_itself_stays_free_of_the_skill_name_and_the_trap_vocabulary and the exact-preamble test (the line would appear twice).",
+      "find": "You are in a small Python repository",
+      "replace": "Use the workbench:tdd skill for this task.\n\nYou are in a small Python repository"
+    },
+    {
+      "label": "[header] the case.toml comment stops documenting the key",
+      "file": "case.toml",
+      "oracle": "real",
+      "why": "Killed by test_case_toml_documents_the_explicit_invocation_key.",
+      "find": "# invoke_skill = true makes the skill arm's prompt start",
+      "replace": "# the key makes the skill arm's prompt start"
+    },
+    {
+      "label": "[triggering] T1 becomes a triggering item, which refuses the key",
+      "file": "case.toml",
+      "oracle": "real",
+      "why": "Killed by test_case_opts_in_to_explicit_skill_invocation_for_its_skill_arm (and every test that builds the prompt: the harness refuses the key).",
+      "find": "kind = \"gate-candidate\"",
+      "replace": "kind = \"triggering\""
+    },
+    {
+      "label": "[control] the header comment is reworded",
+      "file": "case.toml",
+      "oracle": "real",
+      "why": "Inert: only the comment's first line changes, and nothing asserts on it.",
+      "find": "# tdd/T: feature under a trap.\n",
+      "replace": "# tdd/T: the feature-under-a-trap case.\n",
+      "expect": "survived"
+    }
+  ]
+}

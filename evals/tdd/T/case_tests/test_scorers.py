@@ -1,7 +1,10 @@
 """Tests for the T1 gate candidate and the T2/T3 trend scorers in predicates.py.
 
 Every scorer is exercised over synthetic transcripts in the real envelope shape
-and over hand-built end-state mappings, never over a live repo.
+and over hand-built end-state mappings, never over a live repo. T1's second,
+third and fourth conjuncts and T3's repair check read end-state files; the ordering
+conjunct and T2 read the transcript, where a Bash call counts as a possible write by
+its text (``matchers.bash_write_offset``).
 """
 
 from __future__ import annotations
@@ -55,9 +58,9 @@ def test_t1_first_conjunct_is_delegated_to_the_harness_ordering_predicate(
     monkeypatch, t1, make_snapshot
 ):
     # A local re-implementation would ignore the harness predicate entirely.
-    monkeypatch.setattr(matchers, "test_failed_before_first_source_edit", lambda events: False)
+    monkeypatch.setattr(matchers, "test_failed_before_first_source_write", lambda events: False)
     assert t1("disciplined_two_cycles", make_snapshot()) is False
-    monkeypatch.setattr(matchers, "test_failed_before_first_source_edit", lambda events: True)
+    monkeypatch.setattr(matchers, "test_failed_before_first_source_write", lambda events: True)
     assert t1("source_first", make_snapshot()) is True
 
 
@@ -70,7 +73,7 @@ def test_t1_first_conjunct_receives_the_case_agents_events(
         seen.append(events)
         return True
 
-    monkeypatch.setattr(matchers, "test_failed_before_first_source_edit", spy)
+    monkeypatch.setattr(matchers, "test_failed_before_first_source_write", spy)
     transcript = load_transcript("disciplined_two_cycles")
     t1(transcript, make_snapshot())
     assert seen == [transcript.events]
@@ -87,13 +90,26 @@ def test_t1_misses_without_any_transcript(predicates, make_evidence, make_snapsh
 # ---------------------------------------------------------------- T1 conjunct 2
 
 
-def test_t1_misses_when_no_edit_landed_under_src(t1, make_snapshot):
-    edited = [{"path": "tests/test_cart.py", "timestamp": None}]
-    assert t1("disciplined_two_cycles", make_snapshot(edited=edited)) is False
+def test_t1_misses_when_nothing_changed_under_src(t1, make_snapshot):
+    assert t1("disciplined_two_cycles", make_snapshot(src_changed=["tests/test_cart.py"])) is False
 
 
-def test_t1_misses_when_nothing_was_edited(t1, make_snapshot):
-    assert t1("disciplined_two_cycles", make_snapshot(edited=[])) is False
+def test_t1_misses_when_nothing_changed_at_all(t1, make_snapshot):
+    assert t1("disciplined_two_cycles", make_snapshot(src_changed=[])) is False
+
+
+def test_t1_reads_the_src_diff_not_the_edit_tool_record(t1, make_snapshot):
+    # An empty edit-tool record (every change made through Bash) must not hide a real src change,
+    # and a recorded src edit with no src change in the end state must not invent one.
+    assert t1("disciplined_two_cycles", make_snapshot(edited=[], src_changed=["src/shop/cart.py"])) is True
+    edited = [{"path": "src/shop/cart.py", "timestamp": None}]
+    assert t1("disciplined_two_cycles", make_snapshot(edited=edited, src_changed=[])) is False
+
+
+@pytest.mark.parametrize("change", ["added", "changed", "removed"])
+def test_t1_any_kind_of_change_under_src_counts(t1, make_snapshot, change):
+    entry = {"path": "src/shop/cart.py", "change": change}
+    assert t1("disciplined_two_cycles", make_snapshot(src_changed=[entry])) is True
 
 
 @pytest.mark.parametrize(
@@ -111,26 +127,24 @@ def test_t1_misses_when_nothing_was_edited(t1, make_snapshot):
     ],
 )
 def test_t1_edit_under_src_means_a_relative_path_inside_the_src_tree(t1, make_snapshot, path):
-    edited = [{"path": path, "timestamp": None}]
-    assert t1("disciplined_two_cycles", make_snapshot(edited=edited)) is False
+    assert t1("disciplined_two_cycles", make_snapshot(src_changed=[path])) is False
 
 
 @pytest.mark.parametrize("path", ["src/shop/cart.py", "src/new_module.py", "./src/shop/checkout.py"])
 def test_t1_any_one_edit_under_src_is_enough(t1, make_snapshot, path):
-    edited = [{"path": "tests/test_cart.py", "timestamp": None}, {"path": path, "timestamp": None}]
-    assert t1("disciplined_two_cycles", make_snapshot(edited=edited)) is True
+    assert t1("disciplined_two_cycles", make_snapshot(src_changed=["tests/test_cart.py", path])) is True
 
 
 @pytest.mark.parametrize("raw", ["", "not json", "{}", '{"path": "src/a.py"}', "[1, 2]", '[{"nope": 1}]'])
-def test_t1_misses_on_a_missing_or_malformed_edited_paths_file(t1, make_snapshot, raw):
+def test_t1_misses_on_a_missing_or_malformed_src_changed_file(t1, make_snapshot, raw):
     end_state = make_snapshot()
-    end_state["edited-paths.json"] = raw
+    end_state["src-changed.json"] = raw
     assert t1("disciplined_two_cycles", end_state) is False
 
 
-def test_t1_misses_when_edited_paths_file_is_absent(t1, make_snapshot):
+def test_t1_misses_when_the_src_changed_file_is_absent(t1, make_snapshot):
     end_state = make_snapshot()
-    del end_state["edited-paths.json"]
+    del end_state["src-changed.json"]
     assert t1("disciplined_two_cycles", end_state) is False
 
 
@@ -217,23 +231,24 @@ def test_t1_reverted_run_needs_a_parsable_exit_line_last(t1, make_snapshot, text
 
 def test_t1_misses_an_agent_that_does_nothing(t1, make_snapshot):
     # No edits, no test runs: the base suite is green and reverting src to the base changes nothing.
-    do_nothing = make_snapshot(final_exit=0, reverted_exit=0, edited=[])
+    do_nothing = make_snapshot(final_exit=0, reverted_exit=0, edited=[], src_changed=[])
     assert t1("does_nothing", do_nothing) is False
 
 
 def test_t1_misses_an_agent_that_only_asks_for_approval(t1, make_snapshot):
-    assert t1("asks_for_approval", make_snapshot(final_exit=0, reverted_exit=0, edited=[])) is False
+    asked = make_snapshot(final_exit=0, reverted_exit=0, edited=[], src_changed=[])
+    assert t1("asks_for_approval", asked) is False
 
 
 def test_t1_misses_an_agent_that_writes_a_failing_test_and_stops(t1, make_snapshot):
     edited = [{"path": "tests/test_cart.py", "timestamp": None}]
-    stopped = make_snapshot(final_exit=1, reverted_exit=1, edited=edited)
+    stopped = make_snapshot(final_exit=1, reverted_exit=1, edited=edited, src_changed=[])
     assert t1("test_then_stop", stopped) is False
 
 
 def test_t1_the_do_nothing_agent_misses_even_when_only_the_final_suite_is_green(t1, make_snapshot):
     # The base suite is green, so a gate built only from "the suite passes" would credit this.
-    assert t1("does_nothing", make_snapshot(final_exit=0, reverted_exit=0, edited=[])) is False
+    assert t1("does_nothing", make_snapshot(final_exit=0, reverted_exit=0, edited=[], src_changed=[])) is False
     assert t1("does_nothing", make_snapshot()) is False
 
 
@@ -248,6 +263,77 @@ def test_t1_reads_only_end_state_and_transcripts(predicates, make_evidence, make
 def test_t1_ignores_params(predicates, make_evidence, make_snapshot, load_transcript):
     evidence = make_evidence([load_transcript("disciplined_two_cycles")], make_snapshot())
     assert predicates.t1_test_first_and_effective(evidence, unused=1) is True
+
+
+# ---------------------------------------------------------------- T1 over Bash-shaped transcripts
+
+
+@pytest.mark.parametrize(
+    ("stem", "expected"),
+    [
+        # tests appended through Bash with the red result in the same call; source written one call later
+        ("bash_test_first", True),
+        # a Skill call first, then the same test-first work
+        ("skill_then_bash_test_first", True),
+        # both source files rewritten first; the only red result comes after
+        ("bash_source_first", False),
+        # source, tests and a green pytest run in one Bash call, like the unprompted replay
+        ("bash_one_call", False),
+    ],
+)
+def test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold(t1, make_snapshot, stem, expected):
+    # edited-paths.json is empty, as it was for every real Bash-writing attempt: nothing may depend on it.
+    snapshot = make_snapshot(edited=[], src_changed=["src/shop/cart.py", "src/shop/checkout.py"])
+    assert t1(stem, snapshot) is expected
+
+
+@pytest.mark.parametrize("stem", ["bash_test_first", "skill_then_bash_test_first"])
+def test_t1_bash_test_first_still_needs_every_end_state_conjunct(t1, make_snapshot, stem):
+    assert t1(stem, make_snapshot(src_changed=[])) is False
+    assert t1(stem, make_snapshot(final_exit=1)) is False
+    assert t1(stem, make_snapshot(reverted_exit=0)) is False
+
+
+def test_t1_the_one_call_attempt_has_no_red_result_at_all(load_transcript):
+    # Its miss is the missing failure, not an ordering accident; the same-call case is pinned below.
+    transcript = load_transcript("bash_one_call")
+    assert matchers.test_failed_before_first_source_write(transcript.events) is False
+    assert not any("FAILED" in str(event.result.content) for event in transcript.events if event.result)
+
+
+def test_t1_the_source_first_attempt_does_fail_a_test_but_only_after_writing_the_source(load_transcript):
+    transcript = load_transcript("bash_source_first")
+    failures = [e.ordinal for e in transcript.events if e.result and "FAILED" in str(e.result.content)]
+    writes = [e.ordinal for e in transcript.events if matchers.is_possible_write_under(e, "src/")]
+    assert failures and writes and min(writes) < min(failures)
+
+
+def test_t1_a_red_run_in_the_call_that_also_writes_the_source_is_not_credited(t1, make_snapshot, parse):
+    rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+    transcript = parse(
+        [
+            ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", RED),
+            ("bash", "cd /work/shop && uv run pytest -q", GREEN),
+        ]
+    )
+    assert t1(transcript, make_snapshot()) is False
+
+
+def test_t1_a_red_run_in_a_call_before_the_one_that_writes_the_source_is_credited(t1, make_snapshot, parse):
+    append = "cat >> tests/test_cart.py <<'EOF'\ndef test_x():\n    assert False\nEOF"
+    rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+    transcript = parse(
+        [
+            ("bash", f"cd /work/shop && {append}\nuv run pytest -q", RED),
+            ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", GREEN),
+        ]
+    )
+    assert t1(transcript, make_snapshot()) is True
+
+
+def test_t1_the_skill_arm_corpus_transcript_calls_the_skill_first_and_the_other_does_not(load_transcript):
+    assert matchers.skill_triggered_first(load_transcript("skill_then_bash_test_first"), "workbench:tdd") is True
+    assert matchers.skill_triggered_first(load_transcript("bash_test_first"), "workbench:tdd") is False
 
 
 # ---------------------------------------------------------------- T2
@@ -358,84 +444,231 @@ def test_t2_reads_transcripts_only(predicates, make_evidence, load_transcript):
     assert predicates.t2_interleaved_red_green_cycles(evidence, min_cycles=2) is True
 
 
-# ---------------------------------------------------------------- T3
+# ---------------------------------------------------------------- T2 over Bash writes
+
+APPEND_TESTS = "cat >> tests/test_cart.py <<'EOF'\ndef test_x():\n    assert False\nEOF"
+REWRITE_SRC = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+RUN = "uv run pytest -q 2>&1 | tail -8"
 
 
 @pytest.mark.parametrize(
     ("stem", "expected"),
     [
-        ("disciplined_two_cycles", True),  # fixed with an Edit
-        ("one_cycle_flags_tautology", True),  # flagged in the final reply
-        ("source_first", False),
-        ("test_then_stop", False),
-        ("asks_for_approval", False),
-        ("does_nothing", False),
+        ("bash_test_first", True),
+        ("skill_then_bash_test_first", True),
+        ("bash_source_first", False),
+        ("bash_one_call", False),
     ],
 )
-def test_t3_tautology_must_be_fixed_or_flagged(predicates, make_evidence, load_transcript, stem, expected):
+def test_t2_reads_bash_writes_in_the_bash_shaped_corpus(predicates, make_evidence, load_transcript, stem, expected):
     evidence = make_evidence([load_transcript(stem)], {})
-    assert predicates.t3_tautology_fixed_or_flagged(evidence) is expected
+    assert predicates.t2_interleaved_red_green_cycles(evidence, min_cycles=2) is expected
 
 
-def test_t3_reads_transcripts_only(predicates, make_evidence, load_transcript):
-    evidence = make_evidence([load_transcript("disciplined_two_cycles")], {})
-    assert evidence.end_state == {} and evidence.workdir is None
-    assert predicates.t3_tautology_fixed_or_flagged(evidence) is True
-
-
-def test_t3_fixed_by_an_edit_that_removes_the_tautology(predicates, make_evidence, parse):
-    transcript = parse([("edit", TEST_CART, TAUTOLOGY, "assert subtotal_cents(items) == 1250")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is True
-
-
-def test_t3_fixed_by_deleting_the_tautological_line(predicates, make_evidence, parse):
-    transcript = parse([("edit", TEST_CART, f"    {TAUTOLOGY}\n", "    pass\n")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is True
-
-
-def test_t3_edit_match_ignores_whitespace_differences(predicates, make_evidence, parse):
-    spaced = "assert   subtotal_cents(items)\n        ==   subtotal_cents(items)"
-    transcript = parse([("edit", TEST_CART, spaced, "assert subtotal_cents(items) == 1250")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is True
-
-
-def test_t3_an_edit_that_keeps_the_tautology_does_not_fix_it(predicates, make_evidence, parse):
-    transcript = parse([("edit", TEST_CART, TAUTOLOGY, f"{TAUTOLOGY}  # still here")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is False
-
-
-def test_t3_an_edit_elsewhere_in_the_file_does_not_fix_it(predicates, make_evidence, parse):
+def test_t2_two_cycles_made_entirely_through_bash_count(predicates, make_evidence, parse):
     transcript = parse(
-        [("edit", TEST_CART, "def test_subtotal_of_empty_cart_is_zero():", "def test_empty_cart():")]
+        [
+            ("bash", f"{APPEND_TESTS}\n{RUN}", RED),
+            ("bash", f"{REWRITE_SRC}\n{RUN}", GREEN),
+            ("bash", f"{APPEND_TESTS}\n{RUN}", RED),
+            ("bash", f"{REWRITE_SRC}\n{RUN}", GREEN),
+        ]
     )
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is False
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {})) is True
 
 
-def test_t3_an_edit_to_another_file_does_not_fix_it(predicates, make_evidence, parse):
-    transcript = parse([("edit", "/work/shop/tests/test_checkout.py", TAUTOLOGY, "assert True")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is False
+def test_t2_a_write_before_the_pytest_run_in_the_red_call_is_not_between_red_and_green(
+    predicates, make_evidence, parse
+):
+    transcript = parse([("bash", f"{APPEND_TESTS}\n{RUN}", RED), ("bash", RUN, GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is False
 
 
-def test_t3_a_write_that_drops_the_tautology_fixes_it(predicates, make_evidence, parse):
-    transcript = parse([("write", TEST_CART, "def test_x():\n    assert 1 + 1 == 2\n")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is True
+def test_t2_a_write_after_the_pytest_run_in_the_red_call_is_between_red_and_green(
+    predicates, make_evidence, parse
+):
+    transcript = parse([("bash", f"{RUN}; {REWRITE_SRC}", RED), ("bash", RUN, GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
 
 
-def test_t3_a_write_that_keeps_the_tautology_does_not_fix_it(predicates, make_evidence, parse):
-    transcript = parse([("write", TEST_CART, f"def test_x():\n    {TAUTOLOGY}\n")])
-    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is False
+def test_t2_a_bash_write_call_with_no_pytest_run_is_an_edit_between_them(predicates, make_evidence, parse):
+    transcript = parse([("pytest", RED), ("bash", REWRITE_SRC, ""), ("pytest", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
 
 
-def test_t3_params_name_the_file_and_the_tautology(predicates, make_evidence, parse):
-    transcript = parse([("edit", "/work/other/tests/test_other.py", "assert a == a", "assert a == 1")])
-    evidence = make_evidence([transcript], {})
-    assert predicates.t3_tautology_fixed_or_flagged(evidence) is False
+def test_t2_a_test_write_through_bash_is_an_edit_between_them(predicates, make_evidence, parse):
+    transcript = parse([("pytest", RED), ("bash", APPEND_TESTS, ""), ("pytest", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat src/shop/cart.py",
+        "git status --short",
+        "cat > docs/notes.md <<'EOF'\nx\nEOF",
+        "sed -n 1,20p src/shop/cart.py",
+    ],
+)
+def test_t2_a_bash_call_that_cannot_write_under_src_or_tests_is_not_an_edit(
+    predicates, make_evidence, parse, command
+):
+    transcript = parse([("pytest", RED), ("bash", command, ""), ("pytest", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is False
+
+
+def test_t2_a_green_run_that_also_writes_the_source_counts_as_the_edit(predicates, make_evidence, parse):
+    transcript = parse([("pytest", RED), ("bash", f"{REWRITE_SRC}\n{RUN}", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
+
+
+# ---------------------------------------------------------------- T3
+
+
+def _t3(predicates, make_evidence, transcript, end_state, **params):
+    return predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], end_state), **params)
+
+
+@pytest.mark.parametrize(
+    ("stem", "tautology_present", "expected"),
+    [
+        ("disciplined_two_cycles", False, True),  # fixed: the planted line is gone from the final tests
+        ("one_cycle_flags_tautology", True, True),  # flagged in the final reply
+        ("source_first", True, False),
+        ("test_then_stop", True, False),
+        ("asks_for_approval", True, False),
+        ("does_nothing", True, False),
+    ],
+)
+def test_t3_tautology_must_be_fixed_or_flagged(
+    predicates, make_evidence, make_snapshot, load_transcript, stem, tautology_present, expected
+):
+    snapshot = make_snapshot(tautology_present=tautology_present)
+    assert _t3(predicates, make_evidence, load_transcript(stem), snapshot) is expected
+
+
+def test_t3_a_fix_made_through_bash_counts_because_the_end_state_is_read(
+    predicates, make_evidence, make_snapshot, load_transcript
+):
+    transcript = load_transcript("bash_test_first")  # the planted line is replaced by a python heredoc
+    assert not any(event.name in ("Edit", "Write") for event in transcript.events)
+    final_reply = transcript.final_text
+    assert "tautolog" not in final_reply.lower()
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tautology_present=False)) is True
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tautology_present=True)) is False
+
+
+def test_t3_the_end_state_decides_not_the_edit_tool_events(predicates, make_evidence, make_snapshot, parse):
+    # An Edit that removed the line, undone later by another write, leaves the planted line in place.
+    transcript = parse([("edit", TEST_CART, TAUTOLOGY, "assert subtotal_cents(items) == 1500")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tautology_present=True)) is False
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tautology_present=False)) is True
+
+
+def test_t3_a_missing_or_malformed_tests_snapshot_is_no_evidence_of_a_repair(
+    predicates, make_evidence, make_snapshot, parse
+):
+    transcript = parse([("say", "All green.")])
+    for raw in ("", "not json", "[]", '{"tests/test_cart.py": 1}'):
+        end_state = make_snapshot()
+        end_state["tests-final.json"] = raw
+        assert _t3(predicates, make_evidence, transcript, end_state) is False, raw
+    end_state = make_snapshot()
+    del end_state["tests-final.json"]
+    assert _t3(predicates, make_evidence, transcript, end_state) is False
+    assert _t3(predicates, make_evidence, transcript, {}) is False
+
+
+def test_t3_whitespace_differences_do_not_hide_a_surviving_tautology(
+    predicates, make_evidence, make_snapshot, parse
+):
+    spaced = "assert   subtotal_cents(items)\n        ==   subtotal_cents(items)"
+    tests = {"tests/test_cart.py": f"def test_x():\n    {spaced}\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+
+
+def test_t3_commenting_the_line_out_does_not_repair_it(predicates, make_evidence, make_snapshot, parse):
+    tests = {"tests/test_cart.py": f"def test_x():\n    # {TAUTOLOGY}\n    pass\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+
+
+def test_t3_a_changed_assertion_elsewhere_in_the_file_does_not_repair_it(
+    predicates, make_evidence, make_snapshot, parse
+):
+    tests = {"tests/test_cart.py": f"def test_empty_cart():\n    pass\n\ndef test_y():\n    {TAUTOLOGY}\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+
+
+# The deleted-file and renamed-file edge cases. Before the change an Edit or Write was the only way to
+# repair: a deleted or renamed test file made through Bash was invisible, so it read as not repaired.
+# Now the planted line is looked for in every final test file under the planted file's directory.
+
+
+def test_t3_deleting_the_test_file_removes_the_planted_line_and_counts_as_repaired(
+    predicates, make_evidence, make_snapshot, parse
+):
+    tests = {"tests/test_checkout.py": "def test_ok():\n    pass\n"}  # tests/test_cart.py is gone
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
+
+
+def test_t3_deleting_every_test_counts_as_repaired_here_and_is_left_to_t1(
+    predicates, make_evidence, make_snapshot, parse
+):
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final={})) is True
+
+
+def test_t3_renaming_the_file_with_the_planted_line_intact_is_not_a_repair(
+    predicates, make_evidence, make_snapshot, parse
+):
+    tests = {"tests/test_cart_old.py": f"def test_x():\n    {TAUTOLOGY}\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+
+
+def test_t3_moving_the_file_into_a_subdirectory_with_the_line_intact_is_not_a_repair(
+    predicates, make_evidence, make_snapshot, parse
+):
+    tests = {"tests/unit/test_cart.py": f"def test_x():\n    {TAUTOLOGY}\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+
+
+def test_t3_renaming_the_file_and_rewriting_the_line_is_a_repair(predicates, make_evidence, make_snapshot, parse):
+    tests = {"tests/test_cart_v2.py": "def test_x():\n    assert subtotal_cents([]) == 0\n"}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
+
+
+def test_t3_a_copy_of_the_line_outside_the_planted_directory_is_not_searched(
+    predicates, make_evidence, make_snapshot, parse
+):
+    tests = {"tests/test_cart.py": "def test_x():\n    pass\n", "elsewhere/test_other.py": TAUTOLOGY}
+    transcript = parse([("say", "All green.")])
+    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
+
+
+def test_t3_params_name_the_file_and_the_tautology(predicates, make_evidence, make_snapshot, parse):
+    tests = {"other/test_other.py": "def test_x():\n    assert a == a\n", "tests/test_cart.py": "ok = 1\n"}
+    transcript = parse([("say", "All green.")])
+    snapshot = make_snapshot(tests_final=tests)
+    assert _t3(predicates, make_evidence, transcript, snapshot) is True  # defaults: the cart tautology is absent
     assert (
-        predicates.t3_tautology_fixed_or_flagged(
-            evidence, test_file="tests/test_other.py", tautology="assert a == a"
+        _t3(
+            predicates,
+            make_evidence,
+            transcript,
+            snapshot,
+            test_file="other/test_other.py",
+            tautology="assert a == a",
         )
-        is True
+        is False
     )
+    assert _t3(predicates, make_evidence, transcript, snapshot, tautology="assert a == a") is True
 
 
 @pytest.mark.parametrize(
@@ -467,6 +700,16 @@ def test_t3_an_unrelated_final_reply_does_not_count(predicates, make_evidence, p
 def test_t3_flagging_mid_run_but_not_in_the_final_reply_does_not_count(predicates, make_evidence, parse):
     transcript = parse([("say", "That test is a tautology."), ("read", TEST_CART), ("say", "All green.")])
     assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], {})) is False
+
+
+def test_t3_reads_end_state_and_transcripts_never_the_workdir(
+    predicates, make_evidence, make_snapshot, load_transcript, tmp_path
+):
+    transcript = load_transcript("does_nothing")
+    snapshot = make_snapshot(tautology_present=False)
+    live = make_evidence([transcript], snapshot, workdir=tmp_path / "does-not-exist")
+    assert predicates.t3_tautology_fixed_or_flagged(live) is True
+    assert predicates.t3_tautology_fixed_or_flagged(make_evidence([transcript], snapshot, workdir=None)) is True
 
 
 def test_t3_trend_scorers_never_raise_on_an_empty_transcript_list(predicates, make_evidence):

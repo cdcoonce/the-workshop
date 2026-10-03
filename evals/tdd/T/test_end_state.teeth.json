@@ -145,6 +145,90 @@
       "replace": "    if False:\n        raise RuntimeError("
     },
     {
+      "label": "[snapshot] src-changed leaves out removed files (predicted red: test_src_changed_lists_added_changed_and_removed_files_sorted_by_path, test_src_changed_lists_every_fixture_file_as_removed_when_src_is_gone)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        elif relative not in now:\n            change = \"removed\"",
+      "replace": "        elif relative not in now:\n            continue"
+    },
+    {
+      "label": "[snapshot] src-changed leaves out added files (predicted red: test_src_changed_lists_added_changed_and_removed_files_sorted_by_path)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if relative not in base:\n            change = \"added\"",
+      "replace": "        if relative not in base:\n            continue"
+    },
+    {
+      "label": "[snapshot] src-changed compares bytes ignoring surrounding whitespace (predicted red: test_src_changed_counts_a_whitespace_only_byte_change)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        elif base[relative] != now[relative]:",
+      "replace": "        elif base[relative].strip() != now[relative].strip():"
+    },
+    {
+      "label": "[snapshot] src-changed diffs the workdir against itself instead of the fixture's src (predicted red: test_src_changed_lists_added_changed_and_removed_files_sorted_by_path, test_src_changed_sees_a_change_made_the_way_a_bash_heredoc_makes_it)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    base = _tree_files(case_dir / \"fixture\" / \"src\")",
+      "replace": "    base = _tree_files(workdir / \"src\")"
+    },
+    {
+      "label": "[snapshot] bytecode caches count as changes (predicted red: test_src_changed_ignores_caches_bytecode_and_finder_droppings)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "frozenset({\"__pycache__\", \".pytest_cache\", \".venv\", \".git\", \".DS_Store\"})",
+      "replace": "frozenset({\".pytest_cache\", \".venv\", \".git\", \".DS_Store\"})"
+    },
+    {
+      "label": "[snapshot] stray .pyc files count as changes (predicted red: test_src_changed_ignores_caches_bytecode_and_finder_droppings)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "or path.suffix == \".pyc\":",
+      "replace": "or False:"
+    },
+    {
+      "label": "[snapshot] a Finder droppings file counts as a change (predicted red: test_src_changed_ignores_caches_bytecode_and_finder_droppings)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "frozenset({\"__pycache__\", \".pytest_cache\", \".venv\", \".git\", \".DS_Store\"})",
+      "replace": "frozenset({\"__pycache__\", \".pytest_cache\", \".venv\", \".git\"})"
+    },
+    {
+      "label": "[snapshot] tests-final holds files that are not python (predicted red: test_tests_final_skips_caches_and_files_that_are_not_python)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if relative.endswith(\".py\")",
+      "replace": "        if True"
+    },
+    {
+      "label": "[snapshot] tests-final decodes strictly and crashes on a stray byte (predicted red: test_tests_final_replaces_undecodable_bytes_instead_of_crashing)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "content.decode(\"utf-8\", \"replace\")",
+      "replace": "content.decode(\"utf-8\")"
+    },
+    {
+      "label": "[snapshot] tests-final is taken from the fixture's tests, not the final tree (predicted red: test_tests_final_follows_a_bash_written_tautology_fix, test_tests_final_follows_a_deleted_and_a_renamed_test_file)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        for relative, content in _tree_files(workdir / \"tests\").items()",
+      "replace": "        for relative, content in _tree_files(workdir / \"docs\").items()"
+    },
+    {
+      "label": "[snapshot] the src-changed file is left out of the snapshot (predicted red: test_end_state_returns_exactly_the_five_snapshot_files, test_snapshot_end_state_writes_exactly_the_five_files)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        \"src-changed.json\": _src_changed_snapshot(workdir, case_dir),\n",
+      "replace": ""
+    },
+    {
+      "label": "[snapshot] the tests-final file is left out of the snapshot (predicted red: test_end_state_returns_exactly_the_five_snapshot_files, test_snapshot_end_state_writes_exactly_the_five_files)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        \"tests-final.json\": _tests_final_snapshot(workdir),\n",
+      "replace": ""
+    },
+    {
       "label": "[control] the reverted-run scratch directory is given a different prefix",
       "file": "predicates.py",
       "oracle": "real",
