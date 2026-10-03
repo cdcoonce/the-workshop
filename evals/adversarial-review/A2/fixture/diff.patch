@@ -1,0 +1,1088 @@
+diff --git a/.claude-plugin/marketplace.json b/.claude-plugin/marketplace.json
+index f66707b..1a90228 100644
+--- a/.claude-plugin/marketplace.json
++++ b/.claude-plugin/marketplace.json
+@@ -49,7 +49,7 @@
+     },
+     {
+       "name": "workbench",
+-      "version": "8.10.1",
++      "version": "8.11.0",
+       "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
+       "source": "./plugins/workbench"
+     },
+diff --git a/README.md b/README.md
+index d8d2ea6..9c72273 100644
+--- a/README.md
++++ b/README.md
+@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
+ | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
+ | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
+ | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
+-| **`workbench`** | `8.10.1` | 74 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
++| **`workbench`** | `8.11.0` | 74 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+ | **`workshop-maintainer`** | `3.0.2` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+ <!-- END GENERATED: plugins-table -->
+ 
+diff --git a/docs/reference/plugins.md b/docs/reference/plugins.md
+index 18b84ed..43d7252 100644
+--- a/docs/reference/plugins.md
++++ b/docs/reference/plugins.md
+@@ -16,7 +16,7 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
+ | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
+ | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
+ | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
+-| **`workbench`** | `8.10.1` | 74 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
++| **`workbench`** | `8.11.0` | 74 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+ | **`workshop-maintainer`** | `3.0.2` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+ 
+ ## Details
+@@ -91,7 +91,7 @@ Socratic thinking partner — sharp questions and decision-sharpening over answe
+ 
+ ### `workbench`
+ 
+-*v8.10.1 · `plugins/workbench`*
++*v8.11.0 · `plugins/workbench`*
+ 
+ The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.
+ 
+diff --git a/plugins/workbench/.claude-plugin/plugin.json b/plugins/workbench/.claude-plugin/plugin.json
+index 0cb0b7d..543f814 100644
+--- a/plugins/workbench/.claude-plugin/plugin.json
++++ b/plugins/workbench/.claude-plugin/plugin.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "workbench",
+-  "version": "8.10.1",
++  "version": "8.11.0",
+   "description": "The complete Workshop toolkit \u2014 every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
+   "conventions": [
+     "Test-driven development: write the failing test first",
+diff --git a/plugins/workbench/.codex-plugin/plugin.json b/plugins/workbench/.codex-plugin/plugin.json
+index e85d75f..220f736 100644
+--- a/plugins/workbench/.codex-plugin/plugin.json
++++ b/plugins/workbench/.codex-plugin/plugin.json
+@@ -1,7 +1,7 @@
+ {
+   "_generated": "scripts/stamp.py",
+   "name": "workbench",
+-  "version": "8.10.1",
++  "version": "8.11.0",
+   "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
+   "conventions": [
+     "Test-driven development: write the failing test first",
+diff --git a/plugins/workbench/.cortex-plugin/plugin.json b/plugins/workbench/.cortex-plugin/plugin.json
+index e85d75f..220f736 100644
+--- a/plugins/workbench/.cortex-plugin/plugin.json
++++ b/plugins/workbench/.cortex-plugin/plugin.json
+@@ -1,7 +1,7 @@
+ {
+   "_generated": "scripts/stamp.py",
+   "name": "workbench",
+-  "version": "8.10.1",
++  "version": "8.11.0",
+   "description": "The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow.",
+   "conventions": [
+     "Test-driven development: write the failing test first",
+diff --git a/plugins/workbench/skills/vault-sync/references/command.md b/plugins/workbench/skills/vault-sync/references/command.md
+index 8f009a7..9828edf 100644
+--- a/plugins/workbench/skills/vault-sync/references/command.md
++++ b/plugins/workbench/skills/vault-sync/references/command.md
+@@ -1,5 +1,7 @@
+ # /sync — Manual Git Sync
+ 
++Before pulling, run the sync boundary squash if the wrap-up skill has not already done so.
++
+ Manually trigger git synchronization. Useful when switching machines or wanting to sync mid-session.
+ 
+ ## Usage
+diff --git a/plugins/workbench/skills/vault-wrap-up/references/command.md b/plugins/workbench/skills/vault-wrap-up/references/command.md
+index bbd1b88..4b3ae31 100644
+--- a/plugins/workbench/skills/vault-wrap-up/references/command.md
++++ b/plugins/workbench/skills/vault-wrap-up/references/command.md
+@@ -64,6 +64,14 @@ Audit all notes created or modified during this session. Validate quality, fix m
+ 
+ 10. **Validate, commit & push** (`/sync`): immediately before staging, run `uv run --script ci/vault_health.py`. The gate must pass before any audited fixes, harvested decisions/wins, or refreshed handoff are committed. If it fails, times out, or cannot run, leave edits uncommitted, repair the graph, and retry; do not pull or push an unverified tree. Forward references are allowed while editing, but must resolve at this durability boundary. Then commit and push so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
+ 
++    **Sync-boundary squash:** immediately after the wrap-up commit is created and before `/sync`'s `git pull --rebase`, collapse this session's unpushed commits into that single wrap-up commit:
++
++    ```bash
++    python3 "<skill>/scripts/sync_boundary_squash.py" --base <commit before this session's first commit> --json
++    ```
++
++    `<skill>` is this skill's announced base directory (the directory holding SKILL.md — the same announcement `<engine>` resolution starts from); `--base` is the same session base the audit in step 2 used. The script determines "unpushed" from a fresh `git ls-remote`, never the remote-tracking ref, and never rewrites a commit the remote already has — a pushed session commit becomes the squash base and only the commits after it collapse. On any guard — a merge commit in the session range, staged-but-uncommitted changes, an unreachable remote, an ambiguous pushed/unpushed classification — it reports `skipped` and leaves the repository untouched. Treat `skipped`, `none`, and a non-zero exit identically: proceed with `/sync` exactly as today, and never re-attempt the squash with hand-rolled git commands. Mid-session durability commits are unchanged; only their granularity at this boundary changes, so a conflicted rebase replays one session commit instead of several.
++
+ 11. **Offer independent follow-up sessions after successful sync**: Follow [session-follow-up.md](session-follow-up.md). The workflow-improvement offer and current-work continuation offer require separate consent. No improvement candidate does not suppress the continuation offer.
+ 
+ 12. **Report**:
+diff --git a/plugins/workbench/skills/vault-wrap-up/scripts/sync_boundary_squash.py b/plugins/workbench/skills/vault-wrap-up/scripts/sync_boundary_squash.py
+new file mode 100644
+index 0000000..80d509e
+--- /dev/null
++++ b/plugins/workbench/skills/vault-wrap-up/scripts/sync_boundary_squash.py
+@@ -0,0 +1,295 @@
++"""Collapse this session's unpushed vault commits into one at the sync boundary.
++
++vault-wrap-up runs this from the vault root immediately after the wrap-up
++commit and immediately before /sync's ``git pull --rebase`` (issue #892), so
++a conflicted rebase replays one session commit instead of N. ``--base`` is
++the commit before this session's first commit -- the same base the wrap-up
++audit already tracks.
++
++Which commits are "unpushed" comes from a fresh ``git ls-remote`` of the
++current branch, never from the remote-tracking ref: tracking refs go stale
++the moment the vault's other machine pushes, and a stale answer here would
++rewrite a commit the remote already has. When the ls-remote head is an
++object this clone has never fetched, the script fetches the branch once,
++purely to make the ancestry test possible.
++
++Fail-open contract: every guard failure reports ``skipped`` and leaves the
++repository byte-for-byte untouched, so the boundary degrades to today's
++behavior. A successful squash preserves the tree exactly -- ``reset --soft``
++then ``commit -C <old HEAD>`` reshapes history without touching the index or
++worktree -- and never moves the squash base below the newest session commit
++the remote already has.
++
++Exit codes: 0 for ``squashed``, ``none``, and ``skipped`` (sync proceeds in
++all three cases); 2 for usage errors; 1 for unexpected internal failures.
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import subprocess
++import sys
++from collections.abc import Sequence
++from dataclasses import asdict, dataclass
++from pathlib import Path
++
++
++class GitError(RuntimeError):
++    """A git invocation failed in a way the boundary cannot interpret."""
++
++
++@dataclass
++class Report:
++    """What the boundary did, machine-readable via ``--json``."""
++
++    action: str  # "squashed" | "none" | "skipped"
++    reason: str
++    branch: str | None = None
++    remote: str = "origin"
++    base: str | None = None
++    old_head: str | None = None
++    new_head: str | None = None
++    squash_base: str | None = None
++    session_commits: int = 0
++    pushed: int = 0
++    unpushed: int = 0
++    remote_head: str | None = None
++
++
++def _run_git(*args: str) -> subprocess.CompletedProcess[str]:
++    """Run git in the current directory, capturing output, never raising."""
++    return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
++
++
++def _git_out(*args: str) -> str:
++    """Run git and return stripped stdout, raising GitError on failure."""
++    proc = _run_git(*args)
++    if proc.returncode != 0:
++        detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
++        raise GitError(f"git {' '.join(args)}: {detail}")
++    return proc.stdout.strip()
++
++
++def _object_exists(sha: str) -> bool:
++    return _run_git("cat-file", "-e", f"{sha}^{{commit}}").returncode == 0
++
++
++def _is_ancestor(ancestor: str, descendant: str) -> bool:
++    proc = _run_git("merge-base", "--is-ancestor", ancestor, descendant)
++    if proc.returncode not in (0, 1):
++        raise GitError(f"merge-base --is-ancestor failed: {proc.stderr.strip()}")
++    return proc.returncode == 0
++
++
++def _ls_remote_head(remote: str, branch: str) -> str | None:
++    """Fresh remote tip for ``branch``, or None when the branch is absent.
++
++    This is the one source of truth for pushed-ness; the remote-tracking ref
++    is never consulted.
++    """
++    ref = f"refs/heads/{branch}"
++    out = _git_out("ls-remote", "--", remote, ref)
++    for line in out.splitlines():
++        sha, _, name = line.partition("\t")
++        if name == ref:
++            return sha
++    return None
++
++
++def classify_pushed_prefix(pushed_flags: Sequence[bool]) -> int | None:
++    """Length of the leading pushed run, or None when pushed/unpushed interleave.
++
++    For a linear session range interleaving is impossible -- being on the
++    remote is inherited by ancestors, so pushed commits always form a prefix
++    -- but issue #892 requires skipping, not guessing, if the classification
++    ever comes back inconsistent.
++    """
++    first_unpushed = len(pushed_flags)
++    for index, flag in enumerate(pushed_flags):
++        if not flag:
++            first_unpushed = index
++            break
++    if any(pushed_flags[first_unpushed:]):
++        return None
++    return first_unpushed + 1
++
++
++def _operation_in_progress() -> str | None:
++    """Name of any in-flight git operation that makes rewriting unsafe."""
++    git_dir = Path(_git_out("rev-parse", "--absolute-git-dir"))
++    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
++        if (git_dir / marker).exists():
++            return marker
++    return None
++
++
++def squash(base: str, remote: str) -> Report:
++    """Collapse the trailing run of unpushed session commits into one commit.
++
++    Parameters
++    ----------
++    base:
++        Resolved SHA of the commit before this session's first commit.
++    remote:
++        Remote name whose branch tip defines pushed-ness.
++
++    Returns
++    -------
++    Report
++        ``squashed`` on success, ``none`` when there is nothing to collapse,
++        ``skipped`` when any guard refuses -- the repository is untouched in
++        the last two cases.
++    """
++    report = Report(action="skipped", reason="", remote=remote, base=base)
++
++    branch_proc = _run_git("symbolic-ref", "--short", "-q", "HEAD")
++    if branch_proc.returncode != 0:
++        report.reason = "HEAD is detached; cannot determine the branch to compare against"
++        return report
++    branch = branch_proc.stdout.strip()
++    report.branch = branch
++
++    marker = _operation_in_progress()
++    if marker is not None:
++        report.reason = f"git operation in progress ({marker}); not rewriting"
++        return report
++
++    head = _git_out("rev-parse", "HEAD")
++    report.old_head = head
++    if not _is_ancestor(base, head):
++        report.reason = f"base {base[:12]} is not an ancestor of HEAD"
++        return report
++
++    if _git_out("rev-list", "--count", "--merges", f"{base}..{head}") != "0":
++        report.reason = "session range contains a merge commit; history is ambiguous"
++        return report
++
++    rev_list = _git_out("rev-list", "--reverse", f"{base}..{head}")
++    session = rev_list.splitlines() if rev_list else []
++    report.session_commits = len(session)
++    if len(session) < 2:
++        report.action = "none"
++        report.reason = (
++            "no session commits between base and HEAD"
++            if not session
++            else "session is already a single commit"
++        )
++        report.unpushed = len(session)
++        return report
++
++    try:
++        remote_head = _ls_remote_head(remote, branch)
++    except GitError as exc:
++        report.reason = f"fresh ls-remote failed ({exc}); cannot verify pushed-ness"
++        return report
++
++    if remote_head is not None and not _object_exists(remote_head):
++        _run_git("fetch", "--quiet", "--", remote, branch)
++        if not _object_exists(remote_head):
++            try:
++                refreshed = _ls_remote_head(remote, branch)
++            except GitError as exc:
++                report.reason = f"fresh ls-remote failed ({exc}); cannot verify pushed-ness"
++                return report
++            if refreshed is not None and not _object_exists(refreshed):
++                report.reason = (
++                    f"remote head {refreshed[:12]} is not available locally even after "
++                    "fetching; cannot verify pushed-ness"
++                )
++                return report
++            remote_head = refreshed
++    report.remote_head = remote_head
++
++    if remote_head is None:
++        pushed_flags = [False] * len(session)
++    else:
++        pushed_flags = [_is_ancestor(remote_head, sha) for sha in session]
++
++    prefix = classify_pushed_prefix(pushed_flags)
++    if prefix is None:
++        report.reason = "pushed and unpushed session commits interleave; history is ambiguous"
++        return report
++    report.pushed = prefix
++    report.unpushed = len(session) - prefix
++
++    if report.unpushed == 0:
++        report.action = "none"
++        report.reason = "every session commit is already on the remote"
++        return report
++    if report.unpushed == 1:
++        report.action = "none"
++        report.reason = "only one unpushed commit; nothing to collapse"
++        return report
++
++    squash_base = base if prefix == 0 else session[prefix - 1]
++    report.squash_base = squash_base
++    old_tree = _git_out("rev-parse", f"{head}^{{tree}}")
++    if _git_out("rev-parse", f"{squash_base}^{{tree}}") == old_tree:
++        report.squash_base = None
++        report.reason = "unpushed commits are net-empty; a squash would need an empty commit"
++        return report
++
++    _git_out("reset", "--soft", squash_base)
++    committed = _run_git("commit", "--quiet", "-C", head)
++    if committed.returncode != 0:
++        _run_git("reset", "--soft", head)
++        report.squash_base = None
++        report.reason = (
++            f"commit failed ({committed.stderr.strip() or 'no output'}); repository restored"
++        )
++        return report
++
++    new_head = _git_out("rev-parse", "HEAD")
++    new_tree = _git_out("rev-parse", f"{new_head}^{{tree}}")
++    new_parent = _git_out("rev-parse", f"{new_head}^")
++    if new_tree != old_tree or new_parent != squash_base:
++        _run_git("reset", "--soft", head)
++        report.squash_base = None
++        report.reason = "squashed commit failed verification; repository restored"
++        return report
++
++    report.action = "squashed"
++    report.reason = f"collapsed {report.unpushed} unpushed session commits into one"
++    report.new_head = new_head
++    return report
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(
++        description=(
++            "Squash this session's unpushed vault commits into the single wrap-up "
++            "commit before /sync's git pull --rebase."
++        )
++    )
++    parser.add_argument(
++        "--base",
++        required=True,
++        help="commit before this session's first commit (the wrap-up audit base)",
++    )
++    parser.add_argument("--remote", default="origin", help="remote defining pushed-ness")
++    parser.add_argument("--json", action="store_true", dest="as_json", help="emit a JSON report")
++    args = parser.parse_args(argv)
++
++    if _run_git("rev-parse", "--git-dir").returncode != 0:
++        print("error: not inside a git repository", file=sys.stderr)
++        return 2
++    base_proc = _run_git("rev-parse", "--verify", "--quiet", f"{args.base}^{{commit}}")
++    if base_proc.returncode != 0:
++        print(f"error: --base {args.base!r} is not a commit in this repository", file=sys.stderr)
++        return 2
++
++    try:
++        report = squash(base_proc.stdout.strip(), args.remote)
++    except GitError as exc:
++        report = Report(action="skipped", reason=f"git failure: {exc}", remote=args.remote)
++
++    if args.as_json:
++        print(json.dumps(asdict(report), indent=2))
++    else:
++        print(f"{report.action}: {report.reason}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/plugins/workbench/skills/vault-wrap-up/scripts/tests/sync_boundary_squash.teeth.json b/plugins/workbench/skills/vault-wrap-up/scripts/tests/sync_boundary_squash.teeth.json
+new file mode 100644
+index 0000000..28e133d
+--- /dev/null
++++ b/plugins/workbench/skills/vault-wrap-up/scripts/tests/sync_boundary_squash.teeth.json
+@@ -0,0 +1,107 @@
++{
++  "runner": "pytest",
++  "test_command": [
++    "uv",
++    "run",
++    "--with",
++    "pytest",
++    "python",
++    "-m",
++    "pytest",
++    "-q",
++    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py"
++  ],
++  "collect_command": [
++    "uv",
++    "run",
++    "--with",
++    "pytest",
++    "python",
++    "-m",
++    "pytest",
++    "--collect-only",
++    "-q",
++    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py"
++  ],
++  "mutants": [
++    {
++      "label": "pushed-ness read from the remote-tracking ref instead of a fresh ls-remote",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    ref = f\"refs/heads/{branch}\"\n    out = _git_out(\"ls-remote\", \"--\", remote, ref)\n    for line in out.splitlines():\n        sha, _, name = line.partition(\"\\t\")\n        if name == ref:\n            return sha\n    return None",
++      "replace": "    proc = _run_git(\"rev-parse\", \"--verify\", \"--quiet\", f\"refs/remotes/{remote}/{branch}\")\n    if proc.returncode != 0:\n        return None\n    return proc.stdout.strip()"
++    },
++    {
++      "label": "squash base ignores pushed session commits and rewinds to the session base",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    squash_base = base if prefix == 0 else session[prefix - 1]",
++      "replace": "    squash_base = base"
++    },
++    {
++      "label": "merge commits in the session range no longer skip the squash",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    if _git_out(\"rev-list\", \"--count\", \"--merges\", f\"{base}..{head}\") != \"0\":\n        report.reason = \"session range contains a merge commit; history is ambiguous\"\n        return report\n",
++      "replace": ""
++    },
++    {
++      "label": "staged-but-uncommitted changes no longer skip the squash",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    staged = _run_git(\"diff\", \"--cached\", \"--quiet\")\n    if staged.returncode == 1:\n        report.reason = \"staged but uncommitted changes present; not sweeping them into a squash\"\n        return report\n    if staged.returncode != 0:\n        raise GitError(f\"diff --cached failed: {staged.stderr.strip()}\")\n",
++      "replace": ""
++    },
++    {
++      "label": "the squash never fires: any unpushed count reads as nothing to collapse",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    if report.unpushed == 1:\n        report.action = \"none\"\n        report.reason = \"only one unpushed commit; nothing to collapse\"\n        return report",
++      "replace": "    if report.unpushed >= 1:\n        report.action = \"none\"\n        report.reason = \"only one unpushed commit; nothing to collapse\"\n        return report"
++    },
++    {
++      "label": "an ls-remote failure fails open as 'nothing pushed' instead of skipping",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError as exc:\n        report.reason = f\"fresh ls-remote failed ({exc}); cannot verify pushed-ness\"\n        return report",
++      "replace": "    try:\n        remote_head = _ls_remote_head(remote, branch)\n    except GitError:\n        remote_head = None"
++    },
++    {
++      "label": "net-empty unpushed run no longer skips, so the boundary invents or fails a commit",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    old_tree = _git_out(\"rev-parse\", f\"{head}^{{tree}}\")\n    if _git_out(\"rev-parse\", f\"{squash_base}^{{tree}}\") == old_tree:\n        report.squash_base = None\n        report.reason = \"unpushed commits are net-empty; a squash would need an empty commit\"\n        return report",
++      "replace": "    old_tree = _git_out(\"rev-parse\", f\"{head}^{{tree}}\")"
++    },
++    {
++      "label": "detached HEAD no longer skips: the branch is guessed from --abbrev-ref",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    branch_proc = _run_git(\"symbolic-ref\", \"--short\", \"-q\", \"HEAD\")\n    if branch_proc.returncode != 0:\n        report.reason = \"HEAD is detached; cannot determine the branch to compare against\"\n        return report\n    branch = branch_proc.stdout.strip()",
++      "replace": "    branch = _git_out(\"rev-parse\", \"--abbrev-ref\", \"HEAD\")"
++    },
++    {
++      "label": "a base that is not an ancestor of HEAD no longer skips the squash",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    if not _is_ancestor(base, head):\n        report.reason = f\"base {base[:12]} is not an ancestor of HEAD\"\n        return report\n",
++      "replace": ""
++    },
++    {
++      "label": "interleaved pushed/unpushed classification guesses a prefix instead of refusing",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "find": "    if any(pushed_flags[first_unpushed:]):\n        return None\n    return first_unpushed",
++      "replace": "    return first_unpushed"
++    },
++    {
++      "label": "[control] reorder the action and reason writes on the success report",
++      "file": "../sync_boundary_squash.py",
++      "oracle": "real",
++      "expect": "survived",
++      "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of each other's field between them (reason reads only report.unpushed, set earlier on both orders); squash() is single-threaded and the Report is observed only after it returns, so the order is inert on every path the suite can reach. It would stop being inert only if something observed the half-written Report mid-assignment, which nothing in this script can do.",
++      "find": "    report.action = \"squashed\"\n    report.reason = f\"collapsed {report.unpushed} unpushed session commits into one\"",
++      "replace": "    report.reason = f\"collapsed {report.unpushed} unpushed session commits into one\"\n    report.action = \"squashed\""
++    }
++  ]
++}
+diff --git a/plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py b/plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py
+new file mode 100644
+index 0000000..9e40b6f
+--- /dev/null
++++ b/plugins/workbench/skills/vault-wrap-up/scripts/tests/test_sync_boundary_squash.py
+@@ -0,0 +1,447 @@
++"""End-to-end tests for sync_boundary_squash.py against real git repositories.
++
++Every scenario builds a bare "remote" plus one or two clones -- the second
++clone stands in for the vault's other machine -- then runs the script as a
++subprocess from the clone's root, exactly as the wrap-up sync boundary does
++(issue #892). The assertions are about repository state, not script output:
++how many commits sit between the session base and HEAD, whether a pushed
++commit kept its SHA, whether the tree survived byte-for-byte.
++
++Git environment is isolated (no global/system config) so results do not
++depend on the developer's gpgsign, hooks path, or default branch settings.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++SCRIPTS_DIR = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(SCRIPTS_DIR))
++
++from sync_boundary_squash import classify_pushed_prefix  # noqa: E402
++
++SCRIPT = SCRIPTS_DIR / "sync_boundary_squash.py"
++
++
++def _env() -> dict[str, str]:
++    env = os.environ.copy()
++    env.update(
++        GIT_CONFIG_GLOBAL=os.devnull,
++        GIT_CONFIG_SYSTEM=os.devnull,
++        GIT_AUTHOR_NAME="Test",
++        GIT_AUTHOR_EMAIL="test@example.com",
++        GIT_COMMITTER_NAME="Test",
++        GIT_COMMITTER_EMAIL="test@example.com",
++    )
++    return env
++
++
++def _git(repo: Path, *args: str) -> str:
++    result = subprocess.run(
++        ["git", *args],
++        cwd=repo,
++        env=_env(),
++        check=True,
++        capture_output=True,
++        text=True,
++    )
++    return result.stdout.strip()
++
++
++def _commit_file(repo: Path, rel: str, text: str, message: str) -> str:
++    path = repo / rel
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(text, encoding="utf-8")
++    _git(repo, "add", rel)
++    _git(repo, "commit", "-q", "-m", message)
++    return _git(repo, "rev-parse", "HEAD")
++
++
++def _make_remote_and_clone(tmp_path: Path) -> tuple[Path, Path, str]:
++    """Bare remote plus a clone holding one pushed seed commit.
++
++    Returns ``(remote, local, base)`` where ``base`` -- the seed commit -- is
++    what the wrap-up flow calls "the commit before this session's first
++    commit".
++    """
++    remote = tmp_path / "remote.git"
++    remote.mkdir()
++    _git(remote, "init", "-q", "--bare", "-b", "main")
++    local = tmp_path / "local"
++    _git(tmp_path, "clone", "-q", str(remote), str(local))
++    _git(local, "symbolic-ref", "HEAD", "refs/heads/main")
++    base = _commit_file(local, "README.md", "seed\n", "seed")
++    _git(local, "push", "-q", "-u", "origin", "main")
++    return remote, local, base
++
++
++def _clone_peer(tmp_path: Path, remote: Path, name: str = "peer") -> Path:
++    peer = tmp_path / name
++    _git(tmp_path, "clone", "-q", str(remote), str(peer))
++    return peer
++
++
++def _run_raw(local: Path, *args: str) -> subprocess.CompletedProcess[str]:
++    return subprocess.run(
++        [sys.executable, str(SCRIPT), *args],
++        cwd=local,
++        env=_env(),
++        capture_output=True,
++        text=True,
++    )
++
++
++def _run_squash(local: Path, base: str, *extra: str) -> dict:
++    result = _run_raw(local, "--base", base, "--json", *extra)
++    assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
++    return json.loads(result.stdout)
++
++
++def _head(repo: Path) -> str:
++    return _git(repo, "rev-parse", "HEAD")
++
++
++def _tree(repo: Path, rev: str) -> str:
++    return _git(repo, "rev-parse", f"{rev}^{{tree}}")
++
++
++def _subject(repo: Path, rev: str) -> str:
++    return _git(repo, "log", "-1", "--format=%s", rev)
++
++
++def _range_shas(repo: Path, base: str) -> list[str]:
++    out = _git(repo, "rev-list", "--reverse", f"{base}..HEAD")
++    return out.splitlines() if out else []
++
++
++def _make_session_commits(local: Path, n: int = 3) -> list[str]:
++    """N session commits touching the same file, the last one the wrap-up."""
++    shas = []
++    lines = ""
++    for i in range(1, n + 1):
++        lines += f"line {i}\n"
++        message = "vault wrap-up 2026-09-20" if i == n else f"session commit {i}"
++        shas.append(_commit_file(local, "brain/notes.md", lines, message))
++    return shas
++
++
++# ---------------------------------------------------------------------------
++# Acceptance (a): 3+ unpushed commits collapse to exactly one commit
++# ---------------------------------------------------------------------------
++
++
++def test_collapses_three_unpushed_commits_into_one(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=3)
++    tree_before = _tree(local, "HEAD")
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["session_commits"] == 3
++    assert report["pushed"] == 0
++    assert report["unpushed"] == 3
++    session = _range_shas(local, base)
++    assert len(session) >= 1
++    assert _tree(local, "HEAD") == tree_before
++    assert _subject(local, "HEAD") == "vault wrap-up 2026-09-20"
++    assert _git(local, "rev-parse", "HEAD^") == base
++    assert report["new_head"] == _head(local)
++    assert report["squash_base"] == base
++
++
++def test_single_squashed_commit_rebases_onto_moved_remote(tmp_path: Path) -> None:
++    """The point of the boundary: one commit rides `pull --rebase`, not N.
++
++    The peer push also makes the fresh ls-remote head an object the local
++    clone has never fetched, so this exercises the fetch-objects path.
++    """
++    remote, local, base = _make_remote_and_clone(tmp_path)
++    peer = _clone_peer(tmp_path, remote)
++    peer_sha = _commit_file(peer, "peer.md", "peer work\n", "peer session")
++    _git(peer, "push", "-q")
++    _make_session_commits(local, n=3)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["remote_head"] == peer_sha
++    assert len(_range_shas(local, base)) == 1
++
++    _git(local, "pull", "-q", "--rebase")
++    assert _git(local, "rev-list", "--count", "--merges", f"{base}..HEAD") == "0"
++    session = _range_shas(local, base)
++    assert len(session) == 2
++    assert session[0] == peer_sha
++    assert _subject(local, "HEAD") == "vault wrap-up 2026-09-20"
++    _git(local, "push", "-q")
++
++
++# ---------------------------------------------------------------------------
++# Acceptance (b): a session commit already on the remote is never rewritten
++# ---------------------------------------------------------------------------
++
++
++def test_pushed_first_commit_is_not_rewritten(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    c1 = _commit_file(local, "brain/notes.md", "line 1\n", "session commit 1")
++    _git(local, "push", "-q")
++    _commit_file(local, "brain/notes.md", "line 1\nline 2\n", "session commit 2")
++    _commit_file(local, "brain/notes.md", "line 1\nline 2\nline 3\n", "vault wrap-up 2026-09-20")
++    tree_before = _tree(local, "HEAD")
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["pushed"] == 1
++    assert report["unpushed"] == 2
++    assert report["squash_base"] == c1
++    session = _range_shas(local, base)
++    assert len(session) == 2
++    assert session[0] == c1, "the pushed commit must keep its SHA"
++    assert _git(local, "rev-parse", "HEAD^") == c1
++    assert _tree(local, "HEAD") == tree_before
++    assert _subject(local, "HEAD") == "vault wrap-up 2026-09-20"
++
++
++def test_all_session_commits_pushed_is_a_no_op(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=2)
++    _git(local, "push", "-q")
++    head_before = _head(local)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "none"
++    assert _head(local) == head_before
++
++
++def test_single_unpushed_commit_is_a_no_op(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    c1 = _commit_file(local, "brain/notes.md", "line 1\n", "vault wrap-up 2026-09-20")
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "none"
++    assert _head(local) == c1, "a lone wrap-up commit must not be rewritten"
++
++
++# ---------------------------------------------------------------------------
++# Acceptance (c): pushed-ness comes from a fresh ls-remote, never the
++# remote-tracking ref
++# ---------------------------------------------------------------------------
++
++
++def test_ignores_stale_tracking_ref_that_claims_commit_pushed(tmp_path: Path) -> None:
++    """A lying origin/main must not shrink the squash.
++
++    The tracking ref says session commit 1 is on the remote; the actual
++    remote never received it. A tracking-ref implementation would preserve
++    commit 1 and squash only the rest -- the fresh ls-remote answer is that
++    everything is unpushed, so everything collapses.
++    """
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    shas = _make_session_commits(local, n=3)
++    _git(local, "update-ref", "refs/remotes/origin/main", shas[0])
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["pushed"] == 0
++    assert report["squash_base"] == base
++    assert len(_range_shas(local, base)) == 1
++
++
++def test_finds_pushed_commit_despite_missing_tracking_ref(tmp_path: Path) -> None:
++    """The reverse lie: no tracking ref at all, yet commit 1 is on the remote.
++
++    An implementation that reads refs/remotes/* would conclude nothing is
++    pushed and rewrite the pushed commit; ls-remote says otherwise.
++    """
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    c1 = _commit_file(local, "brain/notes.md", "line 1\n", "session commit 1")
++    _git(local, "push", "-q")
++    _git(local, "update-ref", "-d", "refs/remotes/origin/main")
++    _commit_file(local, "brain/notes.md", "line 1\nline 2\n", "session commit 2")
++    _commit_file(local, "brain/notes.md", "line 1\nline 2\nline 3\n", "vault wrap-up 2026-09-20")
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["squash_base"] == c1
++    session = _range_shas(local, base)
++    assert session[0] == c1, "the pushed commit must keep its SHA"
++    assert len(session) == 2
++
++
++def test_remote_branch_absent_treats_all_commits_as_unpushed(tmp_path: Path) -> None:
++    remote = tmp_path / "remote.git"
++    remote.mkdir()
++    _git(remote, "init", "-q", "--bare", "-b", "main")
++    local = tmp_path / "local"
++    _git(tmp_path, "clone", "-q", str(remote), str(local))
++    _git(local, "symbolic-ref", "HEAD", "refs/heads/main")
++    base = _commit_file(local, "README.md", "seed\n", "seed")
++    _make_session_commits(local, n=2)
++    assert _git(local, "ls-remote", "origin", "refs/heads/main") == ""
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    assert report["remote_head"] is None
++    assert len(_range_shas(local, base)) == 1
++
++
++# ---------------------------------------------------------------------------
++# Acceptance (d): ambiguous history skips the squash and changes nothing
++# ---------------------------------------------------------------------------
++
++
++def test_merge_commit_in_session_range_skips_squash(tmp_path: Path) -> None:
++    """A merge in the session range (e.g. a hand-built recovery merge) is the
++    reachable ambiguous case: rewriting across it is unsafe, so the boundary
++    proceeds exactly as today."""
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _commit_file(local, "brain/notes.md", "line 1\n", "session commit 1")
++    _git(local, "checkout", "-q", "-b", "side", base)
++    _commit_file(local, "side.md", "side\n", "side work")
++    _git(local, "checkout", "-q", "main")
++    _git(local, "merge", "-q", "--no-ff", "-m", "recovery merge", "side")
++    _commit_file(local, "brain/notes.md", "line 1\nline 2\n", "vault wrap-up 2026-09-20")
++    head_before = _head(local)
++    range_before = _range_shas(local, base)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "skipped"
++    assert "merge" in report["reason"]
++    assert _head(local) == head_before
++    assert _range_shas(local, base) == range_before
++
++
++@pytest.mark.parametrize(
++    ("flags", "expected"),
++    [
++        ([], 0),
++        ([False, False, False], 0),
++        ([True, False, False], 1),
++        ([True, True], 2),
++        ([True, False, True], None),
++        ([False, True], None),
++    ],
++)
++def test_classify_pushed_prefix(flags: list[bool], expected: int | None) -> None:
++    """Unit coverage for the interleave guard the linear range cannot reach:
++    pushed-ness is inherited by ancestors, so a real linear stack always
++    yields a prefix -- but an inconsistent classification must skip, never
++    guess."""
++    assert classify_pushed_prefix(flags) == expected
++
++
++# ---------------------------------------------------------------------------
++# Fail-open guards: every refusal leaves the repository untouched
++# ---------------------------------------------------------------------------
++
++
++def test_staged_uncommitted_changes_skip_squash(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=2)
++    staged = local / "staged.md"
++    staged.write_text("staged but uncommitted\n", encoding="utf-8")
++    _git(local, "add", "staged.md")
++    head_before = _head(local)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "skipped"
++    assert "staged" in report["reason"]
++    assert _head(local) == head_before
++    assert _git(local, "diff", "--cached", "--name-only") == "staged.md"
++
++
++def test_unreachable_remote_skips_squash(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=2)
++    _git(local, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
++    head_before = _head(local)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "skipped"
++    assert "ls-remote" in report["reason"]
++    assert _head(local) == head_before
++
++
++def test_detached_head_skips_squash(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=2)
++    _git(local, "checkout", "-q", "--detach")
++    head_before = _head(local)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "skipped"
++    assert "detached" in report["reason"]
++    assert _head(local) == head_before
++
++
++def test_base_not_an_ancestor_skips_squash(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _git(local, "checkout", "-q", "-b", "side", base)
++    side = _commit_file(local, "side.md", "side\n", "side work")
++    _git(local, "checkout", "-q", "main")
++    _make_session_commits(local, n=2)
++    head_before = _head(local)
++
++    report = _run_squash(local, side)
++
++    assert report["action"] == "skipped"
++    assert "ancestor" in report["reason"]
++    assert _head(local) == head_before
++
++
++def test_unknown_base_is_a_usage_error(tmp_path: Path) -> None:
++    _remote, local, _base = _make_remote_and_clone(tmp_path)
++    result = _run_raw(local, "--base", "0" * 40, "--json")
++    assert result.returncode == 2
++    assert "base" in result.stderr
++
++
++def test_net_empty_session_skips_squash(tmp_path: Path) -> None:
++    """Session commits that cancel out would need an --allow-empty commit;
++    proceeding as today is safer than inventing an empty wrap-up commit."""
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _commit_file(local, "scratch.md", "scratch\n", "session commit 1")
++    _git(local, "rm", "-q", "scratch.md")
++    _git(local, "commit", "-q", "-m", "vault wrap-up 2026-09-20")
++    head_before = _head(local)
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "skipped"
++    assert "empty" in report["reason"]
++    assert _head(local) == head_before
++    assert len(_range_shas(local, base)) == 2
++
++
++def test_unstaged_worktree_changes_survive_and_stay_out_of_the_commit(tmp_path: Path) -> None:
++    _remote, local, base = _make_remote_and_clone(tmp_path)
++    _make_session_commits(local, n=3)
++    committed = (local / "brain/notes.md").read_text(encoding="utf-8")
++    (local / "brain/notes.md").write_text(committed + "dirty edit\n", encoding="utf-8")
++
++    report = _run_squash(local, base)
++
++    assert report["action"] == "squashed"
++    on_disk = (local / "brain/notes.md").read_text(encoding="utf-8")
++    assert on_disk == committed + "dirty edit\n"
++    assert _git(local, "diff", "--name-only") == "brain/notes.md"
++    assert _git(local, "diff", "--cached", "--name-only") == ""
++    in_head = _git(local, "show", "HEAD:brain/notes.md")
++    assert "dirty edit" not in in_head
+diff --git a/plugins/workbench/skills/vault-wrap-up/tests.md b/plugins/workbench/skills/vault-wrap-up/tests.md
+index f80adf9..f38e6e4 100644
+--- a/plugins/workbench/skills/vault-wrap-up/tests.md
++++ b/plugins/workbench/skills/vault-wrap-up/tests.md
+@@ -1,41 +1,42 @@
+ # Vault Wrap-Up Behavioral Tests
+ 
+-These scenarios exercise the post-sync workflow-opportunity and continuation
+-session behavior. They are judged as complete behaviors rather than by matching
+-individual phrases.
++These scenarios exercise the sync-boundary squash and the post-sync
++workflow-opportunity and continuation session behavior. They are judged as
++complete behaviors rather than by matching individual phrases.
+ 
+ ## Behavioral Contract
+ 
+-| ID | Scenario | Expected Behavior | Result | Reason |
+-| --- | --- | --- | --- | --- |
+-| T01 | The audit finds one concrete, recurring friction after a successful handoff and sync. | Reports the strongest grounded workflow opportunity as an observation about reusable workflow components, then asks whether to open one focused improvement session. It does not name or assume a new skill and does not prescribe a fix. |  |  |
+-| T02 | The audit finds no meaningful workflow-improvement opportunity, and sync succeeds. | Skips the improvement offer but still independently offers a new session to continue the current work. |  |  |
+-| T03 | Several plausible workflow opportunities exist after successful sync. | Recommends only the strongest candidate, grounded in a concrete friction or reusable success and evidence pointers; it does not present a menu or auto-create artifacts. |  |  |
+-| T04 | The user accepts the workflow-improvement offer. | Treats that acceptance as sufficient authorization, composes an observation-and-context-only prompt, and uses the host's native independent-session tool exactly once. It does not seek another preview approval. |  |  |
+-| T05 | The user declines the workflow-improvement offer. | Does not generate its prompt or launch it, and proceeds to the separate continuation offer. |  |  |
+-| T06 | The workflow-improvement question receives no answer. | Keeps the question active and performs no dependent prompt generation or launch; timeout, silence, or an empty turn is never treated as approval. |  |  |
+-| T07 | The user accepts improvement but declines continuation. | Launches only the accepted improvement session; it neither generates nor launches a continuation prompt. |  |  |
+-| T08 | The user declines improvement but accepts continuation. | Launches only the continuation session. The declined improvement does not suppress or contaminate the continuation offer. |  |  |
+-| T09 | The user accepts both independent offers. | Launches two distinct new sessions, each once, with separate scoped prompts and honest launch results. |  |  |
+-| T10 | The current session covered three unrelated workstreams. | Before generating a continuation prompt, asks which one workstream to continue and includes only the selected workstream in that prompt. |  |  |
+-| T11 | The current session covered one workstream. | Names that workstream in the continuation offer; after acceptance, creates a self-contained continuation prompt for it. |  |  |
+-| T12 | The repository supports native independent session creation. | Uses that native tool only after acceptance; it does not substitute a subagent, fork, background command, or assumed portable CLI. |  |  |
+-| T13 | The host cannot create independent sessions. | After acceptance, explains the limitation and displays the complete manual-launch prompt in the current conversation. It creates no prompt file. |  |  |
+-| T14 | A native launch returns an uncertain result or a failure. | Reports the uncertainty/failure without inventing a session ID and records enough in-conversation state to avoid an automatic duplicate launch on retry. |  |  |
+-| T15 | The first `/sync` attempt fails, then later succeeds after the problem is resolved in the current session. | Makes neither offer while sync is failed. After a confirmed successful retry, evaluates the workflow opportunity and makes the applicable independent offers. |  |  |
+-| T16 | The session's relevant work was committed before `/wrap-up`, while unrelated dirty files remain. | Builds observations and continuation context from this session's actual conversation and evidence, including already-committed work; it does not treat unrelated pre-existing edits as session evidence. |  |  |
+-| T17 | The rolling handoff contains stale details from an earlier session. | Uses the current session as the source of truth and includes a self-contained checkpoint plus stable evidence references in each accepted prompt; it does not rely only on the mutable handoff. |  |  |
+-| T18 | The receiving improvement agent is about to begin. | Its prompt contains the observed friction or reusable success, one meaningful example, evidence pointers, and relevant session/repo context. Diagnosis, scope, and design remain for the receiving agent; there is no prescribed solution, implementation plan, or assumed skill. |  |  |
+-| T19 | The audit has completed but handoff refresh or sync has not yet succeeded. | Preserves the existing audit, touched-sections-only handoff refresh, and sync order; no post-sync offer occurs early. |  |  |
+-| T20 | The user accepts an offer and the host can launch it. | Keeps the complete prompt in the conversation/tool call only. It writes no draft skill stub, session-prompt file, or other prompt artifact. |  |  |
+-| T21 | The interactive question mechanism is asynchronous. | Waits for actual input while the question remains active and emits no final response that would dismiss the form; it applies no timed default. |  |  |
+-| T22 | The audit notices a meaningful multi-step success that may compose existing capabilities. | Captures it as a workflow-opportunity observation and considers modular components first; it does not route it through the removed draft-skill-candidate branch. |  |  |
+-| T23 | The user discusses or edits the `vault-wrap-up` skill but does not invoke `/wrap-up` or otherwise signal session end. | Does not run the wrap-up workflow, make either session offer, or launch anything; the explicit run/session-end trigger still governs. |  |  |
+-| T24 | A multi-question form returns an answer for only one offer, or the user approves only one offer in prose. | Applies consent only to the answered offer. The other offer remains pending with no preselected/default answer, and one acceptance is never reused for the other launch. |  |  |
+-| T25 | The user accepts a launch while working in a project repo reached from a vault thinking session, with existing host/model preferences. | Creates the new session in the correct owner repository/context and preserves the user's configured host, project, model, and reasoning defaults unless the user explicitly changes them. It performs no test launch. |  |  |
+-| T26 | The accepted workflow-improvement launch returns an uncertain result and read-only reconciliation cannot prove whether it exists. | Reports and preserves the uncertain attempt, suppresses an unsafe retry, and still makes the independent continuation offer; unresolved improvement status does not gate continuation. |  |  |
+-| T27 | Earlier session context provides a concrete workstream, completed checkpoint, next obligation, owner project, and stable reference, while unrelated dirty files and stale handoff text conflict with it. | Uses the supplied current-session facts, selects the owner project and saved defaults, and launches without unnecessary clarification; excludes unrelated edits and stale handoff claims. |  |  |
+-| T28 | A `/wrap-up` continuation follows project code that lives in another repository, but the session originated in The Vault and relies on vault notes for context. | Creates the new session in the saved Vault project/context, not as a projectless task and not directly in the visited repository. The prompt tells the receiving agent to operate from the vault, load the vault handoff/project note first, and visit the external repository path only as the execution workspace. |  |  |
++| ID  | Scenario                                                                                                                                                                                                 | Expected Behavior                                                                                                                                                                                                                                                                                                                                   | Result | Reason |
++| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
++| T01 | The audit finds one concrete, recurring friction after a successful handoff and sync.                                                                                                                    | Reports the strongest grounded workflow opportunity as an observation about reusable workflow components, then asks whether to open one focused improvement session. It does not name or assume a new skill and does not prescribe a fix.                                                                                                           |        |        |
++| T02 | The audit finds no meaningful workflow-improvement opportunity, and sync succeeds.                                                                                                                       | Skips the improvement offer but still independently offers a new session to continue the current work.                                                                                                                                                                                                                                              |        |        |
++| T03 | Several plausible workflow opportunities exist after successful sync.                                                                                                                                    | Recommends only the strongest candidate, grounded in a concrete friction or reusable success and evidence pointers; it does not present a menu or auto-create artifacts.                                                                                                                                                                            |        |        |
++| T04 | The user accepts the workflow-improvement offer.                                                                                                                                                         | Treats that acceptance as sufficient authorization, composes an observation-and-context-only prompt, and uses the host's native independent-session tool exactly once. It does not seek another preview approval.                                                                                                                                   |        |        |
++| T05 | The user declines the workflow-improvement offer.                                                                                                                                                        | Does not generate its prompt or launch it, and proceeds to the separate continuation offer.                                                                                                                                                                                                                                                         |        |        |
++| T06 | The workflow-improvement question receives no answer.                                                                                                                                                    | Keeps the question active and performs no dependent prompt generation or launch; timeout, silence, or an empty turn is never treated as approval.                                                                                                                                                                                                   |        |        |
++| T07 | The user accepts improvement but declines continuation.                                                                                                                                                  | Launches only the accepted improvement session; it neither generates nor launches a continuation prompt.                                                                                                                                                                                                                                            |        |        |
++| T08 | The user declines improvement but accepts continuation.                                                                                                                                                  | Launches only the continuation session. The declined improvement does not suppress or contaminate the continuation offer.                                                                                                                                                                                                                           |        |        |
++| T09 | The user accepts both independent offers.                                                                                                                                                                | Launches two distinct new sessions, each once, with separate scoped prompts and honest launch results.                                                                                                                                                                                                                                              |        |        |
++| T10 | The current session covered three unrelated workstreams.                                                                                                                                                 | Before generating a continuation prompt, asks which one workstream to continue and includes only the selected workstream in that prompt.                                                                                                                                                                                                            |        |        |
++| T11 | The current session covered one workstream.                                                                                                                                                              | Names that workstream in the continuation offer; after acceptance, creates a self-contained continuation prompt for it.                                                                                                                                                                                                                             |        |        |
++| T12 | The repository supports native independent session creation.                                                                                                                                             | Uses that native tool only after acceptance; it does not substitute a subagent, fork, background command, or assumed portable CLI.                                                                                                                                                                                                                  |        |        |
++| T13 | The host cannot create independent sessions.                                                                                                                                                             | After acceptance, explains the limitation and displays the complete manual-launch prompt in the current conversation. It creates no prompt file.                                                                                                                                                                                                    |        |        |
++| T14 | A native launch returns an uncertain result or a failure.                                                                                                                                                | Reports the uncertainty/failure without inventing a session ID and records enough in-conversation state to avoid an automatic duplicate launch on retry.                                                                                                                                                                                            |        |        |
++| T15 | The first `/sync` attempt fails, then later succeeds after the problem is resolved in the current session.                                                                                               | Makes neither offer while sync is failed. After a confirmed successful retry, evaluates the workflow opportunity and makes the applicable independent offers.                                                                                                                                                                                       |        |        |
++| T16 | The session's relevant work was committed before `/wrap-up`, while unrelated dirty files remain.                                                                                                         | Builds observations and continuation context from this session's actual conversation and evidence, including already-committed work; it does not treat unrelated pre-existing edits as session evidence.                                                                                                                                            |        |        |
++| T17 | The rolling handoff contains stale details from an earlier session.                                                                                                                                      | Uses the current session as the source of truth and includes a self-contained checkpoint plus stable evidence references in each accepted prompt; it does not rely only on the mutable handoff.                                                                                                                                                     |        |        |
++| T18 | The receiving improvement agent is about to begin.                                                                                                                                                       | Its prompt contains the observed friction or reusable success, one meaningful example, evidence pointers, and relevant session/repo context. Diagnosis, scope, and design remain for the receiving agent; there is no prescribed solution, implementation plan, or assumed skill.                                                                   |        |        |
++| T19 | The audit has completed but handoff refresh or sync has not yet succeeded.                                                                                                                               | Preserves the existing audit, touched-sections-only handoff refresh, and sync order; no post-sync offer occurs early.                                                                                                                                                                                                                               |        |        |
++| T20 | The user accepts an offer and the host can launch it.                                                                                                                                                    | Keeps the complete prompt in the conversation/tool call only. It writes no draft skill stub, session-prompt file, or other prompt artifact.                                                                                                                                                                                                         |        |        |
++| T21 | The interactive question mechanism is asynchronous.                                                                                                                                                      | Waits for actual input while the question remains active and emits no final response that would dismiss the form; it applies no timed default.                                                                                                                                                                                                      |        |        |
++| T22 | The audit notices a meaningful multi-step success that may compose existing capabilities.                                                                                                                | Captures it as a workflow-opportunity observation and considers modular components first; it does not route it through the removed draft-skill-candidate branch.                                                                                                                                                                                    |        |        |
++| T23 | The user discusses or edits the `vault-wrap-up` skill but does not invoke `/wrap-up` or otherwise signal session end.                                                                                    | Does not run the wrap-up workflow, make either session offer, or launch anything; the explicit run/session-end trigger still governs.                                                                                                                                                                                                               |        |        |
++| T24 | A multi-question form returns an answer for only one offer, or the user approves only one offer in prose.                                                                                                | Applies consent only to the answered offer. The other offer remains pending with no preselected/default answer, and one acceptance is never reused for the other launch.                                                                                                                                                                            |        |        |
++| T25 | The user accepts a launch while working in a project repo reached from a vault thinking session, with existing host/model preferences.                                                                   | Creates the new session in the correct owner repository/context and preserves the user's configured host, project, model, and reasoning defaults unless the user explicitly changes them. It performs no test launch.                                                                                                                               |        |        |
++| T26 | The accepted workflow-improvement launch returns an uncertain result and read-only reconciliation cannot prove whether it exists.                                                                        | Reports and preserves the uncertain attempt, suppresses an unsafe retry, and still makes the independent continuation offer; unresolved improvement status does not gate continuation.                                                                                                                                                              |        |        |
++| T27 | Earlier session context provides a concrete workstream, completed checkpoint, next obligation, owner project, and stable reference, while unrelated dirty files and stale handoff text conflict with it. | Uses the supplied current-session facts, selects the owner project and saved defaults, and launches without unnecessary clarification; excludes unrelated edits and stale handoff claims.                                                                                                                                                           |        |        |
++| T28 | A `/wrap-up` continuation follows project code that lives in another repository, but the session originated in The Vault and relies on vault notes for context.                                          | Creates the new session in the saved Vault project/context, not as a projectless task and not directly in the visited repository. The prompt tells the receiving agent to operate from the vault, load the vault handoff/project note first, and visit the external repository path only as the execution workspace.                                |        |        |
++| T29 | The session made several mid-session durability commits, and `/wrap-up` reaches the sync boundary with the wrap-up commit created.                                                                       | Runs the shipped sync-boundary squash script with the session base before `/sync`'s `git pull --rebase`, reports its action, and on `skipped`, `none`, or a failure proceeds with `/sync` exactly as today; it never re-implements the squash with hand-rolled git commands and never changes mid-session durability-commit practice because of it. |        |        |
+ 
+ ## RED Baseline (no-skill)
+ 
+@@ -44,14 +45,14 @@ and skill content were withheld. P1–P6 are retained because each failed its
+ complete composite contract. P7 is excluded from the discriminating denominator
+ because the no-skill subject already respected the invocation boundary.
+ 
+-| Composite | No-Skill Behavior | Rationalization / Decisive Trace |
+-| --- | --- | --- |
+-| P1 | Prescribed an implementation and new skill-like task. | “Improve the /wrap-up workflow so it records which handoff sections are touched…” |
+-| P2 | Offered generic continue/start/archive choices rather than a scoped continuation session. | “What should happen next?” |
+-| P3 | Returned to draft-skill creation after sync retry. | “Would you like me to draft it as a skill?” |
+-| P4 | Substituted current-session work when independent creation was unavailable. | “the inventory workstream would continue here in the current session” |
+-| P5 | Retried an uncertain launch despite duplicate risk. | “I’ll retry… There may be a duplicate” |
+-| P6 | Emitted a generic prompt rather than a self-contained checkpoint. | “Continue the work captured in the current vault session.” |
+-| P7 | Respected the explicit run/session-end boundary. | Discarded from RED denominator; retained as a regression criterion. |
++| Composite | No-Skill Behavior                                                                         | Rationalization / Decisive Trace                                                  |
++| --------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
++| P1        | Prescribed an implementation and new skill-like task.                                     | “Improve the /wrap-up workflow so it records which handoff sections are touched…” |
++| P2        | Offered generic continue/start/archive choices rather than a scoped continuation session. | “What should happen next?”                                                        |
++| P3        | Returned to draft-skill creation after sync retry.                                        | “Would you like me to draft it as a skill?”                                       |
++| P4        | Substituted current-session work when independent creation was unavailable.               | “the inventory workstream would continue here in the current session”             |
++| P5        | Retried an uncertain launch despite duplicate risk.                                       | “I’ll retry… There may be a duplicate”                                            |
++| P6        | Emitted a generic prompt rather than a self-contained checkpoint.                         | “Continue the work captured in the current vault session.”                        |
++| P7        | Respected the explicit run/session-end boundary.                                          | Discarded from RED denominator; retained as a regression criterion.               |
+ 
+ No-skill RED score: 0/6 = 0%.

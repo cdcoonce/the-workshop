@@ -1,0 +1,112 @@
+# Every file under fixture/ and ab_raws/ is copied once, byte for byte, from the
+# 2026-09-21 terse-lens-contract A/B experiment, which stays where it is and is
+# never edited or referenced in place. `file` is relative to this case directory;
+# `source_blob_sha` is `git rev-parse <resolved_ref>:<source_path>`.
+# The ab_raws/ files are matcher-development and cross-match-audit material only;
+# nothing here ever reads them as calibration input (see case.toml and acceptance.md).
+resolved_ref = "c205087684d0d8e3958aa2ba3ef5678a4b866621"  # origin/dev when copied
+
+[[files]]
+file = "fixture/defects.json"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/fixture/defects.json"
+source_blob_sha = "2457897dc71c90f7adf49db239106dfcd9d44700"
+
+[[files]]
+file = "fixture/diff.patch"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/fixture/diff.patch"
+source_blob_sha = "37319a18bdbbd83c7eeffb750f05c225d5cda040"
+
+[[files]]
+file = "fixture/spec.md"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/fixture/spec.md"
+source_blob_sha = "b06afe721e4e6932a36ecbcb5816e4a3904f747e"
+
+[[files]]
+file = "ab_raws/a/domain-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/domain-r1.txt"
+source_blob_sha = "bdc6c9082a8da56d1dc7ed3eaee6c97367828bed"
+
+[[files]]
+file = "ab_raws/a/domain-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/domain-r2.txt"
+source_blob_sha = "938c6fe90f9d3b384a73ab709463c3516666737f"
+
+[[files]]
+file = "ab_raws/a/spec_conformance-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/spec_conformance-r1.txt"
+source_blob_sha = "4b2e4e00421142c524280aed9d0bc2d032ef5cd1"
+
+[[files]]
+file = "ab_raws/a/spec_conformance-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/spec_conformance-r2.txt"
+source_blob_sha = "1963847ca45cdc2518b7b8b1233dedc51b828411"
+
+[[files]]
+file = "ab_raws/a/test_veracity-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/test_veracity-r1.txt"
+source_blob_sha = "201b494d04920fe5452ea854ba82247bc7f91dc2"
+
+[[files]]
+file = "ab_raws/a/test_veracity-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a/test_veracity-r2.txt"
+source_blob_sha = "05ba06bf3fb572d83bc32eccfc772cb5d740d851"
+
+[[files]]
+file = "ab_raws/b/domain-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/domain-r1.txt"
+source_blob_sha = "1bdc6df2a546d16910ceef54c9c0bd81762b4231"
+
+[[files]]
+file = "ab_raws/b/domain-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/domain-r2.txt"
+source_blob_sha = "f2dc5844460f582bcefb564c3a5c55239f77d8a7"
+
+[[files]]
+file = "ab_raws/b/spec_conformance-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/spec_conformance-r1.txt"
+source_blob_sha = "bc2ff19caf6449f38c05e221b98e8ae4c82e87d7"
+
+[[files]]
+file = "ab_raws/b/spec_conformance-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/spec_conformance-r2.txt"
+source_blob_sha = "dde8c5fea56f43f72085d929ea24faead36175a7"
+
+[[files]]
+file = "ab_raws/b/test_veracity-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/test_veracity-r1.txt"
+source_blob_sha = "9db5ee287215c2f4d4aae19700558e4f18aa22e4"
+
+[[files]]
+file = "ab_raws/b/test_veracity-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/b/test_veracity-r2.txt"
+source_blob_sha = "44e0f301087b0682306f76d2383e4041f4bc59bf"
+
+[[files]]
+file = "ab_raws/a2/domain-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/domain-r1.txt"
+source_blob_sha = "6df1e8ad36d919f28a4a72a2d0528429bdaa2f6a"
+
+[[files]]
+file = "ab_raws/a2/domain-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/domain-r2.txt"
+source_blob_sha = "d967d12755e35735dd1e104e9d6c62dc7d7da0ab"
+
+[[files]]
+file = "ab_raws/a2/spec_conformance-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/spec_conformance-r1.txt"
+source_blob_sha = "3a11a78797d9d7f59d91c1a8d30c1ae3ba2b8f2c"
+
+[[files]]
+file = "ab_raws/a2/spec_conformance-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/spec_conformance-r2.txt"
+source_blob_sha = "15216c85825ebb384f64a71ad2c6949b107277de"
+
+[[files]]
+file = "ab_raws/a2/test_veracity-r1.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/test_veracity-r1.txt"
+source_blob_sha = "bf035b5e475fdd0f6dcf0adcea2e16d97f452e6c"
+
+[[files]]
+file = "ab_raws/a2/test_veracity-r2.txt"
+source_path = "docs/experiments/2026-09-21-terse-lens-contract-ab/results/raw/a2/test_veracity-r2.txt"
+source_blob_sha = "418d18ac3d3034f1a64df91b663c75fef0bb8ba6"
