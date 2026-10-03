@@ -21,13 +21,20 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 ENGINE = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE))
 
 import semantic_index as si  # noqa: E402
+from test_ragmark_shims import StubEmbedder  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def stub_embedder(monkeypatch):
+    import ragmark.embed
+
+    monkeypatch.setattr(ragmark.embed, "FastembedEmbedder", StubEmbedder)
 
 
 def _make_vault(tmp_path: Path) -> Path:
@@ -41,22 +48,19 @@ def _make_vault(tmp_path: Path) -> Path:
 
 
 def _seed_index(vault: Path, note_rel: str = "brain/a.md") -> None:
-    """A tiny but well-formed index under ``<vault>/.claude/data/semantic``."""
-    (vault / note_rel).parent.mkdir(parents=True, exist_ok=True)
-    (vault / note_rel).write_text("# a\n\nsome body text\n")
-    index_dir = vault / ".claude" / "data" / "semantic"
-    index_dir.mkdir(parents=True)
-    np.save(str(index_dir / "vectors.npy"), np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32))
-    meta = [
-        {"note_path": note_rel, "snippet": "some body"},
-        {"note_path": "brain/b.md", "snippet": "other"},
-    ]
-    (index_dir / "meta.json").write_text(json.dumps(meta))
-    (index_dir / "manifest.json").write_text(json.dumps({note_rel: "stale-hash"}))
+    """Build a real fixture ragmark index, then change one note without refresh."""
+    for rel in (note_rel, "brain/b.md"):
+        path = vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Fixture note\n")
+    si.build_index(vault)
+    (vault / note_rel).write_text("# Changed fixture note\n")
 
 
 class TestMainResolution:
-    def test_no_vault_anywhere_errors_loudly(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_no_vault_anywhere_errors_loudly(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
         monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
         monkeypatch.chdir(tmp_path)
 
@@ -98,10 +102,11 @@ class TestMainResolution:
 
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
-        assert out["ready"] is True
+        assert out["ready"] is False
+        assert out["state"] == "stale"
         assert out["chunks"] == 2
         assert out["notes"] == 2
-        # The one live note's manifest hash is stale on purpose.
+        # One of the two live notes changed after the fixture build.
         assert out["stale_notes"] == 1
         # Loudness: status names the root it resolved, so a wrong root is
         # visible in the output instead of masquerading as an empty vault.
@@ -122,26 +127,31 @@ class TestMainResolution:
 
 
 class TestIndexIO:
-    def test_save_index_writes_under_the_given_vault(self, tmp_path) -> None:
-        """``reindex`` must write into the vault, never beside the module —
-        the broken arrangement would dump ~10MB into the plugin cache."""
+    def test_build_index_writes_under_the_given_vault(self, tmp_path) -> None:
         vault = _make_vault(tmp_path)
-        vectors = np.array([[1.0, 2.0]], dtype=np.float32)
-        meta = [{"note_path": "brain/a.md", "snippet": "s"}]
+        (vault / "brain/a.md").write_text("# Fixture\n")
 
-        si._save_index(vault, vectors, meta, {"brain/a.md": "h"})
+        report = si.build_index(vault)
 
-        index_dir = vault / ".claude" / "data" / "semantic"
-        assert (index_dir / "vectors.npy").exists()
-        assert json.loads((index_dir / "meta.json").read_text()) == meta
-        assert json.loads((index_dir / "manifest.json").read_text()) == {"brain/a.md": "h"}
+        assert report["indexed"] == 1
+        assert (vault / ".ragmark" / "ragmark.db").exists()
+        assert (vault / ".ragmark" / "vectors.npy").exists()
+        assert not (vault / ".claude" / "data" / "semantic").exists()
 
-    def test_load_index_round_trips_from_the_given_vault(self, tmp_path) -> None:
-        vault = _make_vault(tmp_path)
-        _seed_index(vault)
+    def test_status_names_the_requested_root_not_another_cached_root(
+        self, tmp_path
+    ) -> None:
+        first = tmp_path / "first"
+        first.mkdir()
+        second = tmp_path / "second"
+        second.mkdir()
+        _make_vault(first)
+        _make_vault(second)
+        _seed_index(first)
 
-        vectors, meta, manifest = si._load_index(vault)
+        report = si.status(second)
 
-        assert vectors is not None and vectors.shape == (2, 2)
-        assert [m["note_path"] for m in meta] == ["brain/a.md", "brain/b.md"]
-        assert manifest == {"brain/a.md": "stale-hash"}
+        assert report["state"] == "missing"
+        assert report["ready"] is False
+        assert report["vault_root"] == str(second.resolve())
+        assert not (second / ".ragmark").exists()

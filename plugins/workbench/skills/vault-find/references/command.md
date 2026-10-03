@@ -1,59 +1,61 @@
-# /find — Semantic Vault Search
+# /find — Hybrid Vault Search
 
-Search the vault by **meaning**, not keywords. Uses local fastembed embeddings (bge-small-en-v1.5, ONNX, fully on-device) to find notes that match a concept even when the exact words don't appear. Designed for the retrieval pain `reference/` exposes: "I remember the idea but searched the wrong words."
+Search the vault by meaning and exact terms using ragmark's local vector and lexical retrieval. The model runs on-device; note access follows the vault's owner scope and machine context.
 
-**Explicit-invoke only.** This is a search verb you type deliberately; it does not auto-fire on general questions. When `reference/` notes are the likely target, prefer `/find` over grep. When keyword retrieval is clearly sufficient (known title, exact phrase), use grep directly.
+**Explicit-invoke only.** This is a search verb you type deliberately; it does not auto-fire on general questions. When `reference/` notes are the likely target, prefer `/find` over grep. When a known title or exact phrase is sufficient, use scoped keyword retrieval directly.
 
 ## Usage
 
 ```
-/find <natural-language query>   # semantic search + answer
-/find --reindex                  # force full rebuild of the vector index
-/find --status                   # report index health (notes, chunks, freshness)
+/find <natural-language query>   # hybrid search + answer
+/find --reindex                  # explicitly rebuild this vault's derived index
+/find --status                   # read-only index health and freshness
 ```
+
+## Runtime prerequisite
+
+Use the machinery project environment with its `embeddings` extra. The compatibility shim requires the coordinated ragmark scope and compatibility APIs from ragmark#94/#95. A package version in the declared range alone is insufficient: older packages fail with an explicit capability error. Use the reviewed source environment during coordinated development; deploy only after the required package release is available. Do not silently substitute an unrestricted ragmark config.
 
 ## Process
 
 ### `/find <query>`
 
-1. **Incremental reindex.** Run `uv run --script "<engine>/semantic_index.py" reindex` (no `--force`). The engine checks a sha256 manifest and re-embeds only changed or new notes — near-instant when nothing has changed.
+1. **Search once.** Run `uv run --project "<engine>/.." --extra embeddings python "<engine>/semantic_index.py" search "<query>"`. Ragmark checks freshness and incrementally updates changed/new/deleted notes on the query path. No separate pre-search reindex is needed.
 
-2. **Search.** Run `uv run --script "<engine>/semantic_index.py" search "<query>"`. The engine returns a JSON list of `{note_path, score, snippet}`, deduplicated to note level (best-scoring chunk per note), sorted descending.
+2. **Present ranked hits.** The JSON list contains `{note_path, score, snippet}`. Each note uses its highest-ranked supplied chunk. Scores are fused ranking values, not cosine similarity or confidence; retain low scores and never apply the old 0.2 cutoff. The shim requests at most 25 core chunk hits once, then presents up to 8 distinct notes by default. Fewer distinct notes yield a shorter list without refill.
 
-3. **Present ranked hits.** Show the user the top results: note path as a `[[wikilink]]`, cosine score, and the matching snippet. Briefly explain why each result matched (what concept or phrase made it relevant).
-
-4. **Read and answer.** Read the top 2–3 full notes to actually answer the user's question — do not stop at snippets. Synthesize across those notes; quote directly when exact wording matters. Link all referenced notes as `[[wikilinks]]` in your response.
+3. **Read and answer.** Read the top 2–3 full notes through the scoped vault reader before answering. Check dates and later evidence when the question concerns current status. Synthesize across notes and link the supporting notes with `[[wikilinks]]`. Note-level dictionaries omit chunk IDs; use the packaged MCP `vault_search` hits when exact chunk citations are required.
 
 ### `/find --reindex`
 
-Run `uv run --script "<engine>/semantic_index.py" reindex --force`. Forces a full rebuild — re-embeds every in-scope note from scratch. Use when the index seems stale, after a large vault reorganization, or when the user wants to confirm the index is fresh. Report the returned stats: `{indexed, skipped, total_chunks, elapsed}`.
+Run `uv run --project "<engine>/.." --extra embeddings python "<engine>/semantic_index.py" reindex --force`. This explicitly rebuilds the requested vault's `.ragmark` index. Report `{indexed, skipped, removed, defects, total_chunks, elapsed}`. `indexed` counts added plus updated notes, `skipped` counts unchanged notes, and parse defects remain visible. A forced rebuild starts fresh, so its removal count does not describe the discarded prior snapshot.
 
 ### `/find --status`
 
-Run `uv run --script "<engine>/semantic_index.py" status`. Report the returned `{notes, chunks, stale_notes, index_built_at, model, ready}` dict in readable form. Flag if `stale_notes > 0` and suggest running `/find --reindex` if the staleness is high.
+Run `uv run --project "<engine>/.." --extra embeddings python "<engine>/semantic_index.py" status`. This inspects the index without creating or refreshing it. Report the named `vault_root`, `index_dir`, `state`, `ready`, note/chunk counts, and added/changed/deleted counts. Preserve unknown values as unknown. `index_built_at` is unavailable (`null`); do not invent a timestamp. `root_provenance: not_recorded` means the format does not prove which root originally built a copied index.
 
-## Index Scope
+For `stale`, the next query normally refreshes it. For corruption, identity mismatch, or unavailable inspection, surface the returned error/remediation. A missing or unbuilt index is not ready.
 
-The engine indexes: `brain/` · `work/` · `personal/` · `org/` · `perf/` · `reference/` · `thinking/`
+## Index Scope and Storage
 
-Excluded: `thinking/session-logs/` · `.brain/` · `templates/` · `.claude/` · non-`.md` files.
+Owner scope comes from this explicit vault's `.vault/config/vault_scope.py`, with shipped defaults for names absent from a valid config. It controls allowed top-level folders, excluded directories, operating filenames, and transient prefixes. A present broken owner config fails closed. Machine context is read from this same vault's `.vault-context`; an unknown context sees shared notes only.
 
-The index lives in `.claude/data/semantic/` (gitignored, machine-local). Each machine builds its own; it is never synced.
+The derived index lives in `<vault>/.ragmark/`, machine-local and regenerable. The shim does not read, convert, or delete the old `.claude/data/semantic/` index. A first query or explicit rebuild creates the new index only in the requested vault.
 
-## Cold-Start Behavior
+## Model Cache
 
-On the first ever run, fastembed downloads the bge-small-en-v1.5 ONNX model (~130MB) to `~/.cache/fastembed`. The engine emits a one-time notice to stderr during that download. Tell the user: "This first index build may take 30–60 seconds while the model downloads — subsequent runs are instant."
+Ragmark manages its pinned local model. Its cache defaults to `~/.cache/ragmark/fastembed`, with `RAGMARK_FASTEMBED_CACHE` as an override. A first model use may download model assets; status reads identity metadata without loading the model. Do not promise a download size or duration.
 
-## Failure Handling (fail loud)
+## Failure Handling
 
-- **fastembed missing or import error** — the engine returns `{"error": "...", "remediation": "..."}`. Surface the remediation verbatim (it will say `uv add fastembed`), then fall back to a keyword grep over the scoped folders. Always emit a clear `(semantic unavailable — keyword results)` banner so the user knows they're getting fallback results.
-- **Index missing or corrupt** — the engine rebuilds automatically on search if no vectors exist. If rebuild itself fails, surface the error JSON and ask the user to run `/find --reindex` manually after resolving the issue.
-- **Empty results** — if semantic search returns no hits or all scores are below 0.2, say so explicitly and offer a keyword fallback. Never imply an empty result means the vault has nothing relevant.
-- **Errors always appear as `{"error": "...", "remediation": "..."}` JSON on stdout** — parse and surface them; never let a raw Python traceback reach the user.
+- **Missing capability or dependency:** surface the structured error and remediation. Do not retry with broader scope or the old engine. A keyword fallback must honor the same owner scope and machine context and be labelled `(hybrid unavailable — keyword results)`.
+- **Missing index:** the query path initializes it. **Corrupt or model-mismatched index:** surface the error; an explicit `--reindex` is the recovery path, after the reported cause is understood.
+- **Empty or short results:** report what was returned. This does not establish that the vault contains no relevant evidence. Do not infer quality from the absolute score scale.
+- **CLI failures:** parse `{error, remediation}` from stdout and surface them clearly; stderr holds diagnostic details.
 
 ## Constraints
 
-- Semantic is **additive** — it complements keyword search and wikilink traversal; it does not replace them. When results feel weak, say so and try grep.
-- Never claim a vector hit is the definitive truth. Scores reflect embedding similarity, not factual correctness; always read the full note before asserting a claim.
-- All wikilinks in responses must use the note's vault-relative path or short title in `[[double brackets]]`.
-- The conductor never touches the vectors directly — the engine is always called as a subprocess returning JSON.
+- Retrieval complements keyword search and wikilink traversal. Always read source notes before asserting a claim.
+- Ranking does not establish factual correctness or currentness. Preserve unresolved or historical status explicitly.
+- Use vault-relative paths or short titles in response `[[wikilinks]]`.
+- Call the engine or packaged MCP surface; do not manipulate vectors directly.

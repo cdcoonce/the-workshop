@@ -1000,6 +1000,21 @@ class TestSmokeMachinery:
 
         assert not any("machinery" in e for e in result.errors)
 
+    def test_ragmark_is_external_but_unknown_import_still_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin_with_machinery(tmp_path, make_plugin)
+        (plugin / "machinery" / "tests" / "test_runtime.py").write_text(
+            "from ragmark import compat\nfrom unknown_runtime import missing\n"
+        )
+
+        result = smoke_test(plugin)
+
+        machinery_errors = [e for e in result.errors if "machinery" in e]
+        assert len(machinery_errors) == 1
+        assert "imports 'unknown_runtime'" in machinery_errors[0]
+        assert "not in the plugin" in machinery_errors[0]
+
     def test_import_of_unshipped_engine_module_fails(
         self, tmp_path: Path, make_plugin
     ) -> None:

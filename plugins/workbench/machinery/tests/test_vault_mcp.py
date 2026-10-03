@@ -1,9 +1,8 @@
 """Tests for vault_mcp — the read-only MCP surface over the vault.
 
-Covers the pure core: path resolution, note reads, and search delegation.
-The FastMCP wiring is a thin shell over these functions and is deliberately
-not exercised here — importing fastmcp would pull a server dependency into
-the unit suite for no added signal.
+Covers retained Python helper signatures: path resolution, note reads, and
+search delegation. Actual packaged FastMCP wiring, four tool names, annotations,
+owner scope, and context behavior are exercised in test_ragmark_shims.py.
 
 The path-resolution tests carry most of the weight. This module is the first
 surface that lets an agent *outside* the vault repo read vault files, so the
@@ -158,6 +157,9 @@ def test_search_caps_returned_results(vault: Path) -> None:
     size, so the over-fetch factor stays an implementation detail.
     """
 
+    for i in range(MAX_RESULTS):
+        (vault / "reference" / f"n{i}.md").write_text("# Visible fixture\n")
+
     def fake_search(query: str, k: int = 8) -> list[dict]:
         return [
             {"note_path": f"reference/n{i}.md", "score": 0.5, "snippet": ""}
@@ -199,6 +201,10 @@ def scoped_vault(tmp_path: Path) -> Path:
     (root / "work" / "roadmap.md").write_text("# Roadmap\n")
     (root / "personal" / "diary.md").write_text("# Diary\n")
     (root / "reference" / "shared.md").write_text("# Shared\n")
+    for i in range(20):
+        (root / "work" / f"w{i}.md").write_text("# Work fixture\n")
+    for i in range(10):
+        (root / "personal" / f"n{i}.md").write_text("# Personal fixture\n")
     return root
 
 
@@ -313,15 +319,10 @@ class TestSearchHonorsContext:
             "reference/shared.md",
         ]
 
-    def test_overfetches_so_filtering_does_not_starve_results(
+    def test_legacy_helper_does_not_stack_another_overfetch(
         self, scoped_vault: Path
     ) -> None:
-        """Filtering AFTER a k-truncated search would silently return too few.
-
-        If the top k hits are all out-of-context, a naive implementation returns
-        an empty list even though in-context matches exist further down. The
-        server must ask the index for more than k and truncate after filtering.
-        """
+        """The packaged search already owns over-fetch and context gating."""
         (scoped_vault / ".vault-context").write_text("work\n")
         asked: list[int] = []
 
@@ -339,7 +340,7 @@ class TestSearchHonorsContext:
 
         hits = search_notes("x", 3, search_fn=fake_search, vault_root=scoped_vault)
 
-        assert asked and asked[0] > 3, "must over-fetch beyond the requested k"
+        assert asked == [3], "must make one bounded call, without legacy over-fetch"
         assert len(hits) == 3
         assert all(h["note_path"].startswith("work/") for h in hits)
 
@@ -352,7 +353,10 @@ class TestSearchHonorsContext:
                 for i in range(20)
             ]
 
-        assert len(search_notes("x", 4, search_fn=fake_search, vault_root=scoped_vault)) == 4
+        assert (
+            len(search_notes("x", 4, search_fn=fake_search, vault_root=scoped_vault))
+            == 4
+        )
 
 
 # ---------------------------------------------------------------------------
