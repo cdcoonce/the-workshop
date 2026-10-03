@@ -159,6 +159,48 @@
       "replace": "mode = \"inline\""
     },
     {
+      "label": "[prompt] the discipline is smuggled in (predicted red: test_prompt_does_not_smuggle_the_discipline)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "I would like this built test-first.",
+      "replace": "I would like this built test-first, with a failing test before each change."
+    },
+    {
+      "label": "[prompt] the test-first request is dropped (predicted red: test_prompt_is_a_natural_test_first_request_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "I would like this built test-first. ",
+      "replace": "I would like this built carefully. "
+    },
+    {
+      "label": "[prompt] a user turn is scripted into the prompt (predicted red: test_prompt_is_a_natural_test_first_request_with_no_user_turns)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Nobody is around",
+      "replace": "User: Nobody is around"
+    },
+    {
+      "label": "[prompt] an acceptance line is copied into the prompt (predicted red: test_prompt_leaks_nothing_from_acceptance)",
+      "file": "prompt.md",
+      "oracle": "real",
+      "find": "Nobody is around to answer questions, so make the calls yourself.",
+      "replace": "An agent that writes tests first on its own but never loads the skill misses."
+    },
+    {
+      "label": "[fixture] pytest is no longer pinned (predicted red: test_fixture_pins_pytest_directly)",
+      "file": "fixture/pyproject.toml",
+      "oracle": "real",
+      "find": "\"pytest==9.1.1\"",
+      "replace": "\"pytest>=9\""
+    },
+    {
+      "label": "[fixture] the base suite is red (predicted red: test_fixture_base_suite_is_green)",
+      "file": "fixture/src/textkit/slug.py",
+      "oracle": "real",
+      "find": "text.lower()",
+      "replace": "text.upper()"
+    },
+    {
       "label": "[control] a docstring sentence in predicates.py is reworded",
       "file": "predicates.py",
       "oracle": "real",
