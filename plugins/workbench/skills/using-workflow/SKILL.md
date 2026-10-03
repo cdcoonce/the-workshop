@@ -64,6 +64,12 @@ test, require the suite to go red on the predicted test for every
 mutation, and revert cleanly after each. A mutation the suite survives is
 a vacuous guard and fails the build review.
 
+The reviewer emits its teeth ledger (behavior, mutation, predicted test,
+result) into the PR body or a committed file, and also runs an
+untrusted-input / spec-deviation probe: teeth cannot find a behavior no test
+grades. A golden fixture a downstream consumer reads is derived from the
+spec by someone other than its builder (`drain-queue`'s `builder-dispatch`).
+
 ## Trigger Floor
 
 If there is even a small chance a listed skill applies to what you're doing,
