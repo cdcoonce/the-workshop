@@ -497,10 +497,22 @@ def test_the_skill_names_where_transcripts_and_python_come_from():
     transcript_doc = _normalize(importlib.import_module("evals._harness.transcript").__doc__)
     assert "`<session>/subagents/agent-<id>.jsonl`" in skill
     assert "<session>/subagents/agent-<id>.jsonl" in transcript_doc
-    assert "uv run --with jsonschema python" in skill
+    assert "uv run --with pytest --with jsonschema python" in skill
     makefile = (_REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     assert "uv run --with jsonschema python -m evals._harness.guards" in makefile
+    assert (
+        "uv run --with pytest --with jsonschema python -m pytest" in makefile
+    ), "the skill claims to mirror `make test-evals`, which runs pytest"
     assert re.search(r"from the checkout root", skill)
+
+
+def test_every_harness_invocation_in_the_skill_has_pytest_available():
+    # A case's end_state snapshot shells out to `sys.executable -m pytest`, so
+    # a harness interpreter without pytest silently records a miss per attempt.
+    invocations = re.findall(r"uv run [^`\n]*?python", _skill_text())
+    assert invocations, "the skill documents no `uv run ... python` invocation"
+    for invocation in invocations:
+        assert "--with pytest" in invocation, invocation
 
 
 def test_the_skill_names_where_run_dict_scalars_and_versions_come_from():

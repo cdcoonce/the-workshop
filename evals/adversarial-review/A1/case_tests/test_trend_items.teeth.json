@@ -1,0 +1,115 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_trend_items.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_trend_items.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] _defect_named never credits any reply",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "                if review_match(finding, file_suffix=file_suffix, regex=regex, line_window=None):",
+      "replace": "                if False and review_match(finding, file_suffix=file_suffix, regex=regex, line_window=None):"
+    },
+    {
+      "label": "regex dropped: the file token alone credits a defect",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "regex=regex, line_window=None)",
+      "replace": "regex=\".\", line_window=None)"
+    },
+    {
+      "label": "file location dropped: any path token credits a defect",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "file_suffix=file_suffix, regex=regex, line_window=None)",
+      "replace": "file_suffix=\"\", regex=regex, line_window=None)"
+    },
+    {
+      "label": "paragraph segmentation dropped: the whole reply is one segment",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "        for segment in _segments(reply):",
+      "replace": "        for segment in [reply]:"
+    },
+    {
+      "label": "list-item segmentation dropped",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "            if _LIST_ITEM_START.match(line) and current:",
+      "replace": "            if False and current:"
+    },
+    {
+      "label": "leading slash dropped: a bare basename no longer names its file",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "find": "\"file\": \"/\" + path.lstrip(\"/\")",
+      "replace": "\"file\": path"
+    },
+    {
+      "label": "tests-no-teeth item points at rounding.py instead of test_rounding.py",
+      "file": "../case.toml",
+      "oracle": "real",
+      "find": "file_suffix = \"/test_rounding.py\"",
+      "replace": "file_suffix = \"/rounding.py\""
+    },
+    {
+      "label": "decimal-from-float item points at the test file instead of rounding.py",
+      "file": "../case.toml",
+      "oracle": "real",
+      "find": "scorer = \"defect_decimal_from_float\"\nparams = { file_suffix = \"/rounding.py\"",
+      "replace": "scorer = \"defect_decimal_from_float\"\nparams = { file_suffix = \"/test_rounding.py\""
+    },
+    {
+      "label": "a planted defect is promoted to a gate candidate",
+      "file": "../case.toml",
+      "oracle": "real",
+      "find": "id = \"A1-defect-missed-call-site\"\nkind = \"trend\"",
+      "replace": "id = \"A1-defect-missed-call-site\"\nkind = \"gate-candidate\""
+    },
+    {
+      "label": "a findings envelope is declared although no scorer reads evidence.findings",
+      "file": "../case.toml",
+      "oracle": "real",
+      "find": "prompt = \"prompt.md\"\nbuilder",
+      "replace": "prompt = \"prompt.md\"\nenvelope = \"findings\"\nbuilder"
+    },
+    {
+      "label": "[control] blank segments are kept instead of filtered",
+      "file": "../predicates.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "A blank or whitespace-only segment contains no .py path token, so the loop over _PY_PATH.findall never reaches review_match for it; keeping it changes no return value on any input.",
+      "find": "    return [segment for segment in segments if segment.strip()]",
+      "replace": "    return segments"
+    }
+  ]
+}

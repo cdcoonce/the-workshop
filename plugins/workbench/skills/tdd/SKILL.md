@@ -32,7 +32,7 @@ See [discipline.md](discipline.md) for the excuse-to-reality table and the delet
 
 **Good tests** are integration-style: they exercise real code paths through public APIs and describe _what_ the system does, not _how_ it does it. **Bad tests** are coupled to implementation — they mock internal collaborators, test private methods, or verify through external means. The warning sign: your test breaks when you refactor, but behavior hasn't changed.
 
-See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+See [good-and-bad-tests.md](references/good-and-bad-tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
 
 ## Anti-Pattern: Horizontal Slices
 
