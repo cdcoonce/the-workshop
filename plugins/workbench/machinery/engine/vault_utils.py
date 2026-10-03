@@ -195,7 +195,10 @@ def read_batch_model(default: str = DEFAULT_BATCH_MODEL) -> str:
     a context where the module is not importable) falls back to *default*, so
     an absent config preserves the previous behaviour exactly.
     """
-    import vault_scope_resolved
+    try:
+        import vault_scope_resolved
+    except ImportError:
+        return default
 
     value = getattr(vault_scope_resolved, "BATCH_MODEL", None)
     return value if isinstance(value, str) and value else default
