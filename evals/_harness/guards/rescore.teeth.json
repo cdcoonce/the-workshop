@@ -1,0 +1,373 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_rescore.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_rescore.py"
+  ],
+  "mutants": [
+    {
+      "label": "_SCORING_HARNESS_FILES drops scorer.py, so a change to it never triggers a re-score",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_only_a_scoring_harness_file_changes_and_a_recorded_outcome_re_scores_differently[scorer]: a diff changing only evals/_harness/scorer.py must re-score, because that file decides re-scored outcomes.",
+      "find": "(\"scorer\", \"matchers\", \"transcript\", \"dispatch\")",
+      "replace": "(\"matchers\", \"transcript\", \"dispatch\")"
+    },
+    {
+      "label": "_SCORING_HARNESS_FILES drops matchers.py, so a change to it never triggers a re-score",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_only_a_scoring_harness_file_changes_and_a_recorded_outcome_re_scores_differently[matchers]: a diff changing only evals/_harness/matchers.py must re-score, because that file decides re-scored outcomes.",
+      "find": "(\"scorer\", \"matchers\", \"transcript\", \"dispatch\")",
+      "replace": "(\"scorer\", \"transcript\", \"dispatch\")"
+    },
+    {
+      "label": "_SCORING_HARNESS_FILES drops transcript.py, so a change to it never triggers a re-score",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_only_a_scoring_harness_file_changes_and_a_recorded_outcome_re_scores_differently[transcript]: a diff changing only evals/_harness/transcript.py must re-score, because that file decides re-scored outcomes.",
+      "find": "(\"scorer\", \"matchers\", \"transcript\", \"dispatch\")",
+      "replace": "(\"scorer\", \"matchers\", \"dispatch\")"
+    },
+    {
+      "label": "_SCORING_HARNESS_FILES drops dispatch.py, so a change to it never triggers a re-score",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_only_a_scoring_harness_file_changes_and_a_recorded_outcome_re_scores_differently[dispatch]: a diff changing only evals/_harness/dispatch.py must re-score, because that file decides re-scored outcomes.",
+      "find": "(\"scorer\", \"matchers\", \"transcript\", \"dispatch\")",
+      "replace": "(\"scorer\", \"matchers\", \"transcript\")"
+    },
+    {
+      "label": "_scoring_code_changed ignores a case's predicates.py",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_predicates_change_flips_a_recorded_verdict_with_no_declaration and test_a_predicates_change_in_any_case_triggers_every_skills_re_score: a case's predicates.py decides re-scored outcomes.",
+      "find": "path in _SCORING_HARNESS_FILES or _CASE_PREDICATES.match(path)",
+      "replace": "path in _SCORING_HARNESS_FILES"
+    },
+    {
+      "label": "_CASE_PREDICATES matches a predicates.py at any depth",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_look_alike_path_is_not_scoring_code (a fixture's own predicates.py is not a case's): only evals/<skill>/<case>/predicates.py is scoring code.",
+      "find": "_CASE_PREDICATES = re.compile(r\"^evals/(?!_)[^/]+/[^/]+/predicates\\.py$\")",
+      "replace": "_CASE_PREDICATES = re.compile(r\"predicates\\.py$\")"
+    },
+    {
+      "label": "_CASE_PREDICATES counts the harness directory as a skill",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_look_alike_path_is_not_scoring_code[evals/_harness/x/predicates.py]: a _-prefixed directory under evals/ is the harness, never a skill with cases.",
+      "find": "_CASE_PREDICATES = re.compile(r\"^evals/(?!_)[^/]+/[^/]+/predicates\\.py$\")",
+      "replace": "_CASE_PREDICATES = re.compile(r\"^evals/[^/]+/[^/]+/predicates\\.py$\")"
+    },
+    {
+      "label": "_scoring_code_changed always reports a change",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_a_diff_that_changes_no_scoring_code and test_passes_an_empty_diff: with a flipping run file present, only the trigger keeps an unrelated diff from failing.",
+      "find": "    return any(\n        path in _SCORING_HARNESS_FILES or _CASE_PREDICATES.match(path)\n        for path in output.split(\"\\0\")\n        if path\n    )",
+      "replace": "    return True"
+    },
+    {
+      "label": "_scoring_code_changed drops --no-renames, so a renamed predicates.py is not seen",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_renamed_predicates_file_counts_as_a_change: with rename detection on, --name-only prints only the new name and the old predicates.py path never appears.",
+      "find": "\"git\", \"-C\", str(repo_root), \"diff\", \"--no-renames\", \"--name-only\", \"-z\",",
+      "replace": "\"git\", \"-C\", str(repo_root), \"diff\", \"--name-only\", \"-z\","
+    },
+    {
+      "label": "_scoring_code_changed uses a two-dot range, leaking base-only history",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_ignores_a_scoring_change_made_only_on_the_base_via_the_three_dot_range: the diff must be merge-base relative, or a scorer change the base made after the fork re-scores a branch that never touched it.",
+      "find": "f\"{base}...HEAD\",",
+      "replace": "f\"{base}..HEAD\","
+    },
+    {
+      "label": "_is_declared ignores the run_file field",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_declaration_that_differs_in_any_one_field_is_a_different_flip[run_file]: a flip declared for another run file is a different flip.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    keys = (\"item\", \"old_verdict\", \"new_verdict\")\n    return any(\n        isinstance(entry, dict) and set(entry) == set(expected) and all(entry[k] == expected[k] for k in keys)\n        for entry in declarations\n    )"
+    },
+    {
+      "label": "_is_declared ignores the item field",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_declaration_that_differs_in_any_one_field_is_a_different_flip[item]: a flip declared for another item is a different flip.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    keys = (\"run_file\", \"old_verdict\", \"new_verdict\")\n    return any(\n        isinstance(entry, dict) and set(entry) == set(expected) and all(entry[k] == expected[k] for k in keys)\n        for entry in declarations\n    )"
+    },
+    {
+      "label": "_is_declared ignores the old_verdict field",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_declaration_that_differs_in_any_one_field_is_a_different_flip[old_verdict] and test_a_declaration_built_from_the_run_files_top_level_verdict_does_not_match: the before verdict must match exactly.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    keys = (\"run_file\", \"item\", \"new_verdict\")\n    return any(\n        isinstance(entry, dict) and set(entry) == set(expected) and all(entry[k] == expected[k] for k in keys)\n        for entry in declarations\n    )"
+    },
+    {
+      "label": "_is_declared ignores the new_verdict field",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_declaration_that_differs_in_any_one_field_is_a_different_flip[new_verdict] and test_a_one_hit_early_stopped_run_re_scored_to_a_miss_is_void_not_red: the after verdict must match exactly.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    keys = (\"run_file\", \"item\", \"old_verdict\")\n    return any(\n        isinstance(entry, dict) and set(entry) == set(expected) and all(entry[k] == expected[k] for k in keys)\n        for entry in declarations\n    )"
+    },
+    {
+      "label": "_is_declared accepts an entry carrying extra keys",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_only_declaration_carries_a_fifth_key: an entry with any extra key matches nothing.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    return any(all(entry.get(k) == v for k, v in expected.items()) for entry in declarations if isinstance(entry, dict))"
+    },
+    {
+      "label": "_is_declared accepts an entry missing a key",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_the_only_declaration_is_missing_one_of_the_four_fields (one case per field): an entry missing any of the four keys matches nothing.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    return any(all(entry.get(k, v) == v for k, v in expected.items()) for entry in declarations if isinstance(entry, dict))"
+    },
+    {
+      "label": "_is_declared accepts every entry",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_declaration_that_differs_in_any_one_field_is_a_different_flip and test_fails_when_the_only_declaration_on_the_base_is_for_a_different_flip: an unrelated entry must not satisfy the guard.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    return bool(declarations)"
+    },
+    {
+      "label": "_verdict never gates the item, so every item reads green",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_predicates_change_flips_a_recorded_verdict_with_no_declaration and every other flip test: the verdict is compute_verdict over a gated singleton mapping.",
+      "find": "    return compute_verdict({\"item\": (True, outcomes)})",
+      "replace": "    return compute_verdict({\"item\": (False, outcomes)})"
+    },
+    {
+      "label": "_rescore_case derives each side from the first attempt only",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_derives_both_verdicts_from_every_attempt_not_from_the_run_files_verdict and test_an_indeterminate_re_score_is_not_a_miss: each side is derived from every recorded attempt of the case, not one.",
+      "find": "    for attempt in recorded_case[\"attempts\"]:",
+      "replace": "    for attempt in recorded_case[\"attempts\"][:1]:"
+    },
+    {
+      "label": "_rescore_case reads the old outcomes from the re-scored attempts too",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by every flip test: old_verdict comes from the outcomes recorded in the run file, new_verdict from the recomputed ones; reading both from the re-score hides every flip.",
+      "find": "        for item, outcome in recorded_items.items():\n            old_outcomes",
+      "replace": "        for item, outcome in rescored_items.items():\n            old_outcomes"
+    },
+    {
+      "label": "_rescore_case reads an indeterminate re-score as a miss",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_an_indeterminate_re_score_is_not_a_miss: an indeterminate outcome is not a miss, so miss/miss/indeterminate never makes red.",
+      "find": "            rescored_items = dict(rescored.item_hits)",
+      "replace": "            rescored_items = {k: (\"miss\" if v == \"indeterminate\" else v) for k, v in rescored.item_hits.items()}"
+    },
+    {
+      "label": "_rescore_case re-scores without the raw's end_state snapshot",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_re_scores_an_end_state_item_from_the_raws_end_state_snapshot: an end-state item replays against the snapshot files the ledger stored, so dropping them turns its recorded hit into a miss.",
+      "find": "                    end_state_dir=raw_dir / \"end_state\",",
+      "replace": "                    end_state_dir=None,"
+    },
+    {
+      "label": "_rescore_case hands the scorers a workdir",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_re_scores_with_no_workdir: re-scoring runs from raws alone with workdir=None, so no live repo is ever needed.",
+      "find": "                    workdir=None,",
+      "replace": "                    workdir=raw_dir,"
+    },
+    {
+      "label": "_rescore_case finds no transcripts in the raw directory",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_every_recorded_outcome_re_scores_the_same: the transcripts are the *.jsonl files in the raw directory.",
+      "find": "sorted(raw_dir.glob(\"*.jsonl\")),",
+      "replace": "sorted(raw_dir.glob(\"*.json\")),"
+    },
+    {
+      "label": "_rescore_case scores only the first transcript of an attempt",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_scores_every_transcript_of_an_attempt_not_just_the_first: an inline attempt holds one transcript per lens agent, and a hit in the second must still count.",
+      "find": "sorted(raw_dir.glob(\"*.jsonl\")),",
+      "replace": "sorted(raw_dir.glob(\"*.jsonl\"))[:1],"
+    },
+    {
+      "label": "_is_declared honours only the last declaration",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_matching_declaration_before_an_unrelated_one_still_counts: a matching entry counts wherever it sits in the file.",
+      "find": "    return any(entry == expected for entry in declarations)",
+      "replace": "    return any(entry == expected for entry in declarations[-1:])"
+    },
+    {
+      "label": "_rescore_case compares items present on only one side against an empty outcome list",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_a_newly_added_item_is_not_a_flip and test_an_item_removed_from_the_case_is_not_a_flip: a flip needs a verdict on both sides, so an item only in the run file or only in the re-score is skipped, not read as void.",
+      "find": "    for item in sorted(set(old_outcomes) & set(new_outcomes)):\n        old = _verdict(old_outcomes[item])\n        new = _verdict(new_outcomes[item])",
+      "replace": "    for item in sorted(set(old_outcomes) | set(new_outcomes)):\n        old = _verdict(old_outcomes.get(item, []))\n        new = _verdict(new_outcomes.get(item, []))"
+    },
+    {
+      "label": "_rescore_case drops the missing-case-directory check",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_a_missing_case_directory_even_when_no_attempt_has_a_raw: a recorded case with no directory fails even when nothing would be scored.",
+      "find": "    if not case_dir.is_dir():\n        return [_fail(f\"{label}: its case directory {case_dir.relative_to(repo_root)} is missing\")]",
+      "replace": "    pass"
+    },
+    {
+      "label": "_rescore_case treats a counted attempt with no raw directory as indeterminate",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_a_missing_raw_directory_for_a_counted_attempt[True]: a counted attempt must have its raw directory, whatever is declared.",
+      "find": "        elif attempt[\"classification\"] == \"indeterminate\":",
+      "replace": "        elif True:"
+    },
+    {
+      "label": "_rescore_case fails an indeterminate attempt with no raw directory",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_the_only_attempt_is_recorded_indeterminate_and_has_no_raw_directory: the conductor writes no raw for a dispatch_error attempt, so its absence is not a failure.",
+      "find": "        elif attempt[\"classification\"] == \"indeterminate\":",
+      "replace": "        elif False:"
+    },
+    {
+      "label": "_rescore_case swallows a re-scoring error",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_when_score_attempt_raises_a_case_contract_error[True]: a scorer that raises fails closed, even when every flip it would produce is declared.",
+      "find": "                return [\n                    _fail(\n                        f\"{label} attempt {attempt['attempt']}: re-scoring raised \"\n                        f\"{type(exc).__name__}: {exc}\"\n                    )\n                ]",
+      "replace": "                return []"
+    },
+    {
+      "label": "_rescore_run passes a run file that is not readable",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_an_unreadable_run_file: a run file that cannot be read cannot be re-scored.",
+      "find": "    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return [_fail(f\"{run_rel}: not readable as JSON ({exc}), so it cannot be re-scored\")]",
+      "replace": "    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:\n        return []"
+    },
+    {
+      "label": "_rescore_run passes a run file that lacks the recorded fields",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_closed_on_a_run_file_that_lacks_the_recorded_fields: a run file without the fields re-scoring needs fails closed.",
+      "find": "        results.append(\n            _fail(f\"{run_rel}: does not hold the recorded fields re-scoring needs ({type(exc).__name__}: {exc})\")\n        )",
+      "replace": "        pass"
+    },
+    {
+      "label": "check re-scores only the first skill",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_re_scores_every_skills_run_files: every skill's committed run files are re-scored.",
+      "find": "    for skill_dir in discover_skill_dirs(evals_root):",
+      "replace": "    for skill_dir in discover_skill_dirs(evals_root)[:1]:"
+    },
+    {
+      "label": "check re-scores only the first run file of a skill",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_requires_one_declaration_per_flip_and_names_the_undeclared_one: every committed run file is re-scored, not only the oldest.",
+      "find": "        for run_path in sorted((skill_dir / \"runs\").glob(\"*.json\")):",
+      "replace": "        for run_path in sorted((skill_dir / \"runs\").glob(\"*.json\"))[:1]:"
+    },
+    {
+      "label": "_rescore_run re-scores only the first case of a run file",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_checks_every_case_of_a_run_file: every case a run file records is re-scored.",
+      "find": "        for recorded_case in run[\"cases\"]:",
+      "replace": "        for recorded_case in run[\"cases\"][:1]:"
+    },
+    {
+      "label": "check drops the evals-directory-exists guard",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_the_scoring_change_deletes_the_whole_evals_tree: a diff that deletes scoring code along with the whole evals/ tree leaves nothing to re-score and must not crash.",
+      "find": "    if not evals_root.is_dir():\n        return []\n",
+      "replace": ""
+    },
+    {
+      "label": "_fail emits warn instead of fail",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: a warn never fails the runner, so an undeclared flip would pass make test.",
+      "find": "return Result(level=\"fail\", guard=_GUARD_NAME, message=message)",
+      "replace": "return Result(level=\"warn\", guard=_GUARD_NAME, message=message)"
+    },
+    {
+      "label": "_rescore_case drops the run file path from the flip message",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_when_a_predicates_change_flips_a_recorded_verdict_with_no_declaration and test_requires_one_declaration_per_flip_and_names_the_undeclared_one: the author must be told which run file flips.",
+      "find": "    label = f\"{run_rel} case {case!r}\"",
+      "replace": "    label = f\"case {case!r}\""
+    },
+    {
+      "label": "_rescore_case drops the item id from the flip message",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by test_requires_a_declaration_for_each_flipping_item (asserts item-s is named): the author must be told which item flips.",
+      "find": "f\"{label}: item {item!r} re-scores {old} -> {new} but \"",
+      "replace": "f\"{label}: an item re-scores {old} -> {new} but \""
+    },
+    {
+      "label": "[does-nothing] check re-scores no skill at all",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "why": "Killed by every fails_* test: the guard's purpose is to fail on an undeclared flip, so a check that walks no skill returns no results and lets every flip through.",
+      "find": "    for skill_dir in discover_skill_dirs(evals_root):",
+      "replace": "    for skill_dir in []:"
+    },
+    {
+      "label": "[control] reword the guard module docstring",
+      "file": "./rescore.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Module docstring prose; nothing parses or asserts on it, so no test can observe the change on any path.",
+      "find": "Fires only when the diff ``$(VERSION_BASE)...HEAD`` (the ``ctx.base`` ref the",
+      "replace": "Fires only if the diff ``$(VERSION_BASE)...HEAD`` (the ``ctx.base`` ref the"
+    }
+  ]
+}
