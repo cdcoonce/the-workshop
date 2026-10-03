@@ -61,6 +61,25 @@ def test_teeth_stage_semantics_are_pinned() -> None:
     )
 
 
+def test_reviewer_ledger_and_untrusted_input_probe_are_pinned() -> None:
+    """Teeth cannot find an ungraded behavior; the reviewer must also probe."""
+    text = " ".join(_skill_text().lower().split())
+    assert "teeth ledger" in text, "the reviewer must emit its teeth ledger"
+    assert "behavior, mutation, predicted test, result" in text
+    assert "pr body or a committed file" in text, (
+        "an uncommitted ledger is a claim, not evidence"
+    )
+    assert "untrusted-input" in text and "spec-deviation" in text, (
+        "teeth alone cannot find an ungraded behavior; the reviewer must probe"
+    )
+
+
+def test_golden_fixture_rule_has_a_pointer() -> None:
+    """The rule lives in builder-dispatch; the reviewer contract points to it."""
+    text = " ".join(_skill_text().lower().split())
+    assert "golden" in text and "builder-dispatch" in text
+
+
 def test_skill_md_stays_under_the_line_budget() -> None:
     """Progressive disclosure: the invocation-loaded file stays readable."""
     line_count = len(_skill_text().splitlines())

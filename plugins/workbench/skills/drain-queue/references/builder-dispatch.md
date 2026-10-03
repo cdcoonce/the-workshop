@@ -44,8 +44,13 @@ Do ALL work inside that worktree.
 Method — test-driven, red first:
 1. Write the tests first, covering every acceptance criterion in the issue. Run them and
    confirm they are red FOR THE RIGHT REASON (the module or behavior is absent, not a typo).
+   Commit the red test and the fix as separate commits so failing-first is provable.
 2. Implement per the issue's proposed behavior. Critical pins from the gate: <pins>
-3. Full gate: <gate command> — all green.
+3. Full gate: <gate command> — all green. Run it as `<gate command> > <log> 2>&1; echo rc=$?`
+   (or under `set -o pipefail`) and read the rc; never pipe it through `tail` or `head`, which
+   replaces the gate's exit code with the pager's. In a parallel run, rerun a lone Docker
+   failure once and report which it was; the final gate, run alone by the conductor, is the
+   authority.
 4. Teeth checks, run separately with a restore between each: <teeth mutations>. Report the red
    output for every one.
    CAUTION: a mutation that is byte-for-byte the same length as the original may reuse stale
@@ -54,6 +59,11 @@ Method — test-driven, red first:
 
 Constraints:
 - Touch ONLY: <allowed files>. Explicitly forbidden: <forbidden files>.
+- Treat every field of a file another tool writes as untrusted: `isinstance` before using a
+  value as a dict key or set member, decode with `errors="replace"`, reject non-finite floats.
+- A golden fixture a downstream consumer reads must be derived from the spec by someone other
+  than its builder, with the derivation recorded (PR comment or doc). A builder-generated
+  golden is a mirror of its implementation (see `detector-teeth-check`, "The mirror").
 - Existing tests must stay green UNTOUCHED. Do not edit a test to make your build pass — if an
   existing test blocks you, stop and report it.
 - <count assertion>
