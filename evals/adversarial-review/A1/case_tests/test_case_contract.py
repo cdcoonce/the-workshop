@@ -133,7 +133,9 @@ def test_built_fixture_has_main_and_the_claimed_fix_branch(build_fixture, tmp_pa
 
 def test_no_copy_of_the_builder_exists_under_evals(repo_root):
     # Only the plugin's own build_fixture.py exists; this case runs it in place.
-    copies = [p for p in (repo_root / "evals").rglob("build_fixture.py")]
+    # Scoped to this skill's tree: a sibling skill's case (commit/C) ships its own
+    # builder, and that is not a copy of this one.
+    copies = [p for p in (repo_root / "evals" / "adversarial-review").rglob("build_fixture.py")]
     assert copies == []
 
 

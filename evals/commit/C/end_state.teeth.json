@@ -1,0 +1,115 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_end_state.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_end_state.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] end_state reports no commit at all, so a real commit is invisible",
+      "find": "    shas = _git(workdir, \"rev-list\", \"--reverse\", \"--branches\", \"--not\", base).split()",
+      "replace": "    shas = []",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the base is not excluded, so the planted history counts as new commits",
+      "find": "\"rev-list\", \"--reverse\", \"--branches\", \"--not\", base)",
+      "replace": "\"rev-list\", \"--reverse\", \"--branches\")",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "commits are listed newest first",
+      "find": "\"rev-list\", \"--reverse\", \"--branches\"",
+      "replace": "\"rev-list\", \"--branches\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "commits on other branches are not seen",
+      "find": "\"--reverse\", \"--branches\", \"--not\", base",
+      "replace": "\"--reverse\", \"HEAD\", \"--not\", base",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "numbering starts at 0",
+      "find": "enumerate(shas, start=1)",
+      "replace": "enumerate(shas, start=0)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the log snapshot drops the SHA line",
+      "find": "\"--format=%H%n%B\"",
+      "replace": "\"--format=%B\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the files snapshot lists names with status letters",
+      "find": "\"show\", \"--name-only\", \"--format=\"",
+      "replace": "\"show\", \"--name-status\", \"--format=\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the files snapshot is written under the wrong name",
+      "find": "snapshot[f\"commit-{position}.files\"]",
+      "replace": "snapshot[f\"commit-{position}.file\"]",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a missing base file reads as no new commits instead of refusing",
+      "find": "    base = (workdir / \".git\" / _BASE_HEAD_FILE).read_text(encoding=\"utf-8\").strip()",
+      "replace": "    base_file = workdir / \".git\" / _BASE_HEAD_FILE\n    base = base_file.read_text(encoding=\"utf-8\").strip() if base_file.exists() else \"HEAD\"",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "the caller's GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE reach the snapshot's git calls",
+      "find": "    return {name: value for name, value in os.environ.items() if not name.startswith(\"GIT_\")}",
+      "replace": "    return dict(os.environ)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the git signature display override is dropped",
+      "find": "[\"git\", \"-C\", str(workdir), \"-c\", \"log.showSignature=false\", *args]",
+      "replace": "[\"git\", \"-C\", str(workdir), *args]",
+      "expect": "survived",
+      "why": "Holds only where no log.showSignature is configured and no commit is signed, as in every test here (the test identity sets GIT_CONFIG_GLOBAL to /dev/null). It is real protection on a machine that sets it, and a test cannot see that without signing keys.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}
