@@ -1,0 +1,1 @@
+I've been working in this repo most of the day and haven't committed any of it. A couple of unrelated changes are sitting in the working tree: some pricing work and a fix to the name cleanup. Please get my work committed so the history is in good shape. Nothing needs pushing; the repo has no remote.

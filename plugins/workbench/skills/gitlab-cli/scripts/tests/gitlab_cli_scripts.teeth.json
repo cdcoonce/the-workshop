@@ -1,0 +1,210 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "pytest",
+    "-q",
+    "-x",
+    "--no-header",
+    "plugins/workbench/skills/gitlab-cli/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/gitlab-cli/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "clean_log keeps ANSI codes",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "line = ANSI.sub(\"\", raw_line.split(\"\\r\")[-1])",
+      "replace": "line = raw_line.split(\"\\r\")[-1]"
+    },
+    {
+      "label": "clean_log keeps first CR frame, not the last",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "raw_line.split(\"\\r\")[-1]",
+      "replace": "raw_line.split(\"\\r\")[0]"
+    },
+    {
+      "label": "clean_log keeps runner timestamp prefixes",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "line = RUNNER_PREFIX.sub(\"\", line)",
+      "replace": "line = line"
+    },
+    {
+      "label": "clean_log keeps blank lines",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "if not line.strip():",
+      "replace": "if False:"
+    },
+    {
+      "label": "clean_log never truncates long lines",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "if len(line) > MAX_LINE_CHARS:",
+      "replace": "if False:"
+    },
+    {
+      "label": "tail ignored, whole log printed",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "clean_log(trace)[-tail:]",
+      "replace": "clean_log(trace)"
+    },
+    {
+      "label": "green jobs reported as failed",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "failed = [j for j in jobs if j.get(\"status\") == \"failed\"]",
+      "replace": "failed = jobs"
+    },
+    {
+      "label": "job-listing failure reads as green",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "fail_setup(f\"cannot list jobs for pipeline {pipeline_id}\")",
+      "replace": "return 0"
+    },
+    {
+      "label": "unavailable trace silently dropped",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "say(\"(log unavailable)\")\n            continue",
+      "replace": "continue"
+    },
+    {
+      "label": "failed jobs exit green",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "    return RED\n\n\nif __name__",
+      "replace": "    return GREEN\n\n\nif __name__"
+    },
+    {
+      "label": "MR with no pipeline not refused",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "if not head:",
+      "replace": "if False:"
+    },
+    {
+      "label": "green pipelines walked for HEAD sha",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "if p.get(\"status\") != \"success\"]",
+      "replace": "if True]"
+    },
+    {
+      "label": "allow_failure label dropped",
+      "file": "../failed_job_log.py",
+      "oracle": "double",
+      "find": "if job.get(\"allow_failure\"):",
+      "replace": "if False:"
+    },
+    {
+      "label": "--project override ignored",
+      "file": "../_glab.py",
+      "oracle": "real",
+      "find": "if override:",
+      "replace": "if False:"
+    },
+    {
+      "label": "count_unresolved counts non-resolvable notes",
+      "file": "../mr_status.py",
+      "oracle": "real",
+      "find": "n.get(\"resolvable\") and not n.get(\"resolved\")",
+      "replace": "not n.get(\"resolved\")"
+    },
+    {
+      "label": "count_unresolved needs ALL notes unresolved",
+      "file": "../mr_status.py",
+      "oracle": "real",
+      "find": "if any(n.get(\"resolvable\")",
+      "replace": "if all(n.get(\"resolvable\")"
+    },
+    {
+      "label": "approvals shows remaining as received",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "got = required - data.get(\"approvals_left\", 0)",
+      "replace": "got = data.get(\"approvals_left\", 0)"
+    },
+    {
+      "label": "unreadable approvals printed as zero",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "return \"approvals: unavailable\"",
+      "replace": "return \"approvals: 0 of 0\""
+    },
+    {
+      "label": "unreadable threads printed as zero",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "return \"unresolved threads: unavailable\"",
+      "replace": "return \"unresolved threads: 0\""
+    },
+    {
+      "label": "draft flag dropped",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "if mr.get(\"draft\"):",
+      "replace": "if False:"
+    },
+    {
+      "label": "conflicts flag dropped",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "if mr.get(\"has_conflicts\"):",
+      "replace": "if False:"
+    },
+    {
+      "label": "branch lookup includes merged/closed MRs",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "&state=opened",
+      "replace": ""
+    },
+    {
+      "label": "unreadable MR exits 0",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "return INDETERMINATE\n\n    flags",
+      "replace": "return 0\n\n    flags"
+    },
+    {
+      "label": "missing pipeline crashes instead of 'none'",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "pipeline['status'] if pipeline else 'none'",
+      "replace": "pipeline['status']"
+    },
+    {
+      "label": "branch name not URL-encoded",
+      "file": "../mr_status.py",
+      "oracle": "double",
+      "find": "urllib.parse.quote(branch, safe=\"\")",
+      "replace": "branch"
+    },
+    {
+      "label": "[control] default stage label",
+      "file": "../failed_job_log.py",
+      "oracle": "real",
+      "find": "job.get('stage', '?')",
+      "replace": "job.get('stage', '-')",
+      "expect": "survived",
+      "why": "The default only renders when GitLab omits `stage` from a job; every fixture job carries one, so no path the suite reaches reads it. It is not inert for a real job missing `stage` (the header would say '-' instead of '?'), but that label is cosmetic and nothing asserts it."
+    }
+  ]
+}

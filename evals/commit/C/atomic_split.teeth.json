@@ -1,0 +1,89 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_trend_atomic_split.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/commit/C/case_tests/test_trend_atomic_split.py",
+    "evals/commit/C/case_tests/test_does_nothing_and_snapshot_parity.py"
+  ],
+  "mutants": [
+    {
+      "label": "[does-nothing] the agent does nothing (zero new commits) and the trend is still recorded as a pass",
+      "find": "    return len(covered) >= 2",
+      "replace": "    return len(covered) >= 2 or not _files(evidence)",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a single single-unit commit is enough",
+      "find": "    return len(covered) >= 2",
+      "replace": "    return len(covered) >= 1",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a commit spanning both units counts as single-unit",
+      "find": "        if len(owners) == 1 and None not in owners:",
+      "replace": "        if None not in owners:",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "a directory prefix also matches a sibling with the same stem",
+      "find": "path.startswith(entry))",
+      "replace": "path.startswith(entry.rstrip(\"/\")))",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "an exact file entry no longer matches",
+      "find": "            if path == entry or (entry.endswith(\"/\") and path.startswith(entry)):",
+      "replace": "            if entry.endswith(\"/\") and path.startswith(entry):",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "two commits of the same unit count as a split (commits counted, not units)",
+      "find": "            covered |= owners",
+      "replace": "            covered.add(len(covered))",
+      "file": "predicates.py",
+      "oracle": "real"
+    },
+    {
+      "label": "[control] the owner set built with set() over a generator",
+      "find": "        owners = {_unit_of(path, units) for path in paths}",
+      "replace": "        owners = set(_unit_of(path, units) for path in paths)",
+      "expect": "survived",
+      "why": "A set comprehension and set() over the same generator build equal sets for every input.",
+      "file": "predicates.py",
+      "oracle": "real"
+    }
+  ]
+}
