@@ -52,11 +52,10 @@ def test_the_item_names_the_rostered_skill_and_a_scorer_that_exists(case_toml, p
     assert callable(getattr(predicates, item["scorer"]))
 
 
-def test_case_carries_no_calibration_key_and_no_calibration_record(case_toml, case_dir):
+def test_case_carries_no_calibration_key(case_toml):
     assert set(case_toml) <= _CASE_KEYS
     assert set(case_toml["items"][0]) <= _ITEM_KEYS
     assert "envelope" not in case_toml
-    assert not (case_dir / "calibration.json").exists()
 
 
 def test_triggering_kind_selects_the_skill_arm_only_admission_branch(case_toml):

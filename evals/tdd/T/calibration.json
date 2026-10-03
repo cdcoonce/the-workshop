@@ -1,0 +1,44 @@
+{
+  "T1": {
+    "audit": [],
+    "audited_hits": 0,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 0,
+    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 0,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "T2": {
+    "audit": [],
+    "audited_hits": 0,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 0,
+    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 0,
+      "n": 3,
+      "replacements": 0
+    }
+  },
+  "T3": {
+    "audit": [],
+    "audited_hits": 2,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 2,
+    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "n": 6,
+    "no_skill_arm_result": {
+      "hits": 1,
+      "n": 3,
+      "replacements": 0
+    }
+  }
+}

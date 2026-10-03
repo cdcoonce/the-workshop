@@ -1,0 +1,12 @@
+{
+  "C-trig": {
+    "audit": [],
+    "audited_hits": 0,
+    "cross_match_result": "pass",
+    "gate_or_trend_status": "trend",
+    "hits": 0,
+    "input_hash": "a4c9b5f4a68cdc86066a60b282534b8034177165cc5557d6cb5ae4fc2b6165d4",
+    "n": 6,
+    "no_skill_arm_result": null
+  }
+}

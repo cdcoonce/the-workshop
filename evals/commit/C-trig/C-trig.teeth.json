@@ -152,7 +152,7 @@
       "replace": "params = { skill = \"workshop-maintainer:commit\" }"
     },
     {
-      "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key_and_no_calibration_record)",
+      "label": "[case.toml] a calibration key rides on the item (predicted red: test_case_carries_no_calibration_key)",
       "file": "case.toml",
       "oracle": "real",
       "find": "kind = \"triggering\"",
