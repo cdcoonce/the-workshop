@@ -427,3 +427,105 @@ def test_a_build_on_a_teeth_checked_repo_states_the_baseline_run() -> None:
         "makes the BUILD degraded",
     ):
         assert phrase in section, f"anti-rubber-stamp lacks {phrase!r}"
+
+
+def test_reachability_blocks_only_on_a_cited_producer_and_fails_closed() -> None:
+    """A survivor on an input value blocks only when a producer is cited, an
+    unrun search counts as reachable, and the carve-out never reaches the
+    non-value detectors. Without the last two, the rule is a way to talk a
+    real defect out of existence."""
+    section = _cold_section("## Survivors and reachability")
+    for phrase in (
+        "Blocking needs a producer",
+        "`REACHABLE: <citation>`",
+        "`UNREACHABLE`",
+        "Fail closed",
+        "tags the finding REACHABLE and says why",
+        "Reasoning that an input \"would never happen\" is not a search",
+        "without the command and its output is a blocking finding",
+        "A hand-crafted file does not count as a producer",
+        "It never applies to a policy fork (detector 7), a false premise (detector 8)",
+        "Positive controls",
+    ):
+        assert phrase in section, f"reachability section lacks {phrase!r}"
+
+
+def test_detectors_3_and_11_defer_value_survivors_to_reachability() -> None:
+    text = COLD_READ.read_text()
+    detector_11 = _flat(text[text.index("\n11. **") : text.index("## Survivors and reachability")])
+    for n, body in ((3, _detector(3)), (11, detector_11)):
+        assert "#survivors-and-reachability" in body, f"detector {n}"
+
+
+def test_size_flag_names_its_triggers_and_the_kept_whole_ruling() -> None:
+    section = _cold_section("## Size flag")
+    for phrase in (
+        "1.5 times",
+        "more than 20 acceptance checkboxes",
+        "hit the read cap once",
+        "kept whole by Charles",
+        "the flag does not re-ask",
+    ):
+        assert phrase in section, f"size flag lacks {phrase!r}"
+    assert "#size-flag" in _detector(6)
+
+
+def test_subtract_first_is_the_default_at_the_cap_and_binds_to_traced_rules() -> None:
+    section = _cold_section("## Subtract first")
+    for phrase in (
+        "`reader-born`",
+        "`traced`",
+        "Traced rules are never subtraction candidates",
+        "Subtract is the default",
+        "Grow is not offered",
+        "Outside this contract: <case>.",
+        "Charles approved it by name",
+        "rule-born: N of M blocking",
+    ):
+        assert phrase in section, f"subtract-first lacks {phrase!r}"
+
+
+def test_step_8_cap_carries_both_proposals_and_numbers_the_cap() -> None:
+    step = _step(8)
+    for phrase in (
+        "Grow",
+        "Subtract, the default",
+        "`cap #k`",
+        "at `cap #2` and later, Grow is not offered",
+        "#size-flag",
+        "#subtract-first",
+    ):
+        assert phrase in step, f"step 8 lacks {phrase!r}"
+
+
+def test_step_8_requires_a_code_fact_search_and_the_edit_lint() -> None:
+    step = _step(8)
+    for phrase in (
+        "run the search that confirms it",
+        "A reader's suggestion is a hypothesis, not a fact",
+        "cold_read_edit_lint.py",
+        "--expect-deletion-only",
+    ):
+        assert phrase in step, f"step 8 lacks {phrase!r}"
+
+
+def test_step_8_shortening_exception_is_only_an_approved_subtraction() -> None:
+    step = _step(8)
+    assert "never shortens acceptance criteria" in step
+    assert "The one exception is a [subtraction](#subtract-first) that Charles approved by name" in step
+
+
+def test_fidelity_defaults_obey_the_executor_contract() -> None:
+    section = _cold_section("## The source-fidelity pass")
+    for phrase in (
+        "Defaults obey the executor contract",
+        "the diff, the issue body and the gate report cannot grade",
+    ):
+        assert phrase in section, f"fidelity pass lacks {phrase!r}"
+
+
+def test_digest_reports_size_flag_rule_born_and_cap_number() -> None:
+    procedure = _section(COLD_READ.read_text(), "## Procedure")
+    step = _flat(procedure[procedure.index("\n9. ") :])
+    for phrase in ("size-flag line", "rule-born: N of M blocking", "cap number"):
+        assert phrase in step, f"digest lacks {phrase!r}"

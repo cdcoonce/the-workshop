@@ -1,0 +1,89 @@
+# A2: lens-mode review of the doctored PR #896 diff (the terse-lens-contract A/B's fixture).
+# Run inline: the conductor plays adversarial-review's own conductor role and dispatches
+# the lens agents itself, giving each the prompt text build_dispatch_prompt returns, with
+# the lens narrowing taken from the skill's own references/pr-lens-review.md. The case
+# supplies the story (prompt.md) and the fixture; it supplies no lens text.
+#
+# The fixture is a static, committed copy (fixture/, see provenance.toml): the harness
+# fingerprints it as the deps.tree_hash of that directory, this case computes nothing.
+#
+# ab_raws/ holds the experiment's saved lens replies. They are matcher-development and
+# cross-match-audit material only: never calibration input. Nothing scored reads them;
+# calibration for gating happens only through the hand-run issue #989 executing this case.
+mode = "inline"
+prompt = "prompt.md"
+envelope = "findings"
+
+# Every matcher is #992's conjunctive review_match: location AND regex, no disjunctive
+# fallback (the experiment's score_arm.py:65 `in_window or bool(regex.search(desc))` is
+# retired). A window item needs the file suffix AND a line in the window AND the regex; a
+# file-level item needs the file suffix AND the regex.
+
+[[items]]
+id = "A2-D1"
+kind = "gate-candidate"
+scorer = "pushed_prefix_off_by_one"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+line_window = [105, 125]
+regex = 'classify_pushed_prefix|first_unpushed|prefix.{0,40}(off.by.one|\+\s*1|one too|incorrect|wrong|misclassif)'
+
+[[items]]
+id = "A2-D2"
+kind = "gate-candidate"
+scorer = "ancestor_argument_swap"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+line_window = [197, 217]
+regex = '_is_ancestor.{0,80}(swap|revers|invert|order|backward|wrong (way|direction))|ancestor.{0,60}(remote_head).{0,40}(sha|session)|pushed_flags.{0,60}(invert|revers|wrong|backward)'
+
+# D3 is a trend item: reported, never gated.
+[[items]]
+id = "A2-D3"
+kind = "trend"
+scorer = "weakened_collapse_assertion"
+[items.params]
+file_suffix = "tests/test_sync_boundary_squash.py"
+line_window = [139, 160]
+regex = '>=\s*1|at least (one|1)|weak|tautolog|vacuous|trivial|always (true|pass)|never fail|does not assert (exactly|the collapse)|passes (without|even)'
+
+# D4 and D5 are file-level: no line window, the file suffix is the whole location.
+[[items]]
+id = "A2-D4"
+kind = "gate-candidate"
+scorer = "anti_scope_edit"
+[items.params]
+file_suffix = "vault-sync/references/command.md"
+regex = 'vault-sync'
+
+# D5 is an absence. The experiment's regex was the bare alternation
+# `staged|--cached|uncommitted`, so any passing mention of those words credited it. The
+# tightened regex credits only six shapes of "the staged-changes guard is missing", and each
+# needs a negator or absence word, the guard's own noun or verb, and the marker phrase:
+#   1. negator, up to three filler words, guard verb, up to five whitelisted words, for / against /
+#      whether / that / if / at, up to two fillers, marker phrase    (no check for staged changes)
+#   2. negator, up to four qualifiers, marker phrase, `guard` or `check`  (no staged-changes guard)
+#   3. negator, up to three fillers, inspect-verb, "the index"       (never inspects the index)
+#   4. marker phrase, `guard`/`check`, is|was|are|were missing|absent|omitted|not implemented...
+#      (or "does not exist")                                        (the staged guard is missing)
+#   5. `guard`/`check`, for, marker phrase, up to three words, then the same tail
+#                                                                    (the guard for staged changes is missing)
+#   6. negator, run/call/use, `git diff --cached`                    (does not run `git diff --cached`)
+# What keeps a positive or neutral mention out: the gaps between those parts are whitelists of
+# function words, never free text, so "no issue here as staged changes are handled", "not only
+# checks staged files", "without the staged check" and "no longer skips ... staged" have no path
+# through any shape (no look-ahead is needed for them, so none is kept: it could not be tested).
+# Kept defeaters: `never fails to` is not `fails to`, a negator after `if`, `if there were/was/is/
+# are`, `unless` or `unlike` does not count; the marker phrase must end at punctuation or a
+# function word, so `whether the staged base exists` is not `staged changes`; a bare "no staged
+# check is needed" is refused by a look-ahead. Within a clause a comma is allowed only after the
+# guard word, a newline (never a blank line) may stand for a space, and a full stop, semicolon
+# or colon ends the search. Word boundaries sit where a word could otherwise be entered mid-way
+# (`piano`, `staged_files`, `unstaged-files guard is missing`).
+[[items]]
+id = "A2-D5"
+kind = "gate-candidate"
+scorer = "missing_staged_guard"
+[items.params]
+file_suffix = "scripts/sync_boundary_squash.py"
+regex = '(?<![\w-])(?<!if there were )(?<!if there was )(?<!if there is )(?<!if there are )(?<!if )(?<!unless )(?<!unlike )(?:no|never|not|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|(?<!never )fails?\s+to|forgets?\s+to)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:the|any|an|a|such|ever|actually|even|really|explicit|explicitly|dedicated|separate|real|proper|yet|currently|also|is|there|has|have|exists?|one)(?![\w-])){0,3}(?:[ \t]+|[ \t]*\n[ \t]*)(?:check|guard|inspect|detect|handl|verif|skip|refus|look|examin|consult)\w*(?:,?(?:[ \t]+|[ \t]*\n[ \t]*)(?:anywhere|in|of|at|all|the|a|an|any|this|whole|entire|function|file|script|module|code|index|squash\(\)|here|diff|history)(?![\w-])){0,5},?(?:[ \t]+|[ \t]*\n[ \t]*)(?:for|against|whether|that|if|at)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:any|a|an|the|other|possible|pending|outstanding|local)(?![\w-])){0,2}(?:[ \t]+|[ \t]*\n[ \t]*)`?(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:changes|files|content|work|state|edits|data|tree|index|modifications)(?![\w-]))?(?=[^\w\s]|\s*$|(?:[ \t]+|[ \t]*\n[ \t]*)(?:before|when|and|or|so|to|in|at|from|by|with|prior|after|while|but|yet|is|are|was|were|then|if|the|a|it|which|that|anywhere|using|via|exist|exists)(?![\w-]))|(?<![\w-])(?<!if there were )(?<!if there was )(?<!if there is )(?<!if there are )(?<!if )(?<!unless )(?<!unlike )(?:no|never|not|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|(?<!never )fails?\s+to|forgets?\s+to)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:a|an|any|such|dedicated|explicit|separate|real|actual|proper|`?git|diff)(?![\w-])){0,4}(?:[ \t]+|[ \t]*\n[ \t]*)`?(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:changes|files|content|work|state|edits|data|tree|index|modifications)(?![\w-]))?(?:[ \t]+|[ \t]*\n[ \t]*)(?:guard|check)s?(?![\w-])(?!(?:[ \t]+|[ \t]*\n[ \t]*)(?:is|are|was|were|needed|necessary|required|should|would|will)(?![\w-]))|(?<![\w-])(?<!if there were )(?<!if there was )(?<!if there is )(?<!if there are )(?<!if )(?<!unless )(?<!unlike )(?:no|never|not|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|(?<!never )fails?\s+to|forgets?\s+to)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:the|any|an|a|such|ever|actually|even|really|explicit|explicitly|dedicated|separate|real|proper|yet|currently|also|is|there|has|have|exists?|one)(?![\w-])){0,3}(?:[ \t]+|[ \t]*\n[ \t]*)(?:inspect|look|examin|consult|read)\w*(?:(?:[ \t]+|[ \t]*\n[ \t]*)at)?(?:[ \t]+|[ \t]*\n[ \t]*)the(?:[ \t]+|[ \t]*\n[ \t]*)index|(?<![\w-])`?(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:changes|files|content|work|state|edits|data|tree|index|modifications)(?![\w-]))?(?:[ \t]+|[ \t]*\n[ \t]*)(?:guard|check)s?(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:is|was|are|were)(?:[ \t]+|[ \t]*\n[ \t]*)(?:\w+ly(?:[ \t]+|[ \t]*\n[ \t]*))?(?:missing|absent|omitted|not(?:[ \t]+|[ \t]*\n[ \t]*)(?:implemented|present|written|there|enforced|added|done)|never(?:[ \t]+|[ \t]*\n[ \t]*)(?:implemented|written|added|existed))(?![\w-])|(?:[ \t]+|[ \t]*\n[ \t]*)(?:does\s+not|doesn.t|did\s+not)(?:[ \t]+|[ \t]*\n[ \t]*)exist(?![\w-]))|(?<![\w-])(?:guard|check)s?(?![\w-])(?:[ \t]+|[ \t]*\n[ \t]*)(?:for|against|whether|that|if|at)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:any|a|an|the|other|possible|pending|outstanding|local)(?![\w-])){0,2}(?:[ \t]+|[ \t]*\n[ \t]*)`?(?:staged|uncommitted|--cached)(?!\w)[\w/`-]*(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:changes|files|content|work|state|edits|data|tree|index|modifications)(?![\w-]))?(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:anywhere|in|of|at|all|the|a|an|any|this|whole|entire|function|file|script|module|code|index|squash\(\)|here|diff|history)(?![\w-])){0,3}(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:is|was|are|were)(?:[ \t]+|[ \t]*\n[ \t]*)(?:\w+ly(?:[ \t]+|[ \t]*\n[ \t]*))?(?:missing|absent|omitted|not(?:[ \t]+|[ \t]*\n[ \t]*)(?:implemented|present|written|there|enforced|added|done)|never(?:[ \t]+|[ \t]*\n[ \t]*)(?:implemented|written|added|existed))(?![\w-])|(?:[ \t]+|[ \t]*\n[ \t]*)(?:does\s+not|doesn.t|did\s+not)(?:[ \t]+|[ \t]*\n[ \t]*)exist(?![\w-]))|(?<![\w-])(?<!if there were )(?<!if there was )(?<!if there is )(?<!if there are )(?<!if )(?<!unless )(?<!unlike )(?:no|never|not|nowhere|without|missing|lacks?|lacking|absent|omits?|omitted|doesn.t|(?<!never )fails?\s+to|forgets?\s+to)(?![\w-])(?:(?:[ \t]+|[ \t]*\n[ \t]*)(?:the|any|an|a|such|ever|actually|even|really|explicit|explicitly|dedicated|separate|real|proper|yet|currently|also|is|there|has|have|exists?|one)(?![\w-])){0,3}(?:[ \t]+|[ \t]*\n[ \t]*)(?:run|call|invok|use|execut)\w*(?:[ \t]+|[ \t]*\n[ \t]*)(?:the(?:[ \t]+|[ \t]*\n[ \t]*))?`?git(?:[ \t]+|[ \t]*\n[ \t]*)diff(?:[ \t]+|[ \t]*\n[ \t]*)--cached'
