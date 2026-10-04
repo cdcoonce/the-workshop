@@ -1,11 +1,11 @@
 {
   "A1-coverage-bound": {
     "audit": [],
-    "audited_hits": 0,
+    "audited_hits": 6,
     "cross_match_result": "pass",
-    "gate_or_trend_status": "trend",
-    "hits": 0,
-    "input_hash": "2312756e9b59c704d45cd8b2dcda7cd185afb5b94811421ac29be81e690daee7",
+    "gate_or_trend_status": "gate",
+    "hits": 6,
+    "input_hash": "d622f6d17e7b5430a339e782794e0d29008e6759eb6f199f4c30688572c070ac",
     "n": 6,
     "no_skill_arm_result": {
       "hits": 0,
@@ -15,11 +15,11 @@
   },
   "A1-defect-decimal-from-float": {
     "audit": [],
-    "audited_hits": 0,
+    "audited_hits": 5,
     "cross_match_result": "pass",
     "gate_or_trend_status": "trend",
-    "hits": 0,
-    "input_hash": "2312756e9b59c704d45cd8b2dcda7cd185afb5b94811421ac29be81e690daee7",
+    "hits": 5,
+    "input_hash": "d622f6d17e7b5430a339e782794e0d29008e6759eb6f199f4c30688572c070ac",
     "n": 6,
     "no_skill_arm_result": {
       "hits": 0,
@@ -29,25 +29,25 @@
   },
   "A1-defect-missed-call-site": {
     "audit": [],
-    "audited_hits": 4,
+    "audited_hits": 6,
     "cross_match_result": "pass",
     "gate_or_trend_status": "trend",
-    "hits": 4,
-    "input_hash": "2312756e9b59c704d45cd8b2dcda7cd185afb5b94811421ac29be81e690daee7",
+    "hits": 6,
+    "input_hash": "d622f6d17e7b5430a339e782794e0d29008e6759eb6f199f4c30688572c070ac",
     "n": 6,
     "no_skill_arm_result": {
-      "hits": 1,
+      "hits": 3,
       "n": 3,
       "replacements": 0
     }
   },
   "A1-defect-tests-no-teeth": {
     "audit": [],
-    "audited_hits": 1,
+    "audited_hits": 4,
     "cross_match_result": "pass",
     "gate_or_trend_status": "trend",
-    "hits": 1,
-    "input_hash": "2312756e9b59c704d45cd8b2dcda7cd185afb5b94811421ac29be81e690daee7",
+    "hits": 4,
+    "input_hash": "d622f6d17e7b5430a339e782794e0d29008e6759eb6f199f4c30688572c070ac",
     "n": 6,
     "no_skill_arm_result": {
       "hits": 0,

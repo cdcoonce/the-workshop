@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from evals._harness.activation import parse_checks_manifest
 from evals._harness.dispatch import (
     INVOKE_SKILL_PREAMBLE,
     build_dispatch_prompt,
@@ -54,14 +55,21 @@ def test_one_gate_candidate_coverage_bound_and_three_trend_defects(case_toml):
     assert set(by_id) == {_GATE_ID} | _TREND_IDS
 
 
-def test_planted_defects_are_never_gate_candidates_and_a1_is_not_in_checks_manifest(
-    case_toml, case_dir
-):
+def test_planted_defects_are_never_gate_candidates(case_toml):
     for item in case_toml["items"]:
         if item["id"] in _TREND_IDS:
             assert item["kind"] == "trend"
-    manifest = (case_dir.parent / "checks.manifest").read_text(encoding="utf-8")
-    assert not any(item["id"] in manifest for item in case_toml["items"])
+
+
+def test_exactly_the_coverage_bound_gate_is_listed_in_checks_manifest_and_no_defect_item_is(
+    case_toml, case_dir
+):
+    # Admitted at the 2026-10-04 hand-run (skill 6/6, no-skill 0/3). The three defect items are
+    # trend items and must never be listed; the manifest is read with the harness's own parser.
+    listed = set(parse_checks_manifest((case_dir.parent / "checks.manifest").read_text(encoding="utf-8")))
+    a1_ids = {item["id"] for item in case_toml["items"]}
+    assert listed & a1_ids == {_GATE_ID}
+    assert not listed & _TREND_IDS
 
 
 def test_envelope_is_set_if_and_only_if_a_scorer_reads_evidence_findings(case_toml, case_dir):

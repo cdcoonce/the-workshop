@@ -1,0 +1,85 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_case_contract.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_case_contract.py"
+  ],
+  "mutants": [
+    {
+      "label": "[manifest] A1-coverage-bound is commented out of checks.manifest (demoted)",
+      "file": "../../checks.manifest",
+      "oracle": "real",
+      "why": "Killed by test_exactly_the_coverage_bound_gate_is_listed_in_checks_manifest_and_no_defect_item_is: the parsed manifest no longer lists the gate.",
+      "find": "A1-coverage-bound A `## Could not verify`",
+      "replace": "# A1-coverage-bound A `## Could not verify`"
+    },
+    {
+      "label": "[manifest] the gate's id is renamed in checks.manifest",
+      "file": "../../checks.manifest",
+      "oracle": "real",
+      "why": "Killed by the same manifest test: the listed id is no longer an A1 item id.",
+      "find": "A1-coverage-bound A `## Could not verify`",
+      "replace": "A1-coverage-boundary A `## Could not verify`"
+    },
+    {
+      "label": "[manifest] a trend defect item is also listed in checks.manifest",
+      "file": "../../checks.manifest",
+      "oracle": "real",
+      "why": "Killed by the same manifest test: a defect id is listed alongside the gate.",
+      "find": "\nA1-coverage-bound ",
+      "replace": "\nA1-defect-missed-call-site Defect named by a trend item\nA1-coverage-bound "
+    },
+    {
+      "label": "[manifest] a trend defect item is listed instead of the gate",
+      "file": "../../checks.manifest",
+      "oracle": "real",
+      "why": "Killed by the same manifest test: the gate is missing and a defect id is listed.",
+      "find": "A1-coverage-bound A `## Could not verify`",
+      "replace": "A1-defect-tests-no-teeth A `## Could not verify`"
+    },
+    {
+      "label": "[kind] a planted defect item is declared a gate candidate",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "Killed by test_planted_defects_are_never_gate_candidates (and by the one-gate-three-trend test).",
+      "find": "id = \"A1-defect-missed-call-site\"\nkind = \"trend\"",
+      "replace": "id = \"A1-defect-missed-call-site\"\nkind = \"gate-candidate\""
+    },
+    {
+      "label": "[control] a comment line is added to checks.manifest",
+      "file": "../../checks.manifest",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Inert: the parser skips comment lines, so the listed set is unchanged and every test stays green; proves the rig can report a survivor.",
+      "find": "\nA1-coverage-bound ",
+      "replace": "\n# note\nA1-coverage-bound "
+    }
+  ]
+}
