@@ -1589,6 +1589,598 @@ def test_class_13_adversarial_script_shapes_are_linear_not_exponential(command):
     assert _timed(command) < LIMIT
 
 
+# --------------------------------------------------------------------------- round 4 (#1129): the fourth pass
+#
+# A fourth adversarial pass ran real bash 3.2, zsh, BSD sed and perl against the classifier and found classes
+# that wrote under ``lib/`` or ``src/`` while the classifier said ``none`` or ``tests``. Every row below is a
+# command the pass demonstrated (or the isolating variant of one rule), expected ``source``; the controls stay
+# ``none`` / ``tests``. No row is ever run.
+
+R4_PY_SOURCE_CODE = [
+    # P1: singledispatch.register evals a STRING annotation (get_type_hints)
+    "import functools\n@functools.singledispatch\ndef f(x): pass\n@f.register\ndef _(x: \"__import__('os').system('touch lib/hit')\"): pass",
+    # P2: a string.Formatter subclass captures exec through a format string
+    "import string\nL=[]\nclass F(string.Formatter):\n    def format_field(self, v, s):\n        L.append(v); return ''\ndef f(): pass\nF().format('{0.__globals__[__builtins__].exec}', f)\nL[0]('open(\"lib/hit\",\"w\")')",
+    # the import allow-list lost string operator functools typing dataclasses enum
+    "import functools",
+    "import string",
+    "import operator",
+    "import typing",
+    "import dataclasses",
+    "import enum",
+    "from functools import reduce",
+    "from string import Formatter",
+    "from typing import List",
+    "from dataclasses import dataclass",
+    "import enum as e",
+    # a class of any kind is write-capable
+    "class A: pass",
+    "import json\nclass A(json.JSONEncoder): pass",
+    "class A:\n    def f(self): return 1\nprint(A().f())",
+    # a decorator on any function
+    "def d(f): return f\n@d\ndef g(): pass",
+    "import json\n@json.loads\ndef g(): pass",
+    "def d(f): return f\n@d\nasync def g(): pass",
+    # an annotation that is not a bare builtin name (a string annotation is evaluated by get_type_hints)
+    "def f(x: \"int\"): pass",
+    "def f(x) -> \"int\": pass",
+    "x: \"int\" = 1",
+    "def f(*a: \"int\"): pass",
+    "def f(**k: \"int\"): pass",
+    "def f(*, k: \"int\" = 1): pass",
+    "import json\ndef f(x: json.JSONDecoder): pass",
+    "def f(x: list[int]): pass",
+    "def f(x: int | str): pass",
+    "def f(x: object): pass",
+    "def f(x: Foo): pass",
+    "def f() -> object: pass",
+    "x: list[str] = []",
+    # P3: type() and object reach the class of a stream's raw object
+    "import sys\ntype(sys.stdout.buffer.raw)('lib/hit','w')",
+    "import sys\nF=type(sys.stdin.buffer.raw)\nF('lib/hit','w').write(b'x')\nfrom pathlib import Path\nPath('tests/test_a.py').write_text('')",
+    "print(type(1))",
+    "x = object()",
+    "print(object)",
+    # P3: a call whose func is a call, a subscript, a lambda or another expression
+    "def f():\n    return print\nf()('x')",
+    "x = [print]\nx[0]('a')",
+    "print((lambda: 1)())",
+    "(print if 1 else print)('x')",
+    "import json\njson.loads('1')()",
+    "d = {'k': print}\nd['k']('a')",
+    "f = print\n(f)('x')\n(f or print)('y')",
+    # P4: Path is pathlib's constructor only when bound once by an import
+    "import pathlib\ndef Path(p): return pathlib.Path('lib/hit')\nPath('tests/test_a.py').write_text('x')",
+    "import pathlib\nPath = lambda p: pathlib.Path('lib/hit')\nPath('tests/test_a.py').write_text('x')",
+    "Path('tests/test_a.py').write_text('x')",
+    "from json import loads as Path\nPath('tests/test_a.py').write_text('x')",
+    "import json as Path\nPath('tests/test_a.py').write_text('x')",
+    "from pathlib import Path\nfor Path in []:\n    pass\nPath('tests/test_a.py').write_text('x')",
+    "from pathlib import Path\ndef f(Path): Path('tests/test_a.py').write_text('x')\nf(print)",
+    "from pathlib import Path\nPath = 1",
+    "from pathlib import Path\nfrom pathlib import Path\nPath('tests/test_a.py').write_text('x')",
+    "from pathlib import PosixPath as Path\nPath('tests/test_a.py').write_text('x')",
+    "import pathlib\ndef f(pathlib): pathlib.Path('tests/test_a.py').write_text('x')\nf(print)",
+    "import pathlib\ndef pathlib(): pass\npathlib.Path('tests/test_a.py').write_text('x')",
+    "import pathlib\nfor pathlib in []:\n    pass",
+    "import pathlib\nimport json as pathlib\npathlib.Path('tests/test_a.py').write_text('x')",
+    "import pathlib\npathlib.PosixPath('tests/test_a.py').write_text('x')",
+    "import pathlib\n(Path := pathlib.Path)\nPath('tests/test_a.py').write_text('x')",
+    "import pathlib\nwith open('x') as Path:\n    pass",
+    # P5: sys.path decides what a later import loads; sys is read-only
+    "open('tests/json.py','w').write('import os\\nos.system(\"touch lib/hit\")')\nimport sys\nsys.path.insert(0,'tests')\nimport json",
+    "import sys\nprint(sys.path)",
+    "from sys import path",
+    "import sys\nsys.argv.append('x')",
+    "import sys\nsys.argv[0] = 'x'",
+    "import sys\nsys.stdout.encoding = 'x'",
+    "import sys\ndel sys.argv[0]",
+    "import sys\nsys.argv += ['x']",
+    "import sys\nsys.argv.insert(0, 'x')",
+    "import sys\nsys.argv.extend(['x'])",
+    "import sys\nsys.argv.sort()",
+]
+
+R4_PY_SOURCE = [_heredoc_py(code) for code in R4_PY_SOURCE_CODE] + [_py(code) for code in R4_PY_SOURCE_CODE]
+
+
+@pytest.mark.parametrize("command", R4_PY_SOURCE)
+def test_round4_an_inline_python_shape_the_reader_cannot_prove_is_source(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_PY_NONE_CODE = [
+    "def f(x):\n    return x + 1\nprint(f(1))",
+    "def f(x: int, y: str = 'a', *a: float, k: bool = True, **kw: dict) -> list:\n    return [x]\nprint(f(1))",
+    "def f() -> None:\n    pass\nf()",
+    "def f(x: bytes, y: set, z: tuple): pass",
+    "x: int = 1\nprint(x)",
+    "f = lambda x: x + 1\nprint(f(1))",
+    "print(sorted(map(lambda x: x * 2, [3, 1])))",
+    "import sys\nprint(sys.argv, sys.version_info, sys.platform, sys.maxsize)",
+    "import sys\nsys.stdout.write('x')\nsys.stdout.flush()",
+    "import sys\nprint(sys.stdin.read())",
+    "print(open('x').read())",
+    "print(','.join(['a', 'b']))",
+    "import json\nprint(json.dumps({'a': 1}).encode())",
+    "import json\nprint(json.load(open('x'))['a'].items())",
+    "from pathlib import Path\nprint(Path('x').read_text())",
+    "import pathlib\nprint(pathlib.Path('x').read_text())",
+    "import re, json, ast, collections, itertools, math, textwrap, decimal, fractions, statistics, datetime, pathlib, sys",
+    "from datetime import datetime\nprint(datetime.now())",
+    "import collections\nprint(collections.Counter('aab').most_common(1))",
+]
+R4_PY_NONE = [_heredoc_py(code) for code in R4_PY_NONE_CODE] + [_py(code) for code in R4_PY_NONE_CODE]
+
+
+@pytest.mark.parametrize("command", R4_PY_NONE)
+def test_round4_the_plain_inline_python_shapes_stay_read_only(command):
+    assert classify_bash_command(command) == "none", command
+
+
+R4_PY_TESTS_CODE = [
+    "from pathlib import Path\nPath('tests/test_a.py').write_text('x')",
+    "import pathlib\npathlib.Path('tests/test_a.py').write_text('x')",
+    "import pathlib as pl\npl.Path('tests/test_a.py').write_bytes(b'x')",
+    "from pathlib import Path\ndef f(x: int) -> str:\n    return str(x)\nPath('tests/test_a.py').write_text(f(1))",
+]
+R4_PY_TESTS = [_heredoc_py(code) for code in R4_PY_TESTS_CODE]
+
+
+@pytest.mark.parametrize("command", R4_PY_TESTS)
+def test_round4_a_path_bound_once_by_its_import_still_writes_tests(command):
+    assert classify_bash_command(command) == "tests", command
+
+
+# Q: perl -i code and the backup suffix
+R4_PERL_SOURCE = [
+    "perl -i -pe 's/a/$#{[system(q(touch lib\\/hit))]}/' tests/f",
+    "perl -i -pe 's/a/$#x/' tests/test_a.py",
+    "perl -i -pe 's/a/$(touch x)/' tests/test_a.py",
+    "perl -i -pe 's/a/$[/' tests/test_a.py",
+    "perl -i -pe 's/a/${\\ system(q(touch lib\\/hit))}/' tests/test_a.py",
+    "perl -i -pe 's/a/$x/' tests/test_a.py",
+    "perl -i -pe 's/a$/b/' tests/test_a.py",
+    "perl -i -pe 's/a/b$/' tests/test_a.py",
+    "perl -i -pe 's/a/@x/' tests/test_a.py",
+    "perl -i -pe 's/a/@{[system(q(touch lib\\/hit))]}/' tests/test_a.py",
+    "perl -i -pe 's/a/%h/' tests/test_a.py",
+    "perl -i -pe 's%a%b%' tests/test_a.py",
+    "perl -i -pe 's/a/`touch lib\\/hit`/' tests/test_a.py",
+    "perl -i -pe 's/(?{ system(1) })//' tests/test_a.py",
+    "perl -i -pe 's/(??{ system(1) })//' tests/test_a.py",
+    "perl -i -pe 's/a/\\e/' tests/test_a.py",
+    "perl -i -pe 's/a/b/e' tests/test_a.py",
+    "perl -pi'lib/*' -e 's/a/b/' test_a.py",
+    "perl -pi'lib/x' -e 's/a/b/' tests/test_a.py",
+    "perl -pi'*' -e 's/a/b/' tests/test_a.py",
+    "perl -pi'../x' -e 's/a/b/' tests/test_a.py",
+    "perl -i'a b' -pe 's/a/b/' tests/test_a.py",
+    "perl -i'.bak/' -pe 's/a/b/' tests/test_a.py",
+    "perl -pi'$x' -e 's/a/b/' tests/test_a.py",
+    "perl -pi'a;b' -e 's/a/b/' tests/test_a.py",
+    "perl -i'a|b' -pe 's/a/b/' tests/test_a.py",
+]
+
+
+@pytest.mark.parametrize("command", R4_PERL_SOURCE)
+def test_round4_a_perl_in_place_script_or_backup_suffix_outside_the_narrow_form_is_source(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_PERL_TESTS = [
+    "perl -i -pe 's/a/b/' tests/test_a.py",
+    "perl -pi.bak -e 's/a/b/' tests/test_a.py",
+    "perl -pi~ -e 's/a/b/' tests/test_a.py",
+    "perl -pi_old-1 -e 's/a/b/' tests/test_a.py",
+    "perl -i.orig -pe 's/a/b/g' tests/test_a.py",
+    "perl -i -pe 's/(a)(b)/$2$1/g' tests/test_a.py",
+    "perl -i -pe 's/a/<$&>/' tests/test_a.py",
+]
+
+
+@pytest.mark.parametrize("command", R4_PERL_TESTS)
+def test_round4_the_narrow_perl_in_place_form_is_still_tests(command):
+    assert classify_bash_command(command) == "tests", command
+
+
+# R: an @argfile through an option value or an attached value, for every allow-listed tool
+R4_ARGFILE_SOURCE = [
+    "printf -- 'x\\n--junitxml=lib/out.xml\\n' > tests/a.txt; pytest -q -k @tests/a.txt tests/",
+    "pytest -k @tests/a.txt",
+    "pytest -m @tests/a.txt",
+    "pytest -W @tests/a.txt",
+    "pytest -k=@tests/a.txt",
+    "pytest --maxfail=@tests/a.txt",
+    "pytest --tb=@tests/a.txt",
+    "pytest --durations=@tests/a.txt",
+    "pytest -p @tests/a.txt",
+    "pytest -q @tests/a.txt",
+    "pytest -q -- @tests/a.txt",
+    "pytest -q tests/ @tests/a.txt",
+    "py.test -k @tests/a.txt",
+    "uv run pytest -k @tests/a.txt",
+    "uv run --with pytest pytest -m @tests/a.txt",
+    "python3 -m pytest -k @tests/a.txt",
+    "uv run python -m pytest -W @tests/a.txt",
+    "mypy @tests/a.txt",
+    "mypy --python-version @tests/a.txt f",
+    "mypy --python-version=@tests/a.txt f",
+    "mypy --strict @tests/a.txt",
+    "ruff check @tests/a.txt",
+    "ruff check --select @tests/a.txt",
+    "ruff check --select=@tests/a.txt",
+    "ruff check --ignore=@tests/a.txt .",
+    "ruff check --output-format=@tests/a.txt .",
+    "ruff format --check @tests/a.txt",
+    "ruff format --line-length=@tests/a.txt --check .",
+    "black --check @tests/a.txt",
+    "black --check --line-length=@tests/a.txt .",
+    "black --diff @tests/a.txt",
+    "isort --check @tests/a.txt",
+    "isort --check --line-length @tests/a.txt .",
+    "uv run ruff check @tests/a.txt",
+    "uv run mypy @tests/a.txt",
+]
+
+
+@pytest.mark.parametrize("command", R4_ARGFILE_SOURCE)
+def test_round4_an_argfile_word_or_option_value_is_source_for_every_allow_listed_tool(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_ARGFILE_NONE = [
+    "pytest -q -k foo tests/",
+    "pytest -q -k 'a and not b' -m slow tests/",
+    "pytest -W ignore tests/",
+    "mypy --strict src/",
+    "ruff check --select E,F .",
+    "black --check --line-length 100 .",
+    "isort --check .",
+    "uv run pytest -q tests/test_cart.py -k test_x",
+    "echo @x | cat",
+]
+
+
+@pytest.mark.parametrize("command", R4_ARGFILE_NONE)
+def test_round4_a_plain_option_value_still_reads_only(command):
+    assert classify_bash_command(command) == "none", command
+
+
+# S: the shell scanner reads only what it can parse with certainty
+R4_SHELL_SOURCE = [
+    # S1: a heredoc delimiter with a mid-word quote
+    "cat <<E\"O\"F\nEOF\ntouch lib/hit\nE",
+    "cat <<E'O'F\nEOF\ntouch lib/hit\nE",
+    "cat <<E\\OF\nEOF\ntouch lib/hit\nE",
+    "cat <<'EOF'x\nEOFx\ntouch lib/hit\nEOF",
+    "cat <<\"EOF\"x\nEOFx\ntouch lib/hit\nEOF",
+    "cat <<x'EOF'\nxEOF\ntouch lib/hit\nEOF",
+    # S2: a delimiter with a trailing non-word character
+    "cat <<EOF#x\nEOF#x\ntouch lib/hit\nEOF",
+    "cat <<EOF:x\nEOF:x\ntouch lib/hit\nEOF",
+    "cat <<EOF=x\nEOF=x\ntouch lib/hit\nEOF",
+    "cat <<EOF,x\nEOF,x\nrm -f x\nEOF",
+    "cat <<EOF+x\nEOF+x\ntouch lib/hit\nEOF",
+    "cat <<EOF@x\nEOF@x\ntouch lib/hit\nEOF",
+    "cat <<EOF\\\nEOF\ntouch lib/hit",
+    "cat <<EOF`x`\nEOFx\ntouch lib/hit\nEOF",
+    "cat <<1\n1\ntouch lib/hit",
+    "cat <<''\n\ntouch lib/hit",
+    "cat <<'EO F'\nEO F\ntouch lib/hit",
+    "cat <<'EOF$x'\nEOF$x\ntouch lib/hit",
+    "cat <<-'EOF'x\nEOFx\ntouch lib/hit",
+    # S3: a file-descriptor duplication glued to a word
+    "ls 2>&1#; echo x > src/cart.py",
+    "echo hi >&2foo",
+    "echo hi >&2foo; touch lib/hit",
+    "ls 2>&1x",
+    "ls 2>&-x",
+    "cat <&0x",
+    "echo >&1-x",
+    "echo >&1#; touch lib/hit",
+    "echo hi >&2src/x",
+    "ls 2>&1\\x",
+    "ls 2>&1\"x\"",
+    "ls 2>&1$x",
+    "ls 2>&1`x`",
+    "echo >&out.txt",
+    "echo >&lib/hit",
+    # S4: an ANSI-C or locale-translated quote
+    "echo $'it\\'s' ; touch lib/hit # don't",
+    "echo $'x'",
+    "echo $\"x\"",
+    "cat $'a\\nb'",
+    "echo a$'b'",
+    "echo $'\\x27'; touch lib/hit",
+    # S5: a backslash in a command substitution body
+    "echo \"$(echo \\) ; echo x > src/cart.py)\"",
+    "echo $(echo \\x)",
+    "echo `echo \\x`",
+    "echo ${x:-\\}}; touch lib/hit",
+    # S6: a comment in a command substitution body
+    "echo \"$(echo a # )\ntouch lib/hit\n)\"",
+    "echo $(echo a#b)",
+    "echo $(echo a # b)",
+    "echo `echo a#b`",
+    "echo ${x#a}",
+    "echo ${#x}",
+    "echo ${x##*/}",
+    # S7: a quote in a command substitution or parameter expansion body
+    "echo ${x:-\"}\"}; touch lib/hit # \"",
+    "echo ${x:-'}'}; touch lib/hit # '",
+    "echo ${x:-\"a\"}",
+    "echo $(echo \"x\")",
+    "echo $(echo 'x')",
+    "echo $(grep -c '#' f)",
+    "echo `echo \"x\"`",
+    "echo `echo 'x'`",
+    "ls $(git log --format=\"%h\" -1)",
+    "echo \"$(echo \"x\")\"",
+    # embedded newline and carriage return in a body
+    "echo $(echo a\nb)",
+    "echo `echo a\nb`",
+    "echo ${x:-a\nb}",
+    "echo \"$(echo a\ntouch lib/hit\n)\"",
+    "echo $(echo a\r)",
+    # S8: a carriage return or another control character anywhere
+    "echo a\r# ; touch lib/hit",
+    "echo a\rb",
+    "ls\r",
+    "ls\r\n",
+    "cat x\x00y",
+    "cat x\x07",
+    "cat x\x1b[0m",
+    "cat x\x0b",
+    "cat x\x0c",
+    "cat x\x01",
+    "cat <<'EOF'\nx\ry\nEOF",
+    "cat <<EOF\r\nx\r\nEOF\r",
+    "echo 'a\rb'",
+    "echo \"a\rb\"",
+]
+
+
+@pytest.mark.parametrize("command", R4_SHELL_SOURCE)
+def test_round4_a_shell_shape_the_scanner_cannot_parse_with_certainty_is_source(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_SHELL_NONE = [
+    "cat <<EOF\nhello\nEOF",
+    "cat <<'EOF'\nhello\nEOF",
+    "cat <<\"EOF\"\n$x $(touch lib/hit)\nEOF",
+    "cat <<'EOF'\n$x $(touch lib/hit)\nEOF",
+    "cat <<\\EOF\n$x $(touch lib/hit)\nEOF",
+    "cat <<-EOF\n\thello\n\tEOF",
+    "cat <<-'EOF'\n\thello\n\tEOF",
+    "cat <<EOF_1.x-y\nhello\nEOF_1.x-y",
+    "cat <<_E\nhello\n_E",
+    "cat <<EOF | head\nx\nEOF",
+    "cat <<EOF;ls\nx\nEOF",
+    "cat <<EOF&\nx\nEOF",
+    "(cat <<EOF\nx\nEOF\n)",
+    "cat << EOF\nx\nEOF",
+    "cat <<'EOF' | wc -l\nx\nEOF",
+    "ls 2>&1",
+    "ls 2>&1 | head",
+    "ls 2>&1; ls",
+    "ls 2>&1\nls",
+    "echo hi >&2",
+    "echo hi 1>&2",
+    "echo a >&2; echo b",
+    "cat x 2>/dev/null",
+    "ls 2>&-",
+    "ls 2>&1 >/dev/null",
+    "(ls 2>&1)",
+    "ls >&1-",
+    "cat <&0",
+    "grep 'a$' f",
+    "grep -E '^x$' f | head",
+    "echo \"a$\"",
+    "echo \"cost: \\$5\"",
+    "echo $HOME",
+    "echo ${HOME}",
+    "echo \"${HOME}\"",
+    "echo \"${HOME}/x\"",
+    "echo ${HOME:-x}",
+    "echo $(pwd)",
+    "echo \"$(pwd)\"",
+    "echo `pwd`",
+    "ls $(git rev-parse --show-toplevel)",
+    "cat \"$(git rev-parse --show-toplevel)/README.md\"",
+    "cd $(git rev-parse --show-toplevel) && ls",
+    "echo $(echo a | tr a b)",
+    "echo $(cat x | wc -l)",
+    "cat\tx",
+    "echo a\techo",
+    "echo 'a\tb'",
+]
+
+
+@pytest.mark.parametrize("command", R4_SHELL_NONE)
+def test_round4_the_plain_shell_shapes_stay_read_only(command):
+    assert classify_bash_command(command) == "none", command
+
+
+R4_SHELL_TESTS = [
+    "echo hi >&tests/test_a.py",
+    "echo hi > tests/test_a.py 2>&1",
+    "cat > tests/test_a.py <<'EOF'\nx\nEOF",
+    "cat >> tests/test_a.py <<EOF\nx\nEOF",
+]
+
+
+@pytest.mark.parametrize("command", R4_SHELL_TESTS)
+def test_round4_a_plain_redirect_of_a_tests_file_is_still_tests(command):
+    assert classify_bash_command(command) == "tests", command
+
+
+# T: a path-qualified head, and the GNU target options of cp and mv
+R4_HEAD_SOURCE = [
+    "./cat f",
+    "lib/cat f",
+    "tests/cat f",
+    "../cat f",
+    "/tmp/cat f",
+    "/usr/local/sbin/cat f",
+    "/bin/../tmp/cat f",
+    "//tmp/cat f",
+    "/bin//cat f",
+    "/usr/bin/./cat f",
+    "/binx/cat f",
+    "bin/cat f",
+    "./ls",
+    "./git status",
+    "lib/git log",
+    "./grep x f",
+    "./env cat f",
+    "lib/nohup cat f",
+    "./time cat f",
+    "/tmp/sudo cat f",
+    "./nice cat f",
+    "./command cat f",
+    "xargs ./cat",
+    "xargs lib/cat",
+    "echo x | xargs /tmp/cat",
+    "uv run lib/pytest",
+    "uv run ./pytest -q",
+    "uv run .venv/bin/pytest -q",
+    ".venv/bin/pytest -q",
+    "./pytest -q",
+    "lib/python3 -c 'print(1)'",
+    "/usr/bin/lib/cat f",
+    "/bin/cat/ f",
+    "./sed -n 1p f",
+    "lib/awk '{print}' f",
+]
+
+
+@pytest.mark.parametrize("command", R4_HEAD_SOURCE)
+def test_round4_a_path_qualified_head_outside_the_system_bin_directories_is_source(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_HEAD_NONE = [
+    "/bin/cat f",
+    "/usr/bin/cat f",
+    "/usr/local/bin/cat f",
+    "/opt/homebrew/bin/cat f",
+    "/usr/bin/grep -n x f",
+    "/bin/ls -la",
+    "/opt/homebrew/bin/jq . f",
+    "/usr/bin/git status",
+    "/usr/bin/env cat f",
+    "xargs /bin/cat",
+    "/usr/bin/python3 -c 'print(1)'",
+    "/usr/bin/sort f | /usr/bin/uniq",
+    "uv run /usr/bin/python3 -c 'print(1)'",
+]
+
+
+@pytest.mark.parametrize("command", R4_HEAD_NONE)
+def test_round4_an_absolute_system_bin_head_with_a_listed_basename_stays_read_only(command):
+    assert classify_bash_command(command) == "none", command
+
+
+R4_CP_SOURCE = [
+    "cp -rt lib tests/a tests/b",
+    "cp --target-directory lib tests/a tests/b",
+    "cp --target-directory=lib tests/a tests/b",
+    "cp -t lib tests/a",
+    "cp -t lib/ tests/test_a.py",
+    "cp -Tr tests/a lib",
+    "cp -T tests/a lib/b",
+    "cp -rT tests/a lib",
+    "cp -tlib tests/a",
+    "cp -pt lib tests/a",
+    "cp --tar lib tests/a",
+    "cp --t lib tests/a",
+    "cp --target lib tests/a",
+    "cp -u tests/a tests/b",
+    "cp -l tests/a lib/b",
+    "cp -s tests/a lib/b",
+    "cp --parents tests/a lib",
+    "cp --force tests/a tests/b",
+    "cp -x tests/a tests/b",
+    "cp -L tests/a tests/b",
+    "cp -H tests/a tests/b",
+    "cp -d tests/a tests/b",
+    "cp -b tests/a tests/b",
+    "cp -S x tests/a tests/b",
+    "cp -fz tests/a tests/b",
+    "cp tests/a -t lib",
+    "cp tests/a tests/b -t lib",
+    "cp tests/a -rt lib",
+    "mv -t lib tests/a",
+    "mv --target-directory lib tests/a",
+    "mv --target-directory=lib tests/a",
+    "mv -T tests/a lib/b",
+    "mv -u tests/a tests/b",
+    "mv tests/a -t lib",
+    "mv --force tests/a tests/b",
+    "ln -t lib tests/a",
+    "ln -s tests/a lib/b",
+    "install -t lib tests/a",
+    "install tests/a lib/b",
+]
+
+
+@pytest.mark.parametrize("command", R4_CP_SOURCE)
+def test_round4_a_cp_or_mv_option_outside_the_short_read_set_is_source(command):
+    assert classify_bash_command(command) == "source", command
+
+
+R4_CP_TESTS = [
+    "cp tests/a tests/b",
+    "cp -r tests/a tests/b",
+    "cp -R tests/a tests/b",
+    "cp -p tests/a tests/b",
+    "cp -a tests/a tests/b",
+    "cp -f -v tests/a tests/b",
+    "cp -fiv tests/a tests/b",
+    "cp -n tests/a tests/b",
+    "cp -rfp tests/a tests/b",
+    "cp -- tests/a tests/b",
+    "cp -v -- tests/a tests/b",
+    "cp tests/test_a.py tests/test_b.py",
+    "mv tests/a tests/b",
+    "mv -f tests/a tests/b",
+    "mv -iv tests/a tests/b",
+    "mv -n tests/a tests/b",
+]
+
+
+@pytest.mark.parametrize("command", R4_CP_TESTS)
+def test_round4_a_cp_or_mv_with_a_short_read_set_option_is_still_tests(command):
+    assert classify_bash_command(command) == "tests", command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<" + "a" * 50_000,
+        "cat <<'" + "a" * 50_000 + "'",
+        "echo $(" + "x" * 50_000 + ")",
+        "echo `" + "x" * 50_000 + "`",
+        "echo ${" + "x" * 50_000 + "}",
+        "echo $(" + "echo " * 5_000 + ")",
+        "echo " + "$'" * 5_000,
+        "ls 2>&1" + "x" * 50_000,
+        "echo " + "\r" * 50_000,
+        "echo " + "$(echo a) " * 150,
+        "cp " + "-f " * 20_000 + "tests/a tests/b",
+        "perl -i -pe '" + "s/a/b/;" * 8_000 + "' tests/a",
+        "perl -i -pe 's/a/" + "$1" * 20_000 + "/' tests/a",
+        "python3 -c '" + "def f(x: int): pass\n" * 4_000 + "'",
+        "python3 -c '" + "import sys\n" * 4_000 + "sys.path'",
+    ],
+)
+def test_round4_the_new_scanners_are_linear(command):
+    assert len(command) <= 100_000
+    assert _timed(command) < LIMIT
+
+
 # --------------------------------------------------------------------------- the audited shapes stay put
 
 AUDITED = (
