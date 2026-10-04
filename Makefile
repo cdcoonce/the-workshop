@@ -28,6 +28,19 @@ lint:
 verify-versions:
 	uv run python -m scripts.check_version_bumps --base $(VERSION_BASE)
 
+# Release a plugin change: `make bump PLUGIN=workbench [LEVEL=patch|minor|major]`.
+# Edits only the hand-written plugins/<name>/.claude-plugin/plugin.json and runs
+# the stamper, which regenerates the five other places a version appears
+# (codex/cortex manifests, marketplace.json, README, docs/reference/plugins.md).
+# The new version is computed from the version released at VERSION_BASE, so a
+# second run is a no-op; LEVEL defaults to what verify-versions would demand.
+# Pass the same VERSION_BASE the PR will be gated against (origin/dev for a PR
+# into dev).
+.PHONY: bump
+bump:
+	@test -n "$(PLUGIN)" || { echo "usage: make bump PLUGIN=<name> [LEVEL=patch|minor|major]" >&2; exit 2; }
+	uv run python -m scripts.bump_version "$(PLUGIN)" --base "$(VERSION_BASE)" $(if $(LEVEL),--level "$(LEVEL)")
+
 VERSION_BASE ?= origin/main
 
 # afk's gate (`.afk/config.toml` test_command). The full `make test`, graded
@@ -159,6 +172,7 @@ test-evals:
 .PHONY: test
 test:
 	$(MAKE) lint
+	$(MAKE) verify-versions
 	uv run --with pytest python -m pytest -q tests
 	uv run python -m scripts.discover_skill_test_suites
 	$(MAKE) test-machinery
@@ -167,4 +181,3 @@ test:
 	$(MAKE) test-evals
 	$(MAKE) check-teeth-anchors
 	$(MAKE) stamp-check
-	$(MAKE) verify-versions
