@@ -1321,20 +1321,22 @@
       "replace": ""
     },
     {
-      "label": "[r4b unterminated '] an unterminated single quote is an ordinary character",
+      "label": "[r4b unterminated (control) '] an unterminated single quote is an ordinary character",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "why": "The unterminated-quote rows `echo $(echo 'a)`; the body is then scanned again as a command text, which refuses an unterminated quote too, so this guard is a second line and may survive.",
+      "why": "Inert by construction: an unterminated single quote treated as an ordinary character leaves that quote in the body, and the body is scanned again as command text, where an unterminated quote breaks the scan (source) exactly as the guard does. Holds for every input, because the body is always a prefix of the text and the quote has no partner in it; the two checks fail closed identically, so the rows `echo $(echo 'a)` and `echo $(echo \"a)` pass with or without this guard.",
       "find": "            close = text.find(\"'\", k + 1)\n            if close == -1:\n                return None\n",
-      "replace": "            close = text.find(\"'\", k + 1)\n            if close == -1:\n                close = k\n"
+      "replace": "            close = text.find(\"'\", k + 1)\n            if close == -1:\n                close = k\n",
+      "expect": "survived"
     },
     {
-      "label": "[r4b unterminated \"] an unterminated double quote is an ordinary character",
+      "label": "[r4b unterminated (control) \"] an unterminated double quote is an ordinary character",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "why": "The unterminated-quote rows `echo $(echo \"a)`; also backed by the scan of the body.",
+      "why": "Inert by construction: an unterminated double quote treated as an ordinary character leaves that quote in the body, and the body is scanned again as command text, where an unterminated quote breaks the scan (source) exactly as the guard does. Holds for every input, because the body is always a prefix of the text and the quote has no partner in it; the two checks fail closed identically, so the rows `echo $(echo 'a)` and `echo $(echo \"a)` pass with or without this guard.",
       "find": "            if close == -1 or _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n",
-      "replace": "            if close == -1:\n                close = k\n            elif _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n"
+      "replace": "            if close == -1:\n                close = k\n            elif _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n",
+      "expect": "survived"
     },
     {
       "label": "[r4b dq $] a $ inside a double-quoted segment is read",
