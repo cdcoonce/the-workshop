@@ -125,7 +125,9 @@ _DQ_SPECIAL = re.compile(r'[^"\\$`]+')
 _PARAM_NAME = re.compile(r"\w+|[@*#?!$-]")
 _ASSIGNMENT = re.compile(r"[A-Za-z_]\w*\+?=")
 _DEV_OK = re.compile(r"/dev/(?:null|stderr|stdout)")
-_FD_DUP = re.compile(r"\d+-?|-")
+# A duplication operand: a file descriptor number or ``-`` (close). ``>&N-`` (move) is not read: zsh takes the whole
+# word for a file name and writes it.
+_FD_DUP = re.compile(r"[0-9]+|-")
 _UNRESOLVED = "\x00"
 # Words that must be plain literals: the arguments of ``:``, ``break`` and ``continue``.
 _PLAIN_ARG = re.compile(r"[A-Za-z0-9_./=-]+")
@@ -559,7 +561,7 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             if ctx.broken:
                 break
             top = frames[-1] if frames else None
-            if closed and not (word.isdigit() and i < n and text[i] in "<>"):
+            if closed and not (_is_fd_word(word) and i < n and text[i] in "<>"):
                 ctx.broken = True
                 break
             if top is not None and top[1] == "head" and word != "do":
@@ -667,9 +669,13 @@ def _dup_end(text: str, i: int) -> int | None:
     return end if end >= len(text) or text[end] in " \t\n;|&<>()" else None
 
 
+def _is_fd_word(word: str) -> bool:
+    return word.isascii() and word.isdigit()
+
+
 def _drop_fd_word(owner: _Cmd, last_word_end: int, at: int) -> None:
     """A redirect written ``2>file`` reads ``2`` as a word first; take it back."""
-    if last_word_end == at and owner.words and owner.words[-1].isdigit():
+    if last_word_end == at and owner.words and _is_fd_word(owner.words[-1]):
         owner.words.pop()
         owner.plain.pop()
         owner.raw.pop()

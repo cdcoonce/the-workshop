@@ -69,8 +69,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by the source f, make fmt, just build and npm run build rows.",
-      "find": "    return _program(base, args, cmds, index, depth)\n\n\ndef _program",
-      "replace": "    if base in (\"source\", \".\", \"make\", \"just\", \"npm\"):\n        return _RO, []\n    return _program(base, args, cmds, index, depth)\n\n\ndef _program"
+      "find": "    return _program(base, args, cmds, index, depth)\n\n\n# The tools whose command line reads",
+      "replace": "    if base in (\"source\", \".\", \"make\", \"just\", \"npm\"):\n        return _RO, []\n    return _program(base, args, cmds, index, depth)\n\n\n# The tools whose command line reads"
     },
     {
       "label": "[tests target] a call is tests when it merely mentions tests",
@@ -189,7 +189,7 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by cat x >&2, 1>&2 and the 2>&1 pytest rows.",
-      "find": "_FD_DUP = re.compile(r\"\\d+-?|-\")",
+      "find": "_FD_DUP = re.compile(r\"[0-9]+|-\")",
       "replace": "_FD_DUP = re.compile(r\"(?!)\")"
     },
     {
@@ -309,8 +309,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by import shutil, import subprocess, os.system and the from shutil import copy rows: the import allow-list is widened.",
-      "find": "        \"statistics\", \"datetime\", \"string\", \"operator\", \"functools\", \"pathlib\", \"typing\", \"dataclasses\", \"enum\",\n    }",
-      "replace": "        \"statistics\", \"datetime\", \"string\", \"operator\", \"functools\", \"pathlib\", \"typing\", \"dataclasses\", \"enum\",\n        \"os\", \"shutil\", \"subprocess\",\n    }"
+      "find": "        \"statistics\", \"datetime\", \"pathlib\",\n    }",
+      "replace": "        \"statistics\", \"datetime\", \"pathlib\",\n        \"os\", \"shutil\", \"subprocess\",\n    }"
     },
     {
       "label": "[python] an open mode that is not a literal is read-only",
@@ -373,8 +373,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by uv run mytool and uv run autoflake -i.",
-      "find": "    if program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program):\n        return _UNKNOWN, []",
-      "replace": "    if program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program):\n        return _RO, []"
+      "find": "    if program is None or (program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program)):\n        return _UNKNOWN, []",
+      "replace": "    if program is None or (program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program)):\n        return _RO, []"
     },
     {
       "label": "[uv] uv sync, add and pip are read-only",

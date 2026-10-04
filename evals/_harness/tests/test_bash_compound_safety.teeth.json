@@ -199,15 +199,15 @@
       "label": "[arith ${}] the arithmetic forms of ${...} are opaque expansions (predicted red: test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${y:1:2}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${!x}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${x@P}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${a[$x]}])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "        if close == -1 or \"$(\" in inner or \"`\" in inner or _ARITHMETIC_EXPANSION.search(inner):",
-      "replace": "        if close == -1 or \"$(\" in inner or \"`\" in inner:"
+      "find": "            or _ARITHMETIC_EXPANSION.search(inner)\n",
+      "replace": ""
     },
     {
       "label": "[arith ${} too wide] every ${...} is rejected (predicted red: test_a_parameter_expansion_that_does_no_arithmetic_stays_read_only[echo ${f%.py}], test_a_parameter_expansion_that_does_no_arithmetic_stays_read_only[echo ${f:-default}])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "        if close == -1 or \"$(\" in inner or \"`\" in inner or _ARITHMETIC_EXPANSION.search(inner):",
-      "replace": "        if close == -1 or \"$(\" in inner or \"`\" in inner or inner:"
+      "find": "            or _ARITHMETIC_EXPANSION.search(inner)\n",
+      "replace": "            or inner\n"
     },
     {
       "label": "[brace] an unquoted brace expansion is not an unresolved word (predicted red: test_an_unquoted_brace_expansion_argument_is_an_unresolved_expansion[sed {-i,s/a/b/} src/shop/cart.py], test_an_unquoted_brace_expansion_argument_is_an_unresolved_expansion[find src/shop {-delete,-name}])",
