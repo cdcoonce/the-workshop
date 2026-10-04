@@ -50,6 +50,21 @@ class TestTermFrequencyUpdate:
         assert data["REC"]["sessions"] == 2
 
 
+@pytest.mark.parametrize("extra_args", [[], ["--path"], ["--path", ""], ["--typo", "note.md"]])
+def test_explicit_sync_without_paths_refuses_before_git(
+    capsys: pytest.CaptureFixture[str], extra_args: list[str],
+) -> None:
+    with patch.object(sys, "argv", ["session-stop.py", "--explicit-sync", *extra_args]), \
+         patch("session_stop.subprocess.run") as run, \
+         patch("session_stop.push") as push:
+        result = session_stop.main()
+
+    assert result == 1
+    assert "--path" in json.loads(capsys.readouterr().out)["systemMessage"]
+    run.assert_not_called()
+    push.assert_not_called()
+
+
 def test_bare_hook_invocation_never_commits(vault: Path) -> None:
     """A lifecycle Stop event is not authorization to sync the vault."""
     (vault / "perf").mkdir()
@@ -64,6 +79,8 @@ def test_bare_hook_invocation_never_commits(vault: Path) -> None:
     subprocess.run(
         ["git", "config", "user.name", "Test User"], cwd=vault, check=True
     )
+    subprocess.run(["git", "config", "core.hooksPath", "/dev/null"], cwd=vault, check=True)
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=vault, check=True)
     subprocess.run(["git", "add", "."], cwd=vault, check=True)
     subprocess.run(["git", "commit", "-m", "initial"], cwd=vault, check=True)
     subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=vault, check=True)
@@ -167,12 +184,16 @@ class TestVaultHealthCheck:
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         with patch("session_stop.push") as mock_push, \
              patch("session_stop._sync_branch_status", return_value=(True, "main", "main")), \
-             patch.object(sys, "argv", ["session-stop.py", "--explicit-sync"]):
+             patch.object(sys, "argv", [
+                 "session-stop.py", "--explicit-sync", "--path", "brain/one.md",
+                 "--path=brain/two words.md",
+             ]):
             from sync_manager import SyncResult
             mock_push.return_value = SyncResult(success=True, message="ok")
             session_stop.main()
             _, kwargs = mock_push.call_args
             assert kwargs.get("pre_push_check") is session_stop._vault_health_check
+            assert kwargs["intended_paths"] == ["brain/one.md", "brain/two words.md"]
 
 
 class TestSystemMessageShapes:
@@ -208,7 +229,7 @@ class TestSystemMessageShapes:
         with patch(
             "session_stop._sync_branch_status",
             return_value=(False, "feature/x", "main"),
-        ), patch.object(sys, "argv", ["session-stop.py", "--explicit-sync"]):
+        ), patch.object(sys, "argv", ["session-stop.py", "--explicit-sync", "--path", "note.md"]):
             exit_code = session_stop.main()
 
         assert exit_code == 0
@@ -229,7 +250,7 @@ class TestSystemMessageShapes:
         monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
         with patch("session_stop.push") as mock_push, \
              patch("session_stop._sync_branch_status", return_value=(True, "main", "main")), \
-             patch.object(sys, "argv", ["session-stop.py", "--explicit-sync"]):
+             patch.object(sys, "argv", ["session-stop.py", "--explicit-sync", "--path", "note.md"]):
             from sync_manager import SyncResult
             mock_push.return_value = SyncResult(success=True, message="ok")
             exit_code = session_stop.main()
@@ -257,7 +278,7 @@ class TestSystemMessageShapes:
         (tmp_path / "empty-bin").mkdir()
 
         result = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "session-stop.py"), "--explicit-sync"],
+            [sys.executable, str(SCRIPTS_DIR / "session-stop.py"), "--explicit-sync", "--path", "note.md"],
             cwd=vault_dir,
             env=env,
             capture_output=True,

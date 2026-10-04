@@ -130,7 +130,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `vault-skill-alias.py` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
 | `vault-stop-1-notebook-update.py` | — | Stop hook: updates the session notebook. |
 | `vault-stop-2-graph-gardener.py` | — | Stop hook: queues link, profile, and index repairs. |
-| `vault-stop-3-session-sync.py` | — | Stop hook: commits and syncs the vault. |
+| `vault-stop-3-session-sync.py` | — | Stop hook: checks the explicit sync boundary without authorizing a sync. |
 | `vault-validate-write.py` | — | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |

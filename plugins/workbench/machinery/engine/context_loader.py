@@ -64,7 +64,7 @@ GIT_PREVIEW = 5            # commit subjects are already short
 
 HANDOFF_RESUME_ENTRIES = 1  # newest "**▶ <date>" entries kept under "Resume from here"
 HANDOFF_ENTRY_CHARS = 1200  # per-entry clip
-HANDOFF_MAX_BYTES = 8000    # ceiling; whole trailing sections drop past it
+HANDOFF_MAX_BYTES = 8000    # strict UTF-8 ceiling, including separators and notice
 
 
 # ---------------------------------------------------------------------------
@@ -299,37 +299,63 @@ def _condense_resume(section: list[str], rel_path: str) -> str:
 _CLIP_NOTE = "_Sections clipped for context budget"
 
 
+def _clip_bytes(text: str, limit: int) -> str:
+    """Clip UTF-8 text within a byte allowance, including its elision marker."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= limit:
+        return text
+    marker = " …"
+    marker_bytes = len(marker.encode("utf-8"))
+    if limit < marker_bytes:
+        return encoded[:max(limit, 0)].decode("utf-8", errors="ignore").rstrip()
+    cut = encoded[:limit - marker_bytes].decode("utf-8", errors="ignore")
+    newline = cut.rfind("\n")
+    if newline > len(cut) // 2:
+        cut = cut[:newline]
+    cut = cut.rstrip()
+    return cut + marker if cut else marker.lstrip()
+
+
 def _clip_block(block: str, limit: int) -> str:
-    """Clip one section to `limit` characters, always keeping its heading line.
+    """Clip one section to `limit` bytes, keeping its heading when it fits.
 
     Parameters
     ----------
     block : str
         A section, its heading (when it has one) on the first line.
     limit : int
-        Maximum characters for the returned section.
+        Maximum UTF-8 bytes for the returned section.
 
     Returns
     -------
     str
         `block` unchanged when short enough, else the heading plus a clipped
-        body. The result never exceeds `limit`, so re-clipping is a no-op.
+        body. A heading larger than the allowance is itself clipped. The result
+        never exceeds `limit`, so re-clipping is a no-op.
     """
-    if len(block) <= limit:
+    if len(block.encode("utf-8")) <= limit:
         return block
     lines = block.splitlines()
     head, rest = lines[0], "\n".join(lines[1:]).strip()
-    return f"{head}\n\n{_clip(rest, max(limit - len(head) - 4, 0))}".strip()
+    head_bytes = len(head.encode("utf-8"))
+    if head_bytes >= limit:
+        return _clip_bytes(head, limit)
+    body_limit = limit - head_bytes - 2  # blank line after the heading
+    if body_limit <= 0:
+        return head
+    return f"{head}\n\n{_clip_bytes(rest, body_limit)}".rstrip()
 
 
 def _budget_sections(body: str, rel_path: str) -> str:
-    """Clip sections until the digest fits the byte ceiling, losing none of them.
+    """Clip sections within a strict byte ceiling, reserving the source notice.
 
     Sections are trimmed in place rather than dropped from the end. A handoff
     whose resume stack could not be collapsed — its entry markers did not match
     the expected format — is far larger than the ceiling in its first section,
     and dropping from the end costs every remaining section rather than the
-    intended tail.
+    intended tail. Ordinary headings survive; if headings alone cannot fit
+    their allowances, they are clipped too. With more sections than the byte
+    budget can represent, empty clipped sections are omitted.
     """
     if len(body.encode("utf-8")) <= HANDOFF_MAX_BYTES:
         return body
@@ -338,11 +364,15 @@ def _budget_sections(body: str, rel_path: str) -> str:
     if not blocks:
         return body
 
-    budget = HANDOFF_MAX_BYTES // len(blocks)
-    out = "\n\n".join(_clip_block(block, budget) for block in blocks)
-    if _CLIP_NOTE in out:
-        return out
-    return f"{out}\n\n{_CLIP_NOTE} — read `{rel_path}` for the full text._"
+    notice = _clip_bytes(
+        f"{_CLIP_NOTE} — read `{rel_path}` for the full text._", HANDOFF_MAX_BYTES
+    )
+    # N blocks plus the notice need N blank-line separators. Both the notice
+    # and those separators count against the same byte ceiling as the content.
+    remaining = HANDOFF_MAX_BYTES - len(notice.encode("utf-8")) - 2 * len(blocks)
+    budget = max(0, remaining // len(blocks))
+    clipped = [_clip_block(block, budget) for block in blocks]
+    return "\n\n".join(part for part in [*clipped, notice] if part)
 
 
 # ---------------------------------------------------------------------------
@@ -352,10 +382,11 @@ def _budget_sections(body: str, rel_path: str) -> str:
 def condense_digest(text: str, rel_path: str) -> str:
     """Budget a handoff or notebook digest for SessionStart injection.
 
-    Every section is preserved. The reverse-chronological "**▶" entry stack
+    Ordinary section headings are preserved. The reverse-chronological "**▶" entry stack
     under "Resume from here" collapses to the newest few plus a count and a
-    pointer, and sections are clipped in place — never dropped — once the
-    result exceeds `HANDOFF_MAX_BYTES`. A resume section carrying no "**▶"
+    pointer, and sections are clipped in place once the result exceeds
+    `HANDOFF_MAX_BYTES`. Headings themselves may be clipped or omitted when
+    too large or numerous to fit; the byte ceiling takes priority. A resume section carrying no "**▶"
     entries is marked as un-condensed rather than passing through silently.
     A no-op for digests that are already small.
 

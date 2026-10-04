@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -334,6 +334,27 @@ class TestPullRetry:
 
 @pytest.mark.usefixtures("fixed_sync_target")
 class TestPush:
+    def test_empty_intended_paths_never_runs_git(self, tmp_path: Path) -> None:
+        with patch("sync_manager._run_git") as run:
+            result = push(tmp_path, intended_paths=[])
+        assert result.success
+        assert "No intended paths" in result.message
+        run.assert_not_called()
+
+    @pytest.mark.parametrize("paths", [
+        [""], ["."], ["../other.md"], ["/tmp/other.md"], ["notes/../seed.md"],
+        ["./seed.md"], ["notes//seed.md"], ["notes"], ["bad\0name"], "seed.md",
+    ])
+    def test_invalid_intended_paths_refuse_before_git(
+        self, tmp_path: Path, paths: list[str] | str,
+    ) -> None:
+        (tmp_path / "notes").mkdir()
+        with patch("sync_manager._run_git") as run:
+            result = push(tmp_path, intended_paths=paths)
+        assert not result.success
+        assert "Invalid intended path" in result.message
+        run.assert_not_called()
+
     @patch("sync_manager._run_git")
     def test_changed_paths_parses_deletions_renames_and_spaces(
         self, mock_git, tmp_path: Path
@@ -527,6 +548,8 @@ def _setup(tmp_path):
     subprocess.run(["git", "clone", str(remote), str(a)], check=True, capture_output=True, text=True)
     _git(a, "config", "user.email", "t@t.t")
     _git(a, "config", "user.name", "t")
+    _git(a, "config", "core.hooksPath", "/dev/null")
+    _git(a, "config", "commit.gpgsign", "false")
     (a / "seed.md").write_text("seed\n")
     _git(a, "add", ".")
     _git(a, "commit", "-m", "seed")
@@ -536,7 +559,204 @@ def _setup(tmp_path):
     subprocess.run(["git", "clone", str(remote), str(b)], check=True, capture_output=True, text=True)
     _git(b, "config", "user.email", "t@t.t")
     _git(b, "config", "user.name", "t")
+    _git(b, "config", "core.hooksPath", "/dev/null")
+    _git(b, "config", "commit.gpgsign", "false")
     return a, b
+
+
+def test_scoped_push_commits_only_intended_whole_files(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    (a / "selected.md").write_text("selected\n")
+    (a / "foreign.md").write_text("leave local\n")
+
+    result = push(a, intended_paths=["selected.md"])
+
+    assert result.success, result.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert (b / "selected.md").read_text() == "selected\n"
+    assert not (b / "foreign.md").exists()
+    assert (a / "foreign.md").read_text() == "leave local\n"
+    assert subprocess.check_output(
+        ["git", "status", "--porcelain"], cwd=a, text=True
+    ) == "?? foreign.md\n"
+
+
+def test_scoped_push_refuses_foreign_staged_changes_without_mutation(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "selected.md").write_text("selected\n")
+    (a / "foreign.md").write_text("staged\n")
+    _git(a, "add", "foreign.md")
+    (a / "foreign.md").write_text("staged and unstaged\n")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a)
+    index = (a / ".git" / "index").read_bytes()
+    remote = _remote_heads(a, "refs/heads/main")
+
+    result = push(a, intended_paths=["selected.md"])
+
+    assert not result.success
+    assert "foreign.md" in result.message
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a) == head
+    assert (a / ".git" / "index").read_bytes() == index
+    assert _remote_heads(a, "refs/heads/main") == remote
+    assert (a / "foreign.md").read_text() == "staged and unstaged\n"
+    assert (a / "selected.md").read_text() == "selected\n"
+
+
+def test_scoped_push_treats_git_pathspec_characters_literally(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    (a / "[ab].md").write_text("literal\n")
+    (a / "a.md").write_text("foreign\n")
+
+    result = push(a, intended_paths=["[ab].md"])
+
+    assert result.success, result.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert (b / "[ab].md").read_text() == "literal\n"
+    assert not (b / "a.md").exists()
+    assert (a / "a.md").read_text() == "foreign\n"
+
+
+def test_scoped_push_preserves_staged_rename_and_unstaged_deletion(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    (a / "delete me.md").write_text("delete\n")
+    _git(a, "add", "delete me.md")
+    _git(a, "commit", "-m", "another seed")
+    _git(a, "push", "origin", "main")
+    _git(a, "mv", "seed.md", "renamed file.md")
+    (a / "delete me.md").unlink()
+
+    result = push(a, intended_paths=["seed.md", "renamed file.md", "delete me.md"])
+
+    assert result.success, result.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert (b / "renamed file.md").read_text() == "seed\n"
+    assert not (b / "seed.md").exists()
+    assert not (b / "delete me.md").exists()
+
+
+@pytest.mark.parametrize("selected", ["seed.md", "renamed.md"])
+def test_scoped_push_requires_both_staged_rename_endpoints(tmp_path: Path, selected: str) -> None:
+    a, _b = _setup(tmp_path)
+    _git(a, "mv", "seed.md", "renamed.md")
+    index = (a / ".git" / "index").read_bytes()
+
+    result = push(a, intended_paths=[selected])
+
+    assert not result.success
+    assert "outside intended scope" in result.message
+    assert (a / ".git" / "index").read_bytes() == index
+
+
+def test_scoped_push_can_commit_an_already_staged_deletion(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    _git(a, "rm", "seed.md")
+
+    result = push(a, intended_paths=["seed.md"])
+
+    assert result.success, result.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert not (b / "seed.md").exists()
+
+
+def test_scoped_push_includes_unstaged_portion_of_selected_file(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    (a / "seed.md").write_text("staged\n")
+    _git(a, "add", "seed.md")
+    (a / "seed.md").write_text("complete intended working file\n")
+
+    result = push(a, intended_paths=["seed.md"])
+
+    assert result.success, result.message
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert (b / "seed.md").read_text() == "complete intended working file\n"
+
+
+def test_scoped_push_health_failure_preserves_index_and_worktree(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "seed.md").write_text("staged\n")
+    _git(a, "add", "seed.md")
+    (a / "seed.md").write_text("unstaged\n")
+    index = (a / ".git" / "index").read_bytes()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a)
+    remote = _remote_heads(a, "refs/heads/main")
+
+    result = push(a, intended_paths=["seed.md"], pre_push_check=lambda _: (False, "bad graph"))
+
+    assert not result.success
+    assert "bad graph" in result.message
+    assert (a / ".git" / "index").read_bytes() == index
+    assert (a / "seed.md").read_text() == "unstaged\n"
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a) == head
+    assert _remote_heads(a, "refs/heads/main") == remote
+
+
+def test_scoped_health_gate_refuses_foreign_worktree_dependencies(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "selected.md").write_text("Links to [[foreign]]\n")
+    (a / "foreign.md").write_text("untracked dependency\n")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a)
+    health = Mock(return_value=(True, ""))
+    with patch("sync_manager._run_git", wraps=sm._run_git) as run:
+        result = push(a, intended_paths=["selected.md"], pre_push_check=health)
+
+    assert not result.success
+    assert "foreign.md" in result.message
+    assert "health" in result.message.lower()
+    health.assert_not_called()
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a) == head
+    assert not any(
+        {"add", "commit", "pull", "push"}.intersection(call.args[0])
+        for call in run.call_args_list
+    )
+
+
+def test_scoped_push_rechecks_scope_after_health_check(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "selected.md").write_text("selected\n")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a)
+
+    def stage_foreign_during_check(cwd: Path) -> tuple[bool, str]:
+        (cwd / "foreign.md").write_text("another session\n")
+        _git(cwd, "add", "foreign.md")
+        return True, ""
+
+    result = push(a, intended_paths=["selected.md"], pre_push_check=stage_foreign_during_check)
+
+    assert not result.success
+    assert "foreign.md" in result.message
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a) == head
+    assert subprocess.check_output(
+        ["git", "diff", "--cached", "--name-only"], cwd=a, text=True
+    ).strip() == "foreign.md"
+    assert (a / "selected.md").read_text() == "selected\n"
+
+
+def test_scoped_commit_excludes_a_foreign_file_staged_after_add(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "selected.md").write_text("selected\n")
+    (a / "foreign.md").write_text("another session\n")
+    run_git = sm._run_git
+
+    def stage_foreign_after_add(
+        args: list[str], cwd: Path, timeout: int = 25,
+    ) -> subprocess.CompletedProcess[str]:
+        result = run_git(args, cwd, timeout)
+        if "add" in args:
+            _git(cwd, "add", "foreign.md")
+        return result
+
+    # Stop at the subsequent pull boundary so this test isolates commit/index
+    # behavior from rebase/autostash handling of concurrently staged changes.
+    with patch("sync_manager._run_git", side_effect=stage_foreign_after_add), \
+         patch("sync_manager.pull", return_value=SyncResult(False, "pull unavailable")):
+        result = push(a, intended_paths=["selected.md"])
+
+    assert not result.success
+    committed = subprocess.check_output(["git", "show", "--format=", "--name-only", "HEAD"], cwd=a, text=True)
+    assert committed.strip() == "selected.md"
+    staged = subprocess.check_output(["git", "diff", "--cached", "--name-only"], cwd=a, text=True)
+    assert staged.strip() == "foreign.md"
+    assert (a / "foreign.md").read_text() == "another session\n"
 
 
 def test_push_rebase_pulls_before_pushing(tmp_path):

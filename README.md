@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.33.0` | 78 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.33.1` | 78 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.3` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -340,7 +340,7 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
 | `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
 | `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
-| `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: commits and syncs the vault. |
+| `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: checks the explicit sync boundary without authorizing a sync. |
 | `vault-validate-write.py` | `workbench` | — | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |

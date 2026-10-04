@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook — dispatch the background notebook distiller.
 
-Rides the same per-turn Stop cadence as the auto-commit hook. It:
+Runs at the per-turn Stop cadence. It:
   1. Synchronously ensures a notebook stub exists for this session (so that
      a /clear → SessionStart can always find the file — the detached distill
      is too slow to win that race).
@@ -24,7 +24,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from notebook_core import NOTEBOOK_SKELETON  # noqa: E402
+from notebook_core import NOTEBOOK_SKELETON, valid_session_id  # noqa: E402
 from vault_utils import find_vault_root_from_env, read_vault_context  # noqa: E402
 
 
@@ -36,19 +36,20 @@ def ensure_stub(vault_root: Path, context: str, session_id: str) -> None:
     minimal skeleton so that a /clear → SessionStart always finds a file
     before the slower detached distill finishes.
     """
+    if not valid_session_id(session_id):
+        return
     brain_dir = vault_root / ".brain"
     brain_dir.mkdir(parents=True, exist_ok=True)
     notebook = brain_dir / f"notebook-{context}-{session_id}.md"
-    if notebook.exists():
-        return  # already has content — leave it alone
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     sid = session_id[:8] if session_id else "unknown"
-    notebook.write_text(
-        NOTEBOOK_SKELETON.format(
-            context_title=context.title(), stamp=stamp, sid=sid
-        ),
-        encoding="utf-8",
-    )
+    try:
+        with notebook.open("x", encoding="utf-8") as stream:
+            stream.write(NOTEBOOK_SKELETON.format(
+                context_title=context.title(), stamp=stamp, sid=sid
+            ))
+    except FileExistsError:
+        pass  # another worker already owns useful content; never truncate it
 
 
 def main() -> int:
@@ -59,6 +60,8 @@ def main() -> int:
 
     transcript_path = event.get("transcript_path")
     session_id = event.get("session_id", "")
+    if not valid_session_id(session_id):
+        return 0
     if not transcript_path or not Path(transcript_path).exists():
         return 0
 

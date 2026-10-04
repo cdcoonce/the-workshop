@@ -430,6 +430,38 @@ class TestSummaryBudget:
 class TestCondenseDigest:
     """The handoff digest is injected verbatim today; budget its entry stack."""
 
+    @pytest.mark.parametrize("filler", ["漢" * 9000, "🧠" * 9000], ids=["cjk", "emoji"])
+    def test_unicode_budget_includes_notice_and_separators(self, filler: str) -> None:
+        src = f"# Handoff\n\n## Now\n\n{filler}\n\n## Open loops\n\n{filler}"
+        source = ".brain/引き継ぎ.md"
+
+        out = condense_digest(src, source)
+
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES
+        assert "## Now" in out
+        assert "## Open loops" in out
+        assert "Sections clipped for context budget" in out
+        assert source in out
+        assert condense_digest(out, source) == out
+
+    @pytest.mark.parametrize("src, source", [
+        ("## Resume " + "漢" * 5000, ".brain/h.md"),
+        ("\n\n".join(f"## Section {n}" for n in range(1200)), ".brain/h.md"),
+        ("\n\n".join(f"## Section {n}" for n in range(5000)), ".brain/h.md"),
+        ("## Now\n" + "x" * 10000, ".brain/" + "漢" * 5000 + ".md"),
+    ], ids=["oversize-heading", "many-headings", "too-many-headings", "oversize-notice"])
+    def test_pathological_headings_and_notice_still_fit(self, src: str, source: str) -> None:
+        out = condense_digest(src, source)
+
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES
+        assert "Sections clipped for context budget" in out
+        assert condense_digest(out, source) == out
+
+    def test_small_unicode_digest_is_unchanged(self) -> None:
+        small = "# 引き継ぎ\n\n## Now\n\n漢字と 🧠\n\n## Open loops\n\n確認する"
+
+        assert condense_digest(small, ".brain/引き継ぎ.md") == small
+
     @staticmethod
     def _handoff(entry_count: int, body_chars: int = 200) -> str:
         entries = "\n\n".join(
@@ -500,7 +532,7 @@ class TestCondenseDigest:
 
         out = condense_digest(src, ".brain/h.md")
 
-        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES + 400
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES
 
     def test_is_idempotent_without_entry_markers(self) -> None:
         once = condense_digest(self._handoff_bold_entries(), ".brain/h.md")
@@ -516,7 +548,7 @@ class TestCondenseDigest:
     def test_respects_the_byte_ceiling(self) -> None:
         out = condense_digest(self._handoff(8, body_chars=4000), ".brain/h.md")
 
-        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES + 400
+        assert len(out.encode("utf-8")) <= HANDOFF_MAX_BYTES
 
     def test_is_idempotent(self) -> None:
         once = condense_digest(self._handoff(4), ".brain/h.md")

@@ -2,7 +2,7 @@
 
 Public interface:
     pull(vault_path) → SyncResult
-    push(vault_path, message, pre_push_check) → SyncResult
+    push(vault_path, message, pre_push_check, *, intended_paths=None) → SyncResult
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 
@@ -380,23 +380,57 @@ def push(
     vault_path: str | Path,
     message: str = "vault: auto-sync session changes",
     pre_push_check: Callable[[Path], tuple[bool, str]] | None = None,
+    *,
+    intended_paths: Sequence[str] | None = None,
 ) -> SyncResult:
-    """Stage all changes, commit, and push to remote.
+    """Stage authorized whole files, commit, and push to remote.
 
-    Args:
-        vault_path: Path to the vault root directory.
-        message: Commit message.
-        pre_push_check: Optional durability gate run before staging or committing. Takes
-            the repo path and returns ``(ok, detail)``; a caller-supplied check
-            (e.g. a vault-health gate) so this module stays generic — most
-            consumers of this vendored engine have no such check to run. On
-            failure all edits remain uncommitted and pull/push are skipped, leaving
-            a human to fix the working tree before it becomes durable history.
+    Parameters
+    ----------
+    vault_path : str or Path
+        Vault root directory.
+    message : str
+        Commit message.
+    pre_push_check : callable, optional
+        Whole-tree durability gate returning ``(ok, detail)`` before staging.
+        Scoped calls refuse any changed paths outside their scope before this
+        gate: an uncommitted foreign note must not satisfy a link in the proposed
+        commit. Gate failures leave edits uncommitted and skip pull/push.
+    intended_paths : sequence of str, optional
+        Exact vault-relative file paths; no directory or pathspec expansion.
+        Include both endpoints of staged renames. Selected files include their
+        unstaged portions. Foreign staged paths cause refusal. An empty sequence
+        does nothing; omitting this argument retains the legacy all-changes API.
 
-    Returns:
-        SyncResult with success status and message.
+    Returns
+    -------
+    SyncResult
+        Success status and explanatory message.
+
+    Notes
+    -----
+    Scope constrains the new commit, not existing history pushed afterward.
+    Path-limited commits exclude late foreign staging, but do not isolate edits
+    to selected files or concurrent rebase/index activity in a shared checkout.
     """
     cwd = Path(vault_path)
+    if intended_paths is not None:
+        if isinstance(intended_paths, (str, bytes)):
+            return SyncResult(success=False, message="Invalid intended paths — supply a sequence of file paths.")
+        intended_paths = tuple(intended_paths)
+        if not intended_paths:
+            return SyncResult(success=True, message="No intended paths — sync skipped.")
+        for path in intended_paths:
+            if (
+                not isinstance(path, str) or not path or "\0" in path
+                or path == "." or PurePosixPath(path).is_absolute()
+                or ".." in PurePosixPath(path).parts
+                or str(PurePosixPath(path)) != path or (cwd / path).is_dir()
+            ):
+                return SyncResult(
+                    success=False,
+                    message=f"Invalid intended path {path!r} — use an exact vault-relative file path.",
+                )
 
     # Check if remote exists
     try:
@@ -412,7 +446,28 @@ def push(
 
     # Check for changes
     try:
+        if intended_paths is not None:
+            staged = _run_git(["diff", "--cached", "--name-only", "--no-renames", "-z"], cwd)
+            if staged.returncode != 0:
+                raise GitCommandError("diff --cached", staged.stderr)
+            foreign = [path for path in staged.stdout.split("\0") if path and path not in intended_paths]
+            if foreign:
+                return SyncResult(
+                    success=False,
+                    message="Sync refused — staged paths outside intended scope: " + ", ".join(foreign),
+                )
         changed_paths = _changed_paths(cwd)
+        if intended_paths is not None:
+            foreign = [path for path in changed_paths if path not in intended_paths]
+            if pre_push_check is not None and foreign:
+                return SyncResult(
+                    success=False,
+                    message=(
+                        "Sync refused — whole-tree health check cannot validate a scoped commit "
+                        "while changed paths remain outside intended scope: " + ", ".join(foreign)
+                    ),
+                )
+            changed_paths = [path for path in changed_paths if path in intended_paths]
     except GitCommandError as e:
         return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
     except subprocess.TimeoutExpired:
@@ -436,14 +491,35 @@ def push(
                 ),
             )
 
-    # Stage all changes
+    # Stage selected whole files. Already-staged deletions (including rename
+    # sources) are absent from the index, so passing them to `add` would fail.
     try:
-        result = _run_git(["add", "-A", "--", *changed_paths], cwd)
-        if result.returncode != 0:
-            return SyncResult(success=False, message=f"Git add failed: {result.stderr.strip()}")
+        if intended_paths is not None and pre_push_check is not None:
+            foreign = [path for path in _changed_paths(cwd) if path not in intended_paths]
+            if foreign:
+                return SyncResult(
+                    success=False,
+                    message="Sync refused — changed paths appeared outside intended scope during health check: "
+                    + ", ".join(foreign),
+                )
+        literal = ["--literal-pathspecs"] if intended_paths is not None else []
+        stage_paths = changed_paths
+        if intended_paths is not None:
+            candidates = _run_git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd)
+            if candidates.returncode != 0:
+                return SyncResult(success=False, message=f"Git ls-files failed: {candidates.stderr.strip()}")
+            available = set(candidates.stdout.split("\0"))
+            stage_paths = [path for path in changed_paths if path in available]
+        if stage_paths:
+            result = _run_git([*literal, "add", "-A", "--", *stage_paths], cwd)
+            if result.returncode != 0:
+                return SyncResult(success=False, message=f"Git add failed: {result.stderr.strip()}")
 
         # Commit
-        result = _run_git(["commit", "-m", message], cwd)
+        commit_args = ["commit", "-m", message]
+        if intended_paths is not None:
+            commit_args = ["--literal-pathspecs", "commit", "--only", "-m", message, "--", *changed_paths]
+        result = _run_git(commit_args, cwd)
         if result.returncode != 0:
             return SyncResult(success=False, message=f"Git commit failed: {result.stderr.strip()}")
 
@@ -478,6 +554,8 @@ def push(
 
         return SyncResult(success=True, message="Changes committed and pushed.")
 
+    except GitCommandError as e:
+        return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
     except subprocess.TimeoutExpired:
         return SyncResult(success=False, message="Git operation timed out.")
     except FileNotFoundError:
