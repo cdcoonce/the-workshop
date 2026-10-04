@@ -1926,13 +1926,8 @@ R4_SHELL_SOURCE = [
     "echo ${x:-\"}\"}; touch lib/hit # \"",
     "echo ${x:-'}'}; touch lib/hit # '",
     "echo ${x:-\"a\"}",
-    "echo $(echo \"x\")",
-    "echo $(echo 'x')",
-    "echo $(grep -c '#' f)",
     "echo `echo \"x\"`",
     "echo `echo 'x'`",
-    "ls $(git log --format=\"%h\" -1)",
-    "echo \"$(echo \"x\")\"",
     # embedded newline and carriage return in a body
     "echo $(echo a\nb)",
     "echo `echo a\nb`",
@@ -1955,6 +1950,89 @@ R4_SHELL_SOURCE = [
     "echo 'a\rb'",
     "echo \"a\rb\"",
 ]
+
+
+# $( ) bodies are matched quote-aware: balanced quotes are fine, anything the scanner cannot read with certainty is not
+R4_SUBST_NONE = [
+    "cat $(git ls-files | grep -E '\\.py$')",
+    "cd /w && git ls-files && cat docs/plan.md && cat $(git ls-files | grep -E '\\.py$')",
+    "wc -l $(git ls-files 'src/*.py')",
+    "echo $(grep -c '#' tests/test_cart.py)",
+    "echo $(echo ')')",
+    "echo $(echo '(')",
+    "echo $(echo \"(\")",
+    "echo $(echo \"x)\")",
+    "echo $(echo 'x')",
+    "echo $(echo \"x\")",
+    "echo \"$(echo \"x\")\"",
+    "ls $(git log --format=\"%h\" -1)",
+    "echo $(echo 'a b' | tr a b)",
+    "echo $(echo 'it''s')",
+    "echo $(echo 'a\nb')",
+    "echo $(echo \"a b\" | wc -c) $(echo 'c')",
+    "echo $(echo $(echo ')'))",
+]
+
+
+@pytest.mark.parametrize("command", R4_SUBST_NONE)
+def test_round4_a_quote_safe_command_substitution_body_stays_read_only(command):
+    assert classify_bash_command(command) == "none", command
+
+
+R4_SUBST_SOURCE = [
+    # a backslash inside double quotes, a $ or a backtick inside double quotes
+    "cat $(git ls-files | grep -E \"\\.py\")",
+    "echo $(echo \"a\\\"b\")",
+    "echo $(echo \"$x\")",
+    "echo $(echo \"$HOME\")",
+    "echo $(echo \"${x}\")",
+    "echo $(echo \"$(pwd)\")",
+    "echo $(echo \"`pwd`\")",
+    # S5 and S6 stay source
+    "echo \"$(echo \\) ; echo x > src/cart.py)\"",
+    "echo \"$(echo a # )\ntouch lib/hit\n)\"",
+    "echo \"$(echo \\) ; x)\"",
+    # a ) inside single quotes does not close the substitution, and the body writes
+    "echo $(echo ')' ; touch lib/hit)",
+    "echo $(echo \")\" ; touch lib/hit)",
+    "echo $(echo 'x)' ; touch lib/hit)",
+    "echo \"$(echo ')' ; touch lib/hit)\"",
+    "echo $(echo ')' ; echo x > src/cart.py)",
+    # an unterminated quote
+    "echo $(echo 'a)",
+    "echo $(echo \"a)",
+    "echo $(echo 'a) ; touch lib/hit",
+    "echo $(echo \"a) ; touch lib/hit",
+    # a nested substitution that writes, and a body that writes
+    "echo $(echo $(cp a b))",
+    "echo \"$(echo $(cp a b))\"",
+    "echo $(cp a src/b)",
+    "echo $(echo ')' ; echo $(touch lib/hit))",
+    "echo $(echo 'a' $(touch lib/hit))",
+    # outside quotes: a backslash, a #, a newline, a carriage return, $' and $"
+    "echo $(echo a\\b)",
+    "echo $(echo 'a'\\)",
+    "echo $(echo a#b)",
+    "echo $(echo 'a'#b)",
+    "echo $(echo 'a' # b)",
+    "echo $(echo a\nb)",
+    "echo $(echo 'a'\nb)",
+    "echo $(echo a\rb)",
+    "echo $(echo $'a')",
+    "echo $(echo $\"a\")",
+    "echo $(echo 'a' $'b')",
+    # a backtick segment that holds a quote, a paren, a # or a backslash
+    "echo $(echo `echo ')'`)",
+    "echo $(echo `echo \"x\"`)",
+    "echo $(echo `echo a#b`)",
+    "echo $(echo `echo a\\b`)",
+    "echo $(echo `echo a",
+]
+
+
+@pytest.mark.parametrize("command", R4_SUBST_SOURCE)
+def test_round4_a_command_substitution_body_the_scanner_cannot_read_with_certainty_is_source(command):
+    assert classify_bash_command(command) == "source", command
 
 
 @pytest.mark.parametrize("command", R4_SHELL_SOURCE)
