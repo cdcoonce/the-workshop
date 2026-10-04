@@ -269,8 +269,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by the pytest --junitxml, --basetemp, --cov-report and --snapshot-update rows: an option off the allow-list is accepted.",
-      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
-      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"@\"):\n            return False"
+      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"-\") and arg != \"-\":\n            return False",
+      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif False:\n            return False"
     },
     {
       "label": "[ruff] ruff check --fix is read-only",

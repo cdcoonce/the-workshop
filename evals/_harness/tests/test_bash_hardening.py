@@ -1871,6 +1871,11 @@ R4_SHELL_SOURCE = [
     "cat <<1\n1\ntouch lib/hit",
     "cat <<''\n\ntouch lib/hit",
     "cat <<'EO F'\nEO F\ntouch lib/hit",
+    "cat <<1\nhello\n1",
+    "cat <<'EO F'\nhello\nEO F",
+    "cat <<'EOF$x'\nhello\nEOF$x",
+    "cat <<''\nhello\n",
+    "cat <<\"EO F\"\nhello\nEO F",
     "cat <<'EOF$x'\nEOF$x\ntouch lib/hit",
     "cat <<-'EOF'x\nEOFx\ntouch lib/hit",
     # S3: a file-descriptor duplication glued to a word

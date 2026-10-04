@@ -325,16 +325,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by pytest --log-file=, -o cache_dir=, --json-report-file=, --debug=, --pdb, --fixtures rows.",
-      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
-      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"@\"):\n            return False"
-    },
-    {
-      "label": "[7 pytest @file] a pytest @argsfile operand is accepted",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "why": "Killed by pytest @args.txt and pytest -q @args.txt.",
-      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
-      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"-\") and arg != \"-\":\n            return False"
+      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"-\") and arg != \"-\":\n            return False",
+      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif False:\n            return False"
     },
     {
       "label": "[7 pytest -p] pytest -p loads any plugin",
@@ -343,14 +335,6 @@
       "why": "Killed by pytest -p x and python -m pytest -p tests.plugin.",
       "find": "            if i >= n or args[i] != \"no:cacheprovider\":",
       "replace": "            if i >= n:"
-    },
-    {
-      "label": "[7 pytest --] operands after -- are not checked",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "why": "Killed by the pytest -- @args row.",
-      "find": "            return not any(rest.startswith(\"@\") for rest in args[i:])",
-      "replace": "            return True"
     },
     {
       "label": "[7 mypy] a mypy option off the allow-list is accepted",
@@ -1061,16 +1045,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by `pytest -k @tests/a.txt`, `-m`, `-W` and the reviewer's printf-then-pytest row.",
-      "find": "    return arg.startswith(\"@\") or _ARGFILE_VALUE.match(arg) is not None",
+      "find": "    return arg.startswith(\"@\")",
       "replace": "    return False"
-    },
-    {
-      "label": "[r4 R argfile] an attached or = option value starting with @ is read",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "why": "Killed by `pytest -k=@tests/a.txt`, `--maxfail=@...`, `--tb=@...` and `--durations=@...`.",
-      "find": "    return arg.startswith(\"@\") or _ARGFILE_VALUE.match(arg) is not None",
-      "replace": "    return arg.startswith(\"@\")"
     },
     {
       "label": "[r4 R argfile] the tool set is empty",

@@ -28,12 +28,24 @@ and ``-0`` only), ``sed`` (a hand scanner over the script and exact option
 spellings), ``sort``/``tree``/``uniq`` output forms, an option ALLOW-LIST for pytest,
 mypy, ruff, black and isort, and an inline python script that is parsed with
 ``ast`` and may import only a short list of modules and open files only for
-reading (or for writing a string literal under ``tests/``). A heredoc body is data
-only when its delimiter is quoted, and it reaches an interpreter only directly or
-through a bare ``cat``. Pre-existing shapes the reading still does not see are
+reading (or for writing a string literal under ``tests/``): no class, no decorated
+function, no annotation but a bare builtin type name or ``None``, no ``type`` or
+``object``, no call of a call, no ``sys.path``, ``Path`` only when bound once by
+``from pathlib import Path``. A heredoc body is data only when its delimiter is quoted
+(a single fully quoted word of ``[A-Za-z0-9_.-]``); an unquoted delimiter is read only
+as a bare ``[A-Za-z_][A-Za-z0-9_.-]*`` word (its body is then scanned) and every other
+delimiter shape, such as a mid-word quote or ``EOF#x``, is ``source``; a body reaches an
+interpreter only directly or through a bare ``cat``. The scanner also refuses what it
+cannot parse with certainty: a file-descriptor duplication with a glued word (``>&2foo``),
+``$'...'``, a backslash, ``#``, quote or newline in the body of ``$( )``, a backtick pair
+or ``${ }``, any control character but newline and tab, a path-qualified head outside
+``/bin``, ``/usr/bin``, ``/usr/local/bin`` and ``/opt/homebrew/bin``, ``cp`` and ``mv``
+options outside ``-f -i -n -p -r -R -v -a``, an ``@`` word or option value for pytest,
+mypy, ruff, black and isort, and perl in-place code with a ``$`` that is not ``$digit``
+or ``$&`` or a backup suffix that is not ``\\.?[A-Za-z0-9_~-]*``. Pre-existing shapes the reading still does not see are
 code run from agent-authored ``tests/`` (a pytest ``conftest``, ``sitecustomize``),
-state carried across calls (a ``cd`` or a symlink made earlier), the deep object
-graph of the allow-listed python modules, and variables an earlier call exported;
+state carried across calls (a ``cd`` or a symlink made earlier), the reachable object
+graph of the allow-listed python modules (not proven closed), and variables an earlier call exported;
 they are listed in ``docs/experiments/2026-10-03-tdd-t-redesign/README.md``. The
 classifier is a heuristic, not a proof, and a T1 hit is only as trustworthy as
 the owner audit behind it.
@@ -1046,13 +1058,14 @@ def _head_effect(base: str, args: list[str], cmds: list[_Cmd], index: int, depth
 
 
 # The tools whose command line reads ``@file`` as more arguments (argparse ``fromfile_prefix_chars``), so a word
-# that starts with ``@``, or an option value that does, can bring any option the text never shows.
+# that starts with ``@``, an option value (``-k @f``, ``-W @f``) included, can bring any option the text never
+# shows. An attached value (``-k@f``, ``--maxfail=@f``) is refused by each tool's own option allow-list, which
+# names no option whose value can start with ``@``.
 _ARGFILE_TOOLS = frozenset({"pytest", "py.test", "ruff", "black", "isort", "mypy"})
-_ARGFILE_VALUE = re.compile(r"-[-A-Za-z0-9]*=?@")
 
 
 def _argfile_word(arg: str) -> bool:
-    return arg.startswith("@") or _ARGFILE_VALUE.match(arg) is not None
+    return arg.startswith("@")
 
 
 def _program(base: str, args: list[str], cmds: list[_Cmd], index: int, depth: int) -> _Effect:
@@ -1807,7 +1820,7 @@ def _pytest_options_ok(args: list[str]) -> bool:
         arg = args[i]
         i += 1
         if arg == "--":
-            return not any(rest.startswith("@") for rest in args[i:])
+            return True
         if arg in _PYTEST_FLAGS or _PYTEST_CLUSTER.fullmatch(arg):
             continue
         if arg in ("-k", "-m", "-W"):
@@ -1820,7 +1833,7 @@ def _pytest_options_ok(args: list[str]) -> bool:
             i += 1
         elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):
             continue
-        elif (arg.startswith("-") and arg != "-") or arg.startswith("@"):
+        elif arg.startswith("-") and arg != "-":
             return False
     return True
 
@@ -2426,8 +2439,11 @@ def classify_bash_command(command: str) -> str:
     payloads and heredoc scripts are analysed as commands of their own. A heredoc
     body is data for a read-only head only when its delimiter is quoted
     (``<<'EOF'``); an unquoted body that contains ``$``, a backtick or a backslash
-    makes the whole call ``source`` (bash expands it, and joins lines in it), and a
-    body reaches an interpreter's stdin only directly or through a bare ``cat``.
+    makes the whole call ``source`` (bash expands it, and joins lines in it), a
+    delimiter that is not a bare word or one fully quoted word of ``[A-Za-z0-9_.-]``
+    followed by a blank, an operator or the end of the command makes it ``source``
+    too, and a body reaches an interpreter's stdin only directly or through a bare
+    ``cat``.
     ``none`` calls can never count as writes by the classifier's reading, which is
     a heuristic and has known gaps (see the module docstring).
 
@@ -2451,7 +2467,8 @@ def classify_bash_command(command: str) -> str:
 
     ``source``: everything else, including running any file (``python x.py``,
     ``bash f.sh``, ``./f``, ``make``), any head not on the list (``gsed``,
-    ``ditto``, ``/bin/rm``, ``autoflake``), any environment prefix other than the
+    ``ditto``, ``./cat``, ``lib/rm``, ``autoflake``; a path-qualified head counts only
+    as an absolute path in a system bin directory with a listed basename), any environment prefix other than the
     short list in the module docstring, a wrapper with an option (``env -S``,
     ``exec -a``, ``sudo -u``), a target built at run time, an unbalanced quote or
     an unterminated heredoc, and a command over ``BASH_COMMAND_CAP``. A leading
