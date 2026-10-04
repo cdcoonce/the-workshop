@@ -392,7 +392,9 @@ def _lint_trigger_overlaps(descriptions: dict[str, str]) -> list[str]:
 
 # Third-party modules the machinery test runner provides at gate time (see the
 # Makefile's test-machinery step); imports of these are not engine references.
-_MACHINERY_EXTERNAL_MODULES = frozenset({"pytest", "hypothesis", "numpy", "yaml"})
+_MACHINERY_EXTERNAL_MODULES = frozenset(
+    {"pytest", "hypothesis", "numpy", "yaml", "ragmark"}
+)
 
 # Top-level (column-0) import statements in a machinery test module.
 _MACHINERY_IMPORT_PATTERN = re.compile(

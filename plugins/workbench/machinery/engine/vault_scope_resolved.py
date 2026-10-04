@@ -44,6 +44,50 @@ _UNSET = object()
 _owner_config: ModuleType | None | object = _UNSET
 
 
+def for_vault(vault_root: Path) -> ModuleType:
+    """Resolve policy for one explicit root without changing ambient state.
+
+    Parameters
+    ----------
+    vault_root : Path
+        The retrieval caller's vault, independent of cwd and the hook cache.
+
+    Returns
+    -------
+    ModuleType
+        Owner names overlaid on shipped defaults, resolved afresh per call.
+
+    Raises
+    ------
+    RuntimeError
+        A present owner config cannot be read or executed. Retrieval must not
+        silently widen scope; ambient hook exports retain their fail-soft path.
+    """
+    import vault_scope_defaults
+
+    path = Path(vault_root).resolve().joinpath(*_OWNER_CONFIG)
+    resolved = ModuleType("vault_scope_explicit")
+    resolved.__dict__.update(
+        (name, value)
+        for name, value in vars(vault_scope_defaults).items()
+        if not name.startswith("_")
+    )
+    if not path.exists() and not path.is_symlink():
+        return resolved
+    owner = ModuleType("vault_scope_explicit_owner")
+    owner.__file__ = str(path)
+    try:
+        # No sys.modules registration, global cache, or bytecode writes: two
+        # explicit roots in one process must never inherit one another's policy.
+        exec(compile(path.read_bytes(), str(path), "exec"), owner.__dict__)
+    except Exception as exc:
+        raise RuntimeError(f"vault scope could not load {path}: {exc}") from exc
+    resolved.__dict__.update(
+        (name, value) for name, value in vars(owner).items() if not name.startswith("_")
+    )
+    return resolved
+
+
 def _find_vault_root() -> Path | None:
     """Walk up for the vault marker, from ``CLAUDE_PROJECT_DIR`` or cwd.
 
@@ -140,6 +184,4 @@ def __getattr__(name: str):
     try:
         return getattr(_defaults, name)
     except AttributeError:
-        raise AttributeError(
-            f"module {__name__!r} has no attribute {name!r}"
-        ) from None
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None

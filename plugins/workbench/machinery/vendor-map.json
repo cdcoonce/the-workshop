@@ -103,6 +103,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/ragmark_adapter.py",
+      "target": ".claude/scripts/ragmark_adapter.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/run-hook.sh",
       "target": ".claude/scripts/run-hook.sh"
     },
