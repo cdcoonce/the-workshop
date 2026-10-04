@@ -160,13 +160,13 @@ SOURCE_ROWS = [
     "wget http://x/cart.py",
     "ruby -pi -e 'gsub(/a/,\"b\")' shop/cart.py",
     "uv run black .",
+    "perl -ne 'print if /x/' src/shop/cart.py",
+    "prettier --check src",
+    "curl -sS http://example.invalid/x",
     "git checkout feature-branch",
     "echo hi > /tmp/notes.txt",
     "uv run pytest -q 2>&1 | tee /tmp/out.txt",
     # documented over-counts: a write verb or a src token anywhere costs the hit
-    "sed -n 's/a/b/p' src/shop/cart.py | grep -i foo",
-    "grep -rn 'install' src/",
-    "cat src/shop/cart.py | grep -n patch",
     "cat >> tests/test_cart.py <<'EOF'\n# covers src/shop/cart.py\ndef test_x():\n    assert 1\nEOF",
     "cd /Users/x/src/shop && cat >> tests/test_cart.py <<'EOF'\ndef test_x():\n    assert 1\nEOF",
     "PYTHONPATH=src uv run pytest -q > tests/out.txt",
@@ -208,6 +208,9 @@ def test_an_undetected_first_write_can_not_be_followed_by_a_credited_red(command
         "git status --short | head",
         "git diff HEAD -- src/",
         "git log --oneline -- src/shop/cart.py",
+        "sed -n 's/a/b/p' src/shop/cart.py | grep -i foo",
+        "grep -rn 'install' src/",
+        "cat src/shop/cart.py | grep -n patch",
         "grep -rn x src/",
         "grep -rn x tests/ src/ | head",
         "grep -n 'def f() -> int' src/shop/cart.py",
@@ -223,7 +226,6 @@ def test_an_undetected_first_write_can_not_be_followed_by_a_credited_red(command
         "head -50 src/shop/cart.py",
         "sed -n '1,20p' src/shop/cart.py",
         "sed --silent -e 'p' src/shop/cart.py",
-        "perl -ne 'print if /x/' src/shop/cart.py",
         "python3 -c \"print(open('src/shop/cart.py').read())\"",
         "python3 -c \"print(open('src/shop/cart.py', 'r').read())\"",
         "python3 -c \"print(open('src/shop/cart.py', mode='rb').read())\"",
@@ -235,8 +237,6 @@ def test_an_undetected_first_write_can_not_be_followed_by_a_credited_red(command
         "ruff format --diff src",
         "ruff check src/",
         "uv run ruff check src --output-format=concise",
-        "prettier --check src",
-        "curl -sS http://example.invalid/x",
         "git diff --stat",
         "",
     ],
@@ -311,11 +311,10 @@ def test_a_command_over_the_cap_is_a_source_write_without_being_scanned():
 # --------------------------------------------------------------------------- the offset
 
 
-def test_the_offset_is_where_the_first_write_indicator_starts():
+def test_the_offset_is_where_the_first_write_capable_command_starts():
     command = f"{TEST_APPEND}\nuv run pytest -q"
     offset = bash_write_offset(command)
-    assert offset is not None
-    assert command[offset:].startswith(">>")
+    assert offset == 0
     assert offset < command.rfind("pytest")
 
 
@@ -326,9 +325,9 @@ def test_the_offset_of_a_write_after_the_test_run_is_after_it():
     assert offset > command.rfind("pytest")
 
 
-def test_the_offset_is_the_earliest_of_several_write_indicators():
-    command = "echo x > notes.txt && sed -i 's/a/b/' src/x.py"
-    assert bash_write_offset(command) == command.index(">")
+def test_the_offset_is_the_earliest_of_several_write_capable_commands():
+    command = "cat a; echo x > notes.txt; sed -i s/a/b/ src/x.py"
+    assert bash_write_offset(command) == command.index("echo")
 
 
 def test_the_offset_is_none_when_nothing_writes():
@@ -357,9 +356,13 @@ def test_the_offset_is_none_when_nothing_writes():
         ("Write", "/work/shop/scratch_plan.md", "none"),
         ("Write", "/work/shop/docs/plan.md", "none"),
         ("Edit", "/work/shop/pyproject.toml", "none"),
-        ("Edit", "/work/shopsrc/x.py", "none"),
-        ("Edit", "/work/resrc/x.py", "none"),
-        ("Edit", "/work/shop/src_old/x.py", "none"),
+        ("Edit", "/work/shopsrc/x.md", "none"),
+        ("Edit", "/work/resrc/x.md", "none"),
+        ("Edit", "/work/shop/src_old/x.md", "none"),
+        # a script path is a source write even outside src/ (it can author a script that writes src/)
+        ("Edit", "/work/shopsrc/x.py", "source"),
+        ("Edit", "/work/resrc/x.py", "source"),
+        ("Edit", "/work/shop/src_old/x.py", "source"),
         ("Edit", "", "none"),
     ],
 )
@@ -538,7 +541,7 @@ def test_the_old_edit_only_predicate_does_not_see_bash_writes_or_multiedit():
     assert _failed_before_first_source_edit(multi) is False
 
 
-# --------------------------------------------------------------------------- linear time
+# --------------------------------------------------------------------------- bounded time
 
 # Sizes are literals, not the imported cap, so a mutated cap cannot inflate the shapes.
 SHAPE_SIZE = 100_000

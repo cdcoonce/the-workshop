@@ -273,11 +273,11 @@
       "replace": "    if not source_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    return any(_is_test_failure(event) and event.ordinal < first_source for event in events)"
     },
     {
-      "label": "[T1] a write that names neither src nor tests is not a source write, so an unplaced first write lets a later red hit (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
-      "file": "../../_harness/matchers.py",
+      "label": "[T1] an unknown head is read-only, so an unplaced first write lets a later red hit (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
+      "file": "../../_harness/bash_classify.py",
       "oracle": "real",
-      "find": "    if _TESTS_MENTION.search(command) and not _SRC_TOKEN.search(command):\n        return \"tests\"\n    return \"source\"\n",
-      "replace": "    if _TESTS_MENTION.search(command) and not _SRC_TOKEN.search(command):\n        return \"tests\"\n    return \"source\" if _SRC_TOKEN.search(command) else \"tests\"\n"
+      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
+      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
     },
     {
       "label": "[T1] MultiEdit is not an edit tool, so a first MultiEdit on src is invisible (predicted red: test_a_multiedit_on_the_source_first_is_a_source_write via the T1 ordering)",
@@ -334,6 +334,13 @@
       "oracle": "real",
       "find": "    return not any(needle in _squash(text) for text in tests.values())",
       "replace": "    return not any(needle in _squash(text) for text in list(tests.values())[:1])"
+    },
+    {
+      "label": "[T1] running a python file is read-only, so a Write-then-run script is invisible (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
+      "file": "../../_harness/bash_classify.py",
+      "oracle": "real",
+      "find": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _UNKNOWN, []\n    if code is not None:",
+      "replace": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _RO, []\n    if code is not None:"
     }
   ]
 }

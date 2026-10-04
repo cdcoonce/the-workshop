@@ -384,6 +384,12 @@ def test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_lat
         "find src -name '*.py' -exec sed -i '' 's/a/b/' {} +",
         "perl -0pi -e 's/a/b/' shop/cart.py",
         "sed -i'' 's/a/b/' shop/cart.py",
+        "gsed -i 's/a/b/' shop/cart.py",
+        "\\cp /tmp/n.py shop/cart.py",
+        "ditto /tmp/n.py shop/cart.py",
+        "uv run python /tmp/fix.py",
+        "python3 -c \"from shutil import copy; copy('/tmp/n.py','shop/cart.py')\"",
+        "sed -n '1w shop/cart.py' /tmp/n.py",
     ):
         transcript = parse(
             [

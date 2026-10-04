@@ -1,0 +1,509 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_allowlist.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_allowlist.py"
+  ],
+  "mutants": [
+    {
+      "label": "[allow-list] cp is added to the read-only heads",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the cp rows of test_every_other_head_flag_or_redirect_is_not_none and the wrapper rows: a write-capable head on the allow-list makes its calls none.",
+      "find": "\"cat\", \"ls\", \"grep\",",
+      "replace": "\"cat\", \"cp\", \"ls\", \"grep\","
+    },
+    {
+      "label": "[allow-list] gsed-like unknown heads default to read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the unknown-head rows (gsed, ditto, autoflake, make fmt, uv run mytool) and test_an_undetected_first_write_can_not_be_followed_by_a_credited_red.",
+      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
+      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
+    },
+    {
+      "label": "[script run] running a python file is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python x.py, python3 /tmp/fix.py, uv run python path/x.py and the Write-then-run rows: running a file is write-capable.",
+      "find": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _UNKNOWN, []\n    if code is not None:",
+      "replace": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _RO, []\n    if code is not None:"
+    },
+    {
+      "label": "[script run] running a shell script is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by bash f.sh, sh f and the Write fix.sh then bash fix.sh row.",
+      "find": "    if [arg for arg in positional if arg != \"-\"]:\n        return _UNKNOWN, []",
+      "replace": "    if [arg for arg in positional if arg != \"-\"]:\n        return _RO, []"
+    },
+    {
+      "label": "[script run] source and make are not write-capable",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the source f, make fmt, just build and npm run build rows.",
+      "find": "    return _program(base, args, cmds, index, depth)\n\n\ndef _program",
+      "replace": "    if base in (\"source\", \".\", \"make\", \"just\", \"npm\"):\n        return _RO, []\n    return _program(base, args, cmds, index, depth)\n\n\ndef _program"
+    },
+    {
+      "label": "[tests target] a call is tests when it merely mentions tests",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the tests-class negatives: an unresolved or non-tests target next to a tests mention would count as tests.",
+      "find": "        targets\n        and all(_target_is_tests(target) for target in targets)\n        and _TESTS_MENTION.search(command)",
+      "replace": "        targets\n        and _TESTS_MENTION.search(command)"
+    },
+    {
+      "label": "[tests target] every target must be under tests: only the first is checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat >> tests/x ...; cp a /tmp/b and the second-write rows.",
+      "find": "and all(_target_is_tests(target) for target in targets)",
+      "replace": "and _target_is_tests(targets[0])"
+    },
+    {
+      "label": "[tests target] no other write-capable command: an unknown command next to a test write is ignored",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the patch, git apply, ruff check --fix, black ., rsync, find -exec, xargs and script-run rows next to a tests write, and by every unknown-head row.",
+      "find": "        if kind == _UNKNOWN:\n            return _UNKNOWN, []\n        targets.extend(found)",
+      "replace": "        if kind == _UNKNOWN:\n            continue\n        targets.extend(found)"
+    },
+    {
+      "label": "[tests target] the src token does not demote a tests write",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the cd src, src comment and src = 1 rows, and the honest src-in-body misses.",
+      "find": "        and _TESTS_MENTION.search(command)\n        and not _SRC_TOKEN.search(command)",
+      "replace": "        and _TESTS_MENTION.search(command)"
+    },
+    {
+      "label": "[tests target] a .. segment is allowed in a tests path",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat >> tests/../b.py.",
+      "find": "    if not segments or \"..\" in segments or \"src\" in segments:",
+      "replace": "    if not segments or \"src\" in segments:"
+    },
+    {
+      "label": "[tests target] globs and variables are allowed as targets",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat >> tests/*.py and cat >> $F.",
+      "find": "    if not target or any(ch in _GLOB_CHARS for ch in target):",
+      "replace": "    if not target:"
+    },
+    {
+      "label": "[tests target] a src segment is allowed in a tests path",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the /Users/me/src/ws/tests/test_cart.py row.",
+      "find": "    if not segments or \"..\" in segments or \"src\" in segments:",
+      "replace": "    if not segments or \"..\" in segments:"
+    },
+    {
+      "label": "[wrappers] a wrapper word swallows the command it wraps",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sudo cp, command cp, env X=1 cp, nohup mv, time cp and nice cp.",
+      "find": "            i += 1\n            values = _WRAPPER_VALUE_OPTIONS.get(base, set())",
+      "replace": "            return []\n            values = _WRAPPER_VALUE_OPTIONS.get(base, set())"
+    },
+    {
+      "label": "[absolute path] a head given as a path is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by /bin/rm x, /bin/cp a b and ./f.",
+      "find": "    effect = _head_effect(head.rsplit(\"/\", 1)[-1], words[1:], cmds, index, depth)",
+      "replace": "    if \"/\" in head:\n        return redirects\n    effect = _head_effect(head.rsplit(\"/\", 1)[-1], words[1:], cmds, index, depth)"
+    },
+    {
+      "label": "[cap] a command over the cap is scanned instead of failing closed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_a_command_at_the_cap_is_scanned_and_one_over_it_is_source (a read-only over-cap command would be none).",
+      "find": "    if len(command) > BASH_COMMAND_CAP:\n        return \"source\"\n    (kind, targets), _, broken = _top_effect(command)",
+      "replace": "    (kind, targets), _, broken = _top_effect(command)"
+    },
+    {
+      "label": "[cap] the offset of an over-cap command is not 0",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_a_command_at_the_cap_is_scanned_and_one_over_it_is_source.",
+      "find": "    if len(command) > BASH_COMMAND_CAP:\n        return 0\n    effect, first, _ = _top_effect(command)",
+      "replace": "    effect, first, _ = _top_effect(command)"
+    },
+    {
+      "label": "[cap] the cap is raised",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_a_command_at_the_cap_is_scanned_and_one_over_it_is_source.",
+      "find": "BASH_COMMAND_CAP = 100_000",
+      "replace": "BASH_COMMAND_CAP = 10**9"
+    },
+    {
+      "label": "[pipe redirect] >| is not read as a redirect operator",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_the_pipe_redirect_target_is_a_write_target: echo x >| tests/test_cart.py is no longer a recognised tests write.",
+      "find": "            if text.startswith(\">>\", i) or text.startswith(\">|\", i):\n                j = i + 2",
+      "replace": "            if text.startswith(\">>\", i):\n                j = i + 2"
+    },
+    {
+      "label": "[redirect] a file redirect is not a write",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by every echo x > f row.",
+      "find": "def _add_target(owner: _Cmd, target: str) -> None:\n    if _DEV_OK.fullmatch(target):\n        return",
+      "replace": "def _add_target(owner: _Cmd, target: str) -> None:\n    return"
+    },
+    {
+      "label": "[redirect] /dev/null redirects count as writes",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat x > /dev/null, 2>/dev/null and >/dev/stderr rows of the none table.",
+      "find": "_DEV_OK = re.compile(r\"/dev/(?:null|stderr|stdout)\")",
+      "replace": "_DEV_OK = re.compile(r\"(?!)\")"
+    },
+    {
+      "label": "[redirect] fd duplication counts as a file redirect",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat x >&2, 1>&2 and the 2>&1 pytest rows.",
+      "find": "_FD_DUP = re.compile(r\"\\d+-?|-\")",
+      "replace": "_FD_DUP = re.compile(r\"(?!)\")"
+    },
+    {
+      "label": "[find] -exec is not write-capable",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the find -exec, -delete and -fprint rows.",
+      "find": "_FIND_WRITES = frozenset(\n    {\"-exec\", \"-execdir\", \"-ok\", \"-okdir\", \"-delete\", \"-fprint\", \"-fprint0\", \"-fprintf\", \"-fls\"}\n)",
+      "replace": "_FIND_WRITES = frozenset(\n    {\"-fprint0\"}\n)"
+    },
+    {
+      "label": "[sed] sed -i is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the sed -i rows and test_a_recognised_write_aimed_at_a_literal_tests_path_is_tests.",
+      "find": "    if in_place:\n        return (_WRITE, operands) if operands else (_UNKNOWN, [])\n    return _RO, []",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[sed] a w command in a script is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed -n 'w out' x and sed -n '1w out' x.",
+      "find": "    if len(script) > _MAX_SCRIPT or _SED_WRITING_COMMAND.search(script):\n        return True",
+      "replace": "    if len(script) > _MAX_SCRIPT:\n        return True"
+    },
+    {
+      "label": "[sed] s///w flags are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed 's/a/b/w out' x.",
+      "find": "    return any(set(match.group(2)) & {\"w\", \"e\", \"W\", \"E\"} for match in _SED_S_FLAGS.finditer(script))",
+      "replace": "    return False"
+    },
+    {
+      "label": "[awk] awk -i inplace is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by awk -i inplace.",
+      "find": "        if arg.startswith(\"-f\") or arg.startswith(\"--file\") or arg.startswith(\"-i\") or \"inplace\" in arg:",
+      "replace": "        if arg.startswith(\"-f\") or arg.startswith(\"--file\"):"
+    },
+    {
+      "label": "[awk] print > file and system() are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the awk print > and system() rows.",
+      "find": "        if len(arg) > _MAX_SCRIPT or _AWK_WRITES.search(arg):",
+      "replace": "        if len(arg) > _MAX_SCRIPT:"
+    },
+    {
+      "label": "[git] git checkout is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git checkout ., git stash, git stash list and git -C . checkout .",
+      "find": "_GIT_READ_ONLY = frozenset({\"status\", \"diff\", \"log\", \"show\", \"rev-parse\", \"ls-files\", \"blame\", \"describe\"})",
+      "replace": "_GIT_READ_ONLY = frozenset({\"status\", \"diff\", \"log\", \"show\", \"rev-parse\", \"ls-files\", \"blame\", \"describe\", \"checkout\", \"stash\", \"apply\"})"
+    },
+    {
+      "label": "[git] git branch with a name is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git branch newbranch.",
+      "find": "        return (_RO, []) if all(arg in _GIT_BRANCH_READ for arg in rest) else (_UNKNOWN, [])",
+      "replace": "        return _RO, []"
+    },
+    {
+      "label": "[git] git config with a value is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git config user.name x.",
+      "find": "        return (_RO, []) if rest[:1] in ([\"--get\"], [\"--get-all\"], [\"--list\"], [\"-l\"]) else (_UNKNOWN, [])",
+      "replace": "        return _RO, []"
+    },
+    {
+      "label": "[pytest] pytest output flags are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the pytest --junitxml, --basetemp, --cov-report and --snapshot-update rows.",
+      "find": "        return (_UNKNOWN, []) if any(_PYTEST_WRITING_FLAGS.match(arg) for arg in args) else (_RO, [])",
+      "replace": "        return _RO, []"
+    },
+    {
+      "label": "[ruff] ruff check --fix is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ruff check --fix ., --fix-only and --unsafe-fixes.",
+      "find": "            if arg in _RUFF_CHECK_WRITES or arg.startswith(\"--fix\") or arg.startswith(\"--output-file\"):\n                return _write_operands(operands[1:])",
+      "replace": "            if False:\n                return _write_operands(operands[1:])"
+    },
+    {
+      "label": "[formatter] ruff format, black and isort are read-only without --check",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by black ., isort . and the formatter-next-to-tests rows.",
+      "find": "    if \"--check\" in args or \"--diff\" in args:\n        return _RO, []\n    return _write_operands(_positionals(args))",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[formatter] a formatter on a bare directory is a tests target",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat >> tests/test_cart.py; ruff format tests/ and the honest ruff format tests/ miss.",
+      "find": "    return _WRITE, [operand if operand.endswith(\".py\") else _UNRESOLVED for operand in operands]",
+      "replace": "    return _WRITE, list(operands)"
+    },
+    {
+      "label": "[xargs] xargs of a write-capable command is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by xargs rm, ls | xargs rm and xargs sed -i.",
+      "find": "    return (_RO, []) if kind == _RO else (_UNKNOWN, [])",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[python] shutil, subprocess and exec in an inline script are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by import shutil, import subprocess, exec(), eval(), __import__, os.system and the from shutil import copy rows.",
+      "find": "    if len(code) > BASH_COMMAND_CAP or _PY_DANGEROUS.search(code):\n        return _UNKNOWN, []",
+      "replace": "    if len(code) > BASH_COMMAND_CAP:\n        return _UNKNOWN, []"
+    },
+    {
+      "label": "[python] an open mode that is not a literal is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 -c \"open('f', m)\".",
+      "find": "        mode = _literal(mode_text)\n        if mode is None:\n            return _UNKNOWN, []",
+      "replace": "        mode = _literal(mode_text)\n        if mode is None:\n            continue"
+    },
+    {
+      "label": "[python] a write mode on open( is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by open('f','w'), the tests python rows and the python heredoc source rows.",
+      "find": "        if _MODE_WRITES.search(mode):\n            targets.append(_resolve(positional[0], bound) if positional else _UNRESOLVED)",
+      "replace": "        if False:\n            targets.append(_resolve(positional[0], bound) if positional else _UNRESOLVED)"
+    },
+    {
+      "label": "[python] a variable path is resolved even when assigned twice",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the p='tests/a.py'; p='b.py' row.",
+      "find": "        if counts.get(match.group(1)) == 1:",
+      "replace": "        if True:"
+    },
+    {
+      "label": "[python] write_text on an aliased Path is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by x.write_text('a').",
+      "find": "    if len(_ANY_PATH_WRITE.findall(code)) != len(path_writes):\n        return _UNKNOWN, []",
+      "replace": ""
+    },
+    {
+      "label": "[python] a script piped in from echo is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo 'print(1)' | python3 and cat x.py | python3 -.",
+      "find": "    scripts = _stdin_scripts(cmds, index)\n    if not scripts:\n        return _UNKNOWN, []\n    return _combine([_python_effect(script) for script in scripts])",
+      "replace": "    scripts = _stdin_scripts(cmds, index)\n    if not scripts:\n        return _RO, []\n    return _combine([_python_effect(script) for script in scripts])"
+    },
+    {
+      "label": "[python] a heredoc script run by python is data",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 <<'EOF' with open('src/x','w') and the cat <<EOF | python3 row.",
+      "find": "    scripts = _stdin_scripts(cmds, index)\n    if not scripts:\n        return _UNKNOWN, []\n    return _combine([_python_effect(script) for script in scripts])",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[python] python -m <module> other than the allow-listed ones is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 -m scripts.apply, -m py_compile and -m venv.",
+      "find": "            if module not in _INLINE_PROGRAMS:\n                return _UNKNOWN, []",
+      "replace": "            if module not in _INLINE_PROGRAMS:\n                return _RO, []"
+    },
+    {
+      "label": "[uv] uv run of an unlisted program is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uv run mytool and uv run autoflake -i.",
+      "find": "    if program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program):\n        return _UNKNOWN, []",
+      "replace": "    if program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program):\n        return _RO, []"
+    },
+    {
+      "label": "[uv] uv sync, add and pip are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uv sync, uv add and uv pip install.",
+      "find": "        if not args or args[0] != \"run\":\n            return _UNKNOWN, []",
+      "replace": "        if not args or args[0] != \"run\":\n            return _RO, []"
+    },
+    {
+      "label": "[substitution] a $( ) substitution is not analysed as commands",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo $(cp a b), echo \"$(cp a b)\" and the nested row.",
+      "find": "            _scan(text[i + 2 : match.start()], base + i + 2, ctx, depth + 1)\n            return match.end()",
+      "replace": "            return match.end()"
+    },
+    {
+      "label": "[substitution] a backtick substitution is not analysed as commands",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo `cp a b`.",
+      "find": "        _scan(text[i + 1 : close], base + i + 1, ctx, depth + 1)\n        return close + 1",
+      "replace": "        return close + 1"
+    },
+    {
+      "label": "[quotes] an unbalanced single quote does not break the scan",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo 'unterminated and the unbalanced-quote row.",
+      "find": "            if close == -1:\n                ctx.broken = True\n                return \"\".join(parts), n",
+      "replace": "            if close == -1:\n                return \"\".join(parts), n"
+    },
+    {
+      "label": "[heredoc] an unterminated heredoc does not break the scan",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat <<EOF with no terminator.",
+      "find": "                if not found:\n                    ctx.broken = True",
+      "replace": "                if not found:\n                    pass"
+    },
+    {
+      "label": "[heredoc] a quoted operator splits a command",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo 'a; cp a b' (and the quoted-operator test) once single quotes are no longer opaque.",
+      "find": "        if c == \"'\":\n            close = text.find(\"'\", i + 1)",
+      "replace": "        if c == \"'\" and False:\n            close = text.find(\"'\", i + 1)"
+    },
+    {
+      "label": "[bash -c] a bash -c payload is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by bash -c 'echo x > f' and sh -c 'cp a b'.",
+      "find": "            return _text_effect(payload, depth + 1)[0]\n        if arg in (\"-o\", \"+o\"):",
+      "replace": "            return _RO, []\n        if arg in (\"-o\", \"+o\"):"
+    },
+    {
+      "label": "[eval] eval is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by eval 'echo x > f' and the eval base64 row.",
+      "find": "        return _text_effect(text, depth + 1)[0]\n    return _program(base, args, cmds, index, depth)",
+      "replace": "        return _RO, []\n    return _program(base, args, cmds, index, depth)"
+    },
+    {
+      "label": "[timing] the bounded tests prefilter becomes the unbounded pattern",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_classifying_an_adversarial_shape_takes_well_under_half_a_second[echo then test_. chain] (quadratic on test_. repeated).",
+      "find": "_TESTS_MENTION = re.compile(r\"tests|test_|_test\\.py|conftest\\.py\")",
+      "replace": "_TESTS_MENTION = re.compile(r\"tests|(?<![\\w/-])test_[\\w.-]*\\.py|_test\\.py|conftest\\.py\")"
+    },
+    {
+      "label": "[timing] the number of command substitutions is not limited",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the nested substitution openers timing shape (or the substitutions shape): each open $( rescans to the end.",
+      "find": "    if ctx.substitutions > _MAX_SUBSTITUTIONS:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[timing] the number of analysed open( calls is not limited",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the many open( calls timing shape.",
+      "find": "    if len(opens) > _MAX_OPEN_CALLS:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[edit tool script] a script write to a non-test path is not a source write",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the Write /tmp/fix.py, fix.sh and extensionless-shebang rows, and the scratch-script test.",
+      "find": "        if kind == \"none\" and path and _authors_a_script(path, event.input):\n            return \"source\"",
+      "replace": "        if False:\n            return \"source\""
+    },
+    {
+      "label": "[edit tool script] a shebang does not make a write a source write",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_a_shebang_makes_any_non_test_write_a_source_write and the extensionless script row.",
+      "find": "    fresh = [tool_input.get(\"content\"), tool_input.get(\"new_string\")]",
+      "replace": "    fresh = []"
+    },
+    {
+      "label": "[edit tool script] .sh and .rb are not script suffixes",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the fix.sh, apply.rb, .bash, .zsh, .pl, .js, .mjs and .ts rows.",
+      "find": "_SCRIPT_SUFFIXES = (\".py\", \".sh\", \".bash\", \".zsh\", \".pl\", \".rb\", \".js\", \".mjs\", \".ts\")",
+      "replace": "_SCRIPT_SUFFIXES = (\".py\",)"
+    },
+    {
+      "label": "[control] the cached top-level effect is called through a lambda",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Inert: the lambda returns the same value, so every test stays green; proves the rig can report a survivor.",
+      "find": "    return _text_effect(command, 0)\n\n\ndef _stdin_scripts",
+      "replace": "    return (lambda: _text_effect(command, 0))()\n\n\ndef _stdin_scripts",
+      "expect": "survived"
+    }
+  ]
+}
