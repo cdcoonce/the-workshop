@@ -99,9 +99,13 @@ check-teeth-anchors:
 # does. graphmark is graph_cli's own pinned dependency — without it the
 # alias-resolver suite importorskips itself and CI reports green on tests it
 # never ran.
+# An explicit interpreter command plus externally supplied PYTHONPATH can test
+# a reviewed Ragmark source build without installing it. The normal gate still
+# requires Ragmark and fails on missing scope/compatibility capabilities.
+MACHINERY_TEST_PYTHON ?= uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' --with 'ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl' python
 .PHONY: test-machinery
 test-machinery:
-	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q tests
+	cd plugins/workbench/machinery && $(MACHINERY_TEST_PYTHON) -m pytest -q tests
 
 # graphmark parity targets: the rest of the machinery suite runs under the
 # machinery env's own pin (pyproject.toml, graphmark>=0.10,<0.11), the same

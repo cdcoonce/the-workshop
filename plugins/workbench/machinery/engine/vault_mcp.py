@@ -1,157 +1,123 @@
 #!/usr/bin/env -S uv run --script
-"""vault_mcp — a read-only MCP surface over the vault.
+"""Legacy entry point delegated to ragmark's pinned four-tool MCP face (#95).
 
-Today the vault is shared memory only for a session standing *inside* it.
-Sessions in other repos (afk, the-workshop, work projects) and other agents
-(Codex, Cortex, Copilot) cannot query it, so conventions get restated by hand
-and handoffs are push-not-pull. This server closes that gap by exposing the
-existing semantic index and note bodies over MCP.
-
-Two deliberate constraints, both inherited rather than invented here:
-
-- **Read + search only.** An open write surface reachable by arbitrary agents
-  widens the prompt-injection surface the containment analysis already flags
-  (the vault's own instruction files are a poisoning vector). If writes are
-  ever wanted they belong in a single append-only `capture` tool routing
-  through a `/dump`-shaped inbox — never direct note edits.
-- **Serve from the derived layer.** The semantic index stays outside the
-  notes and regenerable; this server is stateless over vault files + index.
-
-Structure: the pure core (`resolve_note`, `read_note`, `search_notes`) holds
-all the policy and is unit-tested without a server; `build_server` is a thin
-FastMCP shell over it, and imports fastmcp lazily so the core stays cheap to
-import and to test.
+Root discovery stays with the Workshop; scope, gating, chunk citations, and
+server registration stay with the packaged core. Python helper signatures are
+retained for existing callers, without a second retrieval over-fetch layer.
+"""
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["fastmcp", "fastembed", "numpy"]
+# dependencies = ["ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl"]
 # ///
-"""
 
 from __future__ import annotations
 
 import sys
-from pathlib import Path, PurePosixPath
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
-from vault_scope_resolved import is_graph_markdown_note
-from vault_utils import find_vault_root_from_env, read_vault_context
+from ragmark import gate
+from ragmark.config import DEFAULT_CONTEXT_DIRS, DEFAULT_VISIBLE_SCOPES, RagmarkConfig
+from ragmark.gate import VaultAccessError as VaultAccessError
+from ragmark.search import DEFAULT_RESULTS, MAX_RESULTS
 
-# One call must not be able to haul the whole index across the wire. The cap is
-# on the server side because the caller is the untrusted party here.
-MAX_RESULTS = 25
+from ragmark_adapter import config_for_vault
+from vault_utils import find_vault_root_from_env
 
-DEFAULT_RESULTS = 8
-
-# Top-level directory -> the machine context that owns it. Everything not listed
-# (brain/, org/, perf/, reference/, thinking/) is shared by both machines.
-CONTEXT_DIRS = {"work": "work", "personal": "personal"}
-
-# Which owned scopes each machine context may see. Deliberately ASYMMETRIC.
-#
-# The vault is one repo synced to both machines, so work/ notes are already on
-# the personal machine's disk — hiding them from search costs reach and
-# protects nothing. The exposure that actually matters runs the other way:
-# personal material surfacing inside an agent session on an employer-managed
-# machine. So the work context is the restricted one, and a context absent
-# from this map (notably "unknown") sees shared notes only.
-VISIBLE_SCOPES = {
-    "personal": frozenset({"personal", "work"}),
-    "work": frozenset({"work"}),
-}
-
-# Context filtering happens after the index returns its ranked hits, so asking
-# for exactly k would under-deliver whenever the top k are out of context.
-# Over-fetch, filter, then truncate.
-OVERFETCH = 4
-
-
-class VaultAccessError(Exception):
-    """Raised when a requested path is not a readable vault note.
-
-    Deliberately does not distinguish "outside the vault" from "not a note"
-    from "missing" from "out of context": a caller probing the boundary learns
-    only that the path is unavailable, not the shape of the filesystem behind
-    it — nor whether a note it may not see exists at all.
-    """
+CONTEXT_DIRS = DEFAULT_CONTEXT_DIRS
+VISIBLE_SCOPES = DEFAULT_VISIBLE_SCOPES
+_CONTEXT_CONFIG = RagmarkConfig(vault_root=Path("."), index_dir=Path(".ragmark"))
 
 
 def note_context(rel_path: str) -> str | None:
-    """Return the machine context owning *rel_path*, or None when shared."""
-    parts = PurePosixPath(str(rel_path)).parts
-    return CONTEXT_DIRS.get(parts[0]) if parts else None
+    """Return the core policy's owning context.
+
+    Parameters
+    ----------
+    rel_path : str
+        Vault-relative note path.
+
+    Returns
+    -------
+    str or None
+        Owning context, or None for shared content.
+    """
+    return gate.note_context(rel_path, _CONTEXT_CONFIG)
 
 
 def visible_in_context(rel_path: str, context: str) -> bool:
-    """True when a note in *rel_path* may be surfaced on a *context* machine.
+    """Return whether the core policy permits this note's owning context.
 
-    Shared notes are visible everywhere. Owned notes follow `VISIBLE_SCOPES`:
-    the personal machine sees both scopes, the work machine sees only work.
+    Parameters
+    ----------
+    rel_path : str
+        Vault-relative note path.
+    context : str
+        Machine context to evaluate.
 
-    An ``unknown`` context — what ``read_vault_context`` returns when the
-    marker is missing — is absent from the map and so sees shared notes only.
-    That is the fail-closed direction: the moment we are least sure where we
-    are running is the moment to reveal least.
+    Returns
+    -------
+    bool
+        Whether the owner scope is visible in that context.
     """
-    owner = note_context(rel_path)
-    if owner is None:
-        return True
-    return owner in VISIBLE_SCOPES.get(context, frozenset())
+    return gate.visible_in_context(rel_path, context, _CONTEXT_CONFIG)
 
 
 def active_context(vault_root: Path) -> str:
-    """Read the machine context from the vault this server is rooted at.
+    """Read the server-side context from the explicit vault root.
 
-    Server-side by construction. The context is never a parameter the caller
-    supplies, because the caller is the untrusted party — a work machine that
-    could ask for "personal" would defeat the whole boundary.
+    Parameters
+    ----------
+    vault_root : Path
+        Vault whose machine context is requested.
+
+    Returns
+    -------
+    str
+        Context marker, or unknown when absent.
     """
-    return read_vault_context(Path(vault_root))
+    return gate.active_context(config_for_vault(vault_root))
 
 
 def resolve_note(rel_path: str, vault_root: Path) -> Path:
-    """Resolve *rel_path* to a readable note inside *vault_root*.
+    """Resolve a note through the core containment, corpus, and context gate.
 
-    The order matters. ``resolve()`` runs FIRST so that symlinks and ``..``
-    segments are collapsed before the containment check — a check written
-    against the *unresolved* path passes for a symlink pointing out of the
-    vault, which is precisely the exfiltration case. Only then is the result
-    tested for being graph content, so ``.claude/``, ``.git/``, ``.env`` and
-    other non-note files inside the vault stay unreachable.
+    Parameters
+    ----------
+    rel_path : str
+        Requested vault-relative note path.
+    vault_root : Path
+        Explicit vault root.
+
+    Returns
+    -------
+    Path
+        Resolved, permitted note path.
     """
-    root = Path(vault_root).resolve()
-    # `root / rel_path` yields rel_path itself when it is absolute, so an
-    # absolute argument is not silently honored — it fails containment below.
-    resolved = (root / rel_path).resolve()
-
-    if not resolved.is_relative_to(root):
-        raise VaultAccessError(f"path is not available: {rel_path}")
-    if not resolved.is_file():
-        raise VaultAccessError(f"path is not available: {rel_path}")
-    if not is_graph_markdown_note(resolved, root):
-        raise VaultAccessError(f"path is not available: {rel_path}")
-    if not visible_in_context(
-        resolved.relative_to(root).as_posix(), active_context(root)
-    ):
-        raise VaultAccessError(f"path is not available: {rel_path}")
-    return resolved
+    return gate.resolve_note(rel_path, config_for_vault(vault_root))
 
 
 def read_note(rel_path: str, vault_root: Path) -> str:
-    """Return the text of one vault note.
+    """Return a note through the core's single read boundary.
 
-    Routes through `resolve_note` rather than repeating the checks, so there
-    is exactly one implementation of the access boundary to get right.
+    Parameters
+    ----------
+    rel_path : str
+        Requested vault-relative note path.
+    vault_root : Path
+        Explicit vault root.
+
+    Returns
+    -------
+    str
+        Bare note text.
     """
-    return resolve_note(rel_path, vault_root).read_text(encoding="utf-8")
+    return gate.read_note(rel_path, config_for_vault(vault_root))
 
 
 def _default_search(query: str, k: int, vault_root: Path) -> list[dict]:
-    """Delegate to the existing semantic index, scoped to *vault_root*.
-
-    Imported lazily: `semantic_index` pulls numpy at import and fastembed on
-    first embed, which the unit tests should not pay for.
-    """
     import semantic_index
 
     return semantic_index.search(query, k, vault_root=vault_root)
@@ -164,53 +130,55 @@ def search_notes(
     vault_root: Path,
     search_fn: Callable[[str, int], list[dict]] | None = None,
 ) -> list[dict]:
-    """Semantic search across the vault, returning context-visible hits.
+    """Preserve the legacy Python helper without another over-fetch layer.
 
-    `vault_root` is required rather than optional: it is what the machine
-    context is read from, and an optional scoping argument would default to
-    returning everything — fail-open, in the one place that must fail closed.
+    Parameters
+    ----------
+    query : str
+        Nonblank query.
+    k : int
+        Positive result limit, capped by the core maximum.
+    vault_root : Path
+        Required keyword-only policy and context root.
+    search_fn : callable, optional
+        Legacy injection seam. Its dictionaries still pass the core gate.
 
-    `search_fn` is injectable so the policy here (validation, clamping,
-    context filtering) is testable without building an index or downloading
-    an embedding model.
+    Returns
+    -------
+    list[dict]
+        At most k visible note records. The MCP server uses packaged tools.
     """
     if not query.strip():
         raise ValueError("query must not be blank")
     if k <= 0:
         raise ValueError("k must be positive")
-
     k = min(k, MAX_RESULTS)
     if search_fn is None:
-        hits = _default_search(query, k * OVERFETCH, vault_root)
-    else:
-        hits = search_fn(query, k * OVERFETCH)
-
-    context = active_context(vault_root)
-    visible = [h for h in hits if visible_in_context(h.get("note_path", ""), context)]
-    return visible[:k]
+        return _default_search(query, k, vault_root)
+    config = config_for_vault(vault_root)
+    hits = search_fn(query, k)
+    allowed = set(
+        gate.filter_visible([hit.get("note_path", "") for hit in hits], config)
+    )
+    return [hit for hit in hits if hit.get("note_path", "") in allowed][:k]
 
 
 def build_server(vault_root: Path) -> Any:
-    """Build the FastMCP server exposing the read-only vault tools.
+    """Build ragmark's pinned four-tool, read-only server for this vault.
 
-    fastmcp is imported here rather than at module scope so the core above
-    stays importable — and testable — without the server dependency.
+    Parameters
+    ----------
+    vault_root : Path
+        Explicit root whose owner scope and machine context are enforced.
+
+    Returns
+    -------
+    Any
+        Packaged FastMCP server registered as ``vault``.
     """
-    from fastmcp import FastMCP
+    from ragmark.mcp import build_server as packaged_server
 
-    mcp: Any = FastMCP("vault")
-
-    @mcp.tool()
-    def vault_search(query: str, k: int = DEFAULT_RESULTS) -> list[dict]:
-        """Search the vault semantically. Returns note paths, scores, snippets."""
-        return search_notes(query, k, vault_root=vault_root)
-
-    @mcp.tool()
-    def vault_read(path: str) -> str:
-        """Read one vault note by its vault-relative path (e.g. 'reference/x.md')."""
-        return read_note(path, vault_root)
-
-    return mcp
+    return packaged_server(config_for_vault(vault_root))
 
 
 def main() -> None:
