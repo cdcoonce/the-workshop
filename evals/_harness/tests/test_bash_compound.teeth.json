@@ -1,0 +1,363 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_compound.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_compound.py"
+  ],
+  "mutants": [
+    {
+      "label": "[body] the commands in a loop or if body are not recorded, so the body reads as none (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in src/*.py; do sed -i 's/a/b/' $f; done], test_a_write_inside_a_compound_is_a_source_write[if true; then cp a b; fi], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[for])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            ctx.cmds.append(cmd)\n        expect = False",
+      "replace": "            if not (frames and frames[-1][1] in (\"body\", \"then\", \"else\")):\n                ctx.cmds.append(cmd)\n        expect = False"
+    },
+    {
+      "label": "[condition] the commands in a while/until/if condition are not recorded (predicted red: test_a_write_inside_a_compound_is_a_source_write[while cp a b; do :; done], test_a_write_inside_a_compound_is_a_source_write[if cp a b; then echo ok; fi])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            ctx.cmds.append(cmd)\n        expect = False",
+      "replace": "            if not (frames and frames[-1][1] == \"cond\"):\n                ctx.cmds.append(cmd)\n        expect = False"
+    },
+    {
+      "label": "[group] the commands in a { } or ( ) group are not recorded (predicted red: test_a_write_inside_a_compound_is_a_source_write[{ cp a b; }], test_a_write_inside_a_compound_is_a_source_write[( rm x )], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[brace], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[subshell])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            ctx.cmds.append(cmd)\n        expect = False",
+      "replace": "            if not (frames and frames[-1][0] in (\"brace\", \"paren\")):\n                ctx.cmds.append(cmd)\n        expect = False"
+    },
+    {
+      "label": "[redirect] a redirect written after a construct closes (done > F, fi >> F, } > F) is ignored (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in a; do cat $f; done > src/out], test_a_compound_whose_only_writes_are_literal_tests_paths_is_a_tests_write[{ cat a; } > tests/x], test_a_redirect_on_the_construct_is_read_like_one_on_a_simple_command[for f in a; do cat $f; done > src/out])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            target, i = _read_target(text, j, ctx, depth, base)\n            _add_target(owner, target)",
+      "replace": "            target, i = _read_target(text, j, ctx, depth, base)\n            if not closed:\n                _add_target(owner, target)"
+    },
+    {
+      "label": "[wrapper] a redirect target inside a compound is unresolved, so a tests write wrapped in a construct becomes a source write (predicted red: test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[for], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[if], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[brace], test_wrapping_an_existing_row_in_a_compound_never_changes_its_class[subshell], test_a_compound_whose_only_writes_are_literal_tests_paths_is_a_tests_write[for f in a; do echo x > tests/$f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            target, i = _read_target(text, j, ctx, depth, base)\n            _add_target(owner, target)",
+      "replace": "            target, i = _read_target(text, j, ctx, depth, base)\n            _add_target(owner, _UNRESOLVED if frames else target)",
+      "why": "The wrapper guard wraps every existing tests row in for/if/brace/subshell and asserts its class is unchanged."
+    },
+    {
+      "label": "[unbalanced] an unterminated construct at the end of the text is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for f in a; do cat $f], test_a_construct_that_is_not_confidently_structured_is_source[( cat a], test_a_construct_that_is_not_confidently_structured_is_source[{ cat a], test_a_construct_that_is_not_confidently_structured_is_source[if true; then cat a])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if (pending or frames) and not ctx.broken:",
+      "replace": "    if pending and not ctx.broken:"
+    },
+    {
+      "label": "[case] a case construct is skipped up to its esac (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[case x in a) cat f;; esac], test_a_construct_that_is_not_confidently_structured_is_source[select x in a b; do cat $x; done], test_a_construct_that_is_not_confidently_structured_is_source[function f { cat x; }])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if word in _REJECTED_WORDS:\n                ctx.broken = True",
+      "replace": "            if word in _REJECTED_WORDS:\n                end = text.find(\"esac\", i)\n                i = n if end == -1 else end + 4\n                cmd = None"
+    },
+    {
+      "label": "[function] a name followed by () is accepted as a function definition and the definition is dropped (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[f() { cat x; }])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if cmd is not None or closed or (frames and frames[-1][1] == \"head\"):\n                ctx.broken = True\n                break\n            frames.append([\"paren\", \"\", scope])",
+      "replace": "            if cmd is not None and text.startswith(\"()\", i):\n                ctx.cmds.remove(cmd)\n                cmd = None\n                i += 2\n                continue\n            if cmd is not None or closed or (frames and frames[-1][1] == \"head\"):\n                ctx.broken = True\n                break\n            frames.append([\"paren\", \"\", scope])"
+    },
+    {
+      "label": "[subshell position] a ( is accepted after a word, as if it opened a group (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[echo a (b)], test_a_construct_that_is_not_confidently_structured_is_source[x=(a b)])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if cmd is not None or closed or (frames and frames[-1][1] == \"head\"):\n                ctx.broken = True\n                break\n            frames.append([\"paren\", \"\", scope])",
+      "replace": "            if closed or (frames and frames[-1][1] == \"head\"):\n                ctx.broken = True\n                break\n            frames.append([\"paren\", \"\", scope])"
+    },
+    {
+      "label": "[depth] the limit on open constructs is removed (predicted red: test_nesting_to_the_depth_limit_is_structured_and_one_past_it_is_source[_braces], test_nesting_to_the_depth_limit_is_structured_and_one_past_it_is_source[_parens], test_nesting_to_the_depth_limit_is_structured_and_one_past_it_is_source[_fors], test_nesting_to_the_depth_limit_is_structured_and_one_past_it_is_source[_ifs], test_mixed_nesting_counts_every_open_frame)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "_MAX_COMPOUND_DEPTH = 32\n",
+      "replace": "_MAX_COMPOUND_DEPTH = 10**9\n"
+    },
+    {
+      "label": "[allow :] the no-op : is not allow-listed (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[until false; do :; done], test_a_compound_whose_simple_commands_are_all_read_only_is_none[while :; do break; done], test_a_compound_whose_simple_commands_are_all_read_only_is_none[: ])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        \":\", \"read\", \"[[\", \"break\", \"continue\",",
+      "replace": "        \"read\", \"[[\", \"break\", \"continue\","
+    },
+    {
+      "label": "[allow read] read is not allow-listed (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[while read l; do echo $l; done < notes.txt], test_a_compound_whose_simple_commands_are_all_read_only_is_none[read x < f])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        \":\", \"read\", \"[[\", \"break\", \"continue\",",
+      "replace": "        \":\", \"[[\", \"break\", \"continue\","
+    },
+    {
+      "label": "[allow [[] [[ is not allow-listed (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[[[ -f a ]] && cat a], test_a_compound_whose_simple_commands_are_all_read_only_is_none[[[ -d src ]]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        \":\", \"read\", \"[[\", \"break\", \"continue\",",
+      "replace": "        \":\", \"read\", \"break\", \"continue\","
+    },
+    {
+      "label": "[allow break] break and continue are not allow-listed (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[while :; do break; done], test_a_compound_whose_simple_commands_are_all_read_only_is_none[while true; do cat a; continue; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        \":\", \"read\", \"[[\", \"break\", \"continue\",",
+      "replace": "        \":\", \"read\", \"[[\","
+    },
+    {
+      "label": "[assignment] a bare NAME=value is not a no-op command (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[X=1; cat a], test_a_compound_whose_simple_commands_are_all_read_only_is_none[X=1 Y=2; cat a])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if _ASSIGNMENT.match(word):\n            i += 1",
+      "replace": "        if False:\n            i += 1"
+    },
+    {
+      "label": "[time] a timing mutant: every do re-scans the rest of the text (quadratic in the number of loops) (predicted red: test_a_long_run_of_closed_loops_is_one_pass)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "                top[1] = \"body\"\n                expect = True",
+      "replace": "                top[1] = \"body\"\n                expect = True\n                len(_WORD_RUN.findall(text, i))"
+    },
+    {
+      "label": "[quoted word] a quoted or escaped reserved word is read as the reserved word (predicted red: test_a_quoted_or_escaped_reserved_word_is_not_a_reserved_word)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if text[start:i] != word or (word not in _COMPOUND_WORDS and word not in _REJECTED_WORDS and word != \"[[\"):",
+      "replace": "            if (word not in _COMPOUND_WORDS and word not in _REJECTED_WORDS and word != \"[[\"):"
+    },
+    {
+      "label": "[closed] a word may follow a closed construct (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[fi cat b], test_a_construct_that_is_not_confidently_structured_is_source[{ cat a; } cat b], test_a_construct_that_is_not_confidently_structured_is_source[( cat a ) cat b], test_a_construct_that_is_not_confidently_structured_is_source[for f in a; do cat $f; done cat b])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if closed and not (word.isdigit() and i < n and text[i] in \"<>\"):",
+      "replace": "            if False and not (word.isdigit() and i < n and text[i] in \"<>\"):"
+    },
+    {
+      "label": "[fd redirect] a file-descriptor prefix after a closed construct counts as a word (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[for f in a b; do cat $f; done 2>&1 | tail], test_a_redirect_on_the_construct_is_read_like_one_on_a_simple_command[for f in a; do cat $f; done 2>&1 | tail])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if closed and not (word.isdigit() and i < n and text[i] in \"<>\"):",
+      "replace": "            if closed:"
+    },
+    {
+      "label": "[test closed] a word may follow a [[ ]] test (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[[[ -f a ]] cat b], test_a_construct_that_is_not_confidently_structured_is_source[[[ -f a ]] ]]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "                cmd = None\n                closed = True\n            elif word == \"!\":",
+      "replace": "                cmd = None\n                closed = False\n            elif word == \"!\":"
+    },
+    {
+      "label": "[test body] the words of a [[ ]] test are skipped, so a substitution inside is not scanned (predicted red: test_a_write_inside_a_compound_is_a_source_write[[[ $(cp a b) ]]], test_a_write_inside_a_compound_is_a_source_write[[[ -f <(cp a b) ]]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        else:\n            start = i\n            word, i = _read_word(text, i, ctx, depth, base)\n            if word == \"]]\" and text[start:i] == \"]]\":\n                return i",
+      "replace": "        else:\n            end = text.find(\"]]\", i)\n            return n if end == -1 else end + 2"
+    },
+    {
+      "label": "[header words] the words of a for header are skipped, so a substitution among them is not scanned (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in `cp a b`; do cat $f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        else:\n            word, i = _read_word(text, i, ctx, depth, base)\n            if ctx.broken:\n                return None\n            words.append(word)",
+      "replace": "        else:\n            end = _WORD_RUN.match(text, i)\n            i = end.end() if end else i + 1\n            words.append(\"x\")"
+    },
+    {
+      "label": "[header name] a for variable that is not an identifier is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for 1x in a; do cat; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if ctx.broken or text[start:i] != name or not _IDENTIFIER.fullmatch(name):",
+      "replace": "    if ctx.broken or text[start:i] != name:"
+    },
+    {
+      "label": "[semicolon after keyword] a ; right after do/then/{ (an empty command) is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for f in a; do; cat $f; done], test_a_construct_that_is_not_confidently_structured_is_source[{ ; cat a; }], test_a_construct_that_is_not_confidently_structured_is_source[if true; then; cat a; fi])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if text.startswith((\";;\", \";&\"), i) or expect or (frames and frames[-1][1] == \"head\"):",
+      "replace": "            if text.startswith((\";;\", \";&\"), i) or (frames and frames[-1][1] == \"head\"):"
+    },
+    {
+      "label": "[double semicolon] a ;; outside a case is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[cat a;; cat b])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if text.startswith((\";;\", \";&\"), i) or expect or (frames and frames[-1][1] == \"head\"):",
+      "replace": "            if expect or (frames and frames[-1][1] == \"head\"):"
+    },
+    {
+      "label": "[head phase] a command is accepted between a for header and its do (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for f in a\\ncat $f\\ndo cat $f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if top is not None and top[1] == \"head\" and word != \"do\":\n                ctx.broken = True\n                break\n",
+      "replace": ""
+    },
+    {
+      "label": "[semicolon in head] a ; between a for header and its do is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for f in a; ; do cat $f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if text.startswith((\";;\", \";&\"), i) or expect or (frames and frames[-1][1] == \"head\"):",
+      "replace": "            if text.startswith((\";;\", \";&\"), i) or expect:"
+    },
+    {
+      "label": "[stray reserved word] a reserved word with no open construct is ignored (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[done], test_a_construct_that_is_not_confidently_structured_is_source[fi], test_a_construct_that_is_not_confidently_structured_is_source[then], test_a_construct_that_is_not_confidently_structured_is_source[do], test_a_construct_that_is_not_confidently_structured_is_source[else], test_a_construct_that_is_not_confidently_structured_is_source[elif], test_a_construct_that_is_not_confidently_structured_is_source[}])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            elif top is None:\n                ctx.broken = True",
+      "replace": "            elif top is None:\n                pass"
+    },
+    {
+      "label": "[stray paren] a ) with nothing open is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[)], test_a_construct_that_is_not_confidently_structured_is_source[cat a )])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if not frames or frames[-1][0] != \"paren\" or expect:",
+      "replace": "            if frames and (frames[-1][0] != \"paren\" or expect):"
+    },
+    {
+      "label": "[paren closer] a ) closes whatever construct is open, or an empty group (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[{ cat a; )], test_a_construct_that_is_not_confidently_structured_is_source[( )])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if not frames or frames[-1][0] != \"paren\" or expect:",
+      "replace": "            if not frames:"
+    },
+    {
+      "label": "[stray closer] a closer that does not match the open construct is ignored (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[if true; then cat a; done; fi], test_a_construct_that_is_not_confidently_structured_is_source[while true; do cat a; fi; done], test_a_construct_that_is_not_confidently_structured_is_source[{ cat a; done; }])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            else:\n                ctx.broken = True\n    if (pending or frames)",
+      "replace": "            else:\n                pass\n    if (pending or frames)"
+    },
+    {
+      "label": "[done phase] done closes a while condition that never saw its do (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[while true do cat a; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            elif word == \"done\" and top[0] == \"loop\" and top[1] == \"body\" and not expect:",
+      "replace": "            elif word == \"done\" and top[0] == \"loop\" and not expect:"
+    },
+    {
+      "label": "[then phase] a second then is accepted inside an if body (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[if true; then cat a; then cat b; fi])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            elif word == \"then\" and top[0] == \"if\" and top[1] == \"cond\" and not expect:",
+      "replace": "            elif word == \"then\" and top[0] == \"if\" and not expect:"
+    },
+    {
+      "label": "[else phase] a second else is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[if true; then cat a; else cat b; else cat c; fi])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            elif word == \"else\" and top[0] == \"if\" and top[1] == \"then\" and not expect:",
+      "replace": "            elif word == \"else\" and top[0] == \"if\" and top[1] in (\"then\", \"else\") and not expect:"
+    },
+    {
+      "label": "[bang] the negation word ! is not structural (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[if ! grep -q x y; then echo no; fi], test_a_compound_whose_simple_commands_are_all_read_only_is_none[! grep -q x y])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "\"until\", \"do\", \"done\", \"for\", \"{\", \"}\", \"!\"})",
+      "replace": "\"until\", \"do\", \"done\", \"for\", \"{\", \"}\"})"
+    },
+    {
+      "label": "[for word] for is not a reserved word, so a loop reads as an unknown head again (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[audited command], test_a_compound_whose_simple_commands_are_all_read_only_is_none[for f in a b c; do echo $f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "\"until\", \"do\", \"done\", \"for\", \"{\", \"}\", \"!\"})",
+      "replace": "\"until\", \"do\", \"done\", \"{\", \"}\", \"!\"})"
+    },
+    {
+      "label": "[binding mentions] a loop variable is read even when the call mentions its name elsewhere (an assignment, a read) (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in a; do f=/tmp; echo x > tests/$f/y; done], test_a_write_inside_a_compound_is_a_source_write[for f in a; do read f; echo x > tests/$f/y; done], test_a_write_inside_a_compound_is_a_source_write[for f in a; do for f in /tmp; do :; done; echo x > tests/$f/y; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "name for name, loops in ctx.binds.items() if loops == 1 and mentions[name] == 1 + ctx.refs.get(name, 0)",
+      "replace": "name for name, loops in ctx.binds.items() if loops == 1"
+    },
+    {
+      "label": "[binding assigners] a loop variable is read even when the call has an eval, read or printf -v that can set it by a built name (predicted red: test_a_write_inside_a_compound_is_a_source_write[for ab in x; do p=a; q=b; eval ...], test_a_write_inside_a_compound_is_a_source_write[for ab in x; do p=a; q=b; read $p$q < f; ...], test_a_write_inside_a_compound_is_a_source_write[for ab in x; do p=a; q=b; printf -v $p$q /tmp; ...])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if any(_assigns_variables(cmd) for cmd in ctx.cmds):\n        return frozenset()",
+      "replace": "    if False:\n        return frozenset()"
+    },
+    {
+      "label": "[binding variants] no limit on the readings one command may need (predicted red: test_a_write_inside_a_compound_is_a_source_write[for a in w0 .. w15; do for b in v0 .. v15; do echo x > tests/$a/$b; done; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if not choices or readings > _MAX_VARIANTS:",
+      "replace": "    if not choices:"
+    },
+    {
+      "label": "[binding budget] no budget on the readings in one call (predicted red: test_a_call_that_needs_more_readings_than_the_budget_allows_fails_closed, test_the_readings_of_a_loop_variable_over_a_long_word_list_are_bounded_in_time)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if ctx.expansions > _MAX_EXPANSIONS:\n        return None",
+      "replace": "    if False:\n        return None"
+    },
+    {
+      "label": "[binding words] no limit on the words of a loop list (predicted red: test_a_write_inside_a_compound_is_a_source_write[for v in w0 .. w16; do echo x > tests/$v; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    literal = len(words) <= _MAX_LOOP_WORDS and all(",
+      "replace": "    literal = True and all("
+    },
+    {
+      "label": "[binding whitespace] a loop word with whitespace is read as one literal word (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in 'a b'; do echo x > tests/$f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "_LOOP_WORD_UNSAFE = frozenset(\"*?[{~ \\t\\r\\n\\x00\")",
+      "replace": "_LOOP_WORD_UNSAFE = frozenset(\"*?[{~\\x00\")"
+    },
+    {
+      "label": "[binding empty] an empty loop word is read as a literal word (predicted red: test_a_write_inside_a_compound_is_a_source_write[for f in ''; do echo x > tests/$f; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        word and not any(ch in _LOOP_WORD_UNSAFE for ch in word) for word in words",
+      "replace": "        not any(ch in _LOOP_WORD_UNSAFE for ch in word) for word in words"
+    },
+    {
+      "label": "[binding off] a loop variable is never read, so tests/$f stays a run-time target (predicted red: test_a_compound_whose_only_writes_are_literal_tests_paths_is_a_tests_write[for f in a; do echo x > tests/$f; done], test_a_loop_variable_over_a_literal_word_list_is_resolved_to_each_word)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if not choices or readings > _MAX_VARIANTS:",
+      "replace": "    if True:"
+    },
+    {
+      "label": "[control] swap two independent local assignments when a for frame is pushed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "frames.append and the ctx.binds count touch different objects and neither reads the other, so their order cannot change any classification.",
+      "find": "                ctx.binds[name] = ctx.binds.get(name, 0) + 1\n                frames.append([\"loop\", \"head\", scope])",
+      "replace": "                frames.append([\"loop\", \"head\", scope])\n                ctx.binds[name] = ctx.binds.get(name, 0) + 1"
+    },
+    {
+      "label": "[control] raise the per-command reading limit by one",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "_MAX_VARIANTS is 64 and no test sits between 64 and 65 readings with a result that differs, so a one-off change that keeps every shipped shape on the same side of the limit is inert. 64 -> 65 keeps the 256-reading row over the limit and every smaller row under it.",
+      "find": "_MAX_VARIANTS = 64\n",
+      "replace": "_MAX_VARIANTS = 65\n"
+    }
+  ]
+}
