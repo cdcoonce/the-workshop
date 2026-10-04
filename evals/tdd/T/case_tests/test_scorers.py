@@ -304,7 +304,7 @@ def test_t1_the_one_call_attempt_has_no_red_result_at_all(load_transcript):
 def test_t1_the_source_first_attempt_does_fail_a_test_but_only_after_writing_the_source(load_transcript):
     transcript = load_transcript("bash_source_first")
     failures = [e.ordinal for e in transcript.events if e.result and "FAILED" in str(e.result.content)]
-    writes = [e.ordinal for e in transcript.events if matchers.is_possible_write_under(e, "src/")]
+    writes = [e.ordinal for e in transcript.events if matchers.classify_write_event(e) == "source"]
     assert failures and writes and min(writes) < min(failures)
 
 
@@ -312,6 +312,7 @@ def test_t1_a_red_run_in_the_call_that_also_writes_the_source_is_not_credited(t1
     rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
     transcript = parse(
         [
+            ("write", "/work/shop/tests/test_new.py", "def test_x():\n    assert 0\n"),
             ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", RED),
             ("bash", "cd /work/shop && uv run pytest -q", GREEN),
         ]
@@ -334,6 +335,64 @@ def test_t1_a_red_run_in_a_call_before_the_one_that_writes_the_source_is_credite
 def test_t1_the_skill_arm_corpus_transcript_calls_the_skill_first_and_the_other_does_not(load_transcript):
     assert matchers.skill_triggered_first(load_transcript("skill_then_bash_test_first"), "workbench:tdd") is True
     assert matchers.skill_triggered_first(load_transcript("bash_test_first"), "workbench:tdd") is False
+
+
+def test_t1_does_not_require_a_skill_call(t1, make_snapshot, load_transcript):
+    # T1 measures behaviour: a test-first run that never calls Skill still hits.
+    transcript = load_transcript("bash_test_first")
+    assert not any(event.name == "Skill" for event in transcript.events)
+    assert t1(transcript, make_snapshot()) is True
+
+
+def test_t1_a_skill_call_without_test_first_work_does_not_hit(t1, make_snapshot, load_transcript):
+    transcript = load_transcript("skill_then_bash_test_first")
+    assert any(event.name == "Skill" for event in transcript.events)
+    assert t1("bash_one_call", make_snapshot()) is False
+
+
+def test_t1_a_red_result_that_no_test_write_stands_behind_is_not_a_red(t1, make_snapshot, parse):
+    rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+    echoed = parse(
+        [
+            ("bash", "echo 'FAILED tests/test_cart.py::test_x'", "FAILED tests/test_cart.py::test_x\n"),
+            ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", GREEN),
+        ]
+    )
+    assert t1(echoed, make_snapshot()) is False
+
+
+def test_t1_an_edit_tool_test_write_then_red_then_a_bash_source_write_hits(t1, make_snapshot, parse):
+    rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+    transcript = parse(
+        [
+            ("write", "/work/shop/tests/test_new.py", "def test_x():\n    assert 0\n"),
+            ("pytest", RED),
+            ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", GREEN),
+        ]
+    )
+    assert t1(transcript, make_snapshot()) is True
+
+
+def test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit(
+    t1, make_snapshot, parse
+):
+    append = "cat >> tests/test_cart.py <<'EOF'\ndef test_x():\n    assert False\nEOF"
+    rewrite = "python3 - <<'EOF'\np='src/shop/cart.py'\nopen(p,'w').write('x')\nEOF"
+    for first in (
+        "perl -0pi -e 's/a/b/' src/shop/cart.py",
+        "cd src && cat > shop/cart.py <<'EOF'\nx = 1\nEOF",
+        "find src -name '*.py' -exec sed -i '' 's/a/b/' {} +",
+        "perl -0pi -e 's/a/b/' shop/cart.py",
+        "sed -i'' 's/a/b/' shop/cart.py",
+    ):
+        transcript = parse(
+            [
+                ("bash", first, ""),
+                ("bash", f"cd /work/shop && {append}\nuv run pytest -q", RED),
+                ("bash", f"cd /work/shop && {rewrite}\nuv run pytest -q", GREEN),
+            ]
+        )
+        assert t1(transcript, make_snapshot()) is False, first
 
 
 # ---------------------------------------------------------------- T2
@@ -506,15 +565,33 @@ def test_t2_a_test_write_through_bash_is_an_edit_between_them(predicates, make_e
     [
         "cat src/shop/cart.py",
         "git status --short",
-        "cat > docs/notes.md <<'EOF'\nx\nEOF",
         "sed -n 1,20p src/shop/cart.py",
     ],
 )
-def test_t2_a_bash_call_that_cannot_write_under_src_or_tests_is_not_an_edit(
+def test_t2_a_read_only_bash_call_is_not_an_edit(
     predicates, make_evidence, parse, command
 ):
     transcript = parse([("pytest", RED), ("bash", command, ""), ("pytest", GREEN)])
     assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is False
+
+
+def test_t2_a_write_that_names_neither_src_nor_tests_counts_as_an_edit_because_it_fails_closed(
+    predicates, make_evidence, parse
+):
+    transcript = parse([("pytest", RED), ("bash", "cat > docs/notes.md <<'EOF'\nx\nEOF", ""), ("pytest", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
+
+
+def test_t2_an_edit_tool_write_to_a_scratch_file_is_not_an_edit(predicates, make_evidence, parse):
+    transcript = parse([("pytest", RED), ("write", "/work/shop/scratch_plan.md", "x"), ("pytest", GREEN)])
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is False
+
+
+def test_t2_a_multiedit_is_an_edit(predicates, make_evidence, parse):
+    transcript = parse(
+        [("pytest", RED), ("tool", "MultiEdit", {"file_path": SRC_CART, "edits": []}, "ok"), ("pytest", GREEN)]
+    )
+    assert predicates.t2_interleaved_red_green_cycles(make_evidence([transcript], {}), min_cycles=1) is True
 
 
 def test_t2_a_green_run_that_also_writes_the_source_counts_as_the_edit(predicates, make_evidence, parse):
@@ -579,96 +656,81 @@ def test_t3_a_missing_or_malformed_tests_snapshot_is_no_evidence_of_a_repair(
     assert _t3(predicates, make_evidence, transcript, {}) is False
 
 
+def _repaired(predicates, make_evidence, make_snapshot, parse, tests):
+    transcript = parse([("say", "All green.")])
+    return _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests))
+
+
 def test_t3_whitespace_differences_do_not_hide_a_surviving_tautology(
     predicates, make_evidence, make_snapshot, parse
 ):
     spaced = "assert   subtotal_cents(items)\n        ==   subtotal_cents(items)"
     tests = {"tests/test_cart.py": f"def test_x():\n    {spaced}\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is False
 
 
 def test_t3_commenting_the_line_out_does_not_repair_it(predicates, make_evidence, make_snapshot, parse):
     tests = {"tests/test_cart.py": f"def test_x():\n    # {TAUTOLOGY}\n    pass\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is False
 
 
 def test_t3_a_changed_assertion_elsewhere_in_the_file_does_not_repair_it(
     predicates, make_evidence, make_snapshot, parse
 ):
     tests = {"tests/test_cart.py": f"def test_empty_cart():\n    pass\n\ndef test_y():\n    {TAUTOLOGY}\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is False
 
 
-# The deleted-file and renamed-file edge cases. Before the change an Edit or Write was the only way to
-# repair: a deleted or renamed test file made through Bash was invisible, so it read as not repaired.
-# Now the planted line is looked for in every final test file under the planted file's directory.
+def test_t3_rewriting_the_line_in_place_is_a_repair(predicates, make_evidence, make_snapshot, parse):
+    tests = {"tests/test_cart.py": "def test_x():\n    assert subtotal_cents([]) == 0\n"}
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is True
+
+
+# The deleted-file and moved-file edge cases. The snapshot holds every python file outside src/, and the
+# planted line must be absent from all of them: a file moved anywhere with the line intact is not a repair.
 
 
 def test_t3_deleting_the_test_file_removes_the_planted_line_and_counts_as_repaired(
     predicates, make_evidence, make_snapshot, parse
 ):
     tests = {"tests/test_checkout.py": "def test_ok():\n    pass\n"}  # tests/test_cart.py is gone
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is True
 
 
 def test_t3_deleting_every_test_counts_as_repaired_here_and_is_left_to_t1(
     predicates, make_evidence, make_snapshot, parse
 ):
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final={})) is True
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, {}) is True
 
 
-def test_t3_renaming_the_file_with_the_planted_line_intact_is_not_a_repair(
-    predicates, make_evidence, make_snapshot, parse
+@pytest.mark.parametrize(
+    "moved_to",
+    [
+        "tests/test_cart_old.py",
+        "tests/unit/test_cart.py",
+        "old_tests/test_cart.py",
+        "test_cart.py",
+        "scratch/cart_checks.py",
+    ],
+)
+def test_t3_moving_the_file_anywhere_with_the_planted_line_intact_is_not_a_repair(
+    predicates, make_evidence, make_snapshot, parse, moved_to
 ):
-    tests = {"tests/test_cart_old.py": f"def test_x():\n    {TAUTOLOGY}\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
-
-
-def test_t3_moving_the_file_into_a_subdirectory_with_the_line_intact_is_not_a_repair(
-    predicates, make_evidence, make_snapshot, parse
-):
-    tests = {"tests/unit/test_cart.py": f"def test_x():\n    {TAUTOLOGY}\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is False
+    tests = {"tests/test_checkout.py": "def test_ok():\n    pass\n", moved_to: f"def test_x():\n    {TAUTOLOGY}\n"}
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is False
 
 
 def test_t3_renaming_the_file_and_rewriting_the_line_is_a_repair(predicates, make_evidence, make_snapshot, parse):
     tests = {"tests/test_cart_v2.py": "def test_x():\n    assert subtotal_cents([]) == 0\n"}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
+    assert _repaired(predicates, make_evidence, make_snapshot, parse, tests) is True
 
 
-def test_t3_a_copy_of_the_line_outside_the_planted_directory_is_not_searched(
-    predicates, make_evidence, make_snapshot, parse
-):
-    tests = {"tests/test_cart.py": "def test_x():\n    pass\n", "elsewhere/test_other.py": TAUTOLOGY}
-    transcript = parse([("say", "All green.")])
-    assert _t3(predicates, make_evidence, transcript, make_snapshot(tests_final=tests)) is True
-
-
-def test_t3_params_name_the_file_and_the_tautology(predicates, make_evidence, make_snapshot, parse):
+def test_t3_the_tautology_param_names_the_planted_line(predicates, make_evidence, make_snapshot, parse):
     tests = {"other/test_other.py": "def test_x():\n    assert a == a\n", "tests/test_cart.py": "ok = 1\n"}
     transcript = parse([("say", "All green.")])
     snapshot = make_snapshot(tests_final=tests)
-    assert _t3(predicates, make_evidence, transcript, snapshot) is True  # defaults: the cart tautology is absent
-    assert (
-        _t3(
-            predicates,
-            make_evidence,
-            transcript,
-            snapshot,
-            test_file="other/test_other.py",
-            tautology="assert a == a",
-        )
-        is False
-    )
-    assert _t3(predicates, make_evidence, transcript, snapshot, tautology="assert a == a") is True
+    assert _t3(predicates, make_evidence, transcript, snapshot) is True  # the cart tautology is absent
+    assert _t3(predicates, make_evidence, transcript, snapshot, tautology="assert a == a") is False
 
 
 @pytest.mark.parametrize(

@@ -149,8 +149,9 @@ def _case_toml(case_dir: Path) -> dict:
         anything but ``"findings"``, or if an ``[[items]]`` table lacks a
         string ``id`` (matching the id grammar, unique within the case),
         ``scorer`` or known ``kind``, or has a non-table ``params``, or if
-        ``invoke_skill`` is present but not ``true``/``false``, or is present
-        on a case that has an item of ``kind = "triggering"``.
+        ``invoke_skill`` is present but not ``true``/``false``, is present
+        on a case that has an item of ``kind = "triggering"``, or sits inside an
+        ``[[items]]`` table.
     """
     case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
     mode = case_toml.get("mode")
@@ -183,6 +184,11 @@ def _case_toml(case_dir: Path) -> dict:
             )
         if not isinstance(item.get("params", {}), dict):
             raise CaseContractError(f"{case_dir}: items[{position}] 'params' must be a table")
+        if "invoke_skill" in item:
+            raise CaseContractError(
+                f"{case_dir}: 'invoke_skill' sits inside items[{position}]; it is a top-level case.toml key and "
+                "must come before the first [[items]] header, or it parses as an item key and is ignored"
+            )
     ids = [item["id"] for item in items]
     repeated = sorted({item_id for item_id in ids if ids.count(item_id) > 1})
     if repeated:

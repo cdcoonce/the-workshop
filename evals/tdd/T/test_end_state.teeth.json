@@ -194,27 +194,6 @@
       "replace": "frozenset({\"__pycache__\", \".pytest_cache\", \".venv\", \".git\"})"
     },
     {
-      "label": "[snapshot] tests-final holds files that are not python (predicted red: test_tests_final_skips_caches_and_files_that_are_not_python)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "        if relative.endswith(\".py\")",
-      "replace": "        if True"
-    },
-    {
-      "label": "[snapshot] tests-final decodes strictly and crashes on a stray byte (predicted red: test_tests_final_replaces_undecodable_bytes_instead_of_crashing)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "content.decode(\"utf-8\", \"replace\")",
-      "replace": "content.decode(\"utf-8\")"
-    },
-    {
-      "label": "[snapshot] tests-final is taken from the fixture's tests, not the final tree (predicted red: test_tests_final_follows_a_bash_written_tautology_fix, test_tests_final_follows_a_deleted_and_a_renamed_test_file)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "        for relative, content in _tree_files(workdir / \"tests\").items()",
-      "replace": "        for relative, content in _tree_files(workdir / \"docs\").items()"
-    },
-    {
       "label": "[snapshot] the src-changed file is left out of the snapshot (predicted red: test_end_state_returns_exactly_the_five_snapshot_files, test_snapshot_end_state_writes_exactly_the_five_files)",
       "file": "predicates.py",
       "oracle": "real",
@@ -227,6 +206,48 @@
       "oracle": "real",
       "find": "        \"tests-final.json\": _tests_final_snapshot(workdir),\n",
       "replace": ""
+    },
+    {
+      "label": "[snapshot] tests-final holds files that are not python (predicted red: test_tests_final_skips_src_caches_virtualenvs_and_files_that_are_not_python)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if name.endswith(\".py\"):",
+      "replace": "            if True:"
+    },
+    {
+      "label": "[snapshot] tests-final decodes strictly and crashes on a stray byte (predicted red: test_tests_final_replaces_undecodable_bytes_instead_of_crashing)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "path.read_bytes().decode(\"utf-8\", \"replace\")",
+      "replace": "path.read_bytes().decode(\"utf-8\")"
+    },
+    {
+      "label": "[snapshot] tests-final is taken from the docs directory, not the final tree (predicted red: test_tests_final_follows_a_bash_written_tautology_fix, test_tests_final_follows_a_deleted_and_a_renamed_test_file)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "os.walk(workdir)",
+      "replace": "os.walk(workdir / \"docs\")"
+    },
+    {
+      "label": "[snapshot] tests-final is narrowed back to tests/, so a file moved out of it is not seen (predicted red: test_tests_final_follows_a_test_file_moved_out_of_the_tests_directory)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "os.walk(workdir)",
+      "replace": "os.walk(workdir / \"tests\")"
+    },
+    {
+      "label": "[snapshot] tests-final includes src/ (predicted red: test_tests_final_holds_every_python_file_outside_src_with_its_text)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "if name not in _SNAPSHOT_IGNORED_NAMES and not (here == workdir and name == \"src\")",
+      "replace": "if name not in _SNAPSHOT_IGNORED_NAMES"
+    },
+    {
+      "label": "[snapshot] tests-final walks into a virtualenv (predicted red: test_tests_final_skips_src_caches_virtualenvs_and_files_that_are_not_python)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "frozenset({\"__pycache__\", \".pytest_cache\", \".venv\", \".git\", \".DS_Store\"})",
+      "replace": "frozenset({\"__pycache__\", \".pytest_cache\", \".git\", \".DS_Store\"})"
     },
     {
       "label": "[control] the reverted-run scratch directory is given a different prefix",

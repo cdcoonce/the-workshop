@@ -31,5 +31,4 @@ kind = "trend"
 scorer = "t3_tautology_fixed_or_flagged"
 
 [items.params]
-test_file = "tests/test_cart.py"
 tautology = "assert subtotal_cents(items) == subtotal_cents(items)"

@@ -210,13 +210,6 @@
       "replace": "    return _matchers.test_failed_before_first_source_edit(evidence.transcripts[0].events)"
     },
     {
-      "label": "[T1 c1] a red result and a source write that share one ordinal are credited (predicted red: test_t1_a_red_run_in_the_call_that_also_writes_the_source_is_not_credited)",
-      "file": "../../_harness/matchers.py",
-      "oracle": "real",
-      "find": "    return min(first_ordinals) < min(then_ordinals)",
-      "replace": "    return min(first_ordinals) <= min(then_ordinals)"
-    },
-    {
       "label": "[T1 c2] the src diff is replaced by the edit-tool record, so a change made through Bash is not seen (predicted red: test_t1_reads_the_src_diff_not_the_edit_tool_record, test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True])",
       "file": "predicates.py",
       "oracle": "real",
@@ -259,27 +252,6 @@
       "replace": "        if outcome is None:\n            continue"
     },
     {
-      "label": "[T2] a Bash write under tests/ is not an edit (predicted red: test_t2_a_test_write_through_bash_is_an_edit_between_them)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "for prefix in (_SOURCE_PREFIX, _TEST_PREFIX)",
-      "replace": "for prefix in (_SOURCE_PREFIX,)"
-    },
-    {
-      "label": "[T2] a Bash write under src/ is not an edit (predicted red: test_t2_a_bash_write_call_with_no_pytest_run_is_an_edit_between_them, test_t2_a_green_run_that_also_writes_the_source_counts_as_the_edit)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "for prefix in (_SOURCE_PREFIX, _TEST_PREFIX)",
-      "replace": "for prefix in (_TEST_PREFIX,)"
-    },
-    {
-      "label": "[T3] the repair check ignores the end state and reads Edit events instead (predicted red: test_t3_a_fix_made_through_bash_counts_because_the_end_state_is_read, test_t3_the_end_state_decides_not_the_edit_tool_events)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "    if _tautology_repaired(evidence.end_state, test_file, tautology):\n        return True",
-      "replace": "    if any(\n        event.name in (\"Edit\", \"Write\") and _squash(tautology) in _squash(str(event.input.get(\"old_string\", \"\")))\n        for event in evidence.transcripts[0].events\n    ):\n        return True"
-    },
-    {
       "label": "[T3] a missing or malformed tests snapshot counts as a repair (predicted red: test_t3_a_missing_or_malformed_tests_snapshot_is_no_evidence_of_a_repair)",
       "file": "predicates.py",
       "oracle": "real",
@@ -287,25 +259,81 @@
       "replace": "    tests = _final_tests(end_state)\n    if tests is None:\n        return True"
     },
     {
-      "label": "[T3] the whole tests tree is searched, not the planted file's directory (predicted red: test_t3_a_copy_of_the_line_outside_the_planted_directory_is_not_searched)",
-      "file": "predicates.py",
+      "label": "[T1 c1] a red result that shares its ordinal with an earlier-tested source write is credited (predicted red: test_t1_a_red_run_in_the_call_that_also_writes_the_source_is_not_credited)",
+      "file": "../../_harness/matchers.py",
       "oracle": "real",
-      "find": "        inside = not root or posixpath.normpath(path) == root or posixpath.normpath(path).startswith(f\"{root}/\")",
-      "replace": "        inside = True"
+      "find": "_is_test_failure(event) and first_test <= event.ordinal < first_source for event in events",
+      "replace": "_is_test_failure(event) and first_test <= event.ordinal <= first_source for event in events"
     },
     {
-      "label": "[T3] only a file with the planted file's name is searched, so a rename hides the tautology (predicted red: test_t3_renaming_the_file_with_the_planted_line_intact_is_not_a_repair, test_t3_moving_the_file_into_a_subdirectory_with_the_line_intact_is_not_a_repair)",
-      "file": "predicates.py",
+      "label": "[T1 c1] a red result no test write stands behind is credited (predicted red: test_t1_a_red_result_that_no_test_write_stands_behind_is_not_a_red)",
+      "file": "../../_harness/matchers.py",
       "oracle": "real",
-      "find": "        inside = not root or posixpath.normpath(path) == root or posixpath.normpath(path).startswith(f\"{root}/\")",
-      "replace": "        inside = posixpath.normpath(path).endswith(test_file)"
+      "find": "    if not source_ordinals or not test_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    first_test = min(test_ordinals)\n    return any(\n        _is_test_failure(event) and first_test <= event.ordinal < first_source for event in events\n    )",
+      "replace": "    if not source_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    return any(_is_test_failure(event) and event.ordinal < first_source for event in events)"
     },
     {
-      "label": "[T3] the planted line is searched for in every file, not only below the planted directory, so a file's own subdirectory is missed (predicted red: test_t3_moving_the_file_into_a_subdirectory_with_the_line_intact_is_not_a_repair)",
+      "label": "[T1] a write that names neither src nor tests is not a source write, so an unplaced first write lets a later red hit (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    if _TESTS_MENTION.search(command) and not _SRC_TOKEN.search(command):\n        return \"tests\"\n    return \"source\"\n",
+      "replace": "    if _TESTS_MENTION.search(command) and not _SRC_TOKEN.search(command):\n        return \"tests\"\n    return \"source\" if _SRC_TOKEN.search(command) else \"tests\"\n"
+    },
+    {
+      "label": "[T1] MultiEdit is not an edit tool, so a first MultiEdit on src is invisible (predicted red: test_a_multiedit_on_the_source_first_is_a_source_write via the T1 ordering)",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\")",
+      "replace": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\")"
+    },
+    {
+      "label": "[T2] only Bash writes classified source count as an edit (predicted red: test_t2_a_test_write_through_bash_is_an_edit_between_them)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "posixpath.normpath(path).startswith(f\"{root}/\")",
-      "replace": "False"
+      "find": "    if not isinstance(command, str) or _matchers.classify_write_event(event) == \"none\":",
+      "replace": "    if not isinstance(command, str) or _matchers.classify_write_event(event) in (\"none\", \"tests\"):"
+    },
+    {
+      "label": "[T2] only Bash writes classified tests count as an edit (predicted red: test_t2_a_bash_write_call_with_no_pytest_run_is_an_edit_between_them)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if not isinstance(command, str) or _matchers.classify_write_event(event) == \"none\":",
+      "replace": "    if not isinstance(command, str) or _matchers.classify_write_event(event) in (\"none\", \"source\"):"
+    },
+    {
+      "label": "[T2] edit-tool writes are not edits (predicted red: test_t2_counts_two_full_cycles)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if _matchers.classify_write_event(event) != \"none\":\n                edited_since_red = True",
+      "replace": "            if False:\n                edited_since_red = True"
+    },
+    {
+      "label": "[T2] every edit-tool event is an edit, a scratch file included (predicted red: test_t2_an_edit_tool_write_to_a_scratch_file_is_not_an_edit)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if _matchers.classify_write_event(event) != \"none\":\n                edited_since_red = True",
+      "replace": "            if event.name in (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\"):\n                edited_since_red = True"
+    },
+    {
+      "label": "[T3] the repair check ignores the end state and reads Edit events instead (predicted red: test_t3_a_fix_made_through_bash_counts_because_the_end_state_is_read, test_t3_the_end_state_decides_not_the_edit_tool_events)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if _tautology_repaired(evidence.end_state, tautology):\n        return True",
+      "replace": "    if any(\n        event.name in (\"Edit\", \"Write\") and _squash(tautology) in _squash(str(event.input.get(\"old_string\", \"\")))\n        for event in evidence.transcripts[0].events\n    ):\n        return True"
+    },
+    {
+      "label": "[T3] only files under tests/ are searched for a surviving tautology (predicted red: test_t3_moving_the_file_anywhere_with_the_planted_line_intact_is_not_a_repair[old_tests/test_cart.py])",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return not any(needle in _squash(text) for text in tests.values())",
+      "replace": "    return not any(needle in _squash(text) for path, text in tests.items() if path.startswith(\"tests/\"))"
+    },
+    {
+      "label": "[T3] only the first file is searched (predicted red: test_t3_moving_the_file_anywhere_with_the_planted_line_intact_is_not_a_repair)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return not any(needle in _squash(text) for text in tests.values())",
+      "replace": "    return not any(needle in _squash(text) for text in list(tests.values())[:1])"
     }
   ]
 }

@@ -26,17 +26,25 @@ Public contract
     Ordering predicate instance: a test failed before the first source-file
     edit.
 
-``bash_write_offset(command, prefix) -> int | None`` / ``bash_may_write_under(command, prefix) -> bool``
-    Conservative reading of a Bash command's text: might it write a file under
-    ``prefix``? See ``bash_write_offset`` for the rule and its limits.
+``classify_bash_command(command) -> "none" | "tests" | "source"``
+    Fail-closed reading of a Bash command's text. ``none`` only when no write
+    indicator is found; ``tests`` only when a write indicator is found, the call
+    names a tests path, and ``src`` appears nowhere in it; ``source`` otherwise.
+    See ``classify_bash_command`` for the indicators and their limits.
 
-``is_possible_write_under(event, prefix) -> bool``
-    ``bash_may_write_under`` for a ``Bash`` tool-call event.
+``bash_write_offset(command) -> int | None``
+    Where the first write indicator starts, for a caller ordering a write against
+    a later word in the same command.
 
-``test_failed_before_first_source_write(events, *, source_prefix="src/") -> bool``
-    The ordering predicate of ``test_failed_before_first_source_edit``, with a
-    Bash call that might write under ``source_prefix`` counted as a source
-    write as well. The old predicate keeps its Edit/Write-only meaning.
+``classify_write_event(event) -> "none" | "tests" | "source"``
+    ``classify_bash_command`` for a ``Bash`` event; a path-segment rule for an
+    ``Edit``/``Write``/``NotebookEdit``/``MultiEdit`` event.
+
+``test_failed_before_first_source_write(events) -> bool``
+    The ordering predicate of ``test_failed_before_first_source_edit`` built on
+    those classifications: a red result written for by a test write at or before
+    it, strictly before the first source write. The old predicate keeps its
+    Edit/Write-only meaning.
 
 ``skill_triggered_first(transcript, skill) -> bool``
     Triggering predicate: the rostered skill's ``Skill`` call precedes every
@@ -269,57 +277,54 @@ def test_failed_before_first_source_edit(events: list[ToolCallEvent]) -> bool:
     return precedes(events, _is_test_failure, _is_source_edit)
 
 
-# ---------------------------------------------------------------- Bash write detection
+# ---------------------------------------------------------------- Bash write classification
 
-# A path prefix counts only when no word character precedes it: ``src/`` in
-# ``scratchpad/x/src/shop/cart.py`` and ``./src/x.py`` matches, ``resrc/`` does not.
-_COMMAND_START = r"(?:^|[;&|(`{\n]|\$\(|\b(?:then|do|else)\b|-exec(?:dir)?)\s*"
-_COMMAND_WRAPPERS = r"(?:(?:sudo|command|exec|time|nohup|xargs|env)\s+(?:-[-\w=]+\s+)*)*"
-_ENV_ASSIGNMENTS = r"(?:\w+=\S*\s+)*"
-_SHELL_WRITE_VERBS = re.compile(
-    _COMMAND_START
-    + _COMMAND_WRAPPERS
-    + _ENV_ASSIGNMENTS
-    + r"(?:mv|cp|rm|install|patch|touch|truncate|ln|rmdir|unlink|rsync)(?![\w./-])",
-    re.MULTILINE,
+# A command longer than this is classified "source" without being scanned (fail closed, bounded cost).
+BASH_COMMAND_CAP = 100_000
+
+_EDIT_FAMILY = ("Edit", "Write", "NotebookEdit", "MultiEdit")
+
+# Every pattern below is a flat literal or a simple class with no nested quantifier, and the
+# tokenizer is one non-backtracking alternation, so the scan is linear in the command's length.
+_TOKEN = re.compile(r"[;&|\n]|[^\s;&|<>(){}\[\]`$\"'=,]+")
+_SEPARATORS = frozenset(";&|\n")
+# Any token that is one of these is a write (or can write): no command-position test, so a verb used
+# as an argument over-counts and a verb behind sudo/env/xargs/-exec/a path is still seen.
+_WRITE_VERBS = frozenset(
+    {
+        "mv", "cp", "rm", "rmdir", "unlink", "install", "rsync", "ln", "touch", "truncate", "dd", "patch",
+        "tee", "sponge", "ed", "ex", "vi", "vim", "nvim", "wget", "tar", "unzip", "scp", "-delete",
+    }
 )
-_SNIPPET_MODE = r"[\"'][rbt]*[wax+][rwxabt+]*[\"']"
-_WRITE_PATTERNS = (
-    re.compile(r"(?<![\w./-])(?:tee|sponge)(?![\w-])"),
-    re.compile(r"(?<![\w./-])sed(?![\w-])[^|;&\n]*?\s(?:-[A-Za-z]*i[A-Za-z.]*|--in-place(?:=\S*)?)(?=\s|$)"),
-    re.compile(r"(?<![\w./-])perl(?![\w-])[^|;&\n]*?\s-[A-Za-z]*i[A-Za-z.]*(?=\s|$)"),
-    re.compile(r"(?<![\w./-])dd\s[^|;&\n]*\bof="),
-    re.compile(r"\s-delete(?=\s|$)"),
-    re.compile(r"(?<![\w./-])(?:black|isort|autopep8|yapf)(?![\w-])(?![^|;&\n]*--check)"),
-    re.compile(r"(?<![\w./-])ruff\s+format(?![\w-])(?![^|;&\n]*--check)"),
-    re.compile(r"(?<![\w./-])ruff\s+check\s[^|;&\n]*--fix"),
-    re.compile(
-        r"(?<![\w./-])git\s+(?:-C\s+\S+\s+)?"
-        r"(?:apply|restore|stash|rm|mv|clean|reset\s+--hard|checkout\s+(?:[^|;&\n]*\s)?--(?=\s|$))"
-    ),
-    _SHELL_WRITE_VERBS,
-    # python / ruby / node snippets that open a file for writing or call a write method
-    re.compile(
-        "|".join(
-            (
-                r"\.write\(",
-                r"write_text\(",
-                r"write_bytes\(",
-                r"\bwriteFile(?:Sync)?\(",
-                r"\bappendFile(?:Sync)?\(",
-                r"\bcreateWriteStream\(",
-                rf"\bopen\s*\([^)\n]*,\s*(?:mode\s*=\s*)?{_SNIPPET_MODE}",
-                rf"\bmode\s*=\s*{_SNIPPET_MODE}",
-                rf"\.open\(\s*{_SNIPPET_MODE}",
-                r"\bos\.(?:rename|replace|remove|unlink|rmdir|truncate)\(",
-                r"\bshutil\.(?:copy|copy2|copyfile|copytree|move|rmtree)\(",
-                r"\.(?:unlink|rename|touch|rmdir)\(",
-            )
-        )
-    ),
+_GIT_WRITES = frozenset(
+    {
+        "apply", "restore", "stash", "rm", "mv", "clean", "am", "cherry-pick", "revert", "merge",
+        "pull", "rebase", "switch", "checkout", "reset", "read-tree",
+    }
 )
-_REDIRECT_TARGETS_THAT_WRITE_NOTHING = re.compile(r"/dev/(?:null|stderr|stdout|tty|fd/\d+)(?![\w/.-])")
+_FORMATTERS = frozenset({"black", "isort", "autopep8", "yapf", "prettier"})
+_CHECK_ONLY = frozenset({"--check", "--diff"})
+# sed/perl/ruby in-place flag clusters in any spelling; a quote after the flag (-i'' or -i"") ends the token.
+_IN_PLACE_CLUSTER = re.compile(r"-[A-Za-z0-9]*i[A-Za-z0-9.]*")
+_CURL_OUTPUT_CLUSTER = re.compile(r"-[A-Za-z0-9]*[oO][A-Za-z0-9]*")
+
+_SNIPPET_WRITES = re.compile(
+    r"\.write\(|write_text\(|write_bytes\(|writeFile|appendFile|createWriteStream|fileinput"
+    r"|O_(?:WRONLY|RDWR|CREAT|APPEND|TRUNC|EXCL)"
+    r"|os\.(?:rename|replace|remove|unlink|rmdir|removedirs|truncate|makedirs|link|symlink)\("
+    r"|shutil\.(?:copy\w*|move|rmtree|make_archive|unpack_archive)"
+    r"|\.(?:unlink|rename|touch|rmdir|symlink_to|hardlink_to)\("
+)
+_OPEN_CALL = re.compile(r"open\s*\(")
+_MODE = r"[rbtU]*[wax+][rwxabtU+]*"
+_FIRST_ARG_MODE = re.compile(rf"\s*\\*[\"']{_MODE}\\*[\"']")
+_LATER_ARG_MODE = re.compile(rf"[,=]\s*\\*[\"']{_MODE}\\*[\"']")
+_OPEN_WINDOW = 200
+_REDIRECT_WRITES_NOTHING = re.compile(r"[ \t]*/dev/(?:null|stderr|stdout|tty|fd/\d+)(?![\w/.-])")
 _FD_DUP = re.compile(r"\d+-?|-")
+
+_TESTS_MENTION = re.compile(r"(?<!\w)tests/|(?<![\w/-])test_[\w.-]*\.py|\w_test\.py|conftest\.py")
+_SRC_TOKEN = re.compile(r"(?<!\w)src(?!\w)")
 
 
 def _first_file_redirect(command: str) -> int | None:
@@ -336,9 +341,8 @@ def _first_file_redirect(command: str) -> int | None:
         if position == -1:
             return None
         start = position
-        previous = command[position - 1] if position else ""
         end = position + 1
-        if previous in ("-", "="):
+        if position and command[position - 1] in ("-", "="):
             position = end
             continue
         if end < len(command) and command[end] == ">":
@@ -354,111 +358,225 @@ def _first_file_redirect(command: str) -> int | None:
             return start
         if end < len(command) and command[end] == "|":
             end += 1
-        target = command[end:].lstrip(" \t")
-        if _REDIRECT_TARGETS_THAT_WRITE_NOTHING.match(target):
+        if _REDIRECT_WRITES_NOTHING.match(command, end):
             position = end
             continue
         return start
 
 
-def bash_write_offset(command: str, prefix: str) -> int | None:
-    """Locate the first write indicator of a Bash command that mentions a path under *prefix*.
+def _token_write_offsets(command: str) -> list[int]:
+    """Offsets of every write indicator found by reading the command word by word."""
+    offsets: list[int] = []
+    active: set[str] = set()
+    formatter_at: int | None = None
+    check_only = False
 
-    The command might write under *prefix* when it BOTH mentions a path under
-    *prefix* (the prefix not preceded by a word character, so ``src/shop/cart.py``
-    and ``scratchpad/x/src/cart.py`` mention ``src/`` and ``resrc/`` does not) AND
-    contains a write indicator: a redirection to a file (``>``/``>>``, not an
-    fd duplication such as ``2>&1`` and not ``>/dev/null``), ``tee``, ``sed -i`` or
-    ``--in-place``, ``perl -i``, a python/ruby/node snippet that opens a file for
-    writing or calls ``.write(``/``write_text``/``write_bytes``/``os.rename``/
-    ``shutil.copy`` and the like, ``mv``, ``cp``, ``rm``, ``install``, ``patch``,
-    ``touch``, ``git apply``/``checkout --``/``restore``/``stash``/``rm``, or a
-    formatter that rewrites files.
+    def close_segment() -> None:
+        nonlocal formatter_at, check_only
+        if formatter_at is not None and not check_only:
+            offsets.append(formatter_at)
+        formatter_at = None
+        check_only = False
 
-    The rule over-approximates on purpose. The text is read as a whole: a write
-    elsewhere plus a mere read of the prefix, a heredoc body that only mentions
-    ``src/``, or ``a > b`` inside an inline script all count. A read-only call
-    counted as a write can turn a test-first hit into a miss and never the
-    reverse. It cannot see what the text does not spell out: a path built at run
-    time (``os.path.join('src', ...)``, ``"$DIR/cart.py"``, a shell variable), a
-    ``cd src`` followed by a bare file name, a script file written earlier and run
-    later, an absolute binary such as ``/bin/rm``, a write through a tool this
-    list does not name, and a verb used as an argument rather than a command.
-    A write it misses is usually harmless to T1's ordering (no detected source
-    write means nothing to order), but an undetected source write followed by a
-    red run and then a detected write would credit a hit.
+    for match in _TOKEN.finditer(command):
+        token = match.group()
+        start = match.start()
+        if token in _SEPARATORS:
+            close_segment()
+            continue
+        word = token.rsplit("/", 1)[-1]
+        if word in _WRITE_VERBS:
+            offsets.append(start)
+        if "inplace" in token or token == "--in-place" or token.startswith("--in-place"):
+            offsets.append(start)
+        if word in ("sed", "perl", "ruby", "curl", "git", "awk", "gawk", "mawk"):
+            active.add(word)
+        elif word in _FORMATTERS:
+            formatter_at = start if formatter_at is None else formatter_at
+        elif word == "ruff":
+            active.add("ruff")
+        if token in _CHECK_ONLY:
+            check_only = True
+        if "sed" in active and (_IN_PLACE_CLUSTER.fullmatch(token) or token == "--in-place"):
+            offsets.append(start)
+        if ("perl" in active or "ruby" in active) and _IN_PLACE_CLUSTER.fullmatch(token):
+            offsets.append(start)
+        if "curl" in active and (
+            _CURL_OUTPUT_CLUSTER.fullmatch(token)
+            or token in ("--remote-name", "--remote-name-all", "--create-dirs")
+            or token.startswith("--output")
+        ):
+            offsets.append(start)
+        if "git" in active and token in _GIT_WRITES:
+            offsets.append(start)
+        if "ruff" in active and (token == "format" or token.startswith("--fix") or token == "--unsafe-fixes"):
+            formatter_at = start if formatter_at is None else formatter_at
+    close_segment()
+    return offsets
+
+
+def _open_write_offset(command: str) -> int | None:
+    """Offset of the first ``open(`` call whose next 200 characters carry a write/append/exclusive mode."""
+    for call in _OPEN_CALL.finditer(command):
+        end = call.end()
+        window_end = end + _OPEN_WINDOW
+        if _FIRST_ARG_MODE.match(command, end, window_end) or _LATER_ARG_MODE.search(command, end, window_end):
+            return call.start()
+    return None
+
+
+def bash_write_offset(command: str) -> int | None:
+    """Locate the first write indicator in a Bash command's text.
 
     Parameters
     ----------
     command : str
         The Bash tool call's ``command`` text.
-    prefix : str
-        A path prefix such as ``"src/"`` or ``"tests/"``.
 
     Returns
     -------
     int | None
         The smallest offset into *command* at which a write indicator starts, or
-        ``None`` when the command does not mention *prefix* or shows no write.
-        A caller ordering a write against a later word in the same command (a
-        pytest run) compares offsets.
+        ``None`` when none is found. A command longer than ``BASH_COMMAND_CAP`` is
+        not scanned and answers ``0``. A caller ordering a write against a later
+        word in the same command (a pytest run) compares offsets.
     """
-    if not isinstance(command, str) or not prefix:
+    if not isinstance(command, str):
         return None
-    if not re.search(rf"(?<!\w){re.escape(prefix)}", command):
-        return None
-    offsets = [match.start() for pattern in _WRITE_PATTERNS if (match := pattern.search(command))]
+    if len(command) > BASH_COMMAND_CAP:
+        return 0
+    offsets = _token_write_offsets(command)
+    snippet = _SNIPPET_WRITES.search(command)
+    if snippet:
+        offsets.append(snippet.start())
+    opened = _open_write_offset(command)
+    if opened is not None:
+        offsets.append(opened)
     redirect = _first_file_redirect(command)
     if redirect is not None:
         offsets.append(redirect)
     return min(offsets) if offsets else None
 
 
-def bash_may_write_under(command: str, prefix: str) -> bool:
-    """Return whether a Bash command might write a file under *prefix*; see ``bash_write_offset``."""
-    return bash_write_offset(command, prefix) is not None
+def classify_bash_command(command: str) -> str:
+    """Classify a Bash command as ``"none"``, ``"tests"`` or ``"source"``, failing closed.
 
+    ``none`` only when the text shows no write indicator: a redirection to a file
+    (not ``2>&1``, not ``>/dev/null``), ``tee``, ``sed`` with an in-place flag in any
+    spelling, ``perl``/``ruby`` with a flag cluster holding ``i``, ``awk -i inplace``,
+    ``ed``/``ex``/``vi``/``vim``, a python/node/ruby snippet with a write API
+    (``open`` with a write, append or exclusive mode in any quoting, ``.write(``,
+    ``write_text``, ``fileinput``, ``shutil.copy``/``move``, ``os.replace``/``rename``/
+    ``remove``, ``Path.rename``/``unlink``/``touch`` and the like), ``curl -o``/``-O``,
+    ``wget``, ``mv``, ``cp``, ``rm``, ``install``, ``rsync``, ``ln``, ``touch``,
+    ``truncate``, ``dd``, ``patch``, ``git apply``/``checkout``/``restore``/``stash``/
+    ``reset``/``clean``/``am``/``cherry-pick`` and the other tree-changing git verbs, or a
+    formatter or fixer run without ``--check``/``--diff`` (``ruff format``,
+    ``ruff check --fix``, ``black``, ``isort``, ``autopep8``, ``yapf``, ``prettier``).
 
-def is_possible_write_under(event: ToolCallEvent, prefix: str) -> bool:
-    """Return whether *event* is a ``Bash`` call whose command might write under *prefix*.
+    A call with an indicator is ``tests`` only when it literally names a tests path
+    (``tests/…``, ``test_*.py``, ``*_test.py``, ``conftest.py``) AND ``src`` appears
+    nowhere in it as a path-ish token (``\bsrc\b``: ``src/x``, ``cd src``,
+    ``os.path.join('src', …)``, ``D=src``, ``find src``). Every other write is
+    ``source``, including one that names neither directory. A command longer than
+    ``BASH_COMMAND_CAP`` is ``source`` without being scanned.
 
-    Edit-tool events are not looked at: ``Edit``, ``Write`` and ``NotebookEdit``
-    name their path exactly and are judged by their own path.
+    The only way to over-credit is a write that matches no indicator at all: a tool
+    or idiom this list does not name, an in-place edit by a program that is not in
+    it, or a script file that was never written through the transcript's own tools
+    and is run later. A read-only call that holds a write verb as an argument, any
+    ``src`` token (a heredoc body, a comment, a workdir path with a ``src`` segment),
+    or a write elsewhere over-counts, which can only cost a hit.
     """
-    if event.name != "Bash" or not isinstance(event.input, dict):
-        return False
-    command = event.input.get("command")
-    return isinstance(command, str) and bash_may_write_under(command, prefix)
+    offset = bash_write_offset(command)
+    if offset is None:
+        return "none"
+    if len(command) > BASH_COMMAND_CAP:
+        return "source"
+    if _TESTS_MENTION.search(command) and not _SRC_TOKEN.search(command):
+        return "tests"
+    return "source"
 
 
-def test_failed_before_first_source_write(events: list[ToolCallEvent], *, source_prefix: str = "src/") -> bool:
-    """Ordering predicate: a test failed before the first possible source write.
+def _is_test_basename(name: str) -> bool:
+    return (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py") or name == "conftest.py"
 
-    Like ``test_failed_before_first_source_edit``, with one addition: a ``Bash``
-    call that might write under *source_prefix* (``bash_write_offset``) is a
-    source write as well as an ``Edit``/``Write``/``NotebookEdit`` of a non-test
-    path. Ordering is by event ordinal, exactly as in ``precedes``: a Bash call
-    that both writes the source and shows the red result shares one ordinal with
-    itself, so that red result is not credited as coming first.
+
+def _classify_edit_path(path: str) -> str:
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return "none"
+    directories = segments[:-1]
+    if _is_test_basename(segments[-1]):
+        return "tests"
+    if "src" in directories:
+        return "source"
+    if "tests" in directories:
+        return "tests"
+    return "none"
+
+
+def classify_write_event(event: ToolCallEvent) -> str:
+    """Classify a tool-call event as ``"none"``, ``"tests"`` or ``"source"``.
+
+    A ``Bash`` event is read by its command (``classify_bash_command``). An
+    ``Edit``, ``Write``, ``NotebookEdit`` or ``MultiEdit`` event is read by its
+    path's segments: a test file's basename (``test_*.py``, ``*_test.py``,
+    ``conftest.py``) is ``tests``; otherwise a ``src`` directory segment makes it
+    ``source`` and a ``tests`` directory segment ``tests``; a path with neither is
+    ``none`` (a scratch file is not a source write). Segments, not substrings, so
+    ``/work/resrc/x.py`` is ``none`` and ``/Users/x/tests/ws/src/shop/cart.py`` is
+    ``source``. Every other tool is ``none``.
+    """
+    if not isinstance(event.input, dict):
+        return "none"
+    if event.name == "Bash":
+        command = event.input.get("command")
+        return classify_bash_command(command) if isinstance(command, str) else "none"
+    if event.name in _EDIT_FAMILY:
+        path = event.input.get("file_path") or event.input.get("notebook_path") or ""
+        return _classify_edit_path(str(path))
+    return "none"
+
+
+def test_failed_before_first_source_write(events: list[ToolCallEvent]) -> bool:
+    """Ordering predicate: a test, written for, failed before the first source write.
+
+    A source write is an event ``classify_write_event`` calls ``source``; a test
+    write is one it calls ``tests``. A credited red result is a ``Bash`` event with a
+    pytest failure marker (as in ``test_failed_before_first_source_edit``) such that
+    some test write sits at an ordinal at or below it (the same call is allowed: the
+    agent appends the test and runs pytest in one Bash call) and its ordinal is
+    strictly below the first source write's. A Bash call that writes the source and
+    shows the red result shares one ordinal with itself, so it is not credited.
 
     Parameters
     ----------
     events : list[ToolCallEvent]
         The transcript's tool-call events.
-    source_prefix : str
-        The path prefix whose Bash writes count as source writes.
 
     Returns
     -------
     bool
-        ``True`` only when a test-failure event's ordinal is strictly below the
-        first source-write event's ordinal; ``False`` when either never occurs.
+        ``True`` only when a credited red result precedes the first source write;
+        ``False`` when there is no source write, no red result, or no test write
+        at or before any red result that comes first.
     """
-
-    def is_source_write(event: ToolCallEvent) -> bool:
-        return _is_source_edit(event) or is_possible_write_under(event, source_prefix)
-
-    return precedes(events, _is_test_failure, is_source_write)
+    source_ordinals = []
+    test_ordinals = []
+    for event in events:
+        kind = classify_write_event(event)
+        if kind == "source":
+            source_ordinals.append(event.ordinal)
+        elif kind == "tests":
+            test_ordinals.append(event.ordinal)
+    if not source_ordinals or not test_ordinals:
+        return False
+    first_source = min(source_ordinals)
+    first_test = min(test_ordinals)
+    return any(
+        _is_test_failure(event) and first_test <= event.ordinal < first_source for event in events
+    )
 
 
 def skill_triggered_first(transcript: Transcript, skill: str) -> bool:

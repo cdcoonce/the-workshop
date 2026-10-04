@@ -151,6 +151,19 @@ def test_the_key_is_refused_on_a_case_with_a_triggering_item(tmp_path, key_line)
         score_attempt(case_dir, [], None, set())
 
 
+@pytest.mark.parametrize("value", ["true", "false"])
+def test_the_key_inside_an_item_table_is_refused_not_silently_ignored(tmp_path, value):
+    # Placed after the [[items]] header it parses as an item key and would never reach the harness.
+    case_dir = _write_case(tmp_path)
+    text = (case_dir / "case.toml").read_text(encoding="utf-8")
+    (case_dir / "case.toml").write_text(text + f"invoke_skill = {value}\n", encoding="utf-8")
+    for entry in (build_dispatch_prompt, build_no_skill_prompt):
+        with pytest.raises(CaseContractError, match="invoke_skill.*item.*top-level"):
+            entry(case_dir)
+    with pytest.raises(CaseContractError, match="invoke_skill.*item.*top-level"):
+        score_attempt(case_dir, [], None, set())
+
+
 def test_a_triggering_case_without_the_key_is_unaffected(tmp_path):
     case_dir = _write_case(tmp_path, kind="triggering")
     assert build_dispatch_prompt(case_dir) == _PROMPT

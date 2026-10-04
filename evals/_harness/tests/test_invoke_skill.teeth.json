@@ -121,6 +121,14 @@
       "replace": "if True:"
     },
     {
+      "label": "[item key] invoke_skill inside an [[items]] table is no longer refused",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_inside_an_item_table_is_refused_not_silently_ignored: a key placed after the first [[items]] header would parse as an item key and be ignored without a word.",
+      "find": "        if \"invoke_skill\" in item:\n            raise",
+      "replace": "        if False:\n            raise"
+    },
+    {
       "label": "[control] the preamble is formatted through format_map",
       "file": "../dispatch.py",
       "oracle": "real",

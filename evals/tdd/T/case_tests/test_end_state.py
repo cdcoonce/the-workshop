@@ -527,7 +527,7 @@ def _tests_final(predicates, workdir):
     return json.loads(predicates.end_state(workdir, CASE_DIR, [])["tests-final.json"])
 
 
-def test_tests_final_holds_every_python_test_file_with_its_text(predicates, tmp_path):
+def test_tests_final_holds_every_python_file_outside_src_with_its_text(predicates, tmp_path):
     workdir = _copy_fixture(tmp_path)
     tests = _tests_final(predicates, workdir)
     assert set(tests) == {"tests/test_cart.py", "tests/test_checkout.py"}
@@ -554,22 +554,40 @@ def test_tests_final_follows_a_deleted_and_a_renamed_test_file(predicates, tmp_p
     assert TAUTOLOGY in tests["tests/test_cart_old.py"]
 
 
-def test_tests_final_skips_caches_and_files_that_are_not_python(predicates, tmp_path):
+def test_tests_final_follows_a_test_file_moved_out_of_the_tests_directory(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "old_tests").mkdir()
+    (workdir / "tests/test_cart.py").rename(workdir / "old_tests/test_cart.py")
+    (workdir / "moved_test.py").write_text(f"def test_x():\n    {TAUTOLOGY}\n", encoding="utf-8")
+    tests = _tests_final(predicates, workdir)
+    assert set(tests) == {"tests/test_checkout.py", "old_tests/test_cart.py", "moved_test.py"}
+    assert TAUTOLOGY in tests["old_tests/test_cart.py"]
+
+
+def test_tests_final_skips_src_caches_virtualenvs_and_files_that_are_not_python(predicates, tmp_path):
     workdir = _copy_fixture(tmp_path)
     (workdir / "tests/__pycache__").mkdir()
     (workdir / "tests/__pycache__/test_cart.cpython-313.pyc").write_bytes(b"\x00")
+    (workdir / "tests/__pycache__/helper.py").write_text("x = 1\n", encoding="utf-8")
     (workdir / "tests/notes.md").write_text("x", encoding="utf-8")
     (workdir / "tests/data").mkdir()
     (workdir / "tests/data/case.json").write_text("{}", encoding="utf-8")
     (workdir / "tests/data/test_nested.py").write_text("def test_nested():\n    pass\n", encoding="utf-8")
+    (workdir / ".venv/lib").mkdir(parents=True)
+    (workdir / ".venv/lib/site.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / ".pytest_cache").mkdir()
+    (workdir / ".pytest_cache/stray.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / "scripts").mkdir()
+    (workdir / "scripts/fix.py").write_text("print('fix')\n", encoding="utf-8")
     assert set(_tests_final(predicates, workdir)) == {
         "tests/test_cart.py",
         "tests/test_checkout.py",
         "tests/data/test_nested.py",
+        "scripts/fix.py",
     }
 
 
-def test_tests_final_is_an_empty_object_when_the_tests_directory_is_gone(predicates, tmp_path):
+def test_tests_final_is_an_empty_object_when_no_python_file_is_left_outside_src(predicates, tmp_path):
     workdir = _copy_fixture(tmp_path)
     shutil.rmtree(workdir / "tests")
     assert _tests_final(predicates, workdir) == {}
@@ -623,6 +641,23 @@ def test_a_source_first_attempt_made_through_bash_misses_t1_with_every_end_state
 def test_a_one_call_attempt_made_through_bash_misses_t1(tmp_path):
     attempt, _ = _bash_attempt(tmp_path, "bash_one_call", solve=True)
     assert attempt.item_hits["T1"] == "miss"
+
+
+def test_a_test_file_moved_out_of_tests_with_the_tautology_intact_misses_t3_from_its_snapshot(tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    _solve(workdir)
+    (workdir / "old_tests").mkdir()
+    (workdir / "old_tests/test_cart.py").write_text(f"def test_x():\n    {TAUTOLOGY}\n", encoding="utf-8")
+    cart_tests = workdir / "tests/test_cart.py"
+    cart_tests.write_text(
+        cart_tests.read_text(encoding="utf-8").replace(TAUTOLOGY, "assert subtotal_cents(items) == 1500"),
+        encoding="utf-8",
+    )
+    transcript_path = Path(__file__).resolve().parent / "transcripts" / "bash_test_first.jsonl"
+    dest = tmp_path / "end_state"
+    snapshot_end_state(CASE_DIR, workdir, [transcript_path], dest)
+    attempt, _ = score_attempt(CASE_DIR, [transcript_path], None, {"T1"}, end_state_dir=dest)
+    assert attempt.item_hits["T3"] == "miss"
 
 
 def test_a_bash_attempt_that_changed_nothing_misses_t1_and_t3(tmp_path):
