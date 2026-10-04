@@ -101,46 +101,34 @@ check-teeth-anchors:
 # never ran.
 .PHONY: test-machinery
 test-machinery:
-	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.6,<0.7' python -m pytest -q tests
+	cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q tests
 
-# graphmark version-matrix parity: the rest of the machinery suite runs under
-# graphmark 0.6 (graph_cli's own pinned floor), but command.md and the
-# vault's own ci/vault_health.py gate both pin graphmark>=0.7,<0.8 — the
-# wrap-up collector's `gate` check (plugins/workbench/machinery/engine/
-# wrap_up_audit.py) reads graphmark.config.CheckPolicy and graphmark.check,
-# and 0.6/0.7 can disagree on edge fixtures. Runs only that one suite, under
-# 0.7, so a real disagreement fails loudly here instead of shipping unnoticed.
+# graphmark parity targets: the rest of the machinery suite runs under the
+# machinery env's own pin (pyproject.toml, graphmark>=0.10,<0.11), the same
+# range command.md and the vault's ci/vault_health.py gate use. The wrap-up
+# collector's `gate` check (plugins/workbench/machinery/engine/wrap_up_audit.py)
+# reads graphmark.config.CheckPolicy and graphmark.check. This target runs only
+# that one suite through a `--with` overlay, so the overlay and the project pin
+# are checked separately and a drift between them fails loudly.
 #
 # Deliberately NOT `cd plugins/workbench/machinery` first: that directory is
-# its own uv project (pyproject.toml pins graphmark>=0.6,<0.7) with a synced
-# `.venv/` already on disk. `uv run --with 'graphmark>=0.7,<0.8'` from
-# INSIDE it resolves 0.7.2 correctly but then silently imports 0.6.0 from
-# that pre-existing `.venv` anyway — verified with `uv run -v`, which shows
-# `Selecting: graphmark==0.7.2` immediately followed by an import from
-# `machinery/.venv/lib/.../graphmark/__init__.py` (0.6.0). `--no-project` and
-# `--isolated` do not change this. Running from the repo root instead (whose
-# own `.venv`/pyproject never mention graphmark) has no such shadow — the
-# `--with` overlay is what actually gets imported. Confirmed by literally
-# counting: this file collects 71 tests total, 3 of them gated
-# `@NEEDS_GRAPHMARK_07`; running the wrong way silently reports 68 passed +
-# 3 skipped, no error, looking like a clean run.
+# its own uv project with a synced `.venv/` already on disk, and a `--with`
+# overlay run from INSIDE it can silently import the `.venv` copy instead of
+# the overlay (verified with `uv run -v` while the pins differed). Running from
+# the repo root has no such shadow. Keep the overlay range equal to the project
+# pin; if they ever diverge again, run from the root.
 .PHONY: test-wrap-up-gate-parity
 test-wrap-up-gate-parity:
-	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
 
-# Same graphmark version-matrix parity target, for the cold-read evidence
-# resolver's wikilink resolution (plugins/workbench/machinery/engine/
-# cold_read_evidence.py, via graph_cli.diagnose). command.md pins
-# graphmark>=0.7,<0.8 for this script too. Same shadow-bug reasoning as
-# test-wrap-up-gate-parity above: deliberately NOT `cd
-# plugins/workbench/machinery` first, or the `--with 'graphmark>=0.7,<0.8'`
-# overlay silently imports that directory's own pinned 0.6.0 `.venv`
-# instead — confirmed the same way, by printing
-# `importlib.metadata.version("graphmark")` inside the pytest process
-# (test_graphmark_07_wikilink_resolution_matches_06).
+# Same graphmark parity target, for the cold-read evidence resolver's wikilink
+# resolution (plugins/workbench/machinery/engine/cold_read_evidence.py, via
+# graph_cli.diagnose). command.md pins the same graphmark range. Same
+# shadow-bug reasoning as test-wrap-up-gate-parity above: deliberately NOT
+# `cd plugins/workbench/machinery` first.
 .PHONY: test-cold-read-evidence-wikilink-parity
 test-cold-read-evidence-wikilink-parity:
-	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.7,<0.8' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
 
 # Eval harness gate (#991): the harness's own tests, plus every fixture
 # case's case_tests/ directory (owned by the fixture children, #998-#1002),

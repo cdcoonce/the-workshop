@@ -504,8 +504,8 @@ def _find_check_kwarg_values(tree: ast.Module) -> list[ast.expr]:
 def _parse_gate_policy(vault_root: Path) -> tuple[dict[str, int] | None, str | None]:
     """Statically parse ``<vault_root>/ci/vault_health.py``'s POLICY and confirm it's applied.
 
-    Never imports or execs the gate file: it requires graphmark>=0.7 (this
-    process may only have 0.6) and running it as a module executes real vault
+    Never imports or execs the gate file: it needs the graphmark that
+    command.md pins (>=0.10), which this process may not have, and running it as a module executes real vault
     code (``VaultConfig(...)``, ``graphmark.build(...)``) as a side effect of
     import. Parses with ``ast`` instead.
 
