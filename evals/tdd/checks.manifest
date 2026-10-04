@@ -1,0 +1,1 @@
+T1 Works test-first with a real result: a failing test result before the first possible source write, a change under src, the suite green and red again with the source reverted (calibrated 2026-10-04: skill 6/6, no-skill 0/3)
