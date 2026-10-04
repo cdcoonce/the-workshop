@@ -1,0 +1,805 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_hardening.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_hardening.py"
+  ],
+  "mutants": [
+    {
+      "label": "[1 unquoted heredoc] a body with $, a backtick or a backslash is data whatever the delimiter",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_1_an_expanding_heredoc_or_a_filtered_script_is_source on the $(...), backtick and $x rows.",
+      "find": "                if not quoted and (\"$\" in joined or \"`\" in joined or \"\\\\\" in joined):",
+      "replace": "                if False:"
+    },
+    {
+      "label": "[1 backslash] a backslash in an unquoted body is data",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the EO\\<newline>F rows of test_class_1_an_expanding_heredoc_or_a_filtered_script_is_source: real bash and zsh join the lines and end the heredoc early.",
+      "find": " or \"`\" in joined or \"\\\\\" in joined):",
+      "replace": " or \"`\" in joined):"
+    },
+    {
+      "label": "[1 filter] a heredoc body reaches an interpreter through any command",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the sed, tee, head, tr and grep filter rows of test_class_1_an_expanding_heredoc_or_a_filtered_script_is_source.",
+      "find": "        passes = _is_bare_cat(cmd)",
+      "replace": "        passes = True"
+    },
+    {
+      "label": "[1 cat operand] cat with an operand passes its stdin through",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the cat -n, cat x and cat - x filter rows.",
+      "find": "    return words is not None and len(words) == 1 and words[0]",
+      "replace": "    return words is not None and len(words) >= 1 and words[0]"
+    },
+    {
+      "label": "[1 cat redirect] cat with a file redirect passes its stdin through",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the cat <<'EOF' > /tmp/y | bash row.",
+      "find": "    if cmd.targets:\n        return False\n    words = _strip_wrappers(cmd.words)\n    return words is not None",
+      "replace": "    words = _strip_wrappers(cmd.words)\n    return words is not None"
+    },
+    {
+      "label": "[2 env name] a prefix name outside the short list is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the PYTEST_ADDOPTS, RUFF_OUTPUT_FILE, BASH_ENV, PYTHONPATH and FOO=1 rows of test_class_2_an_unlisted_prefix_or_a_wrapper_option_is_source.",
+      "find": "    return name in _SAFE_ENV_NAMES and _SAFE_ENV_VALUE.fullmatch(value) is not None",
+      "replace": "    return _SAFE_ENV_VALUE.fullmatch(value) is not None"
+    },
+    {
+      "label": "[2 env value] a listed name with a non-literal value is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the LANG=$X, LANG='a b' and TZ=$(...) rows.",
+      "find": "    return name in _SAFE_ENV_NAMES and _SAFE_ENV_VALUE.fullmatch(value) is not None",
+      "replace": "    return name in _SAFE_ENV_NAMES"
+    },
+    {
+      "label": "[2 wrapper option] env -i, exec -c, time -p, command -v and sudo -n take an option",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the env -i, exec -c, time -p, command -v, nohup -x and sudo -n rows.",
+      "find": "            elif i < n and words[i].startswith(\"-\"):\n                return None",
+      "replace": "            elif i < n and words[i].startswith(\"-\"):\n                i += 1"
+    },
+    {
+      "label": "[2 nice] nice takes any option",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the nice -n x ls row.",
+      "find": "            if base == \"nice\" and i + 1 < n and words[i] == \"-n\" and _INTEGER.fullmatch(words[i + 1]):",
+      "replace": "            if base == \"nice\" and i + 1 < n and words[i] == \"-n\":"
+    },
+    {
+      "label": "[2 bare assignment] a bare NAME=value of an exported name is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the PATH=/x, HOME=/x, GIT_DIR=x, BASH_ENV=x and LD_PRELOAD=x rows.",
+      "find": "            if _EXPORTED_NAMES.fullmatch(word.split(\"=\", 1)[0].rstrip(\"+\")):\n                return None",
+      "replace": "            if False:\n                return None"
+    },
+    {
+      "label": "[2 for variable] a for variable named like an exported variable is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the for PATH in ..., for GIT_EXTERNAL_DIFF in ... and for BASH_ENV in ... rows.",
+      "find": " or _EXPORTED_NAMES.fullmatch(name):",
+      "replace": ":"
+    },
+    {
+      "label": "[3 git -c] git -c accepts any key",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the git -c core.fsmonitor, diff.external and alias rows.",
+      "find": "        elif arg == \"-c\" and i + 1 < n and _git_config_ok(args[i + 1]):",
+      "replace": "        elif arg == \"-c\" and i + 1 < n:"
+    },
+    {
+      "label": "[3 git pager] git -c core.pager accepts any program",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git -c core.pager='cp a src/b' log and git -c core.pager=less log.",
+      "find": "        return value == \"cat\"",
+      "replace": "        return True"
+    },
+    {
+      "label": "[3 git -C src] git -C accepts a directory with a src segment",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git -C src status, git -C ./src/x diff and git -C /abs/src/shop log.",
+      "find": "        and not any(ch in _CD_GLOB for ch in directory)\n        and not _SRC_TOKEN.search(directory)\n    )",
+      "replace": "        and not any(ch in _CD_GLOB for ch in directory)\n    )"
+    },
+    {
+      "label": "[3 git global options] a git option before the subcommand is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git --exec-path, --git-dir, --work-tree, --paginate and --bare rows.",
+      "find": "        elif arg == \"-C\" and i + 1 < n and _git_directory_ok(args[i + 1]):\n            i += 2\n        else:\n            return _UNKNOWN, []",
+      "replace": "        elif arg == \"-C\" and i + 1 < n and _git_directory_ok(args[i + 1]):\n            i += 2\n        else:\n            i += 1"
+    },
+    {
+      "label": "[3 git output abbreviation] only the full --output spelling is refused",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by git diff --outp=src/x, git log --out src/x and git log --ou=src/x.",
+      "find": "    return name.startswith(\"--output\") or (len(name) >= 4 and \"--output\".startswith(name))",
+      "replace": "    return name.startswith(\"--output\")"
+    },
+    {
+      "label": "[4 xargs child] xargs may run find",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by echo -delete | xargs find src and ls | xargs find.",
+      "find": "\"head\", \"tail\", \"echo\", \"printf\"})\n\n\ndef _xargs",
+      "replace": "\"head\", \"tail\", \"echo\", \"printf\", \"find\"})\n\n\ndef _xargs"
+    },
+    {
+      "label": "[4 xargs child sort] xargs may run sort, tee, git, ruff and pytest",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the xargs tee, uniq, sort, git diff, ruff check and pytest rows.",
+      "find": "\"head\", \"tail\", \"echo\", \"printf\"})\n\n\ndef _xargs",
+      "replace": "\"head\", \"tail\", \"echo\", \"printf\", \"sort\", \"tee\", \"git\", \"uniq\", \"ruff\", \"pytest\"})\n\n\ndef _xargs"
+    },
+    {
+      "label": "[4 xargs option] an xargs option other than -n N, -I {} and -0 is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ls | xargs -P 4 cat, -r, -t, -I% and -n1 rows.",
+      "find": "            i += 2\n        else:\n            return _UNKNOWN, []\n    if i >= n:\n        return _RO, []\n    head = args[i].lstrip",
+      "replace": "            i += 2\n        else:\n            i += 1\n    if i >= n:\n        return _RO, []\n    head = args[i].lstrip"
+    },
+    {
+      "label": "[4 xargs replace] xargs -I accepts any replacement string",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ls | xargs -I% cat % and -I % cat %.",
+      "find": "args[i + 1] == \"{}\":",
+      "replace": "True:"
+    },
+    {
+      "label": "[5 sed w command] the sed scanner reads w, W, r, R and e as commands taking a file name",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed -n 'w src/f' x, sed -n '/x/Iw src/f' x and the \\%x%w rows.",
+      "find": "        elif c in \"pdnN=\":\n            end = _sed_end(script, i + 1)",
+      "replace": "        elif c in \"wWrRe\":\n            end = script.find(\"\\n\", i)\n            i = n if end < 0 else end\n        elif c in \"pdnN=\":\n            end = _sed_end(script, i + 1)"
+    },
+    {
+      "label": "[5 sed s flags] the sed s flags w and e are accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed 's/a/b/w src/f' x, 's/a/b/e' and 's/a/b/gw src/f'.",
+      "find": "            if c == \"s\":\n                while j < n and script[j] in _SED_S_FLAGS:\n                    j += 1\n",
+      "replace": "            if c == \"s\":\n                while j < n and script[j] in _SED_S_FLAGS:\n                    j += 1\n                if j < n and script[j] in \"we\":\n                    j = n\n"
+    },
+    {
+      "label": "[5 sed long options] a sed long option other than the exact list is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed --in, --i=.bak, --in-pl, --exp=, --debug and --version rows.",
+      "find": "            elif arg not in _SED_LONG:\n                return _UNKNOWN, []",
+      "replace": "            elif arg not in _SED_LONG:\n                pass"
+    },
+    {
+      "label": "[5 sed in-place] a sed -i letter is read as a plain flag",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_5_an_in_place_sed_of_a_tests_file_is_still_tests.",
+      "find": "                if letter == \"i\":\n                    in_place = True\n                    break\n                if letter == \"e\":",
+      "replace": "                if letter == \"i\":\n                    break\n                if letter == \"e\":"
+    },
+    {
+      "label": "[5 sed --in-place] sed --in-place is read as read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed --in-place 's/a/b/' tests/test_cart.py.",
+      "find": "            elif name == \"--in-place\":\n                in_place = True",
+      "replace": "            elif name == \"--in-place\":\n                pass"
+    },
+    {
+      "label": "[5 sed address flags] an address flag I or M is not consumed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the SED_NONE rows /x/Ip and \\%x%Ip.",
+      "find": "    while end < n and script[end] in _SED_ADDRESS_FLAGS:",
+      "replace": "    while False:"
+    },
+    {
+      "label": "[5 sed readings] the GNU and BSD readings of a bracket need not agree",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed 's/[/]/g' x, sed 'y/[/]/' x and sed 'y/a[b/c/' x.",
+      "find": "    if replacement or _sed_bracket_end(script, start, delim) == j:",
+      "replace": "    if True:"
+    },
+    {
+      "label": "[5 sed -f] sed -f is a plain flag",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sed -f p x, sed -nf p x and sed -s -f p x.",
+      "find": "_SED_FLAG_LETTERS = frozenset(\"nErszu\")",
+      "replace": "_SED_FLAG_LETTERS = frozenset(\"nErszuf\")"
+    },
+    {
+      "label": "[5 sed script cap] the sed script size cap is gone",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_13_a_sed_script_over_the_size_cap_is_source_and_fast.",
+      "find": "    if len(script) > _MAX_SCRIPT:\n        return False\n    n = len(script)\n    i = 0\n    depth = 0",
+      "replace": "    n = len(script)\n    i = 0\n    depth = 0"
+    },
+    {
+      "label": "[6 sort cluster] a sort short cluster with an unlisted letter (o, T, S) is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sort -uo, -ro, -o, -osrc/so, -T, -S 1 and -m rows.",
+      "find": "                break\n            return False\n    return True",
+      "replace": "                break\n            continue\n    return True"
+    },
+    {
+      "label": "[6 sort long] a sort long option abbreviation is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by sort --ou=, --out=, --o=, --output=, --compress-program=, --temp= and --parallel= rows.",
+      "find": "            if arg.split(\"=\", 1)[0] not in _SORT_LONG:\n                return False",
+      "replace": "            if arg.split(\"=\", 1)[0] not in _SORT_LONG:\n                pass"
+    },
+    {
+      "label": "[6 tree o] tree -o in a cluster is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by tree -ao src/t, tree -o f and tree -Ho src/x.",
+      "find": "(\"o\" in arg or \"R\" in arg)",
+      "replace": "(\"R\" in arg)"
+    },
+    {
+      "label": "[6 tree R] tree -R is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by tree -R and tree -aR src.",
+      "find": "(\"o\" in arg or \"R\" in arg)",
+      "replace": "(\"o\" in arg)"
+    },
+    {
+      "label": "[6 tree long] tree --o* and --fromfile are accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by tree --output=f and tree --o f.",
+      "find": "            if arg.startswith((\"--o\", \"--fromfile\")):",
+      "replace": "            if arg.startswith((\"--fromfile\",)):"
+    },
+    {
+      "label": "[6 uniq] uniq with two operands is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uniq in out, uniq -c in out and uniq in out extra.",
+      "find": "    return operands <= 1",
+      "replace": "    return True"
+    },
+    {
+      "label": "[6 uniq BSD] a word after the first operand that looks like a flag is not an operand",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uniq x -c, uniq a -i and uniq -- -c -d: BSD uniq reads them as the output file.",
+      "find": "        else:\n            operands += 1\n    return operands <= 1",
+      "replace": "        elif not arg.startswith(\"-\"):\n            operands += 1\n    return operands <= 1"
+    },
+    {
+      "label": "[7 pytest] a pytest option off the allow-list is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by pytest --log-file=, -o cache_dir=, --json-report-file=, --debug=, --pdb, --fixtures rows.",
+      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
+      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"@\"):\n            return False"
+    },
+    {
+      "label": "[7 pytest @file] a pytest @argsfile operand is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by pytest @args.txt and pytest -q @args.txt.",
+      "find": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
+      "replace": "        elif _PYTEST_TB.fullmatch(arg) or _PYTEST_REPORT.fullmatch(arg) or _PYTEST_COUNT.fullmatch(arg):\n            continue\n        elif arg.startswith(\"-\") and arg != \"-\":\n            return False"
+    },
+    {
+      "label": "[7 pytest -p] pytest -p loads any plugin",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by pytest -p x and python -m pytest -p tests.plugin.",
+      "find": "            if i >= n or args[i] != \"no:cacheprovider\":",
+      "replace": "            if i >= n:"
+    },
+    {
+      "label": "[7 pytest --] operands after -- are not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the pytest -- @args row.",
+      "find": "            return not any(rest.startswith(\"@\") for rest in args[i:])",
+      "replace": "            return True"
+    },
+    {
+      "label": "[7 mypy] a mypy option off the allow-list is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by mypy --junit-xml, --cache-dir, --html-report and -p rows.",
+      "find": "            if not _PY_VERSION.fullmatch(arg.split(\"=\", 1)[1]):\n                return False\n        elif (arg.startswith(\"-\") and arg != \"-\") or arg.startswith(\"@\"):\n            return False",
+      "replace": "            if not _PY_VERSION.fullmatch(arg.split(\"=\", 1)[1]):\n                return False\n        elif arg.startswith(\"@\"):\n            return False"
+    },
+    {
+      "label": "[7 ruff check] a ruff check option off the allow-list is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ruff check -osrc/x, --cache-dir=, --output-file=, --add-noqa and --fix rows.",
+      "find": "        elif arg.startswith(\"-\") and arg != \"-\":\n            return _UNKNOWN, []\n        else:\n            operands.append(arg)\n    if sub == \"check\" or checked:",
+      "replace": "        elif arg.startswith(\"-\") and arg != \"-\":\n            continue\n        else:\n            operands.append(arg)\n    if sub == \"check\" or checked:"
+    },
+    {
+      "label": "[7 ruff format] a ruff format without --check is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ruff format . and ruff format src, and the tests-class formatter rows.",
+      "find": "    if sub == \"check\" or checked:\n        return _RO, []\n    return _write_operands(operands)",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[7 formatter] a black or isort option off the allow-list is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by black --check --workers 4 ., isort --check --overwrite-in-place and isort -c --atomic rows.",
+      "find": "        elif arg.startswith(\"-\") and arg != \"-\":\n            return _UNKNOWN, []\n        else:\n            operands.append(arg)\n    return (_RO, []) if checked else _write_operands(operands)",
+      "replace": "        elif arg.startswith(\"-\") and arg != \"-\":\n            continue\n        else:\n            operands.append(arg)\n    return (_RO, []) if checked else _write_operands(operands)"
+    },
+    {
+      "label": "[7 ruff format] ruff format, black and isort without --check or --diff are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by black ., isort . and the formatter tests-class rows.",
+      "find": "    return (_RO, []) if checked else _write_operands(operands)",
+      "replace": "    return _RO, []"
+    },
+    {
+      "label": "[7 ruff output format] a ruff --output-format value is not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ruff check --output-format=bogus . and --output-format=json:src/x .",
+      "find": "            if value not in _RUFF_FORMATS:\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[7 ruff select] a ruff --select value is not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ruff check --select 'E;cp' .",
+      "find": "            if not _RULE_LIST.fullmatch(value):\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[7 uv blocked] uv run options that point at another project are skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uv run --directory src pytest, --project src, --with-editable ., --cache-dir and --env-file rows.",
+      "find": "        if name in _UV_BLOCKED_OPTIONS:\n            return _UNKNOWN, []",
+      "replace": "        if False:\n            return _UNKNOWN, []"
+    },
+    {
+      "label": "[7 uv with] uv run --with accepts a path",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by uv run --with ./src pytest.",
+      "find": "            if \"/\" in value or value.startswith((\"-\", \".\", \"~\")):\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 import allow-list] the inline python import allow-list includes os, shutil and subprocess",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by import os, shutil, subprocess, posix, sqlite3, zipfile, logging, gzip, io, codecs, glob and time rows.",
+      "find": "        \"statistics\", \"datetime\", \"string\", \"operator\", \"functools\", \"pathlib\", \"typing\", \"dataclasses\", \"enum\",\n    }",
+      "replace": "        \"statistics\", \"datetime\", \"string\", \"operator\", \"functools\", \"pathlib\", \"typing\", \"dataclasses\", \"enum\",\n        \"os\", \"shutil\", \"subprocess\", \"posix\", \"sqlite3\", \"zipfile\", \"logging\", \"gzip\", \"io\", \"codecs\", \"glob\", \"time\",\n    }"
+    },
+    {
+      "label": "[8 getattr] getattr, setattr and delattr are allowed names",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by x = getattr, getattr(1, 'x'), setattr(...) and delattr(...).",
+      "find": "\"locals\", \"getattr\", \"setattr\", \"delattr\", \"exec\", \"eval\",",
+      "replace": "\"locals\", \"exec\", \"eval\","
+    },
+    {
+      "label": "[8 exec] exec, eval and compile are allowed names",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by exec('1'), eval('1') and compile(...) rows.",
+      "find": "\"locals\", \"getattr\", \"setattr\", \"delattr\", \"exec\", \"eval\",\n        \"compile\", \"breakpoint\", \"input\", \"help\",",
+      "replace": "\"locals\", \"getattr\", \"setattr\", \"delattr\",\n        \"breakpoint\", \"input\", \"help\","
+    },
+    {
+      "label": "[8 .open mode] the mode of obj.open(path, mode) is read from index 0 only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_8_the_open_mode_is_read_from_the_right_positional (x.open('src/shop.py', 'w')).",
+      "find": "                    candidates = [*node.args, *([keywords[\"mode\"]] if \"mode\" in keywords else [])]",
+      "replace": "                    candidates = [*node.args[:1], *([keywords[\"mode\"]] if \"mode\" in keywords else [])]"
+    },
+    {
+      "label": "[8 -m] python -m accepts any module",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 -m py_compile, http.server, compileall, venv, pip and scripts.apply rows.",
+      "find": "                return _RO, []\n            return _UNKNOWN, []\n        if arg == \"-\":",
+      "replace": "                return _RO, []\n            return _RO, []\n        if arg == \"-\":"
+    },
+    {
+      "label": "[8 json.tool] python -m json.tool accepts a file operand",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 -m json.tool in out, in, in.json and --bogus.",
+      "find": "            if module == \"json.tool\" and _json_tool_ok(args[i + 2 :]):",
+      "replace": "            if module == \"json.tool\":"
+    },
+    {
+      "label": "[8 glued -m] a glued -mMODULE or any short interpreter option is a plain flag",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by python3 -mpy_compile, -Xdev, -Wignore, -i and -x rows.",
+      "find": "_PYTHON_FLAGS = re.compile(r\"-[uBEsSIOq]+\")",
+      "replace": "_PYTHON_FLAGS = re.compile(r\"-[A-Za-z]\\w*\")"
+    },
+    {
+      "label": "[8 module attributes] a module-valued attribute (pathlib.os, json.codecs) is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by import pathlib; pathlib.os.system(...), json.codecs.open(...), re.enum and from pathlib import os.",
+      "find": "        return module.__name__ == \"collections\" and attr == \"abc\"",
+      "replace": "        return True"
+    },
+    {
+      "label": "[8 sys] every attribute of sys is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by import sys; sys.settrace(f) and sys.addaudithook(f).",
+      "find": "    if module is sys and attr not in _PY_SYS_ATTRS:\n        return False\n",
+      "replace": ""
+    },
+    {
+      "label": "[8 from import] a from-import name is not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by from pathlib import os, from json import codecs, from sys import modules, from sys import _getframe and from operator import attrgetter.",
+      "find": "                if alias.name == \"*\" or not _py_attr_ok(module, alias.name):\n                    return _UNKNOWN, []",
+      "replace": "                if alias.name == \"*\":\n                    return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 private attribute] a private or dunder attribute is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by ().__class__.__mro__, object.__subclasses__(), print.__dict__ and sys._getframe().",
+      "find": "            if attr.startswith(\"_\") or attr in _PY_BAD_ATTRS:\n                return _UNKNOWN, []",
+      "replace": "            if attr in _PY_BAD_ATTRS:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 dunder name] a dunder name other than __name__ and __doc__ is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by print(__loader__), print(__spec__) and print(__file__).",
+      "find": "            if node.id in _PY_BAD_NAMES or (\n                node.id.startswith(\"__\") and node.id.endswith(\"__\") and node.id not in _PY_OK_DUNDERS\n            ):",
+      "replace": "            if node.id in _PY_BAD_NAMES:"
+    },
+    {
+      "label": "[8 alias use] a module alias may be used as a value",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by import pathlib as m; x = m, x = pathlib, print(json) and json = 1.",
+      "find": "            if node.id in aliases and (isinstance(node.ctx, (ast.Store, ast.Del)) or id(node) not in receivers):\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 bare open] open used as a value is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by w = open; w('src/x', 'w'), print(open) and functools.partial(open, ...).",
+      "find": "            if node.id == \"open\" and id(node) not in callees:\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 call-only attributes] a write method used as a value is allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by f = Path('src/f').write_text; f('x'), map(Path.touch, ...) and Path('x').write.",
+      "find": "            if attr in _PY_CALL_ONLY_ATTRS and id(node) not in callees:\n                return _UNKNOWN, []",
+      "replace": "            if False:\n                return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 write methods] touch, mkdir, rename, unlink and friends are allowed",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the Path.touch, mkdir, rename, unlink, rmdir, symlink_to, hardlink_to, chmod, copy and move rows.",
+      "find": "                elif attr in _PY_WRITE_ATTRS:\n                    return _UNKNOWN, []",
+      "replace": "                elif False:\n                    return _UNKNOWN, []"
+    },
+    {
+      "label": "[8 write_text] Path(...).write_text is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by Path('src/x').write_text('y') and Path(a).write_bytes(b'y').",
+      "find": "                elif attr in (\"write_text\", \"write_bytes\"):",
+      "replace": "                elif False:"
+    },
+    {
+      "label": "[8 write_text receiver] write_text on any receiver is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by p = Path('tests/x'); p.write_text('y').",
+      "find": "                        targets.append(resolve(receiver.args[0]))\n                    else:\n                        return _UNKNOWN, []",
+      "replace": "                        targets.append(resolve(receiver.args[0]))\n                    else:\n                        pass"
+    },
+    {
+      "label": "[8 replace] Path.replace is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by Path('x').replace('src/y').",
+      "find": "                elif attr == \"replace\" and (len(node.args) < 2 or starred):",
+      "replace": "                elif False:"
+    },
+    {
+      "label": "[8 write handle] .write on a handle with no recorded open is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by x.write('x') with no open, and x.writelines(['a']).",
+      "find": "    if opens > _MAX_OPEN_CALLS or (dot_writes and not targets):",
+      "replace": "    if opens > _MAX_OPEN_CALLS:"
+    },
+    {
+      "label": "[8 open cap] the cap on open calls is gone",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_8_more_than_fifty_open_calls_fail_closed.",
+      "find": "    if opens > _MAX_OPEN_CALLS or (dot_writes and not targets):",
+      "replace": "    if dot_writes and not targets:"
+    },
+    {
+      "label": "[8 parse failure] a script that does not parse is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by print(1, def f(:, this is not = python and echo hi.",
+      "find": "    except Exception:  # a syntax error, a NUL byte, a script nested too deep: not python we can read\n        return _UNKNOWN, []",
+      "replace": "    except Exception:  # a syntax error, a NUL byte, a script nested too deep: not python we can read\n        return _RO, []"
+    },
+    {
+      "label": "[8 write mode +] a + in an open mode is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by open('src/x', 'r+').",
+      "find": "_PY_WRITE_MODE = frozenset(\"wax+\")",
+      "replace": "_PY_WRITE_MODE = frozenset(\"wax\")"
+    },
+    {
+      "label": "[8 mode literal] an open mode that is not a literal is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by open('f', m).",
+      "find": "                if writes is None:\n                    return _UNKNOWN, []",
+      "replace": "                if writes is None:\n                    continue"
+    },
+    {
+      "label": "[8 open write target] a write-mode open records no target",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by open('src/x', 'w'), the tests-class rows and the rebinding rows.",
+      "find": "                if writes:\n                    targets.append(resolve(",
+      "replace": "                if False:\n                    targets.append(resolve("
+    },
+    {
+      "label": "[9 rebinding] a name bound more than once still resolves to its first literal",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the tuple-target, walrus, +=, for, with, import-as, def-parameter, comprehension and global rebinding rows of test_class_9_a_rebound_python_name_is_not_a_tests_literal.",
+      "find": "        if isinstance(node, ast.Name) and counts.get(node.id) == 1 and node.id in literals:",
+      "replace": "        if isinstance(node, ast.Name) and node.id in literals:"
+    },
+    {
+      "label": "[9 name bindings] Name bindings are not counted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by every rebinding row that reaches the name through a Name target.",
+      "find": "        elif isinstance(node, ast.Name):\n            if isinstance(node.ctx, (ast.Store, ast.Del)):\n                bind(node.id)",
+      "replace": "        elif isinstance(node, ast.Name):\n            if False:\n                bind(node.id)"
+    },
+    {
+      "label": "[10 zsh flags] a ${( zsh expansion flag is read as bash",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by x='$(cp a src/b)'; echo ${(e)x} and the other ${( rows.",
+      "find": "    if \"${(\" in text:",
+      "replace": "    if False and \"${(\" in text:"
+    },
+    {
+      "label": "[11 test quoting] an unquoted unresolved test operand is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by x='a -a -v b[$(cp q src/z)]'; [ -e $x ], [ -f $f ] and [ a = $x ].",
+      "find": "            or (k > 0 and _is_double_quoted(raws[k]) and args[k - 1] in _TEST_OPERAND_AFTER)",
+      "replace": "            or (k > 0 and args[k - 1] in _TEST_OPERAND_AFTER)"
+    },
+    {
+      "label": "[11 test operator position] a double-quoted unresolved word is accepted in operator position",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by [ -f a -a \"$x\" ], [ ! \"$x\" ], [ a \"$x\" b ] and [ -v \"$x\" ].",
+      "find": "            or (k > 0 and _is_double_quoted(raws[k]) and args[k - 1] in _TEST_OPERAND_AFTER)",
+      "replace": "            or (k > 0 and _is_double_quoted(raws[k]))"
+    },
+    {
+      "label": "[11 test arithmetic] an arithmetic comparison with a non-literal operand is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by [ 1 -eq 'a[$(cp q src/z)]' ], test 1 -lt abc and [ a -eq 1 ].",
+      "find": "            if arg in _TEST_ARITHMETIC and not (",
+      "replace": "            if False and arg in _TEST_ARITHMETIC and not ("
+    },
+    {
+      "label": "[13 exponential regex] the nested-quantifier sed regex is back (bounded to its first 36 characters so the run ends)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_class_13_a_sed_substitution_of_backslashes_is_fast_and_source and the adversarial sed shapes: the old regex takes seconds on sed 's/' plus a run of backslashes.",
+      "find": "    if not _sed_script_ok(\"\\n\".join(scripts)):",
+      "replace": "    if len(re.compile(r\"s(.)(?:\\\\.|(?!\\1).)*\\1(?:\\\\.|(?!\\1).)*\\1([A-Za-z0-9]*)\").findall(\"\\n\".join(scripts)[:36])) < 0 or not _sed_script_ok(\"\\n\".join(scripts)):"
+    },
+    {
+      "label": "[awk] a printing program with > or | is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the awk print > rows, the print | row and the quote-in-regex row.",
+      "find": "        if \">\" in bare or \"|\" in bare:\n            return _UNKNOWN, []",
+      "replace": "        if False:\n            return _UNKNOWN, []"
+    },
+    {
+      "label": "[awk] an awk option other than -F and -v is skipped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by awk -f prog x, awk -E x, awk -l x p and awk -d p x.",
+      "find": "        elif arg.startswith((\"-F\", \"-v\")):\n            i += 1\n        else:\n            return _UNKNOWN, []",
+      "replace": "        elif arg.startswith((\"-F\", \"-v\")):\n            i += 1\n        else:\n            i += 1"
+    },
+    {
+      "label": "[awk] system() in a program is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the awk system() row.",
+      "find": "_AWK_BAD_WORDS = (\"system\", \"getline\", \"close\", \"fflush\", \"inplace\", \"@\")",
+      "replace": "_AWK_BAD_WORDS = (\"getline\", \"close\", \"fflush\", \"inplace\", \"@\")"
+    },
+    {
+      "label": "[awk] || in a printing program is a pipe",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the AWK_NONE row awk '$1==1 || $2==2 {print}' x.",
+      "find": "        bare = program.replace(\">=\", \"\").replace(\"||\", \"\")",
+      "replace": "        bare = program.replace(\">=\", \"\")"
+    },
+    {
+      "label": "[less] less and more options are read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by less -o src/x f, less +'!cp a src/b' f and more +/x f.",
+      "find": "    if base in (\"less\", \"more\") and any(arg.startswith((\"-\", \"+\")) and arg != \"-\" for arg in args):",
+      "replace": "    if False and base in (\"less\", \"more\") and any(arg.startswith((\"-\", \"+\")) and arg != \"-\" for arg in args):"
+    },
+    {
+      "label": "[file] file -C is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by file -C -m src/magic, file --compile x and file -bC x.",
+      "find": "    if base == \"file\" and any(_file_compiles(arg) for arg in args):",
+      "replace": "    if False and base == \"file\" and any(_file_compiles(arg) for arg in args):"
+    },
+    {
+      "label": "[rg] rg --hostname-bin is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by rg --hostname-bin=./x foo.",
+      "find": "    if base == \"rg\" and any(arg.startswith((\"--pre\", \"--hostname\")) for arg in args):",
+      "replace": "    if base == \"rg\" and any(arg.startswith((\"--pre\",)) for arg in args):"
+    },
+    {
+      "label": "[src case] a Src or SRC token is not a src token",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cd Src; echo hi > conftest.py, cat >> tests/test_cart.py with a Src import, and the Src path rows (the token reader is the one that sees a Src segment).",
+      "find": "_SRC_TOKEN = re.compile(r\"(?<!\\w)src(?!\\w)\", re.IGNORECASE)",
+      "replace": "_SRC_TOKEN = re.compile(r\"(?<!\\w)src(?!\\w)\")"
+    },
+    {
+      "label": "[unresolved write] an unresolved word in a write head is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the sed -i \"s/a/$x/\" tests/test_x.py, cp $f tests/y, tee, touch, rm, mkdir and perl rows.",
+      "find": "    if effect[0] != _UNKNOWN and any(_UNRESOLVED in arg for arg in args):",
+      "replace": "    if effect[0] == _RO and any(_UNRESOLVED in arg for arg in args):"
+    },
+    {
+      "label": "[perl] perl -i code is not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the perl use File::Copy, syscall, utime, @{[ ]}, (?{ and e-flag rows.",
+      "find": "    if not in_place or not code or not all(_perl_code_ok(c) for c in code):",
+      "replace": "    if not in_place or not code:"
+    },
+    {
+      "label": "[perl markers] a code marker in a perl substitution part is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by perl -pi -e 's/a/@{[ mkdir(...) ]}/', ${\\ system(...)}, (?{ and (??{ rows.",
+      "find": "_PERL_CODE_MARKERS = (\"(?{\", \"(??{\", \"@{\", \"${\")",
+      "replace": "_PERL_CODE_MARKERS = ()"
+    },
+    {
+      "label": "[perl flags] a perl s flag e is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by perl -pi -e 's/a/system(1)/e', s/a/b/ee and s/a/b/r.",
+      "find": "_PERL_S_FLAGS = frozenset(\"gimsx\")",
+      "replace": "_PERL_S_FLAGS = frozenset(\"gimsxer\")"
+    },
+    {
+      "label": "[perl delimiter] a perl bracket delimiter is accepted",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by perl -pi -e 's{a}{b}' tests/test_x.py.",
+      "find": "        if delim.isalnum() or delim in \" \\t\\r\\n\\\\;()[]{}<>\" or ord(delim) >= 128:",
+      "replace": "        if delim.isalnum() or delim in \" \\t\\r\\n\\\\;\" or ord(delim) >= 128:"
+    },
+    {
+      "label": "[perl options] a perl option letter off the list is a plain flag",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by perl -F: -pi -e ..., -Mstrict -pi -e ... and the --foo row... (-M and -F are option letters off the list).",
+      "find": "                if letter not in _PERL_FLAG_LETTERS:\n                    return _UNKNOWN, []",
+      "replace": "                if letter not in _PERL_FLAG_LETTERS:\n                    position += 1\n                    continue"
+    },
+    {
+      "label": "[control] two independent integer patterns swapped",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Two module-level constants that read each other nowhere; inert on every path the suite reaches.",
+      "find": "_INTEGER = re.compile(r\"[0-9]+\")\n_SIGNED_INTEGER = re.compile(r\"[-+]?[0-9]+\")",
+      "replace": "_SIGNED_INTEGER = re.compile(r\"[-+]?[0-9]+\")\n_INTEGER = re.compile(r\"[0-9]+\")",
+      "expect": "survived"
+    }
+  ]
+}

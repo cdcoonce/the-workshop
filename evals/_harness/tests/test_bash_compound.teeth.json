@@ -107,8 +107,8 @@
       "label": "[assignment] a bare NAME=value is not a no-op command (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[X=1; cat a], test_a_compound_whose_simple_commands_are_all_read_only_is_none[X=1 Y=2; cat a])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "        if _ASSIGNMENT.match(word):\n            i += 1",
-      "replace": "        if False:\n            i += 1"
+      "find": "        if _ASSIGNMENT.match(word):\n            assigns.append(word)\n            i += 1",
+      "replace": "        if False:\n            assigns.append(word)\n            i += 1"
     },
     {
       "label": "[allow :] the no-op : is not allow-listed (predicted red: test_a_compound_whose_simple_commands_are_all_read_only_is_none[until false; do :; done], test_a_compound_whose_simple_commands_are_all_read_only_is_none[while :; do break; done], test_a_compound_whose_simple_commands_are_all_read_only_is_none[: ])",
@@ -163,8 +163,8 @@
       "label": "[header name] a for variable that is not an identifier is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for 1x in a; do cat; done])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "    if ctx.broken or text[start:i] != name or not _IDENTIFIER.fullmatch(name):",
-      "replace": "    if ctx.broken or text[start:i] != name:"
+      "find": "    if ctx.broken or text[start:i] != name or not _IDENTIFIER.fullmatch(name) or _EXPORTED_NAMES.fullmatch(name):",
+      "replace": "    if ctx.broken or text[start:i] != name or _EXPORTED_NAMES.fullmatch(name):"
     },
     {
       "label": "[semicolon after keyword] a ; right after do/then/{ (an empty command) is accepted (predicted red: test_a_construct_that_is_not_confidently_structured_is_source[for f in a; do; cat $f; done], test_a_construct_that_is_not_confidently_structured_is_source[{ ; cat a; }], test_a_construct_that_is_not_confidently_structured_is_source[if true; then; cat a; fi])",

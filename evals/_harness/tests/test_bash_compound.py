@@ -386,9 +386,9 @@ def _table_rows(module_file: str) -> list[str]:
 
 
 def _guarded_rows() -> dict[str, str]:
-    """``{command: class}`` for every row of the two classifier tables whose class is fixed today."""
+    """``{command: class}`` for every row of the three classifier tables whose class is fixed today."""
     rows: dict[str, str] = {}
-    for module_file in ("test_bash_writes.py", "test_bash_allowlist.py"):
+    for module_file in ("test_bash_writes.py", "test_bash_allowlist.py", "test_bash_hardening.py"):
         for command in _table_rows(module_file):
             if command.strip():
                 rows[command] = classify_bash_command(command)

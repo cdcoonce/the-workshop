@@ -50,8 +50,8 @@
       "label": "[F3 rule] an unresolved expansion argument no longer takes a head out of read-only (opaque $f to find, sed) (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-delete -name cart.py'; do find src/shop $f; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-i s/a/b/'; do sed $f src/shop/cart.py; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[x=-delete; find src $x])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "    if effect[0] == _RO and any(_UNRESOLVED in arg for arg in args) and not _expansion_safe(base, args):",
-      "replace": "    if False and effect[0] == _RO and any(_UNRESOLVED in arg for arg in args) and not _expansion_safe(base, args):"
+      "find": "        if effect[0] != _RO or not _expansion_safe(base, args, raws):\n            return _UNKNOWN, []",
+      "replace": "        if False:\n            return _UNKNOWN, []"
     },
     {
       "label": "[F3 safe list widened] find and sed join the safe-head list (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-delete -name cart.py'; do find src/shop $f; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-i s/a/b/'; do sed $f src/shop/cart.py; done])",
@@ -78,14 +78,14 @@
       "label": "[F3 test operator position] an unresolved word is allowed as a test operator (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ $x 'a[$(cmd)]' ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ ! $x a ]])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "        return all(\n            _UNRESOLVED not in arg or (k > 0 and args[k - 1] not in _TEST_CONNECTORS and args[k - 1] != \"\\\\(\")\n            for k, arg in enumerate(args)\n        )",
+      "find": "        return all(\n            _UNRESOLVED not in arg\n            or (k > 0 and _is_double_quoted(raws[k]) and args[k - 1] in _TEST_OPERAND_AFTER)\n            for k, arg in enumerate(args)\n        )",
       "replace": "        return True"
     },
     {
       "label": "[F3 test operand] an unresolved operand of a literal operator is not allowed in test (predicted red: test_f3_an_unresolved_argument_to_a_head_that_cannot_write_is_still_read_only[[ -f $f ]], test_f3_an_unresolved_argument_to_a_head_that_cannot_write_is_still_read_only[test -f $f])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "        return all(\n            _UNRESOLVED not in arg or (k > 0 and args[k - 1] not in _TEST_CONNECTORS and args[k - 1] != \"\\\\(\")\n            for k, arg in enumerate(args)\n        )",
+      "find": "        return all(\n            _UNRESOLVED not in arg\n            or (k > 0 and _is_double_quoted(raws[k]) and args[k - 1] in _TEST_OPERAND_AFTER)\n            for k, arg in enumerate(args)\n        )",
       "replace": "        return all(_UNRESOLVED not in arg for arg in args)"
     },
     {
@@ -106,8 +106,8 @@
       "label": "[F6 test -v] test -v and -R are read-only (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ -v x ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ -R x ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[test -v 'a[$(cmd)]'])",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "find": "    if base in (\"test\", \"[\") and any(arg in (\"-v\", \"-R\") for arg in args):",
-      "replace": "    if False and base in (\"test\", \"[\") and any(arg in (\"-v\", \"-R\") for arg in args):"
+      "find": "        if any(arg in (\"-v\", \"-R\") for arg in args):\n            return _UNKNOWN, []",
+      "replace": "        if False and any(arg in (\"-v\", \"-R\") for arg in args):\n            return _UNKNOWN, []"
     },
     {
       "label": "[F4 binding] a loop variable is resolved from the word list (the removed binding feature, as a mutant) (predicted red: test_f4_a_write_whose_target_contains_an_expansion_is_source[for f in a; do echo x > tests/$f; done], test_f4_a_write_whose_target_contains_an_expansion_is_source[for f in a b; do echo x >> tests/test_$f.py; done])",
@@ -159,13 +159,6 @@
       "oracle": "real",
       "find": "            not target\n            or target.startswith(\"-\")\n            or _UNRESOLVED in target",
       "replace": "            _UNRESOLVED in target"
-    },
-    {
-      "label": "[F5 CDPATH] a CDPATH assignment is ignored (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[CDPATH=src; cd shop; echo hi > conftest.py])",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "find": "        if any(word.startswith((\"CDPATH=\", \"CDPATH+=\")) for word in cmd.words):\n            return True\n",
-      "replace": ""
     },
     {
       "label": "[F5 eval] an eval in a call with a write is ignored (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[eval 'cd src'; ...])",
@@ -229,20 +222,6 @@
       "oracle": "real",
       "find": "        if quote:\n            if c == quote:\n                quote = \"\"\n            elif c == \"\\\\\" and quote == '\"':\n                i += 1\n        elif c == \"\\\\\":",
       "replace": "        if quote and False:\n            if c == quote:\n                quote = \"\"\n            elif c == \"\\\\\" and quote == '\"':\n                i += 1\n        elif c == \"\\\\\":"
-    },
-    {
-      "label": "[memo text] a heredoc body is analysed once per shell it is piped into (no memoisation of _text_effect) (predicted red: test_a_heredoc_body_piped_through_6000_shells_is_analysed_once, test_a_77_kb_heredoc_body_piped_through_a_hundred_shells_takes_well_under_half_a_second)",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "find": "@functools.lru_cache(maxsize=256)\ndef _text_effect(",
-      "replace": "def _text_effect("
-    },
-    {
-      "label": "[memo python] a python heredoc body is analysed once per interpreter it is piped into (no memoisation of _python_effect) (predicted red: test_a_heredoc_body_piped_through_python_shells_is_analysed_once)",
-      "file": "../bash_classify.py",
-      "oracle": "real",
-      "find": "@functools.lru_cache(maxsize=256)\ndef _python_effect(",
-      "replace": "def _python_effect("
     },
     {
       "label": "[feed cap] no limit on the heredoc bodies feeding one command (predicted red: test_a_pipeline_fed_by_more_heredocs_than_the_limit_fails_closed)",

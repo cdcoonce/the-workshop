@@ -93,8 +93,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by the unknown-head rows of test_a_write_the_reviewer_found_or_any_unplaceable_write_is_a_source_write (gsed -i, curl -o, wget, perl -ne, prettier --check) and the e2e rows.",
-      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
-      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
+      "find": "    return _UNKNOWN, []\n\n\ndef _read_only_head(",
+      "replace": "    return _RO, []\n\n\ndef _read_only_head("
     },
     {
       "label": "[segment rule] an edit to any path outside a test file is a source write",

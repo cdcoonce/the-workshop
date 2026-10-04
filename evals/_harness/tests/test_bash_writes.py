@@ -229,7 +229,7 @@ def test_an_undetected_first_write_can_not_be_followed_by_a_credited_red(command
         "python3 -c \"print(open('src/shop/cart.py').read())\"",
         "python3 -c \"print(open('src/shop/cart.py', 'r').read())\"",
         "python3 -c \"print(open('src/shop/cart.py', mode='rb').read())\"",
-        "python3 -c \"import sys; sys.path.insert(0, 'src/'); import shop\"",
+        "python3 -c \"import sys; sys.path.insert(0, 'src/'); print(sys.path[0])\"",
         "find . -path ./.venv -prune -o -type f -print | head -50; cat src/shop/cart.py",
         "cd /work/shop && cat docs/plan.md",
         "black --check src/",

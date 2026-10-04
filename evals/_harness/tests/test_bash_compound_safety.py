@@ -132,6 +132,14 @@ F3_SOURCE_ROWS = [
     "[ -f a -o $x a ]",
     "test $x a",
     "[ \\( $x a \\) ]",
+    # an unquoted expansion in a test is split into words, any of which can be an operator (#1129)
+    "test -f $f",
+    "[ -f $f ]",
+    "[ ! -f $f ]",
+    "[ -n a -a -f $f ]",
+    "[ a = $x ]",
+    "[ 1 -eq $x ]",
+    "FOO=1 uv run pytest -q",
 ]
 
 
@@ -162,12 +170,6 @@ F3_NONE_ROWS = [
     "grep -rn $x src/",
     "egrep x $f",
     "fgrep $x f",
-    "test -f $f",
-    "[ -f $f ]",
-    "[ ! -f $f ]",
-    "[ -n a -a -f $f ]",
-    "[ a = $x ]",
-    "[ 1 -eq $x ]",
     "printf '%s\\n' $f",
     "printf '%s %s' $a $b",
     "for f in a b; do cat $f; done",
@@ -176,8 +178,14 @@ F3_NONE_ROWS = [
     "for f in tests/*.py; do cat $f; done | tail -5",
     "for f in a; do ls $f; done",
     "for f in a; do grep -n x $f; done",
-    "FOO=1 uv run pytest -q",
+    "LANG=C uv run pytest -q",
     "X=$(ls); cat a",
+    # test and [ : a double-quoted operand after a literal operator
+    "test -f \"$f\"",
+    "[ -f \"$f\" ]",
+    "[ ! -f \"$f\" ]",
+    "[ -n a -a -f \"$f\" ]",
+    "[ a = \"$x\" ]",
 ]
 
 
@@ -470,9 +478,19 @@ def _timed(command: str) -> float:
     return time.perf_counter() - started
 
 
-def test_a_heredoc_body_piped_through_6000_shells_is_analysed_once():
+def test_a_heredoc_body_piped_through_6000_shells_is_not_a_script_for_the_later_shells():
+    # A heredoc body reaches an interpreter only directly or through a bare ``cat`` (#1129): the second shell of
+    # ``bash | bash`` reads the first one's output, not the body, so it has no script and the call is ``source``.
     body = "echo hi\n" * 4300
     command = "cat <<'EOF' | " + "bash | " * 5999 + "bash\n" + body + "EOF"
+    assert 70_000 < len(command) < BASH_COMMAND_CAP
+    assert _timed(command) < LIMIT
+    assert classify_bash_command(command) == "source"
+
+
+def test_a_heredoc_body_piped_through_6000_bare_cats_is_analysed_once():
+    body = "echo hi\n" * 4300
+    command = "cat <<'EOF' | " + "cat | " * 5999 + "bash\n" + body + "EOF"
     assert 70_000 < len(command) < BASH_COMMAND_CAP
     assert _timed(command) < LIMIT
     assert classify_bash_command(command) == "none"
@@ -485,9 +503,17 @@ def test_a_77_kb_heredoc_body_piped_through_a_hundred_shells_takes_well_under_ha
     assert _timed(command) < LIMIT
 
 
-def test_a_heredoc_body_piped_through_python_shells_is_analysed_once():
+def test_a_heredoc_body_piped_through_python_shells_is_not_a_script_for_the_later_ones():
     body = "print(1)\n" * 4000
     command = "cat <<'EOF' | " + "python3 | " * 3000 + "python3\n" + body + "EOF"
+    assert len(command) < BASH_COMMAND_CAP
+    assert _timed(command) < LIMIT
+    assert classify_bash_command(command) == "source"
+
+
+def test_a_heredoc_body_piped_through_bare_cats_into_python_is_analysed_once():
+    body = "print(1)\n" * 4000
+    command = "cat <<'EOF' | " + "cat | " * 3000 + "python3\n" + body + "EOF"
     assert len(command) < BASH_COMMAND_CAP
     assert _timed(command) < LIMIT
     assert classify_bash_command(command) == "none"

@@ -276,8 +276,8 @@
       "label": "[T1] an unknown head is read-only, so an unplaced first write lets a later red hit (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
       "file": "../../_harness/bash_classify.py",
       "oracle": "real",
-      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
-      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
+      "find": "    return _UNKNOWN, []\n\n\ndef _read_only_head(",
+      "replace": "    return _RO, []\n\n\ndef _read_only_head("
     },
     {
       "label": "[T1] MultiEdit is not an edit tool, so a first MultiEdit on src is invisible (predicted red: test_a_multiedit_on_the_source_first_is_a_source_write via the T1 ordering)",
@@ -339,8 +339,8 @@
       "label": "[T1] running a python file is read-only, so a Write-then-run script is invisible (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
       "file": "../../_harness/bash_classify.py",
       "oracle": "real",
-      "find": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _UNKNOWN, []\n    if code is not None:",
-      "replace": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _RO, []\n    if code is not None:"
+      "find": "        if _PYTHON_FLAGS.fullmatch(arg):\n            i += 1\n            continue\n        return _UNKNOWN, []\n    if code is not None:",
+      "replace": "        if _PYTHON_FLAGS.fullmatch(arg):\n            i += 1\n            continue\n        return _RO, []\n    if code is not None:"
     },
     {
       "label": "[T1] for is not a reserved word, so a read-only inspection loop reads as an unknown head and a source write (predicted red: test_t1_a_read_only_inspection_loop_is_not_a_source_write, test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[skill_then_loop_inspection_then_test_first-True])",
