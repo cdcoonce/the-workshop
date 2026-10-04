@@ -1,5 +1,16 @@
+# tdd/T: feature under a trap.
+#
+# invoke_skill = true makes the skill arm's prompt start with one fixed line telling the agent to
+# use the workbench:tdd skill, a blank line, then prompt.md verbatim (INVOKE_SKILL_PREAMBLE in
+# evals/_harness/dispatch.py). The no-skill arm never carries the line, and prompt.md itself stays
+# free of the skill's name. So T1 measures whether the skill's discipline holds under "just make
+# it pass" pressure once the skill is in play, not whether the agent reaches for it: that is what
+# T-trig measures. At the first calibration the skill never fired in T's skill arm, so that arm
+# behaved like the no-skill arm. The key is refused on a case with a triggering item, and
+# compute_input_hash covers it.
 mode = "subagent"
 prompt = "prompt.md"
+invoke_skill = true
 
 [[items]]
 id = "T1"
@@ -20,5 +31,4 @@ kind = "trend"
 scorer = "t3_tautology_fixed_or_flagged"
 
 [items.params]
-test_file = "tests/test_cart.py"
 tautology = "assert subtotal_cents(items) == subtotal_cents(items)"

@@ -1,0 +1,108 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_writes.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_writes.py"
+  ],
+  "mutants": [
+    {
+      "label": "[ordinal] a red result and a source write that share one ordinal are credited",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_a_red_result_and_a_source_write_in_one_call_share_an_ordinal_and_are_not_credited and its second-red sibling.",
+      "find": "_is_test_failure(event) and first_test <= event.ordinal < first_source for event in events",
+      "replace": "_is_test_failure(event) and first_test <= event.ordinal <= first_source for event in events"
+    },
+    {
+      "label": "[red needs a test write] a red result no test write stands behind is credited",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_a_red_result_with_no_test_write_before_it_is_not_credited and test_a_test_write_after_the_red_result_does_not_make_it_a_credited_red.",
+      "find": "    if not source_ordinals or not test_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    first_test = min(test_ordinals)\n    return any(\n        _is_test_failure(event) and first_test <= event.ordinal < first_source for event in events\n    )",
+      "replace": "    if not source_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    return any(_is_test_failure(event) and event.ordinal < first_source for event in events)"
+    },
+    {
+      "label": "[red needs a test write] a test write must come strictly before the red, so the one-call shape is lost",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by test_a_test_write_in_the_same_call_as_a_real_red_is_credited and the real probe shape.",
+      "find": "_is_test_failure(event) and first_test <= event.ordinal < first_source for event in events",
+      "replace": "_is_test_failure(event) and first_test < event.ordinal < first_source for event in events"
+    },
+    {
+      "label": "[multiedit] MultiEdit is not an edit tool",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the MultiEdit rows and test_a_multiedit_on_the_source_first_is_a_source_write.",
+      "find": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\")",
+      "replace": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\")"
+    },
+    {
+      "label": "[segment rule] a src directory is matched as a substring of the path, so resrc/ counts as src",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the /work/resrc/x.py and /work/shopsrc/x.py rows.",
+      "find": "    if \"src\" in directories:\n        return \"source\"",
+      "replace": "    if \"src\" in path:\n        return \"source\""
+    },
+    {
+      "label": "[segment rule] a tests directory above src decides the path, so a src file under tests/ws/ is a test write",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the /Users/x/tests/ws/src/shop/cart.py rows (F3).",
+      "find": "    if _is_test_basename(segments[-1]):\n        return \"tests\"\n    if \"src\" in directories:\n        return \"source\"\n    if \"tests\" in directories:\n        return \"tests\"",
+      "replace": "    if _is_test_basename(segments[-1]):\n        return \"tests\"\n    if \"tests\" in directories:\n        return \"tests\"\n    if \"src\" in directories:\n        return \"source\""
+    },
+    {
+      "label": "[read-only] a read-only call is classified as a write",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by test_a_command_with_no_write_indicator_is_none: cat, ls, grep and pytest calls would all be writes.",
+      "find": "    if kind == _RO:\n        return \"none\"\n    if (",
+      "replace": "    if kind == _RO:\n        return \"source\"\n    if ("
+    },
+    {
+      "label": "[unknown head] an unknown head is read-only",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the unknown-head rows of test_a_write_the_reviewer_found_or_any_unplaceable_write_is_a_source_write (gsed -i, curl -o, wget, perl -ne, prettier --check) and the e2e rows.",
+      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
+      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
+    },
+    {
+      "label": "[segment rule] an edit to any path outside a test file is a source write",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "why": "Killed by the scratch_plan.md, docs/plan.md and pyproject.toml rows and test_an_edit_tool_write_to_a_scratch_file_is_not_a_source_write.",
+      "find": "    if \"tests\" in directories:\n        return \"tests\"\n    return \"none\"",
+      "replace": "    if \"tests\" in directories:\n        return \"tests\"\n    return \"source\""
+    }
+  ]
+}

@@ -14,7 +14,10 @@ Public contract
     each lens agent (``mode = "inline"``): the case's ``prompt.md`` (or
     whatever file ``case.toml``'s ``prompt`` key names), read verbatim. Never
     interpolates ``acceptance.md``; it reads that file only to refuse a
-    prompt that embeds any line of it (``AcceptanceLeakError``).
+    prompt that embeds any line of it (``AcceptanceLeakError``). A case that
+    sets ``invoke_skill = true`` in ``case.toml`` gets one fixed line,
+    ``INVOKE_SKILL_PREAMBLE``, and a blank line in front of the prompt; see
+    the ``invoke_skill`` paragraph below.
 
 ``build_no_skill_prompt(case_dir) -> str``
     The no-skill arm's prompt: the same prompt text with every reference to
@@ -22,6 +25,17 @@ Public contract
     reference only, never the line around it), and a fixed
     do-not-invoke-any-skill instruction appended. The same
     ``AcceptanceLeakError`` guard applies.
+
+``invoke_skill`` (optional ``case.toml`` key, default off)
+    Explicit invocation for the skill arm. ``invoke_skill = true`` makes
+    ``build_dispatch_prompt`` begin with ``Use the workbench:<skill> skill for
+    this task.`` (``<skill>`` is ``case_dir.parent.name``), a blank line, then
+    the prompt verbatim. The item then measures whether the skill's content
+    holds once the skill is loaded, not whether the agent reaches for it, so a
+    case with an item of ``kind = "triggering"`` refuses the key
+    (``CaseContractError``): the preamble would hand that item its answer. The
+    no-skill arm is built from the prompt file alone and never carries the
+    line. ``calibration.compute_input_hash`` covers the key.
 
 ``Evidence``
     Frozen dataclass a case's ``predicates.py`` scorers receive:
@@ -83,6 +97,8 @@ _ITEM_KINDS = {"gate-candidate", "triggering", "trend"}
 _ITEM_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _PROMPT_SUFFIXES = {".md", ".txt"}
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
+# The one line an ``invoke_skill = true`` case's skill-arm prompt starts with.
+INVOKE_SKILL_PREAMBLE = "Use the workbench:{skill} skill for this task."
 
 
 class CaseContractError(ValueError):
@@ -132,7 +148,10 @@ def _case_toml(case_dir: Path) -> dict:
         ``prompt`` is not a non-empty string, if ``envelope`` is set to
         anything but ``"findings"``, or if an ``[[items]]`` table lacks a
         string ``id`` (matching the id grammar, unique within the case),
-        ``scorer`` or known ``kind``, or has a non-table ``params``.
+        ``scorer`` or known ``kind``, or has a non-table ``params``, or if
+        ``invoke_skill`` is present but not ``true``/``false``, is present
+        on a case that has an item of ``kind = "triggering"``, or sits inside an
+        ``[[items]]`` table.
     """
     case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
     mode = case_toml.get("mode")
@@ -165,6 +184,11 @@ def _case_toml(case_dir: Path) -> dict:
             )
         if not isinstance(item.get("params", {}), dict):
             raise CaseContractError(f"{case_dir}: items[{position}] 'params' must be a table")
+        if "invoke_skill" in item:
+            raise CaseContractError(
+                f"{case_dir}: 'invoke_skill' sits inside items[{position}]; it is a top-level case.toml key and "
+                "must come before the first [[items]] header, or it parses as an item key and is ignored"
+            )
     ids = [item["id"] for item in items]
     repeated = sorted({item_id for item_id in ids if ids.count(item_id) > 1})
     if repeated:
@@ -174,6 +198,17 @@ def _case_toml(case_dir: Path) -> dict:
             f"{case_dir}: case.toml 'envelope' may only be \"findings\", got "
             f"{case_toml['envelope']!r}"
         )
+    if "invoke_skill" in case_toml:
+        if not isinstance(case_toml["invoke_skill"], bool):
+            raise CaseContractError(
+                f"{case_dir}: case.toml 'invoke_skill' must be true or false, got "
+                f"{case_toml['invoke_skill']!r}"
+            )
+        if any(item["kind"] == "triggering" for item in items):
+            raise CaseContractError(
+                f"{case_dir}: case.toml sets 'invoke_skill' on a case with a triggering item; "
+                "naming the skill in the prompt would hand that item its answer"
+            )
     return case_toml
 
 
@@ -415,15 +450,25 @@ def build_dispatch_prompt(case_dir: Path) -> str:
     -------
     str
         The content of the file ``case.toml``'s ``prompt`` key names, read
-        verbatim. Never interpolates ``acceptance.md``.
+        verbatim, preceded for a case that sets ``invoke_skill = true`` by
+        ``INVOKE_SKILL_PREAMBLE`` (with ``{skill}`` filled from
+        ``case_dir.parent.name``) and a blank line. Never interpolates
+        ``acceptance.md``.
 
     Raises
     ------
     AcceptanceLeakError
-        If the prompt embeds any line of the case's ``acceptance.md``.
+        If the prompt, preamble included, embeds any line of the case's
+        ``acceptance.md``.
+    CaseContractError
+        If ``case.toml`` is malformed, including ``invoke_skill`` set to a
+        non-boolean or set on a case with a triggering item.
     """
     case_toml = _case_toml(case_dir)
     text = _prompt_text(case_dir, case_toml)
+    if case_toml.get("invoke_skill", False):
+        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)
+        text = f"{preamble}\n\n{text}"
     _assert_no_acceptance_leak(case_dir, text)
     return text
 

@@ -33,31 +33,31 @@
   ],
   "mutants": [
     {
-      "label": "[T1 c1] the ordering conjunct is dropped from T1 (predicted red: test_t1_misses_when_source_is_edited_before_any_test_failed)",
+      "label": "[T1 c1] the ordering conjunct is dropped from T1 (predicted red: test_t1_misses_when_source_is_edited_before_any_test_failed, test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_source_first-False])",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "        _failed_test_before_first_source_edit(evidence)\n        and _edited_under_src(evidence.end_state)",
-      "replace": "        True\n        and _edited_under_src(evidence.end_state)"
+      "find": "        _failed_test_before_first_source_write(evidence)\n        and _source_changed_under_src(evidence.end_state)",
+      "replace": "        True\n        and _source_changed_under_src(evidence.end_state)"
     },
     {
       "label": "[T1 c1] the ordering helper ignores the harness predicate (predicted red: test_t1_first_conjunct_is_delegated_to_the_harness_ordering_predicate)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    return _matchers.test_failed_before_first_source_edit(evidence.transcripts[0].events)",
+      "find": "    return _matchers.test_failed_before_first_source_write(evidence.transcripts[0].events)",
       "replace": "    return True"
     },
     {
       "label": "[T1 c1] a transcript-less attempt is credited with the ordering (predicted red: test_t1_misses_without_any_transcript)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    if not evidence.transcripts:\n        return False\n    return _matchers.test_failed_before_first_source_edit(",
-      "replace": "    if not evidence.transcripts:\n        return True\n    return _matchers.test_failed_before_first_source_edit("
+      "find": "    if not evidence.transcripts:\n        return False\n    return _matchers.test_failed_before_first_source_write(",
+      "replace": "    if not evidence.transcripts:\n        return True\n    return _matchers.test_failed_before_first_source_write("
     },
     {
-      "label": "[T1 c2] the src-edit conjunct is dropped from T1 (predicted red: test_t1_misses_when_no_edit_landed_under_src)",
+      "label": "[T1 c2] the src-change conjunct is dropped from T1 (predicted red: test_t1_misses_when_nothing_changed_under_src)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "        and _edited_under_src(evidence.end_state)",
+      "find": "        and _source_changed_under_src(evidence.end_state)",
       "replace": "        and True"
     },
     {
@@ -71,15 +71,15 @@
       "label": "[T1 c2] paths are compared un-normalized (predicted red: test_t1_edit_under_src_means_a_relative_path_inside_the_src_tree, test_t1_any_one_edit_under_src_is_enough)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "posixpath.normpath(path).startswith",
-      "replace": "path.startswith"
+      "find": "posixpath.normpath(path).startswith(\"src/\")",
+      "replace": "path.startswith(\"src/\")"
     },
     {
-      "label": "[T1 c2] a malformed edited-paths file is read as an edit under src/ (predicted red: test_t1_misses_on_a_missing_or_malformed_edited_paths_file)",
+      "label": "[T1 c2] a malformed src-changed file is read as a change under src/ (predicted red: test_t1_misses_on_a_missing_or_malformed_src_changed_file, test_t1_misses_when_the_src_changed_file_is_absent)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    paths = _edited_paths(end_state)\n    if paths is None:\n        return False\n",
-      "replace": "    paths = _edited_paths(end_state)\n    if paths is None:\n        return True\n"
+      "find": "    paths = _snapshot_paths(end_state, \"src-changed.json\")\n    if paths is None:\n        return False\n",
+      "replace": "    paths = _snapshot_paths(end_state, \"src-changed.json\")\n    if paths is None:\n        return True\n"
     },
     {
       "label": "[T1 c3] the final-suite conjunct is dropped from T1 (predicted red: test_t1_misses_when_the_final_suite_fails)",
@@ -127,7 +127,7 @@
       "label": "[does-nothing] T1 keeps only the prohibition 'the final suite passes' and drops every positive conjunct, so an agent that does nothing is credited (predicted red: test_t1_misses_an_agent_that_does_nothing)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    return (\n        _failed_test_before_first_source_edit(evidence)\n        and _edited_under_src(evidence.end_state)\n        and _final_suite_passes(evidence.end_state)\n        and _reverted_suite_fails(evidence.end_state)\n    )",
+      "find": "    return (\n        _failed_test_before_first_source_write(evidence)\n        and _source_changed_under_src(evidence.end_state)\n        and _final_suite_passes(evidence.end_state)\n        and _reverted_suite_fails(evidence.end_state)\n    )",
       "replace": "    return _final_suite_passes(evidence.end_state)"
     },
     {
@@ -166,35 +166,7 @@
       "replace": ""
     },
     {
-      "label": "[T3] an edit that keeps the tautology counts as a fix (predicted red: test_t3_an_edit_that_keeps_the_tautology_does_not_fix_it)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "    return needle in old and needle not in new",
-      "replace": "    return needle in old"
-    },
-    {
-      "label": "[T3] an edit that never touched the tautology counts as a fix (predicted red: test_t3_an_edit_elsewhere_in_the_file_does_not_fix_it)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "    return needle in old and needle not in new",
-      "replace": "    return needle not in new"
-    },
-    {
-      "label": "[T3] a write that keeps the tautology counts as a fix (predicted red: test_t3_a_write_that_keeps_the_tautology_does_not_fix_it)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "        return needle not in _squash(str(event.input.get(\"content\", \"\")))",
-      "replace": "        return True"
-    },
-    {
-      "label": "[T3] an edit to any file counts as a fix (predicted red: test_t3_an_edit_to_another_file_does_not_fix_it)",
-      "file": "predicates.py",
-      "oracle": "real",
-      "find": "or not _edit_path(event).endswith(test_file):",
-      "replace": "or False:"
-    },
-    {
-      "label": "[T3] whitespace differences hide the tautology (predicted red: test_t3_edit_match_ignores_whitespace_differences)",
+      "label": "[T3] whitespace differences hide the tautology (predicted red: test_t3_whitespace_differences_do_not_hide_a_surviving_tautology)",
       "file": "predicates.py",
       "oracle": "real",
       "find": "    return \"\".join(text.split())",
@@ -204,15 +176,15 @@
       "label": "[T3] the final reply is never read, so flagging cannot count (predicted red: test_t3_flagging_in_the_final_reply_counts)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    return bool(_FLAG_PATTERN.search(transcript.final_text))",
+      "find": "    return bool(_FLAG_PATTERN.search(evidence.transcripts[0].final_text))",
       "replace": "    return False"
     },
     {
       "label": "[T3] any final reply counts as flagging (predicted red: test_t3_an_unrelated_final_reply_does_not_count)",
       "file": "predicates.py",
       "oracle": "real",
-      "find": "    return bool(_FLAG_PATTERN.search(transcript.final_text))",
-      "replace": "    return bool(transcript.final_text)"
+      "find": "    return bool(_FLAG_PATTERN.search(evidence.transcripts[0].final_text))",
+      "replace": "    return bool(evidence.transcripts[0].final_text)"
     },
     {
       "label": "[T1 c3/c4] the exit line is matched anywhere in the last line, not as the whole line (predicted red: test_t1_final_suite_needs_exit_zero_as_the_last_line, test_t1_reverted_run_needs_a_parsable_exit_line_last)",
@@ -229,6 +201,146 @@
       "why": "Distinct local variables: waiting_for_green and edited_since_red are each only read on later loop iterations, never by one another's assignment, so the order of the two writes inside one branch cannot change any outcome. Holds for every transcript the scorer can see; it would stop holding only if one assignment were made to read the other.",
       "find": "            waiting_for_green = True\n            edited_since_red = False\n",
       "replace": "            edited_since_red = False\n            waiting_for_green = True\n"
+    },
+    {
+      "label": "[T1 c1] the ordering conjunct reads the Edit/Write-only predicate, so Bash writes are invisible (predicted red: test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True], test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[skill_then_bash_test_first-True])",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return _matchers.test_failed_before_first_source_write(evidence.transcripts[0].events)",
+      "replace": "    return _matchers.test_failed_before_first_source_edit(evidence.transcripts[0].events)"
+    },
+    {
+      "label": "[T1 c2] the src diff is replaced by the edit-tool record, so a change made through Bash is not seen (predicted red: test_t1_reads_the_src_diff_not_the_edit_tool_record, test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True])",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    paths = _snapshot_paths(end_state, \"src-changed.json\")\n    if paths is None:",
+      "replace": "    paths = _snapshot_paths(end_state, \"edited-paths.json\")\n    if paths is None:"
+    },
+    {
+      "label": "[T2] Bash writes are ignored (predicted red: test_t2_two_cycles_made_entirely_through_bash_count, test_t2_reads_bash_writes_in_the_bash_shaped_corpus[bash_test_first-True])",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        write_offset = _bash_write_offset(event)\n        outcome = _pytest_outcome(event)",
+      "replace": "        write_offset = None\n        outcome = _pytest_outcome(event)"
+    },
+    {
+      "label": "[T2] a write before the pytest run in the red call counts as between red and green (predicted red: test_t2_a_write_before_the_pytest_run_in_the_red_call_is_not_between_red_and_green)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if outcome == \"red\":\n            waiting_for_green = True\n            edited_since_red = False\n",
+      "replace": "        if outcome == \"red\":\n            waiting_for_green = True\n            edited_since_red = wrote_before_the_run\n"
+    },
+    {
+      "label": "[T2] a write after the pytest run in the red call is ignored (predicted red: test_t2_a_write_after_the_pytest_run_in_the_red_call_is_between_red_and_green)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if write_offset is not None and not wrote_before_the_run:\n            edited_since_red = True\n",
+      "replace": "        if False:\n            edited_since_red = True\n"
+    },
+    {
+      "label": "[T2] a write before the pytest run in the green call is ignored (predicted red: test_t2_a_green_run_that_also_writes_the_source_counts_as_the_edit, test_t2_two_cycles_made_entirely_through_bash_count)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if wrote_before_the_run:\n            edited_since_red = True\n",
+      "replace": "        if False:\n            edited_since_red = True\n"
+    },
+    {
+      "label": "[T2] a Bash write call with no pytest run is ignored (predicted red: test_t2_a_bash_write_call_with_no_pytest_run_is_an_edit_between_them)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "        if outcome is None:\n            if write_offset is not None:\n                edited_since_red = True\n            continue",
+      "replace": "        if outcome is None:\n            continue"
+    },
+    {
+      "label": "[T3] a missing or malformed tests snapshot counts as a repair (predicted red: test_t3_a_missing_or_malformed_tests_snapshot_is_no_evidence_of_a_repair)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    tests = _final_tests(end_state)\n    if tests is None:\n        return False",
+      "replace": "    tests = _final_tests(end_state)\n    if tests is None:\n        return True"
+    },
+    {
+      "label": "[T1 c1] a red result that shares its ordinal with an earlier-tested source write is credited (predicted red: test_t1_a_red_run_in_the_call_that_also_writes_the_source_is_not_credited)",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "_is_test_failure(event) and first_test <= event.ordinal < first_source for event in events",
+      "replace": "_is_test_failure(event) and first_test <= event.ordinal <= first_source for event in events"
+    },
+    {
+      "label": "[T1 c1] a red result no test write stands behind is credited (predicted red: test_t1_a_red_result_that_no_test_write_stands_behind_is_not_a_red)",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "    if not source_ordinals or not test_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    first_test = min(test_ordinals)\n    return any(\n        _is_test_failure(event) and first_test <= event.ordinal < first_source for event in events\n    )",
+      "replace": "    if not source_ordinals:\n        return False\n    first_source = min(source_ordinals)\n    return any(_is_test_failure(event) and event.ordinal < first_source for event in events)"
+    },
+    {
+      "label": "[T1] an unknown head is read-only, so an unplaced first write lets a later red hit (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
+      "file": "../../_harness/bash_classify.py",
+      "oracle": "real",
+      "find": "    if base == \"mypy\":\n        return _RO, []\n    return _UNKNOWN, []",
+      "replace": "    if base == \"mypy\":\n        return _RO, []\n    return _RO, []"
+    },
+    {
+      "label": "[T1] MultiEdit is not an edit tool, so a first MultiEdit on src is invisible (predicted red: test_a_multiedit_on_the_source_first_is_a_source_write via the T1 ordering)",
+      "file": "../../_harness/matchers.py",
+      "oracle": "real",
+      "find": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\")",
+      "replace": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\")"
+    },
+    {
+      "label": "[T2] only Bash writes classified source count as an edit (predicted red: test_t2_a_test_write_through_bash_is_an_edit_between_them)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if not isinstance(command, str) or _matchers.classify_write_event(event) == \"none\":",
+      "replace": "    if not isinstance(command, str) or _matchers.classify_write_event(event) in (\"none\", \"tests\"):"
+    },
+    {
+      "label": "[T2] only Bash writes classified tests count as an edit (predicted red: test_t2_a_bash_write_call_with_no_pytest_run_is_an_edit_between_them)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if not isinstance(command, str) or _matchers.classify_write_event(event) == \"none\":",
+      "replace": "    if not isinstance(command, str) or _matchers.classify_write_event(event) in (\"none\", \"source\"):"
+    },
+    {
+      "label": "[T2] edit-tool writes are not edits (predicted red: test_t2_counts_two_full_cycles)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if _matchers.classify_write_event(event) != \"none\":\n                edited_since_red = True",
+      "replace": "            if False:\n                edited_since_red = True"
+    },
+    {
+      "label": "[T2] every edit-tool event is an edit, a scratch file included (predicted red: test_t2_an_edit_tool_write_to_a_scratch_file_is_not_an_edit)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "            if _matchers.classify_write_event(event) != \"none\":\n                edited_since_red = True",
+      "replace": "            if event.name in (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\"):\n                edited_since_red = True"
+    },
+    {
+      "label": "[T3] the repair check ignores the end state and reads Edit events instead (predicted red: test_t3_a_fix_made_through_bash_counts_because_the_end_state_is_read, test_t3_the_end_state_decides_not_the_edit_tool_events)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    if _tautology_repaired(evidence.end_state, tautology):\n        return True",
+      "replace": "    if any(\n        event.name in (\"Edit\", \"Write\") and _squash(tautology) in _squash(str(event.input.get(\"old_string\", \"\")))\n        for event in evidence.transcripts[0].events\n    ):\n        return True"
+    },
+    {
+      "label": "[T3] only files under tests/ are searched for a surviving tautology (predicted red: test_t3_moving_the_file_anywhere_with_the_planted_line_intact_is_not_a_repair[old_tests/test_cart.py])",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return not any(needle in _squash(text) for text in tests.values())",
+      "replace": "    return not any(needle in _squash(text) for path, text in tests.items() if path.startswith(\"tests/\"))"
+    },
+    {
+      "label": "[T3] only the first file is searched (predicted red: test_t3_moving_the_file_anywhere_with_the_planted_line_intact_is_not_a_repair)",
+      "file": "predicates.py",
+      "oracle": "real",
+      "find": "    return not any(needle in _squash(text) for text in tests.values())",
+      "replace": "    return not any(needle in _squash(text) for text in list(tests.values())[:1])"
+    },
+    {
+      "label": "[T1] running a python file is read-only, so a Write-then-run script is invisible (predicted red: test_t1_a_first_source_write_the_old_rule_could_not_see_no_longer_lets_a_later_red_hit)",
+      "file": "../../_harness/bash_classify.py",
+      "oracle": "real",
+      "find": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _UNKNOWN, []\n    if code is not None:",
+      "replace": "        if arg.startswith(\"-\"):\n            i += 1\n            continue\n        return _RO, []\n    if code is not None:"
     }
   ]
 }

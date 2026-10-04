@@ -1,0 +1,141 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_invoke_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_invoke_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "[no-skill leak] the no-skill prompt is built from the skill-arm prompt, so the preamble leaks into it",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_no_skill_prompt_never_carries_the_preamble and test_the_no_skill_prompt_is_built_from_the_prompt_file_not_the_skill_arm_prompt: the no-skill arm would start from the preamble line.",
+      "find": "    prompt_text = _prompt_text(case_dir, case_toml)\n    skill = case_dir.parent.name",
+      "replace": "    prompt_text = build_dispatch_prompt(case_dir)\n    skill = case_dir.parent.name"
+    },
+    {
+      "label": "[default] the key defaults to on",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_defaults_to_off_so_the_prompt_is_the_file_verbatim and test_every_committed_case_dispatches_its_prompt_untouched_unless_it_opted_in: every case without the key would be dispatched with a preamble.",
+      "find": "if case_toml.get(\"invoke_skill\", False):",
+      "replace": "if case_toml.get(\"invoke_skill\", True):"
+    },
+    {
+      "label": "[presence] the key is read by presence, so invoke_skill = false also adds the preamble",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_an_explicit_false_is_the_same_as_an_absent_key.",
+      "find": "if case_toml.get(\"invoke_skill\", False):",
+      "replace": "if \"invoke_skill\" in case_toml:"
+    },
+    {
+      "label": "[triggering] a triggering item no longer refuses the key",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_is_refused_on_a_case_with_a_triggering_item: the preamble would reach a triggering item.",
+      "find": "if any(item[\"kind\"] == \"triggering\" for item in items):",
+      "replace": "if False:"
+    },
+    {
+      "label": "[type] a non-boolean key is no longer refused",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_must_be_a_boolean: a string or integer would be read by truthiness.",
+      "find": "if not isinstance(case_toml[\"invoke_skill\"], bool):",
+      "replace": "if False:"
+    },
+    {
+      "label": "[format] the blank line after the preamble is dropped",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_on_adds_exactly_one_line_a_blank_line_and_the_prompt_verbatim and test_the_prompt_after_the_preamble_keeps_its_own_whitespace.",
+      "find": "text = f\"{preamble}\\n\\n{text}\"",
+      "replace": "text = f\"{preamble}\\n{text}\""
+    },
+    {
+      "label": "[skill name] the skill is named after the case directory, not its parent",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_is_named_after_the_case_directorys_parent and the exact-line tests.",
+      "find": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)",
+      "replace": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.name)"
+    },
+    {
+      "label": "[leak guard] the acceptance leak check no longer sees the preamble",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_preamble_is_checked_for_acceptance_leaks_with_the_prompt.",
+      "find": "        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "        text = f\"{preamble}\\n\\n{text}\"\n    return text"
+    },
+    {
+      "label": "[hash] the input hash ignores the key",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "why": "Killed by test_the_input_hash_changes_when_the_key_is_turned_on and test_the_input_hash_changes_when_the_same_case_toggles_the_key.",
+      "find": "if case_toml.get(\"invoke_skill\") is True:",
+      "replace": "if False:"
+    },
+    {
+      "label": "[hash] a false key changes the input hash",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "why": "Killed by test_a_false_key_hashes_like_an_absent_key.",
+      "find": "if case_toml.get(\"invoke_skill\") is True:",
+      "replace": "if case_toml.get(\"invoke_skill\") is not None:"
+    },
+    {
+      "label": "[hash] every case's input hash gains the fifth element, invalidating every recorded calibration",
+      "file": "../calibration.py",
+      "oracle": "real",
+      "why": "Killed by test_a_case_without_the_key_keeps_the_hash_it_had_before_the_key_existed and test_a_false_key_hashes_like_an_absent_key.",
+      "find": "if case_toml.get(\"invoke_skill\") is True:",
+      "replace": "if True:"
+    },
+    {
+      "label": "[item key] invoke_skill inside an [[items]] table is no longer refused",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_key_inside_an_item_table_is_refused_not_silently_ignored: a key placed after the first [[items]] header would parse as an item key and be ignored without a word.",
+      "find": "        if \"invoke_skill\" in item:\n            raise",
+      "replace": "        if False:\n            raise"
+    },
+    {
+      "label": "[control] the preamble is formatted through format_map",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Inert: format_map with the same one-key mapping renders the same line, so every test stays green; proves the rig can report a survivor.",
+      "find": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)",
+      "replace": "INVOKE_SKILL_PREAMBLE.format_map({\"skill\": case_dir.parent.name})",
+      "expect": "survived"
+    }
+  ]
+}

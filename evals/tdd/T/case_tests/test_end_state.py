@@ -19,7 +19,14 @@ from evals._harness.transcript import parse_transcript
 
 CASE_DIR = Path(__file__).resolve().parents[1]
 FIXTURE = CASE_DIR / "fixture"
-SNAPSHOT_FILES = {"pytest-final.txt", "pytest-src-reverted.txt", "edited-paths.json"}
+SNAPSHOT_FILES = {
+    "pytest-final.txt",
+    "pytest-src-reverted.txt",
+    "edited-paths.json",
+    "src-changed.json",
+    "tests-final.json",
+}
+TAUTOLOGY = "assert subtotal_cents(items) == subtotal_cents(items)"
 
 SOLVED_CART = '''"""Line items and cart subtotals. All money is whole cents."""
 
@@ -113,10 +120,10 @@ def _last_line(text: str) -> str:
     return text.rstrip("\n").splitlines()[-1]
 
 
-# ------------------------------------------------------------------ the three files
+# ------------------------------------------------------------------ the snapshot files
 
 
-def test_end_state_returns_exactly_the_three_snapshot_files(predicates, solved):
+def test_end_state_returns_exactly_the_five_snapshot_files(predicates, solved):
     workdir, transcript_path = solved
     snapshot = predicates.end_state(workdir, CASE_DIR, [parse_transcript(transcript_path)])
     assert set(snapshot) == SNAPSHOT_FILES
@@ -344,7 +351,7 @@ def _score(case_dir, transcript_path, workdir, end_state_dir):
     )
 
 
-def test_snapshot_end_state_writes_exactly_the_three_files(solved, tmp_path):
+def test_snapshot_end_state_writes_exactly_the_five_files(solved, tmp_path):
     workdir, transcript_path = solved
     dest = tmp_path / "end_state"
     snapshot_end_state(CASE_DIR, workdir, [transcript_path], dest)
@@ -418,6 +425,12 @@ def test_every_item_scores_through_score_attempt_with_the_case_toml_params(tmp_p
     (end_state_dir / "edited-paths.json").write_text(
         json.dumps([{"path": "src/shop/cart.py", "timestamp": None}]), encoding="utf-8"
     )
+    (end_state_dir / "src-changed.json").write_text(
+        json.dumps([{"path": "src/shop/cart.py", "change": "changed"}]), encoding="utf-8"
+    )
+    (end_state_dir / "tests-final.json").write_text(
+        json.dumps({"tests/test_cart.py": "def test_x():\n    assert subtotal_cents([]) == 0\n"}), encoding="utf-8"
+    )
     attempt, unmatched = score_attempt(CASE_DIR, [transcript_path], None, {"T1"}, end_state_dir=end_state_dir)
     assert attempt.classification == "counted"
     assert attempt.item_hits == {"T1": "hit", "T2": "hit", "T3": "hit"}
@@ -431,3 +444,224 @@ def test_a_snapshot_dest_that_is_not_empty_is_refused_so_stale_evidence_cannot_l
     (dest / "stale.txt").write_text("old", encoding="utf-8")
     with pytest.raises(CaseContractError):
         snapshot_end_state(CASE_DIR, workdir, [], dest)
+
+
+# ------------------------------------------------------------------ src-changed.json
+
+
+def _src_changed(predicates, workdir, transcripts=()):
+    raw = predicates.end_state(workdir, CASE_DIR, list(transcripts))["src-changed.json"]
+    return json.loads(raw)
+
+
+def test_src_changed_is_empty_for_an_untouched_fixture(predicates, tmp_path):
+    assert _src_changed(predicates, _copy_fixture(tmp_path)) == []
+
+
+def test_src_changed_lists_added_changed_and_removed_files_sorted_by_path(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "src/shop/cart.py").write_text(SOLVED_CART, encoding="utf-8")  # changed
+    (workdir / "src/shop/loyalty.py").write_text("POINTS = 1\n", encoding="utf-8")  # added
+    (workdir / "src/shop/sub").mkdir()
+    (workdir / "src/shop/sub/deep.py").write_text("X = 1\n", encoding="utf-8")  # added, nested
+    (workdir / "src/shop/checkout.py").unlink()  # removed
+    assert _src_changed(predicates, workdir) == [
+        {"path": "src/shop/cart.py", "change": "changed"},
+        {"path": "src/shop/checkout.py", "change": "removed"},
+        {"path": "src/shop/loyalty.py", "change": "added"},
+        {"path": "src/shop/sub/deep.py", "change": "added"},
+    ]
+
+
+def test_src_changed_sees_a_change_made_the_way_a_bash_heredoc_makes_it(predicates, tmp_path):
+    # No edit-tool event exists anywhere: the diff is of the files themselves.
+    workdir = _copy_fixture(tmp_path)
+    cart = workdir / "src/shop/cart.py"
+    text = cart.read_text(encoding="utf-8")
+    cart.write_text(text.replace("return item.unit_price_cents * item.quantity", "return 0"), encoding="utf-8")
+    assert _src_changed(predicates, workdir, []) == [{"path": "src/shop/cart.py", "change": "changed"}]
+
+
+def test_src_changed_counts_a_whitespace_only_byte_change(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    cart = workdir / "src/shop/cart.py"
+    cart.write_bytes(cart.read_bytes() + b"\n")
+    assert _src_changed(predicates, workdir) == [{"path": "src/shop/cart.py", "change": "changed"}]
+
+
+def test_src_changed_ignores_caches_bytecode_and_finder_droppings(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "src/shop/__pycache__").mkdir()
+    (workdir / "src/shop/__pycache__/cart.cpython-313.pyc").write_bytes(b"\x00")
+    (workdir / "src/shop/__pycache__/marker.txt").write_text("not bytecode", encoding="utf-8")
+    (workdir / "src/shop/stray.pyc").write_bytes(b"\x00")
+    (workdir / "src/.pytest_cache").mkdir()
+    (workdir / "src/.pytest_cache/README.md").write_text("x", encoding="utf-8")
+    (workdir / "src/.DS_Store").write_bytes(b"\x00")
+    assert _src_changed(predicates, workdir) == []
+
+
+def test_src_changed_lists_every_fixture_file_as_removed_when_src_is_gone(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    shutil.rmtree(workdir / "src")
+    assert [entry["change"] for entry in _src_changed(predicates, workdir)] == ["removed"] * 3
+    assert {entry["path"] for entry in _src_changed(predicates, workdir)} == {
+        "src/shop/__init__.py",
+        "src/shop/cart.py",
+        "src/shop/checkout.py",
+    }
+
+
+def test_src_changed_ignores_changes_outside_src(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "tests/test_cart.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / "docs/plan.md").write_text("changed\n", encoding="utf-8")
+    (workdir / "notes.md").write_text("n\n", encoding="utf-8")
+    assert _src_changed(predicates, workdir) == []
+
+
+# ------------------------------------------------------------------ tests-final.json
+
+
+def _tests_final(predicates, workdir):
+    return json.loads(predicates.end_state(workdir, CASE_DIR, [])["tests-final.json"])
+
+
+def test_tests_final_holds_every_python_file_outside_src_with_its_text(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    tests = _tests_final(predicates, workdir)
+    assert set(tests) == {"tests/test_cart.py", "tests/test_checkout.py"}
+    assert TAUTOLOGY in tests["tests/test_cart.py"]
+    assert tests["tests/test_cart.py"] == (FIXTURE / "tests/test_cart.py").read_text(encoding="utf-8")
+
+
+def test_tests_final_follows_a_bash_written_tautology_fix(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    cart_tests = workdir / "tests/test_cart.py"
+    cart_tests.write_text(
+        cart_tests.read_text(encoding="utf-8").replace(TAUTOLOGY, "assert subtotal_cents(items) == 1500"),
+        encoding="utf-8",
+    )
+    assert TAUTOLOGY not in _tests_final(predicates, workdir)["tests/test_cart.py"]
+
+
+def test_tests_final_follows_a_deleted_and_a_renamed_test_file(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "tests/test_checkout.py").unlink()
+    (workdir / "tests/test_cart.py").rename(workdir / "tests/test_cart_old.py")
+    tests = _tests_final(predicates, workdir)
+    assert set(tests) == {"tests/test_cart_old.py"}
+    assert TAUTOLOGY in tests["tests/test_cart_old.py"]
+
+
+def test_tests_final_follows_a_test_file_moved_out_of_the_tests_directory(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "old_tests").mkdir()
+    (workdir / "tests/test_cart.py").rename(workdir / "old_tests/test_cart.py")
+    (workdir / "moved_test.py").write_text(f"def test_x():\n    {TAUTOLOGY}\n", encoding="utf-8")
+    tests = _tests_final(predicates, workdir)
+    assert set(tests) == {"tests/test_checkout.py", "old_tests/test_cart.py", "moved_test.py"}
+    assert TAUTOLOGY in tests["old_tests/test_cart.py"]
+
+
+def test_tests_final_skips_src_caches_virtualenvs_and_files_that_are_not_python(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "tests/__pycache__").mkdir()
+    (workdir / "tests/__pycache__/test_cart.cpython-313.pyc").write_bytes(b"\x00")
+    (workdir / "tests/__pycache__/helper.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / "tests/notes.md").write_text("x", encoding="utf-8")
+    (workdir / "tests/data").mkdir()
+    (workdir / "tests/data/case.json").write_text("{}", encoding="utf-8")
+    (workdir / "tests/data/test_nested.py").write_text("def test_nested():\n    pass\n", encoding="utf-8")
+    (workdir / ".venv/lib").mkdir(parents=True)
+    (workdir / ".venv/lib/site.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / ".pytest_cache").mkdir()
+    (workdir / ".pytest_cache/stray.py").write_text("x = 1\n", encoding="utf-8")
+    (workdir / "scripts").mkdir()
+    (workdir / "scripts/fix.py").write_text("print('fix')\n", encoding="utf-8")
+    assert set(_tests_final(predicates, workdir)) == {
+        "tests/test_cart.py",
+        "tests/test_checkout.py",
+        "tests/data/test_nested.py",
+        "scripts/fix.py",
+    }
+
+
+def test_tests_final_is_an_empty_object_when_no_python_file_is_left_outside_src(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    shutil.rmtree(workdir / "tests")
+    assert _tests_final(predicates, workdir) == {}
+
+
+def test_tests_final_replaces_undecodable_bytes_instead_of_crashing(predicates, tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    (workdir / "tests/test_bytes.py").write_bytes(b"x = '\xff'\n")
+    assert "\ufffd" in _tests_final(predicates, workdir)["tests/test_bytes.py"]
+
+
+# ------------------------------------------------------------------ whole attempts made through Bash
+
+
+def _bash_attempt(tmp_path: Path, transcript_stem: str, *, solve: bool):
+    """A workdir changed the way a Bash heredoc changes it, scored with the stem's transcript."""
+    workdir = _copy_fixture(tmp_path)
+    if solve:
+        _solve(workdir)
+        cart_tests = workdir / "tests/test_cart.py"
+        cart_tests.write_text(
+            cart_tests.read_text(encoding="utf-8").replace(TAUTOLOGY, "assert subtotal_cents(items) == 1500"),
+            encoding="utf-8",
+        )
+    transcript_path = Path(__file__).resolve().parent / "transcripts" / f"{transcript_stem}.jsonl"
+    dest = tmp_path / "end_state"
+    snapshot_end_state(CASE_DIR, workdir, [transcript_path], dest)
+    attempt, _ = score_attempt(CASE_DIR, [transcript_path], None, {"T1"}, end_state_dir=dest)
+    return attempt, dest
+
+
+def test_a_test_first_attempt_made_entirely_through_bash_hits_every_item_from_its_snapshot(tmp_path):
+    attempt, dest = _bash_attempt(tmp_path, "bash_test_first", solve=True)
+    assert json.loads((dest / "edited-paths.json").read_text()) == []  # no edit-tool event exists
+    assert attempt.item_hits == {"T1": "hit", "T2": "hit", "T3": "hit"}
+
+
+def test_the_skill_arm_shape_made_through_bash_hits_every_item_from_its_snapshot(tmp_path):
+    attempt, _ = _bash_attempt(tmp_path, "skill_then_bash_test_first", solve=True)
+    assert attempt.item_hits == {"T1": "hit", "T2": "hit", "T3": "hit"}
+
+
+def test_a_source_first_attempt_made_through_bash_misses_t1_with_every_end_state_conjunct_true(tmp_path):
+    attempt, dest = _bash_attempt(tmp_path, "bash_source_first", solve=True)
+    assert _last_line((dest / "pytest-final.txt").read_text()) == "exit=0"
+    assert re.fullmatch(r"exit=[1-9]\d*", _last_line((dest / "pytest-src-reverted.txt").read_text()))
+    assert json.loads((dest / "src-changed.json").read_text())
+    assert attempt.item_hits["T1"] == "miss"
+
+
+def test_a_one_call_attempt_made_through_bash_misses_t1(tmp_path):
+    attempt, _ = _bash_attempt(tmp_path, "bash_one_call", solve=True)
+    assert attempt.item_hits["T1"] == "miss"
+
+
+def test_a_test_file_moved_out_of_tests_with_the_tautology_intact_misses_t3_from_its_snapshot(tmp_path):
+    workdir = _copy_fixture(tmp_path)
+    _solve(workdir)
+    (workdir / "old_tests").mkdir()
+    (workdir / "old_tests/test_cart.py").write_text(f"def test_x():\n    {TAUTOLOGY}\n", encoding="utf-8")
+    cart_tests = workdir / "tests/test_cart.py"
+    cart_tests.write_text(
+        cart_tests.read_text(encoding="utf-8").replace(TAUTOLOGY, "assert subtotal_cents(items) == 1500"),
+        encoding="utf-8",
+    )
+    transcript_path = Path(__file__).resolve().parent / "transcripts" / "bash_test_first.jsonl"
+    dest = tmp_path / "end_state"
+    snapshot_end_state(CASE_DIR, workdir, [transcript_path], dest)
+    attempt, _ = score_attempt(CASE_DIR, [transcript_path], None, {"T1"}, end_state_dir=dest)
+    assert attempt.item_hits["T3"] == "miss"
+
+
+def test_a_bash_attempt_that_changed_nothing_misses_t1_and_t3(tmp_path):
+    attempt, dest = _bash_attempt(tmp_path, "bash_test_first", solve=False)
+    assert json.loads((dest / "src-changed.json").read_text()) == []
+    assert attempt.item_hits["T1"] == "miss"
+    assert attempt.item_hits["T3"] == "miss"

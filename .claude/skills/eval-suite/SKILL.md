@@ -44,7 +44,12 @@ outside the checkout root fails with `No module named 'evals'`.
 - `case.toml`: `mode = "subagent" | "inline"` and `prompt = "prompt.md"`
   (both required); optional `envelope = "findings"` (set only by a case whose
   scorers read `evidence.findings`; every other case is never a parse-error
-  miss on a prose reply); one or more `[[items]]` tables, each with `id`
+  miss on a prose reply); optional `invoke_skill = true` (explicit
+  invocation: the skill arm's prompt starts with `Use the workbench:<skill>
+  skill for this task.` and a blank line; the no-skill arm never carries it;
+  refused on a case with a `triggering` item, which it would hand its answer;
+  default off, so every other case's prompt is unchanged); one or more
+  `[[items]]` tables, each with `id`
   (unique within the skill), `kind = "gate-candidate" | "trend" |
   "triggering"`, `scorer = "<function in predicates.py>"`, and an optional
   `params` table.

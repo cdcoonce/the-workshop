@@ -45,7 +45,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: the dispatched prompt would carry acceptance.md's text (and the leak guard is bypassed).",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    text = _prompt_text(case_dir, case_toml) + (case_dir / \"acceptance.md\").read_text(encoding=\"utf-8\")\n    return text"
     },
     {
@@ -53,7 +53,7 @@
       "file": "../dispatch.py",
       "oracle": "real",
       "why": "Killed by test_build_dispatch_prompt_builds_a_clean_prompt_without_leaking_acceptance: concatenating every file in the case directory includes acceptance.md's text and the case.toml.",
-      "find": "    text = _prompt_text(case_dir, case_toml)\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "find": "    text = _prompt_text(case_dir, case_toml)\n    if case_toml.get(\"invoke_skill\", False):\n        preamble = INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)\n        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
       "replace": "    return \"\".join(p.read_text(encoding=\"utf-8\") for p in sorted(case_dir.iterdir()) if p.is_file())"
     },
     {
