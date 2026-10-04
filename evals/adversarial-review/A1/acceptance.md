@@ -20,6 +20,29 @@ The item is scored by location AND regex: the section must exist, and a surface
 must be named inside it. A surface named in the findings or the verdict does not
 count. A repo-hygiene remark in that slot does not count.
 
+### How the skill arm is run
+
+The skill arm is told to use the skill: `case.toml` sets `invoke_skill = true`, so
+the harness starts that arm's prompt with one fixed line naming the skill, then a
+blank line, then the unchanged `prompt.md`. The no-skill arm is built from
+`prompt.md` alone and never carries that line. This item therefore measures
+whether the skill's report slot appears and names a surface once the skill is
+loaded; it does not measure whether the skill fires (A3 measures firing). At the
+first calibration the skill arm never called the skill, so it behaved like the
+no-skill arm.
+
+### Limits of the item
+
+- A surface named anywhere inside the section counts, including in a sentence that
+  says the file WAS examined (for example, "only `invoice.py` was executed"). The
+  scorer reads the section's location and a name, not which way the sentence runs.
+- The phrase class mirrors the wording of the good-shape example in the skill's own
+  `SKILL.md` (the example closes with a line about real broker data and also names
+  `invoice.py`), so a reply that copies that wording credits without checking
+  anything.
+- The owner audit therefore judges each hit; the mechanical count alone does not
+  stand for a real coverage bound.
+
 ## Trend items: the three planted defects
 
 Never gated here. Each is credited when one paragraph or list item of the reply
