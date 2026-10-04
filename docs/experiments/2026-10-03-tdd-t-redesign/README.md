@@ -1,6 +1,6 @@
 # tdd T redesign, 2026-10-03
 
-The redesign of the tdd feature-under-trap fixture `T`, [issue #1097](https://github.com/cdcoonce/the-workshop/issues/1097), a follow-up to the [first calibration run](../2026-10-03-eval-suite-calibration/README.md). It is built, and green under `make test`. **It has not been calibrated:** the hand-run (6 skill-arm and 3 no-skill executions, audited by the owner) is a separate later step. If the redesigned `T1` still admits nothing, the redesign closes with the reasons recorded, the way [the C-trig attempt](../2026-10-03-c-trig-redesign/README.md) did. The old `evals/tdd/T/calibration.json` (the old design's trend records) is left as it was.
+The redesign of the tdd feature-under-trap fixture `T`, [issue #1097](https://github.com/cdcoonce/the-workshop/issues/1097), a follow-up to the [first calibration run](../2026-10-03-eval-suite-calibration/README.md). It was built green under `make test`, then hand-run (6 skill-arm and 3 no-skill executions, audited by the owner): `T1` is admitted as gated and `tdd` becomes an active skill. The results, the scoring history and the method are in [Hand-run calibration](#hand-run-calibration) below, and the audit pack is [audit-hand-run.md](audit-hand-run.md). The calibration record in `evals/tdd/T/calibration.json` now holds the redesigned fixture's records, replacing the old design's trend records.
 
 ## The problem
 
@@ -57,7 +57,7 @@ These are the known limits of the reading. Every one is pre-existing (the same w
 - (j) code run from agent-authored files under `tests/` (a pytest `conftest.py`, `sitecustomize`, `BASH_ENV`), and cross-call state, which is invisible by design: a `cd`, a symlink or a file made in an EARLIER call is not known to a later one;
 - (k) unproven: whether an unresolved expansion that lands in the operator position of `[` or `test` can evaluate a subscript on bash 4.2 or later. The rule treats operator-position words as `source` and operand-position words as read-only; the operand-position half has not been shown safe against every bash version.
 
-The list is not exhaustive. The classifier is a heuristic, not a parser of bash, and a `T1` hit is only as trustworthy as the owner audit of every transcript behind it. The `source` costs listed below, and every limit above, can only be checked by that audit; no hand-run score is recorded in this note.
+The list is not exhaustive. The classifier is a heuristic, not a parser of bash, and a `T1` hit is only as trustworthy as the owner audit of every transcript behind it. The `source` costs listed below, and every limit above, can only be checked by that audit; the hand-run scores and the audit that checked them are in [Hand-run calibration](#hand-run-calibration).
 
 Two further ways a write is credited are limits of what `T1` checks rather than of the classifier: a placeholder or token test (`touch tests/x`, `assert False`, a test for one behaviour) satisfies "a test write at or before the red", and `T1` does not check that the failing test is the one that covers the feature (see the limit below).
 
@@ -91,6 +91,40 @@ The `T` prompt text, the fixture tree (the planted tautology and `docs/plan.md` 
 - **A workdir path containing a `src` segment** costs `T1` hits as described above; the dispatch path line the Agent tool adds makes this possible for any fixture directory the conductor picks.
 - **`T1`'s failure marker is unchanged.** Ordering counts a red result only when a Bash result carries a `FAILED` or `ERROR` line (or `error during collection`), so a run piped through `tail -1` that keeps only the `N failed` summary line would not be seen as red. `T2` already accepts that summary line.
 
-## What happens next
+## Hand-run calibration
 
-The calibration hand-run, owner-audited, decides whether any `T` item is admitted. This note records no result for it.
+The hand-run calibration of the redesigned `T`, 2026-10-03 and 2026-10-04, owner-audited. It follows the method of the [first calibration run](../2026-10-03-eval-suite-calibration/README.md) and is the step the earlier sections left open.
+
+### Method
+
+- **Executions:** 9 case-agent executions of `evals/tdd/T`, fixed at n = 6 skill-arm and n = 3 no-skill-arm. Every execution was a `general-purpose` subagent on Sonnet, dispatched through the Agent tool. No retry loop, no replacements and no reserve runs: every execution counted.
+- **Arms and prompts:** the skill arm's dispatch prompt is the harness's `build_dispatch_prompt`, which for `T` prepends `Use the workbench:tdd skill for this task.` to the prompt (the `invoke_skill` preamble); the no-skill arm's is `build_no_skill_prompt`, which never carries that line. Each prompt was preceded by one leading line giving the fixture path.
+- **Fixture:** one fresh copy of the fixture per execution, fingerprint `ebfb934e783dae00565902095b992401094b922b8e5adec33af371589fff2700`, unchanged from the redesign.
+- **Scoring:** `dispatch.snapshot_end_state` into a fresh directory per execution, then `dispatch.score_attempt` over the copied transcript, at the dev commit recorded below. The records come from `calibration.compute_calibration_record` and `write_calibration_records`, and the input hash from `compute_input_hash`; no number was written by hand.
+- **Audit:** the owner read every transcript. Audited hits equal mechanical hits on every item and the cross-match is clean, so every record has `audited_hits == hits` and `cross_match_result == "pass"`. The raw transcripts are machine-local and are not committed; [audit-hand-run.md](audit-hand-run.md) is the committed record, with each execution's call sequence, the class the harness gave each call, and its per-item result.
+
+### Results
+
+Hits out of n, skill arm / no-skill arm:
+
+| Item | Kind | Skill arm | No-skill arm | Status |
+| --- | --- | --- | --- | --- |
+| `T1` | gate-candidate | 6/6 | 0/3 | gate |
+| `T2` | trend | 5/6 (skill arm 2 misses) | 0/3 | trend |
+| `T3` | trend | 5/6 (skill arm 6 misses) | 3/3 | trend |
+
+`T1` meets the admission rule unchanged: skill arm at least 5 of 6, no-skill arm at most 1 of 3, audited rate equal to the mechanical rate, clean cross-match. It is admitted as gated, and `tdd` now has a gated item in `evals/tdd/checks.manifest`, so `tdd` is an active skill. `T2` is a trend item by kind. `T3` is a trend item too, and its no-skill arm passes it 3 of 3, so it would not discriminate the skill from the baseline even if it were a gate candidate. The staleness guard now applies to `T1`'s recorded `input_hash`.
+
+### Scoring history
+
+The nine transcripts were scored twice. At dev `b32d5eb` the classifier read skill arm 4's call 4, a read-only `for ... cat` loop, as a source write, so `T1` scored 5 of 6 in the skill arm. The owner's audit found that a false miss. The classifier was corrected in [fix(evals): classify read-only shell loops and conditionals as read-only (#1123)](https://github.com/cdcoonce/the-workshop/pull/1123) (dev `d2cd497`), and the same nine transcripts were re-scored with no new executions. Only skill arm 4's `T1` changed, from miss to hit, giving 6 of 6. The table above and the records are the `d2cd497` scores.
+
+### What the no-skill arm showed
+
+All 3 no-skill executions worked test-after: each made 3 read-only inspection calls and then one Bash call that wrote the source before any failing test existed. `T1` was 0 of 3, and `T2` was 0 of 3. `T3` was 3 of 3, so an agent that never touched the skill still caught the planted tautological test.
+
+### Confounds that remain
+
+- **The path line.** The Agent tool cannot set a case-agent's working directory, so each dispatch carries one extra leading line giving the fixture path. A workdir path with a `src` segment would cost `T1` hits as described above.
+- **What `T1` measures.** The skill arm is told to use the skill, so `T1` reads whether the skill's discipline holds under the "just make it pass" pressure once the skill is in play, not whether the skill fires. `T-trig` measures firing and was not part of this run.
+- **The classifier's limits.** A `T1` hit is only as trustworthy as the owner audit behind it. The known limits of the Bash reading are listed in [What the reading can and cannot get wrong](#what-the-reading-can-and-cannot-get-wrong) and in `evals/tdd/gaps.md`; they are unchanged.
