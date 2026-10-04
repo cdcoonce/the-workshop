@@ -18,8 +18,15 @@ The shape is an allow-list on purpose. A blocklist of write idioms is open-ended
 (``gsed -i``, ``\\cp``, ``uv run python /tmp/fix.py``, ``from shutil import copy``,
 ``sed -n '1w src/x'`` all slipped past one), and a write the reader misses can
 credit a source-first run as test-first. Here a command nobody listed is
-write-capable, so the only way a hit is wrongly credited is a write hidden inside
-an allow-listed head's own arguments that the per-head rules below do not name.
+write-capable, which closes that hole for unknown commands but is not a proof: the
+classifier is a heuristic, and it still credits writes in classes it does not read
+(unquoted heredoc bodies, environment prefixes and wrapper options, ``git -c``,
+``xargs`` fed from stdin, write forms the per-head regexes miss, output and cache
+flags of pytest, mypy and ruff, an inline-python blocklist, python rebinding,
+zsh-only expansions, code run from agent-authored ``tests/``, and state carried
+across calls). All of these are pre-existing and are listed in
+``docs/experiments/2026-10-03-tdd-t-redesign/README.md``; the list is not
+exhaustive, and a T1 hit is only as trustworthy as the owner audit behind it.
 
 Pytest spellings are allow-listed even though they execute code: running the tests
 is what a test-first attempt does, and a ``none`` call can never count as a write.
@@ -49,15 +56,20 @@ operand, ``printf`` with a literal format); every other head is ``source``.
 
 In a call with a write, every ``cd`` target must be a plain literal path (no quote, escape, glob or
 expansion) that is absolute or relative without ``src`` or ``..`` segments, and the call has no
-``eval`` and no ``CDPATH``: a ``cd`` that can land in ``src`` leaves a write's place unknown. A call
-with a ``cd`` and only read-only commands is unaffected.
+``eval`` and no ``CDPATH``: a ``cd`` that can land in ``src`` leaves a write's place unknown. That
+rule applies only to calls with a write; a literal ``cd`` in a read-only call is unaffected, but a
+``cd`` whose target is an expansion (``cd $d``) is ``source`` anyway, because ``cd`` is not on the
+safe-head list above.
 
-Cost: one pass over the text with a hand-written scanner, no backtracking regex
-over the command, and a stack of open constructs with O(1) work per token. Bounded
-work is enforced by the cap, a limit on command substitutions, a limit on analysed
-``open(`` calls, bounded windows in the python scan, a limit on open constructs and
-a limit on heredoc bodies feeding one command. A heredoc body is analysed once however many
-shells it is piped into (the analysis is memoised).
+Cost: one pass over the text with a hand-written scanner and a stack of open
+constructs with O(1) work per token. The work the code bounds is the cap, a limit
+on command substitutions, a limit on analysed ``open(`` calls, bounded windows in
+the python scan, a limit on open constructs and a limit on heredoc bodies feeding
+one command. A heredoc body is analysed once however many shells it is piped into
+(the analysis is memoised). Not bounded, a known pre-existing limit: the regex
+that reads ``sed s///`` flags (``_SED_S_FLAGS``) backtracks exponentially on
+adversarial input (``sed 's/`` plus about 36 backslashes takes seconds, about 44
+does not finish), so a ``sed`` script is outside the timing tests.
 """
 
 from __future__ import annotations
@@ -1314,7 +1326,10 @@ def classify_bash_command(command: str) -> str:
     inline python script (``-c``, ``-``, or a heredoc) with no write API. Command
     substitutions, backticks, ``bash -c``, ``eval`` payloads and heredoc scripts
     are analysed as commands of their own; a heredoc body is data for a read-only
-    head. ``none`` calls can never count as writes.
+    head only when its delimiter is quoted (``<<'EOF'``): bash expands ``$(...)``,
+    backticks and ``$NAME`` in an unquoted body, which the classifier does not scan
+    (a known limit). ``none`` calls can never count as writes by the classifier's
+    reading, which is a heuristic and has known gaps (see the module docstring).
 
     ``tests``: the call is write-capable, every write in it is a recognised one
     (a file redirect, ``tee``, ``sed -i``, ``perl -i``, ``touch``, ``mkdir``,
