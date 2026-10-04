@@ -9,7 +9,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 2. **Validate each note**: Run the collector first —
 
    ```bash
-   uv run --with 'graphmark>=0.7,<0.8' --with pyyaml python "<engine>/wrap_up_audit.py" --files "<note one>" "<note two>" --json
+   uv run --with 'graphmark>=0.10,<0.11' --with pyyaml python "<engine>/wrap_up_audit.py" --files "<note one>" "<note two>" --json
    ```
 
    Quote each path (a name with a space, split unquoted, resolves to nothing
