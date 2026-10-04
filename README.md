@@ -530,7 +530,7 @@ uv run pytest --cov=scripts --cov-report=term-missing
 | ------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `make stamp` refuses to overwrite a file         | The target lacks the generation marker, so it may be hand-written | Confirm the path belongs in the stamper's map before forcing anything   |
 | `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
-| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Bump `plugins/<name>/.claude-plugin/plugin.json`; see Plugin Versioning |
+| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Run `make bump PLUGIN=<name>` (one hand-written file, the rest stamped); see Plugin Versioning |
 | Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
 | Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 

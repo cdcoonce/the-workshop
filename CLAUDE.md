@@ -150,7 +150,12 @@ green, and silently never arrives. `make test` fails on this
 (`scripts/check_version_bumps.py`).
 
 The version lives in the hand-written `plugins/<name>/.claude-plugin/plugin.json`;
-the two stamped platform manifests carry the same value. The gate diffs
+the two stamped platform manifests, both marketplaces, `README.md` and
+`docs/reference/plugins.md` carry the same value and are generated — never edit
+them by hand. Run `make bump PLUGIN=<name>` (add `LEVEL=patch|minor|major` to
+override the level the gate would demand; set `VERSION_BASE=origin/dev` for a PR
+into `dev`): it edits that one file from the version released at the base ref and
+runs `make stamp`, and a second run changes nothing. The gate diffs
 `plugins/<name>/` against the release branch, excluding stamper-owned paths and
 nothing else — generated content is a pure function of hand-authored content, so
 a real change already trips the gate through its source.
