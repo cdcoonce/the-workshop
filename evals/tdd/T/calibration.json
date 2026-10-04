@@ -1,11 +1,11 @@
 {
   "T1": {
     "audit": [],
-    "audited_hits": 0,
+    "audited_hits": 6,
     "cross_match_result": "pass",
-    "gate_or_trend_status": "trend",
-    "hits": 0,
-    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "gate_or_trend_status": "gate",
+    "hits": 6,
+    "input_hash": "08ec820882dc047f82368fcc0708ee58e921eb7da6e05594f84b6c9b5a828ec4",
     "n": 6,
     "no_skill_arm_result": {
       "hits": 0,
@@ -15,11 +15,11 @@
   },
   "T2": {
     "audit": [],
-    "audited_hits": 0,
+    "audited_hits": 5,
     "cross_match_result": "pass",
     "gate_or_trend_status": "trend",
-    "hits": 0,
-    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "hits": 5,
+    "input_hash": "08ec820882dc047f82368fcc0708ee58e921eb7da6e05594f84b6c9b5a828ec4",
     "n": 6,
     "no_skill_arm_result": {
       "hits": 0,
@@ -29,14 +29,14 @@
   },
   "T3": {
     "audit": [],
-    "audited_hits": 2,
+    "audited_hits": 5,
     "cross_match_result": "pass",
     "gate_or_trend_status": "trend",
-    "hits": 2,
-    "input_hash": "65d7e1d1078549beaefdf0333b4b03a5e6d47d2cd87500477a005a34bd7f61d7",
+    "hits": 5,
+    "input_hash": "08ec820882dc047f82368fcc0708ee58e921eb7da6e05594f84b6c9b5a828ec4",
     "n": 6,
     "no_skill_arm_result": {
-      "hits": 1,
+      "hits": 3,
       "n": 3,
       "replacements": 0
     }
