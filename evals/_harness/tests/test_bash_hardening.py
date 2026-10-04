@@ -2017,6 +2017,12 @@ R4_SUBST_SOURCE = [
     "echo $(echo 'a' # b)",
     "echo $(echo a\nb)",
     "echo $(echo 'a'\nb)",
+    "echo $(echo a\necho b)",
+    "echo $(echo 'a'\necho b)",
+    # process substitution keeps the blunt rule: no quote in its body
+    "cat <(echo \"x\")",
+    "cat <(echo 'x')",
+    "diff <(echo 'a') <(echo b)",
     "echo $(echo a\rb)",
     "echo $(echo $'a')",
     "echo $(echo $\"a\")",

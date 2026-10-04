@@ -1177,10 +1177,10 @@
       "replace": "        if close == -1:"
     },
     {
-      "label": "[r4 S7 paren body] a $( ) body is not checked",
+      "label": "[r4 S7 paren body] a <( ) or >( ) body is not checked",
       "file": "../bash_classify.py",
       "oracle": "real",
-      "why": "Killed by `echo $(echo \"x\")`, `echo $(echo a#b)` and `echo \"$(echo \\) ; echo x > src/cart.py)\"`.",
+      "why": "Killed by `cat <(echo \"x\")`, `cat <(echo 'x')` and `diff <(echo 'a') <(echo b)`: process substitution keeps the blunt rule.",
       "find": "            if _SUBST_BODY_BAD.search(text, i + 2, match.start()):\n                break\n",
       "replace": ""
     },
@@ -1303,6 +1303,94 @@
       "why": "Killed by `cp -- tests/a -x`, `touch -- tests/a -x`, `rm -- tests/a -x` and the other `-- ... -x` rows.",
       "find": "        elif ended:\n            out.append(arg)\n",
       "replace": ""
+    },
+    {
+      "label": "[r4b paren in quotes] a ) or ( inside single quotes counts",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the honest rows `echo $(echo ')')` and `echo $(echo '(')`: with the quote skipped the body ends early and is unreadable.",
+      "find": "        elif c == \"'\":\n            close = text.find(\"'\", k + 1)\n            if close == -1:\n                return None\n            k = close\n",
+      "replace": ""
+    },
+    {
+      "label": "[r4b paren in quotes] a ) or ( inside double quotes counts",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the honest rows `echo $(echo \"(\")` and `echo $(echo \"x)\")`.",
+      "find": "        elif c == '\"':\n            close = text.find('\"', k + 1)\n            if close == -1 or _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n            k = close\n",
+      "replace": ""
+    },
+    {
+      "label": "[r4b unterminated '] an unterminated single quote is an ordinary character",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "The unterminated-quote rows `echo $(echo 'a)`; the body is then scanned again as a command text, which refuses an unterminated quote too, so this guard is a second line and may survive.",
+      "find": "            close = text.find(\"'\", k + 1)\n            if close == -1:\n                return None\n",
+      "replace": "            close = text.find(\"'\", k + 1)\n            if close == -1:\n                close = k\n"
+    },
+    {
+      "label": "[r4b unterminated \"] an unterminated double quote is an ordinary character",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "The unterminated-quote rows `echo $(echo \"a)`; also backed by the scan of the body.",
+      "find": "            if close == -1 or _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n",
+      "replace": "            if close == -1:\n                close = k\n            elif _DQ_SEGMENT_BAD.search(text, k + 1, close):\n                return None\n"
+    },
+    {
+      "label": "[r4b dq $] a $ inside a double-quoted segment is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by `echo $(echo \"$x\")`, `\"$HOME\"` and `\"${x}\"`.",
+      "find": "_DQ_SEGMENT_BAD = re.compile(r\"[$`\\\\]\")",
+      "replace": "_DQ_SEGMENT_BAD = re.compile(r\"[`\\\\]\")"
+    },
+    {
+      "label": "[r4b dq backtick] a backtick inside a double-quoted segment is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by `echo $(echo \"`pwd`\")`.",
+      "find": "_DQ_SEGMENT_BAD = re.compile(r\"[$`\\\\]\")",
+      "replace": "_DQ_SEGMENT_BAD = re.compile(r\"[$\\\\]\")"
+    },
+    {
+      "label": "[r4b dq backslash] a backslash inside a double-quoted segment is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by `cat $(git ls-files | grep -E \"\\.py\")` and `echo $(echo \"a\\\"b\")`.",
+      "find": "_DQ_SEGMENT_BAD = re.compile(r\"[$`\\\\]\")",
+      "replace": "_DQ_SEGMENT_BAD = re.compile(r\"[$`]\")"
+    },
+    {
+      "label": "[r4b dq rule] a double-quoted segment is not checked",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the same rows as the three character mutants.",
+      "find": "            if close == -1 or _DQ_SEGMENT_BAD.search(text, k + 1, close):",
+      "replace": "            if close == -1:"
+    },
+    {
+      "label": "[r4b out-of-quote backslash] a backslash outside quotes in a $( ) body is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by S5 `echo \"$(echo \\) ; echo x > src/cart.py)\"`, `echo \"$(echo \\) ; x)\"` and `echo $(echo a\\b)`.",
+      "find": "_PAREN_BODY_BAD = frozenset(\"\\\\#\\n\")",
+      "replace": "_PAREN_BODY_BAD = frozenset(\"#\\n\")"
+    },
+    {
+      "label": "[r4b out-of-quote #] a # outside quotes in a $( ) body is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by S6 `echo \"$(echo a # )\\ntouch lib/hit\\n)\"`, `echo $(echo a#b)` and `echo $(echo 'a' # b)`.",
+      "find": "_PAREN_BODY_BAD = frozenset(\"\\\\#\\n\")",
+      "replace": "_PAREN_BODY_BAD = frozenset(\"\\\\\\n\")"
+    },
+    {
+      "label": "[r4b out-of-quote newline] a newline outside quotes in a $( ) body is read",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by `echo $(echo a\\necho b)` and `echo $(echo 'a'\\necho b)` (two read-only commands, so nothing else refuses them).",
+      "find": "_PAREN_BODY_BAD = frozenset(\"\\\\#\\n\")",
+      "replace": "_PAREN_BODY_BAD = frozenset(\"\\\\#\")"
     },
     {
       "label": "[control] two independent integer patterns swapped",

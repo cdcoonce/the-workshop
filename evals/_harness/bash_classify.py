@@ -37,8 +37,10 @@ as a bare ``[A-Za-z_][A-Za-z0-9_.-]*`` word (its body is then scanned) and every
 delimiter shape, such as a mid-word quote or ``EOF#x``, is ``source``; a body reaches an
 interpreter only directly or through a bare ``cat``. The scanner also refuses what it
 cannot parse with certainty: a file-descriptor duplication with a glued word (``>&2foo``),
-``$'...'``, a backslash, ``#``, quote or newline in the body of ``$( )``, a backtick pair
-or ``${ }``, any control character but newline and tab, a path-qualified head outside
+``$'...'``, a backslash, ``#``, quote or newline in the body of a backtick pair, ``${ }``
+or ``<( )``, in a ``$( )`` body a backslash, ``#`` or newline outside quotes, an
+unterminated quote, or a double-quoted segment holding ``$``, a backtick or a backslash
+(``$( )`` bodies are matched quote-aware, so balanced quotes are fine), any control character but newline and tab, a path-qualified head outside
 ``/bin``, ``/usr/bin``, ``/usr/local/bin`` and ``/opt/homebrew/bin``, ``cp`` and ``mv``
 options outside ``-f -i -n -p -r -R -v -a``, an ``@`` word or option value for pytest,
 mypy, ruff, black and isort, and perl in-place code with a ``$`` that is not ``$digit``
@@ -130,8 +132,9 @@ _HEREDOC_BARE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
 _HEREDOC_END = " \t\n;|&<>)"
 # Control characters other than a newline and a tab (a carriage return is a blank to this scanner, not to bash).
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f]")
-# What may not appear in the body of ``$( ... )``, a backtick pair or ``${ ... }``: the scanner finds the close by
-# counting, which a backslash, a comment, a quote or a newline in the body can make disagree with the shell.
+# What may not appear in the body of ``<( ... )``, a backtick pair or ``${ ... }``: the scanner finds the close by
+# counting, which a backslash, a comment, a quote or a newline in the body can make disagree with the shell. A
+# ``$( ... )`` body is matched by ``_paren_end``, which reads quotes.
 _SUBST_BODY_BAD = re.compile(r"""[\\#'"\r\n]""")
 _DQ_SPECIAL = re.compile(r'[^"\\$`]+')
 _PARAM_NAME = re.compile(r"\w+|[@*#?!$-]")
@@ -217,6 +220,14 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
             return len(text)
         _scan(text[i + 1 : close], base + i + 1, ctx, depth + 1)
         return close + 1
+    if text[i] == "$":
+        # ``$( ... )``: the end is found by a scanner that knows quotes, so a ``)`` inside them does not count
+        end = _paren_end(text, i + 1)
+        if end is not None:
+            _scan(text[i + 2 : end], base + i + 2, ctx, depth + 1)
+            return end + 1
+        ctx.broken = True
+        return len(text)
     level = 0
     for match in _PAREN.finditer(text, i + 1):
         level += 1 if match.group() == "(" else -1
@@ -227,6 +238,56 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
             return match.end()
     ctx.broken = True
     return len(text)
+
+
+# Inside the body of ``$( ... )``, outside any quote: a backslash, a ``#`` or a newline ends the scan (the shell reads
+# them differently from a paren count; a carriage return is refused by the control-character rule). Inside a
+# double-quoted segment: ``$``, a backtick and a backslash (the segment would expand or escape).
+_PAREN_BODY_BAD = frozenset("\\#\n")
+_DQ_SEGMENT_BAD = re.compile(r"[$`\\]")
+
+
+def _paren_end(text: str, start: int) -> int | None:
+    """The index of the ``)`` that closes the ``(`` at ``text[start]``, or ``None`` when it cannot be known.
+
+    Quote-aware: a single-quoted segment is literal up to the next ``'`` (unterminated: ``None``); a double-quoted
+    segment must hold no ``$``, backtick or backslash; a ``(`` or ``)`` inside either does not count; a backtick
+    segment is skipped as a unit (its body is scanned again as a command text, which refuses quotes, backslashes
+    and ``#`` in it). Outside quotes a backslash, ``#``, newline, and ``$'`` or ``$"``, are ``None``. Nested
+    ``$( )`` is counted by this same scan.
+    """
+    n = len(text)
+    level = 0
+    k = start
+    while k < n:
+        c = text[k]
+        if c == "(":
+            level += 1
+        elif c == ")":
+            level -= 1
+            if level == 0:
+                return k
+        elif c == "'":
+            close = text.find("'", k + 1)
+            if close == -1:
+                return None
+            k = close
+        elif c == '"':
+            close = text.find('"', k + 1)
+            if close == -1 or _DQ_SEGMENT_BAD.search(text, k + 1, close):
+                return None
+            k = close
+        elif c == "`":
+            close = text.find("`", k + 1)
+            if close == -1:
+                return None
+            k = close
+        elif c in _PAREN_BODY_BAD:
+            return None
+        elif c == "$" and text.startswith(("$'", '$"'), k):
+            return None
+        k += 1
+    return None
 
 
 def _has_brace_expansion(raw: str) -> bool:
