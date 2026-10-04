@@ -77,8 +77,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by the tests-class negatives: an unresolved or non-tests target next to a tests mention would count as tests.",
-      "find": "        targets\n        and all(_target_is_tests(target) for target in targets)\n        and _TESTS_MENTION.search(command)",
-      "replace": "        targets\n        and _TESTS_MENTION.search(command)"
+      "find": "        and targets\n        and all(_target_is_tests(target) for target in targets)\n        and not _SRC_TOKEN.search(command)",
+      "replace": "        and targets\n        and not _SRC_TOKEN.search(command)"
     },
     {
       "label": "[tests target] every target must be under tests: only the first is checked",
@@ -101,8 +101,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by the cd src, src comment and src = 1 rows, and the honest src-in-body misses.",
-      "find": "        and _TESTS_MENTION.search(command)\n        and not _SRC_TOKEN.search(command)",
-      "replace": "        and _TESTS_MENTION.search(command)"
+      "find": "        and all(_target_is_tests(target) for target in targets)\n        and not _SRC_TOKEN.search(command)",
+      "replace": "        and all(_target_is_tests(target) for target in targets)"
     },
     {
       "label": "[tests target] a .. segment is allowed in a tests path",
