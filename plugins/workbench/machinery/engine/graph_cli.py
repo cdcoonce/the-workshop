@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.6,<0.7", "fastembed", "numpy"]
+# dependencies = ["graphmark>=0.10,<0.11", "fastembed", "numpy"]
 # ///
 """Vault graph CLI — the reintegration seam.
 

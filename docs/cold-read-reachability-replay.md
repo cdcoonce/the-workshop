@@ -64,3 +64,31 @@ mostly UNREACHABLE, and every defect that was real stays REACHABLE. It does
 not measure the rule's false-negative rate on other repos, and the producer
 search is the reader's own, so a careless reader can still pick the wrong
 writer. The "fail closed" clause is the guard.
+
+## afk-app 30-read run (2026-10-03)
+
+Source: the read-by-read comments on cdcoonce/afk-app#1-#4 (30 fresh reads under
+workbench 8.31.0), classified for the evidence rule of
+[the-workshop#1105](https://github.com/cdcoonce/the-workshop/issues/1105). The
+rule must keep the positive controls blocking and turn the negative controls
+advisory. Classes below are the issue's own; the producer lines are as cited by
+the readers and have not been re-derived here.
+
+Positive controls (blocking under the evidence rule):
+
+| Finding | Basis | Source |
+| --- | --- | --- |
+| afk-app#4 read 8: null `merged_by` / `session_id` | REACHABLE | producers `quarantine.py:183`, `telemetry.py:508`, `issue_source.py:604-605` |
+| afk-app#4 read 3: anti-scope forbids the Codable change the criterion needs | MEASURED | the read's probe build |
+| afk-app#2 read 4: the volatile-key exemption collides with strict-nullable | MEASURED | the read's probe build |
+| afk-app#4 read 2: `tokens: dict \| None` | MEASURED | `models.py` |
+| afk-app#1 read 3: claims not paired with issue numbers | traced | the original body's rule |
+
+Negative controls (advisory under the evidence rule; each targets a reader-born rule or boundary and has no basis):
+
+| Finding | Why advisory |
+| --- | --- |
+| afk-app#3 read 6: fleet failure vs shown issues | REASONED, reader-born boundary |
+| afk-app#2 read 6: `refresh()` fleet request | REASONED, reader-born boundary |
+| afk-app#4 read 9: `git grep` empty-marker | REASONED, reader-born boundary |
+| afk-app#1 read 5: missing sibling line | REASONED, reader-born boundary |

@@ -35,6 +35,7 @@ the repair is to run that tool directly.
 <!-- BEGIN GENERATED: scripts-table -->
 | Script | Purpose |
 | --- | --- |
+| `scripts/bump_version.py` | Bump a plugin's version in the one hand-written file, then stamp the rest. |
 | `scripts/check_teeth_anchors.py` | Resolve every committed detector-teeth-check spec's anchors, without running mutants. |
 | `scripts/check_version_bumps.py` | Fail when a plugin's shipped output changed without a version bump. |
 | `scripts/dev_cycle_validate.py` | Dev cycle state file parser and validator. |
