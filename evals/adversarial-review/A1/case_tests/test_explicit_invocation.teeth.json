@@ -1,0 +1,183 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_explicit_invocation.py",
+    "evals/adversarial-review/A1/case_tests/test_case_contract.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/adversarial-review/A1/case_tests/test_explicit_invocation.py",
+    "evals/adversarial-review/A1/case_tests/test_case_contract.py"
+  ],
+  "mutants": [
+    {
+      "label": "[key] invoke_skill = true is removed from case.toml",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "Killed by the key, loader, skill-arm prompt and toggle tests in test_explicit_invocation.py, and by the dispatch-prompt test in test_case_contract.py.",
+      "find": "invoke_skill = true\nbuilder",
+      "replace": "builder"
+    },
+    {
+      "label": "[key] invoke_skill is false",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "Killed by the key, loader and skill-arm prompt tests, and by the dispatch-prompt test in test_case_contract.py.",
+      "find": "invoke_skill = true\nbuilder",
+      "replace": "invoke_skill = false\nbuilder"
+    },
+    {
+      "label": "[key] the key is also placed inside an [[items]] table",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "The harness refuses the key inside an item table, so every test that reads the case raises.",
+      "find": "scorer = \"coverage_bound\"\n",
+      "replace": "scorer = \"coverage_bound\"\ninvoke_skill = true\n"
+    },
+    {
+      "label": "[triggering] the gate item becomes a triggering item",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "The harness refuses the key on a case with a triggering item; also killed by test_a1_declares_no_triggering_item_so_the_key_is_allowed.",
+      "find": "id = \"A1-coverage-bound\"\nkind = \"gate-candidate\"",
+      "replace": "id = \"A1-coverage-bound\"\nkind = \"triggering\""
+    },
+    {
+      "label": "[no-skill leak] the no-skill prompt is built from the skill-arm prompt, so the preamble leaks into it",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_no_skill_prompt_never_carries_the_preamble_and_is_built_from_the_prompt_file_alone: the no-skill prompt would no longer equal the prompt file plus the do-not-invoke line.",
+      "find": "    prompt_text = _prompt_text(case_dir, case_toml)\n    skill = case_dir.parent.name",
+      "replace": "    prompt_text = build_dispatch_prompt(case_dir)\n    skill = case_dir.parent.name"
+    },
+    {
+      "label": "[format] the preamble appears twice",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_the_skill_arm_prompt_contains_the_preamble_exactly_once_and_as_the_first_line and the dispatch-prompt test in test_case_contract.py.",
+      "find": "text = f\"{preamble}\\n\\n{text}\"",
+      "replace": "text = f\"{preamble}\\n\\n{preamble}\\n\\n{text}\""
+    },
+    {
+      "label": "[format] the preamble comes after the prompt, not first",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the same exact-once-and-first test and the dispatch-prompt test.",
+      "find": "text = f\"{preamble}\\n\\n{text}\"",
+      "replace": "text = f\"{text}\\n\\n{preamble}\""
+    },
+    {
+      "label": "[format] the blank line after the preamble is dropped",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the skill-arm prompt test and the dispatch-prompt test.",
+      "find": "text = f\"{preamble}\\n\\n{text}\"",
+      "replace": "text = f\"{preamble}\\n{text}\""
+    },
+    {
+      "label": "[skill name] the preamble names the case directory, not its parent skill",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "why": "Killed by the skill-arm prompt test and the dispatch-prompt test.",
+      "find": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)",
+      "replace": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.name)"
+    },
+    {
+      "label": "[leak guard] acceptance.md carries the preamble sentence as a line",
+      "file": "../acceptance.md",
+      "oracle": "real",
+      "why": "build_dispatch_prompt runs the acceptance leak check over the preamble, so it raises; killed by the preamble leak test and the dispatch-prompt test.",
+      "find": "# A1 acceptance criteria (private; scorer-only, never sent to the case-agent)\n",
+      "replace": "# A1 acceptance criteria (private; scorer-only, never sent to the case-agent)\n\nUse the workbench:adversarial-review skill for this task.\n"
+    },
+    {
+      "label": "[prompt] prompt.md names the skill",
+      "file": "../prompt.md",
+      "oracle": "real",
+      "why": "Killed by test_prompt_md_names_no_skill_and_carries_no_preamble_sentence and the byte-for-byte scenario cell test.",
+      "find": "Self-review of own two-hour",
+      "replace": "Use the adversarial-review skill: self-review of own two-hour"
+    },
+    {
+      "label": "[prompt] prompt.md carries the preamble sentence",
+      "file": "../prompt.md",
+      "oracle": "real",
+      "why": "Killed by the prompt-name-free test; the skill-arm prompt would also carry the preamble twice.",
+      "find": "Self-review of own two-hour",
+      "replace": "Use the workbench:adversarial-review skill for this task.\n\nSelf-review of own two-hour"
+    },
+    {
+      "label": "[prompt] prompt.md gains a trailing blank line",
+      "file": "../prompt.md",
+      "oracle": "real",
+      "why": "Killed by test_prompt_md_is_the_scenario_1_cell_byte_for_byte: prompt.md is unchanged.",
+      "find": "ready to merge\"\n",
+      "replace": "ready to merge\"\n\n"
+    },
+    {
+      "label": "[hash] the input hash ignores the key",
+      "file": "../../../_harness/calibration.py",
+      "oracle": "real",
+      "why": "Killed by test_toggling_the_key_changes_the_input_hash.",
+      "find": "if case_toml.get(\"invoke_skill\") is True:",
+      "replace": "if False:"
+    },
+    {
+      "label": "[hash] a false key changes the input hash",
+      "file": "../../../_harness/calibration.py",
+      "oracle": "real",
+      "why": "Killed by the false-key half of test_toggling_the_key_changes_the_input_hash.",
+      "find": "if case_toml.get(\"invoke_skill\") is True:",
+      "replace": "if case_toml.get(\"invoke_skill\") is not None:"
+    },
+    {
+      "label": "[docs] the case.toml header no longer documents the key",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "Killed by test_case_toml_header_documents_the_key_and_what_the_gate_now_measures.",
+      "find": "# invoke_skill = true makes the skill arm's prompt",
+      "replace": "# the harness makes the skill arm's prompt"
+    },
+    {
+      "label": "[docs] the case.toml header no longer says A3 measures firing",
+      "file": "../case.toml",
+      "oracle": "real",
+      "why": "Killed by the same header test.",
+      "find": "A3 measures firing",
+      "replace": "see elsewhere"
+    },
+    {
+      "label": "[control] the preamble is formatted through format_map",
+      "file": "../../../_harness/dispatch.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Inert: format_map with the same one-key mapping renders the same line, so every test stays green; proves the rig can report a survivor.",
+      "find": "INVOKE_SKILL_PREAMBLE.format(skill=case_dir.parent.name)",
+      "replace": "INVOKE_SKILL_PREAMBLE.format_map({\"skill\": case_dir.parent.name})"
+    }
+  ]
+}
