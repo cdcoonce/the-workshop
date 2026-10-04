@@ -27,28 +27,42 @@ A call that appends a test AND runs pytest on it stays a ``tests`` call.
 
 Shell compound constructs are structure, not commands: ``for``/``while``/``until ... do ...
 done``, ``if ... then ... [elif ...] [else ...] fi``, brace groups ``{ ...; }``, subshell groups
-``( ... )``, the negation ``!`` and a ``[[ ... ]]`` test. Their reserved words are never heads,
-every simple command in a condition, body or group is classified by the same rules as outside
-it, and the call is the worst of its parts (``source`` > ``tests`` > ``none``); a redirect
-written after a construct (``done > F``, ``fi >> F``, ``} > F``, ``) >> F``) applies to it. The
-words after ``for NAME in`` are data; ``$NAME`` is read as each of those words when they are all
-literal and nothing else in the call can set ``NAME``, and stays opaque otherwise. ``case``,
-``select``, function definitions, ``coproc``, a ``time`` wrapped around a construct, unbalanced or
-mismatched openers and closers, a reserved word the grammar does not allow where it stands, and
-nesting past ``_MAX_COMPOUND_DEPTH`` open constructs all fail closed to ``source``.
+``( ... )`` and the negation ``!``. Their reserved words are never heads, every simple command in
+a condition, body or group is classified by the same rules as outside it, and the call is the
+worst of its parts (``source`` > ``tests`` > ``none``); a redirect written after a construct
+(``done > F``, ``fi >> F``, ``} > F``, ``) >> F``) applies to it. The words after ``for NAME in``
+are data. ``case``, ``select``, function definitions, ``coproc``, ``[[ ]]``, ``(( ))``, ``$(( ))``,
+``read``, a ``time`` wrapped around a construct, unbalanced or mismatched openers and closers, a
+reserved word the grammar does not allow where it stands, and nesting past
+``_MAX_COMPOUND_DEPTH`` open constructs all fail closed to ``source``. ``[[``, ``read``, ``((``,
+``$((``, ``$[`` and the arithmetic forms of ``${...}`` evaluate their operands as arithmetic, where a
+subscript such as ``a[$(cmd)]`` runs ``cmd``; ``test``/``[`` with ``-v`` or ``-R`` and ``printf -v`` do
+the same through a variable name.
+
+A loop variable is an opaque expansion like any other (the word list is not read: ``IFS`` splits
+it), so a write whose target contains an expansion is ``source``. An unresolved expansion
+(``$NAME``, ``${...}``, a command substitution, a backtick, an unquoted ``{a,b}`` brace group) among
+the arguments of a head keeps the call read-only only for a head that cannot write or run code
+whatever it is given (``cat``, ``echo``, ``wc``, ``head``, ``tail``, ``ls``, ``cut``, ``tr``,
+``stat``, ``du``, ``diff``, ``cmp``, ``grep`` and kin, ``test``/``[`` with the expansion as an
+operand, ``printf`` with a literal format); every other head is ``source``.
+
+In a call with a write, every ``cd`` target must be a plain literal path (no quote, escape, glob or
+expansion) that is absolute or relative without ``src`` or ``..`` segments, and the call has no
+``eval`` and no ``CDPATH``: a ``cd`` that can land in ``src`` leaves a write's place unknown. A call
+with a ``cd`` and only read-only commands is unaffected.
 
 Cost: one pass over the text with a hand-written scanner, no backtracking regex
 over the command, and a stack of open constructs with O(1) work per token. Bounded
 work is enforced by the cap, a limit on command substitutions, a limit on analysed
 ``open(`` calls, bounded windows in the python scan, a limit on open constructs and
-a budget on the readings of loop variables.
+a limit on heredoc bodies feeding one command. A heredoc body is analysed once however many
+shells it is piped into (the analysis is memoised).
 """
 
 from __future__ import annotations
 
-import collections
 import functools
-import itertools
 import re
 
 # A command longer than this is classified "source" without being scanned (fail closed).
@@ -58,11 +72,8 @@ _MAX_DEPTH = 4
 # Open compound constructs (``for``/``while``/``until``/``if``/``{``/``(``) at once; one more fails closed.
 _MAX_COMPOUND_DEPTH = 32
 _MAX_SUBSTITUTIONS = 200
-# A loop variable is read as its literal words only for a list of at most this many words, for a command that
-# would need at most ``_MAX_VARIANTS`` readings, and ``_MAX_EXPANSIONS`` readings in the whole call.
-_MAX_LOOP_WORDS = 16
-_MAX_VARIANTS = 64
-_MAX_EXPANSIONS = 2_000
+# A command fed by more heredoc bodies than this (through a pipeline) is not analysed: fail closed.
+_MAX_FEED = 50
 _MAX_OPEN_CALLS = 50
 _OPEN_WINDOW = 300
 _MAX_SCRIPT = 4_000
@@ -78,39 +89,45 @@ _ASSIGNMENT = re.compile(r"[A-Za-z_]\w*\+?=")
 _DEV_OK = re.compile(r"/dev/(?:null|stderr|stdout)")
 _FD_DUP = re.compile(r"\d+-?|-")
 _UNRESOLVED = "\x00"
-# ``$NAME`` / ``${NAME}`` is opaque (it starts with ``_UNRESOLVED``) and carries its name, so a loop variable
-# bound to a literal word list can be read back: ``\x00`` + ``\x01`` + NAME + ``\x02``.
-_VAR_OPEN, _VAR_CLOSE = "\x01", "\x02"
-_VAR_REF = re.compile("\x00\x01([A-Za-z_]\\w*)\x02")
-_NAME_REF = re.compile(r"\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))")
+# Words that must be plain literals: the arguments of ``:``, ``break`` and ``continue``.
+_PLAIN_ARG = re.compile(r"[A-Za-z0-9_./=-]+")
+_CD_GLOB = frozenset("*?[{~")
+# A ``${...}`` that evaluates arithmetic or re-expands its value: an array subscript, indirection (``!``), a
+# substring offset (``NAME:`` not followed by ``-``, ``=``, ``+`` or ``?``), or ``@`` (``${x@P}`` runs a ``$(...)``).
+_ARITHMETIC_EXPANSION = re.compile(r"^!|\[|@|^\w+:(?![-=+?])")
+# Heads that cannot write or run code whatever their arguments are, so an unresolved expansion
+# (``$NAME``, ``$(...)``, a backtick) among their arguments leaves a call read-only. ``test``, ``[`` and
+# ``printf`` have their own rules (``_expansion_safe``); every other head goes to ``source`` on one.
+_EXPANSION_SAFE_HEADS = frozenset(
+    {"cat", "echo", "wc", "head", "tail", "ls", "cut", "tr", "stat", "du", "diff", "cmp", "grep", "egrep", "fgrep"}
+)
+_TEST_CONNECTORS = frozenset({"!", "-a", "-o", "(", ")"})
 _IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
-_LOOP_WORD_UNSAFE = frozenset("*?[{~ \t\r\n\x00")
 
 
 class _Cmd:
-    __slots__ = ("words", "targets", "bodies", "offset", "piped", "scope")
+    __slots__ = ("words", "plain", "targets", "bodies", "offset", "piped", "feed")
 
-    def __init__(self, offset: int, piped: bool, scope: tuple = ()) -> None:
+    def __init__(self, offset: int, piped: bool) -> None:
         self.words: list[str] = []
+        # ``plain[i]`` is True when ``words[i]`` was written exactly as it reads: no quote, escape or expansion.
+        self.plain: list[bool] = []
         self.targets: list[str] = []
         self.bodies: list[str] = []
         self.offset = offset
         self.piped = piped
-        # Innermost-first chain ``(name, literal words | None, parent)`` of the ``for`` loops around this command.
-        self.scope = scope
+        # The heredoc bodies that feed this command's stdin (its own and those earlier in its pipeline), or
+        # ``None`` when there are more than ``_MAX_FEED``. Filled in once the scan is done.
+        self.feed: list[str] | None = []
 
 
 class _Ctx:
-    __slots__ = ("cmds", "broken", "substitutions", "binds", "refs", "bound", "expansions")
+    __slots__ = ("cmds", "broken", "substitutions")
 
     def __init__(self) -> None:
         self.cmds: list[_Cmd] = []
         self.broken = False
         self.substitutions = 0
-        self.binds: dict[str, int] = {}
-        self.refs: dict[str, int] = {}
-        self.bound: frozenset[str] = frozenset()
-        self.expansions = 0
 
 
 def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
@@ -123,9 +140,14 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
     if ctx.substitutions > _MAX_SUBSTITUTIONS:
         ctx.broken = True
         return len(text)
+    if text.startswith("$((", i):
+        # arithmetic expansion: a variable it names is itself evaluated, and a subscript in that value can run a command
+        ctx.broken = True
+        return len(text)
     if text.startswith("${", i):
         close = text.find("}", i + 2)
-        if close == -1 or "$(" in text[i + 2 : close] or "`" in text[i + 2 : close]:
+        inner = text[i + 2 : close]
+        if close == -1 or "$(" in inner or "`" in inner or _ARITHMETIC_EXPANSION.search(inner):
             ctx.broken = True
             return len(text)
         return close + 1
@@ -146,16 +168,46 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
     return len(text)
 
 
-def _var_ref(text: str, i: int, ctx: _Ctx) -> tuple[str, int]:
-    """Read ``$NAME`` or ``${NAME}`` at ``text[i]``: an opaque value that remembers its name."""
-    match = _NAME_REF.match(text, i)
-    name = match.group(1) or match.group(2)
-    ctx.refs[name] = ctx.refs.get(name, 0) + 1
-    return _UNRESOLVED + _VAR_OPEN + name + _VAR_CLOSE, match.end()
+def _has_brace_expansion(raw: str) -> bool:
+    """Does the word as written have an unquoted ``{a,b}`` or ``{1..3}`` group?"""
+    open_groups: list[bool] = []  # one flag per open brace: has a ``,`` or ``..`` been seen inside it
+    quote = ""
+    i = 0
+    n = len(raw)
+    while i < n:
+        c = raw[i]
+        if quote:
+            if c == quote:
+                quote = ""
+            elif c == "\\" and quote == '"':
+                i += 1
+        elif c == "\\":
+            i += 1
+        elif c in "'\"":
+            quote = c
+        elif c == "{":
+            open_groups.append(False)
+        elif c == "}" and open_groups:
+            if open_groups.pop():
+                return True
+        elif open_groups and (c == "," or raw.startswith("..", i)):
+            open_groups[-1] = True
+        i += 1
+    return False
 
 
 def _read_word(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str, int]:
-    """Read one shell word starting at ``text[i]``: quotes removed, expansions made opaque."""
+    """Read one shell word starting at ``text[i]``: quotes removed, expansions made opaque.
+
+    A word with an unquoted brace expansion (``{-i,x}`` becomes two arguments) ends in ``_UNRESOLVED``.
+    """
+    word, end = _read_word_parts(text, i, ctx, depth, base)
+    if "{" in text[i:end] and not ctx.broken and _has_brace_expansion(text[i:end]):
+        word += _UNRESOLVED
+    return word, end
+
+
+def _read_word_parts(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str, int]:
     parts: list[str] = []
     n = len(text)
     while i < n:
@@ -187,9 +239,9 @@ def _read_word(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str
                     nxt = text[i + 1 : i + 2]
                     parts.append(nxt if nxt in ('"', "\\", "$", "`") else "\\" + nxt)
                     i += 2
-                elif d == "$" and _NAME_REF.match(text, i):
-                    ref, i = _var_ref(text, i, ctx)
-                    parts.append(ref)
+                elif text.startswith("$[", i):
+                    ctx.broken = True
+                    return "".join(parts), n
                 elif d == "`" or text.startswith("$(", i) or text.startswith("${", i):
                     i = _subst(text, i, ctx, depth, base)
                     parts.append(_UNRESOLVED)
@@ -203,9 +255,9 @@ def _read_word(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str
                 continue
             parts.append(nxt)
             i += 2
-        elif c == "$" and _NAME_REF.match(text, i):
-            ref, i = _var_ref(text, i, ctx)
-            parts.append(ref)
+        elif text.startswith("$[", i):
+            ctx.broken = True
+            return "".join(parts), n
         elif c == "`" or text.startswith("$(", i) or text.startswith("${", i):
             i = _subst(text, i, ctx, depth, base)
             parts.append(_UNRESOLVED)
@@ -220,7 +272,6 @@ def _read_word(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str
     return "".join(parts), i
 
 
-_REJECTED_WORDS = frozenset({"case", "esac", "select", "function", "coproc", "in"})
 _COMPOUND_WORDS = frozenset({"if", "then", "elif", "else", "fi", "while", "until", "do", "done", "for", "{", "}", "!"})
 # The words that open a frame: ``[kind, phase]`` (a ``for`` opens its frame once its header is read).
 _OPENERS = {"if": ("if", "cond"), "while": ("loop", "cond"), "until": ("loop", "cond"), "{": ("brace", "")}
@@ -233,8 +284,8 @@ def _skip_blanks(text: str, i: int) -> int:
     return i
 
 
-def _for_header(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[int, str, list[str] | None] | None:
-    """Read ``NAME in WORD... ;`` (or ``NAME ;``) after ``for``: ``(end, NAME, literal words | None)``.
+def _for_header(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int | None:
+    """Read ``NAME in WORD... ;`` (or ``NAME ;``) after ``for``: the index after the terminator.
 
     The words are data, not commands (a command substitution among them is still scanned). ``None`` when the
     header is anything else: an arithmetic ``for ((``, a name that is not a plain identifier, an operator in the
@@ -248,67 +299,29 @@ def _for_header(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[in
         return None
     i = _skip_blanks(text, i)
     if i < n and text[i] in ";\n":
-        if text.startswith((";;", ";&"), i):
-            return None
-        return i + 1, name, None
+        return None if text.startswith((";;", ";&"), i) else i + 1
     start = i
     word, i = _read_word(text, i, ctx, depth, base)
     if ctx.broken or word != "in" or text[start:i] != "in":
         return None
-    words: list[str] = []
     while True:
         i = _skip_blanks(text, i)
         if i >= n:
             return None
         c = text[i]
         if c == ";":
-            if text.startswith((";;", ";&"), i):
-                return None
-            i += 1
-            break
+            return None if text.startswith((";;", ";&"), i) else i + 1
         if c == "\n":
-            i += 1
-            break
+            return i + 1
         if c == "#":
             end = text.find("\n", i)
             i = n if end == -1 else end
         elif c in "|&<>()":
             return None
         else:
-            word, i = _read_word(text, i, ctx, depth, base)
+            _, i = _read_word(text, i, ctx, depth, base)
             if ctx.broken:
                 return None
-            words.append(word)
-    literal = len(words) <= _MAX_LOOP_WORDS and all(
-        word and not any(ch in _LOOP_WORD_UNSAFE for ch in word) for word in words
-    )
-    return i, name, words if literal else None
-
-
-def _scan_test(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
-    """Skip a ``[[ ... ]]`` test starting after its ``[[``; its words are data, except substitutions.
-
-    ``&&``, ``||``, ``<``, ``>``, ``(``, ``)`` and ``|`` are operators of the test, not of the shell, so they
-    are read as data here. A ``;``, a newline, or no closing ``]]`` breaks the scan.
-    """
-    n = len(text)
-    while i < n and not ctx.broken:
-        c = text[i]
-        if c in " \t\r":
-            i += 1
-        elif c in ";\n":
-            break
-        elif text.startswith(("<(", ">("), i):
-            i = _subst(text, i, ctx, depth, base)
-        elif c in "&|<>()":
-            i += 1
-        else:
-            start = i
-            word, i = _read_word(text, i, ctx, depth, base)
-            if word == "]]" and text[start:i] == "]]":
-                return i
-    ctx.broken = True
-    return n
 
 
 def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
@@ -329,18 +342,17 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
     next_piped = False
     pending: list[tuple[_Cmd, str, bool]] = []
     last_word_end = -1
-    # Open constructs, innermost last: [kind, phase, scope outside it]. Kinds and phases: "if" (cond, then, else),
+    # Open constructs, innermost last: [kind, phase]. Kinds and phases: "if" (cond, then, else),
     # "loop" (head: a ``for`` header was read and only ``do`` may follow; cond: a ``while``/``until`` condition;
     # body), "brace", "paren".
     frames: list[list] = []
-    scope: tuple = ()
     expect = False  # a command must come next: after ``if``, ``then``, ``do``, ``{``, ``!``, ``&&``, ``||``, ``|``
     closed = False  # a construct just closed: only a redirect, a separator or another ``)`` may follow
 
     def current(at: int) -> _Cmd:
         nonlocal cmd, expect
         if cmd is None:
-            cmd = _Cmd(base + at, next_piped, scope)
+            cmd = _Cmd(base + at, next_piped)
             ctx.cmds.append(cmd)
         expect = False
         return cmd
@@ -382,10 +394,10 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             closed = False
             i += 1
         elif c == "(":
-            if cmd is not None or closed or (frames and frames[-1][1] == "head"):
+            if text.startswith("((", i) or cmd is not None or closed or (frames and frames[-1][1] == "head"):
                 ctx.broken = True
                 break
-            frames.append(["paren", "", scope])
+            frames.append(["paren", ""])
             expect = True
             i += 1
             if len(frames) > _MAX_COMPOUND_DEPTH:
@@ -394,7 +406,7 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             if not frames or frames[-1][0] != "paren" or expect:
                 ctx.broken = True
                 break
-            scope = frames.pop()[2]
+            frames.pop()
             cmd = None
             next_piped = False
             closed = True
@@ -471,8 +483,10 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             _add_target(owner, target)
         elif cmd is not None:
             owner = current(i)
+            start = i
             word, i = _read_word(text, i, ctx, depth, base)
             owner.words.append(word)
+            owner.plain.append(text[start:i] == word)
             last_word_end = i
         else:
             # The first word of a command: a reserved word (read as structure) or the head of a simple command.
@@ -487,34 +501,28 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             if top is not None and top[1] == "head" and word != "do":
                 ctx.broken = True
                 break
-            if text[start:i] != word or (word not in _COMPOUND_WORDS and word not in _REJECTED_WORDS and word != "[["):
+            if text[start:i] != word or (word not in _COMPOUND_WORDS and word not in _REJECTED_WORDS):
                 owner = current(start)
                 owner.words.append(word)
+                owner.plain.append(text[start:i] == word)
                 last_word_end = i
                 continue
             if word in _REJECTED_WORDS:
                 ctx.broken = True
-            elif word == "[[":
-                current(start).words.append(word)
-                i = _scan_test(text, i, ctx, depth, base)
-                cmd = None
-                closed = True
             elif word == "!":
                 expect = True
             elif word in _OPENERS:
-                frames.append([*_OPENERS[word], scope])
+                frames.append(list(_OPENERS[word]))
                 expect = True
                 if len(frames) > _MAX_COMPOUND_DEPTH:
                     ctx.broken = True
             elif word == "for":
-                header = _for_header(text, i, ctx, depth, base)
-                if header is None:
+                end = _for_header(text, i, ctx, depth, base)
+                if end is None:
                     ctx.broken = True
                     break
-                i, name, values = header
-                ctx.binds[name] = ctx.binds.get(name, 0) + 1
-                frames.append(["loop", "head", scope])
-                scope = (name, values, scope)
+                i = end
+                frames.append(["loop", "head"])
                 expect = False
                 if len(frames) > _MAX_COMPOUND_DEPTH:
                     ctx.broken = True
@@ -530,16 +538,16 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
                 top[1] = "else"
                 expect = True
             elif word == "fi" and top[0] == "if" and top[1] in ("then", "else") and not expect:
-                scope = frames.pop()[2]
+                frames.pop()
                 closed = True
             elif word == "do" and top[0] == "loop" and top[1] in ("cond", "head") and not expect:
                 top[1] = "body"
                 expect = True
             elif word == "done" and top[0] == "loop" and top[1] == "body" and not expect:
-                scope = frames.pop()[2]
+                frames.pop()
                 closed = True
             elif word == "}" and top[0] == "brace" and not expect:
-                scope = frames.pop()[2]
+                frames.pop()
                 closed = True
             else:
                 ctx.broken = True
@@ -551,6 +559,7 @@ def _drop_fd_word(owner: _Cmd, last_word_end: int, at: int) -> None:
     """A redirect written ``2>file`` reads ``2`` as a word first; take it back."""
     if last_word_end == at and owner.words and owner.words[-1].isdigit():
         owner.words.pop()
+        owner.plain.pop()
 
 
 def _read_target(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str, int]:
@@ -576,14 +585,18 @@ _WRAPPER_VALUE_OPTIONS = {
     "env": {"-u", "-C", "-S"},
     "nice": {"-n"},
 }
+# Words that are never read as structure or as a command: the scan breaks (``source``). ``[[ ]]`` is here on
+# purpose: it evaluates its operands as arithmetic, so a ``$(...)`` in a subscript runs.
+_REJECTED_WORDS = frozenset({"case", "esac", "select", "function", "coproc", "in", "[["})
 _READ_ONLY_HEADS = frozenset(
     {
         "cat", "ls", "grep", "egrep", "fgrep", "rg", "head", "tail", "wc", "sort", "uniq", "diff", "cmp", "echo",
         "printf", "pwd", "cd", "which", "type", "true", "false", "test", "[", "sleep", "date", "tree", "stat", "file",
         "du", "tr", "cut", "jq", "less", "more",
-        # shell builtins the compound forms need: the no-op, ``read`` (assigns variables from stdin, no file
-        # operand), the ``[[ ]]`` test, and the loop controls
-        ":", "read", "[[", "break", "continue",
+        # shell builtins the compound forms need, only with plain literal arguments (``_command_effect``): the
+        # no-op and the loop controls. ``read`` and ``[[`` are not here: both evaluate a subscripted name as
+        # arithmetic, so a ``$(...)`` inside it runs.
+        ":", "break", "continue",
     }
 )
 _FIND_WRITES = frozenset(
@@ -647,89 +660,76 @@ def _combine(parts: list[_Effect]) -> _Effect:
     return (_WRITE, targets) if targets else (_RO, [])
 
 
+def _bad_cd(cmds: list[_Cmd]) -> bool:
+    """In a call with a write: a ``cd`` whose target is not a plain literal path outside ``src``.
+
+    A write's target is classified by its text, so a ``cd`` that can land in ``src`` (a quote-glued name, an
+    expansion, ``..``, ``-``, no argument, a ``src`` segment) or an ``eval`` (which can run a ``cd`` the scan
+    never sees) leaves the write's place unknown. ``CDPATH`` can do the same to a plain relative name.
+    """
+    for cmd in cmds:
+        if any(word.startswith(("CDPATH=", "CDPATH+=")) for word in cmd.words):
+            return True
+        words = _strip_wrappers(cmd.words)
+        if not words:
+            continue
+        head = words[0].lstrip("\\").rsplit("/", 1)[-1]
+        if head == "eval":
+            return True
+        if head not in ("cd", "pushd"):
+            continue
+        args = words[1:]
+        plain = cmd.plain[len(cmd.words) - len(args) :]
+        if len(args) != 1 or not plain[0]:
+            return True
+        target = args[0]
+        segments = target.split("/")
+        if (
+            not target
+            or target.startswith("-")
+            or _UNRESOLVED in target
+            or any(ch in _CD_GLOB for ch in target)
+            or ".." in segments
+            or (not target.startswith("/") and _SRC_TOKEN.search(target))
+        ):
+            return True
+    return False
+
+
+def _feeds(cmds: list[_Cmd]) -> None:
+    """Fill in ``Cmd.feed``: a command's own heredoc bodies after those of the command piped into it."""
+    previous: list[str] | None = []
+    for cmd in cmds:
+        inherited = previous if cmd.piped else []
+        if inherited is None or len(inherited) + len(cmd.bodies) > _MAX_FEED:
+            cmd.feed = None
+        else:
+            cmd.feed = inherited + cmd.bodies if inherited else cmd.bodies
+        previous = cmd.feed
+
+
+@functools.lru_cache(maxsize=256)
 def _text_effect(text: str, depth: int) -> tuple[_Effect, int | None, bool]:
-    """Scan *text* and combine its commands: ``(effect, first non-read-only offset, broken)``."""
+    """Scan *text* and combine its commands: ``(effect, first non-read-only offset, broken)``.
+
+    Cached: the same heredoc body is analysed once however many shells it is piped into.
+    """
     ctx = _Ctx()
     _scan(text, 0, ctx, depth)
     if ctx.broken:
         return (_UNKNOWN, []), 0, True
-    if ctx.binds:
-        ctx.bound = _readable_loop_variables(text, ctx)
+    _feeds(ctx.cmds)
     parts: list[_Effect] = []
     first: int | None = None
     for index, cmd in enumerate(ctx.cmds):
-        effect = _cmd_effect(cmd, ctx, index, depth)
-        if effect is None:
-            return (_UNKNOWN, []), 0, True
+        effect = _command_effect(cmd, ctx.cmds, index, depth)
         if effect[0] != _RO and first is None:
             first = cmd.offset
         parts.append(effect)
-    return _combine(parts), first, False
-
-
-def _assigns_variables(cmd: _Cmd) -> bool:
-    """A command that can set a variable by name: ``eval``, ``read``, ``printf -v``."""
-    words = _strip_wrappers(cmd.words)
-    if not words:
-        return False
-    head = words[0].lstrip("\\").rsplit("/", 1)[-1]
-    return head in ("eval", "read") or (head == "printf" and any(arg.startswith("-v") for arg in words[1:]))
-
-
-def _readable_loop_variables(text: str, ctx: _Ctx) -> frozenset[str]:
-    """Loop variables whose value can be read off the loop's word list.
-
-    A name qualifies only when one ``for`` binds it and the call never mentions it anywhere else than
-    ``$NAME`` / ``${NAME}`` (so no assignment, ``read``, ``${NAME:=...}`` or second loop can change it), and
-    the call has no ``eval``, ``read`` or ``printf -v`` that could set it by a name built at run time.
-    """
-    if any(_assigns_variables(cmd) for cmd in ctx.cmds):
-        return frozenset()
-    mentions = collections.Counter(_IDENTIFIER.findall(text))
-    return frozenset(
-        name for name, loops in ctx.binds.items() if loops == 1 and mentions[name] == 1 + ctx.refs.get(name, 0)
-    )
-
-
-def _cmd_effect(cmd: _Cmd, ctx: _Ctx, index: int, depth: int) -> _Effect | None:
-    """Effect of one simple command; a ``$NAME`` bound by an enclosing ``for`` is read as each of its words.
-
-    ``None`` when the call needs more readings than ``_MAX_EXPANSIONS`` (the caller fails closed).
-    """
-    if not cmd.scope or not any(_VAR_OPEN in word for word in (*cmd.words, *cmd.targets)):
-        return _command_effect(cmd, ctx.cmds, index, depth)
-    names = dict.fromkeys(m.group(1) for word in (*cmd.words, *cmd.targets) for m in _VAR_REF.finditer(word))
-    choices = {name: values for name in names if (values := _loop_words(cmd.scope, name)) and name in ctx.bound}
-    readings = 1
-    for values in choices.values():
-        readings *= len(values)
-    if not choices or readings > _MAX_VARIANTS:
-        return _command_effect(cmd, ctx.cmds, index, depth)
-    ctx.expansions += readings
-    if ctx.expansions > _MAX_EXPANSIONS:
-        return None
-    parts: list[_Effect] = []
-    for combo in itertools.product(*choices.values()):
-        mapping = dict(zip(choices, combo))
-
-        def read(match: re.Match[str], mapping: dict[str, str] = mapping) -> str:
-            return mapping.get(match.group(1), match.group(0))
-
-        variant = _Cmd(cmd.offset, cmd.piped)
-        variant.words = [_VAR_REF.sub(read, word) for word in cmd.words]
-        variant.targets = [_VAR_REF.sub(read, target) for target in cmd.targets]
-        variant.bodies = cmd.bodies
-        parts.append(_command_effect(variant, ctx.cmds, index, depth))
-    return _combine(parts)
-
-
-def _loop_words(scope: tuple, name: str) -> list[str] | None:
-    """The literal words of the innermost enclosing ``for`` that binds *name*, ``None`` when it has none."""
-    while scope:
-        bound, values, scope = scope
-        if bound == name:
-            return values
-    return None
+    combined = _combine(parts)
+    if combined[0] == _WRITE and _bad_cd(ctx.cmds):
+        combined = (_UNKNOWN, [])
+    return combined, first, False
 
 
 @functools.lru_cache(maxsize=64)
@@ -738,14 +738,9 @@ def _top_effect(command: str) -> tuple[_Effect, int | None, bool]:
     return _text_effect(command, 0)
 
 
-def _stdin_scripts(cmds: list[_Cmd], index: int) -> list[str]:
-    """Heredoc bodies that feed command *index*: its own, then those earlier in its pipeline."""
-    bodies = list(cmds[index].bodies)
-    j = index
-    while cmds[j].piped and j > 0:
-        j -= 1
-        bodies = cmds[j].bodies + bodies
-    return bodies
+def _stdin_scripts(cmds: list[_Cmd], index: int) -> list[str] | None:
+    """Heredoc bodies that feed command *index* (its own, then those earlier in its pipeline); ``None`` if too many."""
+    return cmds[index].feed
 
 
 def _command_effect(cmd: _Cmd, cmds: list[_Cmd], index: int, depth: int) -> _Effect:
@@ -756,8 +751,35 @@ def _command_effect(cmd: _Cmd, cmds: list[_Cmd], index: int, depth: int) -> _Eff
     head = words[0].lstrip("\\")
     if _UNRESOLVED in head:
         return _UNKNOWN, []
-    effect = _head_effect(head.rsplit("/", 1)[-1], words[1:], cmds, index, depth)
+    base = head.rsplit("/", 1)[-1]
+    args = words[1:]
+    if base in (":", "break", "continue"):
+        plain = cmd.plain[len(cmd.words) - len(args) :]
+        if not all(ok and _PLAIN_ARG.fullmatch(arg) for ok, arg in zip(plain, args)):
+            return _UNKNOWN, []
+    effect = _head_effect(base, args, cmds, index, depth)
+    if effect[0] == _RO and any(_UNRESOLVED in arg for arg in args) and not _expansion_safe(base, args):
+        return _UNKNOWN, []
     return _combine([redirects, effect])
+
+
+def _expansion_safe(base: str, args: list[str]) -> bool:
+    """May a call stay read-only with an unresolved expansion among *args* of this head?
+
+    Only for a head that cannot write or run code whatever it is given. ``test`` and ``[`` can when an
+    unresolved word could be a unary operator such as ``-v`` (it evaluates a subscript), so one is allowed only
+    as the operand of a literal operator; ``printf`` only when its format is a literal.
+    """
+    if base in _EXPANSION_SAFE_HEADS:
+        return True
+    if base in ("test", "["):
+        return all(
+            _UNRESOLVED not in arg or (k > 0 and args[k - 1] not in _TEST_CONNECTORS and args[k - 1] != "\\(")
+            for k, arg in enumerate(args)
+        )
+    if base == "printf":
+        return bool(args) and _UNRESOLVED not in args[0]
+    return False
 
 
 # --------------------------------------------------------------------------- heads
@@ -817,6 +839,10 @@ def _read_only_head(base: str, args: list[str]) -> _Effect:
     if base == "date" and any(arg in ("-s", "--set") or arg.startswith("--set=") for arg in args):
         return _UNKNOWN, []
     if base == "rg" and any(arg.startswith("--pre") for arg in args):
+        return _UNKNOWN, []
+    if base == "printf" and any(arg.startswith("-v") for arg in args):
+        return _UNKNOWN, []
+    if base in ("test", "[") and any(arg in ("-v", "-R") for arg in args):
         return _UNKNOWN, []
     return _RO, []
 
@@ -1145,6 +1171,7 @@ def _call_mode(args: list[str], mode_position: int) -> tuple[list[str], str]:
     return positional, keywords.get("mode", "")
 
 
+@functools.lru_cache(maxsize=256)
 def _python_effect(code: str) -> _Effect:
     """Effect of an inline python script: read-only, writes to literal targets, or unknown."""
     if len(code) > BASH_COMMAND_CAP or _PY_DANGEROUS.search(code):
@@ -1297,9 +1324,12 @@ def classify_bash_command(command: str) -> str:
     appears nowhere in it as a path-ish token. Appending a test and running
     pytest on it in one call is the real probe shape and stays ``tests``.
 
-    Shell compound constructs (``for``/``while``/``until``, ``if``, ``{ }``, ``( )``, ``[[ ]]``) are read
-    structurally, worst of their parts; ``case``, ``select``, functions, ``coproc`` and anything
-    unbalanced or nested past 32 open constructs are ``source``.
+    Shell compound constructs (``for``/``while``/``until``, ``if``, ``{ }``, ``( )``) are read
+    structurally, worst of their parts; ``case``, ``select``, functions, ``coproc``, ``[[ ]]``,
+    ``read``, arithmetic contexts and anything unbalanced or nested past 32 open constructs are
+    ``source``. An unresolved expansion among a head's arguments is read-only only for the fixed
+    list of heads that cannot write whatever they are given; a write whose target contains an
+    expansion is ``source``.
 
     ``source``: everything else, including running any file (``python x.py``,
     ``bash f.sh``, ``./f``, ``make``), any head not on the list (``gsed``,
