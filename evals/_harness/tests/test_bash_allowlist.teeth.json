@@ -141,8 +141,8 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by /bin/rm x, /bin/cp a b and ./f.",
-      "find": "    effect = _head_effect(head.rsplit(\"/\", 1)[-1], words[1:], cmds, index, depth)",
-      "replace": "    if \"/\" in head:\n        return redirects\n    effect = _head_effect(head.rsplit(\"/\", 1)[-1], words[1:], cmds, index, depth)"
+      "find": "    effect = _head_effect(base, args, cmds, index, depth)",
+      "replace": "    if \"/\" in head:\n        return redirects\n    effect = _head_effect(base, args, cmds, index, depth)"
     },
     {
       "label": "[cap] a command over the cap is scanned instead of failing closed",

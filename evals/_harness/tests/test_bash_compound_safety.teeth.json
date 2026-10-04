@@ -1,0 +1,264 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_compound_safety.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_bash_compound_safety.py"
+  ],
+  "mutants": [
+    {
+      "label": "[F1 [[] [[ is read-only again (not rejected, allow-listed) (predicted red: test_f1_a_double_bracket_test_is_never_read_only[[[ 'a[$(cp x src/shop/cart.py)]' -eq 1 ]]], test_f1_a_double_bracket_test_is_never_read_only[[[ -f a ]]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "_REJECTED_WORDS = frozenset({\"case\", \"esac\", \"select\", \"function\", \"coproc\", \"in\", \"[[\"})\n_READ_ONLY_HEADS = frozenset(\n    {\n",
+      "replace": "_REJECTED_WORDS = frozenset({\"case\", \"esac\", \"select\", \"function\", \"coproc\", \"in\"})\n_READ_ONLY_HEADS = frozenset(\n    {\n        \"[[\",\n"
+    },
+    {
+      "label": "[F2 read] read is allow-listed again (predicted red: test_f2_read_is_not_read_only[read 'a[$(cp x src/shop/cart.py)]' <<< 1], test_f2_read_is_not_read_only[while read l; do echo $l; done < notes.txt])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        \":\", \"break\", \"continue\",",
+      "replace": "        \":\", \"break\", \"continue\", \"read\","
+    },
+    {
+      "label": "[F3 rule] an unresolved expansion argument no longer takes a head out of read-only (opaque $f to find, sed) (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-delete -name cart.py'; do find src/shop $f; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-i s/a/b/'; do sed $f src/shop/cart.py; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[x=-delete; find src $x])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if effect[0] == _RO and any(_UNRESOLVED in arg for arg in args) and not _expansion_safe(base, args):",
+      "replace": "    if False and effect[0] == _RO and any(_UNRESOLVED in arg for arg in args) and not _expansion_safe(base, args):"
+    },
+    {
+      "label": "[F3 safe list widened] find and sed join the safe-head list (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-delete -name cart.py'; do find src/shop $f; done], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[for f in '-i s/a/b/'; do sed $f src/shop/cart.py; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    {\"cat\", \"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\"}",
+      "replace": "    {\"cat\", \"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\", \"find\", \"sed\"}"
+    },
+    {
+      "label": "[F3 rg file] rg and file join the safe-head list (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[rg x $f], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[file $f])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    {\"cat\", \"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\"}",
+      "replace": "    {\"cat\", \"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\", \"rg\", \"file\"}"
+    },
+    {
+      "label": "[F3 safe list narrowed] cat is not a safe head (predicted red: test_f3_an_unresolved_argument_to_a_head_that_cannot_write_is_still_read_only[cat $f], test_the_real_read_only_inspection_loops_stay_none[audited call])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    {\"cat\", \"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\"}",
+      "replace": "    {\"echo\", \"wc\", \"head\", \"tail\", \"ls\", \"cut\", \"tr\", \"stat\", \"du\", \"diff\", \"cmp\", \"grep\", \"egrep\", \"fgrep\"}"
+    },
+    {
+      "label": "[F3 test operator position] an unresolved word is allowed as a test operator (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ $x 'a[$(cmd)]' ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ ! $x a ]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        return all(\n            _UNRESOLVED not in arg or (k > 0 and args[k - 1] not in _TEST_CONNECTORS and args[k - 1] != \"\\\\(\")\n            for k, arg in enumerate(args)\n        )",
+      "replace": "        return True"
+    },
+    {
+      "label": "[F3 test operand] an unresolved operand of a literal operator is not allowed in test (predicted red: test_f3_an_unresolved_argument_to_a_head_that_cannot_write_is_still_read_only[[ -f $f ]], test_f3_an_unresolved_argument_to_a_head_that_cannot_write_is_still_read_only[test -f $f])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        return all(\n            _UNRESOLVED not in arg or (k > 0 and args[k - 1] not in _TEST_CONNECTORS and args[k - 1] != \"\\\\(\")\n            for k, arg in enumerate(args)\n        )",
+      "replace": "        return all(_UNRESOLVED not in arg for arg in args)"
+    },
+    {
+      "label": "[F3 printf format] an unresolved printf format is allowed (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[printf $fmt a])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        return bool(args) and _UNRESOLVED not in args[0]",
+      "replace": "        return True"
+    },
+    {
+      "label": "[F6 printf -v] printf -v is read-only (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[printf -v x a], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[printf -vx a])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if base == \"printf\" and any(arg.startswith(\"-v\") for arg in args):",
+      "replace": "    if False and base == \"printf\" and any(arg.startswith(\"-v\") for arg in args):"
+    },
+    {
+      "label": "[F6 test -v] test -v and -R are read-only (predicted red: test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ -v x ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[[ -R x ]], test_f3_an_unresolved_argument_to_a_head_that_could_take_a_write_flag_is_source[test -v 'a[$(cmd)]'])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if base in (\"test\", \"[\") and any(arg in (\"-v\", \"-R\") for arg in args):",
+      "replace": "    if False and base in (\"test\", \"[\") and any(arg in (\"-v\", \"-R\") for arg in args):"
+    },
+    {
+      "label": "[F4 binding] a loop variable is resolved from the word list (the removed binding feature, as a mutant) (predicted red: test_f4_a_write_whose_target_contains_an_expansion_is_source[for f in a; do echo x > tests/$f; done], test_f4_a_write_whose_target_contains_an_expansion_is_source[for f in a b; do echo x >> tests/test_$f.py; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            i = match.end() if match else i + 1\n            parts.append(_UNRESOLVED)",
+      "replace": "            i = match.end() if match else i + 1\n            parts.append(\"a\" if match and match.group() == \"f\" else _UNRESOLVED)"
+    },
+    {
+      "label": "[F5 cd tracking] cd targets are not checked in a call with a write (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd s''rc/shop; cat > test_cart.py ...], test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd src; echo hi > conftest.py])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if combined[0] == _WRITE and _bad_cd(ctx.cmds):",
+      "replace": "    if False and combined[0] == _WRITE and _bad_cd(ctx.cmds):"
+    },
+    {
+      "label": "[F5 plain target] a quote-glued or expanded cd target is accepted (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd s''rc/shop && tee test_x.py], test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd \"tests\"; echo hi > conftest.py])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if len(args) != 1 or not plain[0]:",
+      "replace": "        if len(args) != 1:"
+    },
+    {
+      "label": "[F5 dotdot] a .. segment in a cd target is accepted (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd ..; echo hi > tests/x], test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd tests/../src; echo hi > conftest.py])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            or \"..\" in segments\n",
+      "replace": ""
+    },
+    {
+      "label": "[F5 src segment (control)] a src segment in a relative cd target is accepted: inert, the call's own src token already makes a tests write source",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            or (not target.startswith(\"/\") and _SRC_TOKEN.search(target))\n",
+      "replace": "",
+      "expect": "survived",
+      "why": "Any relative cd target with a src segment spells src in the call text, and a call that spells src anywhere is never a tests write (the src-token rule in classify_bash_command), so dropping the cd-side check changes no class. It stays as defence in depth."
+    },
+    {
+      "label": "[F5 glob] a glob in a cd target is accepted (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd s*/shop; echo hi > conftest.py], test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd ~; echo hi > conftest.py])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            or any(ch in _CD_GLOB for ch in target)\n",
+      "replace": ""
+    },
+    {
+      "label": "[F5 dash and empty] cd - and a bare cd are accepted (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd -; echo hi > tests/x], test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[cd; echo hi > tests/x])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            not target\n            or target.startswith(\"-\")\n            or _UNRESOLVED in target",
+      "replace": "            _UNRESOLVED in target"
+    },
+    {
+      "label": "[F5 CDPATH] a CDPATH assignment is ignored (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[CDPATH=src; cd shop; echo hi > conftest.py])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if any(word.startswith((\"CDPATH=\", \"CDPATH+=\")) for word in cmd.words):\n            return True\n",
+      "replace": ""
+    },
+    {
+      "label": "[F5 eval] an eval in a call with a write is ignored (predicted red: test_f5_in_a_call_with_a_write_a_cd_target_must_be_a_plain_literal_path_outside_src[eval 'cd src'; ...])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if head == \"eval\":\n            return True\n",
+      "replace": ""
+    },
+    {
+      "label": "[colon args] the : break continue arguments are not restricted (predicted red: test_the_colon_break_and_continue_take_only_plain_literal_arguments[: 'a b'], test_the_colon_break_and_continue_take_only_plain_literal_arguments[: a[1]], test_the_colon_break_and_continue_take_only_plain_literal_arguments[while :; do break 'x'; done])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if base in (\":\", \"break\", \"continue\"):",
+      "replace": "    if False and base in (\":\", \"break\", \"continue\"):"
+    },
+    {
+      "label": "[arith ((] (( at a command position is a subshell group (predicted red: test_an_arithmetic_context_that_can_run_a_substitution_is_source[((n=n+1))], test_an_arithmetic_context_that_can_run_a_substitution_is_source[x='a[$(cp x src/y)]'; ((n=x))])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "            if text.startswith(\"((\", i) or cmd is not None or closed or (frames and frames[-1][1] == \"head\"):",
+      "replace": "            if cmd is not None or closed or (frames and frames[-1][1] == \"head\"):"
+    },
+    {
+      "label": "[arith $((] $(( is a command substitution of a subshell (predicted red: test_an_arithmetic_context_that_can_run_a_substitution_is_source[x='a[$(cp x src/y)]'; echo $((n=x))])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if text.startswith(\"$((\", i):\n        # arithmetic expansion: a variable it names is itself evaluated, and a subscript in that value can run a command\n        ctx.broken = True\n        return len(text)\n",
+      "replace": ""
+    },
+    {
+      "label": "[arith $[] $[ is a plain word (predicted red: test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo $[1+2]], test_an_arithmetic_context_that_can_run_a_substitution_is_source[x='a[$(cp x src/y)]'; echo $[n=x]])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        elif text.startswith(\"$[\", i):\n            ctx.broken = True\n            return \"\".join(parts), n\n        elif c == \"`\"",
+      "replace": "        elif c == \"`\""
+    },
+    {
+      "label": "[arith ${}] the arithmetic forms of ${...} are opaque expansions (predicted red: test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${y:1:2}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${!x}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${x@P}], test_an_arithmetic_context_that_can_run_a_substitution_is_source[echo ${a[$x]}])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if close == -1 or \"$(\" in inner or \"`\" in inner or _ARITHMETIC_EXPANSION.search(inner):",
+      "replace": "        if close == -1 or \"$(\" in inner or \"`\" in inner:"
+    },
+    {
+      "label": "[arith ${} too wide] every ${...} is rejected (predicted red: test_a_parameter_expansion_that_does_no_arithmetic_stays_read_only[echo ${f%.py}], test_a_parameter_expansion_that_does_no_arithmetic_stays_read_only[echo ${f:-default}])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if close == -1 or \"$(\" in inner or \"`\" in inner or _ARITHMETIC_EXPANSION.search(inner):",
+      "replace": "        if close == -1 or \"$(\" in inner or \"`\" in inner or inner:"
+    },
+    {
+      "label": "[brace] an unquoted brace expansion is not an unresolved word (predicted red: test_an_unquoted_brace_expansion_argument_is_an_unresolved_expansion[sed {-i,s/a/b/} src/shop/cart.py], test_an_unquoted_brace_expansion_argument_is_an_unresolved_expansion[find src/shop {-delete,-name}])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "    if \"{\" in text[i:end] and not ctx.broken and _has_brace_expansion(text[i:end]):",
+      "replace": "    if False and \"{\" in text[i:end] and not ctx.broken and _has_brace_expansion(text[i:end]):"
+    },
+    {
+      "label": "[brace quoted] a quoted brace group counts as an expansion (predicted red: test_a_quoted_brace_or_a_brace_argument_of_a_safe_head_stays_read_only[awk '{print $1, $2}' f], test_a_quoted_brace_or_a_brace_argument_of_a_safe_head_stays_read_only[jq '{a: 1, b: 2}' f])",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "        if quote:\n            if c == quote:\n                quote = \"\"\n            elif c == \"\\\\\" and quote == '\"':\n                i += 1\n        elif c == \"\\\\\":",
+      "replace": "        if quote and False:\n            if c == quote:\n                quote = \"\"\n            elif c == \"\\\\\" and quote == '\"':\n                i += 1\n        elif c == \"\\\\\":"
+    },
+    {
+      "label": "[memo text] a heredoc body is analysed once per shell it is piped into (no memoisation of _text_effect) (predicted red: test_a_heredoc_body_piped_through_6000_shells_is_analysed_once, test_a_77_kb_heredoc_body_piped_through_a_hundred_shells_takes_well_under_half_a_second)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "@functools.lru_cache(maxsize=256)\ndef _text_effect(",
+      "replace": "def _text_effect("
+    },
+    {
+      "label": "[memo python] a python heredoc body is analysed once per interpreter it is piped into (no memoisation of _python_effect) (predicted red: test_a_heredoc_body_piped_through_python_shells_is_analysed_once)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "@functools.lru_cache(maxsize=256)\ndef _python_effect(",
+      "replace": "def _python_effect("
+    },
+    {
+      "label": "[feed cap] no limit on the heredoc bodies feeding one command (predicted red: test_a_pipeline_fed_by_more_heredocs_than_the_limit_fails_closed)",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "find": "_MAX_FEED = 50\n",
+      "replace": "_MAX_FEED = 10**9\n"
+    },
+    {
+      "label": "[control] raise the heredoc-body limit by one",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "No test sits between 50 and 51 bodies: the shapes under test feed 10 and 80, so moving the limit by one keeps both on the same side.",
+      "find": "_MAX_FEED = 50\n",
+      "replace": "_MAX_FEED = 51\n"
+    }
+  ]
+}

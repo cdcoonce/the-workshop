@@ -275,6 +275,9 @@ def test_t1_ignores_params(predicates, make_evidence, make_snapshot, load_transc
         ("bash_test_first", True),
         # a Skill call first, then the same test-first work
         ("skill_then_bash_test_first", True),
+        # a Skill call, then a read-only `for ... cat` inspection loop, then the same test-first work: the loop
+        # was scored as a source write before compound constructs were structured
+        ("skill_then_loop_inspection_then_test_first", True),
         # both source files rewritten first; the only red result comes after
         ("bash_source_first", False),
         # source, tests and a green pytest run in one Bash call, like the unprompted replay
@@ -287,11 +290,20 @@ def test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold(t1, make_snapsho
     assert t1(stem, snapshot) is expected
 
 
-@pytest.mark.parametrize("stem", ["bash_test_first", "skill_then_bash_test_first"])
+@pytest.mark.parametrize("stem", ["bash_test_first", "skill_then_bash_test_first", "skill_then_loop_inspection_then_test_first"])
 def test_t1_bash_test_first_still_needs_every_end_state_conjunct(t1, make_snapshot, stem):
     assert t1(stem, make_snapshot(src_changed=[])) is False
     assert t1(stem, make_snapshot(final_exit=1)) is False
     assert t1(stem, make_snapshot(reverted_exit=0)) is False
+
+
+def test_t1_a_read_only_inspection_loop_is_not_a_source_write(load_transcript):
+    # The owner-audited hand-run's shape: `cd ... && for f in ...; do echo "=== $f"; cat $f; done; uv run pytest ...`.
+    transcript = load_transcript("skill_then_loop_inspection_then_test_first")
+    loop = [e for e in transcript.events if e.name == "Bash" and "for f in" in e.input["command"]]
+    assert len(loop) == 1
+    assert matchers.classify_write_event(loop[0]) == "none"
+    assert matchers.test_failed_before_first_source_write(transcript.events) is True
 
 
 def test_t1_the_one_call_attempt_has_no_red_result_at_all(load_transcript):
