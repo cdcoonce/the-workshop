@@ -1,6 +1,6 @@
 # adversarial-review A1 redesign, 2026-10-04
 
-The redesign of the adversarial-review settlement-review fixture `A1`, [issue #1099](https://github.com/cdcoonce/the-workshop/issues/1099), a follow-up to the [first calibration run](../2026-10-03-eval-suite-calibration/README.md) and the second use of the explicit-invocation precedent set by the [tdd T redesign](../2026-10-03-tdd-t-redesign/README.md). It is built green under `make test`. It has not been hand-run: the calibration (6 skill-arm and 3 no-skill executions, audited by the owner) is the next, separate step, and this note records the change before that run.
+The redesign of the adversarial-review settlement-review fixture `A1`, [issue #1099](https://github.com/cdcoonce/the-workshop/issues/1099), a follow-up to the [first calibration run](../2026-10-03-eval-suite-calibration/README.md) and the second use of the explicit-invocation precedent set by the [tdd T redesign](../2026-10-03-tdd-t-redesign/README.md). It was built green under `make test`, then hand-run (6 skill-arm and 3 no-skill executions, audited by the owner): `A1-coverage-bound` is admitted as gated and `adversarial-review` now has two gated items. The results, the method and the limits are in [Hand-run calibration](#hand-run-calibration) below, and the audit pack is [audit-hand-run.md](audit-hand-run.md).
 
 ## The problem
 
@@ -31,9 +31,9 @@ A second limit, on two trend items and unchanged here: `A1-defect-decimal-from-f
 
 ## What did not change
 
-The `A1` prompt (`prompt.md`), `predicates.py`, `surfaces.toml`, the items and their kinds (one gate candidate, three trend items; none listed in `checks.manifest`), the fixture builder and the three planted defects, the admission bars and rule in `calibration.py`, A2 and A3, every other case, and every file in `evals/_harness/` outside its tests. No other case's dispatched prompt changed, and the neutrality test still fails if one does.
+The `A1` prompt (`prompt.md`), `predicates.py`, `surfaces.toml`, the items and their kinds (one gate candidate, three trend items; at the time of the build none was listed in `checks.manifest`), the fixture builder and the three planted defects, the admission bars and rule in `calibration.py`, A2 and A3, every other case, and every file in `evals/_harness/` outside its tests. No other case's dispatched prompt changed, and the neutrality test still fails if one does.
 
-`A1/calibration.json` still holds the old design's trend records. It was not edited: no record was written by hand. A1 has nothing gated, so the staleness guard does not read it, and the changed input hash is the recorded sign that those records belong to the old design.
+At the time of the build, `A1/calibration.json` still held the old design's trend records: no record was written by hand, A1 had nothing gated so the staleness guard did not read it, and the changed input hash was the recorded sign that those records belonged to the old design. The hand-run below replaced them.
 
 ## Confounds that remain
 
@@ -42,6 +42,46 @@ The `A1` prompt (`prompt.md`), `predicates.py`, `surfaces.toml`, the items and t
 - **The probe had no no-skill arm,** so it says nothing about what the no-skill arm does. The calibration's 0 of 3 for that arm stands as measured.
 - **The scorer's limit is intact.** A surface named as examined, or the phrase class copied from the skill's example, still credits; the audit is the check.
 
-## Next
+## Hand-run calibration
 
-Calibration is pending: 6 skill-arm and 3 no-skill executions, hand-run and owner-audited, scored with the harness and written through `compute_calibration_record`. If `A1-coverage-bound` still admits nothing under the admission rule, the redesign closes with the reasons, as the C-trig attempt did.
+The hand-run calibration of the redesigned `A1`, 2026-10-04, owner-audited. It follows the method of the [first calibration run](../2026-10-03-eval-suite-calibration/README.md) and of the [tdd T redesign](../2026-10-03-tdd-t-redesign/README.md#hand-run-calibration), and is the step the earlier sections left open.
+
+### Method
+
+- **Executions:** 9 case-agent executions of `evals/adversarial-review/A1`, fixed at n = 6 skill-arm and n = 3 no-skill-arm. Every execution was a `general-purpose` subagent on Sonnet, dispatched through the Agent tool. No retry loop, no replacements and no reserve runs: every execution counted.
+- **Arms and prompts:** the skill arm's dispatch prompt is the harness's `build_dispatch_prompt`, which for `A1` prepends `Use the workbench:adversarial-review skill for this task.` to the prompt (the `invoke_skill` preamble); the no-skill arm's is `build_no_skill_prompt`, which never carries that line. Each prompt was preceded by one leading line giving the fixture path, because the Agent tool cannot set a working directory.
+- **Fixture:** one fresh copy of the fixture per execution, built by the case's own builder, fingerprint `b9a46fe1efca2d118aa93f3757e96189628d30819524aae74e90159407e08bd0`, unchanged from the redesign.
+- **Scoring:** `dispatch.score_attempt` over each copied transcript at dev `905b74d` (A1 takes no end-state snapshot). The records come from `calibration.compute_calibration_record` and `write_calibration_records`, and the input hash from `compute_input_hash`; no number was written by hand.
+- **Audit:** the owner read every transcript. Audited hits equal mechanical hits on every item, including all six coverage-bound hits, and the cross-match is clean, so every record has `audited_hits == hits` and `cross_match_result == "pass"`. The raw transcripts are machine-local and are not committed; [audit-hand-run.md](audit-hand-run.md) is the committed record, with each execution's call sequence, its per-item result and the full `## Could not verify` section of every skill-arm reply.
+
+### Results
+
+Hits out of n, skill arm / no-skill arm:
+
+| Item | Kind | Skill arm | No-skill arm | Status |
+| --- | --- | --- | --- | --- |
+| `A1-coverage-bound` | gate-candidate | 6/6 | 0/3 | gate |
+| `A1-defect-decimal-from-float` | trend | 5/6 | 0/3 | trend |
+| `A1-defect-tests-no-teeth` | trend | 4/6 | 0/3 | trend |
+| `A1-defect-missed-call-site` | trend | 6/6 | 3/3 | trend |
+
+`A1-coverage-bound` meets the admission rule unchanged: skill arm at least 5 of 6, no-skill arm at most 1 of 3, audited rate equal to the mechanical rate, clean cross-match. It is admitted as gated and listed in `evals/adversarial-review/checks.manifest`, beside `A2-D2`. The three defect items are trend items by kind, and `A1-defect-missed-call-site` is also passed 3 of 3 by the no-skill arm, so it would not discriminate the skill from the baseline even if it were a gate candidate. The staleness guard now applies to A1's recorded `input_hash`.
+
+### What the no-skill arm showed
+
+`A1-coverage-bound` was 0 of 3: no no-skill reply had a `## Could not verify` section, no execution called a Skill, and all three replies were prose (bold lead-ins and lists, none with the skill's headings). All three still found the missed call site, so an agent that never touched the skill caught that planted defect 3 of 3. The other two defect items were 0 of 3 in this arm.
+
+### What the skill arm showed
+
+All 6 executions called `workbench:adversarial-review` as their first call (6 of 6 Skill-first), and all 6 final replies carried the skill's four headings (`## Claim ledger`, `## Findings`, `## Could not verify`, `## Verdict`). `A1-coverage-bound` was a hit in all 6.
+
+### Limits of the hits
+
+- **What a coverage-bound hit credits.** The scorer credits a listed surface named anywhere in the section, or the phrase class. All six hits name `invoice.py` in the section, mostly in sentences saying it was executed ("`rounding.py` and `invoice.py` were executed"), not as unverified. Five of the six also state in words that real broker or settlement data was not examined (the phrase class). The sixth, skill arm 3, matched on the file mention only. The owner audit judged each hit, and the [audit pack](audit-hand-run.md) quotes every section so the reading can be repeated. As in the probe, a hit shows the skill's report slot appeared and named a surface; it does not by itself show the agent bounded its review honestly.
+- **The file-path-token limit on two trend items.** Skill arm 1 missed `A1-defect-decimal-from-float` and `A1-defect-tests-no-teeth`, and skill arm 3 missed `A1-defect-tests-no-teeth`, in replies that state the defects without the file paths the matcher requires. This is the limit described under the problem above. Both are trend items and unchanged.
+
+### Confounds that remain
+
+- **The path line.** Each dispatch carries one extra leading line giving the fixture path, because the Agent tool cannot set a case-agent's working directory.
+- **What the item measures.** With explicit invocation, `A1-coverage-bound` measures whether the skill's report slot appears and names a surface once the skill is in play, not whether the skill fires. A3 measures firing and was not part of this run.
+- **The scorer's limit is intact.** A surface named as examined, or the phrase class copied from the skill's example, still credits; the owner audit is the check.
