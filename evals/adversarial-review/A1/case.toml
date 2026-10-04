@@ -2,8 +2,18 @@
 # The fixture is built by the plugin's own script, run as `python <builder> <dest>`
 # into a not-yet-existing <dest>; the harness fingerprints that built output
 # (`evals._harness.fingerprint.builder_output_fingerprint`), this case does not.
+#
+# invoke_skill = true makes the skill arm's prompt start with one fixed line telling the agent to
+# use the workbench:adversarial-review skill, a blank line, then prompt.md verbatim
+# (INVOKE_SKILL_PREAMBLE in evals/_harness/dispatch.py). The no-skill arm never carries the line,
+# and prompt.md itself stays free of the skill's name. So A1-coverage-bound measures whether the
+# skill's report slot (`## Could not verify`) appears and names a surface once the skill is in
+# play, not whether the skill fires: A3 measures firing. At the first calibration the skill never
+# fired in A1's skill arm, so that arm behaved like the no-skill arm. The key is refused on a case
+# with a triggering item (A1 has none), and compute_input_hash covers it.
 mode = "subagent"
 prompt = "prompt.md"
+invoke_skill = true
 builder = "plugins/workbench/skills/adversarial-review/scripts/build_fixture.py"
 
 # The coverage bound: a `## Could not verify` section naming a surface from the

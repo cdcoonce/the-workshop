@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from evals._harness.dispatch import (
+    INVOKE_SKILL_PREAMBLE,
     build_dispatch_prompt,
     find_acceptance_leaks,
     find_duplicate_item_ids,
@@ -107,9 +108,10 @@ def test_provenance_records_the_copied_prompts_source_path_and_its_blob_sha_at_t
     assert entry["source_blob_sha"] == at_ref
 
 
-def test_dispatch_prompt_is_prompt_md_and_carries_no_text_from_acceptance_md(case_dir):
+def test_dispatch_prompt_is_the_preamble_then_prompt_md_and_carries_no_text_from_acceptance_md(case_dir):
     prompt = build_dispatch_prompt(case_dir)
-    assert prompt == (case_dir / "prompt.md").read_text(encoding="utf-8")
+    prompt_md = (case_dir / "prompt.md").read_text(encoding="utf-8")
+    assert prompt == INVOKE_SKILL_PREAMBLE.format(skill="adversarial-review") + "\n\n" + prompt_md
     assert find_acceptance_leaks(case_dir, prompt) == []
     assert (case_dir / "acceptance.md").read_text(encoding="utf-8").strip()
 

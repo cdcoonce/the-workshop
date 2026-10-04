@@ -37,7 +37,7 @@ _EVALS_ROOT = Path(__file__).resolve().parents[2]
 _NO_SKILL_INSTRUCTION = "Do not invoke any skill while completing this task."
 _PROMPT = "Add the feature.\n\nKeep it small.\n"
 # The committed cases allowed to carry the key. Anything else must dispatch its prompt untouched.
-_OPT_IN_CASES = {"tdd/T"}
+_OPT_IN_CASES = {"tdd/T", "adversarial-review/A1"}
 
 
 def _write_case(
@@ -261,6 +261,17 @@ def test_every_committed_case_dispatches_its_prompt_untouched_unless_it_opted_in
             assert _label(case_dir) in _OPT_IN_CASES, _label(case_dir)
             continue
         assert build_dispatch_prompt(case_dir) == prompt, _label(case_dir)
+
+
+def test_the_opt_in_list_is_exactly_the_committed_cases_that_set_the_key():
+    # An entry the list does not need would let that case change its prompt unnoticed, so the list
+    # is pinned from both sides: every key is listed (the neutrality test above) and every entry sets one.
+    opted_in = {
+        _label(case_dir)
+        for case_dir in _committed_cases()
+        if "invoke_skill" in tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
+    }
+    assert opted_in == _OPT_IN_CASES
 
 
 def test_only_the_listed_cases_opt_in_and_they_name_their_skill_first():

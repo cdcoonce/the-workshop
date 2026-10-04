@@ -99,8 +99,8 @@
       "label": "a findings envelope is declared although no scorer reads evidence.findings",
       "file": "../case.toml",
       "oracle": "real",
-      "find": "prompt = \"prompt.md\"\nbuilder",
-      "replace": "prompt = \"prompt.md\"\nenvelope = \"findings\"\nbuilder"
+      "find": "invoke_skill = true\nbuilder",
+      "replace": "invoke_skill = true\nenvelope = \"findings\"\nbuilder"
     },
     {
       "label": "[control] blank segments are kept instead of filtered",

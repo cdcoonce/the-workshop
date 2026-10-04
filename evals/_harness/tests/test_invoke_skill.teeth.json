@@ -129,6 +129,46 @@
       "replace": "        if False:\n            raise"
     },
     {
+      "label": "[allow-list] the adversarial-review/A1 entry is removed",
+      "file": "test_invoke_skill.py",
+      "oracle": "real",
+      "why": "Killed by test_every_committed_case_dispatches_its_prompt_untouched_unless_it_opted_in and test_only_the_listed_cases_opt_in_and_they_name_their_skill_first: A1 sets the key but is no longer allowed to.",
+      "find": "_OPT_IN_CASES = {\"tdd/T\", \"adversarial-review/A1\"}",
+      "replace": "_OPT_IN_CASES = {\"tdd/T\"}"
+    },
+    {
+      "label": "[allow-list] the tdd/T entry is removed",
+      "file": "test_invoke_skill.py",
+      "oracle": "real",
+      "why": "Killed by the same two tests: T sets the key but is no longer allowed to.",
+      "find": "_OPT_IN_CASES = {\"tdd/T\", \"adversarial-review/A1\"}",
+      "replace": "_OPT_IN_CASES = {\"adversarial-review/A1\"}"
+    },
+    {
+      "label": "[allow-list] the allow-list is widened to every committed case",
+      "file": "test_invoke_skill.py",
+      "oracle": "real",
+      "why": "Killed by test_the_opt_in_list_is_exactly_the_committed_cases_that_set_the_key: a case that does not set the key would be allowed to change its prompt unnoticed.",
+      "find": "_OPT_IN_CASES = {\"tdd/T\", \"adversarial-review/A1\"}",
+      "replace": "_OPT_IN_CASES = {f\"{c.parent.name}/{c.name}\" for c in discover_case_dirs(_EVALS_ROOT)}"
+    },
+    {
+      "label": "[allow-list] one extra case is allowed without setting the key",
+      "file": "test_invoke_skill.py",
+      "oracle": "real",
+      "why": "Killed by test_the_opt_in_list_is_exactly_the_committed_cases_that_set_the_key.",
+      "find": "_OPT_IN_CASES = {\"tdd/T\", \"adversarial-review/A1\"}",
+      "replace": "_OPT_IN_CASES = {\"tdd/T\", \"adversarial-review/A1\", \"commit/C\"}"
+    },
+    {
+      "label": "[neutrality] a case WITHOUT the key has its dispatched prompt changed",
+      "file": "../dispatch.py",
+      "oracle": "real",
+      "why": "Killed by test_every_committed_case_dispatches_its_prompt_untouched_unless_it_opted_in, the harness neutrality test: every committed case that does not set the key must dispatch prompt.md untouched. Opt-in cases are unaffected by this mutation.",
+      "find": "        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text",
+      "replace": "        text = f\"{preamble}\\n\\n{text}\"\n    _assert_no_acceptance_leak(case_dir, text)\n    return text if \"invoke_skill\" in case_toml else text + \"\\n\""
+    },
+    {
       "label": "[control] the preamble is formatted through format_map",
       "file": "../dispatch.py",
       "oracle": "real",
