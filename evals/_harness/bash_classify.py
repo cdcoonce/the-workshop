@@ -88,6 +88,7 @@ from __future__ import annotations
 import ast
 import functools
 import importlib
+import pathlib
 import re
 import sys
 import types
@@ -109,7 +110,17 @@ _MAX_SCRIPT = 4_000
 
 _WORD_RUN = re.compile(r"[^ \t\r\n|&;<>()'\"\\`$]+")
 _PAREN = re.compile(r"[()]")
-_HEREDOC_DELIM = re.compile(r"""-?[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([\w.-]+))""")
+# A heredoc delimiter is read only in the shapes below; every other shape (a mid-word quote, an expansion, a
+# trailing character that bash would glue into the word) is a scan failure, so the call is ``source``.
+_HEREDOC_BODY = re.compile(r"[A-Za-z0-9_.-]+")
+_HEREDOC_BARE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
+# What may follow the delimiter word: a blank, a newline, an operator or the end of the text.
+_HEREDOC_END = " \t\n;|&<>)"
+# Control characters other than a newline and a tab (a carriage return is a blank to this scanner, not to bash).
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f]")
+# What may not appear in the body of ``$( ... )``, a backtick pair or ``${ ... }``: the scanner finds the close by
+# counting, which a backslash, a comment, a quote or a newline in the body can make disagree with the shell.
+_SUBST_BODY_BAD = re.compile(r"""[\\#'"\r\n]""")
 _DQ_SPECIAL = re.compile(r'[^"\\$`]+')
 _PARAM_NAME = re.compile(r"\w+|[@*#?!$-]")
 _ASSIGNMENT = re.compile(r"[A-Za-z_]\w*\+?=")
@@ -175,13 +186,19 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
     if text.startswith("${", i):
         close = text.find("}", i + 2)
         inner = text[i + 2 : close]
-        if close == -1 or "$(" in inner or "`" in inner or _ARITHMETIC_EXPANSION.search(inner):
+        if (
+            close == -1
+            or "$(" in inner
+            or "`" in inner
+            or _ARITHMETIC_EXPANSION.search(inner)
+            or _SUBST_BODY_BAD.search(inner)
+        ):
             ctx.broken = True
             return len(text)
         return close + 1
     if text[i] == "`":
         close = text.find("`", i + 1)
-        if close == -1:
+        if close == -1 or _SUBST_BODY_BAD.search(text, i + 1, close):
             ctx.broken = True
             return len(text)
         _scan(text[i + 1 : close], base + i + 1, ctx, depth + 1)
@@ -190,6 +207,8 @@ def _subst(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> int:
     for match in _PAREN.finditer(text, i + 1):
         level += 1 if match.group() == "(" else -1
         if level == 0:
+            if _SUBST_BODY_BAD.search(text, i + 2, match.start()):
+                break
             _scan(text[i + 2 : match.start()], base + i + 2, ctx, depth + 1)
             return match.end()
     ctx.broken = True
@@ -290,6 +309,10 @@ def _read_word_parts(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tup
             i = _subst(text, i, ctx, depth, base)
             parts.append(_UNRESOLVED)
         elif c == "$":
+            if text.startswith(("$'", '$"'), i):
+                # an ANSI-C or locale-translated quote: its escapes (``\'``) hide the real end of the quote
+                ctx.broken = True
+                return "".join(parts), n
             match = _PARAM_NAME.match(text, i + 1)
             i = match.end() if match else i + 1
             parts.append(_UNRESOLVED)
@@ -402,7 +425,7 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
                     stop = n if end == -1 else end
                     line = text[i:stop]
                     i = stop + 1
-                    if (line.lstrip("\t") if dash else line).rstrip("\r") == delimiter:
+                    if (line.lstrip("\t") if dash else line) == delimiter:
                         found = True
                         break
                     body.append(line)
@@ -477,15 +500,14 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             if text.startswith("<<<", i):
                 _, i = _read_target(text, i + 3, ctx, depth, base)
             elif text.startswith("<<", i):
-                match = _HEREDOC_DELIM.match(text, i + 2)
-                if not match:
+                dash = text.startswith("<<-", i)
+                read = _heredoc_delimiter(text, i + (3 if dash else 2))
+                if read is None:
                     ctx.broken = True
                     break
-                dash = text.startswith("<<-", i)
-                delimiter = next(g for g in match.groups() if g is not None)
-                quoted = match.group(1) is not None or match.group(2) is not None or "\\" in match.group(0)
+                delimiter, quoted, end = read
                 pending.append((current(i), delimiter, dash, quoted))
-                i = match.end()
+                i = end
             elif text.startswith("<(", i):
                 i = _subst(text, i, ctx, depth, base)
             elif text.startswith("<>", i):
@@ -493,7 +515,11 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
                 target, i = _read_target(text, i + 2, ctx, depth, base)
                 _add_target(current(i), target)
             elif text.startswith("<&", i):
-                _, i = _read_target(text, i + 2, ctx, depth, base)
+                end = _dup_end(text, i + 2)
+                if end is None:
+                    ctx.broken = True
+                    break
+                i = end
             else:
                 _drop_fd_word(current(i), last_word_end, i)
                 _, i = _read_target(text, i + 1, ctx, depth, base)
@@ -504,9 +530,12 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             if text.startswith(">>", i) or text.startswith(">|", i):
                 j = i + 2
             elif text.startswith(">&", i):
-                dup = _FD_DUP.match(text, i + 2)
-                if dup:
-                    i = dup.end()
+                if _FD_DUP.match(text, i + 2):
+                    end = _dup_end(text, i + 2)
+                    if end is None:
+                        ctx.broken = True
+                        break
+                    i = end
                     continue
                 j = i + 2
             elif text.startswith(">(", i):
@@ -591,6 +620,53 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
         ctx.broken = True
 
 
+def _heredoc_delimiter(text: str, i: int) -> tuple[str, bool, int] | None:
+    """Read the delimiter word of a heredoc starting at ``text[i]``: ``(delimiter, quoted, end)`` or ``None``.
+
+    Only three shapes are read: a bare word (``[A-Za-z_][A-Za-z0-9_.-]*``), one fully quoted word (``'WORD'``,
+    ``"WORD"``) and a backslash-prefixed word (``\\WORD``), with the body made of ``[A-Za-z0-9_.-]``. A mid-word
+    quote, any other character, or a word that runs into a character the shell would glue onto it
+    (``EOF#x``, ``EOF:x``) is ``None``: the scanner cannot tell what delimiter bash reads.
+    """
+    n = len(text)
+    while i < n and text[i] in " \t":
+        i += 1
+    if i >= n:
+        return None
+    c = text[i]
+    if c in "'\"":
+        close = text.find(c, i + 1)
+        if close == -1 or _HEREDOC_BODY.fullmatch(text, i + 1, close) is None:
+            return None
+        word, quoted, end = text[i + 1 : close], True, close + 1
+    elif c == "\\":
+        match = _HEREDOC_BODY.match(text, i + 1)
+        if match is None:
+            return None
+        word, quoted, end = match.group(), True, match.end()
+    else:
+        match = _HEREDOC_BARE.match(text, i)
+        if match is None:
+            return None
+        word, quoted, end = match.group(), False, match.end()
+    if end < n and text[end] not in _HEREDOC_END:
+        return None
+    return word, quoted, end
+
+
+def _dup_end(text: str, i: int) -> int | None:
+    """The end of the file-descriptor duplication operand at ``text[i]`` (``1``, ``1-``, ``-``), or ``None``.
+
+    ``None`` when there is none or when something is glued to it (``>&1#``, ``>&2foo``): bash then reads the
+    whole word as a file name, which the scanner would otherwise take for a duplication followed by more text.
+    """
+    dup = _FD_DUP.match(text, i)
+    if dup is None:
+        return None
+    end = dup.end()
+    return end if end >= len(text) or text[end] in " \t\n;|&<>()" else None
+
+
 def _drop_fd_word(owner: _Cmd, last_word_end: int, at: int) -> None:
     """A redirect written ``2>file`` reads ``2`` as a word first; take it back."""
     if last_word_end == at and owner.words and owner.words[-1].isdigit():
@@ -672,16 +748,37 @@ _INTEGER = re.compile(r"[0-9]+")
 _SIGNED_INTEGER = re.compile(r"[-+]?[0-9]+")
 
 
+# The directories a path-qualified command word may name: the system program directories. A head written
+# ``./cat``, ``lib/cat`` or ``/tmp/cat`` runs whatever file is there, whatever its name.
+_SYSTEM_BIN_DIRS = frozenset({"/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"})
+
+
+def _head_base(word: str) -> str | None:
+    """The program name a command word runs: the word itself, or the basename of an absolute system path.
+
+    ``None`` for every other path-qualified word (``./cat``, ``lib/cat``, ``/tmp/cat``, ``/bin//cat``): only the
+    basename of such a word was ever looked at, so a file named like a read-only program passed for it.
+    """
+    word = word.lstrip("\\")
+    if "/" not in word:
+        return word
+    directory, _, base = word.rpartition("/")
+    return base if base and directory in _SYSTEM_BIN_DIRS else None
+
+
 def _positionals(args: list[str], value_options: frozenset[str] | set[str] = frozenset()) -> list[str]:
     out: list[str] = []
     skip = False
+    ended = False
     for arg in args:
         if skip:
             skip = False
+        elif ended:
+            out.append(arg)
         elif arg in value_options:
             skip = True
         elif arg == "--":
-            continue
+            ended = True
         elif not arg.startswith("-") or arg == "-":
             out.append(arg)
     return out
@@ -707,7 +804,7 @@ def _strip_wrappers(words: list[str]) -> list[str] | None:
     wrapped = False
     while i < n:
         word = words[i].lstrip("\\")
-        base = word.rsplit("/", 1)[-1]
+        base = _head_base(word)
         if _ASSIGNMENT.match(word):
             assigns.append(word)
             i += 1
@@ -751,7 +848,7 @@ def _bad_cd(cmds: list[_Cmd]) -> bool:
         words = _strip_wrappers(cmd.words)
         if not words:
             continue
-        head = words[0].lstrip("\\").rsplit("/", 1)[-1]
+        head = _head_base(words[0])
         if head == "eval":
             return True
         if head not in ("cd", "pushd"):
@@ -779,7 +876,7 @@ def _is_bare_cat(cmd: _Cmd) -> bool:
     if cmd.targets:
         return False
     words = _strip_wrappers(cmd.words)
-    return words is not None and len(words) == 1 and words[0].lstrip("\\").rsplit("/", 1)[-1] == "cat"
+    return words is not None and len(words) == 1 and _head_base(words[0]) == "cat"
 
 
 def _feeds(cmds: list[_Cmd]) -> None:
@@ -807,6 +904,9 @@ def _text_effect(text: str, depth: int) -> tuple[_Effect, int | None, bool]:
 
     Cached: the same heredoc body is analysed once however many shells it is piped into.
     """
+    if _CONTROL_CHARS.search(text):
+        # a carriage return or any other control character: the scanner and the shell can read it differently
+        return (_UNKNOWN, []), 0, True
     if "${(" in text:
         # a zsh parameter-expansion flag (``${(e)x}`` evaluates its value as a command line): the Bash tool can run under zsh
         return (_UNKNOWN, []), 0, True
@@ -849,7 +949,9 @@ def _command_effect(cmd: _Cmd, cmds: list[_Cmd], index: int, depth: int) -> _Eff
     head = words[0].lstrip("\\")
     if _UNRESOLVED in head:
         return _UNKNOWN, []
-    base = head.rsplit("/", 1)[-1]
+    base = _head_base(head)
+    if base is None:
+        return _UNKNOWN, []
     args = words[1:]
     if base in (":", "break", "continue"):
         plain = cmd.plain[len(cmd.words) - len(args) :]
@@ -937,8 +1039,20 @@ def _head_effect(base: str, args: list[str], cmds: list[_Cmd], index: int, depth
     return _program(base, args, cmds, index, depth)
 
 
+# The tools whose command line reads ``@file`` as more arguments (argparse ``fromfile_prefix_chars``), so a word
+# that starts with ``@``, or an option value that does, can bring any option the text never shows.
+_ARGFILE_TOOLS = frozenset({"pytest", "py.test", "ruff", "black", "isort", "mypy"})
+_ARGFILE_VALUE = re.compile(r"-[-A-Za-z0-9]*=?@")
+
+
+def _argfile_word(arg: str) -> bool:
+    return arg.startswith("@") or _ARGFILE_VALUE.match(arg) is not None
+
+
 def _program(base: str, args: list[str], cmds: list[_Cmd], index: int, depth: int) -> _Effect:
     """A program run directly or through ``uv run`` / ``python -m``: only the allow-listed ones."""
+    if base in _ARGFILE_TOOLS and any(_argfile_word(arg) for arg in args):
+        return _UNKNOWN, []
     if base in ("pytest", "py.test"):
         return (_RO, []) if _pytest_options_ok(args) else (_UNKNOWN, [])
     if _PYTHON_HEAD.fullmatch(base):
@@ -1086,8 +1200,7 @@ def _xargs(args: list[str]) -> _Effect:
             return _UNKNOWN, []
     if i >= n:
         return _RO, []
-    head = args[i].lstrip("\\")
-    return (_RO, []) if head.rsplit("/", 1)[-1] in _XARGS_CHILDREN else (_UNKNOWN, [])
+    return (_RO, []) if _head_base(args[i]) in _XARGS_CHILDREN else (_UNKNOWN, [])
 
 
 # --------------------------------------------------------------------------- awk
@@ -1410,7 +1523,12 @@ def _sed(args: list[str]) -> _Effect:
 
 _PERL_FLAG_LETTERS = frozenset("pnlaw0123456789")
 _PERL_S_FLAGS = frozenset("gimsx")
-_PERL_CODE_MARKERS = ("(?{", "(??{", "@{", "${")
+# In an in-place script no code may be spelled: ``(?{``, ``(??{`` and ``\\e`` are refused whole, a ``@``, ``%`` or
+# backtick anywhere is refused, and a ``$`` only when a digit or ``&`` follows it (``$1``, ``$&``).
+_PERL_CODE_MARKERS = ("(?{", "(??{", "\\e")
+_PERL_VARIABLE_AFTER_DOLLAR = frozenset("0123456789&")
+# The text glued to ``-i`` is the backup suffix; a ``/`` or ``*`` in it moves the backup file elsewhere.
+_PERL_SUFFIX = re.compile(r"\.?[A-Za-z0-9_~-]*")
 
 
 def _perl_part_end(code: str, start: int, delim: str) -> int | None:
@@ -1426,18 +1544,31 @@ def _perl_part_end(code: str, start: int, delim: str) -> int | None:
         elif c == "\n":
             return None
         elif c == delim:
-            part = code[start:j]
-            return None if any(marker in part for marker in _PERL_CODE_MARKERS) else j + 1
+            return j + 1
         else:
             j += 1
     return None
+
+
+def _perl_text_ok(code: str) -> bool:
+    """No ``@``, ``%`` or backtick, no ``$`` but ``$digit`` and ``$&``, and none of the listed code markers."""
+    if any(marker in code for marker in _PERL_CODE_MARKERS):
+        return False
+    for position, ch in enumerate(code):
+        if ch in "@%`":
+            return False
+        if ch == "$":
+            following = code[position + 1 : position + 2]
+            if not following or following not in _PERL_VARIABLE_AFTER_DOLLAR:
+                return False
+    return True
 
 
 def _perl_code_ok(code: str) -> bool:
     """Is *code* only ``s/RE/REPLACEMENT/gimsx`` substitutions? A ``use``, a function call, an ``e`` flag, a
     ``@{[ ... ]}`` or a ``(?{ ... })`` inside the pattern can run anything (``use File::Copy; copy(...)`` writes), so
     every other program is not read as an in-place edit."""
-    if len(code) > _MAX_SCRIPT:
+    if len(code) > _MAX_SCRIPT or not _perl_text_ok(code):
         return False
     n = len(code)
     i = 0
@@ -1486,6 +1617,8 @@ def _perl(args: list[str]) -> _Effect:
             while position < len(arg):
                 letter = arg[position]
                 if letter == "i":
+                    if _PERL_SUFFIX.fullmatch(arg, position + 1) is None:
+                        return _UNKNOWN, []
                     in_place = True
                     break
                 if letter in "eE":
@@ -1562,13 +1695,26 @@ def _git(args: list[str]) -> _Effect:
     return _UNKNOWN, []
 
 
+# The only options ``cp`` and ``mv`` may carry: -f -i -n -p -r -R -v -a. Every long option, ``-t``/``-T`` (GNU target
+# directory forms) and anything else makes the target unreadable from the text.
+_CP_MV_FLAGS = frozenset("finpRrva")
+
+
+def _cp_mv_options_ok(args: list[str]) -> bool:
+    for arg in args:
+        if arg == "--":
+            return True
+        if arg == "-" or not arg.startswith("-"):
+            continue
+        if arg.startswith("--") or any(letter not in _CP_MV_FLAGS for letter in arg[1:]):
+            return False
+    return True
+
+
 def _file_writer(base: str, args: list[str]) -> _Effect:
+    if base in ("cp", "mv") and not _cp_mv_options_ok(args):
+        return _UNKNOWN, []
     if base == "cp":
-        for position, arg in enumerate(args):
-            if arg == "-t":
-                return (_WRITE, args[position + 1 : position + 2]) if position + 1 < len(args) else (_UNKNOWN, [])
-            if arg.startswith("--target-directory="):
-                return _WRITE, [arg.split("=", 1)[1]]
         operands = _positionals(args)
         return (_WRITE, operands[-1:]) if operands else (_UNKNOWN, [])
     operands = _positionals(args, {"-m", "--mode"} if base == "mkdir" else set())
@@ -1629,8 +1775,8 @@ def _uv(base: str, args: list[str], cmds: list[_Cmd], index: int, depth: int) ->
             i += 1
     if i >= len(args):
         return _UNKNOWN, []
-    program = args[i].lstrip("\\").rsplit("/", 1)[-1]
-    if program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program):
+    program = _head_base(args[i])
+    if program is None or (program not in _INLINE_PROGRAMS and not _PYTHON_HEAD.fullmatch(program)):
         return _UNKNOWN, []
     return _program(program, args[i + 1 :], cmds, index, depth)
 
@@ -1795,29 +1941,38 @@ def _write_operands(operands: list[str]) -> _Effect:
 
 # --------------------------------------------------------------------------- python
 
-# Modules an inline script may import: none of them opens, writes, runs or imports anything by its own API.
+# Modules an inline script may import. ``string``, ``operator``, ``functools``, ``typing``, ``dataclasses`` and
+# ``enum`` are not here: each can reach code by a name or a string (``Formatter`` walks attributes out of a format
+# string, ``singledispatch.register`` evaluates a string annotation, ``attrgetter`` and ``get_type_hints`` do both).
+# The reachable object graph of what is left is not proven closed; it is only the part nobody has found a way out of.
 _PY_IMPORTS = frozenset(
     {
         "json", "re", "sys", "ast", "collections", "itertools", "math", "textwrap", "decimal", "fractions",
-        "statistics", "datetime", "string", "operator", "functools", "pathlib", "typing", "dataclasses", "enum",
+        "statistics", "datetime", "pathlib",
     }
 )
-# What a script may read off ``sys``: the standard streams, the arguments, the import path and plain facts. Not
-# ``modules``, ``meta_path``, ``_getframe`` and the rest of the interpreter's internals.
+# What a script may read off ``sys``: the standard streams, the arguments and plain facts. Not ``path`` (it decides
+# what a later import loads), ``modules``, ``meta_path``, ``_getframe`` and the rest of the interpreter's internals.
 _PY_SYS_ATTRS = frozenset(
     {
-        "stdout", "stderr", "stdin", "argv", "exit", "path", "version", "version_info", "platform", "maxsize",
+        "stdout", "stderr", "stdin", "argv", "exit", "version", "version_info", "platform", "maxsize",
         "byteorder", "getsizeof", "getrecursionlimit", "float_info", "flags", "executable", "getdefaultencoding",
         "getfilesystemencoding",
     }
 )
-# Names that reach builtins, namespaces or code by a string: any reference is write-capable.
+# The ``sys`` attributes a script may call a method on (``sys.stdout.write``); a method of any other (``argv.append``) mutates.
+_PY_SYS_STREAMS = frozenset({"stdout", "stderr", "stdin"})
+# Names that reach builtins, namespaces or code by a string, or the class of an object (``type(x)`` is how a stream's
+# raw object becomes a file constructor): any reference is write-capable.
 _PY_BAD_NAMES = frozenset(
     {
         "__builtins__", "__import__", "vars", "globals", "locals", "getattr", "setattr", "delattr", "exec", "eval",
-        "compile", "breakpoint", "input", "help",
+        "compile", "breakpoint", "input", "help", "type", "object",
     }
 )
+# The only annotations a script may write: a bare builtin name or ``None``. Any other (a string, an attribute, a
+# subscript) is evaluated by something (``get_type_hints``) or is code.
+_PY_ANNOTATION_NAMES = frozenset({"int", "str", "float", "bool", "bytes", "list", "dict", "set", "tuple"})
 _PY_OK_DUNDERS = frozenset({"__name__", "__doc__"})
 # Attributes that reach another namespace, a frame or code by a name or a string.
 _PY_BAD_ATTRS = frozenset(
@@ -1872,8 +2027,37 @@ def _py_is_std_stream(node: ast.AST, aliases: dict) -> bool:
     )
 
 
-def _py_is_path_constructor(node: ast.AST) -> bool:
-    return (isinstance(node, ast.Name) and node.id == "Path") or (isinstance(node, ast.Attribute) and node.attr == "Path")
+def _py_annotation_ok(node: ast.AST | None) -> bool:
+    """Is this annotation absent, ``None`` or a bare builtin type name?"""
+    if node is None:
+        return True
+    if isinstance(node, ast.Constant):
+        return node.value is None
+    return isinstance(node, ast.Name) and node.id in _PY_ANNOTATION_NAMES
+
+
+def _py_chain_root(node: ast.AST) -> ast.AST:
+    """The expression an attribute and subscript chain starts from."""
+    while isinstance(node, (ast.Attribute, ast.Subscript)):
+        node = node.value
+    return node
+
+
+def _py_root_is_alias(node: ast.AST, aliases: dict) -> bool:
+    root = _py_chain_root(node)
+    return isinstance(root, ast.Name) and root.id in aliases
+
+
+def _py_sys_mutator(func: ast.Attribute, aliases: dict) -> bool:
+    """Is *func* a method of a ``sys`` attribute that is not a standard stream (``sys.argv.append``)?"""
+    chain: list[str] = []
+    node: ast.AST = func
+    while isinstance(node, ast.Attribute):
+        chain.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name) or aliases.get(node.id) is not sys or len(chain) < 2:
+        return False
+    return chain[-1] not in _PY_SYS_STREAMS
 
 
 def _py_write_mode(node: ast.AST | None) -> bool | None:
@@ -1892,6 +2076,7 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
     literals: dict[str, str] = {}
     callees: set[int] = set()
     receivers: set[int] = set()
+    path_imported = False
 
     def bind(name: str, times: int = 1) -> None:
         counts[name] = counts.get(name, 0) + times
@@ -1918,6 +2103,8 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
             for alias in node.names:
                 if alias.name == "*" or not _py_attr_ok(module, alias.name):
                     return _UNKNOWN, []
+                if node.module == "pathlib" and alias.name == "Path" and alias.asname is None:
+                    path_imported = True
         elif isinstance(node, ast.Call):
             callees.add(id(node.func))
         elif isinstance(node, ast.Attribute):
@@ -1926,10 +2113,23 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
         elif isinstance(node, ast.Name):
             if isinstance(node.ctx, (ast.Store, ast.Del)):
                 bind(node.id)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        elif isinstance(node, ast.ClassDef):
+            # a class body runs at definition, its methods are called by name from the machinery (a ``Formatter``
+            # subclass captures what the format string walks to): no class is read
+            return _UNKNOWN, []
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.decorator_list or getattr(node, "type_params", None) or not _py_annotation_ok(node.returns):
+                return _UNKNOWN, []
             bind(node.name)
         elif isinstance(node, ast.arg):
+            if not _py_annotation_ok(node.annotation):
+                return _UNKNOWN, []
             bind(node.arg)
+        elif isinstance(node, ast.AnnAssign):
+            if not _py_annotation_ok(node.annotation):
+                return _UNKNOWN, []
+        elif type(node).__name__ == "TypeAlias":
+            return _UNKNOWN, []
         elif isinstance(node, ast.ExceptHandler):
             if node.name:
                 bind(node.name)
@@ -1953,6 +2153,24 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
                         literals[target.id] = node.value.value
     if counts.get("open"):
         return _UNKNOWN, []
+    # ``Path`` is pathlib's constructor only when it is bound once, by ``from pathlib import Path``; ``pathlib`` (under
+    # any name) only when bound once, by its import. A def, class, assignment, loop, ``with``, walrus or parameter
+    # that binds either name makes ``Path(...)`` something else.
+    if counts.get("Path") and not (path_imported and counts["Path"] == 1):
+        return _UNKNOWN, []
+    for alias_name, alias_module in aliases.items():
+        if alias_module is pathlib and counts.get(alias_name) != 1:
+            return _UNKNOWN, []
+
+    def is_path_constructor(node: ast.AST) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id == "Path" and path_imported and counts.get("Path") == 1
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "Path"
+            and isinstance(node.value, ast.Name)
+            and aliases.get(node.value.id) is pathlib
+        )
 
     # pass 2: module attribute chains, children before parents
     module_of: dict[int, types.ModuleType] = {}
@@ -1997,8 +2215,18 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
                 return _UNKNOWN, []
             if attr in _PY_CALL_ONLY_ATTRS and id(node) not in callees:
                 return _UNKNOWN, []
+            if not isinstance(node.ctx, ast.Load) and _py_root_is_alias(node, aliases):
+                return _UNKNOWN, []
+        elif isinstance(node, ast.Subscript):
+            if not isinstance(node.ctx, ast.Load) and _py_root_is_alias(node, aliases):
+                return _UNKNOWN, []
         elif isinstance(node, ast.Call):
             func = node.func
+            if not isinstance(func, (ast.Name, ast.Attribute)):
+                # a call of a call, of a subscript, of a lambda or of any other expression: nothing says what it runs
+                return _UNKNOWN, []
+            if isinstance(func, ast.Attribute) and _py_sys_mutator(func, aliases):
+                return _UNKNOWN, []
             starred = any(isinstance(arg, ast.Starred) for arg in node.args) or any(
                 keyword.arg is None for keyword in node.keywords
             )
@@ -2031,7 +2259,7 @@ def _python_tree_effect(tree: ast.AST) -> _Effect:
                     receiver = func.value
                     if (
                         isinstance(receiver, ast.Call)
-                        and _py_is_path_constructor(receiver.func)
+                        and is_path_constructor(receiver.func)
                         and len(receiver.args) == 1
                         and not receiver.keywords
                         and not isinstance(receiver.args[0], ast.Starred)

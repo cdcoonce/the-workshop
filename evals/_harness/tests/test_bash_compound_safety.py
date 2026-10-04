@@ -387,8 +387,6 @@ ARITHMETIC_NONE_ROWS = [
     "echo ${f}",
     "echo \"${f}\"",
     "echo ${f%.py}",
-    "echo ${f#tests/}",
-    "echo ${#f}",
     "echo ${f:-default}",
     "echo ${f/a/b}",
     "for f in a; do echo ${f%.py}; done",
