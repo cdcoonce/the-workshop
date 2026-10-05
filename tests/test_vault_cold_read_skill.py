@@ -668,3 +668,83 @@ def test_replay_ledger_lists_every_afk_app_row_with_class_and_source() -> None:
     for row in advisory:
         assert row in neg, f"{row!r} must be a negative control"
     assert "blocking" in pos and "advisory" in neg
+
+
+# --- the gate ledger: machine-readable verdict lines and a landed record ------
+# Precedent: a census of 188 gated issues guessed verdicts and read counts from
+# free text (18 rows disagreed) and no comment recorded reader cost or whether
+# the teeth pass re-found a finding. Each test pins one clause of the fix.
+
+LEDGER_SCRIPT = (
+    REPO_ROOT / "plugins" / "workbench" / "machinery" / "engine" / "cold_read_ledger.py"
+)
+READ_LEDGER_LINE = (
+    "<!-- cold-read-ledger: v=1 read=<int> "
+    "verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt> body=<12 hex> "
+    "blocking=<int> rule_born=<int|na> advisory=<int> mutants=<int|na> "
+    "survivors=<int|na> tokens=<int|na> seconds=<int|na> -->"
+)
+LANDED_LEDGER_LINE = (
+    "<!-- cold-read-ledger: v=1 event=landed pr=<int> source_lines=<int> "
+    "test_lines=<int> teeth_gaps=<int> teeth_gaps_raised=<int> -->"
+)
+
+
+def test_step_6_requires_the_ledger_line_last_in_every_verdict_comment() -> None:
+    step = _step(6)
+    for phrase in (
+        "last line of every verdict comment",
+        "[ledger line](#the-ledger-line)",
+        "cold_read_ledger.py",
+        "`tokens` and `seconds` come from the reader's Agent-tool result, or are `na`",
+    ):
+        assert phrase in step, f"step 6 lacks {phrase!r}"
+
+
+def test_ledger_section_carries_both_line_formats_and_they_match_the_script() -> None:
+    """The format is defined twice, here and in the script's docstring; a
+    one-sided edit would let the skill instruct a line the parser rejects."""
+    section = _cold_section("## The ledger line")
+    script = _flat(LEDGER_SCRIPT.read_text())
+    for line in (READ_LEDGER_LINE, LANDED_LEDGER_LINE):
+        assert line in section, f"ledger section lacks {line!r}"
+        assert line in script, f"cold_read_ledger.py docstring lacks {line!r}"
+
+
+def test_ledger_section_states_the_field_rules() -> None:
+    section = _cold_section("## The ledger line")
+    for phrase in (
+        "a value never contains a space",
+        "its token count and duration",
+        "the key is never omitted",
+        "`v`, `read`, `verdict`, `body` and `blocking`",
+        "`unledgered`",
+    ):
+        assert phrase in section, f"ledger section lacks {phrase!r}"
+
+
+def _step_10() -> str:
+    procedure = _section(COLD_READ.read_text(), "## Procedure")
+    return _flat(procedure[procedure.index("\n10. ") :])
+
+
+def test_step_10_posts_the_landed_record_after_the_merge() -> None:
+    step = _step_10()
+    for phrase in (
+        "After landing",
+        "When the slice's PR merges",
+        "one comment ending with the landed [ledger line]",
+        "`teeth_gaps` is the number of test gaps the independent mutation pass found after the BUILD verdict",
+        "`teeth_gaps_raised`",
+        "already raised (blocking or advisory)",
+        "`source_lines` and `test_lines`",
+        'python3 "<engine>/cold_read_ledger.py" --repo <repo> --issue <N>',
+    ):
+        assert phrase in step, f"step 10 lacks {phrase!r}"
+
+
+def test_step_8_reruns_detector_10_after_every_body_edit() -> None:
+    step = _step(8)
+    assert "After every body edit, re-run detector 10's command" in step
+    assert "bare path token" in step
+    assert "afk#1520 read 2" in step
