@@ -53,6 +53,11 @@ authorship is what blinds you to an unbound referent. Three verdicts:
 - **NOT-DISPATCH-READY** — the issue leaves the queue and goes back to shaping. Do not build
   it, and do not quietly rescope it into something buildable.
 
+When the issue body opens with ``Build path: hand-built under the `drain-queue` skill``,
+`vault-cold-read`'s Hand-built slices tier applies: from read 2 on, a finding that only says
+a test does not grade a stated rule, measured or not, arrives as a must-kill list for the
+worker and the independent teeth pass, not as a REWRITE.
+
 The reader writes its own verdict comment on the issue before returning. The ticket is the
 memory store; a verdict that lives only in the conductor's context dies with the session.
 
@@ -91,6 +96,15 @@ issue #<N> in `<worktree>`, focused on `pipelines/ingest/loader.py` and
 `models/staging/orders.sql`. Report correctness, completeness, and reliability findings per
 `plugins/workbench/docs/agent-laws.md`. This is advisory input to my manual review, not a
 gate — I will read the full diff myself regardless of your findings."
+
+**Independent teeth pass (hand-built tier).** This applies to every slice gated under that
+tier, whether or not a finding was downgraded. Dispatch a worker other than the builder to
+run its own mutants against the PR's tests, plus the gate's must-kill list, through
+`detector-teeth-check`. The pass worker only reports. The conductor or another worker closes
+the gaps and re-runs the surviving mutants. The slice does not land while a must-kill mutant
+is neither killed nor explained, and `explained` means the conductor accepts the explanation.
+The PR body carries the pass's ledger and the gaps closed. (Precedent: afk#1520 (PR #1593)
+and afk#1548 (PR #1594), two and five test gaps found after a BUILD verdict.)
 
 **4. Land and tear down.**
 
@@ -147,6 +161,6 @@ against it.
 Check out the integration branch fresh, pull, and run the full gate there — not in a worktree.
 Squash-merges from concurrently-cut branches each pass their own gate and can still combine
 into a red tree. Confirm the remote CI legs went green rather than assuming they did. Then
-report a ledger, one row per issue: issue, pull request, cold-read verdict, teeth evidence,
-and outcome. The ledger is what distinguishes a queue that was gated from one that was
-rubber-stamped.
+report a ledger, one row per issue: issue, pull request, cold-read verdict, tier, teeth
+evidence, the independent teeth pass result, and outcome. The ledger is what distinguishes a
+queue that was gated from one that was rubber-stamped.
