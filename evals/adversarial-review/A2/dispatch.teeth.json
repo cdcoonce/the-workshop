@@ -205,7 +205,7 @@
       "label": "acceptance.md drops the --check sentence",
       "file": "acceptance.md",
       "oracle": "real",
-      "find": "`python -m evals._harness.fixture_copy --check <case_dir> <dest>` fails if that directory holds `defects.json`, an `acceptance.md` or an `ab_raws` entry; run it before dispatching.\n",
+      "find": "`python -m evals._harness.fixture_copy --check <case_dir> <dest>` exits 1 if that directory holds `defects.json`, a byte-identical copy under another name, an `acceptance.md` or an `ab_raws` entry, and 2 on any error; run it before dispatching.\n",
       "replace": "",
       "why": "Killed by test_acceptance_describes_the_mechanism_that_keeps_the_key_from_the_agents (the --check pin)."
     },
@@ -248,6 +248,30 @@
       "find": "fixture_private = [\"defects.json\"]",
       "replace": "fixture_private = [\"defect.json\"]",
       "why": "Killed by test_case_toml_declares_the_answer_key_private (and every copy test: a stale entry refuses the copy)."
+    },
+    {
+      "label": "acceptance.md drops the builder and uncommitted-changes refusal",
+      "file": "acceptance.md",
+      "oracle": "real",
+      "why": "Killed by test_acceptance_describes_the_mechanism_that_keeps_the_key_from_the_agents (the refusal pin).",
+      "find": "The copy command also refuses a builder case and a `fixture/` with uncommitted changes, because the input hash covers the committed tree, not the work tree.\n",
+      "replace": ""
+    },
+    {
+      "label": "acceptance.md drops the byte-identical-copy clause",
+      "file": "acceptance.md",
+      "oracle": "real",
+      "why": "Killed by test_acceptance_describes_the_mechanism_that_keeps_the_key_from_the_agents (the byte-identical pin).",
+      "find": "a byte-identical copy under another name, ",
+      "replace": ""
+    },
+    {
+      "label": "acceptance.md drops the stated limit",
+      "file": "acceptance.md",
+      "oracle": "real",
+      "why": "Killed by test_acceptance_describes_the_mechanism_that_keeps_the_key_from_the_agents (the out-of-scope pin).",
+      "find": "Zip contents and pasted excerpts are out of scope for the check, which matches names and whole-file bytes only.\n",
+      "replace": ""
     }
   ]
 }

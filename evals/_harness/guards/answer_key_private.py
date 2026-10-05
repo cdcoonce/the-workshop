@@ -19,10 +19,9 @@ from __future__ import annotations
 
 import fnmatch
 import os
-import tomllib
 from pathlib import Path
 
-from evals._harness.fixture_copy import FixtureCopyError, private_fixture_paths
+from evals._harness.fixture_copy import FixtureCopyError, has_builder, private_fixture_paths
 from evals._harness.guards import GuardContext, Result
 
 _GUARD_NAME = "answer_key_private"
@@ -36,10 +35,7 @@ def looks_like_answer_key(name: str) -> bool:
 
 
 def _is_static_fixture_case(case_dir: Path) -> bool:
-    if not (case_dir / "fixture").is_dir() or (case_dir / "build_fixture.py").exists():
-        return False
-    case_toml = tomllib.loads((case_dir / "case.toml").read_text(encoding="utf-8"))
-    return not case_toml.get("builder")
+    return (case_dir / "fixture").is_dir() and not has_builder(case_dir)
 
 
 def _fail(message: str) -> Result:

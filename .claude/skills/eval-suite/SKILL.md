@@ -76,14 +76,16 @@ listing every entry. For each fixture:
 1. Read `case.toml` to find its dispatch mode (`subagent` or `inline`) and
    its fixture source.
 2. Prepare a fresh, **not-yet-existing** temporary `<dest>` directory:
-   - A case with only a committed `fixture/` tree: run
+   - A case with only a committed `fixture/` tree: from the repo root, run
      `python -m evals._harness.fixture_copy <case_dir> <dest>`, which copies
      `fixture/` into `<dest>` without the files the case lists under
      `fixture_private` in `case.toml` (an answer key, such as A2's
-     `defects.json`). Never copy `fixture/` by hand: a whole-tree copy hands
-     the answer key to every dispatched agent. Before dispatching, run
+     `defects.json`). It refuses a builder case and a `fixture/` with
+     uncommitted changes. Never copy `fixture/` by hand: a whole-tree copy
+     hands the answer key to every dispatched agent. Before dispatching, run
      `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it
-     fails if `<dest>` holds a private file.
+     exits 1 if `<dest>` holds a private file, a byte-identical copy of one
+     under another name, `acceptance.md` or `ab_raws`, and 2 on any error.
    - A case with a builder (a case-local `build_fixture.py`, or a `builder =
      "<repo-relative path>"` key in `case.toml`): run
      `python <builder> <dest>` into the not-yet-existing `<dest>` (the

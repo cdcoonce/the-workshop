@@ -133,7 +133,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_documents_fixture_preparation (the whole-tree-copy-hands-the-key pin).",
-      "find": "a whole-tree copy hands\n     the answer key to every dispatched agent.",
+      "find": "a whole-tree copy\n     hands the answer key to every dispatched agent.",
       "replace": "a whole-tree copy is merely slower."
     },
     {
@@ -141,7 +141,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_documents_fixture_preparation (the --check invocation pin).",
-      "find": "Before dispatching, run\n     `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it\n     fails if `<dest>` holds a private file.",
+      "find": "Before dispatching, run\n     `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it\n     exits 1 if `<dest>` holds a private file, a byte-identical copy of one\n     under another name, `acceptance.md` or `ab_raws`, and 2 on any error.",
       "replace": ""
     },
     {
@@ -149,7 +149,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_documents_fixture_preparation (the fails-if-private-file pin).",
-      "find": "; it\n     fails if",
+      "find": "; it\n     exits 1 if",
       "replace": "; it\n     warns if"
     },
     {
@@ -544,6 +544,46 @@
       "why": "A harmless synonym swap in untested prose; no assertion reads this sentence.",
       "find": "This skill documents how to run one named skill's eval suite.",
       "replace": "This skill documents how to conduct one named skill's eval suite."
+    },
+    {
+      "label": "[FC7] the from-the-repo-root instruction is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the full command-prefix pin).",
+      "find": "from the repo root, ",
+      "replace": ""
+    },
+    {
+      "label": "[FC8] the builder and uncommitted-changes refusal is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the refusal pin).",
+      "find": "It refuses a builder case and a `fixture/` with\n     uncommitted changes. ",
+      "replace": ""
+    },
+    {
+      "label": "[FC9] the byte-identical-copy leak clause is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": ", a byte-identical copy of one\n     under another name",
+      "replace": ""
+    },
+    {
+      "label": "[FC10] the exit-1 claim is changed to exit-0",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": "exits 1 if `<dest>`",
+      "replace": "exits 0 if `<dest>`"
+    },
+    {
+      "label": "[FC11] the exit-2-on-error claim is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": ", and 2 on any error",
+      "replace": ","
     }
   ]
 }

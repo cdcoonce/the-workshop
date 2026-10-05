@@ -211,13 +211,13 @@ def test_acceptance_describes_the_mechanism_that_keeps_the_key_from_the_agents(c
     assert "lists it under `fixture_private` in `case.toml`" in section and "`defects.json`" in section
     assert "python -m evals._harness.fixture_copy <case_dir> <dest>" in section
     assert "omits every `fixture_private` file" in section
-    assert "fixture_copy --check <case_dir> <dest>` fails if" in section, "must say --check fails on a leak"
+    assert "fixture_copy --check <case_dir> <dest>` exits 1 if" in section, "must say --check fails on a leak"
     assert re.search(r"stays in `fixture/` because moving it would change the input hash[^.]*A2-D2", section)
     assert re.search(r"hand `cp -r` of `fixture/` still leaks", section)
     assert "SKILL.md forbids" in section
     assert "a byte-identical copy under another name" in section
     assert "refuses a builder case and a `fixture/` with uncommitted changes" in section
-    assert re.search(r"zip[^.]*pasted excerpt[^.]*out of scope|out of scope[^.]*zip[^.]*pasted excerpt", section), "must state the limit"
+    assert re.search(r"zip[^.]*pasted excerpt[^.]*out of scope|out of scope[^.]*zip[^.]*pasted excerpt", section, re.IGNORECASE), "must state the limit"
 
 
 def test_acceptance_no_longer_rests_the_protection_on_a_should_sentence(case_dir):

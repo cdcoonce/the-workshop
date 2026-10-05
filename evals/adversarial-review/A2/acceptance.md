@@ -44,7 +44,9 @@ from the skill's own files may reach it, or the baseline stops being a baseline.
 
 `fixture/` holds `defects.json`, the answer key, and the case lists it under `fixture_private` in `case.toml`.
 The conductor's copy command, `python -m evals._harness.fixture_copy <case_dir> <dest>`, omits every `fixture_private` file, so the agents' directory gets `diff.patch` and `spec.md` and nothing else.
-`python -m evals._harness.fixture_copy --check <case_dir> <dest>` fails if that directory holds `defects.json`, an `acceptance.md` or an `ab_raws` entry; run it before dispatching.
+The copy command also refuses a builder case and a `fixture/` with uncommitted changes, because the input hash covers the committed tree, not the work tree.
+`python -m evals._harness.fixture_copy --check <case_dir> <dest>` exits 1 if that directory holds `defects.json`, a byte-identical copy under another name, an `acceptance.md` or an `ab_raws` entry, and 2 on any error; run it before dispatching.
+Zip contents and pasted excerpts are out of scope for the check, which matches names and whole-file bytes only.
 The key stays in `fixture/` because moving it would change the input hash and stale A2-D2's calibration record.
 A hand `cp -r` of `fixture/` still leaks the key, which is why SKILL.md forbids copying `fixture/` by hand.
 The prompt names those two review files by path and nothing else.

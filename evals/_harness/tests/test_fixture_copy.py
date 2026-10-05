@@ -63,6 +63,8 @@ def test_a_malformed_or_stale_declaration_fails_closed_naming_case_and_entry(tmp
     assert "X" in str(err.value)
     if isinstance(bad, list) and bad and isinstance(bad[0], str) and bad[0]:
         assert bad[0] in str(err.value)
+        if ".." in bad[0] or bad[0].startswith("/"):
+            assert "relative POSIX" in str(err.value), "refused for what it is, not as a missing file"
 
 
 def test_an_absolute_entry_that_points_inside_fixture_is_still_refused(tmp_path):
@@ -524,3 +526,11 @@ def test_changes_outside_the_fixture_do_not_block_the_copy(tmp_path):
     case = _repo_case(tmp_path, _FILES, ["defects.json"])
     (case / "prompt.md").write_text("edited prompt", encoding="utf-8")
     assert copy_fixture(case, tmp_path / "dest")
+
+
+def test_an_untracked_file_in_a_new_subdirectory_is_named_by_its_full_path(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (case / "fixture" / "newdir").mkdir()
+    (case / "fixture" / "newdir" / "leaked.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(FixtureCopyError, match=r"newdir/leaked\.txt"):
+        copy_fixture(case, tmp_path / "dest")

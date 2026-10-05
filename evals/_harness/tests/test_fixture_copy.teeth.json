@@ -53,8 +53,8 @@
       "file": "../fixture_copy.py",
       "oracle": "real",
       "why": "Killed by the stale parametrization and test_a_stale_declaration_stops_the_copy_before_anything_is_written.",
-      "find": "        if not os.path.lexists(target):",
-      "replace": "        if False:"
+      "find": "        raise FixtureCopyError(\n            f\"case {label}: fixture_private entry {entry!r} does not exist under fixture/ \"\n            \"(a stale declaration protects nothing)\"\n        )",
+      "replace": "        return"
     },
     {
       "label": "a '..' entry is no longer refused by name",
@@ -125,7 +125,7 @@
       "file": "../fixture_copy.py",
       "oracle": "real",
       "why": "Killed by test_a_nested_private_path_matches_by_relative_path_at_depth: a stranger file under a nested private directory is only found by path.",
-      "find": "            by_path = any(\"/\" + entry + \"/\" in padded for entry in entries)",
+      "find": "            by_path = any(\"/\" + _norm(entry) + \"/\" in padded for entry in entries)",
       "replace": "            by_path = False"
     },
     {
@@ -133,8 +133,8 @@
       "file": "../fixture_copy.py",
       "oracle": "real",
       "why": "Killed by test_a_private_file_is_found_by_basename_even_under_a_different_directory and the private-directory basename test.",
-      "find": "            by_name = name in private_basenames and name in files",
-      "replace": "            by_name = False"
+      "find": "                by_name = _norm(name) in private_basenames",
+      "replace": "                by_name = False"
     },
     {
       "label": "acceptance.md is no longer an always-private name",
@@ -175,6 +175,182 @@
       "why": "Killed by test_cli_exits_nonzero_with_the_reason_when_the_dest_exists.",
       "find": "        return 2",
       "replace": "        return 0"
+    },
+    {
+      "label": "a spelling that differs only by case or normalization is not refused",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the Defects.json, NFD and deeper-component spelling tests (and the parametrized stale case no longer names the spelling).",
+      "find": "        if lookalikes:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "names are compared without casefolding",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dest_file_in_another_case_is_a_leak.",
+      "find": "    return unicodedata.normalize(\"NFC\", text).casefold()",
+      "replace": "    return unicodedata.normalize(\"NFC\", text)"
+    },
+    {
+      "label": "names are compared without NFC normalization",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dest_file_in_another_unicode_normalization_is_a_leak.",
+      "find": "    return unicodedata.normalize(\"NFC\", text).casefold()",
+      "replace": "    return text.casefold()"
+    },
+    {
+      "label": "a byte-identical copy under another name is not flagged",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_byte_identical_copy_under_another_name_is_a_leak.",
+      "find": "                        by_content = _digest(path) in private_digests",
+      "replace": "                        by_content = False"
+    },
+    {
+      "label": "a symlink is not read through for its digest",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_symlink_to_an_identical_copy_elsewhere_is_a_leak_through_its_content.",
+      "find": "                if private_digests and path.is_file():",
+      "replace": "                if private_digests and path.is_file() and not path.is_symlink():"
+    },
+    {
+      "label": "a symlink into fixture is flagged only when it hits a private file",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_symlink_into_fixture_is_a_leak_even_to_a_non_private_file.",
+      "find": "                if target in private_reals or target == fixture_real or fixture_real in target.parents:",
+      "replace": "                if target in private_reals:"
+    },
+    {
+      "label": "an empty private file digest flags every empty file",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_empty_private_file_does_not_flag_every_empty_file.",
+      "find": "    private_digests = {_digest(p) for p in private_files if p.stat().st_size > 0}",
+      "replace": "    private_digests = {_digest(p) for p in private_files}"
+    },
+    {
+      "label": "an empty private or ab_raws directory is not flagged",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_empty_ab_raws_directory_in_dest_is_a_leak and test_an_empty_directory_named_like_a_private_directory_is_a_leak.",
+      "find": "            elif (by_path or always) and not any(path.rglob(\"*\")):",
+      "replace": "            elif False:"
+    },
+    {
+      "label": "a backslash entry is no longer refused",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_backslash_entry_is_refused_even_when_such_a_file_exists.",
+      "find": "        if posix.is_absolute() or \"..\" in posix.parts or \"\\\\\" in entry:",
+      "replace": "        if posix.is_absolute() or \"..\" in posix.parts:"
+    },
+    {
+      "label": "a dest inside fixture is accepted",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dest_inside_the_fixture_is_refused_and_nothing_is_written (and A2's in-repo twin).",
+      "find": "    if dest_real == fixture_real or fixture_real in dest_real.parents:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "dest is not resolved, so a symlink into fixture is accepted",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_dest_reached_through_a_symlink_into_the_fixture_is_refused.",
+      "find": "    dest_real = dest.resolve()",
+      "replace": "    dest_real = dest.absolute()"
+    },
+    {
+      "label": "a builder case is copied",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the builder-key and local-build_fixture refusal tests.",
+      "find": "    if has_builder(case_dir):\n        raise",
+      "replace": "    if False:\n        raise"
+    },
+    {
+      "label": "has_builder ignores the builder key",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_case_with_a_builder_key_is_refused_with_the_builder_command and the calibration-parity test.",
+      "find": "    return bool(_load_case_toml(case_dir).get(\"builder\")) or (case_dir / \"build_fixture.py\").exists()",
+      "replace": "    return (case_dir / \"build_fixture.py\").exists()"
+    },
+    {
+      "label": "has_builder ignores a local build_fixture.py",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_case_with_a_local_build_fixture_script_is_refused and the calibration-parity test.",
+      "find": "    return bool(_load_case_toml(case_dir).get(\"builder\")) or (case_dir / \"build_fixture.py\").exists()",
+      "replace": "    return bool(_load_case_toml(case_dir).get(\"builder\"))"
+    },
+    {
+      "label": "a directory without case.toml raises the raw read error",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_directory_without_case_toml_is_not_a_case_not_a_missing_fixture.",
+      "find": "    if not path.is_file():\n        raise FixtureCopyError(f\"case {_case_label(case_dir)}: {case_dir} is not a case (no case.toml)\")",
+      "replace": "    if False:\n        pass"
+    },
+    {
+      "label": "a dirty fixture is copied",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the untracked, modified, staged and ignored refusal tests.",
+      "find": "    if dirty:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "git status stops listing individual untracked files",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_untracked_file_in_a_new_subdirectory_is_named_by_its_full_path.",
+      "find": "\"--untracked-files=all\", ",
+      "replace": "\"--untracked-files=normal\", "
+    },
+    {
+      "label": "git status stops listing ignored files",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_ignored_file_present_in_the_fixture_is_refused.",
+      "find": "\"--untracked-files=all\", \"--ignored\", ",
+      "replace": "\"--untracked-files=all\", "
+    },
+    {
+      "label": "an untracked path is not counted as dirty",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the untracked-file tests.",
+      "find": "    return [line[3:] for line in status.stdout.splitlines() if line.strip()]",
+      "replace": "    return [line[3:] for line in status.stdout.splitlines() if line.strip() and not line.startswith(\"??\")]"
+    },
+    {
+      "label": "a modified tracked path is not counted as dirty",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_locally_modified_tracked_file_is_refused_naming_it and the staged-file test.",
+      "find": "    return [line[3:] for line in status.stdout.splitlines() if line.strip()]",
+      "replace": "    return [line[3:] for line in status.stdout.splitlines() if line.strip() and line.startswith(\"??\")]"
+    },
+    {
+      "label": "outside git the dirty check reports clean instead of unknown",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_outside_a_git_work_tree_there_is_nothing_to_compare_and_the_copy_proceeds.",
+      "find": "        return None\n    status",
+      "replace": "        return []\n    status"
+    },
+    {
+      "label": "--check exits 2 on a leak",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_cli_exit_codes_are_0_clean_1_leak_2_error.",
+      "find": "            return 1 if leaks else 0",
+      "replace": "            return 2 if leaks else 0"
     }
   ]
 }
