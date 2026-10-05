@@ -9,17 +9,17 @@ one is how a worker "helpfully" edits a file the spec forbade.
 
 ## Slots
 
-| Slot                | What makes it correct                                                                                                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<N>` / `<repo>`    | Issue number and `owner/name`. The body is the spec; nothing is restated.                                                                                                                      |
-| `<normative docs>`  | Design docs the builder must read in full before writing code. Omit if none.                                                                                                                   |
-| `<pins>`            | The decisions the gate already settled: exact literal strings, field names, function signatures, ordering. Anything the cold read had to pin belongs here or the worker re-derives it wrongly. |
-| `<allowed files>`   | Every file the worker may create or modify. Be exhaustive.                                                                                                                                     |
-| `<forbidden files>` | The adjacent files an over-eager builder would improve. Name the specific temptation — a stale "until #N lands" comment is an invitation the worker must decline.                              |
-| `<teeth mutations>` | One mutation per behavior the tests claim to protect, each with the test that must go red. Two to three is typical.                                                                            |
-| `<gate command>`    | The repository's real lint and test commands, quoted exactly.                                                                                                                                  |
-| `<freshness note>`  | If the integration branch moved since the spec was written, name what changed and which function is safe to build on. Omit if the branch is unchanged.                                         |
-| `<count assertion>` | When the spec claims a specific number of call sites, state it and require the worker to stop and report on a mismatch rather than guess. Omit if not applicable.                              |
+| Slot                | What makes it correct                                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<N>` / `<repo>`    | Issue number and `owner/name`. The body is the spec; nothing is restated.                                                                                                                                    |
+| `<normative docs>`  | Design docs the builder must read in full before writing code. Omit if none.                                                                                                                                 |
+| `<pins>`            | The decisions the gate already settled: exact literal strings, field names, function signatures, ordering. Anything the cold read had to pin belongs here or the worker re-derives it wrongly.               |
+| `<allowed files>`   | Every file the worker may create or modify. Be exhaustive.                                                                                                                                                   |
+| `<forbidden files>` | The adjacent files an over-eager builder would improve. Name the specific temptation — a stale "until #N lands" comment is an invitation the worker must decline.                                            |
+| `<teeth mutations>` | One mutation per behavior the tests claim to protect, each with the test that must go red. Two to three is typical. When the gate listed must-kill mutants (the hand-built tier), include every one of them. |
+| `<gate command>`    | The repository's real lint and test commands, quoted exactly.                                                                                                                                                |
+| `<freshness note>`  | If the integration branch moved since the spec was written, name what changed and which function is safe to build on. Omit if the branch is unchanged.                                                       |
+| `<count assertion>` | When the spec claims a specific number of call sites, state it and require the worker to stop and report on a mismatch rather than guess. Omit if not applicable.                                            |
 
 ## Template
 

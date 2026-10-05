@@ -23,7 +23,7 @@
       "label": "B: delete the standing-delegation bullet",
       "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
       "oracle": "real",
-      "find": "- **Standing delegation (Charles's decision, 2026-10-03).** The conductor applies Subtract itself, with no per-cap approval. It deletes each reader-born rule that a blocking or advisory rule-born finding rests on, rewrites each case as an outside-this-contract line, and lists every deletion and added line in the REWRITE comment under a `Subtracted (veto within the next read)` heading. Charles's silence is assent, and he may veto by name. A deletion of a traced rule is never delegated.\n",
+      "find": "- **Standing delegation (Charles's decision, 2026-10-03).** The conductor applies Subtract itself, with no approval for the Subtract itself. It deletes each reader-born rule that a blocking or advisory rule-born finding rests on, rewrites each case as an outside-this-contract line, and lists every deletion and added line in the REWRITE comment under a `Subtracted (veto within the next read)` heading. Charles's silence is assent, and he may veto by name. A deletion of a traced rule is never delegated. It does not reset the read count, so the cap in step 8 still binds and still sends the slice to Charles.\n",
       "replace": ""
     },
     {
@@ -44,7 +44,7 @@
       "label": "E: delete the conductor-counts-the-cap sentences from step 8",
       "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
       "oracle": "real",
-      "find": "The conductor counts the cap, never the reader. Count fresh reads since the last body Charles approved or the last delegated Subtract, whichever is later (a Subtract the conductor applies itself resets the count, as an approved body does), from the comment history and the stamp record. The reader prompt carries no read or cap count. A reader that reports a cap is ignored. ",
+      "find": "The conductor counts the cap, never the reader. Count fresh reads since the last body Charles approved, from the comment history and the stamp record. A delegated Subtract does not reset the count; only a body Charles approved does. A cap ruling from Charles (Grow, or his by-name acceptance of the applied Subtract) counts as approving that body and restarts the count at 0; silence does not. `read=` in the ledger line, the Evidence rule's 'second fresh read' and the Hand-built tier's 'read 2' count every fresh read on the slice; only the cap count restarts. (Precedent: afk#1548 ran six fresh reads under a cap of three, because Subtracts after reads 2 and 4 each reset the count and the cap never bound.) The reader prompt carries no read or cap count. A reader that reports a cap is ignored. ",
       "replace": ""
     },
     {
