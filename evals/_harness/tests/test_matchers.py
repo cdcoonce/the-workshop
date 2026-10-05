@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from evals._harness import matchers
 from evals._harness.matchers import (
     count_unmatched,
     extract_findings,
@@ -196,6 +199,16 @@ def test_ordering_predicate_malformed_transcript_is_truncated_not_a_verdict(tmp_
     )
     transcript = parse_transcript(path)
     assert transcript.status == "truncated"
+
+
+# --- one rule for write paths ------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["_is_test_path", "_is_source_edit", "test_failed_before_first_source_edit"])
+def test_the_legacy_path_classifier_chain_is_retired(name):
+    # #1131: a second path classifier disagreed with ``classify_write_event`` on absolute paths
+    # with a ``tests`` directory above ``src``. ``classify_write_event`` is the only rule.
+    assert not hasattr(matchers, name)
 
 
 # --- skill_triggered_first ---------------------------------------------------

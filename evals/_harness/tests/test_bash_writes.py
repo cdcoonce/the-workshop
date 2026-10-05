@@ -370,6 +370,20 @@ def test_an_edit_tool_write_is_classified_by_its_path_segments(tool, path, expec
     assert classify_write_event(_event(tool, {key: path}, 0)) == expected
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/Users/x/tests/ws/src/shop/cart.py", "source"),
+        ("/work/tests/proj/pkg/cart.py", "tests"),
+        ("/home/dev/tests-sandbox/src/a.py", "source"),
+        ("src/shop/cart.py", "source"),
+    ],
+)
+def test_a_tests_directory_above_the_project_does_not_decide_an_edit_path(path, expected):
+    # The #1131 table: one rule, ``classify_write_event``, decides every write path.
+    assert classify_write_event(_event("Edit", {"file_path": path}, 0)) == expected
+
+
 def test_an_edit_tool_event_without_a_path_is_none():
     assert classify_write_event(_event("Edit", {"old_string": "a"}, 0)) == "none"
     assert classify_write_event(_event("Edit", "not a dict", 0)) == "none"
