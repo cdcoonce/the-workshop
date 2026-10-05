@@ -330,8 +330,14 @@ def _read_word(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str
 
 
 def _read_word_parts(text: str, i: int, ctx: _Ctx, depth: int, base: int) -> tuple[str, int]:
-    parts: list[str] = []
     n = len(text)
+    # Fast path: a word that is one plain run up to a blank, an operator or the end of the text.
+    run = _WORD_RUN.match(text, i)
+    if run:
+        stop = run.end()
+        if stop >= n or text[stop] in " \t\r\n|&;<>()":
+            return run.group(), stop
+    parts: list[str] = []
     while i < n:
         c = text[i]
         if c in " \t\r\n|&;<>()":
@@ -620,12 +626,14 @@ def _scan(text: str, base: int, ctx: _Ctx, depth: int) -> None:
             target, i = _read_target(text, j, ctx, depth, base)
             _add_target(owner, target)
         elif cmd is not None:
-            owner = current(i)
+            expect = False
+            owner = cmd
             start = i
             word, i = _read_word(text, i, ctx, depth, base)
+            written = text[start:i]
             owner.words.append(word)
-            owner.plain.append(text[start:i] == word)
-            owner.raw.append(text[start:i])
+            owner.plain.append(written == word)
+            owner.raw.append(written)
             last_word_end = i
         else:
             # The first word of a command: a reserved word (read as structure) or the head of a simple command.
@@ -877,6 +885,12 @@ def _strip_wrappers(words: list[str]) -> list[str] | None:
     A command that is only assignments (``X=1; ...``) is a shell variable, refused only for the names whose export
     every later command reads.
     """
+    if words:
+        # Fast path for the commonest head: a word with no backslash, no ``/`` (so no path) and no ``=`` (so no
+        # assignment) that is not a wrapper is neither stripped nor refused, whatever follows it.
+        first = words[0]
+        if first not in _WRAPPERS and "=" not in first and "/" not in first and "\\" not in first:
+            return words[:]
     i = 0
     n = len(words)
     assigns: list[str] = []
@@ -1001,6 +1015,9 @@ def _text_effect(text: str, depth: int) -> tuple[_Effect, int | None, bool]:
         if effect[0] != _RO and first is None:
             first = cmd.offset
         parts.append(effect)
+        if effect[0] == _UNKNOWN:
+            # ``_combine`` is ``_UNKNOWN`` from here on and ``first`` is set: the commands after it cannot change either
+            break
     combined = _combine(parts)
     if combined[0] == _WRITE and _bad_cd(ctx.cmds):
         combined = (_UNKNOWN, [])
