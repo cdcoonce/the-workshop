@@ -389,6 +389,22 @@
       "file": "../bash_classify.py",
       "oracle": "real",
       "why": "Killed by echo $(cp a b), echo \"$(cp a b)\" and the nested row.",
+      "find": "            _scan(text[i + 2 : end], base + i + 2, ctx, depth + 1)\n            return end + 1",
+      "replace": "            return end + 1"
+    },
+    {
+      "label": "[early stop] the scan stops at the first write instead of the first unknown command",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by the unknown-then-write rows: a tests write before an unknown command must still end source.",
+      "find": "        if effect[0] == _UNKNOWN:\n            # ``_combine``",
+      "replace": "        if effect[0] != _RO:\n            # ``_combine``"
+    },
+    {
+      "label": "[process substitution] a <( ) or >( ) body is not analysed as commands",
+      "file": "../bash_classify.py",
+      "oracle": "real",
+      "why": "Killed by cat <(cp a src/b) and the >( ) row.",
       "find": "            _scan(text[i + 2 : match.start()], base + i + 2, ctx, depth + 1)\n            return match.end()",
       "replace": "            return match.end()"
     },
