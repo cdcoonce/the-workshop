@@ -76,6 +76,20 @@ What costs hits, deliberately:
 
 `evals/tdd/gaps.md` records the same limits.
 
+### Sixth review pass, not completed, and a lexer conformance differential
+
+Date 2026-10-04, classifier at `b3d8a392`. A sixth independent adversarial pass was started and did not complete: the reviewing agent's output was stopped by a safety classifier partway through, it returned no findings, and it was not re-run. So the newest code (the quote-aware substitution scanner and the round-2 shell-lexer changes) has had no completed independent adversarial pass; the five earlier passes ran on earlier tips.
+
+What was run instead is narrower: a lexer conformance differential that asks only whether the classifier and real shells agree on which text is executed as a command. It used 220,213 distinct generated strings (fixed seed 20261004) built only from `echo`, `printf`, `true`, `:`, `cat` and one unknown marker command. The oracle is whether bash 3.2.57 or zsh 5.9 (`zsh -f`) executed the marker under `eval`. The strings are 100 wrapper constructs composed to depth 3 plus token soup: quoting forms, `$()` and backticks nested to 3, arithmetic, `${v:-...}`, comments, continuations, here-strings, heredocs with quoted and unquoted delimiters, `case`, compound constructs, `eval` and `bash -c`. The rig is committed in [lexer-conformance/](lexer-conformance/README.md).
+
+Result: 0 strings where a shell executed the marker and the classifier returned `none` or `tests`. The classifier returned 187,484 `source`, 32,729 `none` and 0 `tests`; of the `none` rows, none was executed by either shell. No classifier call exceeded 0.5 s. In the conservative direction, 47,228 strings were classified `source` that neither shell executed.
+
+Positive control: the classifier at `origin/dev` `95b92ca`, scored against the same strings and the same oracle, returns `none` for 1,340 strings a shell executed, all in the unquoted-heredoc class (for example a heredoc with an unquoted delimiter whose body holds a backtick or `$()` substitution), so the rig can see the defect class this change closes.
+
+What it does not cover: any write, redirect-to-file or interpreter (so the `tests` class and every write-detection rule were not exercised); process substitution, `[[ ]]`, `read`, aliases, `source`, `trap`, brace, glob and tilde expansion, `$IFS`, non-ASCII and control characters; bash 4 or 5; call paths other than `eval`; strings over 400 characters. 3 bash and 155 zsh cases timed out (shell-side infinite loops; all classified `source`).
+
+This is evidence about the lexer only. It is not the independent adversarial pass the acceptance criteria of issue [#1129](https://github.com/cdcoonce/the-workshop/issues/1129) ask for; the admission rule's owner audit of every transcript remains the backstop, as before.
+
 ## What did not change
 
 The `T` prompt text, the fixture tree (the planted tautology and `docs/plan.md` included), the prompt-vocabulary guards' word lists, the admission bars and rule in `calibration.py`, `T-trig`, every other case, and every matcher's behaviour for its existing callers. The `T` contract tests' guards read the dispatched prompt minus the one harness-owned preamble line, and a separate test pins that the remainder is `prompt.md` byte for byte.
