@@ -51,8 +51,10 @@ def test_the_declared_entries_come_back_as_posix_paths(tmp_path):
 
 @pytest.mark.parametrize(
     "bad",
-    ["defects.json", [""], [3], ["/etc/passwd"], ["../x"], ["sub/../../x"], ["."], ["missing.json"]],
-    ids=["string-not-list", "empty-entry", "non-string", "absolute", "dotdot", "nested-dotdot", "fixture-root", "stale"],
+    ["defects.json", [""], [3], ["/etc/passwd"], ["../x"], ["sub/../../x"], ["."], ["missing.json"],
+     ["../case.toml"], ["sub/../defects.json"]],
+    ids=["string-not-list", "empty-entry", "non-string", "absolute", "dotdot", "nested-dotdot", "fixture-root", "stale",
+         "dotdot-onto-a-real-file-outside", "dotdot-that-lands-back-inside"],
 )
 def test_a_malformed_or_stale_declaration_fails_closed_naming_case_and_entry(tmp_path, bad):
     case = _case(tmp_path, _FILES, bad)
@@ -61,6 +63,16 @@ def test_a_malformed_or_stale_declaration_fails_closed_naming_case_and_entry(tmp
     assert "X" in str(err.value)
     if isinstance(bad, list) and bad and isinstance(bad[0], str) and bad[0]:
         assert bad[0] in str(err.value)
+
+
+def test_an_absolute_entry_that_points_inside_fixture_is_still_refused(tmp_path):
+    case = _case(tmp_path, _FILES)
+    inside = (case / "fixture" / "defects.json").resolve()
+    (case / "case.toml").write_text(
+        f'mode = "inline"\nprompt = "prompt.md"\nfixture_private = ["{inside.as_posix()}"]\n', encoding="utf-8"
+    )
+    with pytest.raises(FixtureCopyError, match="relative"):
+        private_fixture_paths(case)
 
 
 def test_an_entry_that_escapes_fixture_through_a_symlink_is_refused(tmp_path):
@@ -162,6 +174,23 @@ def test_a_private_file_found_by_basename_at_depth_is_a_leak(tmp_path):
     (dest / "a" / "b").mkdir(parents=True)
     (dest / "a" / "b" / "defects.json").write_text("renamed copy", encoding="utf-8")
     assert find_private_leaks(case, dest) == ["a/b/defects.json"]
+
+
+def test_a_private_file_is_found_by_basename_even_under_a_different_directory(tmp_path):
+    case = _case(tmp_path, {"keep.md": "k", "gt/answers/key.json": "K"}, ["gt/answers/key.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "elsewhere").mkdir()
+    (dest / "elsewhere" / "key.json").write_text("moved", encoding="utf-8")
+    assert find_private_leaks(case, dest) == ["elsewhere/key.json"]
+
+
+def test_the_files_of_a_private_directory_are_found_by_basename_too(tmp_path):
+    case = _case(tmp_path, {"keep.md": "k", "gt/a.json": "A"}, ["gt"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "a.json").write_text("moved", encoding="utf-8")
+    assert find_private_leaks(case, dest) == ["a.json"]
 
 
 def test_a_nested_private_path_matches_by_relative_path_at_depth(tmp_path):

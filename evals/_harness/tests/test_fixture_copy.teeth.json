@@ -1,0 +1,180 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fixture_copy.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_fixture_copy.py"
+  ],
+  "mutants": [
+    {
+      "label": "copy no longer omits private paths",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_copy_omits_a_private_file_and_copies_the_rest_byte_for_byte and the directory variant: the key is copied.",
+      "find": "            if not _is_private(rel, entries):",
+      "replace": "            if True:"
+    },
+    {
+      "label": "copy accepts an existing dest",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_copy_refuses_an_existing_dest and the dangling-symlink variant.",
+      "find": "    if os.path.lexists(dest):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a stale declaration is accepted",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the stale parametrization and test_a_stale_declaration_stops_the_copy_before_anything_is_written.",
+      "find": "        if not os.path.lexists(target):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "a '..' entry is no longer refused by name",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the dotdot-that-lands-back-inside parametrization (the resolve check alone passes it).",
+      "find": "or \"..\" in posix.parts or",
+      "replace": "or"
+    },
+    {
+      "label": "an absolute entry is no longer refused by name",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_absolute_entry_that_points_inside_fixture_is_still_refused.",
+      "find": "posix.is_absolute() or ",
+      "replace": ""
+    },
+    {
+      "label": "the resolve-based escape check is dropped",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_an_entry_that_escapes_fixture_through_a_symlink_is_refused and the dotdot-onto-a-real-file-outside parametrization.",
+      "find": "        if resolved == fixture_real or fixture_real not in resolved.parents:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "a malformed fixture_private value is accepted",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by the string-not-list, empty-entry and non-string parametrizations.",
+      "find": "    if not isinstance(declared, list) or not all(isinstance(e, str) and e.strip() for e in declared):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "a symlink inside fixture is followed instead of refused",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_copy_refuses_a_symlink_inside_the_fixture_and_leaves_no_dest.",
+      "find": "                raise FixtureCopyError(\n                    f\"case {label}: fixture holds a symlink {path.relative_to(fixture).as_posix()!r}; \"\n                    \"a copy never follows one\"\n                )",
+      "replace": "                pass"
+    },
+    {
+      "label": "a missing fixture dir is not an error",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_copy_raises_when_the_case_has_no_fixture_dir.",
+      "find": "    if not fixture.is_dir():\n        raise FixtureCopyError(f\"case {label}: has no fixture/ directory to copy\")",
+      "replace": "    if False:\n        pass"
+    },
+    {
+      "label": "copied paths come back reversed",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by every test that compares the returned list.",
+      "find": "    to_copy.sort()",
+      "replace": "    to_copy.sort(reverse=True)"
+    },
+    {
+      "label": "a missing dest reads as clean",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_missing_dest_is_an_error_not_a_pass.",
+      "find": "    if not dest.is_dir():\n        raise FixtureCopyError(f\"case {_case_label(case_dir)}: dest {dest} is not a directory\")",
+      "replace": "    if False:\n        pass"
+    },
+    {
+      "label": "leaks are no longer matched by relative path at depth",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_nested_private_path_matches_by_relative_path_at_depth: a stranger file under a nested private directory is only found by path.",
+      "find": "            by_path = any(\"/\" + entry + \"/\" in padded for entry in entries)",
+      "replace": "            by_path = False"
+    },
+    {
+      "label": "leaks are no longer matched by basename",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_a_private_file_is_found_by_basename_even_under_a_different_directory and the private-directory basename test.",
+      "find": "            by_name = name in private_basenames and name in files",
+      "replace": "            by_name = False"
+    },
+    {
+      "label": "acceptance.md is no longer an always-private name",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_acceptance_md_and_ab_raws_in_dest_are_leaks_even_without_a_declaration and the CLI check test.",
+      "find": "_ALWAYS_PRIVATE_NAMES = (\"acceptance.md\",)",
+      "replace": "_ALWAYS_PRIVATE_NAMES = ()"
+    },
+    {
+      "label": "ab_raws is no longer an always-private directory",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_acceptance_md_and_ab_raws_in_dest_are_leaks_even_without_a_declaration.",
+      "find": "_ALWAYS_PRIVATE_DIRS = (\"ab_raws\",)",
+      "replace": "_ALWAYS_PRIVATE_DIRS = ()"
+    },
+    {
+      "label": "--check exits zero even when it names a leak",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_cli_check_exits_zero_on_a_clean_dest_and_nonzero_naming_each_leak.",
+      "find": "            return 1 if leaks else 0",
+      "replace": "            return 0"
+    },
+    {
+      "label": "--check is not wired (the flag copies instead)",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_cli_check_exits_zero_on_a_clean_dest_and_nonzero_naming_each_leak (a copy onto an existing dest fails).",
+      "find": "        if args.check:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "a refused copy exits zero from the CLI",
+      "file": "../fixture_copy.py",
+      "oracle": "real",
+      "why": "Killed by test_cli_exits_nonzero_with_the_reason_when_the_dest_exists.",
+      "find": "        return 2",
+      "replace": "        return 0"
+    }
+  ]
+}
