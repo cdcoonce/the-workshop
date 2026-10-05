@@ -37,7 +37,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_documents_every_named_harness_entry_point: the table-scoped parse no longer finds report.write_report among the documented entry points.",
-      "find": "| `report.write_report`              | #993    | Writes the red-run report.                                                                    |",
+      "find": "| `report.write_report` | #993 | Writes the red-run report. |",
       "replace": ""
     },
     {
@@ -85,7 +85,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_assigns_lens_agent_dispatch_to_the_conductor_for_inline_mode: the conductor's lens-agent dispatch responsibility is gone from section 3.",
-      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself \u2014 it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
+      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
       "replace": "- `mode = \"inline\"`: skip"
     },
     {
@@ -101,7 +101,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_says_the_conductor_reads_the_manifest_and_the_scorer_never_does: the negation 'the scorer never reads it' is a required rule, not just a keyword.",
-      "find": "The conductor is the only reader of this file \u2014 the scorer\n(`evals._harness.scorer`) never reads it itself.",
+      "find": "The conductor is the only reader of this file — the scorer\n(`evals._harness.scorer`) never reads it itself.",
       "replace": "The scorer reads it itself."
     },
     {
@@ -197,7 +197,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_says_the_fingerprint_comes_from_compute_fingerprint.",
-      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\ninjection_paths=..., plugin_version=..., claude_code_version=...,\nrun_date=...)`, where",
+      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\n  injection_paths=..., plugin_version=..., claude_code_version=...,\n  run_date=...)`, where",
       "replace": "- `run[\"fingerprint\"]` is built by hand, where"
     },
     {
@@ -293,7 +293,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_the_documented_item_states_rule_is_any_counted_attempt_hit.",
-      "find": "`item_states` maps each _gated_ item id to whether any counted attempt has hit\nit so far.",
+      "find": "`item_states` maps each *gated* item id to whether any counted attempt has hit\nit so far.",
       "replace": "`item_states` maps each item id to whether the latest attempt hit it."
     },
     {

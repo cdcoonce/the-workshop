@@ -111,7 +111,7 @@ def test_skill_documents_fixture_preparation():
     assert "not-yet-existing" in section
     assert "pre-existing" not in section
     assert "python <builder> <dest>" in section
-    assert re.search(r"Before the fixture's [*_]first[*_] attempt", section)
+    assert re.search(r"Before the fixture's \*first\* attempt", section)
     assert "cases[].fixture_fingerprint" in section
     # The committed-fixture copy goes through fixture_copy, which omits `fixture_private` files (#1130).
     assert "A case with only a committed `fixture/` tree: run `python -m evals._harness.fixture_copy <case_dir> <dest>`" in section
@@ -427,7 +427,7 @@ def test_the_documented_retry_caps_are_the_real_boundaries():
 
 def test_the_documented_item_states_rule_is_any_counted_attempt_hit():
     section = _section("5")
-    assert re.search(r"maps each [*_]gated[*_] item id to whether any counted attempt has hit it so far", section)
+    assert re.search(r"maps each \*gated\* item id to whether any counted attempt has hit it so far", section)
     should_retry = _harness_function("scorer", "should_retry")
 
     assert should_retry({"a": True, "b": False}, 1, 0) is True
