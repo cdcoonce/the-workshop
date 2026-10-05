@@ -59,3 +59,21 @@ def test_the_check_command_fails_on_a_hand_copy_of_the_fixture(case_dir, repo_ro
     )
     assert check.returncode != 0
     assert "defects.json" in check.stdout
+
+
+def test_the_real_in_repo_copy_path_runs_the_committed_fixture_check(case_dir, tmp_path):
+    """A2 sits in a git work tree, so the dirty-fixture check really runs here (not the non-git branch)."""
+    from evals._harness.fixture_copy import fixture_dirty_paths
+
+    assert fixture_dirty_paths(case_dir) == [], "A2's fixture/ must be committed and clean to be copied"
+    assert copy_fixture(case_dir, tmp_path / "dest") == ["diff.patch", "spec.md"]
+
+
+def test_a_dest_inside_a2s_fixture_is_refused(case_dir):
+    import pytest
+
+    from evals._harness.fixture_copy import FixtureCopyError
+
+    with pytest.raises(FixtureCopyError, match="inside"):
+        copy_fixture(case_dir, case_dir / "fixture" / "inner")
+    assert not (case_dir / "fixture" / "inner").exists()

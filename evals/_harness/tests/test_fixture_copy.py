@@ -259,3 +259,268 @@ def test_cli_exits_nonzero_with_the_reason_when_the_dest_exists(tmp_path):
     result = _run(str(case), str(dest))
     assert result.returncode != 0
     assert "already exists" in result.stderr
+
+
+# ======================================================================================
+# Review fixes (S1-S4) and the gaps the reviewer's mutations survived
+# ======================================================================================
+
+import unicodedata  # noqa: E402
+
+from evals._harness.fixture_copy import fixture_dirty_paths, has_builder  # noqa: E402
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-C", str(repo), *args],
+        capture_output=True, text=True, check=True,
+    )
+    return result.stdout
+
+
+def _repo_case(tmp_path: Path, files: dict[str, str], private: object = None) -> Path:
+    """A case inside a real, committed git work tree."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    case = _case(repo, files, private)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    return case
+
+
+# --- gap tests: backslash, empty private dir, exit codes -----------------------------
+
+
+def test_a_backslash_entry_is_refused_even_when_such_a_file_exists(tmp_path):
+    case = _case(tmp_path, {**_FILES, "sub\\x": "odd"}, ["sub\\x"])
+    with pytest.raises(FixtureCopyError, match="relative POSIX"):
+        private_fixture_paths(case)
+
+
+def test_an_empty_ab_raws_directory_in_dest_is_a_leak(tmp_path):
+    case = _case(tmp_path, _FILES)
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "ab_raws").mkdir()
+    assert find_private_leaks(case, dest) == ["ab_raws"]
+
+
+def test_an_empty_directory_named_like_a_private_directory_is_a_leak(tmp_path):
+    case = _case(tmp_path, _FILES, ["sub"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "sub").mkdir()
+    assert find_private_leaks(case, dest) == ["sub"]
+
+
+def test_cli_exit_codes_are_0_clean_1_leak_2_error(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    clean = tmp_path / "clean"
+    copy_fixture(case, clean)
+    assert _run("--check", str(case), str(clean)).returncode == 0
+    (clean / "defects.json").write_text("x", encoding="utf-8")
+    assert _run("--check", str(case), str(clean)).returncode == 1
+    assert _run("--check", str(case), str(tmp_path / "missing")).returncode == 2
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    assert _run(str(case), str(existing)).returncode == 2
+
+
+# --- S1: spelling and normalization ---------------------------------------------------
+
+
+def test_a_declaration_spelled_differently_from_the_disk_is_refused_naming_both(tmp_path):
+    case = _case(tmp_path, _FILES, ["Defects.json"])
+    with pytest.raises(FixtureCopyError) as err:
+        private_fixture_paths(case)
+    message = str(err.value)
+    assert "X" in message and "Defects.json" in message and "defects.json" in message and "spell" in message
+
+
+def test_a_declaration_in_another_unicode_normalization_is_refused(tmp_path):
+    on_disk = unicodedata.normalize("NFC", "café.json")
+    declared = unicodedata.normalize("NFD", on_disk)
+    assert on_disk != declared
+    case = _case(tmp_path, {"diff.patch": "d", on_disk: "KEY"}, [declared])
+    with pytest.raises(FixtureCopyError, match="spell"):
+        private_fixture_paths(case)
+
+
+def test_a_wrongly_spelled_component_deeper_in_the_path_is_refused(tmp_path):
+    case = _case(tmp_path, _FILES, ["Sub/notes.md"])
+    with pytest.raises(FixtureCopyError, match="spell"):
+        private_fixture_paths(case)
+
+
+def test_a_dest_file_in_another_case_is_a_leak(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "DEFECTS.JSON").write_text("different bytes", encoding="utf-8")
+    assert find_private_leaks(case, dest) == ["DEFECTS.JSON"]
+
+
+def test_a_dest_file_in_another_unicode_normalization_is_a_leak(tmp_path):
+    nfc = unicodedata.normalize("NFC", "café.json")
+    nfd = unicodedata.normalize("NFD", nfc)
+    case = _case(tmp_path, {"diff.patch": "d", nfc: "KEY"}, [nfc])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / nfd).write_text("different bytes", encoding="utf-8")
+    assert find_private_leaks(case, dest) == [nfd]
+
+
+# --- S2: content and symlinks ---------------------------------------------------------
+
+
+def test_a_byte_identical_copy_under_another_name_is_a_leak(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "notes").mkdir()
+    (dest / "notes" / "totally-innocent.txt").write_bytes((case / "fixture" / "defects.json").read_bytes())
+    assert find_private_leaks(case, dest) == ["notes/totally-innocent.txt"]
+
+
+def test_a_symlink_to_an_identical_copy_elsewhere_is_a_leak_through_its_content(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    elsewhere = tmp_path / "elsewhere.txt"
+    elsewhere.write_bytes((case / "fixture" / "defects.json").read_bytes())
+    (dest / "alias").symlink_to(elsewhere)
+    assert "alias" in find_private_leaks(case, dest)
+
+
+def test_a_symlink_into_fixture_is_a_leak_even_to_a_non_private_file(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "back").symlink_to(case / "fixture" / "spec.md")
+    assert find_private_leaks(case, dest) == ["back"]
+
+
+def test_a_symlink_to_an_unrelated_file_is_not_a_leak(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    other = tmp_path / "other.txt"
+    other.write_text("unrelated", encoding="utf-8")
+    (dest / "ok").symlink_to(other)
+    assert find_private_leaks(case, dest) == []
+
+
+def test_an_empty_private_file_does_not_flag_every_empty_file(tmp_path):
+    case = _case(tmp_path, {"diff.patch": "d", "empty.key": ""}, ["empty.key"])
+    dest = tmp_path / "dest"
+    copy_fixture(case, dest)
+    (dest / "__init__.py").write_text("", encoding="utf-8")
+    assert find_private_leaks(case, dest) == []
+
+
+# --- S3: dest inside fixture, builder cases, non-cases ---------------------------------
+
+
+def test_a_dest_inside_the_fixture_is_refused_and_nothing_is_written(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    dest = case / "fixture" / "inner"
+    with pytest.raises(FixtureCopyError, match="inside"):
+        copy_fixture(case, dest)
+    assert not os.path.lexists(dest)
+
+
+def test_a_dest_reached_through_a_symlink_into_the_fixture_is_refused(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    (tmp_path / "alias").symlink_to(case / "fixture")
+    with pytest.raises(FixtureCopyError, match="inside"):
+        copy_fixture(case, tmp_path / "alias" / "inner")
+
+
+def test_a_case_with_a_builder_key_is_refused_with_the_builder_command(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"], toml_extra='builder = "x.py"\n')
+    with pytest.raises(FixtureCopyError, match=r"python <builder> <dest>"):
+        copy_fixture(case, tmp_path / "dest")
+    assert not (tmp_path / "dest").exists()
+
+
+def test_a_case_with_a_local_build_fixture_script_is_refused(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    (case / "build_fixture.py").write_text("", encoding="utf-8")
+    with pytest.raises(FixtureCopyError, match="builder"):
+        copy_fixture(case, tmp_path / "dest")
+
+
+def test_has_builder_agrees_with_calibration_on_every_committed_case():
+    from evals._harness.calibration import _load_case_toml, _resolve_builder
+
+    cases = sorted(p.parent for p in (_REPO_ROOT / "evals").glob("*/*/case.toml") if not p.parts[-3].startswith("_"))
+    assert cases
+    for case in cases:
+        expected = _resolve_builder(case, _REPO_ROOT, _load_case_toml(case)) is not None
+        assert has_builder(case) is expected, case
+
+
+def test_a_directory_without_case_toml_is_not_a_case_not_a_missing_fixture(tmp_path):
+    not_a_case = tmp_path / "plain"
+    (not_a_case / "fixture").mkdir(parents=True)
+    with pytest.raises(FixtureCopyError, match="is not a case"):
+        copy_fixture(not_a_case, tmp_path / "dest")
+    with pytest.raises(FixtureCopyError, match="is not a case"):
+        private_fixture_paths(not_a_case)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(FixtureCopyError, match="is not a case"):
+        copy_fixture(empty, tmp_path / "dest2")
+
+
+# --- S4: the copy must describe what fixture_fingerprint hashed ------------------------
+
+
+def test_outside_a_git_work_tree_there_is_nothing_to_compare_and_the_copy_proceeds(tmp_path):
+    case = _case(tmp_path, _FILES, ["defects.json"])
+    assert fixture_dirty_paths(case) is None
+    assert copy_fixture(case, tmp_path / "dest") == ["diff.patch", "spec.md", "sub/notes.md"]
+
+
+def test_a_committed_clean_fixture_in_a_git_work_tree_copies(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    assert fixture_dirty_paths(case) == []
+    assert copy_fixture(case, tmp_path / "dest") == ["diff.patch", "spec.md", "sub/notes.md"]
+
+
+def test_an_untracked_file_in_the_fixture_is_refused_naming_it(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (case / "fixture" / "defects.json.bak").write_text("KEY", encoding="utf-8")
+    with pytest.raises(FixtureCopyError, match=r"defects\.json\.bak"):
+        copy_fixture(case, tmp_path / "dest")
+    assert not (tmp_path / "dest").exists()
+
+
+def test_a_locally_modified_tracked_file_is_refused_naming_it(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (case / "fixture" / "spec.md").write_text("edited", encoding="utf-8")
+    with pytest.raises(FixtureCopyError, match=r"spec\.md"):
+        copy_fixture(case, tmp_path / "dest")
+
+
+def test_a_staged_but_uncommitted_file_is_refused(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (case / "fixture" / "new.md").write_text("n", encoding="utf-8")
+    _git(case, "add", "fixture/new.md")
+    with pytest.raises(FixtureCopyError, match=r"new\.md"):
+        copy_fixture(case, tmp_path / "dest")
+
+
+def test_an_ignored_file_present_in_the_fixture_is_refused(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (tmp_path / "repo" / ".gitignore").write_text("*.cache\n", encoding="utf-8")
+    (case / "fixture" / "stale.cache").write_text("c", encoding="utf-8")
+    with pytest.raises(FixtureCopyError, match=r"stale\.cache"):
+        copy_fixture(case, tmp_path / "dest")
+
+
+def test_changes_outside_the_fixture_do_not_block_the_copy(tmp_path):
+    case = _repo_case(tmp_path, _FILES, ["defects.json"])
+    (case / "prompt.md").write_text("edited prompt", encoding="utf-8")
+    assert copy_fixture(case, tmp_path / "dest")

@@ -114,13 +114,15 @@ def test_skill_documents_fixture_preparation():
     assert re.search(r"Before the fixture's \*first\* attempt", section)
     assert "cases[].fixture_fingerprint" in section
     # The committed-fixture copy goes through fixture_copy, which omits `fixture_private` files (#1130).
-    assert "A case with only a committed `fixture/` tree: run `python -m evals._harness.fixture_copy <case_dir> <dest>`" in section
+    assert "A case with only a committed `fixture/` tree: from the repo root, run `python -m evals._harness.fixture_copy <case_dir> <dest>`" in section
     assert "without the files the case lists under `fixture_private` in `case.toml`" in section
+    assert "It refuses a builder case and a `fixture/` with uncommitted changes" in section
     assert "Never copy `fixture/` by hand" in section
     assert "a whole-tree copy hands the answer key to every dispatched agent" in section
     assert re.search(
         r"Before dispatching, run `python -m evals\._harness\.fixture_copy --check <case_dir> <dest>`; "
-        r"it fails if `<dest>` holds a private file",
+        r"it exits 1 if `<dest>` holds a private file, a byte-identical copy of one under another name, "
+        r"`acceptance.md` or `ab_raws`, and 2 on any error",
         section,
     )
 
