@@ -46,12 +46,12 @@ outside the checkout root fails with `No module named 'evals'`.
   scorers read `evidence.findings`; every other case is never a parse-error
   miss on a prose reply); optional `invoke_skill = true` (explicit
   invocation: the skill arm's prompt starts with `Use the workbench:<skill>
-  skill for this task.` and a blank line; the no-skill arm never carries it;
+skill for this task.` and a blank line; the no-skill arm never carries it;
   refused on a case with a `triggering` item, which it would hand its answer;
   default off, so every other case's prompt is unchanged); one or more
   `[[items]]` tables, each with `id`
   (unique within the skill), `kind = "gate-candidate" | "trend" |
-  "triggering"`, `scorer = "<function in predicates.py>"`, and an optional
+"triggering"`, `scorer = "<function in predicates.py>"`, and an optional
   `params` table.
 - `prompt.md`: the story sent to the case-agent (or to each lens agent).
 - `acceptance.md`: private acceptance criteria. Scorer-only; never sent to
@@ -76,16 +76,22 @@ listing every entry. For each fixture:
 1. Read `case.toml` to find its dispatch mode (`subagent` or `inline`) and
    its fixture source.
 2. Prepare a fresh, **not-yet-existing** temporary `<dest>` directory:
-   - A case with only a committed `fixture/` tree: copy `fixture/` into
-     `<dest>`.
+   - A case with only a committed `fixture/` tree: run
+     `python -m evals._harness.fixture_copy <case_dir> <dest>`, which copies
+     `fixture/` into `<dest>` without the files the case lists under
+     `fixture_private` in `case.toml` (an answer key, such as A2's
+     `defects.json`). Never copy `fixture/` by hand: a whole-tree copy hands
+     the answer key to every dispatched agent. Before dispatching, run
+     `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it
+     fails if `<dest>` holds a private file.
    - A case with a builder (a case-local `build_fixture.py`, or a `builder =
-     "<repo-relative path>"` key in `case.toml`): run
+"<repo-relative path>"` key in `case.toml`): run
      `python <builder> <dest>` into the not-yet-existing `<dest>` (the
      builder reads the case's `fixture/` itself when both are present). When
      a case has both a `builder` key and a case-local `build_fixture.py`, the
      `builder` key wins over a case-local `build_fixture.py`
      (`calibration.fixture_fingerprint` resolves them the same way).
-3. Before the fixture's *first* attempt, fingerprint it with
+3. Before the fixture's _first_ attempt, fingerprint it with
    `evals._harness.calibration.fixture_fingerprint(case_dir)`, and record the
    result as the run file's `cases[].fixture_fingerprint`.
 
@@ -172,7 +178,7 @@ loop is driven by
 stated here exactly as #991 implements it: counted_attempts counts only
 non-indeterminate (non-harness-breakage) attempts, and `reserve_used` counts
 how many of the fixture's indeterminate reserve of 2 have been drawn;
-`item_states` maps each *gated* item id to whether any counted attempt has hit
+`item_states` maps each _gated_ item id to whether any counted attempt has hit
 it so far. An
 indeterminate attempt — harness breakage: a dispatch error, a missing or
 truncated transcript, or an API-error transcript entry — never increments
@@ -225,8 +231,8 @@ Build one `run` dict for the whole run, then write it. Its shape is the one
   `"red"`, or `"void"`.
 - `run["fingerprint"]` is
   `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,
-  injection_paths=..., plugin_version=..., claude_code_version=...,
-  run_date=...)`, where `direct_paths` and `injection_paths` are the
+injection_paths=..., plugin_version=..., claude_code_version=...,
+run_date=...)`, where `direct_paths` and `injection_paths` are the
   `"direct"` and `"injection"` lists that
   `evals._harness.deps.parse_deps(<text of evals/<skill>/deps>)` returns,
   `plugin_version` is the `version` in
@@ -276,7 +282,7 @@ indeterminate attempt, replaced from the reserve, then one counted attempt;
         {
           "attempt": 1,
           "classification": "indeterminate",
-          "items": {"item-a": "indeterminate", "item-t": "indeterminate"},
+          "items": { "item-a": "indeterminate", "item-t": "indeterminate" },
           "parse_error": false,
           "unmatched_findings": 0,
           "reserve_used": 1,
@@ -285,7 +291,7 @@ indeterminate attempt, replaced from the reserve, then one counted attempt;
         {
           "attempt": 2,
           "classification": "counted",
-          "items": {"item-a": "hit", "item-t": "miss"},
+          "items": { "item-a": "hit", "item-t": "miss" },
           "parse_error": false,
           "unmatched_findings": 2,
           "reserve_used": 1,
@@ -327,16 +333,16 @@ inside this skill.
 
 ## Harness entry points, by module and function
 
-| Entry point | Owner | What it does |
-| --- | --- | --- |
-| `dispatch.snapshot_end_state` | #995 | Snapshots an attempt's end-state evidence before scoring. |
-| `dispatch.score_attempt` | #995 | Parses transcripts, scores every item, returns an `Attempt` plus the unmatched-finding count. |
-| `scorer.classify_attempt` | #991 | Classifies one attempt (`score_attempt` calls it). |
-| `scorer.should_retry` | #991 | Decides whether to run another attempt (the retry loop in step 5). |
-| `scorer.compute_verdict` | #991 | Reduces a fixture's accumulated item outcomes to green/red/void. |
-| `calibration.fixture_fingerprint` | #994 | Fingerprints a case's fixture before its first attempt. |
-| `ledger.write_run` | #993 | Writes the run file and every attempt's raws. |
-| `report.write_report` | #993 | Writes the red-run report. |
-| `activation.parse_checks_manifest` | harness | Parses `checks.manifest` text into the gated ids (step 2). |
-| `deps.parse_deps` | harness | Parses a skill's `deps` file into the direct and injection path lists (step 6). |
-| `fingerprint.compute_fingerprint` | harness | Builds `run["fingerprint"]` (step 6). |
+| Entry point                        | Owner   | What it does                                                                                  |
+| ---------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `dispatch.snapshot_end_state`      | #995    | Snapshots an attempt's end-state evidence before scoring.                                     |
+| `dispatch.score_attempt`           | #995    | Parses transcripts, scores every item, returns an `Attempt` plus the unmatched-finding count. |
+| `scorer.classify_attempt`          | #991    | Classifies one attempt (`score_attempt` calls it).                                            |
+| `scorer.should_retry`              | #991    | Decides whether to run another attempt (the retry loop in step 5).                            |
+| `scorer.compute_verdict`           | #991    | Reduces a fixture's accumulated item outcomes to green/red/void.                              |
+| `calibration.fixture_fingerprint`  | #994    | Fingerprints a case's fixture before its first attempt.                                       |
+| `ledger.write_run`                 | #993    | Writes the run file and every attempt's raws.                                                 |
+| `report.write_report`              | #993    | Writes the red-run report.                                                                    |
+| `activation.parse_checks_manifest` | harness | Parses `checks.manifest` text into the gated ids (step 2).                                    |
+| `deps.parse_deps`                  | harness | Parses a skill's `deps` file into the direct and injection path lists (step 6).               |
+| `fingerprint.compute_fingerprint`  | harness | Builds `run["fingerprint"]` (step 6).                                                         |

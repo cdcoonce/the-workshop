@@ -37,7 +37,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_documents_every_named_harness_entry_point: the table-scoped parse no longer finds report.write_report among the documented entry points.",
-      "find": "| `report.write_report` | #993 | Writes the red-run report. |",
+      "find": "| `report.write_report`              | #993    | Writes the red-run report.                                                                    |",
       "replace": ""
     },
     {
@@ -85,7 +85,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_assigns_lens_agent_dispatch_to_the_conductor_for_inline_mode: the conductor's lens-agent dispatch responsibility is gone from section 3.",
-      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself — it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
+      "find": "- `mode = \"inline\"` (adversarial-review's lens-mode `A2` fixture): run\n  inline. The conductor plays adversarial-review's own conductor role\n  itself \u2014 it does not dispatch a subagent that then dispatches lens\n  agents. It dispatches each lens agent directly, from the same running\n  conversation, giving each the prompt text\n  `evals._harness.dispatch.build_dispatch_prompt(case_dir)` returns, and\n  collects one transcript per lens agent.",
       "replace": "- `mode = \"inline\"`: skip"
     },
     {
@@ -101,7 +101,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_says_the_conductor_reads_the_manifest_and_the_scorer_never_does: the negation 'the scorer never reads it' is a required rule, not just a keyword.",
-      "find": "The conductor is the only reader of this file — the scorer\n(`evals._harness.scorer`) never reads it itself.",
+      "find": "The conductor is the only reader of this file \u2014 the scorer\n(`evals._harness.scorer`) never reads it itself.",
       "replace": "The scorer reads it itself."
     },
     {
@@ -111,6 +111,54 @@
       "why": "Killed by test_skill_documents_fixture_preparation.",
       "find": "Prepare a fresh, **not-yet-existing** temporary",
       "replace": "Prepare a pre-existing populated"
+    },
+    {
+      "label": "[FC1] the committed-fixture copy goes back to a bare whole-tree copy",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation: the fixture_copy command, the fixture_private clause and the never-by-hand rule all vanish.",
+      "find": "run\n     `python -m evals._harness.fixture_copy <case_dir> <dest>`, which copies\n     `fixture/` into `<dest>` without the files the case lists under\n     `fixture_private` in `case.toml` (an answer key, such as A2's\n     `defects.json`).",
+      "replace": "copy `fixture/` into\n     `<dest>`."
+    },
+    {
+      "label": "[FC2] copying fixture/ by hand is said to be fine",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the Never-copy-by-hand pin).",
+      "find": "Never copy `fixture/` by hand:",
+      "replace": "Copying `fixture/` by hand is fine:"
+    },
+    {
+      "label": "[FC3] the whole-tree-copy hazard is no longer stated",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the whole-tree-copy-hands-the-key pin).",
+      "find": "a whole-tree copy hands\n     the answer key to every dispatched agent.",
+      "replace": "a whole-tree copy is merely slower."
+    },
+    {
+      "label": "[FC4] the --check step is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check invocation pin).",
+      "find": "Before dispatching, run\n     `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it\n     fails if `<dest>` holds a private file.",
+      "replace": ""
+    },
+    {
+      "label": "[FC5] the --check step is said to only warn",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the fails-if-private-file pin).",
+      "find": "; it\n     fails if",
+      "replace": "; it\n     warns if"
+    },
+    {
+      "label": "[FC6] the private list is no longer said to live in case.toml's fixture_private",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the fixture_private pin).",
+      "find": "`fixture_private` in `case.toml`",
+      "replace": "`private` in `case.toml`"
     },
     {
       "label": "[K8] landing section dropped",
@@ -149,7 +197,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_says_the_fingerprint_comes_from_compute_fingerprint.",
-      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\n  injection_paths=..., plugin_version=..., claude_code_version=...,\n  run_date=...)`, where",
+      "find": "- `run[\"fingerprint\"]` is\n  `evals._harness.fingerprint.compute_fingerprint(direct_paths=...,\ninjection_paths=..., plugin_version=..., claude_code_version=...,\nrun_date=...)`, where",
       "replace": "- `run[\"fingerprint\"]` is built by hand, where"
     },
     {
@@ -245,7 +293,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_the_documented_item_states_rule_is_any_counted_attempt_hit.",
-      "find": "`item_states` maps each *gated* item id to whether any counted attempt has hit\nit so far.",
+      "find": "`item_states` maps each _gated_ item id to whether any counted attempt has hit\nit so far.",
       "replace": "`item_states` maps each item id to whether the latest attempt hit it."
     },
     {
