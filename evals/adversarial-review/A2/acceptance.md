@@ -42,9 +42,12 @@ from the skill's own files may reach it, or the baseline stops being a baseline.
 
 ## What the agents may see
 
-`fixture/` is copied whole by the conductor's default step, and it holds `defects.json`, the answer key (the spec places it there).
-The hand-run calibration (#989) should copy only diff.patch and spec.md into the agents' working directory, and never defects.json or ab_raws.
-The prompt names those two review files by path and nothing else, which is the only other thing keeping a lens agent off the key.
+`fixture/` holds `defects.json`, the answer key, and the case lists it under `fixture_private` in `case.toml`.
+The conductor's copy command, `python -m evals._harness.fixture_copy <case_dir> <dest>`, omits every `fixture_private` file, so the agents' directory gets `diff.patch` and `spec.md` and nothing else.
+`python -m evals._harness.fixture_copy --check <case_dir> <dest>` fails if that directory holds `defects.json`, an `acceptance.md` or an `ab_raws` entry; run it before dispatching.
+The key stays in `fixture/` because moving it would change the input hash and stale A2-D2's calibration record.
+A hand `cp -r` of `fixture/` still leaks the key, which is why SKILL.md forbids copying `fixture/` by hand.
+The prompt names those two review files by path and nothing else.
 
 ## Raws
 
