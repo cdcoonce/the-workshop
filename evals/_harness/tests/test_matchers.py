@@ -13,7 +13,7 @@ from evals._harness.matchers import (
     precedes,
     review_match,
     skill_triggered_first,
-    test_failed_before_first_source_edit as _test_failed_before_first_source_edit,
+    test_failed_before_first_source_write as _failed_before_first_source_write,
 )
 from evals._harness.transcript import ToolCallEvent, ToolResult, parse_transcript
 
@@ -135,62 +135,40 @@ def test_precedes_false_when_either_event_never_occurs():
     assert precedes(events2, _is_make_test, _is_git_add) is False
 
 
-# --- test_failed_before_first_source_edit -----------------------------------
+# --- the red-result marker read by test_failed_before_first_source_write -------
 
 
-def test_ordering_predicate_pass_when_failure_precedes_source_edit():
-    events = [
-        _event("Bash", {"command": "pytest"}, 0, content="FAILED tests/test_foo.py::test_x - boom"),
-        _event("Edit", {"file_path": "src/foo.py"}, 1),
-    ]
-    assert _test_failed_before_first_source_edit(events) is True
-
-
-def test_ordering_predicate_fail_when_edit_precedes_failure():
-    events = [
-        _event("Edit", {"file_path": "src/foo.py"}, 0),
-        _event("Bash", {"command": "pytest"}, 1, content="FAILED tests/test_foo.py::test_x - boom"),
-    ]
-    assert _test_failed_before_first_source_edit(events) is False
-
-
-def test_ordering_predicate_fail_when_no_failure_occurs():
-    events = [
-        _event("Edit", {"file_path": "src/foo.py"}, 0),
-        _event("Bash", {"command": "pytest"}, 1, content="1 passed"),
-    ]
-    assert _test_failed_before_first_source_edit(events) is False
-
-
-def test_ordering_predicate_ignores_edits_to_test_files():
-    # If the edit to tests/test_new.py (ordinal 0) wrongly counted as a source
-    # edit, the failure at ordinal 1 would no longer precede it and the
-    # predicate would flip to False — only the exclusion keeps it True.
-    events = [
+def _red_then_source(content: str, *, tool: str = "Bash") -> list[ToolCallEvent]:
+    # A test write (ordinal 0), the candidate red result (1), then a source write (2).
+    return [
         _event("Edit", {"file_path": "tests/test_new.py"}, 0),
-        _event("Bash", {"command": "pytest"}, 1, content="ERROR collecting tests/test_new.py"),
+        _event(tool, {"command": "pytest"} if tool == "Bash" else {"file_path": "log.txt"}, 1, content=content),
         _event("Edit", {"file_path": "src/foo.py"}, 2),
     ]
-    assert _test_failed_before_first_source_edit(events) is True
 
 
-def test_ordering_predicate_detects_error_during_collection_substring():
-    events = [
-        _event("Bash", {"command": "pytest"}, 0, content="noise\nerror during collection\nmore noise"),
-        _event("Edit", {"file_path": "src/foo.py"}, 1),
-    ]
-    assert _test_failed_before_first_source_edit(events) is True
+def test_a_failed_line_is_a_red_result():
+    assert _failed_before_first_source_write(_red_then_source("FAILED tests/test_new.py::test_x - boom")) is True
 
 
-def test_ordering_predicate_ignores_non_bash_tool_results_even_with_failure_text():
-    events = [
-        _event("Read", {"file_path": "log.txt"}, 0, content="FAILED tests/test_foo.py::test_x"),
-        _event("Edit", {"file_path": "src/foo.py"}, 1),
-    ]
-    assert _test_failed_before_first_source_edit(events) is False
+def test_an_error_line_is_a_red_result():
+    assert _failed_before_first_source_write(_red_then_source("ERROR collecting tests/test_new.py")) is True
 
 
-def test_ordering_predicate_malformed_transcript_is_truncated_not_a_verdict(tmp_path):
+def test_an_error_during_collection_substring_is_a_red_result():
+    assert _failed_before_first_source_write(_red_then_source("noise\nerror during collection\nmore noise")) is True
+
+
+def test_a_passing_run_is_not_a_red_result():
+    assert _failed_before_first_source_write(_red_then_source("1 passed")) is False
+
+
+def test_failure_text_in_a_non_bash_tool_result_is_not_a_red_result():
+    events = _red_then_source("FAILED tests/test_foo.py::test_x", tool="Read")
+    assert _failed_before_first_source_write(events) is False
+
+
+def test_a_malformed_transcript_is_truncated_not_a_verdict(tmp_path):
     path = tmp_path / "agent-transcript.jsonl"
     path.write_text(
         json.dumps({"type": "assistant", "message": {"model": "m1", "content": []}})

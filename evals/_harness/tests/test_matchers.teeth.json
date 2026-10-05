@@ -86,13 +86,6 @@
       "replace": "    if not first_ordinals or not then_ordinals:\n        pass"
     },
     {
-      "label": "test-file path exclusion disabled, so a test-file edit counts as a source edit",
-      "file": "../matchers.py",
-      "oracle": "real",
-      "find": "def _is_test_path(file_path: str) -> bool:\n    parts = file_path.split(\"/\")\n    name = parts[-1] if parts else file_path\n    if name == \"conftest.py\":\n        return True\n    if name.startswith(\"test_\") and name.endswith(\".py\"):\n        return True\n    if name.endswith(\"_test.py\"):\n        return True\n    return \"tests\" in parts",
-      "replace": "def _is_test_path(file_path: str) -> bool:\n    return False"
-    },
-    {
       "label": "test-failure detection no longer requires the Bash tool",
       "file": "../matchers.py",
       "oracle": "real",
@@ -158,6 +151,13 @@
       "why": "Pure docstring prose; nothing parses or asserts on it, so no test can observe the change.",
       "find": "    Trend count of findings that credit no item; never gates a verdict.",
       "replace": "    Trend count of findings that credit no item; informational only, never a gate."
+    },
+    {
+      "label": "[one rule] a second write-path classifier reappears next to classify_write_event (predicted red: test_the_legacy_path_classifier_chain_is_retired[_is_test_path])",
+      "file": "../matchers.py",
+      "oracle": "real",
+      "find": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\")",
+      "replace": "_EDIT_FAMILY = (\"Edit\", \"Write\", \"NotebookEdit\", \"MultiEdit\")\n\n\ndef _is_test_path(file_path: str) -> bool:\n    return \"tests\" in file_path.split(\"/\")"
     }
   ]
 }

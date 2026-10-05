@@ -203,11 +203,11 @@
       "replace": "            edited_since_red = False\n            waiting_for_green = True\n"
     },
     {
-      "label": "[T1 c1] the ordering conjunct reads the Edit/Write-only predicate, so Bash writes are invisible (predicted red: test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True], test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[skill_then_bash_test_first-True])",
+      "label": "[T1 c1] the ordering conjunct sees only Edit/Write-tool writes (each Bash call's command is blanked, its red result kept), so Bash writes are invisible (predicted red: test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True], test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[skill_then_bash_test_first-True])",
       "file": "predicates.py",
       "oracle": "real",
       "find": "    return _matchers.test_failed_before_first_source_write(evidence.transcripts[0].events)",
-      "replace": "    return _matchers.test_failed_before_first_source_edit(evidence.transcripts[0].events)"
+      "replace": "    events = evidence.transcripts[0].events\n    blind = [e.__class__(name=e.name, input={} if e.name == \"Bash\" else e.input, result=e.result, ordinal=e.ordinal, timestamp=e.timestamp) for e in events]\n    return _matchers.test_failed_before_first_source_write(blind)"
     },
     {
       "label": "[T1 c2] the src diff is replaced by the edit-tool record, so a change made through Bash is not seen (predicted red: test_t1_reads_the_src_diff_not_the_edit_tool_record, test_t1_reads_bash_writes_when_the_end_state_conjuncts_hold[bash_test_first-True])",

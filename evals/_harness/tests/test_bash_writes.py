@@ -4,8 +4,7 @@
 indicator at all; a call with a write indicator is ``tests`` only when it literally names a tests
 path and ``src`` appears nowhere in it as a path-ish token, and ``source`` otherwise. A write the
 reader cannot place is therefore a source write, which can only cost a T1 hit, never credit one.
-``test_failed_before_first_source_write`` is the ordering predicate built on it, and the old
-Edit/Write-only ``test_failed_before_first_source_edit`` keeps its meaning for every other caller.
+``test_failed_before_first_source_write`` is the ordering predicate built on it.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from evals._harness.matchers import (
     bash_write_offset,
     classify_bash_command,
     classify_write_event,
-    test_failed_before_first_source_edit as _failed_before_first_source_edit,
     test_failed_before_first_source_write as _failed_before_first_source_write,
 )
 from evals._harness.transcript import ToolCallEvent, ToolResult
@@ -541,17 +539,13 @@ def test_there_must_be_both_a_red_run_and_a_source_write():
     assert _failed_before_first_source_write([]) is False
 
 
-def test_the_old_edit_only_predicate_does_not_see_bash_writes_or_multiedit():
-    # Other callers keep the Edit/Write-only meaning: the Bash source write at ordinal 0 is invisible to it.
+def test_a_bash_source_write_before_the_red_result_is_not_credited_even_with_a_later_edit():
     events = [
         _bash(PYTHON_REWRITE, 0),
         _bash("uv run pytest -q", 1, RED),
         _event("Edit", {"file_path": "src/shop/cart.py"}, 2),
     ]
-    assert _failed_before_first_source_edit(events) is True
     assert _failed_before_first_source_write(events) is False
-    multi = [_bash("uv run pytest -q", 0, RED), _event("MultiEdit", {"file_path": "src/x.py"}, 1)]
-    assert _failed_before_first_source_edit(multi) is False
 
 
 # --------------------------------------------------------------------------- bounded time

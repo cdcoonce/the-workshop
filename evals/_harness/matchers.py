@@ -22,10 +22,6 @@ Public contract
     has an ordinal strictly below the first event satisfying ``then``.
     Hard-codes no event kind.
 
-``test_failed_before_first_source_edit(events) -> bool``
-    Ordering predicate instance: a test failed before the first source-file
-    edit.
-
 ``classify_bash_command(command) -> "none" | "tests" | "source"``
     Allow-list reading of a Bash command (see ``bash_classify``): ``none`` only
     when every simple command is a known read-only program with no file redirect;
@@ -42,10 +38,8 @@ Public contract
     ``Edit``/``Write``/``NotebookEdit``/``MultiEdit`` event.
 
 ``test_failed_before_first_source_write(events) -> bool``
-    The ordering predicate of ``test_failed_before_first_source_edit`` built on
-    those classifications: a red result written for by a test write at or before
-    it, strictly before the first source write. The old predicate keeps its
-    Edit/Write-only meaning.
+    Ordering predicate built on those classifications: a red result written for
+    by a test write at or before it, strictly before the first source write.
 
 ``skill_triggered_first(transcript, skill) -> bool``
     Triggering predicate: the rostered skill's ``Skill`` call precedes every
@@ -63,7 +57,6 @@ from evals._harness.bash_classify import BASH_COMMAND_CAP, bash_write_offset, cl
 from evals._harness.transcript import ToolCallEvent, Transcript
 
 _FENCED_JSON = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
-_SOURCE_EDIT_TOOLS = ("Edit", "Write", "NotebookEdit")
 _TRIGGERING_EXEMPT_TOOLS = ("Skill", "ToolSearch")
 
 
@@ -208,25 +201,6 @@ def precedes(
     return min(first_ordinals) < min(then_ordinals)
 
 
-def _is_test_path(file_path: str) -> bool:
-    parts = file_path.split("/")
-    name = parts[-1] if parts else file_path
-    if name == "conftest.py":
-        return True
-    if name.startswith("test_") and name.endswith(".py"):
-        return True
-    if name.endswith("_test.py"):
-        return True
-    return "tests" in parts
-
-
-def _is_source_edit(event: ToolCallEvent) -> bool:
-    if event.name not in _SOURCE_EDIT_TOOLS:
-        return False
-    file_path = event.input.get("file_path", "") if isinstance(event.input, dict) else ""
-    return not _is_test_path(str(file_path))
-
-
 def _result_text(event: ToolCallEvent) -> str:
     if event.result is None:
         return ""
@@ -251,32 +225,6 @@ def _is_test_failure(event: ToolCallEvent) -> bool:
     if "error during collection" in text:
         return True
     return any(line.startswith("FAILED ") or line.startswith("ERROR ") for line in text.splitlines())
-
-
-def test_failed_before_first_source_edit(events: list[ToolCallEvent]) -> bool:
-    """Ordering predicate: a new/changed test failed before the first source edit.
-
-    A source-edit event is an ``Edit``/``Write``/``NotebookEdit`` call whose
-    ``input.file_path`` is not a test-file path (``test_*.py``, ``*_test.py``,
-    ``conftest.py``, or any path with a ``tests/`` segment). A test-failure
-    event is a ``Bash`` call whose matched result content contains a pytest
-    failure marker (a line starting ``FAILED `` or ``ERROR ``, or the
-    substring ``error during collection``).
-
-    Parameters
-    ----------
-    events : list[ToolCallEvent]
-        The transcript's tool-call events.
-
-    Returns
-    -------
-    bool
-        ``True`` only when a test-failure event's ordinal is strictly below
-        the first source-edit event's ordinal. ``False`` (not indeterminate)
-        when either kind never occurs — indeterminate is reserved for
-        harness breakage, decided by the caller from ``Transcript.status``.
-    """
-    return precedes(events, _is_test_failure, _is_source_edit)
 
 
 # ---------------------------------------------------------------- write classification
@@ -349,7 +297,8 @@ def test_failed_before_first_source_write(events: list[ToolCallEvent]) -> bool:
 
     A source write is an event ``classify_write_event`` calls ``source``; a test
     write is one it calls ``tests``. A credited red result is a ``Bash`` event with a
-    pytest failure marker (as in ``test_failed_before_first_source_edit``) such that
+    pytest failure marker (a line starting ``FAILED `` or ``ERROR ``, or the substring
+    ``error during collection``) such that
     some test write sits at an ordinal at or below it (the same call is allowed: the
     agent appends the test and runs pytest in one Bash call) and its ordinal is
     strictly below the first source write's. A Bash call that writes the source and
