@@ -99,6 +99,9 @@ LEDGER_FILES = frozenset(
     }
 )
 HANDOFF_PREFIX = ".brain/handoff-"
+# A rolling digest is `handoff-<context>.md`; a dotted stem (`handoff-personal.prev.md`)
+# is a backup or variant, never a digest the replay or lint should touch.
+_HANDOFF_NAME_RE = re.compile(r"^handoff-[A-Za-z0-9_-]+\.md$")
 HEALTH_SCRIPT = "ci/vault_health.py"
 HEALTH_CMD_DEFAULT = "uv run --script ci/vault_health.py"
 HEALTH_TIMEOUT_SECONDS = 300
@@ -326,10 +329,8 @@ def is_allowlisted(path: str) -> bool:
     """True when ``path`` is one of the replayable hub files (issue #893)."""
     if path in LEDGER_FILES:
         return True
-    return (
-        path.startswith(HANDOFF_PREFIX)
-        and path.endswith(".md")
-        and "/" not in path[len(".brain/"):]
+    return path.startswith(HANDOFF_PREFIX) and bool(
+        _HANDOFF_NAME_RE.match(path[len(".brain/"):])
     )
 
 
@@ -1445,8 +1446,7 @@ def replay(base: str, remote: str, health_cmd: str | None) -> Report:
 
 
 def _is_handoff_path(path: str) -> bool:
-    name = Path(path).name
-    return name.startswith("handoff-") and name.endswith(".md")
+    return bool(_HANDOFF_NAME_RE.match(Path(path).name))
 
 
 def _lint_ledger(text: str, path: str) -> list[str]:
@@ -1486,7 +1486,9 @@ def _default_lint_paths() -> list[str]:
     paths = sorted(LEDGER_FILES)
     brain = Path(".brain")
     if brain.is_dir():
-        paths.extend(sorted(str(p) for p in brain.glob("handoff-*.md")))
+        paths.extend(
+            sorted(str(p) for p in brain.glob("handoff-*.md") if _HANDOFF_NAME_RE.match(p.name))
+        )
     return paths
 
 

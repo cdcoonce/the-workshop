@@ -1394,6 +1394,10 @@ def test_is_allowlisted() -> None:
     assert not is_allowlisted("brain/Memories.md")
     assert not is_allowlisted(".brain/handoffs.md")
     assert not is_allowlisted(".brain/deep/handoff-personal.md")
+    # Only the rolling digests: a dotted stem is a backup or variant, not a digest
+    # (the vault tracks a stale `.brain/handoff-personal.prev.md` with no frontmatter).
+    assert not is_allowlisted(".brain/handoff-personal.prev.md")
+    assert not is_allowlisted(".brain/handoff-.md")
     assert not is_allowlisted("personal/projects/proj-a.md")
 
 
@@ -2109,6 +2113,14 @@ def test_lint_clean_default_set_exits_zero(tmp_path: Path) -> None:
     _write(tmp_path, ".brain/handoff-work.md", HANDOFF_SEED)
     result = _lint(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_lint_default_set_skips_handoff_backups(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    _write(tmp_path, ".brain/handoff-personal.prev.md", "# stale backup, no frontmatter\n")
+    result = _lint(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "prev.md" not in result.stdout
 
 
 def test_lint_needs_no_git_and_skips_missing_files(tmp_path: Path) -> None:
