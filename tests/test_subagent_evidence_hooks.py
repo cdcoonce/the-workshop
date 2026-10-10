@@ -475,3 +475,37 @@ def test_signature_hashes_a_large_file_without_reading_it_whole(
     monkeypatch.setattr(Path, "read_bytes", _no_whole_file_read)
 
     assert working_tree_signature(tmp_path) == expected
+
+
+def test_run_git_returns_stripped_stdout_and_none_on_failure(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+
+    assert _git_baseline._run_git(["rev-parse", "--is-inside-work-tree"], tmp_path) == "true"
+    assert _git_baseline._run_git(["rev-parse", "--no-such-flag-xyz"], tmp_path) is None
+    assert _git_baseline._run_git(["rev-parse", "HEAD"], tmp_path / "missing-dir") is None
+
+
+def test_run_git_returns_none_on_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="git", timeout=10)
+
+    monkeypatch.setattr(_git_baseline.subprocess, "run", _boom)
+
+    assert _git_baseline._run_git(["rev-parse", "HEAD"], tmp_path) is None
+
+
+def test_git_dir_and_head_sha_go_through_run_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def _spy(args: list[str], cwd: Path, timeout: int = 10) -> str | None:
+        calls.append(list(args))
+        return "/somewhere" if "--absolute-git-dir" in args else "abc123"
+
+    monkeypatch.setattr(_git_baseline, "_run_git", _spy)
+
+    assert _git_baseline.git_dir(tmp_path) == Path("/somewhere")
+    assert _git_baseline.head_sha(tmp_path) == "abc123"
+    assert ["rev-parse", "--absolute-git-dir"] in calls
+    assert ["rev-parse", "HEAD"] in calls
