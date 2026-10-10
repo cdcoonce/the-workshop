@@ -238,3 +238,62 @@ class TestSidechainSkipped:
         )
         assert result.returncode == 0
         assert result.stdout == ""
+
+
+class TestRearmOnContextCollapse:
+    """The marker is per large-context episode: /clear or compaction re-arms it."""
+
+    def _fire(self, tmp_path: Path, markers: Path, tokens: int, name: str):
+        transcript = _transcript(tmp_path, _assistant_line(2, tokens, 0), name=name)
+        return run(
+            {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
+        )
+
+    def _marker(self, markers: Path) -> Path:
+        import hashlib
+
+        key = hashlib.sha1(b"s1").hexdigest()
+        return markers / "workshop-handoff-gate" / key
+
+    def test_clear_shaped_scenario_warns_again_after_collapse_and_regrowth(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        assert self._fire(tmp_path, markers, 305_000, "a.jsonl").stdout != ""
+        # /clear: same session_id, context collapses below the re-arm floor.
+        assert self._fire(tmp_path, markers, 10_000, "b.jsonl").stdout == ""
+        # Regrows past the threshold: second warning.
+        again = self._fire(tmp_path, markers, 305_000, "c.jsonl")
+        assert again.returncode == 0
+        assert "/wrap-up" in json.loads(again.stdout)["hookSpecificOutput"][
+            "additionalContext"
+        ]
+
+    def test_still_high_context_stays_suppressed_without_a_drop(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        assert self._fire(tmp_path, markers, 305_000, "a.jsonl").stdout != ""
+        # Above the re-arm floor (threshold // 2) but never collapsed.
+        assert self._fire(tmp_path, markers, 200_000, "b.jsonl").stdout == ""
+        assert self._fire(tmp_path, markers, 320_000, "c.jsonl").stdout == ""
+
+    def test_marker_records_the_measured_token_count(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        self._fire(tmp_path, markers, 305_000, "a.jsonl")
+        assert self._marker(markers).read_text(encoding="utf-8").strip() == "305002"
+
+    @pytest.mark.parametrize("content", ["", "garbage \x00 not a number"])
+    def test_legacy_or_malformed_marker_suppresses_until_a_drop(
+        self, tmp_path: Path, markers: Path, content: str
+    ) -> None:
+        marker = self._marker(markers)
+        marker.parent.mkdir(parents=True)
+        marker.write_text(content, encoding="utf-8")
+
+        high = self._fire(tmp_path, markers, 320_000, "a.jsonl")
+        assert high.returncode == 0
+        assert high.stdout == ""
+        assert "Traceback" not in high.stderr
+
+        assert self._fire(tmp_path, markers, 10_000, "b.jsonl").stdout == ""
+        assert self._fire(tmp_path, markers, 305_000, "c.jsonl").stdout != ""
