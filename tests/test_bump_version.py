@@ -275,3 +275,47 @@ class TestMakefileWiring:
         assert recipe
         steps = [line.strip() for line in recipe.group(1).splitlines()]
         assert steps[:2] == ["$(MAKE) lint", "$(MAKE) verify-versions"]
+
+
+class TestGitUnavailable:
+    """git missing from PATH is an OSError, not a nonzero exit."""
+
+    @pytest.fixture
+    def no_git(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def missing(*args: object, **kwargs: object) -> None:
+            raise FileNotFoundError(2, "No such file or directory", "git")
+
+        monkeypatch.setattr(subprocess, "run", missing)
+
+    def test_run_git_converts_oserror_to_giterror(
+        self, no_git: None, tmp_path: Path
+    ) -> None:
+        with pytest.raises(check_version_bumps.GitError, match="git"):
+            check_version_bumps.run_git(tmp_path, "status")
+
+    def test_bump_cli_exits_one_with_a_message_not_a_traceback(
+        self,
+        no_git: None,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        plugin = tmp_path / "plugins" / "advisor" / ".claude-plugin"
+        plugin.mkdir(parents=True)
+        (plugin / "plugin.json").write_text(
+            json.dumps({"name": "advisor", "version": "0.1.0"}), encoding="utf-8"
+        )
+
+        code = bump_version.main(["advisor", "--repo", str(tmp_path), "--base", "main"])
+
+        assert code == 1
+        err = capsys.readouterr().err
+        assert err.startswith("ERROR:")
+        assert "git" in err
+
+    def test_gate_cli_exits_one_with_a_message_not_a_traceback(
+        self, no_git: None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code = check_version_bumps.main(["--repo", str(tmp_path), "--base", "main"])
+
+        assert code == 1
+        assert capsys.readouterr().err.startswith("ERROR:")
