@@ -39,7 +39,7 @@ path. The reviewer:
 - Anchors each intent into a committed `tests/teeth/<branch-slug>.teeth.json`
   row (`label`, `file`, `oracle`, `find`, `replace`); keeps the control as
   `"expect": "survived"` with `why`. Never edits source by hand to mutate it.
-- Runs `teeth_check.py` once, full. A red baseline stops the review.
+- Runs `teeth_check.py` once, full. A red baseline or an ambiguous anchor stops the review.
 - Runs the spec-deviation probe: each `Deviations` item against the spec, plus
   two untrusted or edge inputs the spec implies and no test names.
 - Posts **one PR comment**: the ledger with columns
@@ -64,10 +64,11 @@ its own PR comment, gate green, empty `git status`.
 ## Step 4 — land (conductor)
 
 ```bash
-uv run python scripts/pr_land.py land <pr> --method squash --gate "<gate>" --gate-evidence passed --require <check>
+python3 "<github-pr-land skill dir>/scripts/pr_land.py" land <pr> --method squash --gate "<gate>" --gate-evidence passed --require <check>
 ```
 
 Then `git worktree remove` the builder's tree and prune.
+`<github-pr-land skill dir>` is the absolute path its loader announces.
 
 ## Slots
 
