@@ -51,6 +51,34 @@
       "oracle": "real",
       "find": "    if any(marker in text for marker in _OWNERSHIP_MARKERS):\n        return\n    relative",
       "replace": "    if GENERATED_MARKER in text:\n        return\n    relative"
+    },
+    {
+      "label": "#733 run-hook gate checks hooks/ instead of hooks/scripts/",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "(plugin_dir / \"hooks\" / \"scripts\").is_dir()",
+      "replace": "(plugin_dir / \"hooks\").is_dir()"
+    },
+    {
+      "label": "#740 cutover-path exemption re-added",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite",
+      "replace": "    relative = path.relative_to(root).as_posix()\n    if relative in {\".claude-plugin/marketplace.json\", \".agents/plugins/marketplace.json\", \"plugins/workbench/hooks/hooks.json\"}:\n        return\n    raise StampError(\n        f\"Refusing to overwrite"
+    },
+    {
+      "label": "#740 predecessor-marker exemption re-added",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite",
+      "replace": "    if any(m in text for m in (\"scripts/build_docs.py\", \"scripts/build_marketplace.py\")):\n        return\n    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite"
+    },
+    {
+      "label": "#726 empty dir counted as debris (bool(files) dropped)",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "return bool(files) and all(",
+      "replace": "return all("
     }
   ]
 }

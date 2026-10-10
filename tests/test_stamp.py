@@ -632,3 +632,45 @@ def test_every_real_generated_marker_is_accepted(flat_repo: Path, text: str):
     target.write_text(text)
 
     stamp._guard_overwrite(flat_repo, target)
+
+
+def test_an_advisor_with_an_empty_hooks_dir_gets_no_run_hook(
+    flat_repo: Path, make_plugin
+):
+    """A hooks/ dir without hooks/scripts/ leaves the runner with no caller (#733)."""
+    make_plugin(flat_repo, "workbench", hooks=True)
+    make_plugin(flat_repo, "advisor-thing", skills=["advisor-skill"])
+    hooks = flat_repo / "plugins/advisor-thing/hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / "NOTES.txt").write_text("stray, not a script\n")
+
+    stamp.stamp(flat_repo)
+
+    assert not (hooks / "run-hook.sh").exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "{}\n",
+        '{"note": "hand-written; once built by scripts/build_docs.py"}\n',
+    ],
+)
+def test_a_hand_written_file_at_a_formerly_adopted_path_is_refused(
+    flat_repo: Path, body: str
+):
+    """The one-time cutover exemptions are gone; no path is adopted on sight (#740)."""
+    victim = flat_repo / ".claude-plugin" / "marketplace.json"
+    victim.parent.mkdir(parents=True, exist_ok=True)
+    victim.write_text(body)
+
+    with pytest.raises(stamp.StampError):
+        stamp._guard_overwrite(flat_repo, victim)
+
+
+def test_an_empty_skill_dir_is_not_leftover_debris(tmp_path: Path):
+    """git never creates an empty dir on checkout, so an empty one is hand-made (#726)."""
+    skill = tmp_path / "skills" / "hollow"
+    skill.mkdir(parents=True)
+
+    assert not stamp.is_leftover_artifact_dir(skill)
