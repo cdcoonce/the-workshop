@@ -22,6 +22,7 @@ Checks:
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -398,10 +399,36 @@ _MACHINERY_EXTERNAL_MODULES = frozenset(
     {"pytest", "hypothesis", "numpy", "yaml", "ragmark"}
 )
 
-# Top-level (column-0) import statements in a machinery test module.
-_MACHINERY_IMPORT_PATTERN = re.compile(
-    r"^(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE
-)
+def _machinery_imported_modules(source: str) -> list[str]:
+    """Return the top-level module names a machinery test module imports.
+
+    Walks the module's top-level statements with ``ast`` so prose in
+    docstrings or comments that happens to start with ``from``/``import`` is
+    never mistaken for an import. Relative imports and unparseable source
+    yield nothing.
+
+    Parameters
+    ----------
+    source
+        Python source text of a machinery test module.
+
+    Returns
+    -------
+    list[str]
+        First dotted component of each absolute import, in source order.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return []
+    modules: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            modules.extend(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules.append(node.module.split(".")[0])
+    return modules
+
 
 # Engine file references built from the tests' SCRIPTS_DIR anchor, e.g.
 # `SCRIPTS_DIR / "session-stop.py"` or `SCRIPTS_DIR / "queries" / "x.py"`.
@@ -443,7 +470,7 @@ def _validate_machinery(machinery_dir: Path) -> list[str]:
     for test_file in sorted(tests_dir.glob("*.py")):
         text = test_file.read_text(encoding="utf-8")
 
-        for module_name in _MACHINERY_IMPORT_PATTERN.findall(text):
+        for module_name in _machinery_imported_modules(text):
             if module_name in sys.stdlib_module_names:
                 continue
             if module_name in _MACHINERY_EXTERNAL_MODULES:
