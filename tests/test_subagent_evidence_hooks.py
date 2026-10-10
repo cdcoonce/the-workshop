@@ -509,3 +509,10 @@ def test_git_dir_and_head_sha_go_through_run_git(
     assert _git_baseline.head_sha(tmp_path) == "abc123"
     assert ["rev-parse", "--absolute-git-dir"] in calls
     assert ["rev-parse", "HEAD"] in calls
+
+
+def test_git_common_dir_matches_git_dir_in_a_plain_repo(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+
+    assert _git_baseline.git_common_dir(tmp_path) == _git_baseline.git_dir(tmp_path)
+    assert _git_baseline.git_common_dir(tmp_path / "nowhere") is None
