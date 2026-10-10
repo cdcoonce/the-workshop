@@ -35,7 +35,7 @@ message = data.get("last_assistant_message") or ""
 agent_id = data.get("agent_id")
 cwd = Path(data.get("cwd") or ".").resolve()
 
-if not agent_id or not message:
+if not agent_id:
     sys.exit(0)
 
 # Conservative on purpose: only fire on a strong first-person completion
@@ -48,9 +48,6 @@ COMPLETION_CLAIM = re.compile(
     r"done\.?\s*$)",
     re.IGNORECASE,
 )
-
-if not COMPLETION_CLAIM.search(message):
-    sys.exit(0)
 
 try:
     from _git_baseline import git_dir, head_sha, working_tree_signature
@@ -75,10 +72,16 @@ except OSError:
 lines += [""] * (2 - len(lines))
 baseline_sha, baseline_signature = lines[0], lines[1]
 
+# Consume the baseline whenever one exists, whether or not this message turns
+# out to be a completion claim — otherwise every non-claiming subagent leaves
+# a file behind in the gate directory.
 try:
     state_file.unlink()
 except OSError:
     pass
+
+if not message or not COMPLETION_CLAIM.search(message):
+    sys.exit(0)
 
 # Normalized to match what the start hook serialized (None -> "").
 current_sha = head_sha(cwd) or ""
