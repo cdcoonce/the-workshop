@@ -1345,3 +1345,80 @@ class TestQuoteWrappedLinkTargets:
         errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
         assert len(errors) == 1
         assert "gone file.md" in errors[0]
+
+
+class TestMachineryImportScanner:
+    """The machinery-import check reads Python via ast, not line patterns (#480)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, test_source: str) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        engine = plugin / "machinery" / "engine"
+        engine.mkdir(parents=True)
+        (engine / "vault_utils.py").write_text("# engine module\n")
+        tests_dir = plugin / "machinery" / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_budget.py").write_text(test_source)
+        return plugin
+
+    def test_docstring_line_starting_with_from_not_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            '"""Budget tests.\n\nfrom the scaffold-owned config file.\n'
+            'import the config before use.\n"""\n\nimport pytest\n'
+            "from vault_utils import parse\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_comment_line_starting_with_import_not_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            "# import everything below\nimport pytest\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_genuinely_missing_module_still_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            '"""from the docs."""\nimport pytest\nfrom ghost_module import x\n',
+        )
+
+        result = smoke_test(plugin)
+
+        assert result.passed is False
+        assert any("ghost_module" in e and "machinery" in e for e in result.errors)
+        assert not any("imports 'the'" in e for e in result.errors)
+
+    def test_relative_import_is_not_an_engine_reference(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path, make_plugin, "from . import sibling\nimport pytest\n"
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_unparseable_test_module_does_not_crash_the_scan(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(tmp_path, make_plugin, "def broken(:\n")
+
+        result = smoke_test(plugin)
+
+        assert not any("imports" in e for e in result.errors)
