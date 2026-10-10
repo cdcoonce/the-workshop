@@ -60,7 +60,7 @@ for filename in PROTECTED_FILENAMES:
         sys.exit(2)
 
 for prefix in PROTECTED_BASENAME_PREFIXES:
-    if basename.startswith(prefix):
+    if basename == prefix or basename.startswith(prefix + "."):
         if any(basename.endswith(suffix) for suffix in ALLOWED_TEMPLATE_SUFFIXES):
             continue
         print(
