@@ -20,6 +20,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/adversarial-review` | Attacks finished work by trying to disprove what it claims, reporting what survives with evidence. |
 | `/blueprint` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/build-review-land` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
 | `/commit` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
