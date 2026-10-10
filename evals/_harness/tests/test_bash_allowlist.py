@@ -392,7 +392,6 @@ RO_LABELS = {
     "git rev-parse checkout name arg",
     "cmp",
     "echo to stderr",
-    "env vars",
     "pytest tail ok",
     "pytest cd",
     "read cat",
@@ -400,11 +399,7 @@ RO_LABELS = {
     "ls",
     "pytest -o",
     "pytest --lf",
-    "pytest --pdb",
-    "pytest -p",
-    "pytest --fixtures",
     "ruff format --check",
-    "python importlib reload",
     "git diff after test write",
     "rg --replace",
 }
@@ -783,7 +778,7 @@ def test_honest_test_first_shapes_stay_credited_and_the_known_misses_stay_misses
         "cat <<'EOF'\nrm -rf src\nEOF",
         "echo $(date)",
         "echo `pwd`",
-        "FOO=1 uv run pytest -q",
+        "LANG=C uv run pytest -q",
         "ls | xargs cat",
         "cat x 2>&1",
         "cat x > /dev/null",
@@ -795,7 +790,7 @@ def test_honest_test_first_shapes_stay_credited_and_the_known_misses_stay_misses
         "eval 'ls src'",
         "if [ -f x ]; then echo ok; fi",
         "sudo cat x",
-        "env FOO=1 ls",
+        "env LANG=C ls",
         "command ls",
         "nohup ls",
         "time ls",
@@ -883,6 +878,7 @@ def test_allow_listed_read_only_commands_are_none(command):
         "sed 's/a/b/gw out' x",
         "sed 's/a/b/ge' x",
         "awk -i inplace '{print}' x",
+        "awk -f p x",
         "awk '{print > \"f\"}' x",
         "awk 'BEGIN{system(\"ls\")}'",
         "awk '{print >> \"f\"}' x",
@@ -1112,6 +1108,42 @@ def test_a_command_substitution_and_a_backtick_are_analysed_as_commands():
     assert classify_bash_command('echo "$(cp a b)"') == "source"
     assert classify_bash_command("echo $(echo $(cp a b))") == "source"
     assert classify_bash_command("echo $(ls)") == "none"
+
+
+def test_a_process_substitution_body_is_analysed_as_commands():
+    # a read-only outer command around a write in the body: only the body's own analysis can make these ``source``
+    assert classify_bash_command("cat <(cp a src/b)") == "source"
+    assert classify_bash_command("diff a <(cp a src/b)") == "source"
+    assert classify_bash_command("cat <(echo x > src/b)") == "source"
+    assert classify_bash_command("cat <(cp a tests/b)") == "tests"
+    assert bash_write_offset("cat <(cp a src/b)") == 6
+    # ``>( )`` always leaves an unresolved target, so it is ``source`` whatever its body is
+    assert classify_bash_command("cat a > >(cp /dev/stdin src/b)") == "source"
+    # a read-only body stays read-only
+    assert classify_bash_command("cat <(echo hi)") == "none"
+    assert classify_bash_command("diff <(cat a) <(cat b)") == "none"
+    assert bash_write_offset("diff <(cat a) <(cat b)") is None
+
+
+# An unknown command makes the call ``source`` and fixes the offset of the first non-read-only command, whatever
+# follows it. Each (class, offset) was read from the classifier at d015a099, before the scan stopped at the first one.
+UNKNOWN_THEN_WRITE = [
+    ("cat a; foo; cp a src/b", "source", 7),
+    ("cat a; foo; cp a tests/test_x.py", "source", 7),
+    ("cat a; foo; echo x > src/b", "source", 7),
+    ("ls\ncat a | foo | tee src/b", "source", 11),
+    ("cat a; foo; (cp a src/b)", "source", 7),
+    ("cat a; foo; cd src; cp a b", "source", 7),
+    ("cat a; foo; ls", "source", 7),
+    ("echo x > tests/test_a.py; foo; cp a src/b", "source", 0),
+    ("echo x > tests/test_a.py; cat a; foo", "source", 0),
+]
+
+
+@pytest.mark.parametrize(("command", "kind", "offset"), UNKNOWN_THEN_WRITE)
+def test_an_unknown_command_decides_the_class_and_the_offset_whatever_follows(command, kind, offset):
+    assert classify_bash_command(command) == kind
+    assert bash_write_offset(command) == offset
 
 
 def test_a_quoted_operator_is_not_a_separator_and_an_unquoted_one_is():

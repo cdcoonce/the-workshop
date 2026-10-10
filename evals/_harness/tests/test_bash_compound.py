@@ -386,9 +386,9 @@ def _table_rows(module_file: str) -> list[str]:
 
 
 def _guarded_rows() -> dict[str, str]:
-    """``{command: class}`` for every row of the two classifier tables whose class is fixed today."""
+    """``{command: class}`` for every row of the three classifier tables whose class is fixed today."""
     rows: dict[str, str] = {}
-    for module_file in ("test_bash_writes.py", "test_bash_allowlist.py"):
+    for module_file in ("test_bash_writes.py", "test_bash_allowlist.py", "test_bash_hardening.py"):
         for command in _table_rows(module_file):
             if command.strip():
                 rows[command] = classify_bash_command(command)
@@ -403,9 +403,9 @@ GUARDED = _guarded_rows()
 
 def test_the_wrapper_guard_covers_the_existing_tables():
     classes = list(GUARDED.values())
-    assert classes.count("source") >= 500
-    assert classes.count("tests") >= 30
-    assert classes.count("none") >= 130
+    assert classes.count("source") >= 1700
+    assert classes.count("tests") >= 90
+    assert classes.count("none") >= 580
     assert set(classes) == {"none", "tests", "source"}
 
 
@@ -425,6 +425,35 @@ def test_wrapping_a_write_row_keeps_it_write_capable_at_an_offset(wrapper):
             assert bash_write_offset(wrap(command)) is None, command
         else:
             assert bash_write_offset(wrap(command)) is not None, command
+
+
+def _round4_source_rows() -> list[str]:
+    """Every ``source`` row of the fourth review's tables in ``test_bash_hardening.py`` (the ``R4_*SOURCE*`` lists)."""
+    path = HERE / "test_bash_hardening.py"
+    spec = importlib.util.spec_from_file_location("_rows_round4", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rows: list[str] = []
+    for name, value in vars(module).items():
+        if name.startswith("R4_") and "SOURCE" in name and not name.endswith("_CODE") and isinstance(value, list):
+            rows.extend(row for row in value if isinstance(row, str))
+    return rows
+
+
+ROUND4_SOURCE = _round4_source_rows()
+
+
+def test_the_round4_source_rows_are_all_in_the_guard():
+    assert len(ROUND4_SOURCE) >= 370
+    assert all(GUARDED.get(command) == "source" for command in ROUND4_SOURCE)
+
+
+@pytest.mark.parametrize("wrapper", sorted(WRAPPERS))
+def test_every_round4_source_row_stays_source_inside_a_compound(wrapper):
+    wrap = WRAPPERS[wrapper]
+    escaped = [command for command in ROUND4_SOURCE if classify_bash_command(wrap(command)) != "source"]
+    assert not escaped, escaped
+    assert all(bash_write_offset(wrap(command)) is not None for command in ROUND4_SOURCE)
 
 
 def test_a_wrapped_row_is_classified_through_two_wrappers_too():
