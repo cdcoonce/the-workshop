@@ -119,3 +119,21 @@ def test_missing_tool_input_allows() -> None:
     result = run_hook({})
 
     assert result.returncode == 0
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        ".git",
+        "/repo/.claude/worktrees/x/.git",
+        "node_modules",
+        "project/node_modules",
+    ],
+)
+def test_protected_directory_as_final_component_blocks(file_path: str) -> None:
+    """A target that IS ``.git`` (a linked worktree's gitlink file) is blocked."""
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 2
+    assert "Blocked" in result.stderr
+    assert file_path in result.stderr
