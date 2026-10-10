@@ -2048,3 +2048,240 @@ def test_a_clean_replay_reports_no_refusals(tmp_path: Path) -> None:
 
     assert report["action"] == "replayed"
     assert report["refusals"] == []
+
+
+# ---------------------------------------------------------------------------
+# R6 -- --lint: does every ledger block / handoff parse under the replay grammar?
+# ---------------------------------------------------------------------------
+
+
+def _lint(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run_raw(cwd, "--lint", *args)
+
+
+def _write_vault_files(root: Path) -> None:
+    _write(root, GOTCHAS, GOTCHAS_SEED)
+    _write(root, DECISIONS, DECISIONS_SEED)
+    _write(root, BRAG, BRAG_SEED)
+    _write(root, HANDOFF, HANDOFF_SEED)
+
+
+def test_lint_clean_default_set_exits_zero(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    _write(tmp_path, ".brain/handoff-work.md", HANDOFF_SEED)
+    result = _lint(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_lint_needs_no_git_and_skips_missing_files(tmp_path: Path) -> None:
+    _write(tmp_path, GOTCHAS, GOTCHAS_SEED)
+    result = _lint(tmp_path)  # tmp_path is not a repository; most files are absent
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_lint_reports_an_undated_heading_at_entry_level(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    _write(
+        tmp_path,
+        GOTCHAS,
+        GOTCHAS_SEED.replace(
+            "### Bytecode cache hides a mutation (2026-09-10)",
+            "### Bytecode cache hides a mutation (sometime)",
+        ),
+    )
+    result = _lint(tmp_path)
+    assert result.returncode == 1
+    assert GOTCHAS in result.stdout
+    assert "undated heading" in result.stdout
+    assert "Bytecode cache hides a mutation (sometime)" in result.stdout
+
+
+def test_lint_reports_mixed_entry_heading_levels(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    _write(
+        tmp_path,
+        DECISIONS,
+        DECISIONS_SEED.replace(
+            "### 2026-09-10 — Pin graphmark below 0.8", "#### 2026-09-10 — Pin graphmark below 0.8"
+        ),
+    )
+    result = _lint(tmp_path)
+    assert result.returncode == 1
+    assert DECISIONS in result.stdout
+    assert "levels" in result.stdout
+
+
+def test_lint_reports_a_dated_entry_outside_every_anchor_block(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    orphaned = "# Doc\n\n## A\n\n### Undated opener\n\n### Orphan entry (2026-09-10)\n\nBody.\n"
+    _write(tmp_path, GOTCHAS, orphaned)
+    result = _lint(tmp_path)
+    assert result.returncode == 1
+    assert "outside" in result.stdout
+    assert "Orphan entry" in result.stdout
+
+
+def test_lint_reports_handoff_frontmatter_and_duplicate_sections(tmp_path: Path) -> None:
+    _write_vault_files(tmp_path)
+    _write(tmp_path, ".brain/handoff-work.md", "# no frontmatter\n")
+    _write(tmp_path, HANDOFF, HANDOFF_SEED + "\n## Mode\n\nDuplicate.\n")
+    result = _lint(tmp_path)
+    assert result.returncode == 1
+    assert ".brain/handoff-work.md" in result.stdout
+    assert "frontmatter" in result.stdout
+    assert HANDOFF in result.stdout
+    assert "duplicate" in result.stdout
+
+
+def test_lint_json_lists_findings_and_explicit_paths(tmp_path: Path) -> None:
+    bad = tmp_path / "scratch" / "Ledger.md"
+    bad.parent.mkdir()
+    bad.write_text("# T\n\n## A\n\n### Entry (2026-09-10)\n\nBody.\n\n### Undated\n", encoding="utf-8")
+    result = _lint(tmp_path, "--json", str(bad))
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert [item["path"] for item in payload["findings"]] == [str(bad)]
+    assert "undated heading" in payload["findings"][0]["message"]
+
+
+def test_lint_explicit_clean_paths_exit_zero(tmp_path: Path) -> None:
+    good = tmp_path / "handoff-x.md"
+    good.write_text(HANDOFF_SEED, encoding="utf-8")
+    ledger = tmp_path / "Ledger.md"
+    ledger.write_text(GOTCHAS_SEED, encoding="utf-8")
+    result = _lint(tmp_path, "--json", str(ledger), str(tmp_path / "missing.md"))
+    assert result.returncode == 0, result.stdout
+    assert json.loads(result.stdout)["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# R7 -- --verify: did a hand rebuild keep both sides' additions, invent nothing?
+# ---------------------------------------------------------------------------
+
+
+def _verify_setup(tmp_path: Path) -> tuple[Path, str, str, str]:
+    """A session edit and an origin edit of one handoff; returns (repo, base, tip, origin)."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(
+        peer,
+        HANDOFF,
+        _read(peer, HANDOFF).replace(
+            "- [[proj-b]]: close the parity ticket.",
+            "- [[proj-b]]: parity ticket closed by origin.",
+        ),
+    )
+    _peer_push(peer)
+    _write(
+        local,
+        HANDOFF,
+        _read(local, HANDOFF).replace(
+            "- [[proj-a]]: watch the deploy.",
+            "- [[proj-a]]: deploy watched. Session sentence.",
+        ),
+    )
+    tip = _commit_all(local, "vault wrap-up 2026-09-20")
+    _git(local, "fetch", "-q", "origin")
+    origin = _git(local, "rev-parse", "origin/main")
+    return local, base, tip, origin
+
+
+def _commit_result(local: Path, origin: str, edit) -> str:
+    """Commit ``edit(handoff_text)`` on a branch from origin; return the commit."""
+    _git(local, "switch", "-q", "-c", "hand-rebuild", origin)
+    _write(local, HANDOFF, edit(_read(local, HANDOFF)))
+    result = _commit_all(local, "hand rebuild")
+    _git(local, "switch", "-q", "main")
+    return result
+
+
+def _verify(local: Path, base: str, tip: str, origin: str, result: str) -> subprocess.CompletedProcess[str]:
+    return _run_raw(
+        local, "--verify", "--base", base, "--tip", tip, "--origin", origin,
+        "--result", result, "--json",
+    )
+
+
+def test_verify_passes_a_correct_hand_merge(tmp_path: Path) -> None:
+    local, base, tip, origin = _verify_setup(tmp_path)
+    result = _commit_result(
+        local,
+        origin,
+        lambda text: text.replace(
+            "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched. Session sentence."
+        ),
+    )
+    proc = _verify(local, base, tip, origin, result)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["files"][HANDOFF]["missing"] == []
+    assert payload["files"][HANDOFF]["extra"] == []
+
+
+def test_verify_fails_a_duplicated_sentence_inside_a_session_modified_line(tmp_path: Path) -> None:
+    local, base, tip, origin = _verify_setup(tmp_path)
+    result = _commit_result(
+        local,
+        origin,
+        lambda text: text.replace(
+            "- [[proj-a]]: watch the deploy.",
+            "- [[proj-a]]: deploy watched. Session sentence. Session sentence.",
+        ),
+    )
+    proc = _verify(local, base, tip, origin, result)
+    assert proc.returncode == 1
+    entry = json.loads(proc.stdout)["files"][HANDOFF]
+    assert "- [[proj-a]]: deploy watched. Session sentence." in entry["missing"]
+    assert "- [[proj-a]]: deploy watched. Session sentence. Session sentence." in entry["extra"]
+
+
+def test_verify_fails_a_result_missing_an_origin_added_line(tmp_path: Path) -> None:
+    local, base, tip, origin = _verify_setup(tmp_path)
+    result = _commit_result(
+        local,
+        origin,
+        lambda text: text.replace(
+            "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched. Session sentence."
+        ).replace("- [[proj-b]]: parity ticket closed by origin.", "- [[proj-b]]: close the parity ticket."),
+    )
+    proc = _verify(local, base, tip, origin, result)
+    assert proc.returncode == 1
+    entry = json.loads(proc.stdout)["files"][HANDOFF]
+    assert "- [[proj-b]]: parity ticket closed by origin." in entry["missing"]
+
+
+def test_verify_does_not_fail_lines_both_sides_added(tmp_path: Path) -> None:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    shared = "- [[proj-c]]: both sides added this exact line."
+    for repo in (peer, local):
+        _write(
+            repo,
+            HANDOFF,
+            _read(repo, HANDOFF).replace(
+                "- [[proj-b]]: close the parity ticket.",
+                "- [[proj-b]]: close the parity ticket.\n" + shared,
+            ),
+        )
+    _peer_push(peer)
+    tip = _commit_all(local, "vault wrap-up")
+    _git(local, "fetch", "-q", "origin")
+    origin = _git(local, "rev-parse", "origin/main")
+    result = origin  # one copy of the shared line, which is what either side holds
+    proc = _verify(local, base, tip, origin, result)
+    assert proc.returncode == 0, proc.stdout
+    assert json.loads(proc.stdout)["files"][HANDOFF]["ambiguous"] == [shared]
+
+
+def test_verify_truncates_long_lines_in_text_output(tmp_path: Path) -> None:
+    local, base, tip, origin = _verify_setup(tmp_path)
+    long_line = "- [[proj-a]]: " + "x" * 300
+    result = _commit_result(
+        local, origin, lambda text: text.replace("- [[proj-a]]: watch the deploy.", long_line)
+    )
+    proc = _run_raw(
+        local, "--verify", "--base", base, "--tip", tip, "--origin", origin, "--result", result
+    )
+    assert proc.returncode == 1
+    assert "x" * 300 not in proc.stdout
+    assert HANDOFF in proc.stdout

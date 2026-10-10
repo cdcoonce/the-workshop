@@ -1415,18 +1415,222 @@ def replay(base: str, remote: str, health_cmd: str | None) -> Report:
     return report
 
 
+# ---------------------------------------------------------------------------
+# --lint: does every hub file parse under the replay grammar?
+# ---------------------------------------------------------------------------
+
+
+def _is_handoff_path(path: str) -> bool:
+    name = Path(path).name
+    return name.startswith("handoff-") and name.endswith(".md")
+
+
+def _lint_ledger(text: str, path: str) -> list[str]:
+    """Findings for one ledger: every anchor block must parse, no orphan entries."""
+    doc = _load_doc(text)
+    findings: list[str] = []
+    covered = [False] * len(doc.lines)
+    for span in doc.spans:
+        for idx in range(span.anchor_idx + 1, span.end_idx):
+            covered[idx] = True
+        try:
+            _parse_block(doc.lines, doc.flags, doc.headings, span.anchor_idx, path)
+        except RefusalError as exc:
+            findings.append(str(exc))
+    for idx, line in enumerate(doc.lines):
+        if doc.flags[idx] or covered[idx]:
+            continue
+        if parse_entry_start(line) is not None:
+            findings.append(
+                f"{path}: dated entry {line!r} sits outside every anchor block "
+                f"(line {idx + 1}); the replay could not place it"
+            )
+    return findings
+
+
+def _lint_handoff(text: str, path: str) -> list[str]:
+    """Findings for one handoff: frontmatter/description parse, unique sections."""
+    try:
+        _fm, _desc_idx, _desc, body = _split_handoff(text, path)
+        _split_sections(body, path)
+    except RefusalError as exc:
+        return [str(exc)]
+    return []
+
+
+def _default_lint_paths() -> list[str]:
+    paths = sorted(LEDGER_FILES)
+    brain = Path(".brain")
+    if brain.is_dir():
+        paths.extend(sorted(str(p) for p in brain.glob("handoff-*.md")))
+    return paths
+
+
+def lint(paths: list[str]) -> dict[str, Any]:
+    """Run the replay grammar over hub files without touching git or the network.
+
+    Parameters
+    ----------
+    paths:
+        Files to check; ``handoff-*.md`` basenames are handoffs, everything
+        else is a ledger. Missing files are skipped.
+
+    Returns
+    -------
+    dict
+        ``{"ok": bool, "checked": [path...], "findings": [{"path", "message"}]}``.
+    """
+    checked: list[str] = []
+    findings: list[dict[str, str]] = []
+    for path in paths:
+        file = Path(path)
+        if not file.is_file():
+            continue
+        checked.append(path)
+        try:
+            text = file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            findings.append({"path": path, "message": f"{path}: unreadable ({exc})"})
+            continue
+        found = _lint_handoff(text, path) if _is_handoff_path(path) else _lint_ledger(text, path)
+        findings.extend({"path": path, "message": message} for message in found)
+    return {"ok": not findings, "checked": checked, "findings": findings}
+
+
+# ---------------------------------------------------------------------------
+# --verify: did a hand rebuild keep both sides' additions and invent nothing?
+# ---------------------------------------------------------------------------
+
+
+def _blob_or_empty(rev: str, path: str) -> str:
+    if _blob_sha(rev, path) is None:
+        return ""
+    proc = subprocess.run(
+        ["git", "cat-file", "blob", f"{rev}:{path}"], capture_output=True, check=False
+    )
+    if proc.returncode != 0:
+        raise GitError(f"git cat-file blob {rev}:{path}: {proc.stderr.decode(errors='replace')}")
+    return proc.stdout.decode("utf-8", errors="replace")
+
+
+def _nonblank_lines(text: str) -> Counter[str]:
+    return Counter(line for line in text.splitlines() if line.strip())
+
+
+def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any]:
+    """Check a merge result against both sides by multiset of non-blank lines.
+
+    For every path changed base->tip or base->origin: ``missing`` is any line
+    either side added that the result lacks, ``extra`` any line the result
+    holds beyond ``base - deletions + additions``. A line both sides added is
+    ``ambiguous`` -- one copy or two are both legitimate -- and reported but
+    never failing. A line-level check cannot see reordering; it catches the
+    losses and inventions (a dropped addition, a duplicated sentence).
+
+    Parameters
+    ----------
+    base, tip, origin, result:
+        Git revisions, resolved by the caller.
+
+    Returns
+    -------
+    dict
+        ``{"ok": bool, "files": {path: {"missing", "extra", "ambiguous"}}}``.
+    """
+    paths = sorted(set(_name_status(base, tip)) | set(_name_status(base, origin)))
+    files: dict[str, dict[str, list[str]]] = {}
+    ok = True
+    for path in paths:
+        b, t, o, r = (
+            _nonblank_lines(_blob_or_empty(rev, path)) for rev in (base, tip, origin, result)
+        )
+        s_add, o_add = t - b, o - b
+        s_del, o_del = b - t, b - o
+        ambiguous = set(s_add) & set(o_add)
+        missing = [line for line in ((s_add - r) + (o_add - r)) if line not in ambiguous]
+        expected = (b - (s_del | o_del)) + s_add + o_add
+        extra = [line for line in (r - expected) if line not in ambiguous]
+        files[path] = {
+            "missing": sorted(missing),
+            "extra": sorted(extra),
+            "ambiguous": sorted(ambiguous),
+        }
+        ok = ok and not missing and not extra
+    return {"ok": ok, "files": files}
+
+
+def _clip(line: str, width: int = 100) -> str:
+    return line if len(line) <= width else line[: width - 3] + "..."
+
+
+def _resolve_rev(rev: str) -> str | None:
+    proc = _run_git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _main_lint(args: argparse.Namespace) -> int:
+    paths = args.paths or _default_lint_paths()
+    outcome = lint(paths)
+    if args.as_json:
+        print(json.dumps(outcome, indent=2))
+    else:
+        for finding in outcome["findings"]:
+            print(finding["message"])
+        print(
+            f"lint: {'clean' if outcome['ok'] else 'FINDINGS'} "
+            f"({len(outcome['checked'])} file(s) checked)"
+        )
+    return 0 if outcome["ok"] else 1
+
+
+def _main_verify(args: argparse.Namespace) -> int:
+    revs: dict[str, str] = {}
+    for label in ("base", "tip", "origin", "result"):
+        value = getattr(args, label)
+        if value is None:
+            print(f"error: --verify needs --{label}", file=sys.stderr)
+            return 2
+        resolved = _resolve_rev(value)
+        if resolved is None:
+            print(f"error: --{label} {value!r} is not a commit in this repository", file=sys.stderr)
+            return 2
+        revs[label] = resolved
+    try:
+        outcome = verify_merge(revs["base"], revs["tip"], revs["origin"], revs["result"])
+    except GitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.as_json:
+        print(json.dumps(outcome, indent=2))
+    else:
+        for path, entry in outcome["files"].items():
+            if not entry["missing"] and not entry["extra"]:
+                continue
+            print(f"FAIL {path}")
+            for kind in ("missing", "extra"):
+                for line in entry[kind]:
+                    print(f"  {kind}: {_clip(line)}")
+        for path, entry in outcome["files"].items():
+            for line in entry["ambiguous"]:
+                print(f"  ambiguous (both sides added) {path}: {_clip(line)}")
+        print(f"verify: {'ok' if outcome['ok'] else 'FAIL'} ({len(outcome['files'])} file(s))")
+    return 0 if outcome["ok"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Scoped, fail-closed entry-replay of this session's hub-file changes onto "
             "origin, for /sync conflicts confined to the vault's allowlisted "
-            "accumulating files."
+            "accumulating files. --lint and --verify are read-only companions."
         )
     )
     parser.add_argument(
         "--base",
-        required=True,
-        help="commit before this session's first commit (the wrap-up audit base)",
+        help=(
+            "commit before this session's first commit (the wrap-up audit base); "
+            "with --verify, the merge base of the rebuild"
+        ),
     )
     parser.add_argument("--remote", default="origin", help="remote to fetch and replay onto")
     parser.add_argument(
@@ -1438,24 +1642,57 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--json", action="store_true", dest="as_json", help="emit a JSON report")
+    parser.add_argument(
+        "--lint",
+        action="store_true",
+        help=(
+            "check that every ledger block and handoff parses under the replay grammar "
+            "(default PATHs: the three ledgers plus .brain/handoff-*.md); needs no git"
+        ),
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="check a hand-built merge result against both sides (needs --base/--tip/--origin/--result)",
+    )
+    parser.add_argument("--tip", help="--verify: the session tip revision")
+    parser.add_argument("--origin", help="--verify: origin's head revision")
+    parser.add_argument("--result", help="--verify: the hand-built merge result revision")
+    parser.add_argument("paths", nargs="*", metavar="PATH", help="--lint: files to check")
     args = parser.parse_args(argv)
 
+    if args.lint and args.verify:
+        print("error: --lint and --verify are separate modes", file=sys.stderr)
+        return 2
+    if args.lint:
+        return _main_lint(args)
     if _run_git("rev-parse", "--git-dir").returncode != 0:
         print("error: not inside a git repository", file=sys.stderr)
         return 2
-    base_proc = _run_git("rev-parse", "--verify", "--quiet", f"{args.base}^{{commit}}")
-    if base_proc.returncode != 0:
+    if args.verify:
+        if args.base is None:
+            print("error: --verify needs --base", file=sys.stderr)
+            return 2
+        return _main_verify(args)
+    if args.paths:
+        print("error: PATH arguments only apply to --lint", file=sys.stderr)
+        return 2
+    if args.base is None:
+        print("error: --base is required", file=sys.stderr)
+        return 2
+    base_sha = _resolve_rev(args.base)
+    if base_sha is None:
         print(f"error: --base {args.base!r} is not a commit in this repository", file=sys.stderr)
         return 2
 
-    report = replay(base_proc.stdout.strip(), args.remote, args.health_cmd)
+    report = replay(base_sha, args.remote, args.health_cmd)
 
     if args.as_json:
         print(json.dumps(asdict(report), indent=2))
     else:
         print(f"{report.action}: {report.reason}")
-        for path in report.outside_allowlist:
-            print(f"  outside allowlist: {path}")
+        for refusal in report.refusals:
+            print(f"  refused: {refusal['reason']}")
     return 1 if report.action == "refused" else 0
 
 
