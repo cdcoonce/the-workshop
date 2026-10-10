@@ -1,0 +1,42 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "tests/test_stamp.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_stamp.py"],
+  "mutants": [
+    {
+      "label": "#735 regex only recognises run-hook.sh again",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "run-(?:vault-)?hook\\.sh",
+      "replace": "run-hook\\.sh"
+    },
+    {
+      "label": "#726 .DS_Store no longer counted as debris",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "_BUILD_ARTIFACT_FILES = frozenset({\".DS_Store\"})",
+      "replace": "_BUILD_ARTIFACT_FILES = frozenset()"
+    },
+    {
+      "label": "#781 agent-name uniqueness check not called",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    _check_agent_name_uniqueness(root, model.plugins)\n",
+      "replace": "    pass\n"
+    },
+    {
+      "label": "#733 advisor-* plugins get run-hook.sh unconditionally",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "        and (plugin_dir / \"hooks\" / \"scripts\").is_dir()\n",
+      "replace": "        and True\n"
+    },
+    {
+      "label": "#745 bare prose mention accepted as ownership marker",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    if any(marker in text for marker in _OWNERSHIP_MARKERS):\n        return\n    relative",
+      "replace": "    if GENERATED_MARKER in text:\n        return\n    relative"
+    }
+  ]
+}
