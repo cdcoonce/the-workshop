@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import sys
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -623,3 +627,168 @@ def test_native_adapter_with_empty_session_id_cannot_reopen(tmp_path: Path, adap
 
     with pytest.raises(RegistryError, match="reopen requires"):
         registry.reopen("w", evidence="try anyway")
+
+
+def _lock_path(path: Path) -> Path:
+    return path.with_name(path.name + ".lock")
+
+
+def test_overlapping_mutations_on_different_workers_both_survive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "registry.json"
+    seed = SessionRegistry(path)
+    seed.add("one", project="p", adapter="codex")
+    seed.add("two", project="p", adapter="codex")
+    real_load = SessionRegistry._load
+
+    def _slow_load(self: SessionRegistry) -> dict:
+        data = real_load(self)
+        time.sleep(0.4)  # widen the load -> save window so unlocked writers interleave
+        return data
+
+    monkeypatch.setattr(SessionRegistry, "_load", _slow_load)
+    errors: list[BaseException] = []
+
+    def _run(name: str) -> None:
+        try:
+            SessionRegistry(path).record_update(name, f"update for {name}")
+        except BaseException as exc:  # noqa: BLE001 - surfaced below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_run, args=(n,)) for n in ("one", "two")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert not errors
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["workers"]["one"]["last_observation"] == "update for one"
+    assert data["workers"]["two"]["last_observation"] == "update for two"
+
+
+def _fresh(reg: SessionRegistry) -> None:
+    reg.add("w", project="p", adapter="codex")
+
+
+def _with_session(reg: SessionRegistry) -> None:
+    _fresh(reg)
+    reg.set_session_id("w", "t-1")
+
+
+def _attached(reg: SessionRegistry) -> None:
+    _with_session(reg)
+    reg.mark_attached("w", message_verified=True)
+
+
+def _cortex(reg: SessionRegistry) -> None:
+    reg.add("w", project="p", adapter="cortex-code")
+
+
+def _completed(reg: SessionRegistry) -> None:
+    _attached(reg)
+    reg.set_state("w", "completed", evidence="done")
+    reg.set_integration("w", "integrated", evidence="merged")
+    reg.set_validation("w", passed=True, evidence="ok")
+    reg.record_durable_status("w", "committed")
+
+
+def _retired(reg: SessionRegistry) -> None:
+    _completed(reg)
+    reg.retire("w", platform_action="codex-archived", platform_evidence="archived")
+
+
+MUTATORS: list[tuple[str, Callable[[SessionRegistry], None], Callable[[SessionRegistry], None]]] = [
+    ("add", lambda r: None, lambda r: r.add("w", project="p", adapter="codex")),
+    ("set_session_id", _fresh, lambda r: r.set_session_id("w", "t-1")),
+    ("mark_attached", _with_session, lambda r: r.mark_attached("w", message_verified=True)),
+    (
+        "mark_manual_attached",
+        _cortex,
+        lambda r: r.mark_manual_attached("w", identity_evidence="ui", message_verified=True),
+    ),
+    ("set_state", _attached, lambda r: r.set_state("w", "waiting", evidence="paused")),
+    ("record_update", _fresh, lambda r: r.record_update("w", "obs")),
+    ("record_recovery", _fresh, lambda r: r.record_recovery("w", "tried")),
+    ("amend_contract", _fresh, lambda r: r.amend_contract("w", "more scope")),
+    ("set_integration", _attached, lambda r: r.set_integration("w", "handed-off", evidence="note")),
+    ("set_validation", _fresh, lambda r: r.set_validation("w", passed=True, evidence="ok")),
+    ("record_durable_status", _fresh, lambda r: r.record_durable_status("w", "committed")),
+    ("set_follow_up", _fresh, lambda r: r.set_follow_up("w", "do more")),
+    (
+        "retire",
+        _completed,
+        lambda r: r.retire("w", platform_action="codex-archived", platform_evidence="archived"),
+    ),
+    ("record_archived_update", _retired, lambda r: r.record_archived_update("w", "fix")),
+    ("reopen", _retired, lambda r: r.reopen("w", evidence="again")),
+]
+
+
+@pytest.mark.parametrize(("label", "setup", "call"), MUTATORS, ids=[m[0] for m in MUTATORS])
+def test_every_mutator_holds_the_lock_from_load_to_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+    setup: Callable[[SessionRegistry], None],
+    call: Callable[[SessionRegistry], None],
+) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    setup(registry)
+    probes: list[tuple[str, bool]] = []
+
+    def _locked_elsewhere() -> bool:
+        _lock_path(path).touch()
+        with _lock_path(path).open("a") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            fcntl.flock(handle, fcntl.LOCK_UN)
+            return False
+
+    real_load, real_save = SessionRegistry._load, SessionRegistry._save
+
+    def _load(self: SessionRegistry) -> dict:
+        probes.append(("load", _locked_elsewhere()))
+        return real_load(self)
+
+    def _save(self: SessionRegistry, data: dict) -> None:
+        probes.append(("save", _locked_elsewhere()))
+        real_save(self, data)
+
+    monkeypatch.setattr(SessionRegistry, "_load", _load)
+    monkeypatch.setattr(SessionRegistry, "_save", _save)
+
+    call(registry)
+
+    kinds = [kind for kind, _ in probes]
+    assert "load" in kinds and "save" in kinds, label
+    assert all(held for _, held in probes), f"{label}: _load/_save ran without the lock held"
+
+
+def test_lock_is_released_after_a_mutation_fails(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    registry.add("w", project="p", adapter="codex")
+
+    with pytest.raises(RegistryError):
+        registry.set_session_id("missing", "t-1")
+
+    with _lock_path(path).open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)  # raises if still held
+        fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def test_read_only_get_is_not_blocked_by_a_held_lock(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    registry.add("w", project="p", adapter="codex")
+
+    with _lock_path(path).open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        assert registry.get("w")["state"] == "provisioning"
+        assert "w" in registry.all_workers()["workers"]
+        fcntl.flock(handle, fcntl.LOCK_UN)
