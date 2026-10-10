@@ -397,3 +397,23 @@ def test_sanitized_agent_id_round_trips_between_start_and_stop(tmp_path: Path) -
 
     assert json.loads(result.stdout)["decision"] == "block"
     assert list(gate_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "message",
+    [["I've fixed it"], {"text": "I've fixed it"}, 7, True],
+    ids=["list", "dict", "int", "bool"],
+)
+def test_non_string_final_message_fails_open(tmp_path: Path, message: object) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    start(tmp_path, "agent-nonstr")
+
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "agent-nonstr", "last_assistant_message": message},
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
