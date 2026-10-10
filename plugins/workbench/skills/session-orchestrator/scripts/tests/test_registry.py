@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from registry import RegistryError, SessionRegistry  # noqa: E402
+from registry import RegistryError, SessionRegistry, main  # noqa: E402
 
 
 def _completed_worker(registry: SessionRegistry) -> None:
@@ -359,3 +360,94 @@ def test_cortex_manual_identity_can_retire_without_fabricated_native_id(tmp_path
     assert worker["state"] == "retired"
     assert worker["session_id"] == ""
     assert worker["manual_identity_evidence"]
+
+
+def _cli(registry_path: Path, *argv: str) -> int:
+    return main(["--registry", str(registry_path), *argv])
+
+
+def _on_disk(registry_path: Path) -> dict:
+    return json.loads(registry_path.read_text(encoding="utf-8"))
+
+
+def test_cli_add_session_attach_state_retire_lifecycle(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+
+    assert _cli(path, "add", "ledger", "--origin-project", "household-ledger", "--adapter", "codex") == 0
+    worker = _on_disk(path)["workers"]["ledger"]
+    assert worker["origin_project"] == "household-ledger"
+    assert worker["adapter"] == "codex"
+    assert worker["state"] == "provisioning"
+
+    assert _cli(path, "session", "ledger", "thread-123") == 0
+    assert _on_disk(path)["workers"]["ledger"]["session_id"] == "thread-123"
+
+    assert _cli(path, "attach", "ledger", "--message-verified") == 0
+    worker = _on_disk(path)["workers"]["ledger"]
+    assert worker["state"] == "running"
+    assert worker["message_verified"] is True
+
+    assert _cli(path, "state", "ledger", "completed", "worker final received") == 0
+    worker = _on_disk(path)["workers"]["ledger"]
+    assert worker["state"] == "completed"
+    assert worker["last_observation"] == "worker final received"
+
+    assert _cli(path, "integrate", "ledger", "integrated", "reachable from origin/dev") == 0
+    assert _cli(path, "validate", "ledger", "--passed", "make test passed") == 0
+    assert _cli(path, "status-record", "ledger", "note committed") == 0
+    assert _cli(path, "retire", "ledger", "codex-archived", "thread archived in app") == 0
+
+    data = _on_disk(path)
+    assert "ledger" not in data["workers"]
+    archived = data["archived_workers"]["ledger"]
+    assert archived["state"] == "retired"
+    assert archived["session_id"] == "thread-123"
+    assert archived["platform_retirement_action"] == "codex-archived"
+    assert archived["platform_retirement_evidence"] == "thread archived in app"
+    assert archived["integration_evidence"] == "reachable from origin/dev"
+    assert archived["validation_evidence"] == "make test passed"
+    assert archived["status_evidence"] == "note committed"
+
+
+def test_cli_state_positional_order_is_name_state_evidence(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    _cli(path, "add", "ledger", "--origin-project", "p", "--adapter", "codex")
+    _cli(path, "session", "ledger", "thread-1")
+    _cli(path, "attach", "ledger", "--message-verified")
+
+    _cli(path, "state", "ledger", "waiting", "needs owner input")
+
+    worker = _on_disk(path)["workers"]["ledger"]
+    assert worker["state"] == "waiting"
+    assert worker["last_observation"] == "needs owner input"
+
+
+def test_cli_rejects_state_with_swapped_positionals(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    _cli(path, "add", "ledger", "--origin-project", "p", "--adapter", "codex")
+
+    with pytest.raises(SystemExit):
+        _cli(path, "state", "ledger", "needs owner input", "waiting")
+
+
+def test_cli_session_positional_order_is_name_then_id(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    _cli(path, "add", "ledger", "--origin-project", "p", "--adapter", "codex")
+
+    _cli(path, "session", "ledger", "thread-9")
+
+    assert _on_disk(path)["workers"]["ledger"]["session_id"] == "thread-9"
+
+
+def test_cli_attach_without_flag_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    _cli(path, "add", "ledger", "--origin-project", "p", "--adapter", "codex")
+    _cli(path, "session", "ledger", "thread-1")
+
+    with pytest.raises(RegistryError, match="verified message exchange"):
+        _cli(path, "attach", "ledger")
+
+
+def test_cli_add_rejects_unknown_adapter(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        _cli(tmp_path / "registry.json", "add", "x", "--origin-project", "p", "--adapter", "bogus")
