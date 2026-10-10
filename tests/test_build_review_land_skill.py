@@ -121,3 +121,16 @@ def test_fixer_forbids_changing_the_mutation() -> None:
 
 def test_reviewer_never_hand_mutates() -> None:
     assert "never edits source by hand" in _flat(REVIEWER.read_text()).lower()
+
+
+def test_land_command_names_the_real_script() -> None:
+    text = SKILL.read_text()
+    assert "pr_land.py land" in _flat(text)
+    for line in text.splitlines():
+        if "scripts/pr_land.py" in line:
+            assert "github-pr-land" in line, f"path does not name its skill: {line!r}"
+    assert (SKILLS / "github-pr-land" / "scripts" / "pr_land.py").is_file()
+
+
+def test_skill_stops_on_ambiguous_anchor() -> None:
+    assert "ambiguous anchor" in _flat(SKILL.read_text())
