@@ -15,6 +15,7 @@ writing the string "None" into a state file.
 """
 
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -61,9 +62,8 @@ def working_tree_signature(project_dir: Path) -> str | None:
     """
     try:
         status = subprocess.run(
-            ["git", "-C", str(project_dir), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(project_dir), "status", "--porcelain", "-z", "--untracked-files=all"],
             capture_output=True,
-            text=True,
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -71,13 +71,22 @@ def working_tree_signature(project_dir: Path) -> str | None:
     if status.returncode != 0:
         return None
 
+    # `-z` output is NUL-delimited and never C-quoted, so non-ASCII, tab, quote
+    # and backslash paths arrive as raw bytes. Each entry is `XY <path>`; a
+    # rename/copy entry (X or Y is R/C) is followed by one extra field, the
+    # original path, which is not a file to hash.
     hasher = hashlib.sha256()
-    hasher.update(status.stdout.encode("utf-8", "surrogateescape"))
-    for line in status.stdout.splitlines():
-        path_part = line[3:]
-        if " -> " in path_part:
-            path_part = path_part.split(" -> ")[-1]
-        path_part = path_part.strip('"')
+    hasher.update(status.stdout)
+    fields = status.stdout.split(b"\0")
+    index = 0
+    while index < len(fields):
+        entry = fields[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        if b"R" in entry[:2] or b"C" in entry[:2]:
+            index += 1  # skip the original-path field
+        path_part = os.fsdecode(entry[3:])
         try:
             hasher.update((project_dir / path_part).read_bytes())
         except OSError:
