@@ -598,20 +598,19 @@ def test_duplicate_entry_already_on_origin_is_skipped(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_session_edit_of_existing_entry_refuses(tmp_path: Path) -> None:
+def test_session_edit_of_entry_origin_also_edited_refuses(tmp_path: Path) -> None:
     _remote, local, peer, base = _make_vault(tmp_path)
+    # Origin corrected the 2026-09-15 entry one way...
     _write(
         peer,
         DECISIONS,
-        insert_under(
-            _read(peer, DECISIONS),
-            "## Recent",
-            decisions_entry("2026-09-20", "Peer decision", "**Decided:** peer."),
+        _read(peer, DECISIONS).replace(
+            "collapse unpushed session commits", "collapse only unpushed session commits"
         ),
     )
     _peer_push(peer)
-    # Both sides now hold the 2026-09-15 entry; the session corrects it in
-    # place (the 2455bf8c shape) -- a real semantic conflict, so escalate.
+    # ...and the session corrected the same entry another way (the 2455bf8c
+    # shape) -- a real semantic conflict, so escalate.
     _write(
         local,
         DECISIONS,
@@ -625,14 +624,14 @@ def test_session_edit_of_existing_entry_refuses(tmp_path: Path) -> None:
     report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
 
     assert report["action"] == "refused"
-    assert "non-insertion" in report["reason"]
-    assert DECISIONS in report["reason"] or DECISIONS in str(report.get("files", {}))
+    assert "edited or removed on origin" in report["reason"]
+    assert "Adopt the sync-boundary squash" in report["reason"]
     _assert_untouched(local, head_before, branch_before)
 
 
-def test_non_insertion_ledger_hunk_refuses_even_without_overlap(tmp_path: Path) -> None:
-    """An in-place correction is refused on its own shape, not only when the
-    other side happens to touch the same entry."""
+def test_in_place_edit_of_an_entry_origin_left_alone_replays(tmp_path: Path) -> None:
+    """The session corrects an entry in place plus inserts one; origin only
+    inserted elsewhere. The per-replaced-entry assertion holds, so it replays."""
     _remote, local, peer, base = _make_vault(tmp_path)
     _write(
         peer,
@@ -654,13 +653,17 @@ def test_non_insertion_ledger_hunk_refuses_even_without_overlap(tmp_path: Path) 
     )
     _write(local, GOTCHAS, session_text)
     _commit_all(local, "vault wrap-up 2026-09-20")
-    head_before, branch_before = _head(local), _branch(local)
 
-    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
 
-    assert report["action"] == "refused"
-    assert "non-insertion" in report["reason"]
-    _assert_untouched(local, head_before, branch_before)
+    assert report["action"] == "replayed"
+    merged = _read(local, GOTCHAS)
+    assert "Corrected body of the bytecode gotcha." in merged
+    assert "\nBody of the bytecode gotcha." not in merged
+    assert "Peer body." in merged and "Session body." in merged
+    detail = report["files"][GOTCHAS]
+    assert detail["inserted"] == 1
+    assert detail["replaced"] == 1
 
 
 def test_session_deleting_an_entry_refuses(tmp_path: Path) -> None:
@@ -686,7 +689,8 @@ def test_session_deleting_an_entry_refuses(tmp_path: Path) -> None:
     report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
 
     assert report["action"] == "refused"
-    assert "non-insertion" in report["reason"]
+    assert "deleted" in report["reason"]
+    assert "Pin graphmark below 0.8" in report["reason"]
     _assert_untouched(local, head_before, branch_before)
 
 
@@ -695,9 +699,10 @@ def test_session_deleting_an_entry_refuses(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_origin_edit_of_existing_entry_fires_base_assertion(tmp_path: Path) -> None:
-    """The session side is perfectly clean (pure insertion); origin corrected
-    an existing entry inside the block the replay would rewrite."""
+def test_origin_correction_of_an_untouched_entry_is_preserved(tmp_path: Path) -> None:
+    """The session is a pure insertion; origin corrected an existing entry in
+    the same block. The assertion covers only entries the replay replaces, so
+    origin's copy of the untouched entry simply wins."""
     _remote, local, peer, base = _make_vault(tmp_path)
     _write(
         peer,
@@ -717,13 +722,14 @@ def test_origin_edit_of_existing_entry_fires_base_assertion(tmp_path: Path) -> N
         ),
     )
     _commit_all(local, "vault wrap-up 2026-09-20")
-    head_before, branch_before = _head(local), _branch(local)
 
-    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
 
-    assert report["action"] == "refused"
-    assert "byte-identical" in report["reason"]
-    _assert_untouched(local, head_before, branch_before)
+    assert report["action"] == "replayed"
+    merged = _read(local, DECISIONS)
+    assert "pin it, with TWO parity gates." in merged
+    assert "pin it, with a parity gate." not in merged
+    assert "Session decision" in merged
 
 
 def test_origin_edit_of_touched_handoff_section_fires_base_assertion(tmp_path: Path) -> None:
@@ -1451,9 +1457,9 @@ def test_ledger_merge_pure_insertion_roundtrip() -> None:
     assert detail["inserted"] == 1
 
 
-def test_ledger_merge_refuses_origin_entry_edit() -> None:
+def test_ledger_merge_refuses_origin_edit_of_a_replaced_entry() -> None:
     base = GOTCHAS_SEED
-    tip = insert_under(base, "## Technical", gotchas_entry("New", "2026-09-20", "Body."))
+    tip = base.replace("Body of the bytecode gotcha.", "Session edited this body.")
     origin = base.replace("Body of the bytecode gotcha.", "Origin edited this body.")
     with pytest.raises(RefusalError, match="byte-identical"):
         ledger_merge(base, tip, origin, GOTCHAS)
@@ -1478,7 +1484,567 @@ def test_handoff_merge_identical_same_day_preamble_changes_pass() -> None:
 
 def test_handoff_merge_refuses_cross_day_preamble_divergence() -> None:
     base = HANDOFF_SEED
-    tip = base.replace("_Updated 2026-09-15._", "_Updated 2026-09-20._")
-    origin = base.replace("_Updated 2026-09-15._", "_Updated 2026-09-21._")
+    tip = base.replace("date: 2026-09-15", "date: 2026-09-20")
+    origin = base.replace("date: 2026-09-15", "date: 2026-09-21")
     with pytest.raises(RefusalError):
         handoff_merge(base, tip, origin, HANDOFF)
+
+
+# ---------------------------------------------------------------------------
+# R1 -- trailing-date heading grammar accepts a qualifier after the date.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("suffix", "expected_date"),
+    [
+        ("(2026-10-10)", "2026-10-10"),
+        ("(2026-10-10, [[apipulse]])", "2026-10-10"),
+        ("(2026-10-10, [[a]], [[b]])", "2026-10-10"),
+        ("(2026-09-27, night)", "2026-09-27"),
+        ("(2026-10-02, corrected 2026-10-03)", "2026-10-02"),
+        ("(2026-09-14 onward, [[x]])", "2026-09-14"),
+    ],
+)
+def test_trailing_date_heading_accepts_qualifiers(suffix: str, expected_date: str) -> None:
+    started = parse_entry_start(f"### Some title {suffix}")
+    assert started == ("heading", 3, expected_date)
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "(see 2026-10-10)",
+        "(2026-10-10) trailing text",
+        "(2026-13-40, x)",
+        "(2026-10-10, nested (parens))",
+    ],
+)
+def test_trailing_date_heading_rejects_non_dates(suffix: str) -> None:
+    assert parse_entry_start(f"### Some title {suffix}") is None
+
+
+# ---------------------------------------------------------------------------
+# R2 -- entry-kind precedence: dated headings make dated bullets body text.
+# ---------------------------------------------------------------------------
+
+BULLET_BODY_GOTCHA = (
+    "### Gotcha with a dated bullet in its body (2026-09-12)\n"
+    "\n"
+    "Intro line.\n"
+    "\n"
+    "- **2026-09-12 detail** a dated bullet that is body text, not an entry.\n"
+    "- plain bullet\n"
+)
+
+
+def test_dated_bullet_inside_a_heading_entry_is_body_text() -> None:
+    base = insert_under(GOTCHAS_SEED, "## Technical", BULLET_BODY_GOTCHA)
+    new_session = gotchas_entry("Session gotcha", "2026-09-20", "Session body.")
+    new_origin = gotchas_entry("Origin gotcha", "2026-09-19", "Origin body.")
+    tip = insert_under(base, "## Technical", new_session)
+    origin = insert_under(base, "## Technical", new_origin)
+
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+
+    assert BULLET_BODY_GOTCHA in merged, "the bullet must stay inside its entry"
+    assert new_session in merged and new_origin in merged
+    assert detail["inserted"] == 1
+
+
+def test_blocks_without_a_dated_heading_keep_bullet_entries() -> None:
+    new_win = brag_entry("2026-09-20", "Session win")
+    tip = insert_under(BRAG_SEED, "### Wins", new_win)
+    origin_win = brag_entry("2026-09-18", "Origin win")
+    origin = insert_under(BRAG_SEED, "### Wins", origin_win)
+
+    merged, detail = ledger_merge(BRAG_SEED, tip, origin, BRAG)
+
+    assert new_win in merged and origin_win in merged
+    wins_dates = _entry_dates_under(merged, "### Wins", "### Growth")
+    assert wins_dates == sorted(wins_dates, reverse=True)
+    assert detail["inserted"] == 1
+
+
+def test_bullet_inserted_above_the_first_heading_entry_refuses() -> None:
+    """A bullet-shaped insertion into a heading-entry block is not an entry
+    insertion: it lands in the block preamble, which must not change."""
+    base = GOTCHAS_SEED
+    bullet = "- **2026-09-20 ([[x]]) — A bullet parked in a heading block.** Detail.\n"
+    tip = insert_under(base, "## Technical", bullet)
+    with pytest.raises(RefusalError, match="preamble"):
+        ledger_merge(base, tip, base, GOTCHAS)
+
+
+def test_bullet_and_heading_entries_across_the_two_sides_refuse() -> None:
+    base = "# Doc\n\n## Empty\n\n## Other\n\nProse.\n"
+    tip = base.replace("## Empty\n", "## Empty\n\n- **2026-09-20 — a bullet entry.** Detail.\n", 1)
+    origin = base.replace(
+        "## Empty\n", "## Empty\n\n### Heading entry (2026-09-19)\n\nBody.\n", 1
+    )
+    with pytest.raises(RefusalError, match="mix shapes"):
+        ledger_merge(base, tip, origin, "brain/Gotchas.md")
+
+
+# ---------------------------------------------------------------------------
+# R3 -- entry-level ledger merge.
+# ---------------------------------------------------------------------------
+
+BYTECODE_ENTRY = "### Bytecode cache hides a mutation (2026-09-10)\n\nBody of the bytecode gotcha.\n"
+
+
+def test_ledger_merge_in_place_edit_accepted_when_origin_left_it_alone() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Body of the bytecode gotcha.", "Corrected bytecode body.")
+    origin_chunk = gotchas_entry("Origin gotcha", "2026-09-18", "Origin body.")
+    origin = insert_under(base, "## Technical", origin_chunk)
+
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+
+    assert "Corrected bytecode body." in merged
+    assert "Body of the bytecode gotcha." not in merged
+    assert origin_chunk in merged
+    assert detail["replaced"] == 1
+    assert detail["inserted"] == 0
+
+
+def test_ledger_merge_in_place_edit_refused_when_origin_edited_it_too() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Body of the bytecode gotcha.", "Session body.")
+    origin = base.replace("Body of the bytecode gotcha.", "Origin body.")
+    with pytest.raises(RefusalError, match="Bytecode cache hides a mutation") as info:
+        ledger_merge(base, tip, origin, GOTCHAS)
+    assert "edited or removed on origin" in str(info.value)
+
+
+def test_ledger_merge_in_place_edit_refused_when_origin_removed_it() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Body of the bytecode gotcha.", "Session body.")
+    origin = base.replace(BYTECODE_ENTRY + "\n", "")
+    assert origin != base
+    with pytest.raises(RefusalError, match="edited or removed on origin"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_ledger_merge_edit_plus_two_adjacent_inserts_in_one_opcode() -> None:
+    """difflib sees one ``replace`` of 1 base entry by 3 tip entries."""
+    base = GOTCHAS_SEED
+    one = gotchas_entry("Inserted one", "2026-09-09", "First new body.")
+    two = gotchas_entry("Inserted two", "2026-09-08", "Second new body.")
+    tip = base.replace(
+        BYTECODE_ENTRY,
+        "### Bytecode cache hides a mutation (2026-09-10)\n\nEdited bytecode body.\n\n"
+        + one
+        + "\n"
+        + two,
+    )
+    assert tip != base
+    origin_chunk = gotchas_entry("Origin gotcha", "2026-09-18", "Origin body.")
+    origin = insert_under(base, "## Technical", origin_chunk)
+
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+
+    assert "Edited bytecode body." in merged
+    assert "Body of the bytecode gotcha." not in merged
+    assert one in merged and two in merged and origin_chunk in merged
+    assert detail["replaced"] == 1
+    assert detail["inserted"] == 2
+
+
+def test_ledger_merge_heading_line_edit_accepted() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)",
+        "### Bytecode cache hides a mutation (2026-09-10, [[graphmark]])",
+    )
+    origin_chunk = gotchas_entry("Origin gotcha", "2026-09-18", "Origin body.")
+    origin = insert_under(base, "## Technical", origin_chunk)
+
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+
+    assert "### Bytecode cache hides a mutation (2026-09-10, [[graphmark]])" in merged
+    assert "(2026-09-10)\n" not in merged
+    assert origin_chunk in merged
+    assert detail["replaced"] == 1
+
+
+def test_ledger_merge_entry_deletion_refused() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace(BYTECODE_ENTRY + "\n", "")
+    assert tip != base
+    with pytest.raises(RefusalError, match="deleted") as info:
+        ledger_merge(base, tip, base, GOTCHAS)
+    assert "Bytecode cache hides a mutation" in str(info.value)
+
+
+def test_ledger_merge_origin_correction_of_untouched_entry_is_preserved() -> None:
+    base = GOTCHAS_SEED
+    chunk = gotchas_entry("Session gotcha", "2026-09-20", "Session body.")
+    tip = insert_under(base, "## Technical", chunk)
+    origin = base.replace("Body of the bytecode gotcha.", "Origin corrected this body.")
+
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+
+    assert "Origin corrected this body." in merged
+    assert chunk in merged
+    assert detail["inserted"] == 1
+    assert detail["replaced"] == 0
+
+
+def test_ledger_merge_session_edit_outside_the_blocks_refused() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Recurring pitfalls.", "Recurring pitfalls, reworded.")
+    with pytest.raises(RefusalError, match="outside"):
+        ledger_merge(base, tip, base, GOTCHAS)
+
+
+def test_ledger_merge_session_edit_of_block_preamble_refused() -> None:
+    base = BRAG_SEED.replace("### Wins\n\n- **2026-09-15", "### Wins\n\nPreamble prose.\n\n- **2026-09-15", 1)
+    tip = base.replace("Preamble prose.", "Preamble prose, reworded.")
+    with pytest.raises(RefusalError, match="preamble"):
+        ledger_merge(base, tip, base, BRAG)
+
+
+def test_ledger_merge_origin_preamble_change_refused() -> None:
+    base = BRAG_SEED.replace("### Wins\n\n- **2026-09-15", "### Wins\n\nPreamble prose.\n\n- **2026-09-15", 1)
+    tip = insert_under(base, "### Wins", brag_entry("2026-09-20", "Session win"))
+    origin = base.replace("Preamble prose.", "Origin reworded the preamble.")
+    with pytest.raises(RefusalError, match="preamble"):
+        ledger_merge(base, tip, origin, BRAG)
+
+
+def test_ledger_merge_sorts_each_subsection_separately() -> None:
+    """Wins and Growth share a quarter; a newer Growth entry must not climb
+    into the Wins list."""
+    growth = brag_entry("2026-09-25", "Newer growth entry")
+    tip = insert_under(BRAG_SEED, "### Growth", growth)
+    merged, _detail = ledger_merge(BRAG_SEED, tip, BRAG_SEED, BRAG)
+    wins = merged.split("### Wins\n", 1)[1].split("### Growth\n", 1)[0]
+    growth_block = merged.split("### Growth\n", 1)[1].split("## Q2 2026", 1)[0]
+    assert "Newer growth entry" not in wins
+    assert "Newer growth entry" in growth_block
+
+
+def test_ledger_merge_reports_replaced_and_duplicates() -> None:
+    base = GOTCHAS_SEED
+    chunk = gotchas_entry("Shared gotcha", "2026-09-20", "Same body.")
+    tip = insert_under(base, "## Technical", chunk)
+    origin = insert_under(base, "## Technical", chunk)
+    _merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert detail["duplicates_skipped"] == 1
+    assert detail["inserted"] == 0
+    assert detail["replaced"] == 0
+    assert detail["rule"] == "ledger"
+
+
+# ---------------------------------------------------------------------------
+# R4 -- handoff item-level replay inside touched sections.
+# ---------------------------------------------------------------------------
+
+
+def test_handoff_two_sessions_editing_different_bullets_of_one_section() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched, green.")
+    origin = base.replace(
+        "- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: parity ticket closed."
+    )
+
+    merged, detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    assert "- [[proj-a]]: deploy watched, green." in merged
+    assert "- [[proj-b]]: parity ticket closed." in merged
+    assert "watch the deploy" not in merged and "close the parity ticket" not in merged
+    assert detail["rule"] == "handoff"
+    assert detail["sections_replaced"] == ["Open threads"]
+    assert detail["items_replaced"] == 1
+    assert detail["items_inserted"] == 0
+
+
+def test_handoff_same_bullet_edited_by_both_sides_refuses() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
+    origin = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: origin wording.")
+    with pytest.raises(RefusalError, match="Open threads") as info:
+        handoff_merge(base, tip, origin, HANDOFF)
+    assert "- [[proj-a]]: watch the deploy." in str(info.value)
+    assert "byte-identical" in str(info.value)
+
+
+def test_handoff_session_edit_of_a_bullet_origin_removed_refuses() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
+    origin = base.replace("- [[proj-a]]: watch the deploy.\n", "")
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_handoff_session_insert_while_origin_edits_another_bullet() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace(
+        "- [[proj-b]]: close the parity ticket.",
+        "- [[proj-b]]: close the parity ticket.\n- [[proj-c]]: session's new thread.",
+    )
+    origin = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: origin reworded.")
+
+    merged, detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    assert "- [[proj-a]]: origin reworded." in merged
+    assert "- [[proj-c]]: session's new thread." in merged
+    assert merged.index("close the parity ticket") < merged.index("session's new thread")
+    assert detail["items_inserted"] == 1
+
+
+def test_handoff_both_sides_append_to_the_end_of_one_section() -> None:
+    """Two wrap-ups appending to the same section's tail must both survive."""
+    base = HANDOFF_SEED
+    tip = base.replace(
+        "- [[proj-b]]: close the parity ticket.",
+        "- [[proj-b]]: close the parity ticket.\n- [[proj-c]]: session's tail thread.",
+    )
+    origin = base.replace(
+        "- [[proj-b]]: close the parity ticket.",
+        "- [[proj-b]]: close the parity ticket.\n- [[proj-d]]: origin's tail thread.",
+    )
+
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    assert "session's tail thread." in merged and "origin's tail thread." in merged
+    assert merged.index("close the parity ticket") < merged.index("tail thread")
+
+
+def test_handoff_session_insert_mid_section_lands_after_its_anchor_bullet() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace(
+        "- [[proj-a]]: watch the deploy.",
+        "- [[proj-a]]: watch the deploy.\n- [[proj-c]]: inserted between.",
+    )
+    origin = base.replace(
+        "- [[proj-b]]: close the parity ticket.",
+        "- [[proj-b]]: close the parity ticket.\n- [[proj-d]]: origin's tail thread.",
+    )
+
+    merged, detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    order = [
+        merged.index(text)
+        for text in ("watch the deploy", "inserted between", "close the parity", "tail thread")
+    ]
+    assert order == sorted(order)
+    assert detail["items_inserted"] == 1
+    assert detail["items_replaced"] == 0
+
+
+def test_handoff_edits_to_two_paragraphs_of_one_section_merge() -> None:
+    base = HANDOFF_SEED.replace(
+        "[[proj-a]]: continue the rollout from the squash landing.\n",
+        "[[proj-a]]: continue the rollout from the squash landing.\n\n"
+        "[[proj-b]]: second paragraph about the parity gate.\n",
+    )
+    tip = base.replace("continue the rollout", "finish the rollout")
+    origin = base.replace("second paragraph about", "second paragraph, reworded, about")
+
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    assert "finish the rollout" in merged
+    assert "second paragraph, reworded, about" in merged
+
+
+def test_handoff_bullet_continuation_lines_travel_with_their_bullet() -> None:
+    base = HANDOFF_SEED.replace(
+        "- [[proj-a]]: watch the deploy.\n",
+        "- [[proj-a]]: watch the deploy.\n  continuation of proj-a.\n",
+    )
+    tip = base.replace("continuation of proj-a.", "continuation, rewritten by the session.")
+    origin = base.replace("close the parity ticket.", "ticket closed.")
+
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+
+    assert "continuation, rewritten by the session." in merged
+    assert "ticket closed." in merged
+
+
+def _with_stamp(text: str, stamp: str) -> str:
+    return text.replace("_Updated 2026-09-15._", stamp)
+
+
+def test_handoff_stamp_only_origin_changed_takes_origins() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
+    origin = _with_stamp(base, "_Updated 2026-09-21 (origin)._")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "_Updated 2026-09-21 (origin)._" in merged
+    assert "_Updated 2026-09-15._" not in merged
+    assert "session wording." in merged
+
+
+def test_handoff_stamp_only_session_changed_takes_sessions() -> None:
+    base = HANDOFF_SEED
+    tip = _with_stamp(base, "_Updated 2026-09-20 (session)._")
+    origin = base.replace("- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: origin edit.")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "_Updated 2026-09-20 (session)._" in merged
+    assert "origin edit." in merged
+
+
+def test_handoff_stamp_changed_on_both_sides_session_wins() -> None:
+    base = HANDOFF_SEED
+    tip = _with_stamp(base, "_Updated 2026-09-20 (session)._").replace(
+        "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording."
+    )
+    origin = _with_stamp(base, "_Updated 2026-09-21 (origin)._")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "_Updated 2026-09-20 (session)._" in merged
+    assert "(origin)" not in merged
+    assert "session wording." in merged
+
+
+def test_handoff_non_stamp_preamble_divergence_refuses() -> None:
+    base = HANDOFF_SEED.replace(
+        "_Updated 2026-09-15._\n", "_Updated 2026-09-15._\n\nPreamble prose.\n"
+    )
+    tip = base.replace("Preamble prose.", "Session preamble prose.")
+    origin = base.replace("Preamble prose.", "Origin preamble prose.")
+    with pytest.raises(RefusalError, match="preamble"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_handoff_stamp_divergence_does_not_mask_other_preamble_divergence() -> None:
+    base = HANDOFF_SEED
+    tip = _with_stamp(base, "_Updated 2026-09-20._").replace("date: 2026-09-15", "date: 2026-09-20")
+    origin = _with_stamp(base, "_Updated 2026-09-21._").replace(
+        "date: 2026-09-15", "date: 2026-09-21"
+    )
+    with pytest.raises(RefusalError, match="preamble"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_handoff_concurrent_wrap_ups_on_one_section_replay(tmp_path: Path) -> None:
+    """The reflog shape: every wrap-up edits its own bullet in the same sections."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(
+        peer,
+        HANDOFF,
+        _read(peer, HANDOFF).replace(
+            "- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: parity ticket closed."
+        ),
+    )
+    _peer_push(peer)
+    _write(
+        local,
+        HANDOFF,
+        _read(local, HANDOFF).replace(
+            "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched, green."
+        ),
+    )
+    _commit_all(local, "vault wrap-up 2026-09-20")
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed"
+    merged = _read(local, HANDOFF)
+    assert "- [[proj-a]]: deploy watched, green." in merged
+    assert "- [[proj-b]]: parity ticket closed." in merged
+    assert report["files"][HANDOFF]["items_replaced"] == 1
+
+
+# ---------------------------------------------------------------------------
+# R5 -- every refusal is reported, not just the first.
+# ---------------------------------------------------------------------------
+
+
+def test_every_refusing_file_is_listed_in_the_report(tmp_path: Path) -> None:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(
+        peer,
+        DECISIONS,
+        _read(peer, DECISIONS).replace(
+            "collapse unpushed session commits", "collapse only unpushed session commits"
+        ),
+    )
+    _write(
+        peer,
+        HANDOFF,
+        _read(peer, HANDOFF).replace("Nothing unattended.", "Nothing unattended right now."),
+    )
+    _peer_push(peer)
+    _write(
+        local,
+        DECISIONS,
+        _read(local, DECISIONS).replace(
+            "collapse unpushed session commits", "collapse ALL session commits"
+        ),
+    )
+    _write(local, HANDOFF, _read(local, HANDOFF) + "\n## Brand new section\n\nBody.\n")
+    _commit_all(local, "vault wrap-up 2026-09-20")
+    head_before, branch_before = _head(local), _branch(local)
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
+
+    assert report["action"] == "refused"
+    by_path = {item["path"]: item["reason"] for item in report["refusals"]}
+    assert set(by_path) == {DECISIONS, HANDOFF}
+    assert "edited or removed on origin" in by_path[DECISIONS]
+    assert "sections" in by_path[HANDOFF]
+    assert report["reason"] == report["refusals"][0]["reason"]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_outside_allowlist_refusal_does_not_hide_the_hub_file_refusals(tmp_path: Path) -> None:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(peer, "personal/projects/proj-a.md", NOTE_SEED + "\nPeer line.\n")
+    _write(
+        peer,
+        DECISIONS,
+        _read(peer, DECISIONS).replace(
+            "collapse unpushed session commits", "collapse only unpushed session commits"
+        ),
+    )
+    _peer_push(peer)
+    _write(local, "personal/projects/proj-a.md", NOTE_SEED + "\nSession line.\n")
+    _write(
+        local,
+        DECISIONS,
+        _read(local, DECISIONS).replace(
+            "collapse unpushed session commits", "collapse ALL session commits"
+        ),
+    )
+    _commit_all(local, "vault wrap-up 2026-09-20")
+    head_before, branch_before = _head(local), _branch(local)
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
+
+    assert report["action"] == "refused"
+    assert report["outside_allowlist"] == ["personal/projects/proj-a.md"]
+    paths = [item["path"] for item in report["refusals"]]
+    assert paths == ["personal/projects/proj-a.md", DECISIONS]
+    assert "allowlist" in report["reason"]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_a_clean_replay_reports_no_refusals(tmp_path: Path) -> None:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(
+        peer,
+        DECISIONS,
+        insert_under(
+            _read(peer, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-19", "Peer decision", "**Decided:** peer."),
+        ),
+    )
+    _peer_push(peer)
+    _write(
+        local,
+        DECISIONS,
+        insert_under(
+            _read(local, DECISIONS),
+            "## Recent",
+            decisions_entry("2026-09-20", "Session decision", "**Decided:** mine."),
+        ),
+    )
+    _commit_all(local, "vault wrap-up 2026-09-20")
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed"
+    assert report["refusals"] == []

@@ -86,7 +86,11 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 _SECTION_RE = re.compile(r"^## (.+?)\s*$")
 _BULLET_ENTRY_RE = re.compile(r"^-\s+\*\*(\d{4}-\d{2}-\d{2})\b")
 _LEAD_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\b")
-_TRAIL_DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})\)$")
+# A Gotchas heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD<sep>qualifier)``
+# where sep is a comma or space and the qualifier holds no parentheses -- the
+# live vault carries ``(2026-10-10, [[apipulse]])`` and ``(2026-09-14 onward, [[x]])``
+# alongside the bare form. The entry's date is always the first one.
+_TRAIL_DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})(?:[ ,][^()]*)?\)$")
 _DESCRIPTION_RE = re.compile(r'^description:\s*"((?:[^"\\]|\\.)*)"\s*$')
 
 
@@ -115,6 +119,9 @@ class Report:
     replay_branch: str | None = None
     conflicts: list[str] = field(default_factory=list)
     outside_allowlist: list[str] = field(default_factory=list)
+    # Every refusal found, not just the first: [{"path": ..., "reason": ...}].
+    # ``reason`` stays the first one, so a reader of the old shape still works.
+    refusals: list[dict[str, str]] = field(default_factory=list)
     files: dict[str, dict[str, Any]] = field(default_factory=dict)
     carried: dict[str, list[str]] = field(
         default_factory=lambda: {"added": [], "modified": [], "deleted": []}
@@ -390,9 +397,10 @@ def _parse_chunks(
 ) -> tuple[list[str], list[_Chunk]]:
     """Split ``lines`` into (preamble, dated entry chunks), fail-closed.
 
-    Refuses on mixed entry kinds or heading levels, and -- for heading-kind
-    blocks -- on any undated heading at or below the entries' level, which
-    would make entry boundaries ambiguous.
+    Refuses on mixed entry heading levels, and -- for heading-kind blocks --
+    on any undated heading at or below the entries' level, which would make
+    entry boundaries ambiguous. A block with any dated heading is a
+    heading-entry block: dated bullets inside it are body text.
     """
     starts: list[tuple[int, tuple[str, int, str]]] = []
     for idx, line in enumerate(lines):
@@ -405,18 +413,20 @@ def _parse_chunks(
     if not starts:
         return list(lines), []
 
-    kinds = {started[0] for _idx, started in starts}
-    if len(kinds) > 1:
-        raise RefusalError(
-            f"{path}: {context} mixes bullet and heading entries; refusing to re-linearize it"
-        )
+    # Entry-kind precedence: a block holding any dated heading is a
+    # heading-entry block, so a ``- **YYYY-MM-DD`` line inside it is body text
+    # (a Gotchas entry quoting a dated bullet), never an entry start. Blocks
+    # without a dated heading keep bullet entries (the Brag Doc shape).
+    if any(started[0] == "heading" for _idx, started in starts):
+        starts = [(idx, started) for idx, started in starts if started[0] == "heading"]
+
+    kind = starts[0][1][0]  # one kind by construction: all heading, or all bullet
     levels = {started[1] for _idx, started in starts}
     if len(levels) > 1:
         raise RefusalError(
             f"{path}: {context} mixes entry heading levels {sorted(levels)}; "
             "refusing to re-linearize it"
         )
-    kind = kinds.pop()
     level = levels.pop()
     if kind == "heading":
         start_indices = {idx for idx, _started in starts}
@@ -486,10 +496,106 @@ def _emit_interior(preamble: list[str], chunks: list[_Chunk], at_eof: bool) -> l
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _Span:
+    """One anchor block's extent in a document: heading line to next boundary."""
+
+    anchor_idx: int
+    end_idx: int  # exclusive
+    path: tuple[str, ...]
+    line: str
+
+
+@dataclass
+class _Doc:
+    """A ledger parsed just far enough to locate its anchor blocks."""
+
+    lines: list[str]
+    flags: list[bool]
+    headings: list[tuple[int, int, str]]
+    spans: list[_Span]
+
+    def interior(self, span: _Span) -> list[str]:
+        return self.lines[span.anchor_idx + 1 : span.end_idx]
+
+    def by_path(self) -> dict[tuple[str, ...], list[_Span]]:
+        out: dict[tuple[str, ...], list[_Span]] = {}
+        for span in self.spans:
+            out.setdefault(span.path, []).append(span)
+        return out
+
+    def outside(self) -> list[str]:
+        """Every line that is not inside an anchor block's interior."""
+        keep = [True] * len(self.lines)
+        for span in self.spans:
+            for idx in range(span.anchor_idx + 1, span.end_idx):
+                keep[idx] = False
+        return [line for line, kept in zip(self.lines, keep, strict=True) if kept]
+
+
+def _anchor_spans(
+    lines: list[str], flags: list[bool], headings: list[tuple[int, int, str]]
+) -> list[_Span]:
+    """The anchor blocks of a ledger: its innermost non-entry headings.
+
+    An anchor is a non-entry heading of level 2 or deeper whose next heading
+    is an entry heading, a heading no deeper than itself, or nothing -- so
+    ``## Technical`` (Gotchas, Key Decisions) and ``### Wins`` (Brag Doc, under
+    ``## Q3 2026``) are anchors while ``## Q3 2026`` is not. A block runs to the
+    next heading no deeper than its own, so Wins and Growth sort separately.
+    """
+    spans: list[_Span] = []
+    for pos, (idx, lvl, raw) in enumerate(headings):
+        if lvl < 2 or parse_entry_start(raw) is not None:
+            continue
+        if pos + 1 < len(headings):
+            _nidx, nlvl, nraw = headings[pos + 1]
+            if nlvl > lvl and parse_entry_start(nraw) is None:
+                continue  # a deeper non-entry heading follows: not innermost
+        spans.append(
+            _Span(
+                anchor_idx=idx,
+                end_idx=_block_end(headings, idx, lvl, len(lines)),
+                path=_heading_path(headings, lines, idx),
+                line=raw,
+            )
+        )
+    return spans
+
+
+def _load_doc(text: str) -> _Doc:
+    lines = _lines(text)
+    flags = _fence_flags(lines)
+    headings = _headings(lines, flags)
+    return _Doc(lines, flags, headings, _anchor_spans(lines, flags, headings))
+
+
+def _unique_spans(doc: _Doc, side: str, path: str) -> dict[tuple[str, ...], _Span]:
+    out: dict[tuple[str, ...], _Span] = {}
+    for span_path, spans in doc.by_path().items():
+        if len(spans) != 1:
+            raise RefusalError(
+                f"{path}: anchor {spans[0].line!r} appears {len(spans)} times in the "
+                f"{side}; anchors are ambiguous"
+            )
+        out[span_path] = spans[0]
+    return out
+
+
 def ledger_merge(
     base_text: str, tip_text: str, origin_text: str, path: str
 ) -> tuple[str, dict[str, Any]]:
-    """Replay the session's pure entry insertions onto origin's ledger copy.
+    """Replay the session's entry-level ledger changes onto origin's copy.
+
+    The session's change is read per anchor block as a set of *entries*
+    (workshop #893): inserted entries, and whole entries edited in place. A
+    deletion, a change outside the anchor blocks, or a change to a block
+    preamble refuses. Origin's block is the starting point: each entry the
+    session edited must be byte-identical, exactly once, in origin's block
+    (the narrow per-replaced-entry assertion -- origin's copies of entries the
+    session did not touch simply win, including their corrections); the
+    session's new entries are added unless origin already holds them, and the
+    block is re-sorted newest-first by date.
 
     Parameters
     ----------
@@ -502,97 +608,61 @@ def ledger_merge(
     -------
     tuple
         ``(merged_text, detail)`` -- the merged file content and a report
-        fragment (rule, anchors, inserted, duplicates_skipped, unchanged).
+        fragment (rule, anchors, inserted, replaced, duplicates_skipped,
+        unchanged).
 
     Raises
     ------
     RefusalError
-        On any non-insertion session change, any insertion not under a
-        recognized anchor, any origin-side entry or block-preamble edit
-        (the per-entry base assertion), or any structural ambiguity.
+        On any session change outside the anchor blocks or in a block
+        preamble, any entry deletion, any anchor missing or ambiguous on
+        origin, an origin-side preamble edit, an edited entry origin no longer
+        holds byte-identically exactly once, or mixed entry shapes.
     """
-    base_lines = _lines(base_text)
-    tip_lines = _lines(tip_text)
-    origin_lines = _lines(origin_text)
+    base = _load_doc(base_text)
+    tip = _load_doc(tip_text)
+    origin = _load_doc(origin_text)
+    base_spans = _unique_spans(base, "session base", path)
+    tip_spans = _unique_spans(tip, "session tip", path)
 
-    matcher = difflib.SequenceMatcher(None, base_lines, tip_lines, autojunk=False)
-    insertions: list[tuple[int, list[str]]] = []
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            continue
-        if tag != "insert":
-            raise RefusalError(
-                f"{path}: non-insertion session change ({tag} touching base lines "
-                f"{i1 + 1}-{max(i2, i1 + 1)}); in-place ledger corrections escalate to a human"
-            )
-        insertions.append((i1, tip_lines[j1:j2]))
-
-    base_flags = _fence_flags(base_lines)
-    base_headings = _headings(base_lines, base_flags)
-
-    per_anchor: dict[int, list[_Chunk]] = {}
-    for at, inserted in insertions:
-        anchor_idx: int | None = None
-        for idx, _lvl, _raw in reversed(base_headings):
-            if idx >= at:
-                continue
-            if parse_entry_start(base_lines[idx]) is not None:
-                continue
-            anchor_idx = idx
-            break
-        if anchor_idx is None:
-            raise RefusalError(
-                f"{path}: insertion before line {at + 1} is not under any anchor heading"
-            )
-        anchor_match = _HEADING_RE.match(base_lines[anchor_idx])
-        if anchor_match is None or len(anchor_match.group(1)) < 2:
-            raise RefusalError(
-                f"{path}: insertion before line {at + 1} sits under the document title, "
-                "not a recognized anchor heading"
-            )
-        ins_flags = _fence_flags(inserted)
-        ins_preamble, ins_chunks = _parse_chunks(
-            inserted, ins_flags, path, f"the insertion under {base_lines[anchor_idx]!r}"
+    if base.outside() != tip.outside() or set(base_spans) != set(tip_spans):
+        raise RefusalError(
+            f"{path}: the session changed text outside the anchor blocks "
+            "(or added/removed an anchor heading); escalating"
         )
-        if not ins_chunks or _strip_trailing_blanks(ins_preamble):
-            raise RefusalError(
-                f"{path}: insertion under {base_lines[anchor_idx]!r} is not a pure "
-                "dated-entry insertion; in-place edits escalate to a human"
-            )
-        per_anchor.setdefault(anchor_idx, []).extend(ins_chunks)
-
-    origin_flags = _fence_flags(origin_lines)
-    origin_headings = _headings(origin_lines, origin_flags)
+    origin_by_path = origin.by_path()
 
     detail: dict[str, Any] = {
         "rule": "ledger",
         "anchors": [],
         "inserted": 0,
+        "replaced": 0,
         "duplicates_skipped": 0,
         "unchanged": False,
     }
     replacements: list[tuple[_Block, list[str]]] = []
-    for anchor_idx in sorted(per_anchor):
-        anchor_line = base_lines[anchor_idx]
-        apath = _heading_path(base_headings, base_lines, anchor_idx)
-        base_block = _parse_block(base_lines, base_flags, base_headings, anchor_idx, path)
+    for apath, base_span in base_spans.items():
+        tip_span = tip_spans[apath]
+        if base.interior(base_span) == tip.interior(tip_span):
+            continue  # this block was not touched
+        anchor_line = base_span.line
+        base_block = _parse_block(base.lines, base.flags, base.headings, base_span.anchor_idx, path)
+        tip_block = _parse_block(tip.lines, tip.flags, tip.headings, tip_span.anchor_idx, path)
+        if _strip_trailing_blanks(base_block.preamble) != _strip_trailing_blanks(tip_block.preamble):
+            raise RefusalError(
+                f"{path}: the session edited the preamble under {anchor_line!r}; "
+                "only dated entries may change; escalating"
+            )
 
-        candidates = [
-            idx
-            for idx, _lvl, raw in origin_headings
-            if raw == anchor_line
-            and parse_entry_start(origin_lines[idx]) is None
-            and _heading_path(origin_headings, origin_lines, idx) == apath
-        ]
+        candidates = origin_by_path.get(apath, [])
         if len(candidates) != 1:
             raise RefusalError(
                 f"{path}: anchor {anchor_line!r} was not found exactly once on origin "
                 f"(found {len(candidates)}); the replay never guesses a new anchor"
             )
         origin_block = _parse_block(
-            origin_lines, origin_flags, origin_headings, candidates[0], path
+            origin.lines, origin.flags, origin.headings, candidates[0].anchor_idx, path
         )
-
         if _strip_trailing_blanks(base_block.preamble) != _strip_trailing_blanks(
             origin_block.preamble
         ):
@@ -600,26 +670,29 @@ def ledger_merge(
                 f"{path}: origin's preamble under {anchor_line!r} is not byte-identical "
                 "to the session base; escalating"
             )
-        origin_keys = Counter(chunk.key for chunk in origin_block.entries)
-        for chunk in base_block.entries:
-            if origin_keys[chunk.key] < 1:
-                raise RefusalError(
-                    f"{path}: origin's copy of entry {chunk.label!r} is not byte-identical "
-                    "to the session base (edited or removed); escalating"
-                )
-            origin_keys[chunk.key] -= 1
 
-        new_chunks = per_anchor[anchor_idx]
-        present = Counter(chunk.key for chunk in origin_block.entries)
+        new_entries, replaced = _diff_entries(base_block, tip_block, anchor_line, path)
+
+        origin_keys = Counter(chunk.key for chunk in origin_block.entries)
+        swaps: dict[tuple[str, ...], _Chunk] = {}
+        for old, edited in replaced:
+            if origin_keys[old.key] != 1:
+                raise RefusalError(
+                    f"{path}: origin's copy of entry {old.label!r} the session edited is "
+                    "not byte-identical exactly once (edited or removed on origin); escalating"
+                )
+            swaps[old.key] = edited
+
+        present = Counter(origin_keys)
         kept: list[_Chunk] = []
-        for chunk in new_chunks:
+        for chunk in new_entries:
             if present[chunk.key] > 0:
                 present[chunk.key] -= 1
                 detail["duplicates_skipped"] += 1
                 continue
             kept.append(chunk)
 
-        merged_entries = kept + origin_block.entries
+        merged_entries = kept + [swaps.get(chunk.key, chunk) for chunk in origin_block.entries]
         kinds = {chunk.kind for chunk in merged_entries}
         levels = {chunk.level for chunk in merged_entries}
         if len(kinds) > 1 or len(levels) > 1:
@@ -629,18 +702,68 @@ def ledger_merge(
             )
         merged_entries.sort(key=lambda chunk: chunk.day, reverse=True)
 
-        at_eof = origin_block.end_idx == len(origin_lines)
+        at_eof = origin_block.end_idx == len(origin.lines)
         interior = _emit_interior(origin_block.preamble, merged_entries, at_eof)
         replacements.append((origin_block, interior))
         detail["anchors"].append(anchor_line)
         detail["inserted"] += len(kept)
+        detail["replaced"] += len(swaps)
 
-    out = list(origin_lines)
+    out = list(origin.lines)
     for origin_block, interior in sorted(replacements, key=lambda item: -item[0].anchor_idx):
         out[origin_block.anchor_idx + 1 : origin_block.end_idx] = interior
     merged_text = _join(out)
     detail["unchanged"] = merged_text == origin_text
     return merged_text, detail
+
+
+def _diff_entries(
+    base_block: _Block, tip_block: _Block, anchor_line: str, path: str
+) -> tuple[list[_Chunk], list[tuple[_Chunk, _Chunk]]]:
+    """Classify the session's entry changes: ``(inserted, [(base, edited)])``.
+
+    A ``replace`` opcode pairs each base entry with the tip entry that has the
+    identical start line (an in-place edit with one or more neighbouring
+    insertions lands in one opcode); when exactly one base and one tip entry
+    remain unpaired they are an in-place edit that also changed the start
+    line. Remaining tip entries are insertions. Any base entry left without a
+    partner -- and any ``delete`` -- is a deletion and refuses.
+    """
+    base_keys = [chunk.key for chunk in base_block.entries]
+    tip_keys = [chunk.key for chunk in tip_block.entries]
+    inserted: list[_Chunk] = []
+    replaced: list[tuple[_Chunk, _Chunk]] = []
+    matcher = difflib.SequenceMatcher(None, base_keys, tip_keys, autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "insert":
+            inserted.extend(tip_block.entries[j1:j2])
+            continue
+        lost: list[_Chunk] = []
+        if tag == "delete":
+            lost = base_block.entries[i1:i2]
+            unpaired_tip: list[_Chunk] = []
+        else:
+            unpaired_tip = list(tip_block.entries[j1:j2])
+            for old in base_block.entries[i1:i2]:
+                partner = next(
+                    (chunk for chunk in unpaired_tip if chunk.lines[0] == old.lines[0]), None
+                )
+                if partner is None:
+                    lost.append(old)
+                else:
+                    unpaired_tip.remove(partner)
+                    replaced.append((old, partner))
+            if len(lost) == 1 and len(unpaired_tip) == 1:
+                replaced.append((lost.pop(), unpaired_tip.pop()))
+        if lost:
+            raise RefusalError(
+                f"{path}: the session deleted entry {lost[0].label!r} under {anchor_line!r}; "
+                "entry deletions escalate to a human"
+            )
+        inserted.extend(unpaired_tip)
+    return inserted, replaced
 
 
 # ---------------------------------------------------------------------------
@@ -751,6 +874,118 @@ def _split_sections(
     return preamble, sections
 
 
+_STAMP_PREFIX = "_Updated "
+
+
+def _stamp_lines(preamble: list[str]) -> list[str]:
+    return [line for line in preamble if line.startswith(_STAMP_PREFIX)]
+
+
+def _unstamped(preamble: list[str]) -> list[str]:
+    return [line for line in preamble if not line.startswith(_STAMP_PREFIX)]
+
+
+def _items(body: list[str]) -> list[tuple[str, ...]]:
+    """Split a section body into items: the replay's unit inside a section.
+
+    An item is a top-level ``- `` bullet plus its continuation (the indented
+    lines and blank lines that follow it), or a non-bullet unindented line that
+    follows a blank line, which opens a new paragraph item. Whatever precedes
+    the first item (typically the blank line under the heading) is its own
+    item, and so are the blank lines that end the section: two wrap-ups that
+    both append a bullet to a section's end would otherwise each rewrite the
+    last bullet's trailing blank and collide. Concatenating the items
+    reproduces the body exactly.
+    """
+    end = len(body)
+    while end > 0 and body[end - 1] == "":
+        end -= 1
+    items: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for line in body[:end]:
+        opens = bool(line) and not line[0].isspace() and (
+            line.startswith("- ") or (bool(current) and current[-1] == "")
+        )
+        if opens and current:
+            items.append(tuple(current))
+            current = []
+        current.append(line)
+    if current:
+        items.append(tuple(current))
+    if end < len(body):
+        items.append(tuple(body[end:]))
+    return items
+
+
+def _find_runs(
+    haystack: list[tuple[str, ...]], run: list[tuple[str, ...]]
+) -> list[int]:
+    """Start indices where ``run`` occurs as a contiguous byte-identical run."""
+    width = len(run)
+    return [
+        at for at in range(len(haystack) - width + 1) if haystack[at : at + width] == run
+    ]
+
+
+def _merge_section_items(
+    base_body: list[str],
+    tip_body: list[str],
+    origin_body: list[str],
+    path: str,
+    name: str,
+    counts: dict[str, int],
+) -> list[str]:
+    """Re-apply the session's item-level edits of one section onto origin's body.
+
+    Every item the session replaced or deleted must occur in origin's body as
+    a contiguous, byte-identical run exactly once; an insertion anchors on the
+    base item before it, which must occur exactly once on origin (an insertion
+    at the very top goes to the section top). Placements that overlap refuse.
+    """
+    base_items = _items(base_body)
+    tip_items = _items(tip_body)
+    origin_items = _items(origin_body)
+    placements: list[tuple[int, int, list[tuple[str, ...]]]] = []
+    matcher = difflib.SequenceMatcher(None, base_items, tip_items, autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "insert":
+            if i1 == 0:
+                placements.append((0, 0, tip_items[j1:j2]))
+            else:
+                hits = _find_runs(origin_items, [base_items[i1 - 1]])
+                if len(hits) != 1:
+                    raise RefusalError(
+                        f"{path}: in '## {name}', the item before the session's insertion "
+                        f"({base_items[i1 - 1][0][:60]!r}) is not byte-identical exactly once on "
+                        f"origin ({len(hits)} matches); escalating"
+                    )
+                placements.append((hits[0] + 1, hits[0] + 1, tip_items[j1:j2]))
+            counts["items_inserted"] += j2 - j1
+            continue
+        run = base_items[i1:i2]
+        hits = _find_runs(origin_items, run)
+        if len(hits) != 1:
+            raise RefusalError(
+                f"{path}: in '## {name}', the session's changed item "
+                f"{run[0][0][:60]!r} is not byte-identical exactly once on origin "
+                f"({len(hits)} matches; edited or removed there); escalating"
+            )
+        placements.append((hits[0], hits[0] + len(run), tip_items[j1:j2]))
+        counts["items_replaced"] += len(run)
+    placements.sort(key=lambda placement: (placement[0], placement[1]))
+    for (_s1, end1, _r1), (start2, _e2, _r2) in zip(placements, placements[1:], strict=False):
+        if start2 < end1:
+            raise RefusalError(
+                f"{path}: the session's item edits in '## {name}' overlap on origin; escalating"
+            )
+    merged = list(origin_items)
+    for start, end, replacement in reversed(placements):
+        merged[start:end] = replacement
+    return [line for item in merged for line in item]
+
+
 def handoff_merge(
     base_text: str, tip_text: str, origin_text: str, path: str
 ) -> tuple[str, dict[str, Any]]:
@@ -794,23 +1029,40 @@ def handoff_merge(
     detail: dict[str, Any] = {
         "rule": "handoff",
         "sections_replaced": [],
+        "items_replaced": 0,
+        "items_inserted": 0,
         "description": "unchanged",
         "unchanged": False,
     }
 
-    # The non-section preamble (frontmatter rest + body preamble) is one span.
-    b_rest = (b_fm_rest, b_pre)
-    t_rest = (t_fm_rest, t_pre)
-    o_rest = (o_fm_rest, o_pre)
+    # The non-section preamble (frontmatter rest + body preamble) is one span,
+    # except the ``_Updated`` stamp: every wrap-up rewrites it, so it is
+    # resolved three-way below instead of counting as a divergence.
+    b_rest = (b_fm_rest, _unstamped(b_pre))
+    t_rest = (t_fm_rest, _unstamped(t_pre))
+    o_rest = (o_fm_rest, _unstamped(o_pre))
     if o_rest == b_rest:
         fm_rest, pre, desc_at = t_fm_rest, t_pre, t_desc_idx
     elif t_rest == b_rest or t_rest == o_rest:
         fm_rest, pre, desc_at = o_fm_rest, o_pre, o_desc_idx
     else:
         raise RefusalError(
-            f"{path}: the handoff preamble (frontmatter/date/updated line) diverged on "
-            "both sides and is not byte-identical to the session base; escalating"
+            f"{path}: the handoff preamble (frontmatter/date line) diverged on both "
+            "sides beyond the _Updated stamp and is not byte-identical to the session "
+            "base; escalating"
         )
+    winning_stamp = (
+        _stamp_lines(t_pre)
+        if _stamp_lines(t_pre) != _stamp_lines(b_pre)
+        else _stamp_lines(o_pre)
+    )
+    if _stamp_lines(pre) != winning_stamp:
+        if len(_stamp_lines(pre)) != 1 or len(winning_stamp) != 1:
+            raise RefusalError(
+                f"{path}: the handoff _Updated stamp is not a single line on every side; "
+                "escalating"
+            )
+        pre = [winning_stamp[0] if line.startswith(_STAMP_PREFIX) else line for line in pre]
 
     if o_desc == b_desc:
         detail["description"] = "session" if t_desc != b_desc else "unchanged"
@@ -835,17 +1087,13 @@ def handoff_merge(
 
     out_body = list(pre)
     for name, raw, body in o_secs:
+        out_body.append(raw)
         if name in touched:
-            if body != b_map[name]:
-                raise RefusalError(
-                    f"{path}: origin's copy of section '## {name}' is not byte-identical "
-                    "to the session base; escalating"
-                )
-            out_body.append(raw)
-            out_body.extend(t_map[name])
+            out_body.extend(
+                _merge_section_items(b_map[name], t_map[name], body, path, name, detail)
+            )
             detail["sections_replaced"].append(name)
         else:
-            out_body.append(raw)
             out_body.extend(body)
 
     fm = fm_rest[:desc_at] + [f'description: "{desc}"'] + fm_rest[desc_at:]
@@ -857,6 +1105,16 @@ def handoff_merge(
 # ---------------------------------------------------------------------------
 # orchestration
 # ---------------------------------------------------------------------------
+
+
+def _detail_summary(detail: dict[str, Any]) -> str:
+    """One-line human summary of a per-file merge detail."""
+    if detail["rule"] == "ledger":
+        return f"+{detail['inserted']} inserted, {detail['replaced']} replaced"
+    return (
+        f"{len(detail['sections_replaced'])} section(s), "
+        f"{detail['items_replaced']} replaced / {detail['items_inserted']} inserted items"
+    )
 
 
 def _chunked(items: list[str], size: int = 100) -> list[list[str]]:
@@ -969,28 +1227,50 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         )
         return
 
+    # Evaluate every conflicting file before refusing: the merges are pure
+    # functions of three blobs (nothing in the repository moves until all of
+    # them succeed), so one run can name every file that needs a human.
+    refusals: list[dict[str, str]] = []
     outside = sorted(path for path in conflicts if not is_allowlisted(path))
-    if outside:
-        report.outside_allowlist = outside
-        raise RefusalError("conflicting files outside the allowlist: " + ", ".join(outside))
+    report.outside_allowlist = outside
+    for path in outside:
+        refusals.append(
+            {"path": path, "reason": f"conflicting file outside the allowlist: {path}"}
+        )
 
     merged: dict[str, str | None] = {}
     for path in sorted(conflicts):
+        if path in outside:
+            continue
         s_status, o_status = conflicts[path]
         if s_status != "M" or o_status != "M":
-            raise RefusalError(
-                f"{path}: conflict is not a plain modification on both sides "
-                f"(session {s_status}, origin {o_status}); escalating"
+            refusals.append(
+                {
+                    "path": path,
+                    "reason": (
+                        f"{path}: conflict is not a plain modification on both sides "
+                        f"(session {s_status}, origin {o_status}); escalating"
+                    ),
+                }
             )
+            continue
         base_text = _blob_text(base, path)
         tip_text = _blob_text(head, path)
         origin_text = _blob_text(origin_head, path)
-        if path in LEDGER_FILES:
-            merged_text, detail = ledger_merge(base_text, tip_text, origin_text, path)
-        else:
-            merged_text, detail = handoff_merge(base_text, tip_text, origin_text, path)
+        try:
+            if path in LEDGER_FILES:
+                merged_text, detail = ledger_merge(base_text, tip_text, origin_text, path)
+            else:
+                merged_text, detail = handoff_merge(base_text, tip_text, origin_text, path)
+        except RefusalError as exc:
+            refusals.append({"path": path, "reason": str(exc)})
+            continue
         report.files[path] = detail
         merged[path] = None if detail["unchanged"] else merged_text
+
+    if refusals:
+        report.refusals = refusals
+        raise RefusalError(refusals[0]["reason"])
 
     carried_add: list[str] = []
     carried_mod: list[str] = []
@@ -1047,7 +1327,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
             new_head = origin_head
         else:
             summary = ", ".join(
-                f"{path} (+{detail.get('inserted', len(detail.get('sections_replaced', [])))})"
+                f"{path} ({_detail_summary(detail)})"
                 for path, detail in sorted(report.files.items())
             )
             message = (
@@ -1056,8 +1336,8 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
                 f"Conflicted hub files replayed onto origin's copies: {summary or 'none'}.\n"
                 f"Session-only paths carried: {sum(len(v) for v in report.carried.values())}.\n"
                 "Every replaced span was asserted byte-identical to the session base\n"
-                "(per entry / per section) before replacement; ledger anchors were\n"
-                "re-sorted newest-first (the-workshop#893).\n"
+                "(per replaced entry / per replaced handoff item) before replacement;\n"
+                "ledger anchors were re-sorted newest-first (the-workshop#893).\n"
             )
             _git_out("commit", "--quiet", "-m", message)
             new_head = _git_out("rev-parse", "HEAD")
@@ -1075,13 +1355,15 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         report.new_head = new_head
         report.action = "replayed"
         inserted = sum(detail.get("inserted", 0) for detail in report.files.values())
-        sections = sum(
-            len(detail.get("sections_replaced", [])) for detail in report.files.values()
+        replaced = sum(detail.get("replaced", 0) for detail in report.files.values())
+        items = sum(
+            detail.get("items_replaced", 0) + detail.get("items_inserted", 0)
+            for detail in report.files.values()
         )
         report.reason = (
             f"replayed {len(conflicts)} conflicted hub file(s) onto {remote}/{target}: "
-            f"{inserted} entries inserted, {sections} handoff section(s) re-applied; "
-            "push is now a fast-forward"
+            f"{inserted} entries inserted, {replaced} replaced, {items} handoff item(s) "
+            "re-applied; push is now a fast-forward"
         )
     except BaseException:
         restore_ok = True
