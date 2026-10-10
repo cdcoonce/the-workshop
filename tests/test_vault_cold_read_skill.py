@@ -260,7 +260,7 @@ def test_step_8_is_the_closed_rewrite_loop() -> None:
         EXEMPTION_MARK,
         "produced and measured",
         "Any conductor addition voids",
-        "third fresh read",
+        "has reached 3",
         "NOT-DISPATCH-READY",
     ):
         assert phrase in step, f"step 8 lacks {phrase!r}"
@@ -563,7 +563,7 @@ def test_subtract_is_a_standing_delegation_with_a_veto_listing() -> None:
     section = _cold_section("## Subtract first")
     for phrase in (
         "Standing delegation",
-        "no per-cap approval",
+        "no approval for the Subtract itself",
         "`Subtracted (veto within the next read)`",
         "Charles's silence is assent",
         "A deletion of a traced rule is never delegated",
@@ -627,15 +627,33 @@ def test_conductor_counts_the_cap_and_the_reader_prompt_carries_none() -> None:
     assert "carries no read or cap count" in _step(1)
 
 
-def test_cap_count_resets_on_a_delegated_subtract() -> None:
-    """Charles ruled 2026-10-03: a Subtract the conductor applies itself resets
-    the fresh-read count, as an approved body does."""
+def test_a_delegated_subtract_does_not_reset_the_cap_count() -> None:
+    """Charles reversed the reset part of the 2026-10-03 ruling by directing the
+    recommendation on 2026-10-04: afk#1548 ran six fresh reads under a cap of
+    three because delegated Subtracts after reads 2 and 4 each reset the count,
+    so the cap never bound. Only a body Charles approved resets it."""
     step8 = _step(8)
-    assert (
-        "since the last body Charles approved or the last delegated Subtract, whichever is later"
-        in step8
+    for phrase in (
+        "since the last body Charles approved, from the comment history and the stamp record",
+        "A delegated Subtract does not reset the count; only a body Charles approved does",
+        "afk#1548 ran six fresh reads under a cap of three",
+    ):
+        assert phrase in step8, f"step 8 lacks {phrase!r}"
+    for stale in ("whichever is later", "resets the count, as an approved body does"):
+        assert stale not in step8, f"step 8 still says {stale!r}"
+
+
+def test_standing_delegation_leaves_the_read_count_alone() -> None:
+    """The delegation covers the Subtract itself, never the cap: a Subtract
+    does not reset the count, so the cap still sends the slice to Charles."""
+    bullet = next(
+        _flat(line)
+        for line in COLD_READ.read_text().splitlines()
+        if line.startswith("- **Standing delegation")
     )
-    assert "since the last body Charles approved, from" not in step8
+    assert "no approval for the Subtract itself" in bullet
+    assert "so the cap in step 8 still binds" in bullet
+    assert "no per-cap approval" not in bullet
 
 
 def test_replay_ledger_lists_every_afk_app_row_with_class_and_source() -> None:
@@ -668,3 +686,267 @@ def test_replay_ledger_lists_every_afk_app_row_with_class_and_source() -> None:
     for row in advisory:
         assert row in neg, f"{row!r} must be a negative control"
     assert "blocking" in pos and "advisory" in neg
+
+
+# --- the gate ledger: machine-readable verdict lines and a landed record ------
+# Precedent: a census of 188 gated issues guessed verdicts and read counts from
+# free text (18 rows disagreed) and no comment recorded reader cost or whether
+# the teeth pass re-found a finding. Each test pins one clause of the fix.
+
+LEDGER_SCRIPT = (
+    REPO_ROOT / "plugins" / "workbench" / "machinery" / "engine" / "cold_read_ledger.py"
+)
+READ_LEDGER_LINE = (
+    "<!-- cold-read-ledger: v=1 read=<int> "
+    "verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt> body=<12 hex> "
+    "blocking=<int> rule_born=<int|na> advisory=<int> mutants=<int|na> "
+    "survivors=<int|na> tokens=<int|na> seconds=<int|na> -->"
+)
+LANDED_LEDGER_LINE = (
+    "<!-- cold-read-ledger: v=1 event=landed pr=<int> source_lines=<int> "
+    "test_lines=<int> teeth_gaps=<int> teeth_gaps_raised=<int> -->"
+)
+
+
+def test_step_6_requires_the_ledger_line_last_in_every_verdict_comment() -> None:
+    step = _step(6)
+    for phrase in (
+        "last line of every verdict comment",
+        "[ledger line](#the-ledger-line)",
+        "cold_read_ledger.py",
+        "`tokens` and `seconds` come from the reader's Agent-tool result, or are `na`",
+    ):
+        assert phrase in step, f"step 6 lacks {phrase!r}"
+
+
+def test_ledger_section_carries_both_line_formats_and_they_match_the_script() -> None:
+    """The format is defined twice, here and in the script's docstring; a
+    one-sided edit would let the skill instruct a line the parser rejects."""
+    section = _cold_section("## The ledger line")
+    script = _flat(LEDGER_SCRIPT.read_text())
+    for line in (READ_LEDGER_LINE, LANDED_LEDGER_LINE):
+        assert line in section, f"ledger section lacks {line!r}"
+        assert line in script, f"cold_read_ledger.py docstring lacks {line!r}"
+
+
+def test_ledger_section_states_the_field_rules() -> None:
+    section = _cold_section("## The ledger line")
+    for phrase in (
+        "a value never contains a space",
+        "its token count and duration",
+        "the key is never omitted",
+        "`v`, `read`, `verdict`, `body` and `blocking`",
+        "`unledgered`",
+    ):
+        assert phrase in section, f"ledger section lacks {phrase!r}"
+
+
+def _step_10() -> str:
+    procedure = _section(COLD_READ.read_text(), "## Procedure")
+    return _flat(procedure[procedure.index("\n10. ") :])
+
+
+def test_step_10_posts_the_landed_record_after_the_merge() -> None:
+    step = _step_10()
+    for phrase in (
+        "After landing",
+        "When the slice's PR merges",
+        "one comment ending with the landed [ledger line]",
+        "`teeth_gaps` is the number of test gaps the independent mutation pass found after the BUILD verdict",
+        "`teeth_gaps_raised`",
+        "already raised (blocking or advisory)",
+        "`source_lines` and `test_lines`",
+        'python3 "<engine>/cold_read_ledger.py" --repo <repo> --issue <N>',
+    ):
+        assert phrase in step, f"step 10 lacks {phrase!r}"
+
+
+def test_step_8_reruns_detector_10_after_every_body_edit() -> None:
+    step = _step(8)
+    assert "After every body edit, re-run detector 10's command" in step
+    assert "bare path token" in step
+    assert "afk#1520 read 2" in step
+
+
+# --- Hand-built tier (D5) --------------------------------------------------
+
+HAND_BUILT_HEADING = "## Hand-built slices"
+DEFAULT_HEADING = "## Every finding carries a default"
+
+
+def test_hand_built_section_precedes_the_findings_default_section() -> None:
+    text = COLD_READ.read_text()
+    assert HAND_BUILT_HEADING in text, "command.md has no hand-built section"
+    assert text.index(HAND_BUILT_HEADING) < text.index(DEFAULT_HEADING)
+    assert text.index(HAND_BUILT_HEADING) > text.index("## Subtract first")
+    # Immediately before: no other `## ` heading sits between the two.
+    between = text[text.index(HAND_BUILT_HEADING) + len(HAND_BUILT_HEADING) :]
+    between = between[: between.index(DEFAULT_HEADING)]
+    assert "\n## " not in between
+
+
+TRIGGER_LINE = "Build path: hand-built under the `drain-queue` skill"
+BLOCKING_KINDS = (
+    "states twice",
+    "unbound referent",
+    "false premise",
+    "unreachable bar",
+    "deny-surface match",
+    "fidelity row",
+)
+
+
+def _hand_built_sentences() -> list[str]:
+    return _sentences(_cold_section(HAND_BUILT_HEADING))
+
+
+def _sentence_with(sentences: list[str], needle: str) -> str:
+    hits = [s for s in sentences if needle in s]
+    assert len(hits) == 1, f"{needle!r} should sit in exactly one sentence: {hits}"
+    return hits[0]
+
+
+def test_hand_built_tier_trades_in_spec_reads_for_a_required_teeth_pass() -> None:
+    """For an afk-built slice the spec loop is the only pre-build test-strength
+    gate; a hand-built slice has a reviewed diff, so advisory test-strength
+    findings move downstream to a required independent teeth pass."""
+    section = _cold_section(HAND_BUILT_HEADING)
+    for phrase in (
+        "the only pre-build gate on test strength",
+        "an independent teeth pass by a different worker",
+        "[drain-queue](../../drain-queue/SKILL.md) step 3",
+        "keeps the full loop",
+        "Read 1 and the source-fidelity pass run in full",
+        "must-kill mutant",
+        "the slice does not land until the independent teeth pass has killed every must-kill mutant",
+        "or recorded why one cannot be killed",
+        "`tier: hand-built`",
+        "`tier=hand-built`",
+        "**The cap still binds.**",
+        "an advisory finding does not exempt a read from the count",
+        "afk#1520 (PR #1593) and afk#1548 (PR #1594)",
+        "the independent pass found two and five test gaps",
+    ):
+        assert phrase in section, f"hand-built section lacks {phrase!r}"
+    assert "none in the production source" not in section
+    assert "**Not a cap.**" not in section
+
+
+def test_hand_built_trigger_is_the_drain_queue_build_path_line_seen_by_read_1() -> None:
+    section = _cold_section(HAND_BUILT_HEADING)
+    bullet = _sentence_with(_hand_built_sentences(), "**Which slices.**")
+    assert f"`{TRIGGER_LINE}`" in bullet
+    for phrase in (
+        "written by Charles or `/dispatch` before read 1",
+        "The line must be in the body read 1 saw",
+        "a REWRITE or conductor edit that adds it does not count",
+        "a hand-build under another skill",
+    ):
+        assert phrase in section, f"hand-built section lacks {phrase!r}"
+    detector = _detector(3)
+    assert (
+        "whose body opens with the hand-built `Build path:` line of "
+        "[Hand-built slices](#hand-built-slices)"
+    ) in detector
+    assert "whose header says it is hand-built" not in detector
+
+
+def test_advisory_class_is_only_a_rule_the_test_does_not_grade() -> None:
+    """The advisory sentence must name only the test-does-not-grade class, and
+    the sentence that lists what still blocks must name every blocking class:
+    a rewrite that swaps the two lists goes red here."""
+    sentences = _hand_built_sentences()
+    advisory = _sentence_with(sentences, "is advisory:")
+    assert "does not grade a rule" in advisory
+    assert "MEASURED or REASONED" in advisory
+    for kind in ("unbound referent", "false premise", "fidelity row"):
+        assert kind not in advisory, f"advisory sentence names {kind!r}"
+    blocking = next(s for s in sentences if "Every other finding blocks" in s)
+    for kind in BLOCKING_KINDS:
+        assert kind in blocking, f"blocking sentence lacks {kind!r}"
+    _sentence_with(sentences, "Subtract first runs before this tier")
+
+
+def test_subtract_runs_before_the_hand_built_tier() -> None:
+    section = _cold_section(HAND_BUILT_HEADING)
+    for phrase in (
+        "A finding whose target is a reader-born rule is handled by Subtract",
+        "its mutant is not listed as must-kill",
+        "Only a finding on a traced rule (the original body, a fidelity row or a PRD story) becomes a must-kill mutant",
+        "it gets no outside-this-contract line",
+    ):
+        assert phrase in section, f"hand-built section lacks {phrase!r}"
+
+
+def test_unmeasured_and_conductor_only_classification() -> None:
+    sentences = _hand_built_sentences()
+    unmeasured = _sentence_with(sentences, "`unmeasured`")
+    assert "REASONED" in unmeasured
+    assert "the independent pass must measure it" in unmeasured
+    who = _sentence_with(sentences, "The conductor, never the reader, decides")
+    assert "only when the finding has no other basis" in who
+    for phrase in (
+        "A finding that also cites a fidelity row, states a rule two ways, or needs a wording change to resolve blocks",
+        "When in doubt it blocks",
+    ):
+        assert phrase in " ".join(sentences), f"hand-built section lacks {phrase!r}"
+
+
+def test_digest_states_the_executor_tier_and_the_must_kill_list() -> None:
+    step = _step(9)
+    for phrase in ("`tier: hand-built`", "`tier: afk-built`", "must-kill"):
+        assert phrase in step, f"step 9 lacks {phrase!r}"
+    tier = _sentence_with(_sentences(step), "`tier: hand-built`")
+    for phrase in ("`Build path:` line", "`tier: afk-built`"):
+        assert phrase in tier, f"tier sentence lacks {phrase!r}"
+
+
+def test_step_6_lists_must_kill_mutants_in_the_verdict_comment() -> None:
+    step = _step(6)
+    assert "On a hand-built slice, list every must-kill mutant under" in step
+    assert "`### Must-kill (hand-built)`" in step
+    assert "they count in `advisory=`" in step
+
+
+def test_step_8_cap_counts_every_fresh_read_and_restarts_only_on_a_charles_ruling() -> None:
+    step8 = _step(8)
+    for phrase in (
+        "When a fresh read finds a blocking defect and the count, including that read, has reached 3, the verdict is NOT-DISPATCH-READY",
+        "A cap ruling from Charles (Grow, or his by-name acceptance of the applied Subtract) counts as approving that body and restarts the count at 0; silence does not",
+        "count every fresh read on the slice; only the cap count restarts",
+    ):
+        assert phrase in step8, f"step 8 lacks {phrase!r}"
+    assert "third fresh read" not in step8
+
+
+def test_every_count_reset_sentence_in_the_skill_is_negated_or_restricted() -> None:
+    """Any sentence that says something resets or restarts a count must say who
+    does not, or only who does: `not`, `never` or `only`. A rule reversed back
+    to "a Subtract resets the count" goes red."""
+    # Per line, so a bullet's sentence cannot borrow a negation from the next bullet.
+    hits = [
+        sentence
+        for line in COLD_READ.read_text().splitlines()
+        for sentence in _sentences(_flat(line))
+        if re.search(r"\b(reset|restart)s?\b", sentence) and "count" in sentence
+    ]
+    assert len(hits) >= 4, hits
+    for sentence in hits:
+        assert re.search(r"\b(not|never|only)\b", sentence), sentence
+
+
+def test_hand_built_vocabulary_agrees_between_the_gate_and_drain_queue() -> None:
+    gate = _cold_section(HAND_BUILT_HEADING)
+    drain = _flat((SKILLS / "drain-queue" / "SKILL.md").read_text())
+    for name, text in (("command.md", gate), ("drain-queue SKILL.md", drain)):
+        assert TRIGGER_LINE in text, f"{name} lacks the trigger line"
+        assert "must-kill" in text, f"{name} lacks must-kill"
+    assert "MEASURED or REASONED" in gate
+    assert "measured or not" in drain
+
+
+def test_ledger_fields_name_the_optional_tier_key() -> None:
+    section = _cold_section("## The ledger line")
+    fields = section[section.index("**Fields.**") :]
+    assert "`tier=<hand-built|afk-built>`" in fields
+    assert "optional" in fields

@@ -144,3 +144,70 @@ def test_reading_the_result_dispatches_a_fresh_reader_before_step_2() -> None:
     section = _reading_the_result()
     assert "fresh reader" in section
     assert "before step 2" in section
+
+
+def _step_text(start_marker: str, end_marker: str) -> str:
+    flat = _flat(SKILL.read_text())
+    start = flat.index(start_marker)
+    return flat[start : flat.index(end_marker, start)]
+
+
+def test_step_1_routes_hand_built_issues_to_the_cold_read_tier() -> None:
+    """A hand-built issue's test-strength-only findings arrive as a must-kill
+    list, not as a REWRITE, from read 2 on."""
+    step = _step_text("**1. Gate the spec cold.**", "**2. Dispatch one worker")
+    for phrase in (
+        "the issue body opens with ``Build path: hand-built under the `drain-queue` skill``",
+        "Hand-built slices tier applies",
+        "from read 2 on",
+        "a test does not grade a stated rule, measured or not,",
+        "must-kill list for the worker and the independent teeth pass, not as a REWRITE",
+    ):
+        assert phrase in step, f"step 1 lacks {phrase!r}"
+    assert "header says" not in step
+
+
+def test_step_3_requires_an_independent_teeth_pass_for_hand_built_slices() -> None:
+    step = _step_text("**3. Review the diff yourself.**", "**4. Land and tear down.**")
+    for phrase in (
+        "**Independent teeth pass (hand-built tier).**",
+        "every slice gated under that tier, whether or not a finding was downgraded",
+        "a worker other than the builder",
+        "`detector-teeth-check`",
+        "the gate's must-kill list",
+        "The pass worker only reports",
+        "The conductor or another worker closes the gaps and re-runs the surviving mutants",
+        "does not land while a must-kill mutant is neither killed nor explained",
+        "`explained` means the conductor accepts the explanation",
+        "ledger and the gaps closed",
+        "afk#1520 (PR #1593) and afk#1548 (PR #1594)",
+    ):
+        assert phrase in step, f"step 3 lacks {phrase!r}"
+    # After the specialist pre-reads, which say "before you start the manual review".
+    assert step.index("Independent teeth pass") > step.index(
+        "**Specialist pre-reads.**"
+    )
+    assert step.index("Independent teeth pass") > step.index("Worked dispatch (a diff")
+
+
+def test_teeth_evidence_iron_rule_still_stands_beside_the_independent_pass() -> None:
+    flat = _flat(SKILL.read_text())
+    assert "Every pull request carries teeth evidence" in flat
+
+
+def test_queue_ledger_rows_carry_the_tier_and_the_independent_pass() -> None:
+    flat = _flat(SKILL.read_text())
+    assert (
+        "issue, pull request, cold-read verdict, tier, teeth evidence, "
+        "the independent teeth pass result, and outcome"
+    ) in flat
+
+
+def test_reading_the_result_regrades_hand_built_findings() -> None:
+    section = _reading_the_result()
+    assert (
+        "On a hand-built slice from read 2 on, the conductor re-grades the reader's "
+        "findings under `vault-cold-read`'s Hand-built slices tier, then edits the "
+        "verdict comment and ledger line, corrects the label, and stamps if the "
+        "result is BUILD."
+    ) in section

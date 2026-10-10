@@ -63,3 +63,18 @@ def test_golden_fixture_is_derived_by_someone_else() -> None:
     assert "other than its builder" in text
     assert "derivation" in text and "recorded" in text
     assert "mirror" in text and "detector-teeth-check" in text
+
+
+def test_teeth_mutations_slot_includes_the_gates_must_kill_mutants() -> None:
+    """A hand-built slice's must-kill list reaches the builder through the
+    teeth slot, and every listed mutant is included."""
+    rows = [
+        " ".join(line.split())
+        for line in DISPATCH_MD.read_text(encoding="utf-8").splitlines()
+        if line.startswith("| `<teeth mutations>`")
+    ]
+    assert len(rows) == 1, rows
+    assert (
+        "When the gate listed must-kill mutants (the hand-built tier), "
+        "include every one of them."
+    ) in rows[0]
