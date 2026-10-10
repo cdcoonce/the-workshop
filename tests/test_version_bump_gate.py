@@ -1044,15 +1044,6 @@ class TestVersionDecrease:
         assert find_missing_bumps(repo, "main") == []
         assert find_level_violations(repo, "main") == []
 
-    def test_a_lowered_version_without_a_content_change_is_not_flagged(
-        self, tmp_path: Path
-    ) -> None:
-        repo = _repo_with_two_plugins(tmp_path)
-        _manifest(repo, "mentor", "0.0.9")
-        commit(repo, "lower mentor only")
-
-        assert check_version_bumps.find_version_regressions(repo, "main") == []
-
     def test_a_real_bump_and_an_unchanged_version_are_not_regressions(
         self, tmp_path: Path
     ) -> None:

@@ -294,6 +294,59 @@ def find_level_violations(
     return violations
 
 
+def find_version_regressions(
+    repo: Path, base: str = DEFAULT_BASE
+) -> list[tuple[str, str, str]]:
+    """(plugin, released, current) where changed output carries a lowered version.
+
+    `find_missing_bumps` only sees `current == released` and `find_level_violations`
+    only sees a version that advanced, so a version that went *down* (a bad edit
+    or rebase) belongs to neither. Versions that do not parse are
+    `find_malformed_versions`' to report.
+    """
+    base_sha = resolve_base(repo, base)
+    exclusions = _stamper_exclusions(repo)
+    regressions = []
+    for plugin in shipped_plugins(repo):
+        if not output_changed(repo, base_sha, plugin, exclusions):
+            continue
+        released = manifest_version(repo, plugin, base_sha)
+        current = manifest_version(repo, plugin)
+        if released is None or current is None:
+            continue
+        before, after = _parts(released), _parts(current)
+        if before is None or after is None:
+            continue
+        if after < before:
+            regressions.append((plugin, released, current))
+    return regressions
+
+
+def find_malformed_versions(
+    repo: Path, base: str = DEFAULT_BASE
+) -> list[tuple[str, str, str]]:
+    """(plugin, released, current) where changed output has a non-semver version.
+
+    A version the gate cannot parse cannot be compared, so the level check has
+    nothing to say about it; skipping it would wave through exactly the edit
+    (`1.2.0 -> 1.2.1-beta` beside a removed skill) the level rule exists to
+    catch. An *unchanged* version is `find_missing_bumps`' to report.
+    """
+    base_sha = resolve_base(repo, base)
+    exclusions = _stamper_exclusions(repo)
+    malformed = []
+    for plugin in shipped_plugins(repo):
+        if not output_changed(repo, base_sha, plugin, exclusions):
+            continue
+        released = manifest_version(repo, plugin, base_sha)
+        current = manifest_version(repo, plugin)
+        if released is None or current is None or released == current:
+            continue
+        if _parts(released) is None or _parts(current) is None:
+            malformed.append((plugin, released, current))
+    return malformed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
@@ -304,6 +357,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         missing = find_missing_bumps(repo, args.base)
         levels = find_level_violations(repo, args.base)
+        regressions = find_version_regressions(repo, args.base)
+        malformed = find_malformed_versions(repo, args.base)
     except LookupError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
@@ -314,11 +369,40 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: could not resolve stamper-owned paths: {error}", file=sys.stderr)
         return 1
 
-    if not missing and not levels:
+    if not (missing or levels or regressions or malformed):
         print(f"version-bump gate: no unbumped plugins against {args.base}.")
         return 0
 
+    sections = 0
+
+    def separate() -> None:
+        nonlocal sections
+        if sections:
+            print("", file=sys.stderr)
+        sections += 1
+
+    if malformed:
+        separate()
+        print(
+            "ERROR: these plugins changed, but a version is not valid semver "
+            "(X.Y.Z), so the bump cannot be checked:",
+            file=sys.stderr,
+        )
+        for plugin, released, current in malformed:
+            print(f"  {plugin}: {released} -> {current}", file=sys.stderr)
+
+    if regressions:
+        separate()
+        print(
+            "ERROR: these plugins changed, but their version is lower than "
+            f"the one released at {args.base}:",
+            file=sys.stderr,
+        )
+        for plugin, released, current in regressions:
+            print(f"  {plugin}: {released} -> {current}", file=sys.stderr)
+
     if levels:
+        separate()
         print(
             "ERROR: these plugins changed their component surface by more than "
             "their version bump claims:",
@@ -336,23 +420,22 @@ def main(argv: list[str] | None = None) -> int:
             "capability. See Preset Versioning in CLAUDE.md.",
             file=sys.stderr,
         )
-        if not missing:
-            return 1
-        print("", file=sys.stderr)
 
-    print(
-        "ERROR: these plugins ship changed content but declare the same version "
-        f"as {args.base}:",
-        file=sys.stderr,
-    )
-    for plugin in missing:
-        version = manifest_version(Path(args.repo), plugin)
-        print(f"  {plugin} (still {version})", file=sys.stderr)
-    print(
-        "\nBump each plugin's .claude-plugin/plugin.json version, or the change "
-        "merges green and never reaches anyone who has it installed.",
-        file=sys.stderr,
-    )
+    if missing:
+        separate()
+        print(
+            "ERROR: these plugins ship changed content but declare the same version "
+            f"as {args.base}:",
+            file=sys.stderr,
+        )
+        for plugin in missing:
+            version = manifest_version(repo, plugin)
+            print(f"  {plugin} (still {version})", file=sys.stderr)
+        print(
+            "\nBump each plugin's .claude-plugin/plugin.json version, or the change "
+            "merges green and never reaches anyone who has it installed.",
+            file=sys.stderr,
+        )
     return 1
 
 
