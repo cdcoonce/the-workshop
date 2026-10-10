@@ -53,7 +53,9 @@ def test_closing_keywords_inert_on_dev_prs_is_documented() -> None:
 
 def test_blueprint_attended_sessions_work_frontier_one_at_a_time() -> None:
     text = _flat(SKILLS / "blueprint" / "SKILL.md").lower()
-    assert "one ticket at a time" in text
+    # the description already says "one ticket at a time"; pin the body rule
+    assert "continuation is the default" in text
+    assert "ticket-by-ticket" in text
     assert "unattended" in text
     assert "checkpoint" in text
     # the unattended cap keeps its original name (pinned by test_blueprint_skill)

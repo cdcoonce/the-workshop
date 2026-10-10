@@ -1,0 +1,133 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_backlog_b19_docs.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_backlog_b19_docs.py"
+  ],
+  "mutants": [
+    {
+      "label": "#473 drop parent-SHA verification command",
+      "file": "../CLAUDE.md",
+      "oracle": "real",
+      "find": "`git log --graph --parents`",
+      "replace": "`git log --oneline`"
+    },
+    {
+      "label": "#728 drop manual issue-close instruction",
+      "file": "../plugins/workbench/skills/github-cli/SKILL.md",
+      "oracle": "real",
+      "find": "`gh issue close <N> --comment",
+      "replace": "`gh issue view <N> --comment"
+    },
+    {
+      "label": "#585 attended default flipped back to stop",
+      "file": "../plugins/workbench/skills/blueprint/SKILL.md",
+      "oracle": "real",
+      "find": "continuation is the default",
+      "replace": "stopping is the default"
+    },
+    {
+      "label": "#585 drop unattended qualifier",
+      "file": "../plugins/workbench/skills/blueprint/SKILL.md",
+      "oracle": "real",
+      "find": "Unattended\n  (owner away or unresponsive)",
+      "replace": "Otherwise\n  (owner away or unresponsive)"
+    },
+    {
+      "label": "#585 SKILL.md exceeds line budget",
+      "file": "../plugins/workbench/skills/blueprint/SKILL.md",
+      "oracle": "real",
+      "find": "## Contracts (every session)\n",
+      "replace": "## Contracts (every session)\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    {
+      "label": "#585 drop attended scenario row",
+      "file": "../plugins/workbench/skills/blueprint/tests.md",
+      "oracle": "real",
+      "find": "`attended-continuation`",
+      "replace": "`attended`"
+    },
+    {
+      "label": "#1145 dev-cycle Phase 7 re-infers default branch",
+      "file": "../plugins/workbench/skills/dev-cycle/SKILL.md",
+      "oracle": "real",
+      "find": "PRs to `dev` (never inferred from the GitHub default branch",
+      "replace": "PRs to the default branch (detected via `gh repo view --json defaultBranchRef`) (never inferred from the GitHub default branch"
+    },
+    {
+      "label": "#1145 phase-transitions option (c) says default branch",
+      "file": "../plugins/workbench/skills/dev-cycle/references/phase-transitions.md",
+      "oracle": "real",
+      "find": "Create a new branch from `dev`",
+      "replace": "Create a new branch from the default branch"
+    },
+    {
+      "label": "#1146 delivery branches off origin/main",
+      "file": "../plugins/workbench/skills/persona-builder/references/delivery-and-pr.md",
+      "oracle": "real",
+      "find": "off `origin/dev`",
+      "replace": "off `origin/main`"
+    },
+    {
+      "label": "#1146 delivery drops PR-into-dev",
+      "file": "../plugins/workbench/skills/persona-builder/references/delivery-and-pr.md",
+      "oracle": "real",
+      "find": "pull request into `dev`",
+      "replace": "PR"
+    },
+    {
+      "label": "#1146 SKILL Phase 6 branches off origin/main",
+      "file": "../plugins/workbench/skills/persona-builder/SKILL.md",
+      "oracle": "real",
+      "find": "fresh `origin/dev`",
+      "replace": "fresh `origin/main`"
+    },
+    {
+      "label": "#492 Claude Code verify block removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "**Verify your install:** run `claude plugin list`",
+      "replace": "**Check:** run `claude plugin list`"
+    },
+    {
+      "label": "#492 Codex verify block removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "**Verify your install:** run `codex plugin list`",
+      "replace": "**Check:** run `codex plugin list`"
+    },
+    {
+      "label": "#492 Cortex verify block removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "**Verify your install:** run `cortex skill list`",
+      "replace": "**Check:** run `cortex skill list`"
+    },
+    {
+      "label": "#492 troubleshooting drops unreachable-marketplace row",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "Marketplace URL unreachable",
+      "replace": "Marketplace URL slow"
+    }
+  ]
+}
