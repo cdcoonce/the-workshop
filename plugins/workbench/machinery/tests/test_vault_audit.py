@@ -409,3 +409,16 @@ def test_audit_ignores_a_hub_file_with_no_dated_entries(tmp_path: Path) -> None:
     report = audit(tmp_path)
 
     assert report["issues"]["entry_order"] == []
+
+
+# --- #1077: no module-level name shadows the shared vault_utils pattern ---
+
+
+def test_vault_audit_does_not_shadow_the_shared_wikilink_pattern() -> None:
+    import vault_audit
+    import vault_utils
+
+    shadow = getattr(vault_audit, "WIKILINK_RE", vault_utils.WIKILINK_RE)
+    assert shadow is vault_utils.WIKILINK_RE
+    # The embed-aware pattern keeps its two groups under its own name.
+    assert vault_audit.WIKILINK_WITH_EMBED_RE.groups == 2
