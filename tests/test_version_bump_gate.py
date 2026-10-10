@@ -1167,3 +1167,55 @@ class TestMalformedVersion:
         assert code == 1
         assert "advisor: 1.2.0 -> 1.2.1-beta" in err
         assert "not valid semver" in err
+
+
+class TestSharedPerPluginState:
+    """Base, exclusions, and per-plugin diff status are computed once per run."""
+
+    @pytest.fixture
+    def counted(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+        calls = {"resolve_base": 0, "exclusions": 0, "output_changed": 0}
+
+        def wrap(module_attr: str, key: str) -> None:
+            original = getattr(check_version_bumps, module_attr)
+
+            def counting(*args, **kwargs):
+                calls[key] += 1
+                return original(*args, **kwargs)
+
+            monkeypatch.setattr(check_version_bumps, module_attr, counting)
+
+        wrap("resolve_base", "resolve_base")
+        wrap("_stamper_exclusions", "exclusions")
+        wrap("output_changed", "output_changed")
+        return calls
+
+    def test_main_computes_each_thing_once(
+        self, tmp_path: Path, counted: dict[str, int]
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _plugin(repo, "mentor", "0.1.0", "# v2\n")
+        commit(repo, "change mentor, no bump")
+
+        assert check_version_bumps.main(["--repo", str(repo), "--base", "main"]) == 1
+
+        assert counted == {"resolve_base": 1, "exclusions": 1, "output_changed": 2}
+
+    def test_a_finder_called_alone_still_works_without_a_context(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _plugin(repo, "mentor", "0.1.0", "# v2\n")
+        commit(repo, "change mentor, no bump")
+
+        assert find_missing_bumps(repo, "main") == ["mentor"]
+
+    def test_finders_accept_a_prebuilt_context(self, tmp_path: Path) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _plugin(repo, "mentor", "0.1.0", "# v2\n")
+        commit(repo, "change mentor, no bump")
+
+        context = check_version_bumps.build_context(repo, "main")
+
+        assert find_missing_bumps(repo, "main", context) == ["mentor"]
+        assert find_level_violations(repo, "main", context) == []
