@@ -41,8 +41,10 @@ VALID_ROLES = (
 )
 
 # Link prefixes that are not intra-doc relative paths and should be skipped
-# during link resolution (anchors, project-root-relative paths).
-_LINK_SKIP_PREFIXES = ("#", ".claude/")
+# during link resolution (anchors, project-root-relative paths, and
+# leading-slash root-relative links, which pathlib would resolve from the
+# filesystem root).
+_LINK_SKIP_PREFIXES = ("#", ".claude/", "/")
 
 # Matches any URI scheme prefix (e.g. "http:", "mailto:", "tel:") so such
 # links aren't mistaken for relative file paths.
