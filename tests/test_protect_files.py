@@ -159,3 +159,14 @@ def test_other_ecosystem_lockfile_blocks_with_reason(file_path: str) -> None:
     assert result.returncode == 2
     assert f"'{basename}'" in result.stderr
     assert file_path in result.stderr
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [".environment.md", ".envrc.notes", ".envy", "docs/.environment.md"],
+)
+def test_unrelated_dotfile_sharing_env_prefix_allows(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
