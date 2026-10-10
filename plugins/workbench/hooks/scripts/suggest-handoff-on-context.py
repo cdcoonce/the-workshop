@@ -57,8 +57,8 @@ def _threshold() -> int:
 def _context_tokens(transcript_path: Path) -> int | None:
     """Return the live context size from the last assistant message's usage.
 
-    Scans the JSONL transcript from the end and returns the first assistant usage
-    found as input + cache-read + cache-creation tokens. Returns None when the file
+    Scans the JSONL transcript from the end and returns the first main-thread
+    (non-sidechain) assistant usage found as input + cache-read + cache-creation tokens. Returns None when the file
     is unreadable or contains no usage-bearing assistant message.
     """
     try:
@@ -76,6 +76,8 @@ def _context_tokens(transcript_path: Path) -> int | None:
             continue
         if not isinstance(record, dict) or record.get("type") != "assistant":
             continue
+        if record.get("isSidechain") is True:
+            continue  # subagent turn: its usage is not the main thread's context
         message = record.get("message")
         if not isinstance(message, dict):
             continue
