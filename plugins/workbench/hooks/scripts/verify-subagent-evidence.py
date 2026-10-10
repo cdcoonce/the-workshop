@@ -31,7 +31,10 @@ if not isinstance(data, dict):
     # Fail open: a payload that isn't a JSON object isn't ours to act on.
     sys.exit(0)
 
-message = data.get("last_assistant_message") or ""
+message = data.get("last_assistant_message")
+if not isinstance(message, str):
+    # Fail open on a malformed payload: only a string can carry a claim.
+    message = ""
 agent_id = data.get("agent_id")
 cwd = Path(data.get("cwd") or ".").resolve()
 
