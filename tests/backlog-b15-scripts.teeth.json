@@ -1,0 +1,149 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_version_bump_gate.py",
+    "tests/test_bump_version.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_version_bump_gate.py",
+    "tests/test_bump_version.py"
+  ],
+  "mutants": [
+    {
+      "label": "#755 manifest_version returns the raw JSON value, not a str",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "return None if version is None else str(version)",
+      "replace": "return version"
+    },
+    {
+      "label": "#747 a bare file under skills/ counts as a component",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "if len(parts) >= 3 and parts[0] in (\"skills\", \"agents\"):",
+      "replace": "if len(parts) >= 2 and parts[0] in (\"skills\", \"agents\"):"
+    },
+    {
+      "label": "#747 working-tree walk keeps directory entries",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "for p in base.rglob(\"*\") if p.is_file()]",
+      "replace": "for p in base.rglob(\"*\")]"
+    },
+    {
+      "label": "#780 a git diff failure folds into 'changed'",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "if result.returncode not in (0, 1):",
+      "replace": "if False:"
+    },
+    {
+      "label": "#1139 run_git lets OSError escape",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "    except OSError as error:\n        # git missing",
+      "replace": "    except ZeroDivisionError as error:\n        # git missing"
+    },
+    {
+      "label": "#1139 bump_version.main does not catch GitError",
+      "file": "../scripts/bump_version.py",
+      "oracle": "real",
+      "find": "except (BumpError, StampError, gate.GitError) as error:",
+      "replace": "except (BumpError, StampError) as error:"
+    },
+    {
+      "label": "#741 a lowered version is never reported",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "        if after < before:\n            regressions.append",
+      "replace": "        if False:\n            regressions.append"
+    },
+    {
+      "label": "#1060 a malformed version is never reported",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "if parse_version(released) is None or parse_version(current) is None:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#1060 an unchanged malformed version is double-reported",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "if released is None or current is None or released == current:\n            continue\n        if parse_version",
+      "replace": "if released is None or current is None:\n            continue\n        if parse_version"
+    },
+    {
+      "label": "#1138 bump_version parses with its own regex again",
+      "file": "../scripts/bump_version.py",
+      "oracle": "real",
+      "find": "    parts = gate.parse_version(version)\n",
+      "replace": "    parts = tuple(int(c) for c in version.split('.')) if version and re.fullmatch(r'\\d+\\.\\d+\\.\\d+', version) else None\n"
+    },
+    {
+      "label": "#1138 the gate's actual_level stops using parse_version",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "    before, after = parse_version(released), parse_version(current)\n    if before is None or after is None or after <= before:\n        return None\n    if after[0]",
+      "replace": "    before, after = (None, None) if released is None else (tuple(map(int, released.split('.'))), tuple(map(int, current.split('.'))))\n    if before is None or after is None or after <= before:\n        return None\n    if after[0]"
+    },
+    {
+      "label": "#727 main hands finders no shared context",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "missing = find_missing_bumps(repo, args.base, context)",
+      "replace": "missing = find_missing_bumps(repo, args.base)"
+    },
+    {
+      "label": "#727 main hands the level finder no shared context",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "levels = find_level_violations(repo, args.base, context)",
+      "replace": "levels = find_level_violations(repo, args.base)"
+    },
+    {
+      "label": "#742 level-only repo is waved through as clean",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "if not (missing or levels or regressions or malformed):",
+      "replace": "if not (missing or regressions or malformed):"
+    },
+    {
+      "label": "#742 an unresolvable base exits zero",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "    except LookupError as error:\n        print(f\"ERROR: {error}\", file=sys.stderr)\n        return 1",
+      "replace": "    except LookupError as error:\n        print(f\"ERROR: {error}\", file=sys.stderr)\n        return 0"
+    },
+    {
+      "label": "#742 a StampError exits zero",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "could not resolve stamper-owned paths: {error}\", file=sys.stderr)\n        return 1",
+      "replace": "could not resolve stamper-owned paths: {error}\", file=sys.stderr)\n        return 0"
+    },
+    {
+      "label": "#742 missing-bump section is dropped when levels also fail",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "    if missing:\n        separate()",
+      "replace": "    if missing and not levels:\n        separate()"
+    }
+  ]
+}
