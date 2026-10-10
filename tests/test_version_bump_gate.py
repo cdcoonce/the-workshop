@@ -1019,3 +1019,160 @@ class TestGitDiffErrorIsNotAChange:
         err = capsys.readouterr().err
         assert err.startswith("ERROR:")
         assert "Traceback" not in err
+
+
+class TestVersionDecrease:
+    """A lowered version is neither "no bump" nor a bump of any level."""
+
+    def test_a_lowered_version_alongside_a_change_is_flagged(self, tmp_path: Path) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "advisor", "1.1.9")
+        _skill(repo, "advisor", "alpha", "# alpha, changed\n")
+        commit(repo, "change advisor, lower the version")
+
+        assert check_version_bumps.find_version_regressions(repo, "main") == [
+            ("advisor", "1.2.0", "1.1.9")
+        ]
+
+    def test_the_other_checks_stay_silent_about_it(self, tmp_path: Path) -> None:
+        """The gap #741 names: neither existing check owns a decrease."""
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "advisor", "1.1.9")
+        _skill(repo, "advisor", "alpha", "# alpha, changed\n")
+        commit(repo, "change advisor, lower the version")
+
+        assert find_missing_bumps(repo, "main") == []
+        assert find_level_violations(repo, "main") == []
+
+    def test_a_lowered_version_without_a_content_change_is_not_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "mentor", "0.0.9")
+        commit(repo, "lower mentor only")
+
+        assert check_version_bumps.find_version_regressions(repo, "main") == []
+
+    def test_a_real_bump_and_an_unchanged_version_are_not_regressions(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "advisor", "1.2.1")
+        _skill(repo, "advisor", "alpha", "# alpha, changed\n")
+        _plugin(repo, "mentor", "0.1.0", "# v2\n")
+        commit(repo, "bump one, forget the other")
+
+        assert check_version_bumps.find_version_regressions(repo, "main") == []
+
+    def test_the_cli_names_the_decrease_distinctly(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "advisor", "1.1.9")
+        _skill(repo, "advisor", "alpha", "# alpha, changed\n")
+        commit(repo, "change advisor, lower the version")
+
+        code = check_version_bumps.main(["--repo", str(repo), "--base", "main"])
+
+        err = capsys.readouterr().err
+        assert code == 1
+        assert "advisor: 1.2.0 -> 1.1.9" in err
+        assert "lower than" in err
+        assert "declare the same version" not in err
+
+
+class TestMalformedVersion:
+    """A version the gate cannot parse is an error, not a reason to skip."""
+
+    def _removal(self, repo: Path, version: str) -> None:
+        _drop_skill(repo, "advisor", "beta")
+        _manifest(repo, "advisor", version)
+        commit(repo, f"drop beta, version {version}")
+
+    @pytest.mark.parametrize("bad", ["1.0", "1.2.1-beta", "1.2.1rc1", ""])
+    def test_valid_to_malformed_with_a_removal_is_reported(
+        self, tmp_path: Path, bad: str
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        self._removal(repo, bad)
+
+        assert check_version_bumps.find_malformed_versions(repo, "main") == [
+            ("advisor", "1.2.0", bad)
+        ]
+
+    def test_malformed_to_valid_is_reported_too(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        _plugin(repo, "advisor", "1.0", "# v1\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+        _plugin(repo, "advisor", "1.0.1", "# v2\n")
+        commit(repo, "real change, valid version")
+
+        assert check_version_bumps.find_malformed_versions(repo, "main") == [
+            ("advisor", "1.0", "1.0.1")
+        ]
+
+    def test_an_unchanged_malformed_version_is_left_to_the_missing_bump_check(
+        self, tmp_path: Path
+    ) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "config", "user.email", "test@example.com")
+        git(repo, "config", "user.name", "Test")
+        _plugin(repo, "advisor", "1.0", "# v1\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "release")
+        git(repo, "checkout", "-q", "-b", "work")
+        _plugin(repo, "advisor", "1.0", "# v2\n")
+        commit(repo, "change, version untouched")
+
+        assert find_missing_bumps(repo, "main") == ["advisor"]
+        assert check_version_bumps.find_malformed_versions(repo, "main") == []
+
+    def test_a_manifest_only_change_counts_as_a_change(self, tmp_path: Path) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        _manifest(repo, "mentor", "0.1")
+        commit(repo, "touch only the manifest version of mentor")
+
+        # The manifest is itself plugin content, so this *is* a change; the
+        # report must still fire for it.
+        assert check_version_bumps.find_malformed_versions(repo, "main") == [
+            ("mentor", "0.1.0", "0.1")
+        ]
+
+    def test_a_numeric_manifest_version_fails_the_cli_without_a_traceback(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _plugin(repo, "advisor", "0.1.0", "# v2\n")
+        _write(
+            repo / "plugins" / "advisor" / ".claude-plugin" / "plugin.json",
+            json.dumps({"name": "advisor", "version": 1.1, "description": ""}),
+        )
+        commit(repo, "typo'd numeric version")
+
+        code = check_version_bumps.main(["--repo", str(repo), "--base", "main"])
+
+        err = capsys.readouterr().err
+        assert code == 1
+        assert "advisor: 0.1.0 -> 1.1" in err
+        assert "not valid semver" in err
+        assert "Traceback" not in err
+
+    def test_the_cli_reports_the_malformed_version(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        repo = _repo_with_two_plugins(tmp_path)
+        self._removal(repo, "1.2.1-beta")
+
+        code = check_version_bumps.main(["--repo", str(repo), "--base", "main"])
+
+        err = capsys.readouterr().err
+        assert code == 1
+        assert "advisor: 1.2.0 -> 1.2.1-beta" in err
+        assert "not valid semver" in err
