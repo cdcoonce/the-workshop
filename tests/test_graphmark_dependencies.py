@@ -244,3 +244,47 @@ def test_owner_ci_parity_leg_stays_separate(target: str) -> None:
     assert "'graphmark>=0.10,<0.11'" in recipe
     assert "cd plugins/workbench/machinery" not in recipe
     assert f"$(MAKE) {target}" in _recipe("test")
+
+
+# ---------------------------------------------------------------------------
+# The release wheel is declared at nine sites; each must name RAGMARK_WHEEL.
+# Before these tests only the Makefile gate was compared to the constant, so a
+# bump that missed a script header, pyproject.toml or a lock entry passed.
+# ---------------------------------------------------------------------------
+
+
+def _wheel_url(requirement: str) -> str:
+    assert "@" in requirement, requirement
+    return requirement.split("@", 1)[1].strip()
+
+
+@pytest.mark.parametrize("name", sorted(_engine_scripts_declaring_ragmark()))
+def test_engine_scripts_pin_the_release_wheel(name: str) -> None:
+    requirements = _engine_scripts_declaring_ragmark()[name]
+    [ragmark] = [item for item in requirements if _requirement_name(item) == "ragmark"]
+    assert _wheel_url(ragmark) == RAGMARK_WHEEL
+
+
+def test_machinery_project_pins_the_release_wheel() -> None:
+    data = tomllib.loads((MACHINERY / "pyproject.toml").read_text(encoding="utf-8"))
+    [ragmark] = [
+        item
+        for item in data["project"]["dependencies"]
+        if _requirement_name(item) == "ragmark"
+    ]
+    assert _wheel_url(ragmark) == RAGMARK_WHEEL
+
+
+def test_machinery_lock_pins_the_release_wheel() -> None:
+    lock = tomllib.loads((MACHINERY / "uv.lock").read_text(encoding="utf-8"))
+    package = next(item for item in lock["package"] if item["name"] == "ragmark")
+    project = next(
+        item for item in lock["package"] if item["name"] == "workbench-machinery"
+    )
+    requirement = next(
+        item for item in project["metadata"]["requires-dist"] if item["name"] == "ragmark"
+    )
+    assert package["source"] == {"url": RAGMARK_WHEEL}
+    assert [wheel["url"] for wheel in package["wheels"]] == [RAGMARK_WHEEL]
+    assert requirement["url"] == RAGMARK_WHEEL
+    assert f"/v{package['version']}/" in RAGMARK_WHEEL
