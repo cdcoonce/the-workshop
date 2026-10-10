@@ -26,7 +26,6 @@ also exits 0 — a hook that breaks session end is worse than the bug it reports
 WORKSHOP_HOOK = {"event": "SessionEnd"}
 
 import json  # noqa: E402
-import subprocess  # noqa: E402
 import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -56,23 +55,19 @@ else:
 cwd = Path(data.get("cwd") or ".").resolve()
 
 
-def _git(*args: str):
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(cwd), *args],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
+# The sibling module is normally importable because run-hook.sh executes this
+# file directly; pin its directory so a runpy-style launch resolves it too.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from _git_baseline import _run_git
+except ImportError:
+    # Fail open: the helper module ships alongside every hook, but a stale or
+    # partial install must no-op rather than crash session end.
+    sys.exit(0)
 
 
 try:
-    repo_root = _git("rev-parse", "--show-toplevel")
+    repo_root = _run_git(["rev-parse", "--show-toplevel"], cwd)
     if repo_root is None:
         sys.exit(0)
 
@@ -93,12 +88,12 @@ try:
     if warn_off_trunk is False:
         sys.exit(0)
 
-    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch is None or branch == "HEAD":
         sys.exit(0)  # detached HEAD
 
-    git_dir = _git("rev-parse", "--git-dir")
-    common_dir = _git("rev-parse", "--git-common-dir")
+    git_dir = _run_git(["rev-parse", "--git-dir"], cwd)
+    common_dir = _run_git(["rev-parse", "--git-common-dir"], cwd)
     if git_dir is None or common_dir is None:
         sys.exit(0)
     if (cwd / git_dir).resolve() != (cwd / common_dir).resolve():

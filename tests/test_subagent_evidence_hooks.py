@@ -481,7 +481,7 @@ def test_run_git_returns_stripped_stdout_and_none_on_failure(tmp_path: Path) -> 
     _init_git_repo(tmp_path)
 
     assert _git_baseline._run_git(["rev-parse", "--is-inside-work-tree"], tmp_path) == "true"
-    assert _git_baseline._run_git(["rev-parse", "--no-such-flag-xyz"], tmp_path) is None
+    assert _git_baseline._run_git(["not-a-git-subcommand-xyz"], tmp_path) is None
     assert _git_baseline._run_git(["rev-parse", "HEAD"], tmp_path / "missing-dir") is None
 
 

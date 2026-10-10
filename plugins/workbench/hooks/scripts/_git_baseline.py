@@ -24,36 +24,41 @@ from pathlib import Path
 _HASH_CHUNK_BYTES = 1024 * 1024
 
 
-def git_dir(project_dir: Path) -> Path | None:
-    """Absolute .git directory for `project_dir`, or None outside a repo."""
+def _run_git(args: list[str], cwd: Path, timeout: int = 10) -> str | None:
+    """Run `git -C <cwd> <args>` and return stripped stdout, or None on any failure.
+
+    Parameters
+    ----------
+    args
+        Arguments after `git -C <cwd>`.
+    cwd
+        Directory git runs in.
+    timeout
+        Seconds before the call is abandoned.
+    """
     try:
         result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "--absolute-git-dir"],
+            ["git", "-C", str(cwd), *args],
             capture_output=True,
             text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return Path(result.stdout.strip())
-
-
-def head_sha(project_dir: Path) -> str | None:
-    """Current HEAD sha, or None when there is no resolvable HEAD."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=10,
+            timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode != 0:
         return None
     return result.stdout.strip()
+
+
+def git_dir(project_dir: Path) -> Path | None:
+    """Absolute .git directory for `project_dir`, or None outside a repo."""
+    out = _run_git(["rev-parse", "--absolute-git-dir"], project_dir)
+    return None if out is None else Path(out)
+
+
+def head_sha(project_dir: Path) -> str | None:
+    """Current HEAD sha, or None when there is no resolvable HEAD."""
+    return _run_git(["rev-parse", "HEAD"], project_dir)
 
 
 def working_tree_signature(project_dir: Path) -> str | None:
