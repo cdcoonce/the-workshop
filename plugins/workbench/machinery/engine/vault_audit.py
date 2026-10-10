@@ -30,11 +30,9 @@ from vault_scope_resolved import (  # noqa: E402
     iter_graph_markdown_notes,
     rel_posix,
 )
-from vault_utils import find_vault_root  # noqa: E402
+from vault_utils import code_spans as _code_spans, find_vault_root  # noqa: E402
 
 WIKILINK_WITH_EMBED_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
-FENCED_CODE_RE = re.compile(r"(^|\n)```.*?(?:\n```|$)", re.DOTALL)
-INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 OBSIDIAN_BASE_RECOMMENDATIONS = (
     "Decisions.base",
     "People Missing Context.base",
@@ -143,12 +141,6 @@ def _attachment_exists(target: str, vault_root: Path) -> bool:
         return False
     candidates = (vault_root / target, vault_root / "assets" / target)
     return any(candidate.is_file() for candidate in candidates)
-
-
-def _code_spans(text: str) -> list[tuple[int, int]]:
-    spans = [(m.start(), m.end()) for m in FENCED_CODE_RE.finditer(text)]
-    spans.extend((m.start(), m.end()) for m in INLINE_CODE_RE.finditer(text))
-    return spans
 
 
 def _inside_spans(pos: int, spans: list[tuple[int, int]]) -> bool:

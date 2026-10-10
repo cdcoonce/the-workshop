@@ -57,7 +57,7 @@ from typing import Callable, Iterator
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from vault_utils import find_vault_root_from_env, read_batch_model, read_vault_context, WIKILINK_CAPTURE_RE  # noqa: E402
+from vault_utils import find_vault_root_from_env, read_batch_model, read_vault_context, WIKILINK_CAPTURE_RE, code_spans  # noqa: E402
 from vault_scope_resolved import (  # noqa: E402
     GRAPH_EXCLUDED_DIRS,
     GRAPH_NOTE_DIRS,
@@ -808,32 +808,7 @@ def _normalize(text: str) -> str:
     return text
 
 
-def _code_spans(text: str) -> list[tuple[int, int]]:
-    """Char ranges covered by Markdown code — fenced blocks and inline spans.
-
-    Wikilinks inside these are documentation/examples, not real links: the
-    resolver skips any match that starts inside a returned range. Fenced blocks
-    are delimited by lines starting with ``` or ~~~ (the fence lines included);
-    inline spans are backtick runs (`` `x` ``, `` ``x`` ``).
-    """
-    spans: list[tuple[int, int]] = []
-    pos = 0
-    in_fence = False
-    for line in text.splitlines(keepends=True):
-        stripped = line.lstrip()
-        is_fence = stripped.startswith("```") or stripped.startswith("~~~")
-        if in_fence:
-            spans.append((pos, pos + len(line)))
-            if is_fence:
-                in_fence = False
-        elif is_fence:
-            in_fence = True
-            spans.append((pos, pos + len(line)))
-        else:
-            for m in re.finditer(r"`+[^`]*`+", line):
-                spans.append((pos + m.start(), pos + m.end()))
-        pos += len(line)
-    return spans
+_code_spans = code_spans
 
 
 def proposal_signature(kind: str, note_rel: str, key: str = "") -> str:
