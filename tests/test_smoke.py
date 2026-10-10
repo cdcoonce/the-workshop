@@ -1312,3 +1312,36 @@ class TestSmokeVendorMapSources:
         result = smoke_test(plugin)
 
         assert not any("vendor-map" in e for e in result.errors)
+
+
+class TestQuoteWrappedLinkTargets:
+    """Quote-wrapped link targets resolve with the quotes stripped (#612)."""
+
+    def test_quote_wrapped_link_to_existing_file_with_space_passes(
+        self, tmp_path: Path
+    ) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "a file.md").write_text("x")
+        (tmp_path / "s" / "SKILL.md").write_text('[text]("a file.md")\n')
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_single_quote_wrapped_link_passes(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "a file.md").write_text("x")
+        (tmp_path / "s" / "SKILL.md").write_text("[text]('a file.md')\n")
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_quote_wrapped_link_to_missing_file_still_fails(
+        self, tmp_path: Path
+    ) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text('[text]("gone file.md")\n')
+        errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
+        assert len(errors) == 1
+        assert "gone file.md" in errors[0]
