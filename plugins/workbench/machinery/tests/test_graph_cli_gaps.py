@@ -4,7 +4,7 @@
 The handler had no test of its own: only ``vector_similar_fn`` (the reader it
 is fed) is pinned elsewhere. These tests pin what the CLI **emits** for given
 inputs, the JSON ``/connect`` and ``/garden`` read, so that moving the ranking
-off graphmark's ``gaps()`` onto another implementation has a before/after
+off graphmark's ``gaps()`` onto ``ragmark.gaps.rank_pairs`` has a before/after
 harness. They are characterization tests: where today's output is surprising
 the test says so and pins it anyway. A pin records what the code does today; it
 is not an endorsement, and the owner of a deliberate behavior change is meant
@@ -728,21 +728,18 @@ def test_an_empty_result_emits_an_empty_json_list(
     assert (rc, out) == (0, "[]\n")
 
 
-def test_nan_score_slips_through_the_band_and_is_emitted_as_bare_nan(
-    tmp_path, capsys, similarity
-):
-    # Characterization, not an endorsement: NaN fails neither bound comparison,
-    # so a NaN score survives the band and the output is not strict JSON.
+def test_nan_score_is_dropped_by_the_band(tmp_path, capsys, similarity):
+    # Deliberate change from the graphmark-gaps era, which let a NaN score slip
+    # through (``score < threshold`` is False for NaN) and emitted bare ``NaN``,
+    # which is not strict JSON. ragmark.gaps.rank_pairs requires
+    # ``threshold <= score <= max_score``, which NaN fails, so it never reaches
+    # the output.
     root = make_vault(tmp_path)
     similarity({(ALPHA, GAMMA): float("nan")})
 
     rc, out = run(root, capsys, "--gaps")
 
-    assert rc == 0
-    assert '"score": NaN' in out
-    [entry] = json.loads(out)
-    assert (entry["a"], entry["b"]) == (ALPHA, GAMMA)
-    assert math.isnan(entry["score"])
+    assert (rc, out) == (0, "[]\n")
 
 
 # ---------------------------------------------------------------------------
