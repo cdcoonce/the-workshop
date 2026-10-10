@@ -478,8 +478,12 @@ def test_show_branch_goes_through_public_accessor(tmp_path: Path, monkeypatch: p
     path = tmp_path / "registry.json"
     SessionRegistry(path).add("live", project="p", adapter="codex")
 
-    def _boom(self: SessionRegistry) -> dict:
-        raise AssertionError("show must not call the private _load")
+    real_load = SessionRegistry._load
+
+    def _guarded_load(self: SessionRegistry) -> dict:
+        if sys._getframe(1).f_code.co_name == "main":
+            raise AssertionError("show must not call the private _load from main()")
+        return real_load(self)
 
     calls: list[str] = []
     real = SessionRegistry.all_workers
@@ -489,7 +493,7 @@ def test_show_branch_goes_through_public_accessor(tmp_path: Path, monkeypatch: p
         return real(self)
 
     monkeypatch.setattr(SessionRegistry, "all_workers", _spy)
-    monkeypatch.setattr(SessionRegistry, "_load", _boom)
+    monkeypatch.setattr(SessionRegistry, "_load", _guarded_load)
 
     assert _cli(path, "show") == 0
     assert calls == ["all_workers"]
