@@ -417,3 +417,35 @@ def test_non_string_final_message_fails_open(tmp_path: Path, message: object) ->
     assert result.returncode == 0
     assert result.stdout == ""
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Task not done.", "Nothing is done yet.", "Nothing is done.", "The migration is not done"],
+)
+def test_negated_done_ending_is_not_a_completion_claim(tmp_path: Path, message: str) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    start(tmp_path, "agent-neg")
+
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "agent-neg", "last_assistant_message": message},
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("message", ["All done.", "I'm done.", "Reviewed everything. I am done"])
+def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, message: str) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    start(tmp_path, "agent-pos")
+
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "agent-pos", "last_assistant_message": message},
+    )
+
+    assert json.loads(result.stdout)["decision"] == "block"
