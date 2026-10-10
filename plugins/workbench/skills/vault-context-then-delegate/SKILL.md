@@ -3,8 +3,7 @@ name: vault-context-then-delegate
 description: >
   Runs Charles's vault /context-then-delegate workflow, resolving
   email/SharePoint/Slack ambiguity before writing a prompt. Trigger: Charles
-  invokes /context-then-delegate, or is about to write a delegated prompt
-  with unresolved domain ambiguity.
+  invokes /context-then-delegate, or is about to write a delegated prompt.
 ---
 
 # Vault Context Then Delegate

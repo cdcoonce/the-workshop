@@ -1,7 +1,7 @@
 ---
 name: vault-wrap-up
 description: >
-  Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. Trigger when Charles invokes /wrap-up, signals the session is ending, or explicitly asks to run this vault workflow.
+  Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. Trigger when Charles invokes /wrap-up or signals the session is ending.
 ---
 
 # Vault Wrap Up
