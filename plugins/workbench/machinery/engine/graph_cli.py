@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
+# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 """Vault graph CLI — the reintegration seam.
 

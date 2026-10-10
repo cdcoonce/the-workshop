@@ -16,10 +16,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MACHINERY = ROOT / "plugins" / "workbench" / "machinery"
 GRAPHMARK_REQUIREMENT = "graphmark>=0.10,<0.11"
-# ragmark is not on PyPI: every surface resolves the v0.2.0 release wheel by URL.
+# ragmark is not on PyPI: every surface resolves the v0.3.0 release wheel by URL.
 RAGMARK_WHEEL = (
-    "https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/"
-    "ragmark-0.2.0-py3-none-any.whl"
+    "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/"
+    "ragmark-0.3.0-py3-none-any.whl"
 )
 # ragmark's embedder identity records `fastembed.__version__`, and ragmark
 # refuses an index whose recorded identity differs (IndexIdentityError, state
