@@ -457,9 +457,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    """Run the registry CLI."""
-    args = _parser().parse_args()
+def main(argv: list[str] | None = None) -> int:
+    """Run the registry CLI.
+
+    Parameters
+    ----------
+    argv : list[str] or None
+        Command-line arguments excluding the program name. ``None`` reads
+        ``sys.argv``.
+
+    Returns
+    -------
+    int
+        Process exit code.
+    """
+    args = _parser().parse_args(argv)
     registry = SessionRegistry(args.registry)
     if args.command == "add":
         registry.add(args.name, origin_project=args.origin_project, adapter=args.adapter, repository=args.repository, workspace=args.workspace, client_id=args.client_id, dependencies=args.depends_on)
