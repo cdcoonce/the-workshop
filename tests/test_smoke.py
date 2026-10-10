@@ -1222,3 +1222,30 @@ class TestSmokeMachineryWiring:
 
         assert result.passed is False
         assert any("vendor-map" in e and "duplicate" in e for e in result.errors)
+
+
+class TestSmokeAgentBlankRequiredFields:
+    """A present-but-blank required agent field must fail like a missing one (#736)."""
+
+    @pytest.mark.parametrize("blank_field", ["name", "description", "role"])
+    def test_blank_required_field_fails(
+        self, tmp_path: Path, make_plugin, blank_field: str
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        fields = {
+            "name": "tdd-implementer",
+            "description": "test",
+            "role": "implementer",
+        }
+        fields[blank_field] = ""
+        body = "".join(f"{k}: {v}\n" if v else f"{k}:\n" for k, v in fields.items())
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(f"---\n{body}---\n")
+
+        result = smoke_test(plugin)
+
+        assert not result.passed
+        assert any(
+            "missing required field" in e and f"'{blank_field}'" in e
+            for e in result.errors
+        )
