@@ -451,3 +451,62 @@ def test_cli_attach_without_flag_is_refused(tmp_path: Path) -> None:
 def test_cli_add_rejects_unknown_adapter(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         _cli(tmp_path / "registry.json", "add", "x", "--origin-project", "p", "--adapter", "bogus")
+
+
+def test_all_workers_returns_active_and_archived_maps(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+    _completed_worker(registry)
+    registry.set_follow_up("ledger", "")
+    registry.retire("ledger", platform_action="codex-archived", platform_evidence="archived")
+    registry.add("live", project="household-ledger", adapter="codex")
+
+    everything = registry.all_workers()
+
+    assert set(everything) == {"workers", "archived_workers"}
+    assert set(everything["workers"]) == {"live"}
+    assert set(everything["archived_workers"]) == {"ledger"}
+    assert everything["archived_workers"]["ledger"]["state"] == "retired"
+
+
+def test_all_workers_on_missing_file_is_empty(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "absent.json")
+
+    assert registry.all_workers() == {"workers": {}, "archived_workers": {}}
+
+
+def test_show_branch_goes_through_public_accessor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "registry.json"
+    SessionRegistry(path).add("live", project="p", adapter="codex")
+
+    def _boom(self: SessionRegistry) -> dict:
+        raise AssertionError("show must not call the private _load")
+
+    calls: list[str] = []
+    real = SessionRegistry.all_workers
+
+    def _spy(self: SessionRegistry) -> dict:
+        calls.append("all_workers")
+        return real(self)
+
+    monkeypatch.setattr(SessionRegistry, "all_workers", _spy)
+    monkeypatch.setattr(SessionRegistry, "_load", _boom)
+
+    assert _cli(path, "show") == 0
+    assert calls == ["all_workers"]
+    assert "live" in json.loads(capsys.readouterr().out)
+
+
+def test_show_prints_active_then_archived_unchanged(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    _completed_worker(registry)
+    registry.set_follow_up("ledger", "")
+    registry.retire("ledger", platform_action="codex-archived", platform_evidence="archived")
+    registry.add("live", project="p", adapter="codex")
+
+    _cli(path, "show")
+    assert set(json.loads(capsys.readouterr().out)) == {"live"}
+    _cli(path, "show", "--archived")
+    assert set(json.loads(capsys.readouterr().out)) == {"ledger"}
+    _cli(path, "show", "ledger")
+    assert json.loads(capsys.readouterr().out)["state"] == "retired"
