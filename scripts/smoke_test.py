@@ -150,6 +150,8 @@ def _validate_doc_links(docs_dir: Path, doc_filename: str, label: str) -> list[s
                 # spaces.
                 if link_target and not link_target.startswith(("'", '"')):
                     link_target = link_target.split(None, 1)[0]
+                else:
+                    link_target = _strip_quotes(link_target)
                 if not link_target or _is_out_of_contract(link_target):
                     continue
                 file_part = re.split(r"[#?]", link_target, maxsplit=1)[0]
