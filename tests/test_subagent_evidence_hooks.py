@@ -449,3 +449,29 @@ def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, messag
     )
 
     assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_signature_hashes_a_large_file_without_reading_it_whole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The digest must equal a full-read baseline, but memory must stay bounded."""
+    import hashlib
+
+    _init_git_repo(tmp_path)
+    big = tmp_path / "big.bin"
+    big.write_bytes(b"0123456789abcdef" * (192 * 1024) + b"tail")  # ~3 MiB, larger than the chunk
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    ).stdout
+    expected = hashlib.sha256(status + big.read_bytes()).hexdigest()
+
+    def _no_whole_file_read(self: Path) -> bytes:
+        raise AssertionError("read_bytes() loads the whole file into memory")
+
+    monkeypatch.setattr(Path, "read_bytes", _no_whole_file_read)
+
+    assert working_tree_signature(tmp_path) == expected
