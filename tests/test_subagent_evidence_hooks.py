@@ -262,3 +262,37 @@ def test_signature_changes_for_edits_inside_an_already_untracked_directory(
     after = working_tree_signature(tmp_path)
 
     assert before != after
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["café.txt", 'quo"te.txt', "tab\tname.txt", "back\\slash.txt"],
+    ids=["non-ascii", "double-quote", "tab", "backslash"],
+)
+def test_signature_changes_when_a_specially_named_untracked_file_is_edited(
+    tmp_path: Path, name: str
+) -> None:
+    """git C-quotes these paths in `--porcelain` output; the content must still be hashed."""
+    _init_git_repo(tmp_path)
+    (tmp_path / name).write_text("one\n")
+
+    before = working_tree_signature(tmp_path)
+
+    (tmp_path / name).write_text("two\n")
+
+    assert before != working_tree_signature(tmp_path)
+
+
+def test_signature_changes_when_a_renamed_file_is_edited(tmp_path: Path) -> None:
+    """A rename is two NUL fields under `-z`; the new path's content must be hashed."""
+    _init_git_repo(tmp_path)
+    (tmp_path / "old name.txt").write_text("one\n")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "mv", "old name.txt", "café new.txt"], cwd=tmp_path, check=True)
+
+    before = working_tree_signature(tmp_path)
+
+    (tmp_path / "café new.txt").write_text("two\n")
+
+    assert before != working_tree_signature(tmp_path)
