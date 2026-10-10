@@ -41,6 +41,10 @@ from scripts.stamp import StampError, owned_paths
 DEFAULT_BASE = "origin/main"
 
 
+class GitError(Exception):
+    """git could not answer; the gate must fail rather than guess."""
+
+
 def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
@@ -108,12 +112,17 @@ def output_changed(repo: Path, base: str, plugin: str, exclusions: list[str]) ->
     definition, which is the invariant that keeps this from drifting back.
     """
     pathspecs = [f":(exclude){path}" for path in exclusions]
-    return (
-        run_git(
-            repo, "diff", "--quiet", base, "--", f"plugins/{plugin}", *pathspecs
-        ).returncode
-        != 0
+    result = run_git(
+        repo, "diff", "--quiet", base, "--", f"plugins/{plugin}", *pathspecs
     )
+    # 0 = identical, 1 = differs; anything else is git failing (bad revision,
+    # bad pathspec), which is not evidence the plugin changed.
+    if result.returncode not in (0, 1):
+        raise GitError(
+            f"git diff against {base} for plugins/{plugin} failed "
+            f"(exit {result.returncode}): {result.stderr.strip()}"
+        )
+    return result.returncode == 1
 
 
 def manifest_version(repo: Path, plugin: str, ref: str | None = None) -> str | None:
@@ -292,6 +301,9 @@ def main(argv: list[str] | None = None) -> int:
         missing = find_missing_bumps(repo, args.base)
         levels = find_level_violations(repo, args.base)
     except LookupError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    except GitError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     except StampError as error:
