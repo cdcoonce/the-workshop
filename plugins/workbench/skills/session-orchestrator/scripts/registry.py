@@ -68,6 +68,17 @@ class SessionRegistry:
             raise RegistryError(f"worker {name!r} does not exist")
         return worker
 
+    def all_workers(self) -> dict[str, Any]:
+        """Return every worker, keyed by registry section.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``{"workers": ..., "archived_workers": ...}`` after schema migration.
+        """
+        data = self._load()
+        return {"workers": data["workers"], "archived_workers": data["archived_workers"]}
+
     def add(
         self,
         name: str,
@@ -512,11 +523,11 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "archived-update":
         registry.record_archived_update(args.name, args.evidence)
     else:
-        data = registry._load()
         if args.name:
             output = registry.get(args.name)
         else:
-            output = data["archived_workers"] if args.archived else data["workers"]
+            everything = registry.all_workers()
+            output = everything["archived_workers"] if args.archived else everything["workers"]
         print(json.dumps(output, indent=2, sort_keys=True))
     return 0
 
