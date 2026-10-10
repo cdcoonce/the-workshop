@@ -60,6 +60,25 @@ class SessionRegistry:
             {"at": _now(), "detail": detail, "kind": kind}
         )
 
+    @staticmethod
+    def _has_identity(worker: dict[str, Any]) -> bool:
+        """Report whether a worker carries an addressable identity.
+
+        Parameters
+        ----------
+        worker : dict[str, Any]
+            One registry worker record.
+
+        Returns
+        -------
+        bool
+            ``True`` when a ``cortex-code`` worker has manual identity evidence,
+            or any other worker has a non-empty ``session_id``.
+        """
+        if worker["adapter"] == "cortex-code":
+            return bool(worker["manual_identity_evidence"])
+        return bool(worker["session_id"])
+
     def get(self, name: str) -> dict[str, Any]:
         """Return one worker, rejecting unknown human-readable names."""
         data = self._load()
@@ -209,7 +228,7 @@ class SessionRegistry:
             if state == "running" and not worker["message_verified"]:
                 raise RegistryError("running state requires verified attachment")
             raise RegistryError(f"invalid state transition: {worker['state']} -> {state}")
-        if state == "running" and (not worker["session_id"] or not worker["message_verified"]):
+        if state == "running" and (not self._has_identity(worker) or not worker["message_verified"]):
             raise RegistryError("running state requires verified attachment")
         worker["state"] = state
         worker["last_meaningful_update"] = _now()
@@ -335,10 +354,7 @@ class SessionRegistry:
             raise RegistryError("retirement requires durable status evidence")
         if worker["pending_follow_up"]:
             raise RegistryError("retirement requires no assigned follow-up")
-        has_identity = bool(worker["session_id"])
-        if worker["adapter"] == "cortex-code":
-            has_identity = bool(worker["manual_identity_evidence"])
-        if not has_identity or not worker["message_verified"]:
+        if not self._has_identity(worker) or not worker["message_verified"]:
             raise RegistryError("retirement requires a verified attached identity")
         expected_actions = {
             "codex": "codex-archived",
@@ -377,7 +393,7 @@ class SessionRegistry:
         worker = data["archived_workers"].get(name)
         if worker is None:
             raise RegistryError(f"worker {name!r} does not exist")
-        if worker["state"] != "retired" or not worker["session_id"] or not evidence.strip():
+        if worker["state"] != "retired" or not self._has_identity(worker) or not evidence.strip():
             raise RegistryError("reopen requires a retired addressable worker and evidence")
         worker["state"] = "provisioning"
         worker["message_verified"] = False
