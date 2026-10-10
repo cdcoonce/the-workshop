@@ -14,6 +14,8 @@ callers that serialize these values normalize None themselves rather than
 writing the string "None" into a state file.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import subprocess
