@@ -21,23 +21,38 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    result, and a refusal returns it to the original detached commit.
 2. The session's per-file diff (``--base`` -> HEAD) is computed
    content-level; after the #892 squash that is one hunk set.
-3. Ledger rule: hunks must be *pure insertions* of dated entries under a
-   recognized anchor heading. They are re-inserted under that anchor in
-   origin's copy, then every entry under the anchor is re-sorted
-   newest-first by date -- the deterministic re-linearization that keeps
-   #871's ordering guarantee under concurrency (#871's ordering-drift
-   detector stays on as the tooth).
-4. Handoff rule: origin's file wins wholesale; only the ``##`` sections this
-   session touched (the ``handoff_sections`` collector's section model) are
-   re-applied, and the frontmatter ``description:`` is merged additively at
+3. Ledger rule: the session's change is read per anchor block as *whole
+   entries* -- new dated entries, and existing entries edited in place (an
+   in-place correction like the vault's ``2455bf8c``, even one that changes
+   the entry's own heading line). Each entry the session edited must be
+   byte-identical, exactly once, in origin's block; origin's entries the
+   session did not touch simply win, corrections included. New entries are
+   added unless origin already holds them, and every entry under the anchor is
+   re-sorted newest-first by date -- the deterministic re-linearization that
+   keeps #871's ordering guarantee under concurrency (#871's ordering-drift
+   detector stays on as the tooth). An anchor is a block's innermost non-entry
+   heading (``### Wins`` under ``## Q3 2026``, ``## Technical``). An entry
+   heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
+   with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
+   body text, not an entry. Deleting an entry, editing a block preamble, or
+   changing any text outside the anchor blocks refuses.
+4. Handoff rule: origin's file wins wholesale; inside each ``##`` section this
+   session touched (the ``handoff_sections`` collector's section model) the
+   replay is item-level -- an item is a top-level ``- `` bullet with its
+   continuation, or a blank-separated paragraph. Every item the session
+   replaced must occur in origin's section byte-identically exactly once; an
+   inserted item lands right after its (unique) base predecessor. The
+   ``_Updated`` stamp resolves three-way instead of counting as a preamble
+   divergence, and the frontmatter ``description:`` is merged additively at
    clause granularity rather than restored as the session's whole paragraph.
 5. Assertions, fail-closed: before every replacement, origin's corresponding
    span must be byte-identical to the session-base version, with spans drawn
-   per entry / per section -- as narrow as possible, which is spec, not
-   preference. Any assertion failure, any non-insertion change in a ledger
-   (an in-place correction like the vault's ``2455bf8c``), or any conflict
-   outside the allowlist refuses, lists the files, and leaves the repository
-   exactly as it found it. The escalation path is unchanged.
+   per *replaced* entry / per *replaced* item -- exactly the spans the replay
+   replaces, never wider and never skipped, which is spec, not preference.
+   Any assertion failure, any entry deletion, or any conflict outside the
+   allowlist refuses and leaves the repository exactly as it found it. Every
+   conflicting file is evaluated first, so the report's ``refusals`` names
+   each one. The escalation path is unchanged.
 6. ``ci/vault_health.py`` runs on the replayed tree before anything is
    pushed; a failure restores the original state.
 
@@ -47,6 +62,15 @@ content, so every uncertainty stops it. Exit codes: 0 for ``replayed`` and
 ``none`` (sync proceeds -- after ``replayed`` the push is a fast-forward),
 1 for ``refused`` (stop and alert; the repository has been restored), 2 for
 usage errors.
+
+Two read-only companions share the module's grammar. ``--lint [PATH ...]``
+checks that every ledger block and handoff parses under the replay grammar
+(needs no git or network), so a shape defect is fixed at write time rather
+than discovered as a refusal at sync. ``--verify --base B --tip T --origin O
+--result R`` checks a hand-built merge against both sides by multiset of
+non-blank lines -- run it after any user-approved hand rebuild that follows a
+refusal, and do not push on a failure. ``scripts/entry_replay_backtest.py`` in
+the workshop repository measures all of this against real vault history.
 """
 
 from __future__ import annotations
