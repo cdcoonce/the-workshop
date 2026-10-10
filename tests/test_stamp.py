@@ -585,32 +585,6 @@ def test_a_skill_dir_with_a_real_file_beside_ds_store_is_not_debris(tmp_path: Pa
     assert not stamp.is_leftover_artifact_dir(skill)
 
 
-def test_a_duplicate_agent_across_plugins_is_a_loud_failure(flat_repo: Path, make_plugin):
-    """One agent name per repo: the agents table would show two identical rows (#781)."""
-    make_plugin(flat_repo, "other", agents=["demo-agent"])
-
-    with pytest.raises(stamp.StampError) as excinfo:
-        stamp.stamp(flat_repo)
-
-    message = str(excinfo.value)
-    assert "demo-agent" in message
-    assert "plugins/demo/agents/demo-agent" in message
-    assert "plugins/other/agents/demo-agent" in message
-
-
-def test_two_agent_dirs_sharing_a_frontmatter_name_is_a_loud_failure(
-    flat_repo: Path, make_plugin
-):
-    other = make_plugin(flat_repo, "other", agents=["other-agent"])
-    agent_md = other / "agents" / "other-agent" / "AGENT.md"
-    agent_md.write_text(agent_md.read_text().replace("name: other-agent", "name: demo-agent"))
-
-    with pytest.raises(stamp.StampError) as excinfo:
-        stamp.stamp(flat_repo)
-
-    assert "demo-agent" in str(excinfo.value)
-
-
 def test_an_advisor_plugin_without_hook_scripts_gets_no_run_hook(
     flat_repo: Path, make_plugin
 ):

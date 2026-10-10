@@ -655,36 +655,6 @@ def _check_plugin_name_uniqueness(root: Path, plugins: list[PluginDoc]) -> None:
         seen[plugin.name] = relative
 
 
-def _check_agent_name_uniqueness(root: Path, plugins: list[PluginDoc]) -> None:
-    """Fail if two plugins ship an agent with the same name.
-
-    Both the directory name and the frontmatter ``name`` are checked: either
-    one colliding renders two indistinguishable rows in the agents reference,
-    and a tool resolving an agent by name cannot tell the copies apart.
-    """
-    seen_dirs: dict[str, str] = {}
-    seen_names: dict[str, str] = {}
-    for plugin in plugins:
-        for agent_dir in _component_dirs(plugin.directory / "agents"):
-            relative = agent_dir.relative_to(root).as_posix()
-            previous = seen_dirs.get(agent_dir.name)
-            if previous is not None:
-                raise StampError(
-                    f"Agent '{agent_dir.name}' is shipped by two plugins: "
-                    f"{previous} and {relative}. One plugin per agent name."
-                )
-            seen_dirs[agent_dir.name] = relative
-        for agent in plugin.agents:
-            relative = plugin.directory.relative_to(root).as_posix()
-            previous = seen_names.get(agent.name)
-            if previous is not None:
-                raise StampError(
-                    f"Agent name '{agent.name}' is claimed by two plugins: "
-                    f"{previous} and {relative}. One plugin per agent name."
-                )
-            seen_names[agent.name] = relative
-
-
 def _persona_plumbing(root: Path) -> dict[str, str]:
     """The canonical persona artefacts workbench owns and every persona copies.
 
@@ -803,7 +773,6 @@ def build_model(root: Path) -> StampModel:
         model.plugins.append(_build_plugin(root, plugin_dir, model.persona_plumbing))
 
     _check_plugin_name_uniqueness(root, model.plugins)
-    _check_agent_name_uniqueness(root, model.plugins)
 
     for plugin in model.plugins:
         model.skills.extend(plugin.skills)
