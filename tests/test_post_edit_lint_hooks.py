@@ -10,11 +10,13 @@ success/failure contract still holds.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -289,3 +291,64 @@ def test_eslint_still_runs_without_a_prettier_config(tmp_path: Path) -> None:
     calls = record_path.read_text()
     assert "eslint" in calls
     assert "prettier" not in calls
+
+
+# --- Linter subprocess timeout (#732) ---------------------------------------
+
+
+def test_hung_linter_times_out_and_fails_open(tmp_path: Path) -> None:
+    """A linter that outlives the hook's timeout must not stall the edit."""
+    source = WORKBENCH_HOOK.read_text()
+    assert "LINT_TIMEOUT_SECONDS = 30" in source
+    fast_hook = tmp_path / "post-edit-lint-fast.py"
+    fast_hook.write_text(source.replace("LINT_TIMEOUT_SECONDS = 30", "LINT_TIMEOUT_SECONDS = 1"))
+    fake_npx = tmp_path / "npx"
+    fake_npx.write_text("#!/bin/sh\nexec sleep 8\n")
+    fake_npx.chmod(fake_npx.stat().st_mode | stat.S_IEXEC)
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_prettier_config(project)
+
+    started = time.monotonic()
+    result = run_hook(fast_hook, _md_in(project), tmp_path)
+    elapsed = time.monotonic() - started
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
+    assert "prettier" not in result.stderr, "a timed-out linter is not a successful action"
+    assert elapsed < 6, f"hook waited out the hung linter ({elapsed:.1f}s)"
+
+
+# --- Matcher parity with vault-validate-write (#816) -------------------------
+
+VAULT_HOOK = WORKBENCH_HOOK.with_name("vault-validate-write.py")
+
+
+def _matcher_spellings(hook_path: Path) -> set[str]:
+    """Return the set of tool-name spellings a hook's WORKSHOP_HOOK matcher names."""
+    for node in ast.parse(hook_path.read_text()).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "WORKSHOP_HOOK" for t in node.targets
+        ):
+            return set(ast.literal_eval(node.value)["matcher"].split("|"))
+    raise AssertionError(f"{hook_path} declares no WORKSHOP_HOOK")
+
+
+def test_edit_matchers_agree_across_post_edit_hooks() -> None:
+    lint = _matcher_spellings(WORKBENCH_HOOK)
+    vault = _matcher_spellings(VAULT_HOOK)
+
+    assert lint == vault
+    assert "multiedit" in lint
+
+
+# --- Malformed tool_input (#817) ---------------------------------------------
+
+
+@pytest.mark.parametrize("tool_input", [None, "x", 3, ["a"], True])
+def test_non_dict_tool_input_fails_open(tool_input: object) -> None:
+    result = _run_hook_stdin(WORKBENCH_HOOK, json.dumps({"tool_input": tool_input}))
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
+    assert "AttributeError" not in result.stderr
