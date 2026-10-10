@@ -137,3 +137,25 @@ def test_protected_directory_as_final_component_blocks(file_path: str) -> None:
     assert result.returncode == 2
     assert "Blocked" in result.stderr
     assert file_path in result.stderr
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "Pipfile.lock",
+        "Cargo.lock",
+        "composer.lock",
+        "Gemfile.lock",
+        "sub/dir/Cargo.lock",
+    ],
+)
+def test_other_ecosystem_lockfile_blocks_with_reason(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+    basename = file_path.rsplit("/", 1)[-1]
+
+    assert result.returncode == 2
+    assert f"'{basename}'" in result.stderr
+    assert file_path in result.stderr
