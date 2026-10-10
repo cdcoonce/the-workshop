@@ -631,3 +631,63 @@ class TestCLI:
         )
         assert result.returncode == 1
         assert "FAIL" in result.stdout
+
+
+class TestArtifactsSectionScoping:
+    """Only the ``## Artifacts`` section may contribute artifact rows."""
+
+    _HEADER = "---\nschema_version: 1\nfeature: f\nstatus: in_progress\ncurrent_phase: plan\n---\n"
+    _TABLE = (
+        "| Phase | Status | Artifact |\n"
+        "| ----- | ------ | -------- |\n"
+        "| plan  | completed | docs/plan.md |\n"
+    )
+    _OTHER = (
+        "| shape | size | form |\n"
+        "| ----- | ---- | ---- |\n"
+        "| red   | large | round |\n"
+    )
+
+    def _write(self, tmp_path: Path, body: str) -> Path:
+        path = tmp_path / "f.state.md"
+        path.write_text(self._HEADER + body)
+        return path
+
+    def test_table_in_another_section_is_not_read_as_artifacts(self, tmp_path: Path) -> None:
+        body = f"\n## Artifacts\n\n{self._TABLE}\n## Log\n\n{self._OTHER}"
+        path = self._write(tmp_path, body)
+
+        state = parse_state_file(path)
+
+        assert [(r.phase, r.status, r.artifact) for r in state.artifacts] == [
+            ("plan", "completed", "docs/plan.md")
+        ]
+        assert validate_state_file(path).passed
+
+    def test_table_before_artifacts_section_is_ignored(self, tmp_path: Path) -> None:
+        body = f"\n## Notes\n\n{self._OTHER}\n## Artifacts\n\n{self._TABLE}"
+
+        state = parse_state_file(self._write(tmp_path, body))
+
+        assert [r.phase for r in state.artifacts] == ["plan"]
+
+    def test_artifacts_section_at_eof_without_following_heading_is_read(
+        self, tmp_path: Path
+    ) -> None:
+        state = parse_state_file(self._write(tmp_path, f"\n## Artifacts\n\n{self._TABLE}"))
+
+        assert [r.phase for r in state.artifacts] == ["plan"]
+
+    def test_no_artifacts_section_yields_no_rows(self, tmp_path: Path) -> None:
+        state = parse_state_file(self._write(tmp_path, f"\n## Log\n\n{self._TABLE}"))
+
+        assert state.artifacts == []
+
+    def test_unrecognized_phase_inside_artifacts_section_is_still_reported(
+        self, tmp_path: Path
+    ) -> None:
+        table = self._TABLE + "| implmenet | completed | — |\n"
+        path = self._write(tmp_path, f"\n## Artifacts\n\n{table}")
+
+        assert [r.phase for r in parse_state_file(path).artifacts] == ["plan", "implmenet"]
+        assert not validate_state_file(path).passed
