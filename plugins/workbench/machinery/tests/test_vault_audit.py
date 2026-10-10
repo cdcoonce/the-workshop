@@ -422,3 +422,45 @@ def test_vault_audit_does_not_shadow_the_shared_wikilink_pattern() -> None:
     assert shadow is vault_utils.WIKILINK_RE
     # The embed-aware pattern keeps its two groups under its own name.
     assert vault_audit.WIKILINK_WITH_EMBED_RE.groups == 2
+
+
+# --- #730: one shared code-span detector that knows ~~~ fences ---
+
+
+def test_audit_ignores_wikilinks_inside_tilde_fences(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Pattern.md",
+        _note("Pattern", body="Example:\n\n~~~md\n[[Nowhere Target]]\n~~~\n"),
+    )
+
+    report = audit(tmp_path)
+
+    assert report["issues"]["broken_links"] == []
+    assert report["issues"]["ambiguous_links"] == []
+
+
+def test_audit_still_reports_a_real_link_after_a_tilde_fence(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "brain/Pattern.md",
+        _note("Pattern", body="~~~\n[[Fenced]]\n~~~\n\nReal: [[Really Missing]]\n"),
+    )
+
+    report = audit(tmp_path)
+
+    details = [i["detail"] for i in report["issues"]["broken_links"]]
+    assert details == ["broken [[Really Missing]]"]
+
+
+def test_code_span_detection_is_the_shared_vault_utils_function() -> None:
+    import vault_audit
+    import vault_utils
+
+    assert vault_audit._code_spans is vault_utils.code_spans
+    text = "a `x` b\n~~~\nfenced\n~~~\n"
+    kinds = vault_utils.code_spans(text)
+    assert (text.index("`x`"), text.index("`x`") + 3) in kinds
+    assert any(start == text.index("~~~") for start, _ in kinds)

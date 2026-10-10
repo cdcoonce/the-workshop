@@ -1095,3 +1095,7 @@ def test_run_lane_b_falls_back_when_owner_value_absent(
     _capture_claude_argv(monkeypatch, captured)
     gg.run_lane_b([note], repo)
     assert captured["argv"] == ["claude", "-p", "--model", vault_utils.DEFAULT_BATCH_MODEL]
+
+
+def test_gardener_code_spans_is_the_shared_vault_utils_function():
+    assert gg._code_spans is vault_utils.code_spans
