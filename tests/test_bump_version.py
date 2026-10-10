@@ -319,3 +319,32 @@ class TestGitUnavailable:
 
         assert code == 1
         assert capsys.readouterr().err.startswith("ERROR:")
+
+
+class TestOneSemverParser:
+    """Both scripts read "X.Y.Z" through the same function."""
+
+    @pytest.mark.parametrize("odd", ["1.2.³", "1.2.3\n", " 1.2.3", "1.2.3.4", "-1.2.3"])
+    def test_both_reject_what_the_shared_parser_rejects(self, odd: str) -> None:
+        assert check_version_bumps.parse_version(odd) is None
+        with pytest.raises(BumpError, match="semver"):
+            next_version(odd, "patch")
+
+    def test_both_accept_plain_semver_identically(self) -> None:
+        assert check_version_bumps.parse_version("0.12.3") == (0, 12, 3)
+        assert next_version("0.12.3", "patch") == "0.12.4"
+
+    def test_bump_version_delegates_to_the_gates_parser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(check_version_bumps, "parse_version", lambda v: (7, 7, 7))
+
+        assert next_version("not-a-version", "patch") == "7.7.8"
+
+    def test_the_gate_delegates_to_the_same_parser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = {"a": (1, 0, 0), "b": (1, 0, 1)}
+        monkeypatch.setattr(check_version_bumps, "parse_version", fake.get)
+
+        assert check_version_bumps.actual_level("a", "b") == "patch"
