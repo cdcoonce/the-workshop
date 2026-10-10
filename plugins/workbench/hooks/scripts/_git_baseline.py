@@ -56,6 +56,19 @@ def git_dir(project_dir: Path) -> Path | None:
     return None if out is None else Path(out)
 
 
+def git_common_dir(project_dir: Path) -> Path | None:
+    """Absolute shared .git directory for `project_dir`, or None outside a repo.
+
+    In a linked worktree `git_dir` points at `.git/worktrees/<name>`, which git
+    deletes with the worktree; this resolves to the repository's own `.git`.
+    """
+    out = _run_git(["rev-parse", "--git-common-dir"], project_dir)
+    if out is None:
+        return None
+    # Git reports this relative to `project_dir` in the plain-repo case.
+    return (Path(project_dir) / out).resolve()
+
+
 def head_sha(project_dir: Path) -> str | None:
     """Current HEAD sha, or None when there is no resolvable HEAD."""
     return _run_git(["rev-parse", "HEAD"], project_dir)
