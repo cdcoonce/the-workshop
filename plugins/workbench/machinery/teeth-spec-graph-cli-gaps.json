@@ -1,0 +1,351 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_graph_cli_gaps.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_graph_cli_gaps.py"
+  ],
+  "mutants": [
+    {
+      "label": "near-bridges: `targets` is computed but never handed to gaps()",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            targets=targets,\n",
+      "replace": "\n"
+    },
+    {
+      "label": "near-bridges: flag ignored, no target restriction ever applied",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "targets = siloed_notes(graph) if args.near_bridges else None",
+      "replace": "targets = None"
+    },
+    {
+      "label": "near-bridges: always restricted to siloed notes, flag or not",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "targets = siloed_notes(graph) if args.near_bridges else None",
+      "replace": "targets = siloed_notes(graph)"
+    },
+    {
+      "label": "--note is parsed but not passed to gaps()",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            note=args.note,",
+      "replace": "            note=None,"
+    },
+    {
+      "label": "dismissed pairs are not filtered out of --gaps",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            dismissed=active_dismissed_sigs(vault_root),",
+      "replace": "            dismissed=set(),"
+    },
+    {
+      "label": "--dismiss never records the dismissal",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        record_dismissal(vault_root, args.dismiss[0], args.dismiss[1])",
+      "replace": "        pass"
+    },
+    {
+      "label": "--dismiss prints the note path instead of the signature",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit({\"dismissed\": weaklink_sig(args.dismiss[0], args.dismiss[1])})",
+      "replace": "_emit({\"dismissed\": args.dismiss[0]})"
+    },
+    {
+      "label": "--dismiss exits non-zero after recording",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit({\"dismissed\": weaklink_sig(args.dismiss[0], args.dismiss[1])})\n        return 0",
+      "replace": "_emit({\"dismissed\": weaklink_sig(args.dismiss[0], args.dismiss[1])})\n        return 1"
+    },
+    {
+      "label": "--dismiss builds the similarity reader first (needs an index to dismiss)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "    if args.dismiss:\n",
+      "replace": "    vector_similar_fn(vault_root)\n    if args.dismiss:\n"
+    },
+    {
+      "label": "transient prefixes are not excluded",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            exclude_prefixes=TRANSIENT_PREFIXES,",
+      "replace": "            exclude_prefixes=(),"
+    },
+    {
+      "label": "transient exclusion silently loses its first prefix",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            exclude_prefixes=TRANSIENT_PREFIXES,",
+      "replace": "            exclude_prefixes=TRANSIENT_PREFIXES[1:],"
+    },
+    {
+      "label": "--threshold is parsed but ignored (default band always used)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            threshold=args.threshold,",
+      "replace": "            threshold=GAPS_DEFAULT_THRESHOLD,"
+    },
+    {
+      "label": "--max is parsed but ignored (default band always used)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            max_score=args.max_score,",
+      "replace": "            max_score=GAPS_DEFAULT_MAX_SCORE,"
+    },
+    {
+      "label": "threshold and max-score are swapped",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            threshold=args.threshold,",
+      "replace": "            threshold=args.max_score,"
+    },
+    {
+      "label": "-k is parsed but ignored (default k always used)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            k=args.k,",
+      "replace": "            k=GAPS_DEFAULT_K,"
+    },
+    {
+      "label": "k is hardcoded to 5",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            k=args.k,",
+      "replace": "            k=5,"
+    },
+    {
+      "label": "--hub-degree is parsed but ignored (default always used)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            hub_degree=args.hub_degree,",
+      "replace": "            hub_degree=GAPS_DEFAULT_HUB_DEGREE,"
+    },
+    {
+      "label": "hub demotion disabled (hub_degree=None)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            hub_degree=args.hub_degree,",
+      "replace": "            hub_degree=None,"
+    },
+    {
+      "label": "default --threshold loosened to 0.5",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "p.add_argument(\"--threshold\", type=float, default=GAPS_DEFAULT_THRESHOLD)",
+      "replace": "p.add_argument(\"--threshold\", type=float, default=0.5)"
+    },
+    {
+      "label": "default --max opened to 1.0 (no near-duplicate cap)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "\"--max\", type=float, default=GAPS_DEFAULT_MAX_SCORE, dest=\"max_score\"",
+      "replace": "\"--max\", type=float, default=1.0, dest=\"max_score\""
+    },
+    {
+      "label": "default -k lowered to 3",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "p.add_argument(\"-k\", type=int, default=GAPS_DEFAULT_K)",
+      "replace": "p.add_argument(\"-k\", type=int, default=3)"
+    },
+    {
+      "label": "default --top lowered to 5",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "p.add_argument(\"--top\", type=int, default=10)",
+      "replace": "p.add_argument(\"--top\", type=int, default=5)"
+    },
+    {
+      "label": "default --hub-degree lowered to 20",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "\"--hub-degree\", type=int, default=GAPS_DEFAULT_HUB_DEGREE, dest=\"hub_degree\"",
+      "replace": "\"--hub-degree\", type=int, default=20, dest=\"hub_degree\""
+    },
+    {
+      "label": "--top slices one too many",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit(result[: args.top + 1])"
+    },
+    {
+      "label": "--top ignored, every pair emitted",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit(result)"
+    },
+    {
+      "label": "--top takes the tail of the ranking instead of the head",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit(result[-args.top :])"
+    },
+    {
+      "label": "output re-sorted by path, discarding the rank order",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit(sorted(result, key=lambda e: (e[\"a\"], e[\"b\"]))[: args.top])"
+    },
+    {
+      "label": "non-finite scores filtered out after ranking",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit([e for e in result if e[\"score\"] == e[\"score\"]][: args.top])"
+    },
+    {
+      "label": "gaps branch exits 3 after emitting",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit(result[: args.top])\n        return 3"
+    },
+    {
+      "label": "output pretty-printed over several lines",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "print(json.dumps(obj, ensure_ascii=False))",
+      "replace": "print(json.dumps(obj, ensure_ascii=False, indent=2))"
+    },
+    {
+      "label": "output escapes non-ASCII note names",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "print(json.dumps(obj, ensure_ascii=False))",
+      "replace": "print(json.dumps(obj))"
+    },
+    {
+      "label": "link maps emptied before gaps(): linked pairs look unlinked",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        targets = siloed_notes(graph) if args.near_bridges else None\n",
+      "replace": "        targets = siloed_notes(graph) if args.near_bridges else None\n        graph.out_links.clear()\n        graph.back_links.clear()\n"
+    },
+    {
+      "label": "reader built for the process cwd instead of the vault root",
+      "file": "engine/graph_cli.py",
+      "oracle": "double",
+      "find": "            vector_similar_fn(vault_root),",
+      "replace": "            vector_similar_fn(Path.cwd()),"
+    },
+    {
+      "label": "--vault-root used unresolved",
+      "file": "engine/graph_cli.py",
+      "oracle": "double",
+      "find": "Path(args.vault_root).resolve()",
+      "replace": "Path(args.vault_root)"
+    },
+    {
+      "label": "a failing reader build is swallowed into an empty result",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        result = gaps(\n            graph,\n            vector_similar_fn(vault_root),\n",
+      "replace": "        def _reader():\n            try:\n                return vector_similar_fn(vault_root)\n            except Exception:\n                return lambda rel, k: []\n\n        result = gaps(\n            graph,\n            _reader(),\n"
+    },
+    {
+      "label": "a failing reader call is swallowed into an empty result",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        result = gaps(\n            graph,\n",
+      "replace": "        def _safe_gaps(*a, **kw):\n            try:\n                return gaps(*a, **kw)\n            except Exception:\n                return []\n\n        result = _safe_gaps(\n            graph,\n"
+    },
+    {
+      "label": "dismissals applied after the top-N cut instead of before it",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            dismissed=active_dismissed_sigs(vault_root),\n            exclude_prefixes=TRANSIENT_PREFIXES,\n            max_score=args.max_score,\n            hub_degree=args.hub_degree,\n            targets=targets,\n        )\n        _emit(result[: args.top])",
+      "replace": "            dismissed=set(),\n            exclude_prefixes=TRANSIENT_PREFIXES,\n            max_score=args.max_score,\n            hub_degree=args.hub_degree,\n            targets=targets,\n        )\n        _live = active_dismissed_sigs(vault_root)\n        _emit([e for e in result[: args.top] if e[\"sig\"] not in _live])"
+    },
+    {
+      "label": "--dismiss yields to --gaps when both are given",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "    if args.dismiss:\n",
+      "replace": "    if args.dismiss and not args.gaps:\n"
+    },
+    {
+      "label": "entries lose their sig field",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit([{k: v for k, v in e.items() if k != \"sig\"} for e in result[: args.top]])"
+    },
+    {
+      "label": "scores re-rounded to two places",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        _emit([{**e, \"score\": round(e[\"score\"], 2)} for e in result[: args.top]])"
+    },
+    {
+      "label": "gaps() called with no lower bound (threshold=0.0)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            threshold=args.threshold,",
+      "replace": "            threshold=0.0,"
+    },
+    {
+      "label": "an empty result prints nothing instead of []",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(result[: args.top])",
+      "replace": "        if result:\n            _emit(result[: args.top])"
+    },
+    {
+      "label": "[control] gaps() keyword arguments reordered (threshold after k)",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "            threshold=args.threshold,\n            k=args.k,\n",
+      "replace": "            k=args.k,\n            threshold=args.threshold,\n",
+      "expect": "survived",
+      "why": "Keyword arguments bind by name, so their textual order cannot change what gaps() receives; inert on every path, including paths no test reaches."
+    }
+  ]
+}
