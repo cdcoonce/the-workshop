@@ -3,11 +3,18 @@
 The machine-local index is now <explicit-vault-root>/.ragmark. This adapter
 requires the coordinated scope/compatibility API; current older packages fail
 loudly. No legacy index is read, converted, deleted, or silently reused.
+
+The ``fastembed==0.8.0`` pin in the inline dependencies is deliberate and
+mirrors pyproject.toml, uv.lock and the Makefile test gate. ragmark records
+``fastembed.__version__`` in the index's model identity and refuses an index
+built under a different one, so an unpinned patch release strands the index.
+Move the pin only together with an index rebuild and the runtime snapshot
+(see the PR that introduced it).
 """
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl"]
+# dependencies = ["ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 
 from __future__ import annotations

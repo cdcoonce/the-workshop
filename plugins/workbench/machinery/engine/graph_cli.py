@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl"]
+# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 """Vault graph CLI — the reintegration seam.
 
@@ -25,6 +25,13 @@ vault's Ragmark index through the public, context-gated note similarity API.
 The gaps banding policy (threshold / max-score / k / hub-degree) is sourced from graphmark's
 published ``GAPS_DEFAULT_*`` constants rather than restated here, so the validated band has a
 single definition.
+
+The ``fastembed==0.8.0`` pin in the inline dependencies is deliberate and
+mirrors pyproject.toml, uv.lock and the Makefile test gate. ragmark records
+``fastembed.__version__`` in the index's model identity and refuses an index
+built under a different one, so an unpinned patch release strands the index.
+Move the pin only together with an index rebuild and the runtime snapshot
+(see the PR that introduced it).
 """
 
 from __future__ import annotations

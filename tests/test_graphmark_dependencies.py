@@ -21,6 +21,23 @@ RAGMARK_WHEEL = (
     "https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/"
     "ragmark-0.2.0-py3-none-any.whl"
 )
+# ragmark's embedder identity records `fastembed.__version__`, and ragmark
+# refuses an index whose recorded identity differs (IndexIdentityError, state
+# `identity_mismatch`). The wheel only constrains `fastembed>=0.8,<0.9`, so every
+# environment that builds or reads the vault's index must pin the SAME exact
+# version the existing index was built with, or a patch release silently
+# strands the index. `==` is deliberate: moving this pin is a coordinated act
+# (rebuild the index, refresh the runtime snapshot), never a silent drift.
+FASTEMBED_VERSION = "0.8.0"
+FASTEMBED_REQUIREMENT = f"fastembed=={FASTEMBED_VERSION}"
+# Engine scripts known to declare ragmark in their PEP 723 block; discovery must
+# still find all of them, or "every script that declares ragmark" is vacuous.
+RAGMARK_ENGINE_SCRIPTS = {"graph_cli.py", "semantic_index.py", "vault_mcp.py"}
+
+# The reference regex from PEP 723, so a block is parsed the way uv parses it.
+_PEP723_BLOCK = re.compile(
+    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+)
 
 
 def _make_command(*args: str) -> list[str]:
@@ -43,17 +60,46 @@ def _recipe(target: str) -> str:
     return match.group(1)
 
 
+def _pep723_dependencies(script: Path) -> list[str] | None:
+    """Return the script's inline `dependencies`, or None without a script block."""
+    for match in _PEP723_BLOCK.finditer(script.read_text(encoding="utf-8")):
+        if match.group("type") != "script":
+            continue
+        content = "".join(
+            line[2:] if line.startswith("# ") else line[1:]
+            for line in match.group("content").splitlines(keepends=True)
+        )
+        return tomllib.loads(content).get("dependencies", [])
+    return None
+
+
+def _requirement_name(requirement: str) -> str:
+    """Return the lower-cased distribution name a requirement string names."""
+    return re.split(r"[\s\[<>=!~@;]", requirement.strip(), maxsplit=1)[0].lower()
+
+
+def _fastembed_requirements(requirements: list[str]) -> list[str]:
+    return [item for item in requirements if _requirement_name(item) == "fastembed"]
+
+
+def _engine_scripts_declaring_ragmark() -> dict[str, list[str]]:
+    declared: dict[str, list[str]] = {}
+    for script in sorted((MACHINERY / "engine").glob("*.py")):
+        requirements = _pep723_dependencies(script)
+        if requirements and any(
+            _requirement_name(item) == "ragmark" for item in requirements
+        ):
+            declared[script.name] = requirements
+    return declared
+
+
 @pytest.mark.parametrize("surface", ["script", "project", "primary-gate"])
 def test_graph_runtime_and_primary_gate_share_ragmark_compatible_range(
     surface: str,
 ) -> None:
     if surface == "script":
-        script = (MACHINERY / "engine" / "graph_cli.py").read_text(encoding="utf-8")
-        metadata = script.split("# /// script\n", 1)[1].split("# ///", 1)[0]
-        data = tomllib.loads(
-            "\n".join(line.removeprefix("# ") for line in metadata.splitlines())
-        )
-        requirements = data["dependencies"]
+        requirements = _pep723_dependencies(MACHINERY / "engine" / "graph_cli.py")
+        assert requirements is not None
     elif surface == "project":
         data = tomllib.loads((MACHINERY / "pyproject.toml").read_text(encoding="utf-8"))
         requirements = data["project"]["dependencies"]
@@ -83,6 +129,47 @@ def test_machinery_lock_resolves_graphmark_in_the_declared_range() -> None:
         if item["name"] == "graphmark"
     )
     assert requirement["specifier"] == ">=0.10,<0.11"
+
+
+def test_engine_scripts_that_declare_ragmark_pin_the_index_fastembed() -> None:
+    declared = _engine_scripts_declaring_ragmark()
+    assert RAGMARK_ENGINE_SCRIPTS <= set(declared)
+    assert {
+        name: _fastembed_requirements(requirements)
+        for name, requirements in declared.items()
+        if _fastembed_requirements(requirements) != [FASTEMBED_REQUIREMENT]
+    } == {}
+
+
+def test_machinery_project_pins_the_index_fastembed() -> None:
+    data = tomllib.loads((MACHINERY / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = data["project"]["dependencies"]
+    assert _fastembed_requirements(requirements) == [FASTEMBED_REQUIREMENT]
+
+
+def test_machinery_lock_resolves_fastembed_to_the_pin() -> None:
+    lock = tomllib.loads((MACHINERY / "uv.lock").read_text(encoding="utf-8"))
+    assert [
+        package["version"] for package in lock["package"] if package["name"] == "fastembed"
+    ] == [FASTEMBED_VERSION]
+    project = next(
+        package
+        for package in lock["package"]
+        if package["name"] == "workbench-machinery"
+    )
+    # The `embeddings` extra's own `fastembed>=0.3` carries a marker; the
+    # unconditional requirement is the one the default environment resolves.
+    requirements = [
+        item
+        for item in project["metadata"]["requires-dist"]
+        if item["name"] == "fastembed" and "marker" not in item
+    ]
+    assert [item["specifier"] for item in requirements] == [f"=={FASTEMBED_VERSION}"]
+
+
+def test_default_machinery_gate_pins_the_index_fastembed() -> None:
+    requirements = re.findall(r"--with '([^']+)'", _default_machinery_command())
+    assert _fastembed_requirements(requirements) == [FASTEMBED_REQUIREMENT]
 
 
 def test_default_machinery_gate_requires_ragmark_mcp() -> None:
@@ -135,6 +222,18 @@ def test_teeth_commands_do_not_reintroduce_an_incompatible_runtime(
         item for item in data.get(command, []) if item.startswith("graphmark")
     ]
     assert all(item == GRAPHMARK_REQUIREMENT for item in requirements)
+
+
+@pytest.mark.parametrize(
+    "spec", sorted(MACHINERY.glob("teeth-spec-*.json")), ids=lambda p: p.stem
+)
+@pytest.mark.parametrize("command", ["test_command", "collect_command"])
+def test_teeth_commands_that_resolve_ragmark_pin_the_index_fastembed(
+    spec: Path, command: str
+) -> None:
+    argv = json.loads(spec.read_text(encoding="utf-8")).get(command, [])
+    if any(_requirement_name(item) == "ragmark" for item in argv):
+        assert _fastembed_requirements(argv) == [FASTEMBED_REQUIREMENT]
 
 
 @pytest.mark.parametrize(
