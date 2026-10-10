@@ -1249,3 +1249,66 @@ class TestSmokeAgentBlankRequiredFields:
             "missing required field" in e and f"'{blank_field}'" in e
             for e in result.errors
         )
+
+
+class TestSmokeVendorMapSources:
+    """Every vendor-map entry's source must exist in the shipped machinery (#737)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, entries: list[dict]) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        machinery = plugin / "machinery"
+        (machinery / "engine").mkdir(parents=True)
+        (machinery / "engine" / "real.py").write_text("# engine\n")
+        (machinery / "vendor-map.json").write_text(
+            json.dumps({"schema": 2, "entries": entries})
+        )
+        return plugin
+
+    def test_existing_source_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [{"kind": "file", "source": "engine/real.py", "target": ".claude/real.py"}],
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("vendor-map" in e for e in result.errors)
+
+    def test_nonexistent_source_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [
+                {
+                    "kind": "file",
+                    "source": "engine/ghost.py",
+                    "target": ".claude/ghost.py",
+                }
+            ],
+        )
+
+        result = smoke_test(plugin)
+
+        assert result.passed is False
+        assert any("vendor-map" in e and "engine/ghost.py" in e for e in result.errors)
+
+    def test_preset_rooted_source_is_not_checked_against_machinery(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [
+                {
+                    "kind": "file",
+                    "source": "skills/x/SKILL.md",
+                    "source_root": "preset",
+                    "target": ".claude/skills/x/SKILL.md",
+                }
+            ],
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("vendor-map" in e for e in result.errors)
