@@ -1,0 +1,132 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_answer_key_private.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "jsonschema",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "--rootdir=evals",
+    "--import-mode=importlib",
+    "evals/_harness/tests/test_answer_key_private.py"
+  ],
+  "mutants": [
+    {
+      "label": "heuristic drops the defects.json name",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_the_name_heuristic_flags_answer_key_names[defects.json] and the guard tests built on that name.",
+      "find": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")",
+      "replace": "_PATTERNS = (\"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")"
+    },
+    {
+      "label": "heuristic drops answer*",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by the answers.json and answer_key.txt name cases.",
+      "find": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")",
+      "replace": "_PATTERNS = (\"defects.json\", \"ground_truth*\", \"expected*\", \"*key*.json\")"
+    },
+    {
+      "label": "heuristic drops ground_truth*",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by the ground_truth name cases.",
+      "find": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")",
+      "replace": "_PATTERNS = (\"defects.json\", \"answer*\", \"expected*\", \"*key*.json\")"
+    },
+    {
+      "label": "heuristic drops expected*",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by the expected name cases and test_fails_an_answer_key_at_depth.",
+      "find": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")",
+      "replace": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"*key*.json\")"
+    },
+    {
+      "label": "heuristic drops *key*.json",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by the key.json, scoring_key.json and KEY-v2.JSON name cases.",
+      "find": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\", \"*key*.json\")",
+      "replace": "_PATTERNS = (\"defects.json\", \"answer*\", \"ground_truth*\", \"expected*\")"
+    },
+    {
+      "label": "heuristic is case-sensitive",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by the Defects.JSON and KEY-v2.JSON name cases.",
+      "find": "    lowered = name.casefold()",
+      "replace": "    lowered = name"
+    },
+    {
+      "label": "a listed key is still reported",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_the_key_is_listed_in_fixture_private.",
+      "find": "                    covered = any(rel == entry or rel.startswith(entry + \"/\") for entry in private)",
+      "replace": "                    covered = False"
+    },
+    {
+      "label": "a listed directory no longer covers the files beneath it",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_passes_when_a_listed_directory_covers_the_key.",
+      "find": "rel == entry or rel.startswith(entry + \"/\") for entry in private)",
+      "replace": "rel == entry for entry in private)"
+    },
+    {
+      "label": "a builder case (key or local script) is checked",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_a_case_with_a_builder_key_is_not_checked and test_a_case_with_a_local_builder_is_not_checked.",
+      "find": "(case_dir / \"fixture\").is_dir() and not has_builder(case_dir)",
+      "replace": "(case_dir / \"fixture\").is_dir()"
+    },
+    {
+      "label": "a bad declaration is not turned into a failure",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_a_bad_declaration_fails_rather_than_passing_silently (the exception escapes instead of a fail Result).",
+      "find": "            except FixtureCopyError as exc:\n                results.append(_fail(f\"{label}: {exc}\"))\n                continue",
+      "replace": "            except FixtureCopyError:\n                raise"
+    },
+    {
+      "label": "underscore-prefixed skill dirs are walked",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_underscore_and_hidden_skill_dirs_are_not_walked.",
+      "find": "if p.is_dir() and not p.name.startswith((\"_\", \".\"))",
+      "replace": "if p.is_dir()"
+    },
+    {
+      "label": "an exposed key never produces a fail",
+      "file": "./answer_key_private.py",
+      "oracle": "real",
+      "why": "Killed by test_fails_an_unlisted_answer_key_in_a_static_fixture_naming_the_file.",
+      "find": "            if exposed:",
+      "replace": "            if False:"
+    }
+  ]
+}

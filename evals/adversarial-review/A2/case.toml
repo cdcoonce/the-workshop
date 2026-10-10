@@ -13,6 +13,8 @@
 mode = "inline"
 prompt = "prompt.md"
 envelope = "findings"
+# Answer key: stays in fixture/ (moving it would stale A2-D2), omitted by fixture_copy; see acceptance.md.
+fixture_private = ["defects.json"]
 
 # Every matcher is #992's conjunctive review_match: location AND regex, no disjunctive
 # fallback (the experiment's score_arm.py:65 `in_window or bool(regex.search(desc))` is

@@ -113,6 +113,54 @@
       "replace": "Prepare a pre-existing populated"
     },
     {
+      "label": "[FC1] the committed-fixture copy goes back to a bare whole-tree copy",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation: the fixture_copy command, the fixture_private clause and the never-by-hand rule all vanish.",
+      "find": "run\n     `python -m evals._harness.fixture_copy <case_dir> <dest>`, which copies\n     `fixture/` into `<dest>` without the files the case lists under\n     `fixture_private` in `case.toml` (an answer key, such as A2's\n     `defects.json`).",
+      "replace": "copy `fixture/` into\n     `<dest>`."
+    },
+    {
+      "label": "[FC2] copying fixture/ by hand is said to be fine",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the Never-copy-by-hand pin).",
+      "find": "Never copy `fixture/` by hand:",
+      "replace": "Copying `fixture/` by hand is fine:"
+    },
+    {
+      "label": "[FC3] the whole-tree-copy hazard is no longer stated",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the whole-tree-copy-hands-the-key pin).",
+      "find": "a whole-tree copy\n     hands the answer key to every dispatched agent.",
+      "replace": "a whole-tree copy is merely slower."
+    },
+    {
+      "label": "[FC4] the --check step is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check invocation pin).",
+      "find": "Before dispatching, run\n     `python -m evals._harness.fixture_copy --check <case_dir> <dest>`; it\n     exits 1 if `<dest>` holds a private file, a byte-identical copy of one\n     under another name, `acceptance.md` or `ab_raws`, and 2 on any error.",
+      "replace": ""
+    },
+    {
+      "label": "[FC5] the --check step is said to only warn",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the fails-if-private-file pin).",
+      "find": "; it\n     exits 1 if",
+      "replace": "; it\n     warns if"
+    },
+    {
+      "label": "[FC6] the private list is no longer said to live in case.toml's fixture_private",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the fixture_private pin).",
+      "find": "`fixture_private` in `case.toml`",
+      "replace": "`private` in `case.toml`"
+    },
+    {
       "label": "[K8] landing section dropped",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
@@ -496,6 +544,46 @@
       "why": "A harmless synonym swap in untested prose; no assertion reads this sentence.",
       "find": "This skill documents how to run one named skill's eval suite.",
       "replace": "This skill documents how to conduct one named skill's eval suite."
+    },
+    {
+      "label": "[FC7] the from-the-repo-root instruction is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the full command-prefix pin).",
+      "find": "from the repo root, ",
+      "replace": ""
+    },
+    {
+      "label": "[FC8] the builder and uncommitted-changes refusal is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the refusal pin).",
+      "find": "It refuses a builder case and a `fixture/` with\n     uncommitted changes. ",
+      "replace": ""
+    },
+    {
+      "label": "[FC9] the byte-identical-copy leak clause is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": ", a byte-identical copy of one\n     under another name",
+      "replace": ""
+    },
+    {
+      "label": "[FC10] the exit-1 claim is changed to exit-0",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": "exits 1 if `<dest>`",
+      "replace": "exits 0 if `<dest>`"
+    },
+    {
+      "label": "[FC11] the exit-2-on-error claim is dropped",
+      "file": "../../../.claude/skills/eval-suite/SKILL.md",
+      "oracle": "real",
+      "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
+      "find": ", and 2 on any error",
+      "replace": ","
     }
   ]
 }

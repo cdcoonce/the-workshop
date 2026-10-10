@@ -37,6 +37,29 @@ Checks
     outside fenced code, before vs after. Always printed as info; it is an
     error only under ``--expect-deletion-only`` when the delta is positive.
 
+``STALE_COUNT_CLAIM`` (always)
+    The ``## Budget`` section states a count of new tests or criteria, the
+    ``## Acceptance criteria`` items changed, and the sentence did not. Incident:
+    a rewrite added criteria while "one guard, one replaced test and eight new
+    tests" stayed byte-identical, and the next reader filed a blocking
+    "stale count" finding, twice on one issue. A lint cannot recompute the
+    true number of tests from free-prose criteria, so this detects the
+    SITUATION, not the right number. Claims are ``<number> new|added|extra
+    test(s)`` (TEST family) and ``<number> [acceptance] checkbox(es)|criteria|
+    criterion`` (CRITERIA family) inside the Budget section, outside fenced
+    and inline code; numbers are digits or ``one``..``twenty``, and a number glued
+    to a hyphen, comma or period (``twenty-one``, ``1,200``, ``2.5``) is not a
+    claim. "a"/"an" and "replaced" test counts are ignored. A claim present verbatim (case-
+    insensitive) in both Budgets is stale when its family's delta is nonzero:
+    TEST uses the change in Acceptance items mentioning ``test(s)``, CRITERIA
+    uses the change in total Acceptance items. Heuristic limits: an item that
+    mentions "test" is not necessarily one new test (and a test may hide in an
+    item that never says so), so it can fire on a count that still holds and
+    miss one that went stale; the message asks for "update or confirm". Both
+    headings must exist (Budget in ``after``), else nothing is emitted. Severity
+    is ``error``; under ``--expect-deletion-only`` it is ``info`` (a deletion
+    applies no new text, so the number is fixed in the next edit).
+
 ``--expect-deletion-only`` adds:
 
 ``ADDED_LINE`` / ``ADDED_ITEM``
@@ -81,6 +104,19 @@ INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
 FUSED_NUMBERED_RE = re.compile(r"(?:(?<=[)`:])|(?<=[^\d\s.]\.))\d{1,2}\. \S")
 FUSED_CHECKBOX_RE = re.compile(r"(?<=[.)`:])- \[[ xX]\]")
 TOKEN_RE = re.compile(r"`([^`\n]+)`|(#\d+)(?!\d)")
+HEADING_RE = re.compile(r"^(#{1,6})\s+\S")
+ACCEPTANCE_RE = re.compile(r"^#{1,6}\s+Acceptance criteria\b", re.IGNORECASE)
+BUDGET_RE = re.compile(r"^#{1,6}\s+Budget\b", re.IGNORECASE)
+TEST_ITEM_RE = re.compile(r"\btests?\b", re.IGNORECASE)
+_NUMBER = (r"(?<![\w.,-])(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven"
+           r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
+           r"|twenty)")
+CLAIM_RES = {
+    "test": re.compile(rf"{_NUMBER}\s+(?:new|added|extra)\s+tests?\b", re.IGNORECASE),
+    "criteria": re.compile(
+        rf"{_NUMBER}\s+(?:acceptance\s+)?(?:checkboxes|checkbox|criteria|criterion)\b",
+        re.IGNORECASE),
+}
 
 
 @dataclass(frozen=True)
@@ -251,6 +287,82 @@ def check_dangling(before: list[str], after: list[str]) -> list[Finding]:
     return out
 
 
+def _section_span(lines: list[str], heading_rx: re.Pattern[str]) -> tuple[int, int] | None:
+    """Return the 1-based ``(first, last)`` body lines of the first matching section.
+
+    The section runs from the matching heading to the next heading of the same
+    or higher level (fewer or equal ``#``), outside fenced code. ``None`` when
+    no heading matches.
+    """
+    fenced = code_fence_mask(lines)
+    start = level = None
+    for i, line in enumerate(lines):
+        if fenced[i]:
+            continue
+        m = HEADING_RE.match(line)
+        if start is None:
+            if m and heading_rx.match(line):
+                start, level = i, len(m.group(1))
+        elif m and len(m.group(1)) <= level:
+            return start + 2, i
+    return None if start is None else (start + 2, len(lines))
+
+
+def _acceptance_deltas(before: list[str], after: list[str]) -> tuple[int, int] | None:
+    """Return ``(d_all, d_test)`` over Acceptance-criteria items, after minus before."""
+    counts = []
+    for lines in (before, after):
+        span = _section_span(lines, ACCEPTANCE_RE)
+        if span is None:
+            return None
+        items = [t for n, t in list_items(lines) if span[0] <= n <= span[1]]
+        counts.append((len(items), sum(1 for t in items if TEST_ITEM_RE.search(t))))
+    return counts[1][0] - counts[0][0], counts[1][1] - counts[0][1]
+
+
+def _budget_claims(lines: list[str]) -> dict[tuple[str, str], int]:
+    """Map ``(family, lowercased claim text)`` to the first 1-based line it appears on."""
+    span = _section_span(lines, BUDGET_RE)
+    claims: dict[tuple[str, str], int] = {}
+    if span is None:
+        return claims
+    fenced = code_fence_mask(lines)
+    for n in range(span[0], span[1] + 1):
+        if fenced[n - 1]:
+            continue
+        masked = _mask_inline_code(lines[n - 1])
+        for family, rx in CLAIM_RES.items():
+            for m in rx.finditer(masked):
+                claims.setdefault((family, _norm(m.group(0)).lower()), n)
+    return claims
+
+
+def check_stale_counts(before: list[str], after: list[str],
+                       deletion_only: bool = False) -> list[Finding]:
+    """STALE_COUNT_CLAIM: a Budget count survived unchanged while criteria changed."""
+    deltas = _acceptance_deltas(before, after)
+    if deltas is None:
+        return []
+    d_all, d_test = deltas
+    delta_for = {"test": d_test, "criteria": d_all}
+    wording = {"test": "acceptance items mentioning tests",
+               "criteria": "acceptance criteria items"}
+    before_claims = _budget_claims(before)
+    out: list[Finding] = []
+    for (family, text), line in _budget_claims(after).items():
+        delta = delta_for[family]
+        if (family, text) not in before_claims or delta == 0:
+            continue
+        msg = (f'Budget states "{text}", unchanged from before, but '
+               f"{wording[family]} changed by {delta:+d}; update the number "
+               "or confirm it still holds")
+        if deletion_only:
+            msg += " (deletion edits add no new text; fix the number in the next edit)"
+        out.append(Finding("STALE_COUNT_CLAIM", "info" if deletion_only else "error",
+                           "after", line, msg))
+    return out
+
+
 def lint(before_text: str, after_text: str, deletion_only: bool = False) -> tuple[
         list[Finding], dict[str, int]]:
     """Run every check; return ``(findings, counts)``."""
@@ -259,6 +371,7 @@ def lint(before_text: str, after_text: str, deletion_only: bool = False) -> tupl
     findings = check_fused_items(after)
     count_f, b, a = check_item_count(before, after, deletion_only)
     findings += count_f
+    findings += check_stale_counts(before, after, deletion_only)
     if deletion_only:
         findings += check_deletion_only(before, after)
         findings += check_dangling(before, after)

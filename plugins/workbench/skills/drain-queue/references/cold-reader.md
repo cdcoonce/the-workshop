@@ -115,6 +115,10 @@ on the edited body, from this template, before step 2; you are no longer cold to
 made. `vault-cold-read`'s step 8 owns the rest of that loop, its sole exemption and its read
 cap.
 
+On a hand-built slice from read 2 on, the conductor re-grades the reader's findings under
+`vault-cold-read`'s Hand-built slices tier, then edits the verdict comment and ledger line,
+corrects the label, and stamps if the result is BUILD.
+
 A NOT-DISPATCH-READY removes the issue from the queue. Resist the pull to rescope it into
 something buildable in the moment; that decision belongs to shaping, with the whole context
 in view, not to the conductor mid-drain.
