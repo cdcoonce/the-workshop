@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
+# dependencies = ["graphmark>=0.10,<0.11", "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 """Vault graph CLI — the reintegration seam.
 
@@ -22,9 +22,11 @@ Structural queries (--stats/--orphans/...) are also supported for parity with th
 Structural configuration follows the owner scope. Similarity reads the selected
 vault's Ragmark index through the public, context-gated note similarity API.
 
-The gaps banding policy (threshold / max-score / k / hub-degree) is sourced from graphmark's
-published ``GAPS_DEFAULT_*`` constants rather than restated here, so the validated band has a
-single definition.
+The gaps banding policy (threshold / max-score / k / hub-degree) is sourced from ragmark's
+published ``ragmark.gaps.GAPS_DEFAULT_*`` constants rather than restated here, so the validated
+band has a single definition. The ranking itself is ``ragmark.gaps.rank_pairs``; this handler
+supplies what that primitive leaves to the caller: the target scope (``--note`` wins over
+``--near-bridges``, else every graph node), the transient-prefix exclusion, and the ``sig`` field.
 
 The ``fastembed==0.8.0`` pin in the inline dependencies is deliberate and
 mirrors pyproject.toml, uv.lock and the Makefile test gate. ragmark records
@@ -44,17 +46,12 @@ from pathlib import Path
 
 import graphmark
 from graphmark import (
-    GAPS_DEFAULT_HUB_DEGREE,
-    GAPS_DEFAULT_K,
-    GAPS_DEFAULT_MAX_SCORE,
-    GAPS_DEFAULT_THRESHOLD,
     VaultConfig,
     VaultGraph,
     active_dismissed_sigs,
     bridges,
     clusters,
     diagnose,
-    gaps,
     hubs,
     neighborhood,
     orphans,
@@ -207,6 +204,16 @@ def _emit(obj) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Lazy, like vector_similar_fn's ragmark imports: other engine scripts import this
+    # module for build()/diagnose() under an environment that has graphmark only.
+    from ragmark.gaps import (
+        GAPS_DEFAULT_HUB_DEGREE,
+        GAPS_DEFAULT_K,
+        GAPS_DEFAULT_MAX_SCORE,
+        GAPS_DEFAULT_THRESHOLD,
+        rank_pairs,
+    )
+
     p = argparse.ArgumentParser(description="Vault graph queries (graphmark-backed).")
     p.add_argument("--vault-root")
     p.add_argument("--stats", action="store_true")
@@ -241,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note")
     p.add_argument("--near-bridges", action="store_true", dest="near_bridges")
     p.add_argument("--dismiss", nargs=2, metavar=("A", "B"))
-    # The gaps band comes from graphmark's published constants, so the validated policy has
+    # The gaps band comes from ragmark's published constants, so the validated policy has
     # one definition instead of literals copied into this argparse block.
     p.add_argument("--threshold", type=float, default=GAPS_DEFAULT_THRESHOLD)
     p.add_argument(
@@ -295,19 +302,37 @@ def main(argv: list[str] | None = None) -> int:
     elif args.neighborhood:
         _emit(neighborhood(graph, args.neighborhood, args.depth))
     elif args.gaps:
-        targets = siloed_notes(graph) if args.near_bridges else None
-        result = gaps(
+        if args.note is not None:
+            targets = [args.note]
+        elif args.near_bridges:
+            targets = list(siloed_notes(graph))
+        else:
+            targets = list(graph.nodes.keys())
+        transient = tuple(TRANSIENT_PREFIXES)
+        targets = [t for t in targets if not t.startswith(transient)]
+        similar_fn = vector_similar_fn(vault_root)
+
+        def similar_outside_transient(rel, k):
+            return [
+                (other, score)
+                for other, score in similar_fn(rel, k)
+                if not other.startswith(transient)
+            ]
+
+        ranked = rank_pairs(
             graph,
-            vector_similar_fn(vault_root),
+            similar_outside_transient,
             threshold=args.threshold,
             k=args.k,
-            note=args.note,
             dismissed=active_dismissed_sigs(vault_root),
-            exclude_prefixes=TRANSIENT_PREFIXES,
             max_score=args.max_score,
             hub_degree=args.hub_degree,
             targets=targets,
         )
+        result = [
+            {"a": a, "b": b, "score": score, "sig": weaklink_sig(a, b)}
+            for a, b, score in ranked
+        ]
         _emit(result[: args.top])
     else:
         _emit(stats(graph))

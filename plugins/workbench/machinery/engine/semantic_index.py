@@ -14,7 +14,7 @@ Move the pin only together with an index rebuild and the runtime snapshot
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
+# dependencies = ["ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 
 from __future__ import annotations

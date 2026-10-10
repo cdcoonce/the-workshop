@@ -555,14 +555,14 @@ wheels = [
 
 [[package]]
 name = "graphmark"
-version = "0.10.0"
+version = "0.10.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "networkx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/f9/079f1b889e8bc0a8efc019b0f0350f6aac945f0d3d0a0833e3a64fd330b6/graphmark-0.10.0.tar.gz", hash = "sha256:667af72bd2cde132d29e6eb03c053be2f64524ab308e5e3179c963dfd6ce854a", size = 218127, upload-time = "2026-10-04T00:31:50.13Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/2e/45e45f2b8f241f816d7dfdc61f7591beadd2e4afa3d6b7c0f74d182aed8b/graphmark-0.10.1.tar.gz", hash = "sha256:abb1f71211d35bee217fb45c5644a39bed7ed57f36d48f84125a283e7190c584", size = 220347, upload-time = "2026-10-04T03:33:17.986Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/50/08/d04b337d261228ee477f6c751b4c3d177e5a1f0c550875c1a5bfb5923b17/graphmark-0.10.0-py3-none-any.whl", hash = "sha256:162bf23ea791d4a6db45f87ec9d9354cf62bf89db9aa833cc8c4cfb4a713a888", size = 49639, upload-time = "2026-10-04T00:31:48.542Z" },
+    { url = "https://files.pythonhosted.org/packages/18/8a/4eae6076417bf345691882312ee0ba45fb6cf9fd155828eaab2a84ffde84/graphmark-0.10.1-py3-none-any.whl", hash = "sha256:d1cba4dd903eb251c0fcfcd50dbd39ed8a7c3f4d9730829c30de092ad4087ada", size = 50315, upload-time = "2026-10-04T03:33:16.788Z" },
 ]
 
 [[package]]
@@ -1794,8 +1794,8 @@ wheels = [
 
 [[package]]
 name = "ragmark"
-version = "0.2.0"
-source = { url = "https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl" }
 dependencies = [
     { name = "fastembed" },
     { name = "graphmark" },
@@ -1804,7 +1804,7 @@ dependencies = [
     { name = "pyyaml" },
 ]
 wheels = [
-    { url = "https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", hash = "sha256:7928f696bf27db7add73f4eda08382680a0b08056979589239d208bf5182f34e" },
+    { url = "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl", hash = "sha256:700e6caf8e5e1356b1725f18b0cbeda3e44c5d137b135441d62a35c61cb75a24" },
 ]
 
 [package.metadata]
@@ -1812,7 +1812,7 @@ requires-dist = [
     { name = "fastembed", specifier = ">=0.8,<0.9" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2,<4" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2,<4" },
-    { name = "graphmark", specifier = ">=0.10,<1.0" },
+    { name = "graphmark", specifier = ">=0.10.1,<1.0" },
     { name = "numpy", specifier = ">=2,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6,<7" },
@@ -2401,7 +2401,7 @@ requires-dist = [
     { name = "graphmark", specifier = ">=0.10,<0.11" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ragmark", url = "https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl" },
+    { name = "ragmark", url = "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl" },
 ]
 provides-extras = ["embeddings", "mcp"]
 
