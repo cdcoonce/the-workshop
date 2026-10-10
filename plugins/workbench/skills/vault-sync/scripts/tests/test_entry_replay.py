@@ -1668,6 +1668,16 @@ def test_ledger_merge_heading_line_edit_accepted() -> None:
     assert detail["replaced"] == 1
 
 
+def test_ledger_merge_in_place_edit_refused_when_origin_holds_two_copies() -> None:
+    """"Exactly once": an edit cannot be placed when origin holds the entry twice."""
+    base = GOTCHAS_SEED
+    tip = base.replace("Body of the bytecode gotcha.", "Session body.")
+    origin = base.replace(BYTECODE_ENTRY, BYTECODE_ENTRY + "\n" + BYTECODE_ENTRY)
+    assert origin != base
+    with pytest.raises(RefusalError, match="edited or removed on origin"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
 def test_ledger_merge_entry_deletion_refused() -> None:
     base = GOTCHAS_SEED
     tip = base.replace(BYTECODE_ENTRY + "\n", "")
@@ -1707,7 +1717,9 @@ def test_ledger_merge_session_edit_of_block_preamble_refused() -> None:
 
 def test_ledger_merge_origin_preamble_change_refused() -> None:
     base = BRAG_SEED.replace("### Wins\n\n- **2026-09-15", "### Wins\n\nPreamble prose.\n\n- **2026-09-15", 1)
-    tip = insert_under(base, "### Wins", brag_entry("2026-09-20", "Session win"))
+    new_win = brag_entry("2026-09-20", "Session win")
+    tip = base.replace("Preamble prose.\n\n", "Preamble prose.\n\n" + new_win + "\n", 1)
+    assert tip != base
     origin = base.replace("Preamble prose.", "Origin reworded the preamble.")
     with pytest.raises(RefusalError, match="preamble"):
         ledger_merge(base, tip, origin, BRAG)
@@ -1768,6 +1780,32 @@ def test_handoff_same_bullet_edited_by_both_sides_refuses() -> None:
         handoff_merge(base, tip, origin, HANDOFF)
     assert "- [[proj-a]]: watch the deploy." in str(info.value)
     assert "byte-identical" in str(info.value)
+
+
+def test_handoff_session_edit_of_a_bullet_origin_duplicated_refuses() -> None:
+    """"Exactly once": two byte-identical matches on origin cannot be told apart."""
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
+    origin = base.replace(
+        "- [[proj-a]]: watch the deploy.\n",
+        "- [[proj-a]]: watch the deploy.\n- [[proj-a]]: watch the deploy.\n",
+    )
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_handoff_insertion_anchor_duplicated_on_origin_refuses() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace(
+        "- [[proj-a]]: watch the deploy.",
+        "- [[proj-a]]: watch the deploy.\n- [[proj-c]]: session's insert.",
+    )
+    origin = base.replace(
+        "- [[proj-a]]: watch the deploy.\n",
+        "- [[proj-a]]: watch the deploy.\n- [[proj-a]]: watch the deploy.\n",
+    )
+    with pytest.raises(RefusalError, match="insertion"):
+        handoff_merge(base, tip, origin, HANDOFF)
 
 
 def test_handoff_session_edit_of_a_bullet_origin_removed_refuses() -> None:

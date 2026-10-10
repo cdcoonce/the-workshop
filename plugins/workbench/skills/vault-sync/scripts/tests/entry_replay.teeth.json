@@ -5,10 +5,14 @@
     "run",
     "--with",
     "pytest",
+    "--with",
+    "pytest-xdist",
     "python",
     "-m",
     "pytest",
     "-q",
+    "-n",
+    "4",
     "plugins/workbench/skills/vault-sync/scripts/tests/test_entry_replay.py"
   ],
   "collect_command": [
@@ -25,32 +29,32 @@
   ],
   "mutants": [
     {
-      "label": "non-insertion ledger changes are silently ignored instead of refusing",
+      "label": "an entry the session deleted is silently dropped instead of refusing",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        if tag != \"insert\":\n            raise RefusalError(\n                f\"{path}: non-insertion session change ({tag} touching base lines \"\n                f\"{i1 + 1}-{max(i2, i1 + 1)}); in-place ledger corrections escalate to a human\"\n            )\n        insertions.append((i1, tip_lines[j1:j2]))",
-      "replace": "        if tag != \"insert\":\n            continue\n        insertions.append((i1, tip_lines[j1:j2]))"
+      "find": "        if lost:\n            raise RefusalError(\n                f\"{path}: the session deleted entry {lost[0].label!r} under {anchor_line!r}; \"\n                \"entry deletions escalate to a human\"\n            )\n",
+      "replace": "        if lost:\n            pass\n"
     },
     {
-      "label": "the per-entry base assertion is gone: origin-side entry edits merge silently",
+      "label": "the per-replaced-entry assertion is gone: origin-side edits of a replaced entry are overwritten",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        origin_keys = Counter(chunk.key for chunk in origin_block.entries)\n        for chunk in base_block.entries:\n            if origin_keys[chunk.key] < 1:\n                raise RefusalError(\n                    f\"{path}: origin's copy of entry {chunk.label!r} is not byte-identical \"\n                    \"to the session base (edited or removed); escalating\"\n                )\n            origin_keys[chunk.key] -= 1\n\n",
-      "replace": "\n"
+      "find": "            if origin_keys[old.key] != 1:\n                raise RefusalError(\n                    f\"{path}: origin's copy of entry {old.label!r} the session edited is \"\n                    \"not byte-identical exactly once (edited or removed on origin); escalating\"\n                )\n",
+      "replace": ""
     },
     {
-      "label": "the per-section base assertion is gone: origin-side section edits are overwritten",
+      "label": "the per-item assertion is gone: origin-side edits of a replaced handoff item are overwritten",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        if name in touched:\n            if body != b_map[name]:\n                raise RefusalError(\n                    f\"{path}: origin's copy of section '## {name}' is not byte-identical \"\n                    \"to the session base; escalating\"\n                )\n            out_body.append(raw)",
-      "replace": "        if name in touched:\n            out_body.append(raw)"
+      "find": "        hits = _find_runs(origin_items, run)\n        if len(hits) != 1:\n            raise RefusalError(\n                f\"{path}: in '## {name}', the session's changed item \"\n                f\"{run[0][0][:60]!r} is not byte-identical exactly once on origin \"\n                f\"({len(hits)} matches; edited or removed there); escalating\"\n            )\n",
+      "replace": "        hits = _find_runs(origin_items, run) or [0]\n"
     },
     {
-      "label": "conflicts outside the allowlist no longer refuse up front",
+      "label": "conflicts outside the allowlist no longer refuse",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    outside = sorted(path for path in conflicts if not is_allowlisted(path))\n    if outside:\n        report.outside_allowlist = outside\n        raise RefusalError(\"conflicting files outside the allowlist: \" + \", \".join(outside))",
-      "replace": "    outside: list[str] = []"
+      "find": "    for path in outside:\n        refusals.append(\n            {\"path\": path, \"reason\": f\"conflicting file outside the allowlist: {path}\"}\n        )\n",
+      "replace": "    for path in outside:\n        pass\n"
     },
     {
       "label": "the newest-first date re-sort is dropped after insertion",
@@ -91,8 +95,8 @@
       "label": "byte-identical entries origin already holds are inserted again (duplicates)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        for chunk in new_chunks:\n            if present[chunk.key] > 0:\n                present[chunk.key] -= 1\n                detail[\"duplicates_skipped\"] += 1\n                continue\n            kept.append(chunk)",
-      "replace": "        for chunk in new_chunks:\n            kept.append(chunk)"
+      "find": "        for chunk in new_entries:\n            if present[chunk.key] > 0:\n                present[chunk.key] -= 1\n                detail[\"duplicates_skipped\"] += 1\n                continue\n            kept.append(chunk)\n",
+      "replace": "        for chunk in new_entries:\n            kept.append(chunk)\n"
     },
     {
       "label": "touched handoff sections are never re-applied: origin wins everything",
@@ -149,6 +153,132 @@
       "oracle": "real",
       "find": "        \"REVERT_HEAD\",\n        \"BISECT_LOG\",\n",
       "replace": "        \"REVERT_HEAD\",\n"
+    },
+    {
+      "label": "the trailing-date grammar rejects qualified headings again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})(?:[ ,][^()]*)?\\)$\")",
+      "replace": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})\\)$\")"
+    },
+    {
+      "label": "a dated bullet inside a heading-entry block is read as an entry start again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if any(started[0] == \"heading\" for _idx, started in starts):\n        starts = [(idx, started) for idx, started in starts if started[0] == \"heading\"]\n",
+      "replace": ""
+    },
+    {
+      "label": "an in-place edit that also changed the heading line is treated as a deletion",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            if len(lost) == 1 and len(unpaired_tip) == 1:\n                replaced.append((lost.pop(), unpaired_tip.pop()))\n",
+      "replace": ""
+    },
+    {
+      "label": "the over-broad assertion is back: every base entry must survive on origin untouched",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        new_entries, replaced = _diff_entries(base_block, tip_block, anchor_line, path)\n",
+      "replace": "        new_entries, replaced = _diff_entries(base_block, tip_block, anchor_line, path)\n        for chunk in base_block.entries:\n            if Counter(c.key for c in origin_block.entries)[chunk.key] != 1:\n                raise RefusalError(f\"{path}: origin's copy of {chunk.label!r} is not byte-identical\")\n"
+    },
+    {
+      "label": "'exactly once' relaxed to 'at least once': a replaced entry origin holds twice is placed anyway",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            if origin_keys[old.key] != 1:",
+      "replace": "            if origin_keys[old.key] < 1:"
+    },
+    {
+      "label": "changes outside the anchor blocks are no longer compared",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if base.outside() != tip.outside() or set(base_spans) != set(tip_spans):",
+      "replace": "    if set(base_spans) != set(tip_spans):"
+    },
+    {
+      "label": "a session edit of a block preamble is no longer refused",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if _strip_trailing_blanks(base_block.preamble) != _strip_trailing_blanks(tip_block.preamble):\n            raise RefusalError(\n                f\"{path}: the session edited the preamble under {anchor_line!r}; \"\n                \"only dated entries may change; escalating\"\n            )\n",
+      "replace": ""
+    },
+    {
+      "label": "origin's block preamble is no longer compared to the session base",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if _strip_trailing_blanks(base_block.preamble) != _strip_trailing_blanks(\n            origin_block.preamble\n        ):\n            raise RefusalError(\n                f\"{path}: origin's preamble under {anchor_line!r} is not byte-identical \"\n                \"to the session base; escalating\"\n            )\n",
+      "replace": ""
+    },
+    {
+      "label": "anchors are not innermost: a quarter and its Wins/Growth subsections sort as one block",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            if nlvl > lvl and parse_entry_start(nraw) is None:\n                continue  # a deeper non-entry heading follows: not innermost\n",
+      "replace": "            pass\n"
+    },
+    {
+      "label": "'exactly once' relaxed to 'at least once' for a replaced handoff item",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        hits = _find_runs(origin_items, run)\n        if len(hits) != 1:",
+      "replace": "        hits = _find_runs(origin_items, run)\n        if not hits:"
+    },
+    {
+      "label": "a handoff insertion anchored on a duplicated origin item is placed after the first copy",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                hits = _find_runs(origin_items, [base_items[i1 - 1]])\n                if len(hits) != 1:",
+      "replace": "                hits = _find_runs(origin_items, [base_items[i1 - 1]])\n                if not hits:"
+    },
+    {
+      "label": "the _Updated stamp always takes origin's value instead of resolving three-way",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    winning_stamp = (\n        _stamp_lines(t_pre)\n        if _stamp_lines(t_pre) != _stamp_lines(b_pre)\n        else _stamp_lines(o_pre)\n    )\n",
+      "replace": "    winning_stamp = _stamp_lines(o_pre)\n"
+    },
+    {
+      "label": "the _Updated stamp counts as a preamble divergence again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "def _unstamped(preamble: list[str]) -> list[str]:\n    return [line for line in preamble if not line.startswith(_STAMP_PREFIX)]",
+      "replace": "def _unstamped(preamble: list[str]) -> list[str]:\n    return list(preamble)"
+    },
+    {
+      "label": "the replay stops at the first refusing file instead of collecting them all",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        except RefusalError as exc:\n            refusals.append({\"path\": path, \"reason\": str(exc)})\n            continue\n",
+      "replace": "        except RefusalError:\n            raise\n"
+    },
+    {
+      "label": "--lint swallows a block that does not parse",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        except RefusalError as exc:\n            findings.append(str(exc))\n",
+      "replace": "        except RefusalError:\n            pass\n"
+    },
+    {
+      "label": "--lint ignores a dated entry that sits outside every anchor block",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if doc.flags[idx] or covered[idx]:\n            continue\n",
+      "replace": "        continue\n"
+    },
+    {
+      "label": "--verify no longer reports an addition missing from the result",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    missing = [line for line in ((s_add - r) + (o_add - r)) if line not in ambiguous]",
+      "replace": "    missing: list[str] = []"
+    },
+    {
+      "label": "--verify no longer reports a line the result invented",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    extra = [line for line in (r - expected) if line not in ambiguous]",
+      "replace": "    extra: list[str] = []"
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",
