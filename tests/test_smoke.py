@@ -1442,3 +1442,52 @@ class TestRootRelativeLinksOutOfContract:
         errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
         assert len(errors) == 1
         assert "some/path.md" in errors[0]
+
+
+class TestFrontmatterNestedBlockSequence:
+    """Nested block-sequence YAML lists parse into lists (#746)."""
+
+    def test_nested_block_sequence_parses_to_list(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nname: a\nskills:\n  add:\n    - x\n    - y\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+
+    def test_nested_block_sequence_strips_quotes_and_sibling_keys(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - 'x'\n    - \"y\"\n  remove: [z]\nrole: r\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+        assert result["skills"]["remove"] == ["z"]
+        assert result["role"] == "r"
+
+    def test_inline_list_form_unchanged(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter("---\nskills:\n  add: [x, y]\n---\n")
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+
+    def test_agent_with_block_sequence_dangling_skill_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(
+            "---\nname: tdd-implementer\ndescription: test\nrole: implementer\n"
+            "skills:\n  add:\n    - nonexistent-skill\n---\n"
+        )
+
+        result = smoke_test(plugin)
+
+        assert not result.passed
+        assert any("nonexistent-skill" in e for e in result.errors)
