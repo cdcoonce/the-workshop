@@ -4,11 +4,18 @@
 Root discovery stays with the Workshop; scope, gating, chunk citations, and
 server registration stay with the packaged core. Python helper signatures are
 retained for existing callers, without a second retrieval over-fetch layer.
+
+The ``fastembed==0.8.0`` pin in the inline dependencies is deliberate and
+mirrors pyproject.toml, uv.lock and the Makefile test gate. ragmark records
+``fastembed.__version__`` in the index's model identity and refuses an index
+built under a different one, so an unpinned patch release strands the index.
+Move the pin only together with an index rebuild and the runtime snapshot
+(see the PR that introduced it).
 """
 
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl"]
+# dependencies = ["ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl", "fastembed==0.8.0"]
 # ///
 
 from __future__ import annotations

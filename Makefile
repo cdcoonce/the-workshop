@@ -114,7 +114,11 @@ check-teeth-changed:
 # An explicit interpreter command plus externally supplied PYTHONPATH can test
 # a reviewed Ragmark source build without installing it. The normal gate still
 # requires Ragmark and fails on missing scope/compatibility capabilities.
-MACHINERY_TEST_PYTHON ?= uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' --with 'ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl' python
+# fastembed is pinned exactly because ragmark records fastembed.__version__ in
+# the index's model identity and refuses an index built under another; the pin
+# equals machinery/pyproject.toml's and each engine script's inline one, and
+# moves only together with an index rebuild and the runtime snapshot.
+MACHINERY_TEST_PYTHON ?= uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' --with 'ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl' --with 'fastembed==0.8.0' python
 .PHONY: test-machinery
 test-machinery:
 	cd plugins/workbench/machinery && $(MACHINERY_TEST_PYTHON) -m pytest -q tests

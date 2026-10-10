@@ -18,6 +18,12 @@ dependencies = [
     "numpy>=1.26",
     "graphmark>=0.10,<0.11",
     "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl",
+    # Exact, deliberately: ragmark records fastembed.__version__ in the index's
+    # model identity and refuses an index built under a different one, while
+    # the wheel only constrains fastembed>=0.8,<0.9. Move this pin only
+    # together with an index rebuild and the runtime snapshot, and keep it
+    # equal to the inline pins in engine/*.py and the Makefile test gate.
+    "fastembed==0.8.0",
 ]
 
 [project.optional-dependencies]
