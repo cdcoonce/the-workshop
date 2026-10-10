@@ -383,6 +383,8 @@ anyway: `git status` is then an independent check that everything was restored.
 
 - `adversarial-review` — where blind teeth actually surface. A green matrix
   never reports one, so point a hostile pass at the tests, not just the code.
+  The dispatch role around this runner — a reviewer who authors the spec blind to the tests and
+  commits it on the PR branch — is `build-review-land`.
 - `warehouse-sql-test-harness` — the same mirror, one domain over: asserting on
   SQL text rather than executing it. Reach for it when the dependency is a
   warehouse.
