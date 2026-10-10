@@ -1274,18 +1274,16 @@ def _extract_broken_target(proposal: str) -> str | None:
     return None
 
 
-def write_queue(
-    vault_root: Path,
+def render_queue(
     context: str,
     lane_a: LaneAResult,
     lane_b: dict,
-    dry_run: bool = False,
     dismissed: set[str] = frozenset(),
     stranded: list[dict] = (),
     memdrift: dict | None = None,
     unprofiled: list[str] = (),
-) -> Path:
-    """Write (or print in dry_run) the gardener queue file."""
+) -> str:
+    """Render the gardener queue file's markdown (no I/O)."""
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines: list[str] = [
         "---",
@@ -1430,7 +1428,25 @@ def write_queue(
         lines.append("_(none)_")
 
     lines.append("")
-    content = "\n".join(lines)
+    return "\n".join(lines)
+
+
+def write_queue(
+    vault_root: Path,
+    context: str,
+    lane_a: LaneAResult,
+    lane_b: dict,
+    dry_run: bool = False,
+    dismissed: set[str] = frozenset(),
+    stranded: list[dict] = (),
+    memdrift: dict | None = None,
+    unprofiled: list[str] = (),
+) -> Path:
+    """Write (or print in dry_run) the gardener queue file."""
+    content = render_queue(
+        context, lane_a, lane_b,
+        dismissed=dismissed, stranded=stranded, memdrift=memdrift, unprofiled=unprofiled,
+    )
 
     queue_path = vault_root / ".brain" / f"gardener-{context}.md"
 
@@ -1448,21 +1464,20 @@ def write_queue(
 # Queue summary (for session-start surfacing)
 # ---------------------------------------------------------------------------
 
-def queue_summary(vault_root: Path, context: str) -> str | None:
-    """Return a one-line summary if the gardener queue is non-empty, else None.
+def count_queue_entries(text: str) -> tuple[int, int]:
+    """Count applied repairs and proposed items in a rendered queue.
 
-    Counts applied repairs and total proposed items.
+    Parameters
+    ----------
+    text : str
+        Queue markdown as produced by :func:`render_queue`.
+
+    Returns
+    -------
+    tuple of int
+        ``(applied, proposals)``: ``- `` lines under ``## Applied`` and under
+        every later heading, respectively.
     """
-    queue_path = vault_root / ".brain" / f"gardener-{context}.md"
-    if not queue_path.exists():
-        return None
-
-    try:
-        text = queue_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-    # Count applied repairs (lines under "## Applied" that start with "- ")
     applied = 0
     proposals = 0
     in_applied = False
@@ -1483,6 +1498,24 @@ def queue_summary(vault_root: Path, context: str) -> str | None:
                 applied += 1
             elif in_proposed:
                 proposals += 1
+    return applied, proposals
+
+
+def queue_summary(vault_root: Path, context: str) -> str | None:
+    """Return a one-line summary if the gardener queue is non-empty, else None.
+
+    Counts applied repairs and total proposed items.
+    """
+    queue_path = vault_root / ".brain" / f"gardener-{context}.md"
+    if not queue_path.exists():
+        return None
+
+    try:
+        text = queue_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    applied, proposals = count_queue_entries(text)
 
     if applied == 0 and proposals == 0:
         return None
@@ -1647,10 +1680,12 @@ def _run_gardener_locked(
     )
 
     n_applied = len(lane_a.applied)
-    n_proposals = len(lane_a.proposals) + len(stranded) + sum(
-        len(lane_b.get(k, []))
-        for k in ("missing_links", "orphans")
-    )
+    # Count what the queue actually lists (dismissals, unprofiled people and
+    # memory drift included), the same way queue_summary() reads it back.
+    _, n_proposals = count_queue_entries(render_queue(
+        context, lane_a, lane_b,
+        dismissed=dismissed, stranded=stranded, memdrift=memdrift, unprofiled=unprofiled,
+    ))
     # --- Update state ---
     # Record gardened hashes (post-Lane-A, so auto-repaired notes don't re-propose).
     gardened = dict(state.get("gardened", {}))
