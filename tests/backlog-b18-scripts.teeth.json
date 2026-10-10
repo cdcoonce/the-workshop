@@ -92,6 +92,27 @@
       "oracle": "real",
       "find": "    except Exception:\n        # Never let",
       "replace": "    except KeyError:\n        # Never let"
+    },
+    {
+      "label": "#756 break after first failing suite",
+      "file": "../scripts/discover_skill_test_suites.py",
+      "oracle": "real",
+      "find": "            failures.append(str(rel))",
+      "replace": "            failures.append(str(rel))\n            break"
+    },
+    {
+      "label": "#1023 any heading ends the Artifacts section",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "if in_section and line.startswith(\"## \"):",
+      "replace": "if in_section and line.startswith(\"#\"):"
+    },
+    {
+      "label": "#1023 prefix-match Artifacts heading",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "r\"^##[ \\t]+Artifacts[ \\t]*$\"",
+      "replace": "r\"^##[ \\t]+Artifacts\""
     }
   ]
 }

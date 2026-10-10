@@ -691,3 +691,27 @@ class TestArtifactsSectionScoping:
 
         assert [r.phase for r in parse_state_file(path).artifacts] == ["plan", "implmenet"]
         assert not validate_state_file(path).passed
+
+
+class TestArtifactsSectionHeadingBoundaries:
+    """Heading-boundary edge cases for the ``## Artifacts`` section."""
+
+    _HEADER = TestArtifactsSectionScoping._HEADER
+    _TABLE = TestArtifactsSectionScoping._TABLE
+    _write = TestArtifactsSectionScoping._write
+
+    def test_subheading_inside_artifacts_does_not_end_the_section(self, tmp_path: Path) -> None:
+        body = f"\n## Artifacts\n\n### Early\n\n{self._TABLE}\n### Late\n\n{self._TABLE.replace('plan ', 'spec ')}"
+
+        state = parse_state_file(self._write(tmp_path, body))
+
+        assert [r.phase for r in state.artifacts] == ["plan", "spec"]
+
+    def test_heading_that_merely_starts_with_artifacts_is_not_the_section(
+        self, tmp_path: Path
+    ) -> None:
+        state = parse_state_file(
+            self._write(tmp_path, f"\n## Artifacts and notes\n\n{self._TABLE}")
+        )
+
+        assert state.artifacts == []

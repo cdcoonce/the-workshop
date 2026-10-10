@@ -100,3 +100,17 @@ def test_main_returns_1_and_names_only_the_failing_suite(
     err = capsys.readouterr().err
     assert "plugins/demo-plugin/skills/beta/scripts" in err
     assert "skills/alpha/scripts" not in err
+
+
+def test_main_runs_every_suite_when_the_first_one_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    first = _make_suite(tmp_path, "alpha")
+    second = _make_suite(tmp_path, "beta")
+    calls = _stub_run(monkeypatch, {"alpha"})
+
+    assert main([str(tmp_path)]) == 1
+    assert calls == [first, second]  # a first failure must not skip later suites
+    err = capsys.readouterr().err
+    assert "plugins/demo-plugin/skills/alpha/scripts" in err
+    assert "skills/beta/scripts" not in err
