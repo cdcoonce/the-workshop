@@ -479,6 +479,7 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
       adapter would only fail later inside a vault.
     - The vendor map must parse and keep unique targets: a duplicated
       target would silently overwrite one managed file with another.
+    - Every machinery-rooted vendor-map entry's ``source`` must exist.
     """
     errors: list[str] = []
     engine_dir = machinery_dir / "engine"
@@ -530,6 +531,17 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
                     f"machinery vendor-map.json has duplicate target '{target}'"
                 )
             seen.add(target)
+            # Entries rooted at the preset resolve outside the shipped
+            # machinery tree; only machinery-rooted sources are checkable here.
+            if entry.get("source_root") == "preset":
+                continue
+            source = entry.get("source", "")
+            if not (machinery_dir / source).is_file():
+                errors.append(
+                    f"machinery vendor-map.json entry for target '{target}' "
+                    f"names source '{source}' but machinery/{source} is not "
+                    f"in the plugin"
+                )
 
     return errors
 
