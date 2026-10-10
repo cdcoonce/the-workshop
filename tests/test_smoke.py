@@ -1422,3 +1422,23 @@ class TestMachineryImportScanner:
         result = smoke_test(plugin)
 
         assert not any("imports" in e for e in result.errors)
+
+
+class TestRootRelativeLinksOutOfContract:
+    """Leading-slash links are out of contract, like the .claude/ carve-out (#645)."""
+
+    def test_root_relative_link_not_flagged(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text("[text](/some/root/path.md)\n")
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_relative_link_to_missing_file_still_flagged(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text("[text](some/path.md)\n")
+        errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
+        assert len(errors) == 1
+        assert "some/path.md" in errors[0]
