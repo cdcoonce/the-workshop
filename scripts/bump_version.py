@@ -24,7 +24,6 @@ from scripts import check_version_bumps as gate
 from scripts.stamp import StampError, stamp
 
 _VERSION_LINE = re.compile(r'("version"\s*:\s*")([^"]*)(")')
-_SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
 class BumpError(Exception):
@@ -41,10 +40,10 @@ class BumpResult:
 
 
 def _parse(version: str | None) -> tuple[int, int, int]:
-    if not version or not _SEMVER.fullmatch(version):
+    parts = gate.parse_version(version)
+    if parts is None:
         raise BumpError(f"version {version!r} is not plain semver (X.Y.Z)")
-    major, minor, patch = (int(c) for c in version.split("."))
-    return major, minor, patch
+    return parts
 
 
 def next_version(released: str, level: str) -> str:

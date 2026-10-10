@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -244,13 +245,29 @@ def required_level(repo: Path, plugin: str, base_sha: str) -> str:
     return "patch"
 
 
-def _parts(version: str | None) -> tuple[int, int, int] | None:
-    if not version:
+_SEMVER = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
+
+
+def parse_version(version: str | None) -> tuple[int, int, int] | None:
+    """Split a plain ``X.Y.Z`` version into ints, or None when it is not one.
+
+    The single source of truth for "is this a version we can compare": the gate
+    and `scripts.bump_version` both read versions through it. ASCII digits only
+    (``str.isdigit`` accepts ``"\u00b3"``, which ``int`` then rejects).
+
+    Parameters
+    ----------
+    version : str or None
+        A manifest version string.
+
+    Returns
+    -------
+    tuple of int or None
+        ``(major, minor, patch)``, or None for anything but ``N.N.N``.
+    """
+    if not version or not _SEMVER.fullmatch(version):
         return None
-    chunks = version.split(".")
-    if len(chunks) != 3 or not all(c.isdigit() for c in chunks):
-        return None
-    major, minor, patch = (int(c) for c in chunks)
+    major, minor, patch = (int(c) for c in version.split("."))
     return major, minor, patch
 
 
@@ -261,7 +278,7 @@ def actual_level(released: str | None, current: str | None) -> str | None:
     satisfies a `major` requirement. Demanding `1.0.0` to drop a skill from a
     0.x plugin would force a release meaning nobody intends.
     """
-    before, after = _parts(released), _parts(current)
+    before, after = parse_version(released), parse_version(current)
     if before is None or after is None or after <= before:
         return None
     if after[0] != before[0]:
@@ -314,7 +331,7 @@ def find_version_regressions(
         current = manifest_version(repo, plugin)
         if released is None or current is None:
             continue
-        before, after = _parts(released), _parts(current)
+        before, after = parse_version(released), parse_version(current)
         if before is None or after is None:
             continue
         if after < before:
@@ -342,7 +359,7 @@ def find_malformed_versions(
         current = manifest_version(repo, plugin)
         if released is None or current is None or released == current:
             continue
-        if _parts(released) is None or _parts(current) is None:
+        if parse_version(released) is None or parse_version(current) is None:
             malformed.append((plugin, released, current))
     return malformed
 
