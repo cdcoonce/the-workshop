@@ -296,3 +296,47 @@ def test_signature_changes_when_a_renamed_file_is_edited(tmp_path: Path) -> None
     (tmp_path / "café new.txt").write_text("two\n")
 
     assert before != working_tree_signature(tmp_path)
+
+
+def _commit_readme(path: Path) -> None:
+    (path / "README.md").write_text("hello\n")
+    subprocess.run(["git", "add", "-A"], cwd=path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=path, check=True)
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Here's what I found during exploration.", "No fix needed."],
+    ids=["exploration", "no-fix"],
+)
+def test_state_file_is_removed_when_the_message_is_not_a_completion_claim(
+    tmp_path: Path, message: str
+) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+
+    start(tmp_path, "agent-leak")
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-leak.txt"
+    assert state_file.exists()
+
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "agent-leak", "last_assistant_message": message},
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert not state_file.exists()
+
+
+def test_state_file_is_removed_when_the_final_message_is_empty(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+
+    start(tmp_path, "agent-empty")
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-empty.txt"
+
+    result = run(STOP_HOOK, {"cwd": str(tmp_path), "agent_id": "agent-empty"})
+
+    assert result.returncode == 0
+    assert not state_file.exists()
