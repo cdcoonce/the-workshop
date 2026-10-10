@@ -35,6 +35,7 @@ import json
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from scripts.stamp import StampError, owned_paths
@@ -152,19 +153,47 @@ def manifest_version(repo: Path, plugin: str, ref: str | None = None) -> str | N
     return None if version is None else str(version)
 
 
-def find_missing_bumps(repo: Path, base: str = DEFAULT_BASE) -> list[str]:
+@dataclass(frozen=True)
+class GateContext:
+    """Per-run state every finder needs: computed once, passed to each.
+
+    Attributes
+    ----------
+    base_sha : str
+        Full sha `base` resolved to.
+    changed : tuple of str
+        Plugins (sorted) whose shipped output differs from `base_sha`.
+    """
+
+    base_sha: str
+    changed: tuple[str, ...]
+
+
+def build_context(repo: Path, base: str = DEFAULT_BASE) -> GateContext:
+    """Resolve `base`, derive the stamper exclusions, diff each plugin once."""
+    base_sha = resolve_base(repo, base)
+    exclusions = _stamper_exclusions(repo)
+    changed = tuple(
+        plugin
+        for plugin in shipped_plugins(repo)
+        if output_changed(repo, base_sha, plugin, exclusions)
+    )
+    return GateContext(base_sha, changed)
+
+
+def find_missing_bumps(
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
+) -> list[str]:
     """Plugins whose shipped output changed since `base` without a version bump.
 
     A plugin absent from `base` is new — there is no prior version to bump
     from. A plugin absent from the working tree was deleted, and a deleted
     plugin needs no bump either.
     """
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     missing = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         if released is None:
             continue  # new plugin
@@ -289,15 +318,13 @@ def actual_level(released: str | None, current: str | None) -> str | None:
 
 
 def find_level_violations(
-    repo: Path, base: str = DEFAULT_BASE
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
 ) -> list[tuple[str, str, str]]:
     """(plugin, required, actual) where the bump is too small for the change."""
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     violations = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         current = manifest_version(repo, plugin)
         if released is None or current is None:
@@ -312,7 +339,7 @@ def find_level_violations(
 
 
 def find_version_regressions(
-    repo: Path, base: str = DEFAULT_BASE
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
 ) -> list[tuple[str, str, str]]:
     """(plugin, released, current) where changed output carries a lowered version.
 
@@ -321,12 +348,10 @@ def find_version_regressions(
     or rebase) belongs to neither. Versions that do not parse are
     `find_malformed_versions`' to report.
     """
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     regressions = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         current = manifest_version(repo, plugin)
         if released is None or current is None:
@@ -340,7 +365,7 @@ def find_version_regressions(
 
 
 def find_malformed_versions(
-    repo: Path, base: str = DEFAULT_BASE
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
 ) -> list[tuple[str, str, str]]:
     """(plugin, released, current) where changed output has a non-semver version.
 
@@ -349,12 +374,10 @@ def find_malformed_versions(
     (`1.2.0 -> 1.2.1-beta` beside a removed skill) the level rule exists to
     catch. An *unchanged* version is `find_missing_bumps`' to report.
     """
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     malformed = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         current = manifest_version(repo, plugin)
         if released is None or current is None or released == current:
@@ -372,10 +395,11 @@ def main(argv: list[str] | None = None) -> int:
 
     repo = Path(args.repo)
     try:
-        missing = find_missing_bumps(repo, args.base)
-        levels = find_level_violations(repo, args.base)
-        regressions = find_version_regressions(repo, args.base)
-        malformed = find_malformed_versions(repo, args.base)
+        context = build_context(repo, args.base)
+        missing = find_missing_bumps(repo, args.base, context)
+        levels = find_level_violations(repo, args.base, context)
+        regressions = find_version_regressions(repo, args.base, context)
+        malformed = find_malformed_versions(repo, args.base, context)
     except LookupError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
