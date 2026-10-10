@@ -117,7 +117,7 @@ def test_each_install_section_has_a_verify_block() -> None:
         body = _section(install, platform, 3)
         assert "Verify your install" in body, platform
         assert list_command in body, platform
-        assert "/brainstorm" in body, platform
+        assert "brainstorm" in body, platform
 
 
 def test_troubleshooting_covers_install_side_symptoms() -> None:

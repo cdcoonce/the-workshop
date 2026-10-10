@@ -90,7 +90,7 @@ When triggered:
 2. **Code handling:** Warn user that existing code may conflict. Present options:
    - (a) Keep all existing code on the branch
    - (b) Revert specific commits
-   - (c) Create a new branch from the default branch
+   - (c) Create a new branch from `dev` (CLAUDE.md's Branch and Promotion Policy)
 3. Log the user's choice
 4. Reset phases from `plan` onward to `pending`
 5. Re-enter Phase 2

@@ -113,6 +113,8 @@ Claude reads `.claude-plugin/marketplace.json`, finds the available packages, an
 
 > **Headless:** plugin skills load under `claude -p` too, namespaced `<plugin>:<skill>` (re-verified 2026-08-09 on Claude Code 2.1.223, including with `--setting-sources project,local`) — no project-scope copies needed for scripted automation (see [COMPATIBILITY.md](COMPATIBILITY.md) → Claude Code → Headless).
 
+**Verify your install:** run `claude plugin list` (or `/plugin` inside a session) and confirm `workbench` shows as installed and enabled. Then invoke `/brainstorm` — a working install answers with shaping questions about your idea before proposing anything. Skills are namespaced `workbench:<skill>`; if `/brainstorm` is not found, see [Troubleshooting](#troubleshooting).
+
 See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
 
 ### Codex
@@ -127,7 +129,9 @@ codex plugin marketplace add https://github.com/cdcoonce/the-workshop.git
 codex plugin add workbench@the-workshop
 ```
 
-Verify with `codex plugin list`. Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
+Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
+
+**Verify your install:** run `codex plugin list` and confirm `workbench` is listed as enabled. Then invoke `workbench:brainstorm` in a session — a working install answers with shaping questions. Hooks staying silent is expected until you approve them (see the note below and [Platform Support](#platform-support)).
 
 > **What you get on Codex is skills, bundled docs, and plugin-level hooks.** Plugin-bundled hooks load when the plugin is enabled (corrected 2026-08-09 — an earlier entry read the retired `plugin_hooks` feature flag as a removed capability), but they sit behind a **silent trust gate**: Codex records trust against each hook definition's hash and skips unapproved hooks with no output and no error, so expect a re-approval prompt after every plugin update. Repo-level `.codex/hooks.json` additionally needs project trust (`trust_level = "trusted"` in `~/.codex/config.toml`). Don't rely on hook protections on Codex without reading [COMPATIBILITY.md](COMPATIBILITY.md) → Codex → Hooks. Persona plugins remain no-ops here for a different reason: their hook command interpolates `CLAUDE_PLUGIN_ROOT`, and Codex supplies `PLUGIN_ROOT` instead.
 
@@ -148,6 +152,8 @@ For example, to install `workbench`:
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
 
 > **Skills work fully on Cortex, and plugin-level hooks execute** (probe-verified on 1.20.2, 2026-08-08 — superseding the earlier "never executed" finding from v1.1.8; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). Two caveats: `CLAUDE_PLUGIN_ROOT` is **unset** in Cortex's hook environment, so the Workshop's current hook commands (including persona injection) resolve against the wrong directory and fail there until a self-locating command form ships; and a restored window's first session fires SessionStart before plugin activation, so plugin SessionStart hooks always miss it.
+
+**Verify your install:** run `cortex skill list` and confirm the `workbench` skills appear. Then invoke `/brainstorm` — a working install answers with shaping questions. Persona injection and the other hook commands that rely on `CLAUDE_PLUGIN_ROOT` do nothing here by design (see [Platform Support](#platform-support)); a missing skill is the real failure.
 
 ### Any Other Agent (Manual Copy)
 
@@ -533,6 +539,11 @@ uv run pytest --cov=scripts --cov-report=term-missing
 | `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
 | `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Run `make bump PLUGIN=<name>` (one hand-written file, the rest stamped); see Plugin Versioning |
 | Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
+| Skill not found after install (Claude Code)      | Plugin not installed or not enabled, or the session predates the install | Run `claude plugin list`; install or enable `workbench`, then start a fresh session |
+| Skill not found after install (Codex)            | Marketplace not registered, or the plugin was never added          | Run `codex plugin marketplace add ...` then `codex plugin add workbench@the-workshop`; check `codex plugin list` |
+| Skill not found after install (Cortex)           | Install path wrong, or the Sync button was never pressed           | Re-run the `/github-plugin-installer` command with the `dist/<preset>` sub-path; check `cortex skill list` |
+| Hooks are silent on Codex or Cortex              | Expected: Codex skips unapproved hooks without output; Cortex lacks `CLAUDE_PLUGIN_ROOT` | Approve the hooks on Codex; otherwise see [Platform Support](#platform-support) |
+| Marketplace URL unreachable                      | A work network or proxy blocks `github.com` or `raw.githubusercontent.com` | Retry off the VPN or allow-list the hosts; or use Manual Copy from a clone |
 | Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 
 ---
