@@ -13,12 +13,11 @@ Nothing here runs outside a vault: ``run-vault-hook.sh`` checks for
 WORKSHOP_HOOK = {"event": "SessionStart", "runner": "vault"}
 
 import os  # noqa: E402
-import runpy  # noqa: E402
 import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-_ENGINE = Path(__file__).resolve().parents[2] / "machinery" / "engine"
-_TARGET = _ENGINE / "session-start.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _vault_engine_dispatch import run_engine_script  # noqa: E402
 
 
 def _write_breadcrumb() -> None:
@@ -50,16 +49,4 @@ def _write_breadcrumb() -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered)
 
-# Fail open, like every hook in this repo: a missing or broken engine must not
-# block the tool path. The guard already proved we are in a vault, so a failure
-# here is a real defect worth seeing on stderr -- but not worth blocking on.
-try:
-    _write_breadcrumb()
-    sys.path.insert(0, str(_ENGINE))
-    sys.argv = [str(_TARGET)]
-    runpy.run_path(str(_TARGET), run_name="__main__")
-except SystemExit:
-    raise
-except Exception as exc:  # noqa: BLE001 - fail-open is the contract
-    print(f"vault hook {_TARGET.name} failed: {exc}", file=sys.stderr)
-    sys.exit(0)
+run_engine_script("session-start.py", before=_write_breadcrumb)
