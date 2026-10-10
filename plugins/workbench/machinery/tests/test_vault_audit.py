@@ -464,3 +464,197 @@ def test_code_span_detection_is_the_shared_vault_utils_function() -> None:
     kinds = vault_utils.code_spans(text)
     assert (text.index("`x`"), text.index("`x`") + 3) in kinds
     assert any(start == text.index("~~~") for start, _ in kinds)
+
+
+# --- #725 / #810 / #811: the link catalog and resolver ---
+
+
+def _issues(report: dict, group: str) -> list[str]:
+    return [i["detail"] for i in report["issues"][group]]
+
+
+def test_self_alias_colliding_with_stem_is_not_ambiguous(tmp_path: Path) -> None:
+    """#725: stem and alias normalizing to one key must not double-count the note."""
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(
+        tmp_path,
+        "org/people/Charles-Coonce.md",
+        "---\ndate: 2026-07-08\ndescription: \"Charles\"\ntags:\n  - person\n"
+        "aliases:\n  - \"Charles Coonce\"\n---\n\n# Charles\n\nBody.\n",
+    )
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="Ask [[charles coonce]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "ambiguous_links") == []
+    assert _issues(report, "broken_links") == []
+
+
+def _two_notes_fixture(root: Path) -> None:
+    _write(root, "CLAUDE.md", "# Vault")
+    _write(root, "personal/projects/alpha/NOTES.md", _note("Alpha notes"))
+    _write(root, "personal/projects/beta/NOTES.md", _note("Beta notes"))
+
+
+def test_path_qualified_link_with_unique_suffix_resolves(tmp_path: Path) -> None:
+    """#810 case A: only one file ends in alpha/NOTES, so it is not ambiguous."""
+    _two_notes_fixture(tmp_path)
+    _write(tmp_path, "personal/Index.md", _note("Index", body="See [[alpha/NOTES]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "ambiguous_links") == []
+    assert _issues(report, "broken_links") == []
+
+
+def test_fully_qualified_link_still_resolves(tmp_path: Path) -> None:
+    """#810 case B: no regression for the vault-relative path form."""
+    _two_notes_fixture(tmp_path)
+    _write(
+        tmp_path,
+        "personal/Index.md",
+        _note("Index", body="See [[personal/projects/alpha/NOTES]]."),
+    )
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "ambiguous_links") == []
+    assert _issues(report, "broken_links") == []
+
+
+def test_bare_name_matching_two_notes_is_reported_ambiguous(tmp_path: Path) -> None:
+    """#810 case C: a colliding bare target must not silently pick a winner."""
+    _two_notes_fixture(tmp_path)
+    _write(tmp_path, "personal/Index.md", _note("Index", body="See [[NOTES]]."))
+
+    report = audit(tmp_path)
+
+    ambiguous = _issues(report, "ambiguous_links")
+    assert len(ambiguous) == 1
+    assert "alpha/NOTES.md" in ambiguous[0] and "beta/NOTES.md" in ambiguous[0]
+
+
+def test_path_link_disambiguates_a_colliding_basename(tmp_path: Path) -> None:
+    _two_notes_fixture(tmp_path)
+    _write(
+        tmp_path,
+        "personal/Index.md",
+        _note("Index", body="See [[projects/beta/NOTES]]. Also [[gamma/NOTES]]."),
+    )
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "ambiguous_links") == []
+    assert _issues(report, "broken_links") == ["broken [[gamma/NOTES]]"]
+
+
+def _stem_vs_alias_fixture(root: Path) -> None:
+    _write(root, "CLAUDE.md", "# Vault")
+    long_body = "Body text. " * 40
+    _write(root, "reference/repo-crash-course.md", _note("Crash course", body=long_body))
+    _write(
+        root,
+        "reference/skills/repo-crash-course/SKILL.md",
+        "---\ndate: 2026-07-08\ndescription: \"Skill\"\ntags:\n  - reference\n"
+        "aliases:\n  - repo-crash-course\n---\n\n# Skill\n\n" + long_body + "\n",
+    )
+    _write(root, "brain/Linker.md", _note("Linker", body="Use [[repo-crash-course]]."))
+
+
+def _audit_under_seed(root: Path, seed: str) -> dict:
+    """Run ``audit`` in a fresh interpreter pinned to one PYTHONHASHSEED."""
+    import json
+    import os
+    import subprocess
+    import sys as _sys
+
+    code = (
+        "import json, sys\n"
+        f"sys.path.insert(0, {str(SCRIPTS_DIR)!r})\n"
+        "from pathlib import Path\n"
+        "from vault_audit import audit\n"
+        "r = audit(Path(sys.argv[1]))\n"
+        "print(json.dumps({'issues': r['issues'], 'queue': r['thinking_promotion_queue']},"
+        " sort_keys=True))\n"
+    )
+    done = subprocess.run(
+        [_sys.executable, "-c", code, str(root)],
+        capture_output=True, text=True, check=True,
+        env={**os.environ, "PYTHONHASHSEED": seed},
+    )
+    return json.loads(done.stdout)
+
+
+def test_exact_filename_beats_another_notes_alias(tmp_path: Path) -> None:
+    """#810: the file literally named after the target wins over an alias."""
+    _stem_vs_alias_fixture(tmp_path)
+
+    for seed in ("1", "2", "3", "4", "5"):
+        orphans = {i["file"] for i in _audit_under_seed(tmp_path, seed)["issues"]["orphans"]}
+        assert "reference/repo-crash-course.md" not in orphans, seed
+        assert "reference/skills/repo-crash-course/SKILL.md" in orphans, seed
+
+
+def test_resolution_is_identical_across_hash_seeds(tmp_path: Path) -> None:
+    """#810: the backlink graph must not depend on set iteration order."""
+    _stem_vs_alias_fixture(tmp_path)
+    _two_notes_fixture(tmp_path)
+    _write(tmp_path, "personal/Index.md", _note("Index", body="[[NOTES]] [[alpha/NOTES]]"))
+
+    runs = [_audit_under_seed(tmp_path, seed) for seed in ("1", "2", "3", "4", "5")]
+
+    assert all(run == runs[0] for run in runs)
+
+
+def _decoy_manuals(root: Path) -> None:
+    for rel in (
+        ".claude/worktrees/agent-1/AGENTS.md",
+        ".venv/lib/site-packages/somepkg/AGENTS.md",
+        "node_modules/leftpad/CLAUDE.md",
+        "templates/AGENTS.md",
+    ):
+        _write(root, rel, "# decoy")
+
+
+def test_operating_files_in_excluded_dirs_are_not_link_targets(tmp_path: Path) -> None:
+    """#811: decoy manuals under excluded directories never enter the catalog."""
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[AGENTS]] and [[CLAUDE]]."))
+    _decoy_manuals(tmp_path)
+
+    report = audit(tmp_path)
+
+    assert sorted(_issues(report, "broken_links")) == ["broken [[AGENTS]]", "broken [[CLAUDE]]"]
+
+
+def test_audit_does_not_depend_on_a_transient_agent_worktree(tmp_path: Path) -> None:
+    """#811: the same vault audits the same with or without a worktree checkout."""
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[AGENTS]]."))
+    before = audit(tmp_path)["issues"]
+    _write(tmp_path, ".claude/worktrees/agent-1/AGENTS.md", "# transient checkout")
+    after = audit(tmp_path)["issues"]
+
+    assert before == after
+
+
+def test_root_operating_manual_resolves_beside_excluded_decoys(tmp_path: Path) -> None:
+    """#811: a directory-only filter keeps the vault's own manual resolvable."""
+    _write(tmp_path, "AGENTS.md", "# Vault")
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[AGENTS]]."))
+    _decoy_manuals(tmp_path)
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
+
+
+def test_nested_readme_is_not_a_link_target(tmp_path: Path) -> None:
+    """#811: root-excluded files stay bounded to depth one."""
+    _write(tmp_path, "README.md", "# Repo")
+    _write(tmp_path, "tools/README.md", "# nested")
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[README]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
