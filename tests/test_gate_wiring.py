@@ -88,6 +88,33 @@ def test_makefile_test_target_checks_teeth_spec_anchors() -> None:
     )
 
 
+def test_makefile_test_target_runs_teeth_specs_whose_inputs_changed() -> None:
+    """Specs a change can have affected must RUN on every gate run, not on demand.
+
+    Resolving an anchor is not running its mutant: an anchor that drifts onto
+    a different, uncovered site still resolves, and the mutant survives with
+    `check-teeth-anchors` green (#1147). The run gate must diff against the
+    same base the version gate uses, so a PR into dev is judged on its own
+    changes and not on everything since the last promotion to main.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    target = re.search(r"^check-teeth-changed:\n((?:\t.*\n)+)", makefile, re.MULTILINE)
+    assert target, "Makefile must define a `check-teeth-changed` target"
+    assert "scripts.check_teeth_changed" in target.group(1), (
+        "`check-teeth-changed` must run the selecting gate, "
+        "`scripts.check_teeth_changed`, not a hand-kept list of specs"
+    )
+    assert "--base $(VERSION_BASE)" in target.group(1), (
+        "`check-teeth-changed` must diff against VERSION_BASE, the base the "
+        "rest of the gate is judged on"
+    )
+    test_recipe = re.search(r"^test:\n((?:\t.*\n)+)", makefile, re.MULTILINE)
+    assert test_recipe and "$(MAKE) check-teeth-changed" in test_recipe.group(1), (
+        "the `test` target must run `check-teeth-changed`, or a mutant that "
+        "stopped dying merges green"
+    )
+
+
 def _afk_config() -> dict:
     """`.afk/config.toml` parsed. It is afk's control plane, not ordinary config.
 

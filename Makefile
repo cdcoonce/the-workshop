@@ -90,6 +90,18 @@ stamp-check:
 check-teeth-anchors:
 	uv run python -m scripts.check_teeth_anchors
 
+# Teeth-run gate: anchors can drift onto a DIFFERENT site whose text still
+# matches (#1147: a split of `_subst` left the `$( )` mutant anchored on the
+# process-substitution fallback, uncovered, and it survived with every gate
+# green). Only running a mutant proves it still dies, and a full run of every
+# spec is minutes of mutant pytest runs, so this runs in full only the specs
+# whose own file, mutation target(s) or test file(s) changed since the
+# merge-base with VERSION_BASE (the same base verify-versions uses; pass
+# VERSION_BASE=origin/dev for a PR into dev). Most commits select nothing.
+.PHONY: check-teeth-changed
+check-teeth-changed:
+	uv run python -m scripts.check_teeth_changed --base $(VERSION_BASE)
+
 # Vault machinery suite: the vault's engine scripts ship as workbench payload
 # (plugins/workbench/machinery/). Like the skill-script suites, the tests live
 # in an isolated subtree beside the code they exercise and run in their OWN
@@ -172,4 +184,5 @@ test:
 	$(MAKE) test-cold-read-evidence-wikilink-parity
 	$(MAKE) test-evals
 	$(MAKE) check-teeth-anchors
+	$(MAKE) check-teeth-changed
 	$(MAKE) stamp-check

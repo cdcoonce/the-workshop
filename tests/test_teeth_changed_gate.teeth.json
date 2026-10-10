@@ -1,0 +1,183 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_teeth_changed_gate.py",
+    "tests/test_gate_wiring.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_teeth_changed_gate.py",
+    "tests/test_gate_wiring.py"
+  ],
+  "mutants": [
+    {
+      "label": "[selection] a mutation target's change does not select its spec",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the mutation-target-changed case, the drift test and the bash_classify instance test: the #1147 drift changed only the target.",
+      "find": "    for mutant in doc.get(\"mutants\", []):\n        inputs.add(_relative(spec.parent / mutant[\"file\"], repo))",
+      "replace": "    for mutant in []:\n        inputs.add(_relative(spec.parent / mutant[\"file\"], repo))"
+    },
+    {
+      "label": "[selection] the test files a spec runs are not its inputs",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the test-file-changed case and the test-directory case: deleting the killing test is the other silent way a tooth goes.",
+      "find": "    for arg in _path_args(doc, _candidates(spec, repo)):\n        if (cwd / arg).exists():\n            inputs.add(_relative(cwd / arg, repo))",
+      "replace": "    for arg in []:\n        if (cwd / arg).exists():\n            inputs.add(_relative(cwd / arg, repo))"
+    },
+    {
+      "label": "[selection] a changed file beneath a directory input does not count",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the test-directory case: skill-script specs name a tests directory, not files.",
+      "find": "            if path == item or path.startswith(item + \"/\"):",
+      "replace": "            if path == item:"
+    },
+    {
+      "label": "[selection] the spec's own file is not an input",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the spec-itself-changed case: a re-anchored or new row must run.",
+      "find": "    inputs = {_relative(spec, repo)}",
+      "replace": "    inputs = set()"
+    },
+    {
+      "label": "[base] an unresolvable base reads as no change",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the unresolvable-base test: a typo or unfetched ref would pass every spec unrun.",
+      "find": "    if resolved.returncode != 0:\n        raise BaseUnresolvable(",
+      "replace": "    if resolved.returncode != 0:\n        return set()\n        raise BaseUnresolvable("
+    },
+    {
+      "label": "[base] the diff is taken from the base's tip, not the merge-base",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the base-moved test: a branch behind its base would be charged for the base's own edits.",
+      "find": "    listed = _git(repo, \"diff\", \"--name-only\", \"-z\", merge_base.stdout.strip())",
+      "replace": "    listed = _git(repo, \"diff\", \"--name-only\", \"-z\", base)"
+    },
+    {
+      "label": "[base] the diff is against HEAD, not the working tree",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the uncommitted-edit test: locally the gate runs before the commit.",
+      "find": "    listed = _git(repo, \"diff\", \"--name-only\", \"-z\", merge_base.stdout.strip())",
+      "replace": "    listed = _git(repo, \"diff\", \"--name-only\", \"-z\", merge_base.stdout.strip(), \"HEAD\")"
+    },
+    {
+      "label": "[cwd] every spec runs from the repo root",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the machinery-style test: its suite is only found from its own directory, so the baseline goes red and the gate fails a killed mutant.",
+      "find": "    for candidate in candidates:\n        if all((candidate / arg).exists() for arg in args):\n            return candidate\n    return candidates[-1]",
+      "replace": "    return candidates[-1]"
+    },
+    {
+      "label": "[cwd] the repo root is tried before the spec's own directory",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the bare-tests test and the repo-wide cwd test: a bare `tests` exists at the root too, and the skill spec means its own.",
+      "find": "    candidates.append(root)\n    return candidates",
+      "replace": "    candidates.insert(0, root)\n    return candidates"
+    },
+    {
+      "label": "[cwd] a bare word that exists is not a path argument",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the bare-tests test (its spec runs from the root, scores nothing, and a killed mutant reads as a survivor) and the repo-wide cwd test.",
+      "find": "        if not a.startswith(\"-\") and (\"/\" in a or any((c / a).exists() for c in candidates))",
+      "replace": "        if not a.startswith(\"-\") and \"/\" in a"
+    },
+    {
+      "label": "[verdict] a failing runner does not fail the spec",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the drift test: the survivor's spec must be reported FAIL and the gate must exit 1.",
+      "find": "        if code != 0:\n            failed.append(rel)",
+      "replace": "        if False:\n            failed.append(rel)"
+    },
+    {
+      "label": "[verdict] failed specs exit 0",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the drift test, which asserts the exit status.",
+      "find": "        print(f\"\\nteeth specs whose mutants did not all die: {', '.join(failed)}\", file=sys.stderr)\n        return 1",
+      "replace": "        print(f\"\\nteeth specs whose mutants did not all die: {', '.join(failed)}\", file=sys.stderr)\n        return 0"
+    },
+    {
+      "label": "[verdict] the survivor's label is dropped from the report",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the drift test, which asserts the full label (the runner's own table truncates it to 30 characters).",
+      "find": "            lines.append(f\"  {mutant['status']:<14} {mutant['label']}  {who}\".rstrip())",
+      "replace": "            lines.append(f\"  {mutant['status']:<14} {who}\".rstrip())"
+    },
+    {
+      "label": "[discovery] finding no specs passes",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the no-specs test: a broken pathspec would gate nothing forever.",
+      "find": "            \"no teeth specs found — discovery is broken, since this gate checked nothing\",\n            file=sys.stderr,\n        )\n        return 1",
+      "replace": "            \"no teeth specs found — discovery is broken, since this gate checked nothing\",\n            file=sys.stderr,\n        )\n        return 0"
+    },
+    {
+      "label": "[list] --list runs the selected specs anyway",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the list-mode test, which asserts no mutant verdict appears.",
+      "find": "    if args.list:\n        for spec, hits in selected:",
+      "replace": "    if False:\n        for spec, hits in selected:"
+    },
+    {
+      "label": "[wiring] the test target no longer runs check-teeth-changed",
+      "file": "../Makefile",
+      "oracle": "real",
+      "why": "Killed by test_makefile_test_target_runs_teeth_specs_whose_inputs_changed.",
+      "find": "\t$(MAKE) check-teeth-anchors\n\t$(MAKE) check-teeth-changed\n",
+      "replace": "\t$(MAKE) check-teeth-anchors\n"
+    },
+    {
+      "label": "[wiring] check-teeth-changed diffs against a hard-coded base",
+      "file": "../Makefile",
+      "oracle": "real",
+      "why": "Killed by the wiring test's VERSION_BASE assertion: a PR into dev must be judged on its own changes.",
+      "find": "\tuv run python -m scripts.check_teeth_changed --base $(VERSION_BASE)\n",
+      "replace": "\tuv run python -m scripts.check_teeth_changed --base origin/main\n"
+    },
+    {
+      "label": "[empty] a change touching no spec input fails the gate",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "why": "Killed by the runs-nothing test: two thirds of merges select nothing and must pass without a run, with the anchor gate still covering every spec.",
+      "find": "            f\"({untouched} specs untouched); nothing to run\"\n        )\n        return 0",
+      "replace": "            f\"({untouched} specs untouched); nothing to run\"\n        )\n        return 1"
+    },
+    {
+      "label": "[control] reword the untouched-count summary line",
+      "file": "../scripts/check_teeth_changed.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The summary count line is informational: no test pins its wording, and the verdict is the exit status plus the RUN/FAIL/ok lines, which this does not touch. Inert on every path the suite reaches.",
+      "find": "    print(f\"\\n{len(selected)} spec(s) run, {untouched} untouched since {args.base}\")",
+      "replace": "    print(f\"\\n{len(selected)} spec(s) ran; {untouched} untouched since {args.base}\")"
+    }
+  ]
+}
