@@ -514,3 +514,112 @@ def test_show_prints_active_then_archived_unchanged(tmp_path: Path, capsys: pyte
     assert set(json.loads(capsys.readouterr().out)) == {"ledger"}
     _cli(path, "show", "ledger")
     assert json.loads(capsys.readouterr().out)["state"] == "retired"
+
+
+def _manual_cortex_worker(registry: SessionRegistry) -> None:
+    registry.add("cortex", project="household-ledger", adapter="cortex-code")
+    registry.mark_manual_attached(
+        "cortex",
+        identity_evidence="owner confirmed exact retained session in Cortex Sessions UI",
+        message_verified=True,
+    )
+
+
+def _blank_session_id(path: Path, name: str, section: str = "workers") -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data[section][name]["session_id"] = ""
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_cortex_manual_worker_can_return_to_running_after_waiting(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+    _manual_cortex_worker(registry)
+
+    registry.set_state("cortex", "waiting", evidence="needs owner input")
+    registry.set_state("cortex", "running", evidence="owner replied")
+
+    worker = registry.get("cortex")
+    assert worker["state"] == "running"
+    assert worker["session_id"] == ""
+
+
+def test_cortex_manual_worker_can_return_to_running_after_blocked(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+    _manual_cortex_worker(registry)
+
+    registry.set_state("cortex", "blocked", evidence="awaiting review")
+    registry.set_state("cortex", "running", evidence="unblocked")
+
+    assert registry.get("cortex")["state"] == "running"
+
+
+def test_retired_cortex_worker_can_reopen_and_keeps_identity_evidence(tmp_path: Path) -> None:
+    registry = SessionRegistry(tmp_path / "registry.json")
+    _manual_cortex_worker(registry)
+    registry.set_state("cortex", "completed", evidence="worker final received")
+    registry.set_integration("cortex", "integrated", evidence="reachable from origin/dev")
+    registry.set_validation("cortex", passed=True, evidence="make test passed")
+    registry.record_durable_status("cortex", "project status committed")
+    registry.retire(
+        "cortex",
+        platform_action="cortex-manual-retained",
+        platform_evidence="owner confirmed exact session retained",
+    )
+    evidence = registry.get("cortex")["manual_identity_evidence"]
+
+    registry.reopen("cortex", evidence="owner reopened the retained session")
+
+    worker = registry.get("cortex")
+    assert worker["state"] == "provisioning"
+    assert worker["manual_identity_evidence"] == evidence
+    assert "cortex" in registry.all_workers()["workers"]
+
+
+def test_cortex_worker_without_identity_evidence_cannot_reopen(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    _manual_cortex_worker(registry)
+    registry.set_state("cortex", "completed", evidence="done")
+    registry.set_integration("cortex", "integrated", evidence="merged")
+    registry.set_validation("cortex", passed=True, evidence="ok")
+    registry.record_durable_status("cortex", "committed")
+    registry.retire("cortex", platform_action="cortex-manual-retained", platform_evidence="retained")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["archived_workers"]["cortex"]["manual_identity_evidence"] = ""
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(RegistryError, match="reopen requires"):
+        registry.reopen("cortex", evidence="try anyway")
+
+
+@pytest.mark.parametrize("adapter", ["codex", "claude-code"])
+def test_native_adapter_with_empty_session_id_cannot_return_to_running(tmp_path: Path, adapter: str) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    registry.add("w", project="p", adapter=adapter)
+    registry.set_session_id("w", "native-1")
+    registry.mark_attached("w", message_verified=True)
+    registry.set_state("w", "waiting", evidence="paused")
+    _blank_session_id(path, "w")
+
+    with pytest.raises(RegistryError, match="verified attachment"):
+        registry.set_state("w", "running", evidence="resumed")
+
+
+@pytest.mark.parametrize("adapter", ["codex", "claude-code"])
+def test_native_adapter_with_empty_session_id_cannot_reopen(tmp_path: Path, adapter: str) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    action = {"codex": "codex-archived", "claude-code": "claude-stopped-retained"}[adapter]
+    registry.add("w", project="p", adapter=adapter)
+    registry.set_session_id("w", "native-1")
+    registry.mark_attached("w", message_verified=True)
+    registry.set_state("w", "completed", evidence="done")
+    registry.set_integration("w", "integrated", evidence="merged")
+    registry.set_validation("w", passed=True, evidence="ok")
+    registry.record_durable_status("w", "committed")
+    registry.retire("w", platform_action=action, platform_evidence="archived")
+    _blank_session_id(path, "w", "archived_workers")
+
+    with pytest.raises(RegistryError, match="reopen requires"):
+        registry.reopen("w", evidence="try anyway")
