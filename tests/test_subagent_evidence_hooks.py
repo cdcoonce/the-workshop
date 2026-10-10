@@ -340,3 +340,60 @@ def test_state_file_is_removed_when_the_final_message_is_empty(tmp_path: Path) -
 
     assert result.returncode == 0
     assert not state_file.exists()
+
+
+@pytest.mark.parametrize("agent_id", ["../../escape", "a/b", "..", "x\\..\\y"])
+def test_start_hook_keeps_the_state_file_inside_the_gate_directory(
+    tmp_path: Path, agent_id: str
+) -> None:
+    _init_git_repo(tmp_path)
+    gate_dir = tmp_path / ".git" / "the-workshop-subagent-gate"
+
+    start(tmp_path, agent_id)
+
+    in_gate = sorted(gate_dir.iterdir())
+    assert len(in_gate) == 1, "the baseline should still be recorded under a sanitized name"
+    assert all(p.is_file() for p in in_gate), "agent_id created a nested directory"
+    stray = [p for p in tmp_path.rglob("*.txt") if gate_dir not in p.parents]
+    assert stray == [], f"state file escaped the gate directory: {stray}"
+
+
+def test_stop_hook_does_not_delete_files_outside_the_gate_directory(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    (tmp_path / ".git" / "the-workshop-subagent-gate").mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep\nme\n")
+
+    result = run(
+        STOP_HOOK,
+        {
+            "cwd": str(tmp_path),
+            "agent_id": "../../victim",
+            "last_assistant_message": "I've fixed the bug.",
+        },
+    )
+
+    assert result.returncode == 0
+    assert victim.exists()
+
+
+def test_sanitized_agent_id_round_trips_between_start_and_stop(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+
+    start(tmp_path, "../weird/id")
+    gate_dir = tmp_path / ".git" / "the-workshop-subagent-gate"
+    assert len(list(gate_dir.iterdir())) == 1
+
+    result = run(
+        STOP_HOOK,
+        {
+            "cwd": str(tmp_path),
+            "agent_id": "../weird/id",
+            "last_assistant_message": "I've fixed the bug.",
+        },
+    )
+
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert list(gate_dir.iterdir()) == []
