@@ -145,3 +145,15 @@ def test_wrapper_is_declaration_plus_one_dispatch_call(wrapper: str) -> None:
         and getattr(n.func, "id", None) == "run_engine_script"
     ]
     assert len(calls) == 1
+
+
+def test_session_stop_wrapper_forwards_caller_arguments() -> None:
+    """A lifecycle Stop must preserve deliberate caller args (e.g. --explicit-sync)."""
+    tree = ast.parse((SCRIPTS / "vault-stop-3-session-sync.py").read_text())
+    call = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "run_engine_script"
+    )
+    assert [k.arg for k in call.keywords] == ["extra_argv"]
+    assert ast.unparse(call.keywords[0].value) == "sys.argv[1:]"

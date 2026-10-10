@@ -469,12 +469,43 @@ def test_signature_hashes_a_large_file_without_reading_it_whole(
     ).stdout
     expected = hashlib.sha256(status + big.read_bytes()).hexdigest()
 
+    real_open = Path.open
+    reads: list[int] = []
+
+    class _BoundedReads:
+        """Proxy that fails any unbounded or oversized read of the file."""
+
+        def __init__(self, handle: object) -> None:
+            self._handle = handle
+
+        def __enter__(self) -> "_BoundedReads":
+            self._handle.__enter__()
+            return self
+
+        def __exit__(self, *exc: object) -> object:
+            return self._handle.__exit__(*exc)
+
+        def read(self, size: int | None = -1) -> bytes:
+            if size is None or size < 0 or size > 8 * 1024 * 1024:
+                raise AssertionError("whole-file read: memory is not bounded")
+            reads.append(size)
+            return self._handle.read(size)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._handle, name)
+
+    def _spy_open(self: Path, *args: object, **kwargs: object) -> object:
+        handle = real_open(self, *args, **kwargs)
+        return _BoundedReads(handle) if self.name == "big.bin" else handle
+
     def _no_whole_file_read(self: Path) -> bytes:
         raise AssertionError("read_bytes() loads the whole file into memory")
 
+    monkeypatch.setattr(Path, "open", _spy_open)
     monkeypatch.setattr(Path, "read_bytes", _no_whole_file_read)
 
     assert working_tree_signature(tmp_path) == expected
+    assert len(reads) > 2, "a multi-chunk file should be read in several bounded reads"
 
 
 def test_run_git_returns_stripped_stdout_and_none_on_failure(tmp_path: Path) -> None:
@@ -516,3 +547,28 @@ def test_git_common_dir_matches_git_dir_in_a_plain_repo(tmp_path: Path) -> None:
 
     assert _git_baseline.git_common_dir(tmp_path) == _git_baseline.git_dir(tmp_path)
     assert _git_baseline.git_common_dir(tmp_path / "nowhere") is None
+
+
+def test_signature_does_not_hash_a_renames_original_path(tmp_path: Path) -> None:
+    """Under `-z` a rename entry carries the original path as a second field; it is not content."""
+    import hashlib
+
+    _init_git_repo(tmp_path)
+    (tmp_path / "abc-old.txt").write_text("one\n")
+    # A tracked, unmodified file whose name equals the original path minus the
+    # 3-char status prefix: a parser that treats the original-path field as an
+    # entry would hash it as a phantom.
+    (tmp_path / "-old.txt").write_text("phantom\n")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "mv", "abc-old.txt", "new.txt"], cwd=tmp_path, check=True)
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    ).stdout
+    expected = hashlib.sha256(status + (tmp_path / "new.txt").read_bytes()).hexdigest()
+
+    assert working_tree_signature(tmp_path) == expected
