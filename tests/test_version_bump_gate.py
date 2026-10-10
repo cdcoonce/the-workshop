@@ -923,3 +923,30 @@ class TestMainCli:
 
         assert code == 1
         assert "could not resolve stamper-owned paths: manifest unreadable" in err
+
+
+class TestNonStringVersion:
+    """`plugin.json` is hand-edited; an unquoted version must fail readably."""
+
+    def _numeric(self, repo: Path, value: object) -> None:
+        _write(
+            repo / "plugins" / "advisor" / ".claude-plugin" / "plugin.json",
+            json.dumps({"name": "advisor", "version": value, "description": ""}),
+        )
+
+    def test_manifest_version_returns_a_str_for_a_numeric_version(
+        self, repo: Path
+    ) -> None:
+        self._numeric(repo, 1.1)
+
+        version = check_version_bumps.manifest_version(repo, "advisor")
+
+        assert isinstance(version, str)
+        assert version == "1.1"
+
+    def test_manifest_version_is_none_for_a_missing_or_null_version(
+        self, repo: Path
+    ) -> None:
+        self._numeric(repo, None)
+
+        assert check_version_bumps.manifest_version(repo, "advisor") is None
