@@ -950,3 +950,36 @@ class TestNonStringVersion:
         self._numeric(repo, None)
 
         assert check_version_bumps.manifest_version(repo, "advisor") is None
+
+
+class TestComponentsAreTypedEntries:
+    """Only a skill/agent directory and a hook file are components."""
+
+    @pytest.fixture
+    def stray(self, repo: Path) -> Path:
+        base = repo / "plugins" / "advisor"
+        _write(base / "skills" / ".gitkeep", "")
+        _write(base / "agents" / "README.md", "not an agent\n")
+        _write(base / "agents" / "real-agent" / "AGENT.md", "# real\n")
+        _hook(repo, "advisor", "real_hook", "")
+        _write(base / "hooks" / "scripts" / "fixtures" / "sample.txt", "data\n")
+        commit(repo, "stray entries")
+        return repo
+
+    EXPECTED = {
+        "skills/advisor-skill",
+        "agents/real-agent",
+        "hooks/real_hook.py",
+    }
+
+    def test_working_tree_ignores_a_stray_file_and_a_hooks_subdirectory(
+        self, stray: Path
+    ) -> None:
+        found = check_version_bumps._components_at(stray, "advisor", None)
+
+        assert found == self.EXPECTED
+
+    def test_a_ref_ignores_the_same_strays(self, stray: Path) -> None:
+        found = check_version_bumps._components_at(stray, "advisor", "HEAD")
+
+        assert found == self.EXPECTED
