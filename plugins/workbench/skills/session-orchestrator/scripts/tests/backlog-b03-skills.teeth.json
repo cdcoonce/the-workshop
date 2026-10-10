@@ -1,0 +1,133 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/session-orchestrator/scripts/tests/test_registry.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/session-orchestrator/scripts/tests/test_registry.py"
+  ],
+  "mutants": [
+    {
+      "label": "#987 state positional order swapped (test_cli_state_positional_order_is_name_state_evidence)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    state.add_argument(\"name\")\n    state.add_argument(\"state\", choices=(\"provisioning\", \"running\", \"waiting\", \"blocked\", \"completed\", \"lost\"))\n    state.add_argument(\"evidence\")",
+      "replace": "    state.add_argument(\"name\")\n    state.add_argument(\"evidence\")\n    state.add_argument(\"state\", choices=(\"provisioning\", \"running\", \"waiting\", \"blocked\", \"completed\", \"lost\"))"
+    },
+    {
+      "label": "#987 session positional order swapped (test_cli_session_positional_order_is_name_then_id)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    session.add_argument(\"name\")\n    session.add_argument(\"session_id\")",
+      "replace": "    session.add_argument(\"session_id\")\n    session.add_argument(\"name\")"
+    },
+    {
+      "label": "#987 main ignores argv (test_cli_add_session_attach_state_retire_lifecycle)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "parse_args(argv)",
+      "replace": "parse_args()"
+    },
+    {
+      "label": "#987 attach drops --message-verified wiring (test_cli_attach_without_flag_is_refused)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "registry.mark_attached(args.name, message_verified=args.message_verified)",
+      "replace": "registry.mark_attached(args.name, message_verified=True)"
+    },
+    {
+      "label": "#937 show reaches into _load again (test_show_branch_goes_through_public_accessor)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "everything = registry.all_workers()",
+      "replace": "everything = registry._load()"
+    },
+    {
+      "label": "#937 accessor drops archived workers (test_all_workers_returns_active_and_archived_maps)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "\"archived_workers\": data[\"archived_workers\"]}",
+      "replace": "\"archived_workers\": {}}"
+    },
+    {
+      "label": "#1022 cortex identity rule removed (test_cortex_manual_worker_can_return_to_running_after_waiting)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "if worker[\"adapter\"] == \"cortex-code\":\n            return bool(worker[\"manual_identity_evidence\"])",
+      "replace": "if False:\n            return bool(worker[\"manual_identity_evidence\"])"
+    },
+    {
+      "label": "#1022 set_state running gate back on raw session_id (test_cortex_manual_worker_can_return_to_running_after_blocked)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "if state == \"running\" and (not self._has_identity(worker)",
+      "replace": "if state == \"running\" and (not worker[\"session_id\"]"
+    },
+    {
+      "label": "#1022 reopen gate back on raw session_id (test_retired_cortex_worker_can_reopen_and_keeps_identity_evidence)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "or not self._has_identity(worker) or not evidence.strip()",
+      "replace": "or not worker[\"session_id\"] or not evidence.strip()"
+    },
+    {
+      "label": "#1022 identity helper always true (test_native_adapter_with_empty_session_id_cannot_return_to_running)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "        return bool(worker[\"session_id\"])\n\n    def get",
+      "replace": "        return True\n\n    def get"
+    },
+    {
+      "label": "#1070 lock is a no-op (test_overlapping_mutations_on_different_workers_both_survive)",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "            fcntl.flock(handle, fcntl.LOCK_EX)\n            try:",
+      "replace": "            try:"
+    },
+    {
+      "label": "#1070 reopen unlocked (test_every_mutator_holds_the_lock_from_load_to_save[reopen])",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    @_mutating\n    def reopen(",
+      "replace": "    def reopen("
+    },
+    {
+      "label": "#1070 retire unlocked (test_every_mutator_holds_the_lock_from_load_to_save[retire])",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    @_mutating\n    def retire(",
+      "replace": "    def retire("
+    },
+    {
+      "label": "#1070 set_state unlocked (test_every_mutator_holds_the_lock_from_load_to_save[set_state])",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    @_mutating\n    def set_state(",
+      "replace": "    def set_state("
+    },
+    {
+      "label": "#1070 add unlocked (test_every_mutator_holds_the_lock_from_load_to_save[add])",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    @_mutating\n    def add(",
+      "replace": "    def add("
+    }
+  ]
+}
