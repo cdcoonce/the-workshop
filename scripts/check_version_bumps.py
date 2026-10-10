@@ -130,9 +130,12 @@ def manifest_version(repo: Path, plugin: str, ref: str | None = None) -> str | N
             return None
         text = result.stdout
     try:
-        return json.loads(text).get("version")
+        version = json.loads(text).get("version")
     except (json.JSONDecodeError, AttributeError):
         return None
+    # The manifest is hand-edited: an unquoted `1.1` parses as a float, which
+    # has no `.split`. Coerce so a typo reaches the malformed-version report.
+    return None if version is None else str(version)
 
 
 def find_missing_bumps(repo: Path, base: str = DEFAULT_BASE) -> list[str]:
