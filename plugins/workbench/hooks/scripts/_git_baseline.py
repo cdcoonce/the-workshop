@@ -21,6 +21,8 @@ import os
 import subprocess
 from pathlib import Path
 
+_HASH_CHUNK_BYTES = 1024 * 1024
+
 
 def git_dir(project_dir: Path) -> Path | None:
     """Absolute .git directory for `project_dir`, or None outside a repo."""
@@ -90,7 +92,10 @@ def working_tree_signature(project_dir: Path) -> str | None:
             index += 1  # skip the original-path field
         path_part = os.fsdecode(entry[3:])
         try:
-            hasher.update((project_dir / path_part).read_bytes())
+            with (project_dir / path_part).open("rb") as handle:
+                # Chunked so a large changed file cannot balloon the hook's memory.
+                for chunk in iter(lambda: handle.read(_HASH_CHUNK_BYTES), b""):
+                    hasher.update(chunk)
         except OSError:
             pass
     return hasher.hexdigest()
