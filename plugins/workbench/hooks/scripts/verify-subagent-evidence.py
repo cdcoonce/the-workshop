@@ -48,7 +48,7 @@ COMPLETION_CLAIM = re.compile(
     r"deleted|refactored|committed|resolved|written|wrote|applied)\b"
     r"|\b(?:changes? (?:are|is) complete|fix is (?:in place|complete|done)|"
     r"implementation is complete|committed the (?:fix|change)|"
-    r"done\.?\s*$)",
+    r"(?:I'm|I am|all|it's|it is) done\.?\s*$)",
     re.IGNORECASE,
 )
 
