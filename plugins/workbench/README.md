@@ -125,13 +125,13 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
-| `vault-pre-compact.py` | — | PreCompact hook: preserves session state before compaction. |
-| `vault-session-start.py` | — | SessionStart hook: pulls from remote and injects vault context. |
-| `vault-skill-alias.py` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
-| `vault-stop-1-notebook-update.py` | — | Stop hook: updates the session notebook. |
-| `vault-stop-2-graph-gardener.py` | — | Stop hook: queues link, profile, and index repairs. |
-| `vault-stop-3-session-sync.py` | — | Stop hook: checks the explicit sync boundary without authorizing a sync. |
-| `vault-validate-write.py` | — | PostToolUse hook: validates frontmatter on vault note writes. |
+| `vault-pre-compact.py` | `PreCompact` | PreCompact hook: preserves session state before compaction. |
+| `vault-session-start.py` | `SessionStart` | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | `UserPromptSubmit` | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
+| `vault-stop-1-notebook-update.py` | `Stop` | Stop hook: updates the session notebook. |
+| `vault-stop-2-graph-gardener.py` | `Stop` | Stop hook: queues link, profile, and index repairs. |
+| `vault-stop-3-session-sync.py` | `Stop` | Stop hook: checks the explicit sync boundary without authorizing a sync. |
+| `vault-validate-write.py` | `PostToolUse` | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
 | `warn-off-trunk.py` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
