@@ -78,7 +78,7 @@ SessionStart hook: inject a persona output-style as additionalContext.
 
 ### `post-edit-lint.py`
 
-*`workbench` plugin · events: `PostToolUse` · matcher: `edit|write|multi_edit|Edit|Write|MultiEdit`*
+*`workbench` plugin · events: `PostToolUse` · matcher: `write|edit|multiedit|multi_edit|Write|Edit|MultiEdit`*
 
 Post-edit hook: auto-format and lint edited files with whatever toolchain is
 
