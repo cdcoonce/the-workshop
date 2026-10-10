@@ -808,3 +808,118 @@ class TestSecondSliceInADrain:
         single-slice criterion could not distinguish from a correct fix.
         """
         assert find_missing_bumps(second_slice_on_advanced_staging, "origin/dev") == []
+
+
+def _repo_with_two_plugins(tmp_path: Path) -> Path:
+    """`main` holds advisor 1.2.0 (alpha, beta) and mentor 0.1.0 (one skill)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    _manifest(repo, "advisor", "1.2.0")
+    _skill(repo, "advisor", "alpha", "# alpha\n")
+    _skill(repo, "advisor", "beta", "# beta\n")
+    _plugin(repo, "mentor", "0.1.0", "# v1\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "release")
+    git(repo, "checkout", "-q", "-b", "work")
+    return repo
+
+
+def _drop_skill(repo: Path, plugin: str, skill: str) -> None:
+    subprocess.run(
+        ["rm", "-rf", str(repo / "plugins" / plugin / "skills" / skill)], check=True
+    )
+
+
+class TestMainCli:
+    """`main()` is what `make verify-versions` runs; its branching is its own."""
+
+    @pytest.fixture
+    def two(self, tmp_path: Path) -> Path:
+        return _repo_with_two_plugins(tmp_path)
+
+    def _run(self, repo: Path, capsys: pytest.CaptureFixture[str], base: str = "main"):
+        code = check_version_bumps.main(["--repo", str(repo), "--base", base])
+        captured = capsys.readouterr()
+        return code, captured.out, captured.err
+
+    def test_clean_repo_exits_zero_with_the_all_clear(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code, out, err = self._run(two, capsys)
+
+        assert code == 0
+        assert "no unbumped plugins against main" in out
+        assert err == ""
+
+    def test_missing_bump_only_reports_only_the_missing_section(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _plugin(two, "mentor", "0.1.0", "# v2\n")
+        commit(two, "change mentor, no bump")
+
+        code, out, err = self._run(two, capsys)
+
+        assert code == 1
+        assert "declare the same version as main" in err
+        assert "mentor (still 0.1.0)" in err
+        assert "component surface" not in err
+        assert out == ""
+
+    def test_level_violation_only_reports_only_the_level_section(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _drop_skill(two, "advisor", "beta")
+        _manifest(two, "advisor", "1.2.1")
+        commit(two, "drop beta, patch bump")
+
+        code, out, err = self._run(two, capsys)
+
+        assert code == 1
+        assert "component surface by more than" in err
+        assert "advisor: needs a major bump, got patch (1.2.1)" in err
+        assert "declare the same version" not in err
+
+    def test_both_problems_report_both_sections_level_first(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _drop_skill(two, "advisor", "beta")
+        _manifest(two, "advisor", "1.2.1")
+        _plugin(two, "mentor", "0.1.0", "# v2\n")
+        commit(two, "both problems")
+
+        code, out, err = self._run(two, capsys)
+
+        assert code == 1
+        assert "advisor: needs a major bump, got patch" in err
+        assert "mentor (still 0.1.0)" in err
+        assert err.index("component surface") < err.index("declare the same version")
+
+    def test_unresolvable_base_prints_the_error_and_exits_one(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code, out, err = self._run(two, capsys, base="no-such-branch")
+
+        assert code == 1
+        assert err.startswith("ERROR: base ref 'no-such-branch' not found")
+        assert out == ""
+
+    def test_stamp_error_prints_the_error_and_exits_one(
+        self,
+        two: Path,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from scripts.stamp import StampError
+
+        def boom(repo: Path) -> list[str]:
+            raise StampError("manifest unreadable")
+
+        monkeypatch.setattr(check_version_bumps, "_stamper_exclusions", boom)
+
+        code, out, err = self._run(two, capsys)
+
+        assert code == 1
+        assert "could not resolve stamper-owned paths: manifest unreadable" in err
