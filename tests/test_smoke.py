@@ -1491,3 +1491,73 @@ class TestFrontmatterNestedBlockSequence:
 
         assert not result.passed
         assert any("nonexistent-skill" in e for e in result.errors)
+
+
+class TestSmokeMachineryImportForms:
+    """Import-form gap closers for the machinery import scan (#480)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, source: str) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        (plugin / "machinery" / "engine").mkdir(parents=True)
+        tests_dir = plugin / "machinery" / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_x.py").write_text(source)
+        return plugin
+
+    def test_plain_import_of_unshipped_module_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(tmp_path, make_plugin, "import ghost_module\n")
+
+        result = smoke_test(plugin)
+
+        assert any(
+            "ghost_module" in e and "machinery" in e for e in result.errors
+        )
+
+    def test_relative_imports_are_not_engine_references(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            "from .sibling import x\nfrom ..pkg import y\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+
+class TestFrontmatterSubKeyEdges:
+    """Edge cases for nested block-sequence parsing (#746)."""
+
+    def test_sub_key_does_not_leak_into_next_top_level_key(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - x\nother:\n  - y\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x"]
+        assert not (isinstance(result["other"], dict) and "add" in result["other"])
+        assert "add" not in result["skills"].get("other", {})
+
+    def test_trailing_comment_on_list_item_is_stripped(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - x  # note\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x"]
+
+    def test_dash_without_space_is_not_a_sequence_item(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter("---\nskills:\n  add:\n    -x\n---\n")
+
+        assert result is not None
+        assert result["skills"]["add"] == ""
