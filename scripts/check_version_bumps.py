@@ -196,8 +196,13 @@ def _components_at(repo: Path, plugin: str, ref: str | None) -> set[str]:
     prefix = f"plugins/{plugin}/"
     if ref is None:
         base = repo / "plugins" / plugin
+        # Files only, matching `ls-tree -r` on the ref path: a directory is
+        # implied by the files inside it, and a bare directory entry (a
+        # `hooks/scripts/fixtures/`) is not a capability.
         paths = (
-            [str(p.relative_to(repo)) for p in base.rglob("*")] if base.is_dir() else []
+            [str(p.relative_to(repo)) for p in base.rglob("*") if p.is_file()]
+            if base.is_dir()
+            else []
         )
     else:
         result = run_git(repo, "ls-tree", "-r", "--name-only", ref, "--", prefix)
@@ -206,7 +211,9 @@ def _components_at(repo: Path, plugin: str, ref: str | None) -> set[str]:
     components = set()
     for path in paths:
         parts = Path(path).relative_to(f"plugins/{plugin}").parts if path.startswith(prefix) else ()
-        if len(parts) >= 2 and parts[0] in ("skills", "agents"):
+        # `skills/<name>/...` and `agents/<name>/...`: the component is the
+        # directory, so a file sitting directly under `skills/` is not one.
+        if len(parts) >= 3 and parts[0] in ("skills", "agents"):
             components.add(f"{parts[0]}/{parts[1]}")
         elif len(parts) == 3 and parts[0] == "hooks" and parts[1] == "scripts":
             if not parts[2].startswith("_"):
