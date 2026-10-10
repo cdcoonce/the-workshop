@@ -1517,15 +1517,32 @@ def _nonblank_lines(text: str) -> Counter[str]:
     return Counter(line for line in text.splitlines() if line.strip())
 
 
-def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any]:
-    """Check a merge result against both sides by multiset of non-blank lines.
+def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, list[str]]:
+    """Compare one file's merge result to both sides by non-blank-line multisets.
 
-    For every path changed base->tip or base->origin: ``missing`` is any line
+    Returns ``{"missing", "extra", "ambiguous"}``: ``missing`` is any line
     either side added that the result lacks, ``extra`` any line the result
-    holds beyond ``base - deletions + additions``. A line both sides added is
-    ``ambiguous`` -- one copy or two are both legitimate -- and reported but
-    never failing. A line-level check cannot see reordering; it catches the
-    losses and inventions (a dropped addition, a duplicated sentence).
+    holds beyond ``base - deletions + additions``, and ``ambiguous`` the lines
+    both sides added (one copy or two are both legitimate, so they never fail).
+    Counter semantics throughout.
+    """
+    b, t, o, r = (_nonblank_lines(text) for text in (base, tip, origin, result))
+    s_add, o_add = t - b, o - b
+    s_del, o_del = b - t, b - o
+    ambiguous = set(s_add) & set(o_add)
+    missing = [line for line in ((s_add - r) + (o_add - r)) if line not in ambiguous]
+    expected = (b - (s_del | o_del)) + s_add + o_add
+    extra = [line for line in (r - expected) if line not in ambiguous]
+    return {"missing": sorted(missing), "extra": sorted(extra), "ambiguous": sorted(ambiguous)}
+
+
+def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any]:
+    """Check a merge result against both sides, file by file.
+
+    Covers every path changed base->tip or base->origin; see
+    ``compare_texts`` for the per-file rule. A line-level check cannot see
+    reordering; it catches the losses and inventions (a dropped addition, a
+    duplicated sentence).
 
     Parameters
     ----------
@@ -1539,23 +1556,11 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
     """
     paths = sorted(set(_name_status(base, tip)) | set(_name_status(base, origin)))
     files: dict[str, dict[str, list[str]]] = {}
-    ok = True
     for path in paths:
-        b, t, o, r = (
-            _nonblank_lines(_blob_or_empty(rev, path)) for rev in (base, tip, origin, result)
+        files[path] = compare_texts(
+            *(_blob_or_empty(rev, path) for rev in (base, tip, origin, result))
         )
-        s_add, o_add = t - b, o - b
-        s_del, o_del = b - t, b - o
-        ambiguous = set(s_add) & set(o_add)
-        missing = [line for line in ((s_add - r) + (o_add - r)) if line not in ambiguous]
-        expected = (b - (s_del | o_del)) + s_add + o_add
-        extra = [line for line in (r - expected) if line not in ambiguous]
-        files[path] = {
-            "missing": sorted(missing),
-            "extra": sorted(extra),
-            "ambiguous": sorted(ambiguous),
-        }
-        ok = ok and not missing and not extra
+    ok = all(not entry["missing"] and not entry["extra"] for entry in files.values())
     return {"ok": ok, "files": files}
 
 
