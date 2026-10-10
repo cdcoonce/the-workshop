@@ -237,6 +237,7 @@ def _parse_frontmatter(text: str) -> dict | None:
     result: dict = {}
     current_key: str | None = None
     block_scalar = False
+    current_sub_key: str | None = None
     for line in frontmatter_text.split("\n"):
         stripped = line.strip()
         if not stripped:
@@ -247,6 +248,7 @@ def _parse_frontmatter(text: str) -> dict | None:
         if ":" in stripped and not stripped.startswith("-") and not is_indented:
             key, _, value = stripped.partition(":")
             key = key.strip()
+            current_sub_key = None
             value = re.sub(r"\s+#.*$", "", value.strip())
             if value.startswith("[") and value.endswith("]"):
                 result[key] = [
@@ -276,12 +278,26 @@ def _parse_frontmatter(text: str) -> dict | None:
             if block_scalar:
                 # Fold every indented line into the value, colons and all.
                 result[current_key] = f"{result[current_key]} {stripped}".strip()
+            elif (
+                current_sub_key is not None
+                and isinstance(result[current_key], dict)
+                and (stripped == "-" or stripped.startswith("- "))
+            ):
+                # Nested block-sequence item under the preceding ``sub_key:``.
+                items = result[current_key].get(current_sub_key)
+                if not isinstance(items, list):
+                    items = []
+                    result[current_key][current_sub_key] = items
+                item = re.sub(r"\s+#.*$", "", stripped[1:].strip())
+                if item:
+                    items.append(_strip_quotes(item))
             elif ":" in stripped:
                 if not isinstance(result[current_key], dict):
                     result[current_key] = {}
                 sub_key, _, sub_value = stripped.partition(":")
                 sub_key = sub_key.strip()
                 sub_value = sub_value.strip()
+                current_sub_key = sub_key
                 if sub_value.startswith("[") and sub_value.endswith("]"):
                     result[current_key][sub_key] = [
                         _strip_quotes(v.strip())
