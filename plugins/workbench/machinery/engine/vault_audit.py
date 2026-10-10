@@ -32,7 +32,7 @@ from vault_scope_resolved import (  # noqa: E402
 )
 from vault_utils import find_vault_root  # noqa: E402
 
-WIKILINK_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
+WIKILINK_WITH_EMBED_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
 FENCED_CODE_RE = re.compile(r"(^|\n)```.*?(?:\n```|$)", re.DOTALL)
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 OBSIDIAN_BASE_RECOMMENDATIONS = (
@@ -159,7 +159,7 @@ def _links(path: Path) -> list[tuple[bool, str]]:
     out: list[tuple[bool, str]] = []
     text = _read(path)
     code_spans = _code_spans(text)
-    for match in WIKILINK_RE.finditer(text):
+    for match in WIKILINK_WITH_EMBED_RE.finditer(text):
         if _inside_spans(match.start(), code_spans):
             continue
         bang, raw = match.groups()
