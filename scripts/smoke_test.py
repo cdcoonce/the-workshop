@@ -658,7 +658,7 @@ def smoke_test(plugin_path: Path) -> SmokeTestResult:
 
             # Check required fields
             for req_field in ["name", "description", "role"]:
-                if req_field not in frontmatter:
+                if req_field not in frontmatter or not frontmatter.get(req_field):
                     result.errors.append(
                         f"Agent '{agent_dir.name}/AGENT.md' missing required "
                         f"field '{req_field}'"
