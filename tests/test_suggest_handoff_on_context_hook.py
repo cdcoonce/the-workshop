@@ -58,6 +58,12 @@ def _assistant_line(input_t: int, cache_read: int, cache_create: int) -> str:
     )
 
 
+def _sidechain_line(input_t: int, cache_read: int, cache_create: int) -> str:
+    record = json.loads(_assistant_line(input_t, cache_read, cache_create))
+    record["isSidechain"] = True
+    return json.dumps(record)
+
+
 def _transcript(tmp_path: Path, *lines: str, name: str = "t.jsonl") -> Path:
     path = tmp_path / name
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -197,3 +203,38 @@ class TestOncePerSession:
         second = run(payload, tmpdir=markers)
         assert first.stdout != ""
         assert second.stdout == ""
+
+
+class TestSidechainSkipped:
+    """A subagent (isSidechain) turn must not be read as the main thread's usage."""
+
+    def test_trailing_sidechain_turn_does_not_mask_main_thread_usage(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        # Main thread is large; the last record is a tiny subagent turn.
+        transcript = _transcript(
+            tmp_path,
+            _assistant_line(2, 305_000, 0),
+            _sidechain_line(2, 5_000, 0),
+        )
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
+        )
+        assert result.returncode == 0
+        assert "/wrap-up" in json.loads(result.stdout)["hookSpecificOutput"][
+            "additionalContext"
+        ]
+
+    def test_trailing_huge_sidechain_turn_does_not_trigger(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        transcript = _transcript(
+            tmp_path,
+            _assistant_line(2, 10_000, 0),
+            _sidechain_line(2, 400_000, 0),
+        )
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
+        )
+        assert result.returncode == 0
+        assert result.stdout == ""
