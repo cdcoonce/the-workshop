@@ -983,3 +983,39 @@ class TestComponentsAreTypedEntries:
         found = check_version_bumps._components_at(stray, "advisor", "HEAD")
 
         assert found == self.EXPECTED
+
+
+class TestGitDiffErrorIsNotAChange:
+    """`git diff --quiet` exits 0 (same), 1 (differs), >1 (git itself failed)."""
+
+    BOGUS = "0123456789abcdef0123456789abcdef01234567"
+
+    def test_an_unreachable_base_raises_with_git_stderr(self, repo: Path) -> None:
+        with pytest.raises(check_version_bumps.GitError, match="fatal"):
+            check_version_bumps.output_changed(repo, self.BOGUS, "advisor", [])
+
+    def test_exit_zero_and_one_still_mean_unchanged_and_changed(
+        self, repo: Path
+    ) -> None:
+        head = git(repo, "rev-parse", "HEAD")
+        assert check_version_bumps.output_changed(repo, head, "advisor", []) is False
+
+        _plugin(repo, "advisor", "0.1.0", "# v2\n")
+        assert check_version_bumps.output_changed(repo, head, "advisor", []) is True
+
+    def test_main_reports_a_git_error_and_exits_one(
+        self,
+        repo: Path,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            check_version_bumps, "resolve_base", lambda repo, base: self.BOGUS
+        )
+
+        code = check_version_bumps.main(["--repo", str(repo), "--base", "main"])
+
+        assert code == 1
+        err = capsys.readouterr().err
+        assert err.startswith("ERROR:")
+        assert "Traceback" not in err
