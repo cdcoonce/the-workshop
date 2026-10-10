@@ -3,8 +3,7 @@ name: detector-teeth-check
 description: >
   Prove tests catch the defect they claim to prevent: re-inject it, check the
   suite goes red. Use for any teeth check, mutation run or vacuous-test doubt,
-  and in place of hand-rolling a mutate/revert script, which loses work and
-  runs stale bytecode.
+  and in place of hand-rolling a mutate/revert script.
 ---
 
 # Detector teeth check

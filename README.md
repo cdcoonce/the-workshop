@@ -219,7 +219,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/github-pr-land` | `workbench` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
-| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
@@ -267,11 +267,11 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
 | `/vault-podcast` | `workbench` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
-| `/vault-recall` | `workbench` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
+| `/vault-recall` | `workbench` | Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
+| `/vault-wrap-up` | `workbench` | Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | `workbench` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
 | `/warehouse-sql-test-harness` | `workbench` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |
