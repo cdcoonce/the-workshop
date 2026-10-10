@@ -15,10 +15,13 @@ subsumes the bare handoff refresh this hook used to point at. It suggests, never
 invokes. The script name, env var, and marker dir keep their historical "handoff"
 spelling so installed configs and overrides keep working.
 
-Fires at most once per session: a marker file keyed on ``session_id`` (or, when a host
-omits one, a hash of the transcript path) is written on first trigger and suppresses
-every later turn. The marker is checked before the transcript is parsed, so once armed
-the hook is effectively free.
+Fires at most once per large-context episode: a marker file keyed on ``session_id``
+(or, when a host omits one, a hash of the transcript path) is written on first trigger,
+holding the measured token count, and suppresses later turns. ``/clear`` and compaction
+keep the ``session_id`` but collapse the measured context, so while the marker is armed
+the transcript is still measured: a reading below the re-arm floor (``threshold // 2``)
+deletes the marker, and the next crossing warns again. A legacy empty or unreadable
+marker counts as armed-with-unknown-count.
 
 Agnostic + fail-open by design: stdlib only, no bash. A malformed payload, an
 unreadable transcript, or a host that never sends ``transcript_path`` (Codex, Cortex
@@ -115,11 +118,26 @@ def _already_warned(marker: Path) -> bool:
     return marker.exists()
 
 
-def _arm(marker: Path) -> None:
+def _rearm_if_collapsed(marker: Path, context_tokens: int | None, threshold: int) -> bool:
+    """Delete the marker when context fell below the re-arm floor.
+
+    Returns True when the marker was removed (the hook is armed again). An
+    unreadable transcript (``None``) never re-arms.
+    """
+    if context_tokens is None or context_tokens >= threshold // 2:
+        return False
+    try:
+        marker.unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
+def _arm(marker: Path, context_tokens: int = 0) -> None:
     """Best-effort marker write; failure just means a possible repeat warning."""
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text("", encoding="utf-8")
+        marker.write_text(str(context_tokens), encoding="utf-8")
     except OSError:
         pass
 
@@ -152,14 +170,17 @@ def main() -> int:
         return 0
 
     marker = _marker_path(_session_key(data, transcript_path))
-    if _already_warned(marker):
-        return 0  # once per session — cheap short-circuit before parsing
-
+    threshold = _threshold()
     context_tokens = _context_tokens(Path(transcript_path))
-    if context_tokens is None or context_tokens < _threshold():
+    if _already_warned(marker) and not _rearm_if_collapsed(
+        marker, context_tokens, threshold
+    ):
+        return 0  # armed and context has not collapsed: once per episode
+
+    if context_tokens is None or context_tokens < threshold:
         return 0
 
-    _arm(marker)
+    _arm(marker, context_tokens)
     print(
         json.dumps(
             {
