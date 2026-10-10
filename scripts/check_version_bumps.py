@@ -46,9 +46,13 @@ class GitError(Exception):
 
 
 def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
-    )
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
+        )
+    except OSError as error:
+        # git missing from PATH (or not executable) never reaches a returncode.
+        raise GitError(f"could not run git: {error}") from error
 
 
 def resolve_base(repo: Path, base: str) -> str:

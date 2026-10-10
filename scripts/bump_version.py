@@ -108,7 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     repo = Path(args.repo)
     try:
         result = bump(repo, args.plugin, args.base, args.level)
-    except (BumpError, StampError) as error:
+        changed_files = _changed_files(repo)
+    except (BumpError, StampError, gate.GitError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
@@ -116,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{result.plugin}: {result.released} -> {result.new} ({result.level} against {args.base})")
     else:
         print(f"{result.plugin}: already at {result.new}, past the {result.level} bump from {result.released}; nothing to do")
-    for name in _changed_files(repo):
+    for name in changed_files:
         print(f"  {name}")
     return 0
 
