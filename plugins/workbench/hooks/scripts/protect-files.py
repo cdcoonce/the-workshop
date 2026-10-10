@@ -34,7 +34,7 @@ path = PurePath(file_path)
 basename = path.name
 
 for directory in PROTECTED_DIRS:
-    if directory in path.parts[:-1]:
+    if directory in path.parts:
         print(
             f"Blocked: {file_path} matches protected pattern '{directory}/'",
             file=sys.stderr,
