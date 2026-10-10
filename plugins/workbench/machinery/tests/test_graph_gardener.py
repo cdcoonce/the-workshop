@@ -1099,3 +1099,47 @@ def test_run_lane_b_falls_back_when_owner_value_absent(
 
 def test_gardener_code_spans_is_the_shared_vault_utils_function():
     assert gg._code_spans is vault_utils.code_spans
+
+
+# --- #729: the done-log proposal count describes the queue it wrote ---
+
+
+def test_done_log_counts_every_proposal_the_queue_contains(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+    import re
+
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    drift_sig = gg.proposal_signature("broken", "personal/src.md", "trapped slug")
+    plain_sig = gg.proposal_signature("broken", "personal/src.md", "plain miss")
+
+    def lane_a(*args: object, **kwargs: object) -> gg.LaneAResult:
+        result = gg.LaneAResult()
+        result.proposals.append(f"`personal/src.md`: broken `[[trapped slug]]` <!-- gsig: {drift_sig} -->")
+        result.proposals.append(f"`personal/src.md`: broken `[[plain miss]]` <!-- gsig: {plain_sig} -->")
+        return result
+
+    monkeypatch.setattr(gg, "run_lane_a", lane_a)
+    monkeypatch.setattr(gg, "detect_auto_memory_drift", lambda _: {"trapped slug": "trapped.md"})
+    monkeypatch.setattr(gg, "detect_unprofiled_people", lambda *a, **k: ["Jane Doe", "John Roe"])
+    monkeypatch.setattr(
+        gg, "run_lane_b_headless",
+        lambda *a: {
+            "missing_links": [{"note": "personal/src.md", "text": "x", "suggested": "[[Y]]", "rationale": "r"}],
+            "orphans": [],
+        },
+    )
+    dismissed = repo / gg.DISMISSED_FILE_REL
+    dismissed.parent.mkdir(parents=True, exist_ok=True)
+    dismissed.write_text(json.dumps({"dismissed": [gg.proposal_signature("person", "", "John Roe")]}))
+
+    assert gg.run_gardener("s", repo, notes_override=[note], check_debounce=False) == 0
+
+    logged = re.search(r"(\d+) proposal\(s\)", (repo / gg.GARDENER_LOG_REL).read_text())
+    summary = gg.queue_summary(repo, "personal")
+    queued = re.search(r"(\d+) graph suggestion", summary)
+    assert logged and queued
+    # plain broken + Jane Doe + drift entry + missing link, John Roe dismissed
+    assert int(queued.group(1)) == 4
+    assert int(logged.group(1)) == int(queued.group(1))
