@@ -143,6 +143,20 @@
       "oracle": "real",
       "find": "name: build-review-land\ndescription:",
       "replace": "name: build-review-lan\ndescription:"
+    },
+    {
+      "label": "17 land command points at a real script",
+      "file": "../plugins/workbench/skills/build-review-land/SKILL.md",
+      "oracle": "real",
+      "find": "python3 \"<github-pr-land skill dir>/scripts/pr_land.py\" land",
+      "replace": "uv run python scripts/pr_land.py land"
+    },
+    {
+      "label": "18 ambiguous anchor stops the review",
+      "file": "../plugins/workbench/skills/build-review-land/SKILL.md",
+      "oracle": "real",
+      "find": "A red baseline or an ambiguous anchor stops the review.",
+      "replace": "A red baseline stops the review."
     }
   ]
 }
