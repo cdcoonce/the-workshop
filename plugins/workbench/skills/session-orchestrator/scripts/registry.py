@@ -4,14 +4,32 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import functools
 import json
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 
 class RegistryError(ValueError):
     """Raised when a registry transition would violate the orchestration contract."""
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _mutating(method: _F) -> _F:
+    """Run a load-modify-save method while holding the registry's file lock."""
+
+    @functools.wraps(method)
+    def wrapper(self: SessionRegistry, *args: Any, **kwargs: Any) -> Any:
+        with self._locked():
+            return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
 
 
 def _now() -> str:
@@ -23,6 +41,18 @@ class SessionRegistry:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Hold an exclusive advisory lock on a sibling ``.lock`` file."""
+        lock_path = self.path.with_name(self.path.name + ".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -98,6 +128,7 @@ class SessionRegistry:
         data = self._load()
         return {"workers": data["workers"], "archived_workers": data["archived_workers"]}
 
+    @_mutating
     def add(
         self,
         name: str,
@@ -149,6 +180,7 @@ class SessionRegistry:
         self._event(data["workers"][name], "created", "worker registered")
         self._save(data)
 
+    @_mutating
     def set_session_id(self, name: str, session_id: str) -> None:
         """Record the platform's real addressable session identity."""
         if not session_id.strip():
@@ -160,6 +192,7 @@ class SessionRegistry:
         self._event(data["workers"][name], "session", session_id)
         self._save(data)
 
+    @_mutating
     def mark_attached(self, name: str, *, message_verified: bool = False) -> None:
         """Mark a worker running only after identity and messaging are verified."""
         data = self._load()
@@ -177,6 +210,7 @@ class SessionRegistry:
         self._event(worker, "attached", "controller message exchange verified")
         self._save(data)
 
+    @_mutating
     def mark_manual_attached(
         self,
         name: str,
@@ -205,6 +239,7 @@ class SessionRegistry:
         self._event(worker, "manual-attached", identity_evidence)
         self._save(data)
 
+    @_mutating
     def set_state(self, name: str, state: str, *, evidence: str) -> None:
         """Set an observable lifecycle state with durable evidence."""
         allowed = {"provisioning", "running", "waiting", "blocked", "completed", "lost"}
@@ -236,6 +271,7 @@ class SessionRegistry:
         self._event(worker, "state", f"{state}: {evidence}")
         self._save(data)
 
+    @_mutating
     def record_update(self, name: str, observation: str, *, meaningful: bool = False) -> None:
         """Record every observation without treating unchanged polls as milestones."""
         data = self._load()
@@ -248,6 +284,7 @@ class SessionRegistry:
         self._event(worker, "milestone" if meaningful else "observation", observation)
         self._save(data)
 
+    @_mutating
     def record_recovery(self, name: str, evidence: str) -> None:
         """Append one identity-reconciliation attempt and its evidence."""
         data = self._load()
@@ -261,6 +298,7 @@ class SessionRegistry:
         self._event(worker, "recovery", evidence)
         self._save(data)
 
+    @_mutating
     def amend_contract(self, name: str, amendment: str) -> None:
         """Append an explicit scope or authorization amendment."""
         if not amendment.strip():
@@ -273,6 +311,7 @@ class SessionRegistry:
         self._event(worker, "contract-amendment", amendment)
         self._save(data)
 
+    @_mutating
     def set_integration(self, name: str, status: str, *, evidence: str) -> None:
         """Record verified integration or an explicit durable handoff."""
         if status not in {"integrated", "handed-off"} or not evidence.strip():
@@ -296,6 +335,7 @@ class SessionRegistry:
         self._event(worker, "integration", f"{status}: {evidence}")
         self._save(data)
 
+    @_mutating
     def set_validation(self, name: str, *, passed: bool, evidence: str) -> None:
         """Record the required validation result and exact evidence."""
         if not evidence.strip():
@@ -309,6 +349,7 @@ class SessionRegistry:
         self._event(worker, "validation", f"{'passed' if passed else 'failed'}: {evidence}")
         self._save(data)
 
+    @_mutating
     def record_durable_status(self, name: str, evidence: str) -> None:
         """Record where the worker's durable completion status was written."""
         if not evidence.strip():
@@ -322,6 +363,7 @@ class SessionRegistry:
         self._event(worker, "durable-status", evidence)
         self._save(data)
 
+    @_mutating
     def set_follow_up(self, name: str, assignment: str) -> None:
         """Record or clear the worker's remaining assigned follow-up."""
         data = self._load()
@@ -332,6 +374,7 @@ class SessionRegistry:
         self._event(worker, "follow-up", assignment or "none")
         self._save(data)
 
+    @_mutating
     def retire(
         self,
         name: str,
@@ -376,6 +419,7 @@ class SessionRegistry:
         data["archived_workers"][name] = data["workers"].pop(name)
         self._save(data)
 
+    @_mutating
     def record_archived_update(self, name: str, evidence: str) -> None:
         """Append durable history when a retained identity cannot be reopened."""
         if not evidence.strip():
@@ -387,6 +431,7 @@ class SessionRegistry:
         self._event(worker, "archived-update", evidence)
         self._save(data)
 
+    @_mutating
     def reopen(self, name: str, *, evidence: str) -> None:
         """Reopen a retained worker without replacing its session identity."""
         data = self._load()
