@@ -1,0 +1,53 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-o",
+    "pythonpath=plugins/workbench/skills/daa-code-review/scripts",
+    "-q",
+    "plugins/workbench/skills/daa-code-review/scripts/tests/test_markdown_analyzer.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-o",
+    "pythonpath=plugins/workbench/skills/daa-code-review/scripts",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/daa-code-review/scripts/tests/test_markdown_analyzer.py"
+  ],
+  "mutants": [
+    {
+      "label": "#608: the right-curly-quote entry is missing from the corruption map (test_curly_double_quote_keys_map_to_curly_quotes)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\xe2\\x80\\x9d\": \"\\u201d\",  # right double quote",
+      "replace": "    # right double quote entry dropped"
+    },
+    {
+      "label": "#608: the left-curly-quote entry fixes to a straight quote (test_corrupted_curly_quotes_suggest_proper_curly_quotes)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\xe2\\x80\\x9c\": \"\\u201c\",  # left double quote",
+      "replace": "    \"\\xe2\\x80\\x9c\": \"\\\"\",  # left double quote"
+    },
+    {
+      "label": "#748: defined_refs is built from unmasked content again (test_defined_ref_inside_code_fence_does_not_define_it)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "REFERENCE_DEF_PATTERN.finditer(masked_content)",
+      "replace": "REFERENCE_DEF_PATTERN.finditer(content)"
+    }
+  ]
+}
