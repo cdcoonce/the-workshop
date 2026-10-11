@@ -56,9 +56,11 @@ def _scan_notes(vault: Path, dirs: list[str]) -> list[tuple[Path, dict]]:
 
 def _has_tag(fm: dict, tag: str) -> bool:
     """Check if frontmatter has a specific tag."""
-    tags = fm.get("tags", [])
+    tags = fm.get("tags")
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",")]
+    if not isinstance(tags, list):
+        return False
     return tag in tags
 
 
@@ -99,7 +101,7 @@ def query_active_work(vault: Path) -> str:
     """List all active work notes."""
     notes = _scan_notes(vault, ["work/active", "work/incidents"])
     rows = []
-    for path, fm in sorted(notes, key=lambda x: x[1].get("date", ""), reverse=True):
+    for path, fm in sorted(notes, key=lambda x: str(x[1].get("date", "")), reverse=True):
         rows.append([
             path.stem,
             str(fm.get("status", "")),
@@ -170,7 +172,7 @@ def query_learning(vault: Path) -> str:
     """List all learning notes."""
     notes = _scan_notes(vault, ["personal/learning"])
     rows = []
-    for path, fm in sorted(notes, key=lambda x: x[1].get("date", ""), reverse=True):
+    for path, fm in sorted(notes, key=lambda x: str(x[1].get("date", "")), reverse=True):
         rows.append([
             path.stem,
             str(fm.get("status", "")),

@@ -28,10 +28,10 @@ _PREP_TAG_RE = re.compile(r"^\s*-\s*meeting-prep\s*$")
 
 def _frontmatter_end(lines: list[str]) -> int | None:
     """Return the index of the closing ``---`` of the leading frontmatter block."""
-    if not lines or lines[0].rstrip("\n") != _FM_DELIM:
+    if not lines or lines[0].rstrip("\r\n") != _FM_DELIM:
         return None
     for i in range(1, len(lines)):
-        if lines[i].rstrip("\n") == _FM_DELIM:
+        if lines[i].rstrip("\r\n") == _FM_DELIM:
             return i
     return None
 
@@ -60,7 +60,10 @@ def sweep_stale_prep(vault_root: Path, today: date | None = None) -> dict:
         return {"flipped": [], "count": 0}
 
     for path in sorted(work_dir.rglob("*.md")):
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        # newline="" keeps CRLF intact so detection sees the real line endings
+        # and the rewrite leaves every other byte untouched.
+        with path.open(encoding="utf-8", newline="") as stream:
+            lines = stream.read().splitlines(keepends=True)
         end = _frontmatter_end(lines)
         if end is None:
             continue
@@ -81,9 +84,11 @@ def sweep_stale_prep(vault_root: Path, today: date | None = None) -> dict:
         if meeting_date is None or date.fromisoformat(meeting_date) >= today:
             continue
 
-        newline = "\n" if fm[status_idx].endswith("\n") else ""
+        old = fm[status_idx]
+        newline = old[len(old.rstrip("\r\n")):]
         fm[status_idx] = f"status: completed{newline}"
-        path.write_text("".join([lines[0], *fm, *lines[end:]]), encoding="utf-8")
+        with path.open("w", encoding="utf-8", newline="") as stream:
+            stream.write("".join([lines[0], *fm, *lines[end:]]))
         flipped.append(str(path.relative_to(vault_root)))
 
     return {"flipped": flipped, "count": len(flipped)}
