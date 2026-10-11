@@ -1,0 +1,70 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests"
+  ],
+  "mutants": [
+    {
+      "label": "[#778] _VTT_TIMING requires HH:MM:SS (test_short_vtt_timing_is_not_emitted_as_prose)",
+      "file": "../clean_transcript.py",
+      "oracle": "real",
+      "find": "r\"^(?:\\d{2}:)?\\d{2}:\\d{2}[.,]\\d{3}\\s*-->\\s*(?:\\d{2}:)?\\d{2}:\\d{2}[.,]\\d{3}\"",
+      "replace": "r\"^\\d{2}:\\d{2}:\\d{2}[.,]\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2}[.,]\\d{3}\""
+    },
+    {
+      "label": "[#778] _SRT_TIMING requires HH:MM:SS (test_short_srt_is_detected_and_timed)",
+      "file": "../clean_transcript.py",
+      "oracle": "real",
+      "find": "r\"^(?:\\d{2}:)?\\d{2}:\\d{2},\\d{3}\\s*-->\\s*(?:\\d{2}:)?\\d{2}:\\d{2},\\d{3}\"",
+      "replace": "r\"^\\d{2}:\\d{2}:\\d{2},\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2},\\d{3}\""
+    },
+    {
+      "label": "[#778] _TIMING_START requires HH:MM:SS (test_short_vtt_cue_updates_anchor_time)",
+      "file": "../clean_transcript.py",
+      "oracle": "real",
+      "find": "r\"^((?:\\d{1,2}:)?\\d{2}:\\d{2}[.,]\\d{3})\\s*-->\"",
+      "replace": "r\"^(\\d{1,2}:\\d{2}:\\d{2}[.,]\\d{3})\\s*-->\""
+    },
+    {
+      "label": "[#629] substring hostname match (test_spoofed_hostname_is_not_treated_as_youtube)",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "host == \"youtube.com\" or host.endswith(\".youtube.com\")",
+      "replace": "\"youtube.com\" in host"
+    },
+    {
+      "label": "[#629] suffix match without the dot boundary (test_spoofed_hostname_is_not_treated_as_youtube[evilyoutube.com])",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "host.endswith(\".youtube.com\")",
+      "replace": "host.endswith(\"youtube.com\")"
+    },
+    {
+      "label": "[#629] trailing-dot FQDN no longer normalised (test_legitimate_hostname_variants_accepted)",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "(parsed.hostname or \"\").rstrip(\".\")",
+      "replace": "(parsed.hostname or \"\")"
+    }
+  ]
+}

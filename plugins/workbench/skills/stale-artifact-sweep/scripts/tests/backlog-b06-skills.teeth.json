@@ -1,0 +1,63 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests"
+  ],
+  "mutants": [
+    {
+      "label": "[#964] SUPERSEDED-only branch rolls up as STILL_VALID (test_branch_only_superseded_commits_is_not_still_valid)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    elif superseded:\n        verdict = SUPERSEDED",
+      "replace": "    elif superseded:\n        verdict = STILL_VALID"
+    },
+    {
+      "label": "[#964] UNVERIFIABLE commit does not surface in the branch verdict (test_branch_unverifiable_commit_is_surfaced_not_still_valid)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    if unverifiable:\n        verdict = UNVERIFIABLE",
+      "replace": "    if unverifiable:\n        verdict = STILL_VALID"
+    },
+    {
+      "label": "[#964] every non-done commit is counted genuinely additive (test_branch_mixed_still_valid_and_superseded_lists_only_valid_as_additive)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    additive = by_verdict[STILL_VALID]",
+      "replace": "    additive = [c for c in commits if c.verdict != ALREADY_DONE]"
+    },
+    {
+      "label": "[#986] changed_files uses git show, empty for a merge commit (test_commit_superseded_merge_movers_scoped_to_files_merge_touched)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "run_git(repo, \"diff\", \"--name-only\", parent, sha)",
+      "replace": "run_git(repo, \"show\", \"--pretty=format:\", \"--name-only\", sha)"
+    },
+    {
+      "label": "[#986] empty files falls through to the unscoped log (test_commit_without_recorded_files_never_lists_unscoped_movers)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": " if files else []",
+      "replace": ""
+    }
+  ]
+}
