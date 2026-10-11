@@ -255,3 +255,72 @@ def test_changed_signature_after_green_pass_reruns_tests(tmp_path: Path) -> None
 
     second = run_hook({"cwd": str(tmp_path), "session_id": "s4"})
     assert second.returncode == 2
+
+
+@pytest.mark.parametrize("filename", ["Makefile", "package.json"])
+def test_non_utf8_detection_file_fails_open(tmp_path: Path, filename: str) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / filename).write_bytes(b"test:\n\t@exit 1\n\xff\xfe\x80 not utf-8\n")
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
+
+
+def test_js_repo_with_only_spec_files_in_tests_dir_does_not_pick_pytest(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / "package.json").write_text(
+        json.dumps({"scripts": {"test:unit": "vitest run"}})
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "a.spec.ts").write_text("export {};\n")
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_tests_dir_with_python_file_still_selects_pytest(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_x.py").write_text("def test_x():\n    assert False\n")
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    assert result.returncode == 2
+    assert "Tests are failing" in result.stderr
+
+
+def test_nested_python_file_in_tests_dir_selects_pytest(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    nested = tmp_path / "tests" / "unit"
+    nested.mkdir(parents=True)
+    (nested / "test_y.py").write_text("def test_y():\n    assert False\n")
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    assert result.returncode == 2
+
+
+def test_pyproject_only_repo_still_selects_pytest(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\nversion = '0'\n")
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    # pytest collects nothing (rc 5), so the existing behavior is a block.
+    assert result.returncode == 2
+
+
+def test_docstring_lists_detection_order_makefile_npm_pytest() -> None:
+    doc = HOOK_PATH.read_text().split('"""')[1]
+    assert doc.index("Makefile") < doc.index("npm test") < doc.index("pytest")
