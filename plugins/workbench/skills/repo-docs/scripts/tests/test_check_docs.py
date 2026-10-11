@@ -103,6 +103,34 @@ def test_missing_covered_path_is_reported_and_present_path_is_not(repo: Path) ->
     assert all("here.py" not in f.detail for f in findings)
 
 
+def test_covered_path_with_a_space_is_parsed_and_checked(repo: Path) -> None:
+    """A space in a covered path must not make the footer read as unstamped (#779)."""
+    _write(repo / "src" / "my module.py", "x = 1\n")
+    _write(
+        repo / "docs" / "reference" / "spaced.md",
+        "# Spaced\n",
+        NEW.format(mode="reference", baseline="abc123", covers="src/my module.py,src/here.py"),
+    )
+    assert _check(repo) == []
+    _write(
+        repo / "docs" / "reference" / "spaced-gone.md",
+        "# Spaced\n",
+        NEW.format(mode="reference", baseline="abc123", covers="src/here.py,src/no such file.py"),
+    )
+    findings = _check(repo)
+    assert any(f.kind == "missing-path" and "no such file.py" in f.detail for f in findings)
+    assert all("my module.py" not in f.detail for f in findings)
+
+
+def test_covered_path_with_a_space_under_the_legacy_marker(repo: Path) -> None:
+    _write(
+        repo / "docs" / "reference" / "legacy-spaced.md",
+        "# Legacy\n",
+        LEGACY.format(baseline="abc123", covers="src/old name.py"),
+    )
+    assert ("legacy-spaced.md", "missing-path") in _kinds(_check(repo))
+
+
 def test_changed_source_is_reported_against_a_real_git_baseline(repo: Path) -> None:
     _git(repo, "init", "-q")
     _git(repo, "add", ".")
