@@ -74,8 +74,8 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\xe2\x80\xa6": "…",  # ellipsis (â€¦)
     "\xe2\x80\x98": "'",  # left single quote
     "\xe2\x80\x99": "'",  # right single quote
-    "\xe2\x80\x9c": """,  # left double quote
-    "\xe2\x80\x9d": """,  # right double quote
+    "\xe2\x80\x9c": "\u201c",  # left double quote
+    "\xe2\x80\x9d": "\u201d",  # right double quote
     # Checkmarks and symbols
     "\xe2\x9c\x93": "✓",  # checkmark (âœ")
     "\xe2\x9c\x94": "✔",  # heavy checkmark (âœ")
