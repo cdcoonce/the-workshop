@@ -2,7 +2,7 @@
 name: gitlab-ci-watch
 description: >
   Watches GitLab CI until a pushed commit, MR, or integration branch reaches a
-  terminal state, reporting every job's status. Use after pushing to GitLab, on
+  terminal state. Use after pushing to GitLab, on
   a `glab mr merge` 405, or to confirm post-merge CI on dev. For browsing, use
   gitlab-cli.
 ---
