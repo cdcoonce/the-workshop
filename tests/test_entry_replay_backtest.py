@@ -95,3 +95,57 @@ def test_backtest_counts_a_concurrent_hub_conflict(
     assert "events accepted" in out
     assert "1/1" in out
     assert "invariant violations" in out
+
+
+# ---------------------------------------------------------------------------
+# Grading an accepted merge: "same lines" is not "success"
+# ---------------------------------------------------------------------------
+
+_BASE = "# L\n\n## T\n\n### A (2026-09-03)\n\nbody a\n\n### B (2026-09-01)\n\nbody b\n"
+_ORIGIN = _BASE.replace("### A", "### O (2026-09-05)\n\nbody o\n\n### A", 1)
+_TIP = _BASE.replace("### B", "### N1 (2026-09-02)\n\nbody n1\n\n### N2 (2026-09-02)\n\nbody n2\n\n### B", 1)
+_EXPECTED = _ORIGIN.replace("### B", "### N1 (2026-09-02)\n\nbody n1\n\n### N2 (2026-09-02)\n\nbody n2\n\n### B", 1)
+
+
+def _grade(merged: str) -> tuple[str, dict[str, bool]]:
+    return backtest.classify_merge(merged, _EXPECTED, _BASE, _TIP, _ORIGIN)
+
+
+def test_classify_exact() -> None:
+    bucket, flags = _grade(_EXPECTED)
+    assert bucket == "exact" and not any(flags.values())
+
+
+def test_classify_blank_line_damage_is_order_preserving_but_flagged() -> None:
+    glued = _EXPECTED.replace("body n1\n\n### N2", "body n1\n### N2")
+    bucket, flags = _grade(glued)
+    assert bucket == "order-preserving"
+    assert flags["blank_damaged"] and not flags["relocated"] and not flags["lines_differ"]
+
+
+def test_classify_a_relocated_entry_is_flagged_even_though_the_orders_hold() -> None:
+    moved = _ORIGIN + "\n### N1 (2026-09-02)\n\nbody n1\n\n### N2 (2026-09-02)\n\nbody n2\n"
+    bucket, flags = _grade(moved)
+    assert bucket == "order-preserving" and flags["relocated"]
+
+
+def test_classify_the_sessions_own_lines_reordered_is_not_order_preserving() -> None:
+    swapped = _EXPECTED.replace("### N1 (2026-09-02)\n\nbody n1\n\n", "@@").replace(
+        "### N2 (2026-09-02)\n\nbody n2\n\n", "### N2 (2026-09-02)\n\nbody n2\n\n### N1 (2026-09-02)\n\nbody n1\n\n"
+    ).replace("@@", "")
+    bucket, flags = _grade(swapped)
+    assert bucket == "blank-structure-equal" and flags["relocated"]
+
+
+def test_classify_a_lost_line_is_other() -> None:
+    bucket, flags = _grade(_EXPECTED.replace("body n2\n", ""))
+    assert bucket == "other" and flags["lines_differ"]
+
+
+def test_classify_origins_lines_reordered_is_not_order_preserving() -> None:
+    reordered = _EXPECTED.replace("### O (2026-09-05)\n\nbody o\n\n", "").replace(
+        "### B (2026-09-01)\n\nbody b\n", "### B (2026-09-01)\n\nbody b\n\n### O (2026-09-05)\n\nbody o\n"
+    )
+    # O moves below B: origin's own line order (O before A before B) is broken.
+    bucket, _flags = _grade(reordered)
+    assert bucket == "blank-structure-equal"

@@ -30,6 +30,13 @@ Two measurements, both run in the vault repository:
    result is ``B:f``; pairs are stratified by whether plain
    ``git merge-file`` of the same three versions conflicts.
 
+An accepted pair is graded against the text the session really committed
+(``classify_merge``), not just by whether it has the same lines: ``exact``,
+``order-preserving`` (same non-blank lines, origin's lines and the session's own
+added lines each in their original relative order), ``blank-structure-equal``
+(the blank-separated paragraph blocks match) and ``other``; relocation and
+blank-line damage are reported as flags on the non-exact accepts.
+
 The two modules are loaded as isolated instances under distinct module names
 (the baseline from ``git show <ref>:...`` into a temp dir); nothing is
 monkeypatched, so neither measurement can contaminate the other.
@@ -38,6 +45,7 @@ monkeypatched, so neither measurement can contaminate the other.
 from __future__ import annotations
 
 import argparse
+import difflib
 import glob
 import importlib.util
 import os
@@ -188,14 +196,96 @@ def run_merge(module: ModuleType, path: str, base: str, tip: str, origin: str) -
     return Outcome("accept", merged=merged)
 
 
-def nonblank(text: str) -> Counter[str]:
-    return Counter(line for line in text.splitlines() if line.strip())
-
-
-def violations(checker: ModuleType, base: str, tip: str, origin: str, merged: str) -> bool:
+def violations(
+    checker: ModuleType, base: str, tip: str, origin: str, merged: str, path: str = ""
+) -> bool:
     """True when the merge lost or invented a line (the --verify invariant)."""
-    verdict = checker.compare_texts(base, tip, origin, merged)
+    verdict = checker.compare_texts(base, tip, origin, merged, path)
     return bool(verdict["missing"] or verdict["extra"])
+
+
+# ---------------------------------------------------------------------------
+# How close an accepted merge is to what the session actually wrote
+# ---------------------------------------------------------------------------
+
+BUCKETS = ("exact", "order-preserving", "blank-structure-equal", "other")
+
+
+def nonblank_list(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.strip()]
+
+
+def paragraph_blocks(text: str) -> Counter[tuple[str, ...]]:
+    """The multiset of blank-separated paragraph blocks (each a tuple of lines)."""
+    blocks: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        if line.strip():
+            current.append(line)
+        elif current:
+            blocks.append(tuple(current))
+            current = []
+    if current:
+        blocks.append(tuple(current))
+    return Counter(blocks)
+
+
+def is_subsequence(needle: list[str], haystack: list[str]) -> bool:
+    """True when ``needle`` appears in ``haystack`` in order (gaps allowed)."""
+    remaining = iter(haystack)
+    return all(any(line == other for other in remaining) for line in needle)
+
+
+def session_added_lines(base: str, tip: str) -> list[str]:
+    """Non-blank lines the session wrote (insert/replace spans of base -> tip), in order."""
+    base_lines, tip_lines = base.splitlines(), tip.splitlines()
+    matcher = difflib.SequenceMatcher(None, base_lines, tip_lines, autojunk=False)
+    added: list[str] = []
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag in ("insert", "replace"):
+            added.extend(line for line in tip_lines[j1:j2] if line.strip())
+    return added
+
+
+def classify_merge(
+    merged: str, expected: str, base: str, tip: str, origin: str
+) -> tuple[str, dict[str, bool]]:
+    """Grade one accepted merge against the text the session really produced.
+
+    ``expected`` is the file as it was actually committed after ``origin``.
+    Buckets, strictest first:
+
+    * ``exact`` -- byte-identical to ``expected``.
+    * ``order-preserving`` -- the same non-blank lines, and both origin's lines
+      and the session's own added lines appear in the result in the relative
+      order they had (no line of either side reordered). Blank-line damage and a
+      session entry placed somewhere else than where the session put it still
+      count here, which is why the flags below exist.
+    * ``blank-structure-equal`` -- not order-preserving, but the multiset of
+      blank-separated paragraph blocks equals ``expected``'s.
+    * ``other`` -- anything else, including a line lost or invented.
+
+    The returned flags grade the non-exact accepts further: ``relocated`` (the
+    non-blank line sequence differs from ``expected``'s: something sits
+    somewhere the session did not put it), ``blank_damaged`` (the paragraph
+    blocks differ: a blank line was lost, gained or moved), ``lines_differ``
+    (the non-blank multiset differs: a line was lost or invented).
+    """
+    merged_lines, expected_lines = nonblank_list(merged), nonblank_list(expected)
+    flags = {
+        "relocated": merged_lines != expected_lines,
+        "blank_damaged": paragraph_blocks(merged) != paragraph_blocks(expected),
+        "lines_differ": Counter(merged_lines) != Counter(expected_lines),
+    }
+    if merged == expected:
+        return "exact", flags
+    if not flags["lines_differ"] and is_subsequence(
+        nonblank_list(origin), merged_lines
+    ) and is_subsequence(session_added_lines(base, tip), merged_lines):
+        return "order-preserving", flags
+    if not flags["blank_damaged"]:
+        return "blank-structure-equal", flags
+    return "other", flags
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +362,7 @@ def measure_reflog(
                 outcome = run_merge(module, path, b, t, o)
                 if outcome.status == "accept":
                     tally.files_accept += 1
-                    if violations(checker, b, t, o, outcome.merged):
+                    if violations(checker, b, t, o, outcome.merged, path):
                         tally.invariant_violations += 1
                         notes.append(f"INVARIANT {label} {tip[:8]}..{onto[:8]} {path}")
                 else:
@@ -325,12 +415,12 @@ def measure_pairs(
                     counts[f"{stratum}:{label}-{outcome.status}"] += 1
                     continue
                 counts[f"{stratum}:{label}-accept"] += 1
-                if outcome.merged == b:
-                    counts[f"{label}-exact"] += 1
-                elif nonblank(outcome.merged) == nonblank(b):
-                    counts[f"{label}-same-lines"] += 1
-                else:
-                    counts[f"{label}-WRONG"] += 1
+                bucket, flags = classify_merge(outcome.merged, b, a_par, tip, a)
+                counts[f"{label}-{bucket}"] += 1
+                if bucket != "exact":
+                    for flag, raised in flags.items():
+                        counts[f"{label}-{flag}"] += raised
+                if flags["lines_differ"]:
                     wrong.append(f"{label} {path} {a_rev[:8]}..{b_rev[:8]}")
     return counts, wrong
 
@@ -391,11 +481,18 @@ def print_report(
             for label in labels
         )
         print(f"  {stratum:26}{cells}")
-    for kind in ("exact", "same-lines", "WRONG"):
+    for kind in BUCKETS:
         cells = "".join(f"{pair_counts[f'{label}-{kind}']:>12}" for label in labels)
         print(f"  {'accepted ' + kind:26}{cells}")
+    for flag, text in (
+        ("relocated", "lines in another place"),
+        ("blank_damaged", "paragraph blocks differ"),
+        ("lines_differ", "line lost or invented"),
+    ):
+        cells = "".join(f"{pair_counts[f'{label}-{flag}']:>12}" for label in labels)
+        print(f"    of non-exact: {text:23}{cells}")
     for item in wrong[:10]:
-        print(f"  !! WRONG {item}")
+        print(f"  !! LINES DIFFER {item}")
 
 
 def main(argv: list[str] | None = None) -> int:
