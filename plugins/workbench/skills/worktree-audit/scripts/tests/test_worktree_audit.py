@@ -16,6 +16,8 @@ import pytest
 from worktree_audit import (
     audit_repo,
     authored_commits,
+    find_repos,
+    Verdict,
     orphan_branch_verdicts,
     reap,
 )
@@ -257,3 +259,59 @@ def test_reap_never_touches_an_unscoped_worktree(repo: Path):
     reap(repo, audit_repo(repo))
 
     assert wt.exists()
+
+
+# --- reap: partial failure ------------------------------------------------------
+
+
+def test_reap_counts_a_removed_worktree_even_when_its_branch_delete_fails(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+):
+    # The directory is gone the moment `worktree remove` succeeds; a branch
+    # delete that then fails must not erase that fact from the report.
+    wt = _worktree(repo, "halfdone")
+    verdict = Verdict(
+        "halfdone", "reap", "authored nothing", path=wt, branch="session/no-such-branch"
+    )
+
+    removed = reap(repo, [verdict])
+
+    assert not wt.exists()
+    assert removed == ["halfdone"]
+    err = capsys.readouterr().err
+    assert "halfdone" in err
+    assert "session/no-such-branch" in err
+
+
+def test_reap_does_not_count_a_worktree_it_failed_to_remove(
+    repo: Path, tmp_path: Path
+):
+    verdict = Verdict(
+        "ghost", "reap", "authored nothing", path=tmp_path / "not-a-worktree", branch=None
+    )
+
+    assert reap(repo, [verdict]) == []
+
+
+# --- find_repos ---------------------------------------------------------------
+
+
+def test_find_repos_returns_only_repos_with_linked_worktrees(tmp_path: Path):
+    root = tmp_path / "sweep"
+    root.mkdir()
+    plain = root / "plain"
+    plain.mkdir()
+    _git(plain, "init", "-b", "main")
+    _git(plain, "config", "user.email", "t@e.com")
+    _git(plain, "config", "user.name", "T")
+    _git(plain, "commit", "--allow-empty", "-m", "init")
+
+    linked = root / "linked"
+    linked.mkdir()
+    _git(linked, "init", "-b", "main")
+    _git(linked, "config", "user.email", "t@e.com")
+    _git(linked, "config", "user.name", "T")
+    _git(linked, "commit", "--allow-empty", "-m", "init")
+    _git(linked, "worktree", "add", "-b", "session/x", str(tmp_path / "x"))
+
+    assert find_repos(root) == [linked]
