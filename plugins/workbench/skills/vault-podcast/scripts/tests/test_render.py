@@ -190,6 +190,12 @@ def test_pause_non_numeric_raises() -> None:
         render.parse_script("A|hi\nPAUSE|soon\n", frozenset({"A", "PAUSE"}))
 
 
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "NaN", "Infinity", "-Infinity"])
+def test_pause_non_finite_raises(value: str) -> None:
+    with pytest.raises(render.ScriptFormatError, match="PAUSE"):
+        render.parse_script(f"A|hi\nPAUSE|{value}\n", frozenset({"A", "PAUSE"}))
+
+
 def test_over_200_turns_raises() -> None:
     text = "\n".join(f"A|turn {i}" for i in range(201))
     with pytest.raises(render.ScriptFormatError, match="200"):
