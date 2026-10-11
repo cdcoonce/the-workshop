@@ -40,7 +40,15 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
    with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
    body text, not an entry. Deleting an entry, editing a block preamble, or
-   changing any text outside the anchor blocks refuses.
+   changing any text outside the anchor blocks refuses. The output is
+   *spliced*, not re-serialized: origin's raw lines with only the session's
+   entries replaced or inserted, so the block preamble and every untouched
+   entry stay byte-identical, a replaced entry keeps origin's trailing blank
+   lines, and a new entry copies the block's separator style (a tight list
+   stays tight). A leftover base/tip entry pair counts as an edit only when
+   it is the unique similar match (same date; same heading text, a mostly
+   unchanged body, or -- for a bodyless one-line bullet -- a mostly unchanged
+   start line).
 4. Handoff rule: origin's file wins wholesale; inside each ``##`` section this
    session touched (the ``handoff_sections`` collector's section model) the
    replay is item-level -- an item is a top-level ``- `` bullet with its
@@ -48,7 +56,11 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    inside one item). Base items are aligned to origin's by position, not
    content: every item the session replaced must be unchanged and aligned on
    origin, and an inserted item lands right after its aligned base predecessor
-   (one origin already holds is not inserted twice). The
+   (one origin itself added is not inserted twice; an item that merely looks
+   like an existing one is kept). Items compare ignoring trailing blank lines,
+   so loose and tight lists align. Both sides making the same delete or the
+   same edit is already applied, and a changed item with a byte-identical twin
+   in a section origin also changed refuses (the twin cannot be told apart). The
    ``_Updated`` stamp resolves three-way instead of counting as a preamble
    divergence, and the frontmatter ``description:`` is merged additively at
    clause granularity rather than restored as the session's whole paragraph.
@@ -59,7 +71,13 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    Any assertion failure, any entry deletion, or any conflict outside the
    allowlist refuses and leaves the repository exactly as it found it. Every
    conflicting file is evaluated first, so the report's ``refusals`` names
-   each one. The escalation path is unchanged.
+   each one. A file whose base, tip or origin ends inside an open code fence
+   refuses too (its headings cannot be trusted). The escalation path is
+   unchanged.
+   Self-verification: the merged text of every file is re-checked against
+   both sides with the ``--verify`` line-multiset comparison before anything
+   is written; a merge that loses or duplicates a line refuses ("self-check").
+   There is no flag to skip it.
 6. ``ci/vault_health.py`` runs on the replayed tree before anything is
    pushed; a failure restores the original state.
 
@@ -72,10 +90,11 @@ usage errors.
 
 Two read-only companions share the module's grammar. ``--lint [PATH ...]``
 checks that every ledger block and handoff parses under the replay grammar
-(needs no git or network), so a shape defect is fixed at write time rather
+(needs no git or network; it also flags a duplicated anchor path and an
+unclosed code fence), so a shape defect is fixed at write time rather
 than discovered as a refusal at sync. ``--verify --base B --tip T --origin O
 --result R`` checks a hand-built merge against both sides by multiset of
-non-blank lines -- run it after any user-approved hand rebuild that follows a
+non-blank lines over every path either side or the result touches -- run it after any user-approved hand rebuild that follows a
 refusal, and do not push on a failure. ``scripts/entry_replay_backtest.py`` in
 the workshop repository measures all of this against real vault history.
 """
