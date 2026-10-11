@@ -191,6 +191,109 @@ def test_branch_fully_contained_is_already_done(repo: Path) -> None:
     assert result.commits == []
 
 
+def test_branch_only_superseded_commits_is_not_still_valid(repo: Path) -> None:
+    """Every non-done commit is stale against the target — reviving gains nothing."""
+    branch_from(repo, "feature")
+    write(repo, "docs/operations.md", "alpha\nbravo REVISED\ncharlie\n")
+    commit_all(repo, "revise bravo")
+
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "docs/operations.md", "one\ntwo\nthree\nfour\nfive\n")
+    commit_all(repo, "rewrite the table wholesale")
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert result.verdict == stale_check.SUPERSEDED
+    assert not any("genuinely additive" in line for line in result.evidence)
+    assert any("superseded" in line.lower() for line in result.evidence)
+
+
+def test_branch_unverifiable_commit_is_surfaced_not_still_valid(repo: Path) -> None:
+    """An undeterminable commit must not be reported as confirmed-valid work."""
+    branch_from(repo, "feature")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "empty marker")
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert [c.verdict for c in result.commits] == [stale_check.UNVERIFIABLE]
+    assert result.verdict == stale_check.UNVERIFIABLE
+    assert not any("genuinely additive" in line for line in result.evidence)
+    assert any("unverifiable" in line.lower() for line in result.evidence)
+
+
+def test_branch_mixed_still_valid_and_superseded_lists_only_valid_as_additive(
+    repo: Path,
+) -> None:
+    branch_from(repo, "feature")
+    write(repo, "docs/operations.md", "alpha\nbravo REVISED\ncharlie\n")
+    stale_sha = commit_all(repo, "revise bravo")
+    write(repo, "unrelated.md", "untouched\nplus more\n")
+    commit_all(repo, "extend unrelated")
+
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "docs/operations.md", "one\ntwo\nthree\nfour\nfive\n")
+    commit_all(repo, "rewrite the table wholesale")
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert result.verdict == stale_check.STILL_VALID
+    additive = next(line for line in result.evidence if "genuinely additive" in line)
+    assert stale_sha[:7] not in additive
+
+
+def test_commit_superseded_merge_movers_scoped_to_files_merge_touched(
+    repo: Path,
+) -> None:
+    """A merge commit's files come from its first-parent diff, not `git show`.
+
+    `git show --name-only` prints nothing for a merge, which used to leave the
+    path filter empty and list every commit on the target as a mover.
+    """
+    branch_from(repo, "feature")
+    write(repo, "feature-only.md", "feature\n")
+    commit_all(repo, "feature work")
+    git(repo, "checkout", "-q", "-b", "other", "dev")
+    write(repo, "docs/operations.md", "alpha\nbravo REVISED\ncharlie\n")
+    commit_all(repo, "revise bravo on other")
+    git(repo, "checkout", "-q", "feature")
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge other", "other")
+    merge_sha = git(repo, "rev-parse", "HEAD")
+    assert len(git(repo, "rev-list", "--parents", "-n1", merge_sha).split()) == 3
+
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "docs/operations.md", "one\ntwo\nthree\nfour\nfive\n")
+    commit_all(repo, "rewrite the table wholesale")
+    write(repo, "unrelated.md", "elsewhere\n")
+    commit_all(repo, "touch only the unrelated file")
+
+    result = stale_check.commit_status(repo, merge_sha, "dev")
+
+    text = "\n".join(result.evidence)
+    assert result.verdict == stale_check.SUPERSEDED
+    assert "docs/operations.md" in text
+    assert "no files recorded" not in text
+    assert "rewrite the table wholesale" in text
+    assert "touch only the unrelated file" not in text
+
+
+def test_commit_without_recorded_files_never_lists_unscoped_movers(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no real files to filter on, commit_status must not call the unscoped log."""
+    branch_from(repo, "feature")
+    write(repo, "docs/operations.md", "alpha\nbravo REVISED\ncharlie\n")
+    sha = commit_all(repo, "revise bravo")
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "docs/operations.md", "one\ntwo\nthree\nfour\nfive\n")
+    commit_all(repo, "rewrite the table wholesale")
+    monkeypatch.setattr(stale_check, "changed_files", lambda repo, sha: [])
+
+    result = stale_check.commit_status(repo, sha, "dev")
+
+    assert result.verdict == stale_check.SUPERSEDED
+    assert not any("changed on dev since the base" in line for line in result.evidence)
+
+
 def test_branch_unverifiable_when_missing(repo: Path) -> None:
     result = stale_check.branch_status(repo, "no-such-branch", "dev")
 
