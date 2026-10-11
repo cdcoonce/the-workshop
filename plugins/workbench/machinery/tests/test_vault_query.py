@@ -345,3 +345,96 @@ def test_query_learning_sorts_by_date_descending(tmp_path: Path) -> None:
 
     assert "course" in out
     assert out.index("new") < out.index("old")
+
+
+# ---------------------------------------------------------------------------
+# #775 — _has_tag tolerates empty / non-list tags
+# ---------------------------------------------------------------------------
+
+def test_has_tag_empty_tags_field_is_false() -> None:
+    # YAML parses a bare `tags:` to None.
+    assert vault_query._has_tag({"tags": None}, "decision") is False
+
+
+def test_has_tag_non_list_values_are_false() -> None:
+    assert vault_query._has_tag({"tags": 5}, "decision") is False
+    assert vault_query._has_tag({}, "decision") is False
+
+
+def test_has_tag_matches_list_and_comma_string() -> None:
+    assert vault_query._has_tag({"tags": ["a", "decision"]}, "decision") is True
+    assert vault_query._has_tag({"tags": "a, decision"}, "decision") is True
+
+
+def test_query_decisions_survives_note_with_empty_tags(tmp_path: Path) -> None:
+    _write_fm_note(
+        tmp_path / "work" / "active" / "blank.md",
+        'description: "d"\ntags:\n',
+    )
+    out = vault_query.query_decisions(tmp_path)
+    assert "blank" not in out
+
+
+# ---------------------------------------------------------------------------
+# #770 — mixed dated / undated notes must not crash the sort
+# ---------------------------------------------------------------------------
+
+def test_query_learning_mixed_dated_and_undated(tmp_path: Path) -> None:
+    _write_fm_note(
+        tmp_path / "personal" / "learning" / "dated.md",
+        'date: 2026-01-01\ndescription: "d"\nstatus: done\nsource: book\n',
+    )
+    _write_fm_note(
+        tmp_path / "personal" / "learning" / "undated.md",
+        'description: "d"\nstatus: done\nsource: book\n',
+    )
+    out = vault_query.query_learning(tmp_path)
+    assert "dated" in out and "undated" in out
+
+
+def test_query_active_work_mixed_dated_and_undated(tmp_path: Path) -> None:
+    _write_fm_note(
+        tmp_path / "work" / "active" / "dated.md",
+        'date: 2026-01-01\ndescription: "d"\nstatus: active\nproject: p\n',
+    )
+    _write_fm_note(
+        tmp_path / "work" / "active" / "undated.md",
+        'description: "d"\nstatus: active\nproject: p\n',
+    )
+    out = vault_query.query_active_work(tmp_path)
+    assert "dated" in out and "undated" in out
+
+
+# ---------------------------------------------------------------------------
+# Teeth-pass gaps (#775 / #770)
+# ---------------------------------------------------------------------------
+
+def test_has_tag_dict_and_nested_list_tags_are_false() -> None:
+    assert vault_query._has_tag({"tags": {"decision": 1}}, "decision") is False
+    assert vault_query._has_tag({"tags": [["decision"]]}, "decision") is False
+
+
+def test_query_active_work_undated_sorts_last(tmp_path: Path) -> None:
+    _write_fm_note(
+        tmp_path / "work" / "active" / "b-no-date.md",
+        'description: "d"\nstatus: active\nproject: p\n',
+    )
+    _write_fm_note(
+        tmp_path / "work" / "active" / "a-with-date.md",
+        'date: 2026-01-01\ndescription: "d"\nstatus: active\nproject: p\n',
+    )
+    out = vault_query.query_active_work(tmp_path)
+    assert out.index("a-with-date") < out.index("b-no-date")
+
+
+def test_query_learning_undated_sorts_last(tmp_path: Path) -> None:
+    _write_fm_note(
+        tmp_path / "personal" / "learning" / "b-no-date.md",
+        'description: "d"\nstatus: done\nsource: book\n',
+    )
+    _write_fm_note(
+        tmp_path / "personal" / "learning" / "a-with-date.md",
+        'date: 2026-01-01\ndescription: "d"\nstatus: done\nsource: book\n',
+    )
+    out = vault_query.query_learning(tmp_path)
+    assert out.index("a-with-date") < out.index("b-no-date")
