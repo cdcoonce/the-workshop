@@ -4349,3 +4349,51 @@ def test_pd_an_entry_similar_to_one_both_sides_already_had_is_not_a_re_add() -> 
     tip = insert_under(base, "## Technical", twin)
     merged, detail = ledger_merge(base, tip, base.replace("Second line of that body.", "Edited on origin."), GOTCHAS)
     assert detail["inserted"] == 1 and merged.count("### Stale tracking refs lie after a push") == 2
+
+
+def test_s1_a_ledger_separator_both_sides_changed_is_origins() -> None:
+    base = _brag_block(_A + "\n" + _B)
+    tip = _brag_block(_A + _B)  # the session tightened the list
+    origin = _brag_block(_A + "\n\n" + _B)  # origin loosened it further
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert merged == origin
+
+
+def test_s1_a_handoff_separator_both_sides_changed_is_origins() -> None:
+    base = _notes("\n- a\n\n- b\n")
+    tip = _notes("\n- a\n- b\n")
+    origin = _notes("\n- a\n\n\n- b\n")
+    assert handoff_merge(base, tip, origin, HANDOFF)[0] == origin
+
+
+def test_s1_a_handoff_separator_is_not_carried_onto_an_item_origin_put_after_it() -> None:
+    """The session tightened a against b; origin put o between them, so a's separator to o is
+    origin's, not the session's."""
+    base = _notes("\n- a\n\n- b\n\n- c\n")
+    tip = _notes("\n- a\n- b\n\n- c\n")
+    origin = _notes("\n- a\n\n- o\n\n- b\n\n- c\n")
+    assert handoff_merge(base, tip, origin, HANDOFF)[0] == origin
+
+
+def test_pa_an_item_origin_put_before_a_deleted_bullet_keeps_its_own_blank_line() -> None:
+    base = _notes("\n- a\n- b\n- c\n")
+    tip = _notes("\n- a\n- c\n")
+    origin = _notes("\n- a\n- o\n\n- b\n- c\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.split("## Notes")[1].startswith("\n\n- a\n- o\n\n- c\n")
+
+
+def test_pa_a_replacement_followed_by_something_origin_added_takes_origins_separator() -> None:
+    base = _notes("\n- a\n- b\n- c\n")
+    tip = _notes("\n- a\n\nPara x.\n\n- c\n")
+    origin = _notes("\n- a\n- b\n- o\n- c\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.split("## Notes")[1].startswith("\n\n- a\n\nPara x.\n- o\n- c\n")
+
+
+def test_pc_an_entry_inserted_at_the_top_takes_the_sessions_blank_lines_under_the_preamble() -> None:
+    base = _brag_block(_A)
+    tip = _brag_block(_N + _A)
+    origin = base.replace("### Wins\n\n", "### Wins\n\n\n")  # origin widened the gap under the heading
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert merged == tip
