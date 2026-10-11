@@ -53,7 +53,6 @@ DOMAIN_RULES: tuple[tuple[str, str], ...] = (
     ("Weather_Adjusted", "build"),
     ("household", "home"),
     ("housing-commute", "home"),
-    ("school", "school"),
     ("masters", "school"),
 )
 

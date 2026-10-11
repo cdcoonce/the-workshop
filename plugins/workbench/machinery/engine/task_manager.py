@@ -83,10 +83,15 @@ def _format_task_line(text: str, due_date: date | None = None, links: list[str] 
 
     # Append wikilinks that aren't already in the text
     if links:
+        # Compare on the link target (before any ``|`` alias), case-insensitively.
+        present = {
+            m.group(1).split("|", 1)[0].strip().casefold()
+            for m in WIKILINK_CAPTURE_RE.finditer(task_text)
+        }
         for link in links:
-            wikilink = f"[[{link}]]"
-            if wikilink not in task_text:
-                task_text = f"{task_text} {wikilink}"
+            if link.strip().casefold() not in present:
+                task_text = f"{task_text} [[{link}]]"
+                present.add(link.strip().casefold())
 
     if due_date is None:
         return f"- [ ] {task_text}"

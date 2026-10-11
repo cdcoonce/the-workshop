@@ -61,19 +61,26 @@ def _vault_health_check(cwd: Path) -> tuple[bool, str]:
 def _sync_branch_status(vault_root: Path) -> tuple[bool, str, str]:
     """Return (on_sync_branch, current_branch, default_branch).
 
+    A git timeout yields ``(False, "", "")`` so the caller skips auto-sync.
+
     The auto-commit hook should only fire on the default sync branch (main).
     On a feature branch, deliberate per-commit work wins — auto-sync would
     sweep WIP and interleave noise commits with curated ones. `/sync` still
     works on any branch when the user explicitly asks for it.
     """
-    cur = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=vault_root, capture_output=True, text=True, check=False, timeout=10,
-    ).stdout.strip()
-    head = subprocess.run(
-        ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-        cwd=vault_root, capture_output=True, text=True, check=False, timeout=10,
-    )
+    try:
+        cur = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=vault_root, capture_output=True, text=True, check=False, timeout=10,
+        ).stdout.strip()
+        head = subprocess.run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            cwd=vault_root, capture_output=True, text=True, check=False, timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        # Hung git (e.g. index.lock contention): report "not on the sync
+        # branch" with an empty branch name so main() skips auto-sync.
+        return (False, "", "")
     default = head.stdout.strip().rsplit("/", 1)[-1] if head.returncode == 0 else "main"
     if not default:
         default = "main"
@@ -111,6 +118,11 @@ def main() -> int:
     # Auto-sync only on the default branch. On a feature branch, skip the
     # commit/push so deliberate work isn't swept into auto-sync commits.
     on_sync_branch, cur_branch, default_branch = _sync_branch_status(vault_root)
+    if not on_sync_branch and not cur_branch:
+        print(json.dumps({"systemMessage": (
+            "⏸️ Auto-sync skipped — git branch check timed out. Run /sync to push."
+        )}))
+        return 0
     if not on_sync_branch:
         print(json.dumps({"systemMessage": (
             f"⏸️ Auto-sync paused — on feature branch '{cur_branch}' "

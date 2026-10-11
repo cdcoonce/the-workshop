@@ -28,7 +28,7 @@ import importlib
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -1399,7 +1399,14 @@ class TestVaultRootDetection:
         )
 
         assert pulse.main() == 1
-        assert "no vault root found" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "no vault root found" in out
+        # The message must name the signature detection actually keys on
+        # (#594), not the retired bare `.vault-context` marker.
+        assert "CLAUDE.md" in out
+        assert "brain/" in out
+        assert "perf/" in out
+        assert ".vault-context" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -1526,3 +1533,100 @@ class TestCli:
         assert len(payload["rows"]) == 2
         ledger = tmp_path / "perf" / "metrics" / "pulse-personal.csv"
         assert ledger.exists()
+
+
+# ---------------------------------------------------------------------------
+# Backfill git-log window (#782) — `since` must reach the OLDEST requested
+# week, not be sized by how many weeks were requested.
+# ---------------------------------------------------------------------------
+class TestVaultGitWindow:
+    def test_sparse_far_past_weeks_are_covered_by_since(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from datetime import date
+
+        tz = ZoneInfo("UTC")
+        today = datetime.now(tz).date()
+        old_keys = [
+            pulse._week_of_date(today - timedelta(weeks=k)) for k in (42, 41, 40)
+        ]
+        seen: dict[str, date] = {}
+
+        def fake_collect(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
+            seen["since"] = since
+            return {}
+
+        monkeypatch.setattr(pulse, "collect_vault_git", fake_collect)
+        pulse.scan(
+            projects_root=tmp_path / "p",
+            codex_root=tmp_path / "c",
+            repos_root=tmp_path / "r",
+            vault_root=tmp_path,
+            week_keys=old_keys,
+            tz=tz,
+            include_vault_git=True,
+        )
+
+        oldest = min(old_keys)
+        year, week = oldest.split("-W")
+        oldest_monday = date.fromisocalendar(int(year), int(week), 1)
+        assert seen["since"] <= oldest_monday
+
+    @staticmethod
+    def _since_for(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keys: list[str]):
+        from datetime import date
+
+        seen: dict[str, date] = {}
+
+        def fake_collect(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
+            seen["since"] = since
+            return {}
+
+        monkeypatch.setattr(pulse, "collect_vault_git", fake_collect)
+        pulse.scan(
+            projects_root=tmp_path / "p",
+            codex_root=tmp_path / "c",
+            repos_root=tmp_path / "r",
+            vault_root=tmp_path,
+            week_keys=keys,
+            tz=ZoneInfo("UTC"),
+            include_vault_git=True,
+        )
+        return seen["since"]
+
+    @staticmethod
+    def _monday(key: str):
+        from datetime import date
+
+        year, week = key.split("-W")
+        return date.fromisocalendar(int(year), int(week), 1)
+
+    def test_since_is_oldest_monday_minus_exactly_two_weeks_on_sparse_list(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        today = datetime.now(ZoneInfo("UTC")).date()
+        keys = [pulse._week_of_date(today - timedelta(weeks=k)) for k in (5, 50)]
+        since = self._since_for(tmp_path, monkeypatch, keys)
+        oldest_monday = self._monday(min(keys))
+        assert oldest_monday - since == timedelta(weeks=2)
+
+    def test_since_across_a_year_boundary_anchors_on_the_oldest_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        keys = ["2025-W52", "2026-W01"]
+        since = self._since_for(tmp_path, monkeypatch, keys)
+        # 2025-W52 starts Monday 2025-12-22; the margin is exactly two weeks.
+        assert self._monday("2025-W52").isoformat() == "2025-12-22"
+        assert since.isoformat() == "2025-12-08"
+        assert since.weekday() == 0
+
+
+# ---------------------------------------------------------------------------
+# DOMAIN_RULES hygiene (#1074) — first match wins, so a repeated substring
+# key is dead data.
+# ---------------------------------------------------------------------------
+class TestDomainRulesUnique:
+    def test_no_duplicate_substring_keys(self) -> None:
+        keys = [substring for substring, _ in pulse_defaults.DOMAIN_RULES]
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        assert dupes == []

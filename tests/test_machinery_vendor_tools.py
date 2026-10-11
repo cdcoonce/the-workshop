@@ -1275,6 +1275,41 @@ class TestUpgradeJsonKey:
         assert rc == 1
         assert settings_path.read_text() == "{not json"
 
+    @pytest.mark.parametrize(
+        "original",
+        ['["a", "b"]\n', "42\n", '"scalar"\n', "null\n"],
+        ids=["array", "number", "string", "null"],
+    )
+    @pytest.mark.parametrize("force", [False, True], ids=["plain", "force"])
+    def test_non_object_target_refuses_and_survives_untouched(
+        self,
+        sync_mod,
+        source_machinery2: Path,
+        vault_target: Path,
+        original: str,
+        force: bool,
+    ) -> None:
+        """A valid-JSON but non-object target is refused like invalid JSON:
+        rewriting one key would gut the file's real content."""
+        _adopted2(sync_mod, source_machinery2, vault_target)
+        settings_path = vault_target / ".claude" / "settings.json"
+        settings_path.write_text(original)
+
+        argv = [
+            "upgrade",
+            "--target",
+            str(vault_target),
+            "--source",
+            str(source_machinery2),
+            "--apply",
+        ]
+        if force:
+            argv.append("--force")
+        rc = sync_mod.main(argv)
+
+        assert rc == 1
+        assert settings_path.read_text() == original
+
     def test_newly_managed_identical_json_key_locks_without_refusal(
         self, sync_mod, source_machinery2: Path, vault_target: Path
     ) -> None:

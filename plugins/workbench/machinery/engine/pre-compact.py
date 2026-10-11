@@ -41,11 +41,16 @@ def main() -> int:
     except Exception:
         return 0
 
+    if not isinstance(event, dict):
+        return 0
+
     transcript_path = event.get("transcript_path", "")
     trigger = event.get("trigger", "unknown")
 
-    if not transcript_path:
+    if not transcript_path or not isinstance(transcript_path, str):
         return 0
+    if not isinstance(trigger, str):
+        trigger = "unknown"
 
     source = Path(transcript_path)
     if not source.exists():
