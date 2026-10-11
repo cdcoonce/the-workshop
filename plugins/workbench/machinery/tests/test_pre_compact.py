@@ -68,7 +68,7 @@ class TestPreCompactMain:
         assert set(payload) == {"systemMessage"}
         message = payload["systemMessage"]
         assert message.startswith(f"✓ Session transcript backed up to {backups[0].name}")
-        assert "/handoff" in message
+        assert "run /handoff (it rewrites" in message
 
     def test_missing_trigger_defaults_to_unknown(self, vault: Path, tmp_path: Path) -> None:
         transcript = tmp_path / "t.jsonl"
