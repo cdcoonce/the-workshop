@@ -16,7 +16,7 @@ every refusal exits 1 and restores the repository, and the three teeth from
 issue #893 each have a named test here:
 
 - concurrent disjoint inserts under one anchor -> replay succeeds, both
-  entries present, dates newest-first;
+  entries present, the session's entry where the session put it;
 - a semantic overlap (the session edited an existing entry) -> refused;
 - an origin-side edit inside a replaced span -> the per-entry / per-section
   base assertion fires.
@@ -367,8 +367,10 @@ def test_concurrent_disjoint_inserts_same_anchor_replay_succeeds(tmp_path: Path)
     peer_chunk = decisions_entry("2026-09-20", "Peer session decision", "**Decided:** peer thing.")
     _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
     origin_head = _peer_push(peer)
-    # The session's entry is OLDER than the peer's, so only date placement
-    # can produce the right order -- top-insertion alone would get it wrong.
+    # The session's entry is OLDER than the peer's, but it sat at the top of the
+    # session's block: placement is positional, so it lands directly under the
+    # preamble and the peer's entry stays below it (the #874 ordering-drift
+    # detector, not the replay, is the order tooth).
     session_chunk = decisions_entry(
         "2026-09-18", "Session decision", "**Decided:** session thing."
     )
@@ -384,8 +386,7 @@ def test_concurrent_disjoint_inserts_same_anchor_replay_succeeds(tmp_path: Path)
     assert peer_chunk in merged, "origin's concurrent entry must survive"
     assert session_chunk in merged, "the session's entry must be re-inserted"
     dates = _entry_dates_under(merged, "## Recent", None)
-    assert dates == ["2026-09-20", "2026-09-18", "2026-09-15", "2026-09-10"]
-    assert dates == sorted(dates, reverse=True), "entries must run newest-first"
+    assert dates == ["2026-09-18", "2026-09-20", "2026-09-15", "2026-09-10"]
     # The replay commit sits on origin's head, so the push is a fast-forward.
     assert _git(local, "rev-parse", "HEAD^") == origin_head
     assert _branch(local) == "main"
@@ -504,7 +505,7 @@ def test_equal_dates_keep_session_entry_above_origin_entry(tmp_path: Path) -> No
 
 def test_replay_keeps_origin_order_even_when_origin_drifted(tmp_path: Path) -> None:
     """Origin's entries keep their exact order -- drift included. Only the
-    session's new entry is placed, before the first origin entry older than it."""
+    session's new entry is placed, directly under the preamble where the session put it."""
     _remote, local, peer, base = _make_vault(tmp_path)
     # Peer appends at the wrong end -- the exact drift #871 exists to stop.
     drifted = _read(peer, DECISIONS) + "\n" + decisions_entry(
@@ -2398,20 +2399,21 @@ def test_compare_texts_a_correct_stamp_resolution_passes() -> None:
     base = "---\ndescription: \"d\"\n---\n_Updated 1._\n- a\n"
     tip = "---\ndescription: \"d\"\n---\n_Updated 2._\n- a\n- s\n"
     origin = "---\ndescription: \"d\"\n---\n_Updated 3._\n- a\n- o\n"
-    for stamp in ("_Updated 2._", "_Updated 3._"):
-        result = f"---\ndescription: \"d\"\n---\n{stamp}\n- a\n- s\n- o\n"
-        verdict = compare_texts(base, tip, origin, result)
-        assert verdict["missing"] == [] and verdict["extra"] == [], stamp
-        assert stamp in verdict["resolved"]
+    # the session changed its stamp, so the session's is the one resolution
+    stamp = "_Updated 2._"
+    result = f"---\ndescription: \"d\"\n---\n{stamp}\n- a\n- s\n- o\n"
+    verdict = compare_texts(base, tip, origin, result, HANDOFF)
+    assert verdict["missing"] == [] and verdict["extra"] == [], stamp
+    assert stamp in verdict["resolved"]
 
 
 def test_compare_texts_an_invented_stamp_or_a_dropped_stamp_fails() -> None:
     base = "_Updated 1._\n- a\n"
     tip = "_Updated 2._\n- a\n"
     origin = "_Updated 3._\n- a\n"
-    invented = compare_texts(base, tip, origin, "_Updated 9._\n- a\n")
+    invented = compare_texts(base, tip, origin, "_Updated 9._\n- a\n", HANDOFF)
     assert invented["extra"] == ["_Updated 9._"]
-    dropped = compare_texts(base, tip, origin, "- a\n")
+    dropped = compare_texts(base, tip, origin, "- a\n", HANDOFF)
     assert dropped["missing"] and dropped["resolved"] == []
 
 
@@ -2421,10 +2423,10 @@ def test_compare_texts_accepts_the_merged_description_clause_set() -> None:
 
     base, tip, origin = doc("x; y"), doc("x; y; s"), doc("x; y; o")
     merged = doc("x; y; o; s")
-    verdict = compare_texts(base, tip, origin, merged)
+    verdict = compare_texts(base, tip, origin, merged, HANDOFF)
     assert verdict["missing"] == [] and verdict["extra"] == []
     assert verdict["resolved"] == ['description: "x; y; o; s"']
-    wrong = compare_texts(base, tip, origin, doc("x; y; o; s; s"))
+    wrong = compare_texts(base, tip, origin, doc("x; y; o; s; s"), HANDOFF)
     assert wrong["extra"] == ['description: "x; y; o; s; s"']
 
 
@@ -2529,10 +2531,10 @@ def test_insertion_into_an_unsorted_block_moves_no_existing_entry() -> None:
     ]
 
 
-def test_new_entry_newer_than_everything_older_goes_to_the_end() -> None:
+def test_new_entry_the_session_placed_last_goes_to_the_end() -> None:
     base = GOTCHAS_SEED
     new = gotchas_entry("Ancient entry", "2026-01-01", "Old body.")
-    tip = insert_under(base, "## Technical", new)
+    tip = base.replace("## Process", new + "\n## Process")
     merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
     technical = merged.split("## Process")[0]
     assert technical.rstrip().endswith("Old body.")
@@ -3136,3 +3138,457 @@ def test_p7_verify_reports_a_file_the_hand_rebuild_reformatted(tmp_path: Path) -
     files = json.loads(proc.stdout)["files"]
     assert "personal/projects/proj-a.md" in files
     assert "Reformatted in the rebuild." in files["personal/projects/proj-a.md"]["extra"][0]
+
+
+# ---------------------------------------------------------------------------
+# Round 3 -- granularity findings (G1-G5), one test group per finding.
+# ---------------------------------------------------------------------------
+
+# G1 -- a mid-session push must not leave a stale three-way base --------------
+
+PUSHED_GOTCHA = gotchas_entry("Session gotcha", "2026-09-18", "Wrong number 42.")
+PEER_GOTCHA = gotchas_entry("Peer gotcha", "2026-09-19", "Peer body.")
+
+
+def _mid_session_push(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    """Session pushes Gotcha N + a handoff item mid-session; the peer then moves origin.
+
+    Returns ``(local, peer, base, pushed)`` -- ``base`` is the pre-session
+    commit, ``pushed`` the session's first (already-published) commit.
+    """
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(local, GOTCHAS, insert_under(_read(local, GOTCHAS), "## Technical", PUSHED_GOTCHA))
+    _write(
+        local,
+        HANDOFF,
+        _read(local, HANDOFF).replace(
+            "- [[proj-b]]: close the parity ticket.",
+            "- [[proj-b]]: close the parity ticket.\n- [[proj-x]]: pushed mid-session.",
+        ),
+    )
+    pushed = _commit_all(local, "vault wrap-up (mid-session)")
+    _git(local, "push", "-q")
+    _git(peer, "pull", "-q", "--ff-only")
+    return local, peer, base, pushed
+
+
+def test_g1_a_pushed_entry_later_corrected_is_not_replayed_next_to_its_correction(
+    tmp_path: Path,
+) -> None:
+    local, peer, base, pushed = _mid_session_push(tmp_path)
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", PEER_GOTCHA))
+    _write(
+        peer,
+        HANDOFF,
+        _read(peer, HANDOFF)
+        .replace("_Updated 2026-09-15._", "_Updated 2026-09-19._")
+        .replace("- [[proj-x]]: pushed mid-session.", "- [[proj-x]]: reworded by the peer."),
+    )
+    _peer_push(peer)
+    _write(local, GOTCHAS, _read(local, GOTCHAS).replace("Wrong number 42.", "Corrected number 41."))
+    _write(
+        local,
+        HANDOFF,
+        _read(local, HANDOFF).replace(
+            "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched."
+        ),
+    )
+    _commit_all(local, "vault wrap-up (end of session)")
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report
+    assert report["merge_base"] == pushed
+    gotchas = _read(local, GOTCHAS)
+    assert gotchas.count("### Session gotcha (2026-09-18)") == 1
+    assert "Corrected number 41." in gotchas and "Wrong number 42." not in gotchas
+    assert "### Peer gotcha (2026-09-19)" in gotchas
+    handoff = _read(local, HANDOFF)
+    assert "- [[proj-x]]: reworded by the peer." in handoff
+    assert "pushed mid-session" not in handoff, "a pushed item origin reworded must not come back"
+    assert "- [[proj-a]]: deploy watched." in handoff
+    assert "_Updated 2026-09-19._" in handoff
+
+
+def test_g1_the_same_correction_made_on_both_sides_accepts(tmp_path: Path) -> None:
+    local, peer, base, _pushed = _mid_session_push(tmp_path)
+    _write(
+        peer,
+        GOTCHAS,
+        insert_under(
+            _read(peer, GOTCHAS).replace("Wrong number 42.", "Corrected number 41."),
+            "## Technical",
+            PEER_GOTCHA,
+        ),
+    )
+    _peer_push(peer)
+    _write(local, GOTCHAS, _read(local, GOTCHAS).replace("Wrong number 42.", "Corrected number 41."))
+    _commit_all(local, "vault wrap-up (end of session)")
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report
+    gotchas = _read(local, GOTCHAS)
+    assert gotchas.count("### Session gotcha (2026-09-18)") == 1
+    assert gotchas.count("Corrected number 41.") == 1 and "Wrong number 42." not in gotchas
+    assert "### Peer gotcha (2026-09-19)" in gotchas
+
+
+def test_g1_a_base_older_than_the_published_history_is_still_accepted_as_an_ancestor(
+    tmp_path: Path,
+) -> None:
+    """--base two commits back, with the first already pushed: merge-base moves up to it."""
+    local, peer, base, pushed = _mid_session_push(tmp_path)
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", PEER_GOTCHA))
+    _peer_push(peer)
+    _write(local, DECISIONS, _read(local, DECISIONS).replace("**Decided:** pin it", "**Decided:** pin it hard"))
+    _commit_all(local, "vault wrap-up (end of session)")
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+    assert report["action"] in ("replayed", "none"), report
+    assert report["merge_base"] == pushed
+    assert base != report["merge_base"]
+
+
+def test_g1_a_base_that_is_not_an_ancestor_of_the_merge_base_refuses(tmp_path: Path) -> None:
+    """--base after the shared history (an unpublished commit) cannot be attributed."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", PEER_GOTCHA))
+    _peer_push(peer)
+    _write(local, DECISIONS, _read(local, DECISIONS).replace("**Decided:** pin it", "**Decided:** pin it hard"))
+    first = _commit_all(local, "unpublished predecessor")
+    _write(local, GOTCHAS, insert_under(_read(local, GOTCHAS), "## Technical", PUSHED_GOTCHA))
+    _commit_all(local, "session")
+    head_before, branch_before = _head(local), _branch(local)
+
+    report = _run_replay(local, first, expect_rc=1)
+
+    assert report["action"] == "refused"
+    assert "not an ancestor" in report["reason"]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_g1_verify_uses_the_merge_base_when_origin_holds_later_session_commits(
+    tmp_path: Path,
+) -> None:
+    local, peer, base, _pushed = _mid_session_push(tmp_path)
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", PEER_GOTCHA))
+    _peer_push(peer)
+    _write(local, GOTCHAS, _read(local, GOTCHAS).replace("Wrong number 42.", "Corrected number 41."))
+    tip = _commit_all(local, "vault wrap-up (end of session)")
+    _git(local, "fetch", "-q", "origin")
+    origin = _git(local, "rev-parse", "origin/main")
+    # A correct hand rebuild: origin's file with the correction applied in place.
+    _git(local, "switch", "-q", "-c", "hand-rebuild", origin)
+    _write(local, GOTCHAS, _read(local, GOTCHAS).replace("Wrong number 42.", "Corrected number 41."))
+    result = _commit_all(local, "hand rebuild")
+    _git(local, "switch", "-q", "main")
+
+    proc = _verify(local, base, tip, origin, result)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    # ...and the rebuild that keeps BOTH the pushed entry and its correction fails.
+    _git(local, "switch", "-q", "-c", "double-rebuild", origin)
+    _write(
+        local,
+        GOTCHAS,
+        insert_under(
+            _read(local, GOTCHAS),
+            "## Technical",
+            gotchas_entry("Session gotcha", "2026-09-18", "Corrected number 41."),
+        ),
+    )
+    double = _commit_all(local, "double rebuild")
+    _git(local, "switch", "-q", "main")
+    assert _verify(local, base, tip, origin, double).returncode == 1
+
+
+# G2 -- inserted handoff items keep the session's own blank separators ----------
+
+
+def _section(items_text: str, tail: str = "## Mode\n\nVault first.\n") -> str:
+    return _hd("## Notes\n" + items_text + "\n" + tail)
+
+
+def test_g2_a_paragraph_appended_at_a_sections_end_keeps_its_blank_line() -> None:
+    base = _section("\nPara one is here.\n")
+    tip = _section("\nPara one is here.\n\nPara two added by session.\n")
+    origin = base.replace("_Updated 2026-10-10_", "_Updated 2026-10-11_")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "Para one is here.\n\nPara two added by session.\n" in merged
+    assert merged == tip.replace("_Updated 2026-10-10_", "_Updated 2026-10-11_")
+
+
+def test_g2_a_closing_paragraph_after_bullets_is_not_a_lazy_continuation() -> None:
+    base = _section("\n- a\n- b\n")
+    tip = _section("\n- a\n- b\n\nClosing paragraph.\n")
+    origin = base.replace("_Updated 2026-10-10_", "_Updated 2026-10-11_")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- b\n\nClosing paragraph.\n" in merged
+
+
+def test_g2_tight_bullets_inserted_after_a_loose_paragraph_stay_tight() -> None:
+    base = _section("\nIntro paragraph.\n")
+    tip = _section("\nIntro paragraph.\n\n- n1\n- n2\n- n3\n")
+    origin = base.replace("_Updated 2026-10-10_", "_Updated 2026-10-11_")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "Intro paragraph.\n\n- n1\n- n2\n- n3\n" in merged
+
+
+def test_g2_an_insertion_mid_section_leaves_origins_other_items_untouched() -> None:
+    base = _section("\n- a\n\n- b\n- c\n")
+    tip = _section("\n- a\n\n- n1\n- n2\n\n- b\n- c\n")
+    origin = _section("\n- a\n\n- b\n- c\n- origin-added\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.split("## Notes\n", 1)[1].startswith(
+        "\n- a\n\n- n1\n- n2\n\n- b\n- c\n- origin-added\n"
+    )
+
+
+def test_g2_an_insertion_after_the_leading_blank_keeps_the_sessions_tight_list() -> None:
+    base = _section("\n- a\n- b\n")
+    tip = _section("\n- n\n- a\n- b\n")
+    merged, _detail = handoff_merge(base, tip, base, HANDOFF)
+    assert merged == tip
+
+
+# G3 -- ledger placement is positional: after the session's predecessor entry ---
+
+
+def _gotcha_titles(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith("### ")]
+
+
+def test_g3_an_entry_appended_at_the_bottom_of_an_oldest_first_block_lands_at_the_bottom() -> None:
+    new = gotchas_entry("Newest, appended last", "2026-09-20", "New body.")
+    tip = UNSORTED_BASE + "\n" + new
+    merged, _detail = ledger_merge(UNSORTED_BASE, tip, UNSORTED_BASE, GOTCHAS)
+    assert merged == tip
+    assert _gotcha_titles(merged)[-1] == "### Newest, appended last (2026-09-20)"
+
+
+def test_g3_an_entry_inserted_mid_block_lands_after_its_predecessor_despite_origins_insert() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-01-01", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    )
+    peer = gotchas_entry("Origin top entry", "2026-09-20", "Peer body.")
+    origin = insert_under(base, "## Technical", peer)
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert _gotcha_titles(merged)[:4] == [
+        "### Origin top entry (2026-09-20)",
+        "### Stale tracking refs lie after a push (2026-09-15)",
+        "### Session mid entry (2026-01-01)",
+        "### Bytecode cache hides a mutation (2026-09-10)",
+    ]
+
+
+def test_g3_a_top_insertion_lands_at_the_top_whatever_its_date() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session top entry", "2026-01-01", "Old but first.")
+    tip = insert_under(base, "## Technical", new)
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert merged == tip
+    assert _gotcha_titles(merged)[0] == "### Session top entry (2026-01-01)"
+
+
+def test_g3_both_sides_inserting_at_the_top_keeps_both_with_the_sessions_under_the_preamble() -> None:
+    base = GOTCHAS_SEED
+    mine = gotchas_entry("Session top entry", "2026-09-18", "Mine.")
+    theirs = gotchas_entry("Origin top entry", "2026-09-20", "Theirs.")
+    tip = insert_under(base, "## Technical", mine)
+    origin = insert_under(base, "## Technical", theirs)
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert _gotcha_titles(merged)[:3] == [
+        "### Session top entry (2026-09-18)",
+        "### Origin top entry (2026-09-20)",
+        "### Stale tracking refs lie after a push (2026-09-15)",
+    ]
+
+
+def test_g3_consecutive_new_entries_keep_their_tip_order_mid_block() -> None:
+    base = GOTCHAS_SEED
+    one = gotchas_entry("Session one", "2026-09-12", "One.")
+    two = gotchas_entry("Session two", "2026-09-13", "Two.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)",
+        one + "\n" + two + "\n### Bytecode cache hides a mutation (2026-09-10)",
+    )
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert merged == tip
+
+
+def test_g3_a_predecessor_origin_edited_falls_back_to_the_successor() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-09-12", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    )
+    origin = base.replace("Second line of that body.", "Second line, corrected on origin.")
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert _gotcha_titles(merged)[:3] == [
+        "### Stale tracking refs lie after a push (2026-09-15)",
+        "### Session mid entry (2026-09-12)",
+        "### Bytecode cache hides a mutation (2026-09-10)",
+    ]
+    assert "corrected on origin" in merged
+
+
+def test_g3_neither_neighbour_surviving_on_origin_refuses() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-09-12", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    )
+    origin = base.replace("Second line of that body.", "Corrected A.").replace(
+        "Body of the bytecode gotcha.", "Corrected B."
+    )
+    with pytest.raises(RefusalError, match="placement"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_g3_an_entry_after_a_session_edited_predecessor_lands_after_that_entry() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-09-12", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    ).replace("Second line of that body.", "Second line, edited by the session.")
+    merged, detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert merged == tip
+    assert detail["replaced"] == 1 and detail["inserted"] == 1
+
+
+# G4 -- the self-check's `resolved` exemptions apply to one side, one place -----
+
+
+def _hand(desc: str, stamp: str, body: str = "- a\n") -> str:
+    return f'---\ndescription: "{desc}"\n---\n_Updated {stamp}._\n\n## Open\n\n{body}'
+
+
+def test_g4_a_merge_that_drops_a_session_only_description_change_fails_the_self_check() -> None:
+    base = _hand("d", "1")
+    tip = _hand("d; session clause", "1", "- a\n- s\n")
+    origin = _hand("d", "1", "- a\n- o\n")
+    dropped = _hand("d", "1", "- a\n- s\n- o\n")
+    verdict = compare_texts(base, tip, origin, dropped, HANDOFF)
+    assert verdict["missing"] == ['description: "d; session clause"']
+    assert verdict["extra"] == ['description: "d"']
+    kept = _hand("d; session clause", "1", "- a\n- s\n- o\n")
+    ok = compare_texts(base, tip, origin, kept, HANDOFF)
+    assert ok["missing"] == [] and ok["extra"] == []
+
+
+def test_g4_an_origin_only_description_change_must_survive() -> None:
+    base = _hand("d", "1")
+    tip = _hand("d", "1", "- a\n- s\n")
+    origin = _hand("d; origin clause", "1")
+    reverted = _hand("d", "1", "- a\n- s\n")
+    verdict = compare_texts(base, tip, origin, reverted, HANDOFF)
+    assert verdict["missing"] or verdict["extra"]
+
+
+def test_g4_a_both_sides_description_change_must_be_the_clause_merge() -> None:
+    base = _hand("x; y", "1")
+    tip = _hand("x; y; s", "1")
+    origin = _hand("x; y; o", "1")
+    assert compare_texts(base, tip, origin, _hand("x; y; o; s", "1"), HANDOFF)["extra"] == []
+    for wrong in ("x; y; s", "x; y; o"):
+        verdict = compare_texts(base, tip, origin, _hand(wrong, "1"), HANDOFF)
+        assert verdict["missing"] or verdict["extra"], wrong
+
+
+def test_g4_the_stamp_must_be_the_sessions_when_the_session_changed_it() -> None:
+    base, tip, origin = _hand("d", "1"), _hand("d", "2"), _hand("d", "3")
+    assert compare_texts(base, tip, origin, _hand("d", "2"), HANDOFF)["extra"] == []
+    # origin's stamp is NOT acceptable when the session changed its own
+    verdict = compare_texts(base, tip, origin, _hand("d", "3"), HANDOFF)
+    assert verdict["extra"] == ["_Updated 3._"]
+
+
+def test_g4_the_stamp_must_be_origins_when_only_origin_changed_it() -> None:
+    base, tip, origin = _hand("d", "1"), _hand("d", "1", "- a\n- s\n"), _hand("d", "3")
+    assert compare_texts(base, tip, origin, _hand("d", "3", "- a\n- s\n"), HANDOFF)["extra"] == []
+    verdict = compare_texts(base, tip, origin, _hand("d", "1", "- a\n- s\n"), HANDOFF)
+    assert verdict["extra"] == ["_Updated 1._"]
+
+
+def test_g4_a_fenced_description_line_in_a_ledger_body_is_counted_like_any_line() -> None:
+    fence = 'Example:\n\n```\ndescription: "x"\n```\n'
+    base = f'---\ndescription: "g"\n---\n\n# Gotchas\n\n{fence}'
+    tip = base + '\nAnother:\n\n```\ndescription: "x"\n```\n'
+    verdict = compare_texts(base, tip, base, base, GOTCHAS)
+    assert 'description: "x"' in verdict["missing"]
+    # ...while a description change in a LEDGER's frontmatter is plain line arithmetic too
+    changed = tip.replace('description: "g"', 'description: "g2"', 1)
+    plain = compare_texts(base, changed, base, base, GOTCHAS)
+    assert 'description: "g2"' in plain["missing"]
+
+
+def test_g4_a_description_or_stamp_line_inside_a_handoff_section_is_counted() -> None:
+    base = _hand("d", "1", '- a\n```\ndescription: "x"\n```\n')
+    tip = _hand("d", "1", '- a\n```\ndescription: "x"\n```\n- b\n```\ndescription: "x"\n```\n_Updated 9._\n')
+    verdict = compare_texts(base, tip, base, base, HANDOFF)
+    assert 'description: "x"' in verdict["missing"] and "_Updated 9._" in verdict["missing"]
+
+
+# G5 -- both sides renaming a handoff section identically is not a structure change
+
+
+RENAMED = "## Open threads — carried forward unless noted"
+
+
+def test_g5_both_sides_renaming_a_section_identically_replays_by_position() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("## Open threads", RENAMED).replace(
+        "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched."
+    )
+    origin = base.replace("## Open threads", RENAMED).replace(
+        "- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: parity ticket closed."
+    )
+    merged, detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert RENAMED in merged and "## Open threads\n" not in merged
+    assert "- [[proj-a]]: deploy watched." in merged
+    assert "- [[proj-b]]: parity ticket closed." in merged
+    assert detail["sections_replaced"] == ["Open threads — carried forward unless noted"]
+    _lossless(base, tip, origin, merged)
+
+
+def test_g5_a_rename_on_one_side_only_still_refuses() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("## Open threads", RENAMED)
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, tip, base, HANDOFF)
+
+
+def test_g5_different_renames_on_the_two_sides_still_refuse() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("## Open threads", RENAMED)
+    origin = base.replace("## Open threads", "## Open threads, renamed elsewhere")
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_g5_a_reorder_or_an_added_section_that_origin_also_made_still_refuses() -> None:
+    base = HANDOFF_SEED
+    swapped = base.replace("## What's running\n\nNothing unattended.\n\n", "").replace(
+        "## Mode\n", "## What's running\n\nNothing unattended.\n\n## Mode\n"
+    )
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, swapped, swapped, HANDOFF)
+    added = base + "\n## Extra\n\nNew.\n"
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, added, added, HANDOFF)
+    dropped = base.replace("## Mode\n\nVault first, implementation in repository.\n", "")
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, dropped, dropped, HANDOFF)
+
+
+def test_g5_a_swap_of_two_section_names_is_a_reorder_not_a_rename() -> None:
+    base = HANDOFF_SEED
+    tip = (
+        base.replace("## Resume from here", "## @@")
+        .replace("## What's running", "## Resume from here")
+        .replace("## @@", "## What's running")
+    )
+    with pytest.raises(RefusalError, match="sections"):
+        handoff_merge(base, tip, tip, HANDOFF)
