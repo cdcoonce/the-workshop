@@ -368,7 +368,7 @@ def test_has_tag_matches_list_and_comma_string() -> None:
 
 def test_query_decisions_survives_note_with_empty_tags(tmp_path: Path) -> None:
     _write_fm_note(
-        tmp_path / "work" / "decisions" / "blank.md",
+        tmp_path / "work" / "active" / "blank.md",
         'description: "d"\ntags:\n',
     )
     out = vault_query.query_decisions(tmp_path)
