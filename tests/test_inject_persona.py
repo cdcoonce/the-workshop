@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -105,3 +107,44 @@ class TestMainSuccess:
         assert "---" not in context.replace(
             inject_persona.PRECEDENCE_HEADER, ""
         ).replace(inject_persona.PRECEDENCE_FOOTER, "")
+
+
+class TestFailSafeWrapperAsSubprocess:
+    """The ``__main__`` wrapper is what makes the hook fail safe; run it for real."""
+
+    def _run(self, plugin_root: Path) -> subprocess.CompletedProcess[str]:
+        env = {"PATH": "/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT": str(plugin_root)}
+        return subprocess.run(
+            [sys.executable, str(HOOK_PATH)],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=30,
+        )
+
+    def test_non_utf8_output_style_exits_0_with_no_stdout_or_traceback(
+        self, tmp_path: Path
+    ) -> None:
+        styles = tmp_path / "output-styles"
+        styles.mkdir()
+        # Invalid UTF-8: read_text(encoding="utf-8") raises UnicodeDecodeError.
+        (styles / "persona.md").write_bytes(b"---\nname: x\n---\n\xff\xfe broken\n")
+
+        result = self._run(tmp_path)
+
+        assert result.returncode == 0
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+
+    def test_valid_style_still_emits_output_through_the_same_wrapper(
+        self, tmp_path: Path
+    ) -> None:
+        styles = tmp_path / "output-styles"
+        styles.mkdir()
+        (styles / "persona.md").write_text("---\nname: x\n---\nBe terse.\n")
+
+        result = self._run(tmp_path)
+
+        assert result.returncode == 0
+        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "Be terse." in context

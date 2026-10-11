@@ -116,3 +116,48 @@ def test_outside_git_repo_still_warns_but_does_not_crash(tmp_path: Path) -> None
     payload = json.loads(result.stdout)
     assert "systemMessage" in payload
     assert not (tmp_path / ".git").exists()
+
+
+def test_linked_worktree_logs_to_the_common_git_dir(tmp_path: Path) -> None:
+    """A removed worktree takes `.git/worktrees/<name>/` with it; the log must not live there."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "README.md").write_text("hello\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+    worktree = tmp_path / "wt"
+    subprocess.run(["git", "worktree", "add", "-q", "-b", "side", str(worktree)], cwd=repo, check=True)
+
+    result = run(
+        {
+            "cwd": str(worktree),
+            "config_source": "skills",
+            "file_path": str(worktree / ".claude" / "settings.json"),
+        }
+    )
+    assert result.returncode == 0
+
+    common_log = repo.resolve() / ".git" / "the-workshop-config-audit.log"
+    assert common_log.exists()
+    assert not list((repo / ".git" / "worktrees").rglob("the-workshop-config-audit.log"))
+
+    subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=repo, check=True)
+    assert common_log.exists(), "removing the worktree must not erase the audit log"
+
+
+def test_linked_worktree_from_a_subdirectory_logs_to_the_common_git_dir(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "README.md").write_text("hello\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+    worktree = tmp_path / "wt"
+    subprocess.run(["git", "worktree", "add", "-q", "-b", "side", str(worktree)], cwd=repo, check=True)
+    sub = worktree / "nested"
+    sub.mkdir()
+
+    run({"cwd": str(sub), "config_source": "skills", "file_path": "x.json"})
+
+    assert (repo.resolve() / ".git" / "the-workshop-config-audit.log").exists()
