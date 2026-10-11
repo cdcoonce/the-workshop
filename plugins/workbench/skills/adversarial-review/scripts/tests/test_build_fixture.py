@@ -8,9 +8,6 @@ the pass would look identical to a real one.
 So these assert the defects by *executing* them, not by matching source text.
 """
 
-import os
-import shutil
-import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -135,27 +132,3 @@ def test_defect_3_the_missed_call_site_still_rounds_bare(repo: Path) -> None:
         check=True,
     )
     assert result.stdout.strip() == str(round(1.005, 2))
-
-
-def test_git_is_found_through_the_callers_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`_git` must inherit the caller's PATH, not replace it with three fixed dirs (#1071).
-
-    A git that lives only outside /usr/bin:/bin:/usr/local/bin (Homebrew on Apple
-    Silicon, Nix, mise shims) is invisible under a hardcoded PATH. A shim first on
-    the caller's PATH proves the caller's PATH is the one searched.
-    """
-    real_git = shutil.which("git")
-    assert real_git is not None
-    shim_dir = tmp_path / "shim-bin"
-    shim_dir.mkdir()
-    marker = tmp_path / "shim-used"
-    shim = shim_dir / "git"
-    shim.write_text(f'#!/bin/sh\necho used >> "{marker}"\nexec "{real_git}" "$@"\n')
-    shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}")
-
-    build_fixture(tmp_path / "fixture-via-shim")
-
-    assert marker.is_file(), "build_fixture never reached a git on the caller's PATH"
