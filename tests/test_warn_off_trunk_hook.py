@@ -218,3 +218,41 @@ def test_tomli_fallback_still_warns(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "feature/thing" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_hook_uses_the_shared_git_helper_not_a_private_copy() -> None:
+    import ast
+
+    tree = ast.parse(HOOK_PATH.read_text())
+    private = [
+        n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_git"
+    ]
+    imported = {
+        alias.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module == "_git_baseline"
+        for alias in n.names
+    }
+    assert private == []
+    assert "_run_git" in imported
+
+
+def test_hook_fails_open_when_the_shared_helper_is_missing(tmp_path: Path) -> None:
+    import shutil
+
+    isolated = tmp_path / "hooks"
+    isolated.mkdir()
+    shutil.copy2(HOOK_PATH, isolated / HOOK_PATH.name)  # deliberately without _git_baseline.py
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    result = subprocess.run(
+        [sys.executable, str(isolated / HOOK_PATH.name)],
+        input=json.dumps({"cwd": str(repo)}),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
