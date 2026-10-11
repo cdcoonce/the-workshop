@@ -41,6 +41,55 @@
       "find": "RUNTIME_ERROR_CATEGORY_RULES = {\"F821\", \"F822\", \"F823\"}",
       "replace": "RUNTIME_ERROR_CATEGORY_RULES = {\"F821\", \"F822\"}",
       "oracle": "real"
+    },
+    {
+      "label": "1069 F821 dropped",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F822\", \"F823\"}",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 F822 dropped",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F821\", \"F823\"}",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 F823 dropped",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F821\", \"F822\"}",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 override widened to F401",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F821\", \"F822\", \"F823\", \"F401\"}",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 override widened to F841",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F821\", \"F822\", \"F823\", \"F841\"}",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 override widened to F-prefix (F8xx)",
+      "file": "../python_analyzer.py",
+      "find": "    if rule_id in RUNTIME_ERROR_CATEGORY_RULES:",
+      "replace": "    if rule_id.startswith('F8'):",
+      "oracle": "real"
+    },
+    {
+      "label": "1069 override widened to F811",
+      "file": "../python_analyzer.py",
+      "find": "{\"F821\", \"F822\", \"F823\"}",
+      "replace": "{\"F821\", \"F822\", \"F823\", \"F811\"}",
+      "oracle": "real"
     }
   ]
 }

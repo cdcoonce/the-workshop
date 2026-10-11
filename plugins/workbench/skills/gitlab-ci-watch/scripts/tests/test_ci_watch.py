@@ -1008,8 +1008,61 @@ def test_failure_budget_reset_clears_the_streak(monkeypatch):
 def test_every_watch_loop_gives_up_indeterminate_on_repeated_api_failure(
     monkeypatch, capsys, call
 ):
-    monkeypatch.setattr(ci_watch, "glab_api", lambda _path: None)
+    polls = {"n": 0}
+
+    def api(_path):
+        polls["n"] += 1
+        if polls["n"] > 10:
+            raise AssertionError("loop never gave up")
+        return None
+
+    monkeypatch.setattr(ci_watch, "glab_api", api)
     monkeypatch.setattr(ci_watch.time, "sleep", lambda _s: None)
     monkeypatch.setattr(ci_watch, "MAX_CONSECUTIVE_FAILURES", 4)
     assert call() == ci_watch.INDETERMINATE
     assert "4 consecutive API failures — giving up, re-query needed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "call, pending, terminal",
+    [
+        (
+            lambda: ci_watch.watch_pipeline("p", "abc", "main", 0, float("inf")),
+            [{"id": 1, "ref": "main", "status": "running", "sha": "abc"}],
+            [{"id": 1, "ref": "main", "status": "success", "sha": "abc"}],
+        ),
+        (
+            lambda: ci_watch.watch_pipeline_by_id("p", "9", 0, float("inf")),
+            {"id": 9, "status": "running", "sha": "abc"},
+            {"id": 9, "status": "success", "sha": "abc"},
+        ),
+        (
+            lambda: ci_watch.watch_mr("p", "7", 0, 1e9),
+            {"state": "opened"},
+            {"state": "merged", "sha": "abc", "target_branch": "main"},
+        ),
+    ],
+    ids=["watch_pipeline", "watch_pipeline_by_id", "watch_mr"],
+)
+def test_every_watch_loop_resets_the_streak_after_a_good_poll(
+    monkeypatch, call, pending, terminal
+):
+    """fail, fail, good, fail, fail, terminal: the good poll must clear the streak."""
+    polls = {"n": 0}
+    script = [None, None, pending, None, None, terminal]
+
+    def api(_path):
+        if polls["n"] >= len(script):
+            raise AssertionError("loop polled past the terminal state")
+        value = script[polls["n"]]
+        polls["n"] += 1
+        return value
+
+    monkeypatch.setattr(ci_watch, "glab_api", api)
+    monkeypatch.setattr(ci_watch.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ci_watch, "MAX_CONSECUTIVE_FAILURES", 3)
+    monkeypatch.setattr(ci_watch, "report", lambda *_a, **_k: ci_watch.GREEN)
+    if "state" in terminal:  # watch_mr hands a merged MR to watch_pipeline
+        monkeypatch.setattr(ci_watch, "watch_pipeline", lambda *_a, **_k: ci_watch.GREEN)
+    assert call() == ci_watch.GREEN
+    assert polls["n"] == len(script)

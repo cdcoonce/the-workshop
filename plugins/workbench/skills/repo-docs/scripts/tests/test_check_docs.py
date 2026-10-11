@@ -419,3 +419,31 @@ def test_the_last_unfenced_footer_is_the_doc_s_provenance(repo: Path) -> None:
         NEW.format(mode="reference", baseline="abc123", covers="src/here.py"),
     )
     assert _check(repo) == []
+
+
+def test_covers_stops_at_the_first_comment_close_on_a_shared_line() -> None:
+    """A second comment on the same line must not leak into covers (#779)."""
+    text = "# Doc\n<!-- repo-docs: baseline=a covers=src/x.py --> <!-- note -->\n"
+    prov = check_docs._provenance(text)
+    assert prov is not None
+    assert prov.covers == ("src/x.py",)
+    assert prov.baseline == "a"
+
+
+def test_covers_strips_each_path_and_drops_empty_segments() -> None:
+    prov = check_docs._provenance("<!-- repo-docs: baseline=a covers= a.py , ,b c.py  -->\n")
+    assert prov is not None
+    assert prov.covers == ("a.py", "b c.py")
+
+
+def test_empty_covers_parses_as_a_footer_with_no_paths() -> None:
+    """Pinned behavior: `covers= -->` is still a footer, with nothing covered."""
+    prov = check_docs._provenance("<!-- repo-docs: baseline=a covers= -->\n")
+    assert prov is not None
+    assert prov.covers == ()
+
+
+def test_covered_path_may_contain_a_greater_than_sign() -> None:
+    prov = check_docs._provenance("<!-- repo-docs: baseline=a covers=src/a>b.py -->\n")
+    assert prov is not None
+    assert prov.covers == ("src/a>b.py",)

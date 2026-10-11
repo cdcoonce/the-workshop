@@ -97,6 +97,10 @@ class TestRuleMapping:
         assert get_category_for_rule("F822") == IssueCategory.RUNTIME_ERROR
         assert get_category_for_rule("F823") == IssueCategory.RUNTIME_ERROR
 
+    def test_redefinition_rule_stays_unused_code(self):
+        """The #1069 override is exactly F821-F823; F811 keeps the F-rule default."""
+        assert get_category_for_rule("F811") == IssueCategory.UNUSED_CODE
+
     def test_complexity_category(self):
         """Test that C90 rules map to COMPLEXITY category."""
         assert get_category_for_rule("C901") == IssueCategory.COMPLEXITY

@@ -64,6 +64,7 @@ def test_glab_list_non_list_page_is_none(monkeypatch):
         ("https://gitlab.com/group/project.git", "group/project"),
         ("https://gitlab.com/group/sub/project", "group/sub/project"),
         ("https://gitlab.com/group/project/", "group/project"),
+        ("git@host:group/p:q.git", "group/p:q"),
     ],
 )
 def test_parse_project_path(url: str, expected: str) -> None:

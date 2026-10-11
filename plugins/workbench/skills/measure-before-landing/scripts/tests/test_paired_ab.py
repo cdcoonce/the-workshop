@@ -590,3 +590,60 @@ def test_void_analyze_with_bracket_enabled_and_no_a2(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "VOID" in captured.err
     assert "--a2" in captured.err
+
+
+def _analyze_args(tmp_path, spec_path, *, with_a2=False):
+    a_json = tmp_path / "a.json"
+    b_json = tmp_path / "b.json"
+    a_json.write_text(json.dumps({"rows": [{"query": "q1", "recall": 0.5}]}))
+    b_json.write_text(json.dumps({"rows": [{"query": "q1", "recall": 0.9}]}))
+    args = [
+        "analyze",
+        "--spec", str(spec_path),
+        "--a", str(a_json),
+        "--b", str(b_json),
+        "--cwd", str(tmp_path),
+    ]
+    if with_a2:
+        a2_json = tmp_path / "a2.json"
+        a2_json.write_text(json.dumps({"rows": [{"query": "q1", "recall": 0.5}]}))
+        args += ["--a2", str(a2_json)]
+    return args
+
+
+def test_analyze_with_no_bracket_table_defaults_to_enabled_and_voids_without_a2(
+    tmp_path, capsys
+):
+    """An absent [bracket] table means enabled (#890): no --a2 is a VOID, no ledger."""
+    prereg_rel = _write_prereg(tmp_path)
+    spec_path = _write_spec(tmp_path, prereg_rel=prereg_rel, include_cmds=False)
+    text = spec_path.read_text()
+    spec_path.write_text(text[: text.index("[bracket]")])
+    assert "[bracket]" not in spec_path.read_text()
+    assert main(_analyze_args(tmp_path, spec_path)) == 2
+    assert "VOID" in capsys.readouterr().err
+    assert not (tmp_path / "eval").exists()
+
+
+def test_analyze_voids_without_a2_even_with_a_loose_tolerance(tmp_path, capsys):
+    """A wide tolerance does not excuse a missing --a2 arm (#890)."""
+    prereg_rel = _write_prereg(tmp_path)
+    spec_path = _write_spec(
+        tmp_path,
+        prereg_rel=prereg_rel,
+        include_cmds=False,
+        bracket_enabled=True,
+        tolerance=0.5,
+    )
+    assert main(_analyze_args(tmp_path, spec_path)) == 2
+    assert "VOID" in capsys.readouterr().err
+    assert not (tmp_path / "eval").exists()
+
+
+def test_analyze_with_bracket_disabled_needs_no_a2(tmp_path, capsys):
+    prereg_rel = _write_prereg(tmp_path)
+    spec_path = _write_spec(
+        tmp_path, prereg_rel=prereg_rel, include_cmds=False, bracket_enabled=False
+    )
+    assert main(_analyze_args(tmp_path, spec_path)) in (0, 1)
+    assert "VOID" not in capsys.readouterr().err

@@ -65,6 +65,69 @@
       "find": "    if path.endswith(\".git\"):",
       "replace": "    if False:",
       "oracle": "real"
+    },
+    {
+      "label": "1144 stop condition <= PAGE_SIZE",
+      "file": "../_glab.py",
+      "find": "if len(data) < PAGE_SIZE:",
+      "replace": "if len(data) <= PAGE_SIZE:",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 page range off by one (MAX_PAGES-1 pages)",
+      "file": "../_glab.py",
+      "find": "range(1, MAX_PAGES + 1)",
+      "replace": "range(1, MAX_PAGES)",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 page range one extra",
+      "file": "../_glab.py",
+      "find": "range(1, MAX_PAGES + 1)",
+      "replace": "range(1, MAX_PAGES + 2)",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 page starts at 0",
+      "file": "../_glab.py",
+      "find": "range(1, MAX_PAGES + 1)",
+      "replace": "range(0, MAX_PAGES)",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 per_page dropped",
+      "file": "../_glab.py",
+      "find": "per_page={PAGE_SIZE}&page={page}",
+      "replace": "page={page}",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 scp path keeps leading colon part (split rsplit)",
+      "file": "../_glab.py",
+      "find": "url.split(\":\", 1)[1]",
+      "replace": "url.rsplit(\":\", 1)[1]",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 strip only trailing slash type (no leading strip)",
+      "file": "../_glab.py",
+      "find": "path.strip(\"/\")",
+      "replace": "path.rstrip(\"/\")",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 empty path returns ''",
+      "file": "../_glab.py",
+      "find": "return path or None",
+      "replace": "return path",
+      "oracle": "real"
+    },
+    {
+      "label": "1144 no-colon no-scheme returns whole url",
+      "file": "../_glab.py",
+      "find": "    else:\n        return None\n    path = path.strip",
+      "replace": "    else:\n        path = url\n    path = path.strip",
+      "oracle": "real"
     }
   ]
 }

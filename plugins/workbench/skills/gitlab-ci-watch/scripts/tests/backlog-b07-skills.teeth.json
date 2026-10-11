@@ -37,6 +37,76 @@
       "find": "        \"\"\"Forget the failure streak.\"\"\"\n        self.failures = 0",
       "replace": "        \"\"\"Forget the failure streak.\"\"\"\n        pass",
       "oracle": "real"
+    },
+    {
+      "label": "799 watch_mr never resets streak",
+      "file": "../ci_watch.py",
+      "find": "            return INDETERMINATE\n            continue\n        budget.reset()\n        state",
+      "replace": "            return INDETERMINATE\n            continue\n        state",
+      "oracle": "real"
+    },
+    {
+      "label": "799 watch_pipeline never resets",
+      "file": "../ci_watch.py",
+      "find": "        budget.reset()\n        if not pipes:",
+      "replace": "        if not pipes:",
+      "oracle": "real"
+    },
+    {
+      "label": "799 watch_pipeline_by_id never resets",
+      "file": "../ci_watch.py",
+      "find": "        budget.reset()\n        status = data.get(\"status\"",
+      "replace": "        status = data.get(\"status\"",
+      "oracle": "real"
+    },
+    {
+      "label": "799 fail() no sleep",
+      "file": "../ci_watch.py",
+      "find": "        time.sleep(interval)\n        return False",
+      "replace": "        return False",
+      "oracle": "real"
+    },
+    {
+      "label": "799 fail() sleeps constant 1",
+      "file": "../ci_watch.py",
+      "find": "        time.sleep(interval)\n        return False",
+      "replace": "        time.sleep(1)\n        return False",
+      "oracle": "real"
+    },
+    {
+      "label": "799 give up one early",
+      "file": "../ci_watch.py",
+      "find": "if self.failures >= MAX_CONSECUTIVE_FAILURES:",
+      "replace": "if self.failures >= MAX_CONSECUTIVE_FAILURES - 1:",
+      "oracle": "real"
+    },
+    {
+      "label": "799 give-up message dropped",
+      "file": "../ci_watch.py",
+      "find": "            say(f\"{self.failures} consecutive API failures \u2014 giving up, re-query needed\")\n            return True",
+      "replace": "            return True",
+      "oracle": "real"
+    },
+    {
+      "label": "799 fail() returns False at give-up",
+      "file": "../ci_watch.py",
+      "find": "re-query needed\")\n            return True",
+      "replace": "re-query needed\")\n            return False",
+      "oracle": "real"
+    },
+    {
+      "label": "799 watch_mr give-up not INDETERMINATE (continue)",
+      "file": "../ci_watch.py",
+      "find": "            if budget.fail(interval):\n                return INDETERMINATE\n            continue\n        budget.reset()\n        state",
+      "replace": "            budget.fail(interval)\n            continue\n        budget.reset()\n        state",
+      "oracle": "real"
+    },
+    {
+      "label": "799 shared class-level counter",
+      "file": "../ci_watch.py",
+      "find": "    def __init__(self) -> None:\n        self.failures = 0",
+      "replace": "    _shared = [0]\n    def __init__(self) -> None:\n        pass\n    @property\n    def failures(self): return FailureBudget._shared[0]\n    @failures.setter\n    def failures(self, v): FailureBudget._shared[0] = v",
+      "oracle": "real"
     }
   ]
 }
