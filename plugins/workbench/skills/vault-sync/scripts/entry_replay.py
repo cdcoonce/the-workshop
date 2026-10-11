@@ -24,13 +24,18 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
 3. Ledger rule: the session's change is read per anchor block as *whole
    entries* -- new dated entries, and existing entries edited in place (an
    in-place correction like the vault's ``2455bf8c``, even one that changes
-   the entry's own heading line). Each entry the session edited must be
+   the entry's own heading line -- when the date is unchanged and the heading
+   text or the body mostly is; overwriting an entry with a different one is a
+   deletion). Each entry the session edited must be
    byte-identical, exactly once, in origin's block; origin's entries the
    session did not touch simply win, corrections included. New entries are
-   added unless origin already holds them, and every entry under the anchor is
-   re-sorted newest-first by date -- the deterministic re-linearization that
-   keeps #871's ordering guarantee under concurrency (#871's ordering-drift
-   detector stays on as the tooth). An anchor is a block's innermost non-entry
+   added unless origin already holds them. Nothing is re-sorted: origin's
+   entries keep their exact order (real blocks are not uniformly ordered, so a
+   block-wide sort would rewrite entries the session never touched), an edited
+   entry keeps its origin position, and each new entry goes immediately before
+   the first origin entry, scanning from the top, that is not newer than it
+   (else at the end) -- so a same-date new entry sits above origin's same-date
+   entries, and new entries sharing a slot keep the session's order. An anchor is a block's innermost non-entry
    heading (``### Wins`` under ``## Q3 2026``, ``## Technical``). An entry
    heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
    with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
@@ -39,9 +44,11 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
 4. Handoff rule: origin's file wins wholesale; inside each ``##`` section this
    session touched (the ``handoff_sections`` collector's section model) the
    replay is item-level -- an item is a top-level ``- `` bullet with its
-   continuation, or a blank-separated paragraph. Every item the session
-   replaced must occur in origin's section byte-identically exactly once; an
-   inserted item lands right after its (unique) base predecessor. The
+   continuation, or a blank-separated paragraph (a code fence keeps its lines
+   inside one item). Base items are aligned to origin's by position, not
+   content: every item the session replaced must be unchanged and aligned on
+   origin, and an inserted item lands right after its aligned base predecessor
+   (one origin already holds is not inserted twice). The
    ``_Updated`` stamp resolves three-way instead of counting as a preamble
    divergence, and the frontmatter ``description:`` is merged additively at
    clause granularity rather than restored as the session's whole paragraph.
@@ -107,7 +114,8 @@ HEALTH_CMD_DEFAULT = "uv run --script ci/vault_health.py"
 HEALTH_TIMEOUT_SECONDS = 300
 REPLAY_BRANCH_PREFIX = "sync-entry-replay/"
 
-_FENCE_RE = re.compile(r"^(```|~~~)")
+# CommonMark fence: up to three spaces of indent, then 3+ backticks or tildes.
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 # Mirrors the wrap-up collector's handoff section model: level-2 headings only.
 _SECTION_RE = re.compile(r"^## (.+?)\s*$")
@@ -261,23 +269,36 @@ def _join(lines: list[str]) -> str:
 
 
 def _fence_flags(lines: list[str]) -> list[bool]:
-    """Per-line "inside (or delimiting) a code fence" flags."""
+    """Per-line "inside (or delimiting) a code fence" flags, per CommonMark.
+
+    A fence opens on 3+ backticks or tildes (up to three spaces of indent; a
+    backtick fence's info string holds no backtick) and closes only on a line
+    of the *same* character at least as long as the opener with nothing but
+    whitespace after it -- so a four-backtick fence is not ended by an inner
+    three-backtick line, and an unclosed fence runs to the end of the text.
+    """
     flags: list[bool] = []
-    in_fence = False
-    marker = ""
+    fence_char = ""
+    fence_len = 0
     for line in lines:
-        stripped = line.strip()
-        m = _FENCE_RE.match(stripped)
-        if m:
-            if not in_fence:
-                in_fence = True
-                marker = m.group(1)
-            elif stripped.startswith(marker):
-                in_fence = False
-                marker = ""
+        m = _FENCE_RE.match(line)
+        if fence_char:
+            flags.append(True)
+            if (
+                m
+                and m.group(1)[0] == fence_char
+                and len(m.group(1)) >= fence_len
+                and not m.group(2).strip()
+            ):
+                fence_char = ""
+                fence_len = 0
+            continue
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence_char = m.group(1)[0]
+            fence_len = len(m.group(1))
             flags.append(True)
             continue
-        flags.append(in_fence)
+        flags.append(False)
     return flags
 
 
@@ -619,8 +640,9 @@ def ledger_merge(
     session edited must be byte-identical, exactly once, in origin's block
     (the narrow per-replaced-entry assertion -- origin's copies of entries the
     session did not touch simply win, including their corrections); the
-    session's new entries are added unless origin already holds them, and the
-    block is re-sorted newest-first by date.
+    session's new entries are added unless origin already holds them. Origin's
+    entry order is never rewritten: new entries are placed by date (see
+    ``_place_entries``).
 
     Parameters
     ----------
@@ -717,15 +739,14 @@ def ledger_merge(
                 continue
             kept.append(chunk)
 
-        merged_entries = kept + [swaps.get(chunk.key, chunk) for chunk in origin_block.entries]
+        merged_entries = _place_entries(origin_block.entries, swaps, kept)
         kinds = {chunk.kind for chunk in merged_entries}
         levels = {chunk.level for chunk in merged_entries}
         if len(kinds) > 1 or len(levels) > 1:
             raise RefusalError(
                 f"{path}: entries under {anchor_line!r} mix shapes across the two sides; "
-                "refusing to re-linearize"
+                "refusing to merge them"
             )
-        merged_entries.sort(key=lambda chunk: chunk.day, reverse=True)
 
         at_eof = origin_block.end_idx == len(origin.lines)
         interior = _emit_interior(origin_block.preamble, merged_entries, at_eof)
@@ -740,6 +761,70 @@ def ledger_merge(
     merged_text = _join(out)
     detail["unchanged"] = merged_text == origin_text
     return merged_text, detail
+
+
+def _place_entries(
+    origin_entries: list[_Chunk],
+    swaps: dict[tuple[str, ...], _Chunk],
+    new_entries: list[_Chunk],
+) -> list[_Chunk]:
+    """Origin's entries in origin's exact order, plus the session's new ones.
+
+    No sort: real blocks are not uniformly ordered (some run oldest-first,
+    some carry drift), so a whole-block re-sort would rewrite entries the
+    session never touched. An edited entry keeps its origin position even if
+    it was re-dated. Each new entry goes immediately before the first origin
+    entry, scanning from the top of the block, that is not newer than it (date
+    on or before the new entry's) -- or at the end when there is none. In a
+    newest-first block that is exactly "above the first older-or-same-day
+    entry", so a same-date new entry sits above origin's same-date entries.
+    New entries that land in the same slot keep the session's relative order.
+    """
+    origin_days = [chunk.day for chunk in origin_entries]
+    slots: dict[int, list[_Chunk]] = {}
+    for chunk in new_entries:
+        at = next((i for i, day in enumerate(origin_days) if day <= chunk.day), len(origin_days))
+        slots.setdefault(at, []).append(chunk)
+    placed: list[_Chunk] = []
+    for index, entry in enumerate(origin_entries):
+        placed.extend(slots.get(index, []))
+        placed.append(swaps.get(entry.key, entry))
+    placed.extend(slots.get(len(origin_entries), []))
+    return placed
+
+
+def _heading_text(chunk: _Chunk) -> str:
+    """An entry's start line without its date: the part a rename would change."""
+    line = chunk.lines[0]
+    bullet = _BULLET_ENTRY_RE.match(line)
+    if bullet:
+        return line[bullet.end() :].strip()
+    heading = _HEADING_RE.match(line)
+    if heading is None:
+        return line.strip()
+    text = heading.group(2)
+    lead = _LEAD_DATE_RE.match(text)
+    if lead:
+        return text[lead.end() :].strip()
+    trail = _TRAIL_DATE_RE.search(text)
+    return text[: trail.start()].strip() if trail else text.strip()
+
+
+def _same_entry_edited(old: _Chunk, edited: _Chunk) -> bool:
+    """Is ``edited`` plausibly ``old`` with its start line changed?
+
+    Required before the single unpaired leftover of a ``replace`` is treated
+    as an in-place edit: otherwise overwriting an entry with a brand-new one
+    would read as an edit and silently lose the old entry. Same date, and
+    either the same heading text or a body that is mostly unchanged.
+    """
+    if old.day != edited.day:
+        return False
+    if _heading_text(old) == _heading_text(edited):
+        return True
+    old_body = "\n".join(_strip_trailing_blanks(old.lines[1:]))
+    new_body = "\n".join(_strip_trailing_blanks(edited.lines[1:]))
+    return difflib.SequenceMatcher(None, old_body, new_body).ratio() >= 0.6
 
 
 def _diff_entries(
@@ -780,7 +865,11 @@ def _diff_entries(
                 else:
                     unpaired_tip.remove(partner)
                     replaced.append((old, partner))
-            if len(lost) == 1 and len(unpaired_tip) == 1:
+            if (
+                len(lost) == 1
+                and len(unpaired_tip) == 1
+                and _same_entry_edited(lost[0], unpaired_tip[0])
+            ):
                 replaced.append((lost.pop(), unpaired_tip.pop()))
         if lost:
             raise RefusalError(
@@ -837,7 +926,8 @@ def merge_descriptions(base: str, tip: str, origin: str) -> str:
             removed[clause] -= 1
             continue
         out.append(clause)
-    out.extend(added)
+    # A clause origin already carries (both sides added it) is not appended again.
+    out.extend(clause for clause in added if clause not in origin_clauses)
     if not out:
         raise RefusalError("description merge produced an empty value; escalating")
     return "; ".join(out)
@@ -919,17 +1009,24 @@ def _items(body: list[str]) -> list[tuple[str, ...]]:
     the first item (typically the blank line under the heading) is its own
     item, and so are the blank lines that end the section: two wrap-ups that
     both append a bullet to a section's end would otherwise each rewrite the
-    last bullet's trailing blank and collide. Concatenating the items
-    reproduces the body exactly.
+    last bullet's trailing blank and collide. Lines inside a code fence never
+    open an item, so a blank or ``- `` line in a fenced block stays with the
+    item that holds the fence; the fence's own opening line can. Concatenating
+    the items reproduces the body exactly.
     """
     end = len(body)
     while end > 0 and body[end - 1] == "":
         end -= 1
+    flags = _fence_flags(body)
     items: list[tuple[str, ...]] = []
     current: list[str] = []
-    for line in body[:end]:
-        opens = bool(line) and not line[0].isspace() and (
-            line.startswith("- ") or (bool(current) and current[-1] == "")
+    for idx, line in enumerate(body[:end]):
+        inside_fence = flags[idx] and not _is_fence_opener(flags, idx)
+        opens = (
+            bool(line)
+            and not inside_fence
+            and not line[0].isspace()
+            and (line.startswith("- ") or (bool(current) and current[-1] == ""))
         )
         if opens and current:
             items.append(tuple(current))
@@ -942,14 +1039,28 @@ def _items(body: list[str]) -> list[tuple[str, ...]]:
     return items
 
 
-def _find_runs(
-    haystack: list[tuple[str, ...]], run: list[tuple[str, ...]]
-) -> list[int]:
-    """Start indices where ``run`` occurs as a contiguous byte-identical run."""
-    width = len(run)
-    return [
-        at for at in range(len(haystack) - width + 1) if haystack[at : at + width] == run
-    ]
+def _is_fence_opener(flags: list[bool], idx: int) -> bool:
+    """Is line ``idx`` the opening line of a fence (flagged, previous line not)?"""
+    return flags[idx] and (idx == 0 or not flags[idx - 1])
+
+
+def _align_items(
+    base_items: list[tuple[str, ...]], origin_items: list[tuple[str, ...]]
+) -> dict[int, int]:
+    """Map base item index -> origin item index for items unchanged on origin.
+
+    Positional, not by content: two byte-identical items (``- Links: [[x]]``
+    under different topics) are different items, and a content search would
+    happily target the wrong one. Only items inside ``equal`` blocks of an
+    ordered diff are mapped; everything else was changed or removed on origin.
+    """
+    mapping: dict[int, int] = {}
+    matcher = difflib.SequenceMatcher(None, base_items, origin_items, autojunk=False)
+    for tag, i1, i2, j1, _j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(i2 - i1):
+                mapping[i1 + offset] = j1 + offset
+    return mapping
 
 
 def _merge_section_items(
@@ -962,14 +1073,18 @@ def _merge_section_items(
 ) -> list[str]:
     """Re-apply the session's item-level edits of one section onto origin's body.
 
-    Every item the session replaced or deleted must occur in origin's body as
-    a contiguous, byte-identical run exactly once; an insertion anchors on the
-    base item before it, which must occur exactly once on origin (an insertion
-    at the very top goes to the section top). Placements that overlap refuse.
+    Base items are aligned to origin's by position (``_align_items``). Every
+    item the session replaced or deleted must be mapped -- unchanged and
+    aligned on origin -- and the mapped run contiguous; an insertion anchors
+    on the mapped origin position of the base item before it (an insertion at
+    the very top goes to the section top). A session-inserted item origin's
+    section already holds byte-identically is not inserted again. Placements
+    that overlap refuse.
     """
     base_items = _items(base_body)
     tip_items = _items(tip_body)
     origin_items = _items(origin_body)
+    mapping = _align_items(base_items, origin_items)
     placements: list[tuple[int, int, list[tuple[str, ...]]]] = []
     matcher = difflib.SequenceMatcher(None, base_items, tip_items, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -977,27 +1092,35 @@ def _merge_section_items(
             continue
         if tag == "insert":
             if i1 == 0:
-                placements.append((0, 0, tip_items[j1:j2]))
+                anchor = 0
+            elif i1 - 1 in mapping:
+                anchor = mapping[i1 - 1] + 1
             else:
-                hits = _find_runs(origin_items, [base_items[i1 - 1]])
-                if len(hits) != 1:
-                    raise RefusalError(
-                        f"{path}: in '## {name}', the item before the session's insertion "
-                        f"({base_items[i1 - 1][0][:60]!r}) is not byte-identical exactly once on "
-                        f"origin ({len(hits)} matches); escalating"
-                    )
-                placements.append((hits[0] + 1, hits[0] + 1, tip_items[j1:j2]))
-            counts["items_inserted"] += j2 - j1
+                raise RefusalError(
+                    f"{path}: in '## {name}', the item before the session's insertion "
+                    f"({base_items[i1 - 1][0][:60]!r}) is not unchanged on origin "
+                    "(byte-identical and aligned); escalating"
+                )
+            fresh = [
+                item
+                for item in tip_items[j1:j2]
+                if not any(line.strip() for line in item) or item not in origin_items
+            ]
+            if fresh:
+                placements.append((anchor, anchor, fresh))
+                counts["items_inserted"] += len(fresh)
             continue
-        run = base_items[i1:i2]
-        hits = _find_runs(origin_items, run)
-        if len(hits) != 1:
+        run = list(range(i1, i2))
+        if any(index not in mapping for index in run) or any(
+            mapping[b] + 1 != mapping[a] for a, b in zip(run[1:], run, strict=False)
+        ):
             raise RefusalError(
                 f"{path}: in '## {name}', the session's changed item "
-                f"{run[0][0][:60]!r} is not byte-identical exactly once on origin "
-                f"({len(hits)} matches; edited or removed there); escalating"
+                f"{base_items[i1][0][:60]!r} is not byte-identical, aligned, and contiguous "
+                "on origin (edited or removed there); escalating"
             )
-        placements.append((hits[0], hits[0] + len(run), tip_items[j1:j2]))
+        start = mapping[i1]
+        placements.append((start, start + len(run), tip_items[j1:j2]))
         counts["items_replaced"] += len(run)
     placements.sort(key=lambda placement: (placement[0], placement[1]))
     for (_s1, end1, _r1), (start2, _e2, _r2) in zip(placements, placements[1:], strict=False):
@@ -1362,7 +1485,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
                 f"Session-only paths carried: {sum(len(v) for v in report.carried.values())}.\n"
                 "Every replaced span was asserted byte-identical to the session base\n"
                 "(per replaced entry / per replaced handoff item) before replacement;\n"
-                "ledger anchors were re-sorted newest-first (the-workshop#893).\n"
+                "new ledger entries were placed by date, origin's order untouched (the-workshop#893).\n"
             )
             _git_out("commit", "--quiet", "-m", message)
             new_head = _git_out("rev-parse", "HEAD")
@@ -1492,25 +1615,43 @@ def _default_lint_paths() -> list[str]:
     return paths
 
 
-def lint(paths: list[str]) -> dict[str, Any]:
+def _is_ledger_name(path: str) -> bool:
+    return Path(path).name in {Path(ledger).name for ledger in LEDGER_FILES}
+
+
+def lint(paths: list[str], explicit: bool = False) -> dict[str, Any]:
     """Run the replay grammar over hub files without touching git or the network.
 
     Parameters
     ----------
     paths:
-        Files to check; ``handoff-*.md`` basenames are handoffs, everything
-        else is a ledger. Missing files are skipped.
+        Files to check. A ``handoff-<context>.md`` basename is a handoff; a
+        ledger basename (``Gotchas.md``, ``Key Decisions.md``, ``Brag Doc.md``)
+        is a ledger; anything else is not a hub file.
+    explicit:
+        True when the caller named the paths: a missing one, or one that is
+        not a hub file, is then a finding. Default-set files that are absent
+        are simply skipped.
 
     Returns
     -------
     dict
         ``{"ok": bool, "checked": [path...], "findings": [{"path", "message"}]}``.
+        Nothing checked and nothing found is itself a finding.
     """
     checked: list[str] = []
     findings: list[dict[str, str]] = []
     for path in paths:
         file = Path(path)
         if not file.is_file():
+            if explicit:
+                findings.append({"path": path, "message": f"{path}: file is missing"})
+            continue
+        handoff = _is_handoff_path(path)
+        if not handoff and not _is_ledger_name(path):
+            findings.append(
+                {"path": path, "message": f"{path}: not a hub file (neither a ledger nor a handoff digest)"}
+            )
             continue
         checked.append(path)
         try:
@@ -1518,8 +1659,10 @@ def lint(paths: list[str]) -> dict[str, Any]:
         except (OSError, UnicodeDecodeError) as exc:
             findings.append({"path": path, "message": f"{path}: unreadable ({exc})"})
             continue
-        found = _lint_handoff(text, path) if _is_handoff_path(path) else _lint_ledger(text, path)
+        found = _lint_handoff(text, path) if handoff else _lint_ledger(text, path)
         findings.extend({"path": path, "message": message} for message in found)
+    if not checked and not findings:
+        findings.append({"path": "", "message": "no hub files found; nothing was checked"})
     return {"ok": not findings, "checked": checked, "findings": findings}
 
 
@@ -1543,23 +1686,91 @@ def _nonblank_lines(text: str) -> Counter[str]:
     return Counter(line for line in text.splitlines() if line.strip())
 
 
+# Lines the merge resolves by rule rather than by line arithmetic: every
+# wrap-up rewrites the handoff's _Updated stamp and its frontmatter description,
+# so both sides "changing" them is expected and the result legitimately holds
+# either side's version (or, for the description, the clause-merged one).
+_RESOLVED_PREFIXES = (_STAMP_PREFIX, "description: ")
+
+
+def _resolved_lines(text: str, prefix: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith(prefix)]
+
+
+def _description_candidates(base: str, tip: str, origin: str) -> list[list[str]]:
+    """The tip's, origin's, and clause-merged ``description:`` lines, as lists."""
+    candidates = [_resolved_lines(tip, "description: "), _resolved_lines(origin, "description: ")]
+    parsed = []
+    for text in (base, tip, origin):
+        found = _resolved_lines(text, "description: ")
+        match = _DESCRIPTION_RE.match(found[0]) if len(found) == 1 else None
+        if match is None:
+            return candidates
+        parsed.append(match.group(1))
+    try:
+        merged = merge_descriptions(*parsed)
+    except RefusalError:
+        return candidates
+    candidates.append([f'description: "{merged}"'])
+    return candidates
+
+
 def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, list[str]]:
     """Compare one file's merge result to both sides by non-blank-line multisets.
 
-    Returns ``{"missing", "extra", "ambiguous"}``: ``missing`` is any line
-    either side added that the result lacks, ``extra`` any line the result
-    holds beyond ``base - deletions + additions``, and ``ambiguous`` the lines
-    both sides added (one copy or two are both legitimate, so they never fail).
-    Counter semantics throughout.
+    The result must hold every non-blank line exactly ``base - deletions +
+    additions`` times (deletions by either side win; additions from both sides
+    count). ``missing`` lists lines the result holds too few times -- an
+    addition lost, but also *untouched* content lost -- and ``extra`` lines it
+    holds too many times (a duplicated sentence, an invented line). A line both
+    sides added is ``ambiguous``: any count from one copy up to two is fine.
+    Lines starting ``_Updated `` and the frontmatter ``description: `` line are
+    resolved by rule, not arithmetic: the result must hold exactly one side's
+    version (or the clause-merged description); a match is reported under
+    ``resolved``, a mismatch or a dropped line under ``extra`` / ``missing``.
     """
-    b, t, o, r = (_nonblank_lines(text) for text in (base, tip, origin, result))
+    missing: set[str] = set()
+    extra: set[str] = set()
+    resolved: list[str] = []
+    for prefix in _RESOLVED_PREFIXES:
+        sides = [_resolved_lines(text, prefix) for text in (base, tip, origin, result)]
+        if not any(sides):
+            continue
+        if prefix == "description: ":
+            candidates = _description_candidates(base, tip, origin)
+        else:
+            candidates = [sides[1], sides[2]]
+        if sides[3] in candidates:
+            resolved.extend(sides[3])
+        elif sides[3]:
+            extra.update(sides[3])
+        else:
+            missing.update(sides[1] or sides[2])
+
+    def rest(text: str) -> Counter[str]:
+        return Counter(
+            line for line in _nonblank_lines(text).elements() if not line.startswith(_RESOLVED_PREFIXES)
+        )
+
+    b, t, o, r = (rest(text) for text in (base, tip, origin, result))
     s_add, o_add = t - b, o - b
-    s_del, o_del = b - t, b - o
+    kept = b - ((b - t) | (b - o))
     ambiguous = set(s_add) & set(o_add)
-    missing = [line for line in ((s_add - r) + (o_add - r)) if line not in ambiguous]
-    expected = (b - (s_del | o_del)) + s_add + o_add
-    extra = [line for line in (r - expected) if line not in ambiguous]
-    return {"missing": sorted(missing), "extra": sorted(extra), "ambiguous": sorted(ambiguous)}
+    for line in set(b) | set(t) | set(o) | set(r):
+        low = kept[line] + (
+            max(s_add[line], o_add[line]) if line in ambiguous else s_add[line] + o_add[line]
+        )
+        high = kept[line] + s_add[line] + o_add[line]
+        if r[line] < low:
+            missing.add(line)
+        if r[line] > high:
+            extra.add(line)
+    return {
+        "missing": sorted(missing),
+        "extra": sorted(extra),
+        "ambiguous": sorted(ambiguous),
+        "resolved": sorted(resolved),
+    }
 
 
 def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any]:
@@ -1601,7 +1812,7 @@ def _resolve_rev(rev: str) -> str | None:
 
 def _main_lint(args: argparse.Namespace) -> int:
     paths = args.paths or _default_lint_paths()
-    outcome = lint(paths)
+    outcome = lint(paths, explicit=bool(args.paths))
     if args.as_json:
         print(json.dumps(outcome, indent=2))
     else:

@@ -40,6 +40,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from entry_replay import (  # noqa: E402
     RefusalError,
+    compare_texts,
     handoff_merge,
     is_allowlisted,
     ledger_merge,
@@ -366,7 +367,7 @@ def test_concurrent_disjoint_inserts_same_anchor_replay_succeeds(tmp_path: Path)
     peer_chunk = decisions_entry("2026-09-20", "Peer session decision", "**Decided:** peer thing.")
     _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
     origin_head = _peer_push(peer)
-    # The session's entry is OLDER than the peer's, so only the date re-sort
+    # The session's entry is OLDER than the peer's, so only date placement
     # can produce the right order -- top-insertion alone would get it wrong.
     session_chunk = decisions_entry(
         "2026-09-18", "Session decision", "**Decided:** session thing."
@@ -501,9 +502,9 @@ def test_equal_dates_keep_session_entry_above_origin_entry(tmp_path: Path) -> No
     assert merged.index("Session same-day decision") < merged.index("Peer same-day decision")
 
 
-def test_replay_relinearizes_an_origin_block_with_ordering_drift(tmp_path: Path) -> None:
-    """The date-sort is what reconciles the replay with #871: even drift that
-    arrived from origin's side leaves the merged anchor newest-first."""
+def test_replay_keeps_origin_order_even_when_origin_drifted(tmp_path: Path) -> None:
+    """Origin's entries keep their exact order -- drift included. Only the
+    session's new entry is placed, before the first origin entry older than it."""
     _remote, local, peer, base = _make_vault(tmp_path)
     # Peer appends at the wrong end -- the exact drift #871 exists to stop.
     drifted = _read(peer, DECISIONS) + "\n" + decisions_entry(
@@ -518,7 +519,7 @@ def test_replay_relinearizes_an_origin_block_with_ordering_drift(tmp_path: Path)
     _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
 
     dates = _entry_dates_under(_read(local, DECISIONS), "## Recent", None)
-    assert dates == ["2026-09-19", "2026-09-17", "2026-09-15", "2026-09-10"]
+    assert dates == ["2026-09-17", "2026-09-15", "2026-09-10", "2026-09-19"]
 
 
 def test_multiple_ledgers_and_anchors_replay_in_one_run(tmp_path: Path) -> None:
@@ -1786,28 +1787,27 @@ def test_handoff_same_bullet_edited_by_both_sides_refuses() -> None:
     assert "byte-identical" in str(info.value)
 
 
-def test_handoff_session_edit_of_a_bullet_origin_duplicated_refuses() -> None:
-    """"Exactly once": two byte-identical matches on origin cannot be told apart."""
+def test_handoff_origin_duplicating_an_item_does_not_stop_a_positional_edit() -> None:
+    """Origin added a second identical bullet; the session's edit lands on the
+    aligned (first) copy and origin's added copy survives -- nothing is lost."""
     base = HANDOFF_SEED
     tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
     origin = base.replace(
         "- [[proj-a]]: watch the deploy.\n",
         "- [[proj-a]]: watch the deploy.\n- [[proj-a]]: watch the deploy.\n",
     )
-    with pytest.raises(RefusalError, match="Open threads"):
-        handoff_merge(base, tip, origin, HANDOFF)
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.count("session wording.") == 1
+    assert merged.count("- [[proj-a]]: watch the deploy.") == 1
 
 
-def test_handoff_insertion_anchor_duplicated_on_origin_refuses() -> None:
+def test_handoff_insertion_after_an_item_origin_removed_refuses() -> None:
     base = HANDOFF_SEED
     tip = base.replace(
         "- [[proj-a]]: watch the deploy.",
         "- [[proj-a]]: watch the deploy.\n- [[proj-c]]: session's insert.",
     )
-    origin = base.replace(
-        "- [[proj-a]]: watch the deploy.\n",
-        "- [[proj-a]]: watch the deploy.\n- [[proj-a]]: watch the deploy.\n",
-    )
+    origin = base.replace("- [[proj-a]]: watch the deploy.\n", "")
     with pytest.raises(RefusalError, match="insertion"):
         handoff_merge(base, tip, origin, HANDOFF)
 
@@ -2184,7 +2184,7 @@ def test_lint_reports_handoff_frontmatter_and_duplicate_sections(tmp_path: Path)
 
 
 def test_lint_json_lists_findings_and_explicit_paths(tmp_path: Path) -> None:
-    bad = tmp_path / "scratch" / "Ledger.md"
+    bad = tmp_path / "scratch" / "Gotchas.md"
     bad.parent.mkdir()
     bad.write_text("# T\n\n## A\n\n### Entry (2026-09-10)\n\nBody.\n\n### Undated\n", encoding="utf-8")
     result = _lint(tmp_path, "--json", str(bad))
@@ -2198,11 +2198,39 @@ def test_lint_json_lists_findings_and_explicit_paths(tmp_path: Path) -> None:
 def test_lint_explicit_clean_paths_exit_zero(tmp_path: Path) -> None:
     good = tmp_path / "handoff-x.md"
     good.write_text(HANDOFF_SEED, encoding="utf-8")
-    ledger = tmp_path / "Ledger.md"
+    ledger = tmp_path / "Gotchas.md"
     ledger.write_text(GOTCHAS_SEED, encoding="utf-8")
-    result = _lint(tmp_path, "--json", str(ledger), str(tmp_path / "missing.md"))
+    result = _lint(tmp_path, "--json", str(ledger), str(good))
     assert result.returncode == 0, result.stdout
     assert json.loads(result.stdout)["ok"] is True
+
+
+def test_lint_explicit_missing_path_is_a_finding(tmp_path: Path) -> None:
+    ledger = tmp_path / "Gotchas.md"
+    ledger.write_text(GOTCHAS_SEED, encoding="utf-8")
+    missing = tmp_path / "Key Decisions.md"
+    result = _lint(tmp_path, "--json", str(ledger), str(missing))
+    assert result.returncode == 1, result.stdout
+    findings = json.loads(result.stdout)["findings"]
+    assert [item["path"] for item in findings] == [str(missing)]
+    assert "missing" in findings[0]["message"]
+
+
+def test_lint_explicit_non_hub_path_is_a_finding_not_linted_as_a_ledger(tmp_path: Path) -> None:
+    stray = tmp_path / "Notes.md"
+    stray.write_text(GOTCHAS_SEED, encoding="utf-8")
+    result = _lint(tmp_path, "--json", str(stray))
+    assert result.returncode == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert [item["path"] for item in payload["findings"]] == [str(stray)]
+    assert "not a hub file" in payload["findings"][0]["message"]
+    assert payload["checked"] == []
+
+
+def test_lint_with_nothing_to_check_fails(tmp_path: Path) -> None:
+    result = _lint(tmp_path)  # an empty directory: no hub files at all
+    assert result.returncode == 1
+    assert "no hub files found" in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -2335,3 +2363,356 @@ def test_verify_truncates_long_lines_in_text_output(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "x" * 300 not in proc.stdout
     assert HANDOFF in proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# Round 2 -- adversarial-review findings, one test group per finding.
+# ---------------------------------------------------------------------------
+
+# F1 -- compare_texts / --verify must see lost untouched content ---------------
+
+
+def test_compare_texts_reports_an_untouched_line_the_result_lost() -> None:
+    verdict = compare_texts("a\nb\n", "a\nb\nc\n", "a\nb\n", "a\nc\n")
+    assert verdict["missing"] == ["b"]
+    assert verdict["extra"] == []
+
+
+def test_compare_texts_empty_result_fails() -> None:
+    verdict = compare_texts("a\nb\n", "a\nb\nc\n", "a\nb\nd\n", "")
+    assert set(verdict["missing"]) == {"a", "b", "c", "d"}
+
+
+def test_compare_texts_clean_merge_passes() -> None:
+    verdict = compare_texts("a\nb\n", "a\nb\nc\n", "a\nb\nd\n", "d\na\nb\nc\n")
+    assert verdict["missing"] == [] and verdict["extra"] == []
+
+
+def test_compare_texts_both_sides_added_line_may_appear_once_or_twice() -> None:
+    base, tip, origin = "a\n", "a\nx\n", "a\nx\n"
+    for copies, ok in ((0, False), (1, True), (2, True), (3, False)):
+        result = "a\n" + "x\n" * copies
+        verdict = compare_texts(base, tip, origin, result)
+        assert (not verdict["missing"] and not verdict["extra"]) is ok, copies
+        assert verdict["ambiguous"] == ["x"]
+
+
+def test_compare_texts_a_correct_stamp_resolution_passes() -> None:
+    base = "---\ndescription: \"d\"\n---\n_Updated 1._\n- a\n"
+    tip = "---\ndescription: \"d\"\n---\n_Updated 2._\n- a\n- s\n"
+    origin = "---\ndescription: \"d\"\n---\n_Updated 3._\n- a\n- o\n"
+    for stamp in ("_Updated 2._", "_Updated 3._"):
+        result = f"---\ndescription: \"d\"\n---\n{stamp}\n- a\n- s\n- o\n"
+        verdict = compare_texts(base, tip, origin, result)
+        assert verdict["missing"] == [] and verdict["extra"] == [], stamp
+        assert stamp in verdict["resolved"]
+
+
+def test_compare_texts_an_invented_stamp_or_a_dropped_stamp_fails() -> None:
+    base = "_Updated 1._\n- a\n"
+    tip = "_Updated 2._\n- a\n"
+    origin = "_Updated 3._\n- a\n"
+    invented = compare_texts(base, tip, origin, "_Updated 9._\n- a\n")
+    assert invented["extra"] == ["_Updated 9._"]
+    dropped = compare_texts(base, tip, origin, "- a\n")
+    assert dropped["missing"] and dropped["resolved"] == []
+
+
+def test_compare_texts_accepts_the_merged_description_clause_set() -> None:
+    def doc(desc: str) -> str:
+        return f'---\ndescription: "{desc}"\n---\n- a\n'
+
+    base, tip, origin = doc("x; y"), doc("x; y; s"), doc("x; y; o")
+    merged = doc("x; y; o; s")
+    verdict = compare_texts(base, tip, origin, merged)
+    assert verdict["missing"] == [] and verdict["extra"] == []
+    assert verdict["resolved"] == ['description: "x; y; o; s"']
+    wrong = compare_texts(base, tip, origin, doc("x; y; o; s; s"))
+    assert wrong["extra"] == ['description: "x; y; o; s; s"']
+
+
+# F2 -- handoff items align positionally, never by content search ---------------
+
+DUP_LINKS_BASE = HANDOFF_SEED.replace(
+    "- [[proj-a]]: watch the deploy.\n- [[proj-b]]: close the parity ticket.\n",
+    "- A topic\n- Links: [[x]]\n- B topic\n- Links: [[x]]\n",
+)
+
+
+def _second_links(text: str, new: str) -> str:
+    head, _sep, tail = text.rpartition("- Links: [[x]]")
+    return head + new + tail
+
+
+def test_handoff_duplicate_items_edited_on_both_sides_refuse() -> None:
+    assert DUP_LINKS_BASE != HANDOFF_SEED
+    tip = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[z]]")
+    origin = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[y]]")
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
+
+
+def test_handoff_insert_after_a_duplicate_item_origin_edited_refuses() -> None:
+    tip = _second_links(DUP_LINKS_BASE, "- Links: [[x]]\n- Inserted item")
+    origin = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[y]]")
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
+
+
+def test_handoff_duplicate_items_session_edit_lands_on_the_right_copy() -> None:
+    tip = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[z]]")
+    origin = DUP_LINKS_BASE.replace("- B topic", "- B topic, origin-edited")
+    merged, _detail = handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
+    assert merged.index("- A topic\n- Links: [[x]]\n") < merged.index("- B topic, origin-edited")
+    assert merged.count("[[x]], [[z]]") == 1
+    assert merged.index("[[x]], [[z]]") > merged.index("B topic")
+
+
+def test_handoff_prepend_to_a_middle_section_with_origin_unchanged_accepts() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-new]]: first.\n- [[proj-a]]: watch the deploy.")
+    merged, detail = handoff_merge(base, tip, base, HANDOFF)
+    assert merged == tip
+    assert detail["items_inserted"] == 1
+
+
+def test_handoff_prepend_while_origin_edited_a_different_item_accepts() -> None:
+    base = HANDOFF_SEED
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-new]]: first.\n- [[proj-a]]: watch the deploy.")
+    origin = base.replace("- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: origin edit.")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.index("proj-new") < merged.index("proj-a]]: watch")
+    assert "- [[proj-b]]: origin edit." in merged
+
+
+# F3 -- no whole-block re-sort: origin's order stays, new entries are placed ----
+
+UNSORTED_BASE = (
+    "# Gotchas\n\n## Technical\n\n"
+    + gotchas_entry("Oldest first one", "2026-09-01", "Body one.")
+    + "\n"
+    + gotchas_entry("Oldest first two", "2026-09-05", "Body two with a tpyo.")
+    + "\n"
+    + gotchas_entry("Oldest first three", "2026-09-10", "Body three.")
+)
+
+
+def _changed_lines(a: str, b: str) -> int:
+    import difflib
+
+    return sum(1 for line in difflib.ndiff(a.splitlines(), b.splitlines()) if line[0] in "+-")
+
+
+def test_typo_fix_in_an_oldest_first_block_changes_exactly_one_line() -> None:
+    tip = UNSORTED_BASE.replace("tpyo", "typo")
+    merged, detail = ledger_merge(UNSORTED_BASE, tip, UNSORTED_BASE, GOTCHAS)
+    assert detail["replaced"] == 1
+    assert merged == tip
+    assert _changed_lines(UNSORTED_BASE, merged) == 2  # one line out, one line in
+
+
+def test_insertion_into_an_unsorted_block_moves_no_existing_entry() -> None:
+    """Scanning from the top, 09-07 meets 09-01 first (strictly older), so it lands
+    above it; origin's three entries keep their exact oldest-first order."""
+    new = gotchas_entry("New entry", "2026-09-07", "New body.")
+    tip = insert_under(UNSORTED_BASE, "## Technical", new)
+    merged, _detail = ledger_merge(UNSORTED_BASE, tip, UNSORTED_BASE, GOTCHAS)
+    titles = [line for line in merged.splitlines() if line.startswith("### ")]
+    assert titles[0] == "### New entry (2026-09-07)"
+    assert titles[1:] == [
+        "### Oldest first one (2026-09-01)",
+        "### Oldest first two (2026-09-05)",
+        "### Oldest first three (2026-09-10)",
+    ]
+
+
+def test_new_entry_newer_than_everything_older_goes_to_the_end() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Ancient entry", "2026-01-01", "Old body.")
+    tip = insert_under(base, "## Technical", new)
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    technical = merged.split("## Process")[0]
+    assert technical.rstrip().endswith("Old body.")
+
+
+def test_same_date_new_entry_goes_above_origins_same_date_entry() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Same day newcomer", "2026-09-15", "New body.")
+    tip = insert_under(base, "## Technical", new)
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert merged.index("Same day newcomer") < merged.index("Stale tracking refs lie")
+
+
+def test_multiple_new_entries_keep_the_sessions_relative_order() -> None:
+    base = GOTCHAS_SEED
+    first = gotchas_entry("Session first", "2026-09-20", "One.")
+    second = gotchas_entry("Session second", "2026-09-20", "Two.")
+    tip = insert_under(base, "## Technical", first + "\n" + second)
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert merged.index("Session first") < merged.index("Session second")
+    assert merged.index("Session second") < merged.index("Stale tracking refs lie")
+
+
+def test_an_edited_entry_keeps_its_origin_position_in_an_unsorted_block() -> None:
+    tip = UNSORTED_BASE.replace(
+        "Oldest first two (2026-09-05)", "Oldest first two (2026-09-05, [[x]])"
+    )
+    merged, detail = ledger_merge(UNSORTED_BASE, tip, UNSORTED_BASE, GOTCHAS)
+    assert detail["replaced"] == 1
+    titles = [line for line in merged.splitlines() if line.startswith("### ")]
+    assert titles[1] == "### Oldest first two (2026-09-05, [[x]])"
+
+
+# F4 -- CommonMark fences ------------------------------------------------------
+
+FENCED_ENTRY = (
+    "### Entry holding a four-backtick fence (2026-09-12)\n"
+    "\n"
+    "````md\n"
+    "```\n"
+    "\n"
+    "\n"
+    "### Inner fake (2026-09-01)\n"
+    "```\n"
+    "````\n"
+    "\n"
+    "After the fence.\n"
+)
+
+
+def test_a_four_backtick_fence_is_not_closed_by_an_inner_three_backtick_line() -> None:
+    base = insert_under(GOTCHAS_SEED, "## Technical", FENCED_ENTRY)
+    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-20", "New."))
+    merged, detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert FENCED_ENTRY in merged, "the fence content (two blank lines included) must be intact"
+    assert detail["inserted"] == 1 and detail["replaced"] == 0
+    assert merged.count("Stale tracking refs lie") == 1
+
+
+def test_a_tilde_fence_is_not_closed_by_backticks_and_needs_a_long_enough_closer() -> None:
+    entry = (
+        "### Tilde fence entry (2026-09-12)\n\n~~~~\n```\n### Inner fake (2026-09-01)\n~~~\n\n"
+        "still inside\n~~~~\n\nAfter.\n"
+    )
+    base = insert_under(GOTCHAS_SEED, "## Technical", entry)
+    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-20", "New."))
+    merged, detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert entry in merged
+    assert detail["inserted"] == 1
+
+
+# F5 -- an overwrite is a deletion, not an edit -------------------------------
+
+
+def test_overwriting_an_entry_with_a_new_one_refuses_as_a_deletion() -> None:
+    base = GOTCHAS_SEED.replace(
+        "### Review packets retired (2026-09-01)\n\nBody of the process gotcha.\n",
+        "### Review packets retired (2026-10-05)\n\nBody of the process gotcha.\n",
+    )
+    tip = base.replace(
+        "### Review packets retired (2026-10-05)\n\nBody of the process gotcha.\n",
+        "### Entirely different newcomer (2026-10-10)\n\nA brand new unrelated body.\n",
+    )
+    assert tip != base
+    with pytest.raises(RefusalError, match="deleted"):
+        ledger_merge(base, tip, base, GOTCHAS)
+
+
+def test_a_heading_only_rename_of_the_same_entry_still_pairs() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)",
+        "### Bytecode caches can hide a mutation (2026-09-10)",
+    )
+    merged, detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert detail["replaced"] == 1
+    assert "Bytecode caches can hide a mutation" in merged
+    assert "### Bytecode cache hides a mutation" not in merged
+
+
+def test_same_date_rewrite_with_a_similar_body_pairs_but_a_dissimilar_one_does_not() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)\n\nBody of the bytecode gotcha.",
+        "### Renamed bytecode entry (2026-09-10)\n\nBody of the bytecode gotcha, extended a bit.",
+    )
+    _merged, detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert detail["replaced"] == 1
+    unrelated = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)\n\nBody of the bytecode gotcha.",
+        "### Something else entirely (2026-09-10)\n\nZzz qqq www xxx 123 completely unrelated text.",
+    )
+    with pytest.raises(RefusalError, match="deleted"):
+        ledger_merge(base, unrelated, base, GOTCHAS)
+
+
+# F6 -- an item both sides inserted appears once -------------------------------
+
+
+def test_handoff_item_both_sides_inserted_is_not_duplicated() -> None:
+    base = HANDOFF_SEED
+    both = "- [[proj-a]]: watch the deploy.\n- Same new item."
+    tip = base.replace("- [[proj-a]]: watch the deploy.", both)
+    origin = base.replace("- [[proj-a]]: watch the deploy.", both)
+    origin = origin.replace("- [[proj-b]]: close the parity ticket.", "- [[proj-b]]: origin edit.")
+    merged, detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.count("- Same new item.") == 1
+    assert "origin edit." in merged
+    assert detail["items_inserted"] == 0
+
+
+# F7 -- description clauses origin already holds are not appended --------------
+
+
+def test_merge_descriptions_does_not_append_a_clause_origin_already_has() -> None:
+    assert merge_descriptions("a; b", "a; b; c", "a; b2; c") == "a; b2; c"
+
+
+# F8 -- handoff items are fence-aware -----------------------------------------
+
+
+def test_handoff_blank_and_bullet_lines_inside_a_fence_stay_in_their_item() -> None:
+    fenced = "- [[proj-a]]: run this:\n```\n- inside one\n\n- inside two\n```"
+    base = HANDOFF_SEED.replace("- [[proj-a]]: watch the deploy.", fenced)
+    tip = base.replace("- inside one", "- inside one, session")
+    origin = base.replace("- inside two", "- inside two, origin")
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_handoff_a_fence_opening_after_a_blank_still_starts_its_own_item() -> None:
+    base = HANDOFF_SEED.replace(
+        "- [[proj-a]]: watch the deploy.",
+        "- [[proj-a]]: watch the deploy.\n\n```\ncode\n```",
+    )
+    tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
+    origin = base.replace("code", "code, origin")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "session wording." in merged and "code, origin" in merged
+
+
+def test_handoff_replace_run_with_an_origin_insertion_between_its_items_refuses() -> None:
+    """The session replaced two adjacent items by one; origin slipped an item
+    between them, so the base run is not contiguous on origin."""
+    base = HANDOFF_SEED
+    tip = base.replace(
+        "- [[proj-a]]: watch the deploy.\n- [[proj-b]]: close the parity ticket.\n",
+        "- [[proj-ab]]: merged thread.\n",
+    )
+    origin = base.replace(
+        "- [[proj-a]]: watch the deploy.\n",
+        "- [[proj-a]]: watch the deploy.\n- [[proj-o]]: origin slipped this in.\n",
+    )
+    assert tip != base and origin != base
+    with pytest.raises(RefusalError, match="Open threads"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_redating_an_entry_heading_is_a_deletion_even_with_the_same_body() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)",
+        "### Bytecode cache hides a mutation (2026-09-11)",
+    )
+    with pytest.raises(RefusalError, match="deleted"):
+        ledger_merge(base, tip, base, GOTCHAS)
