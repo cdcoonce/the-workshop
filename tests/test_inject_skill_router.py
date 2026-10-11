@@ -327,3 +327,36 @@ class TestRouterBodyOnClearAndCompact:
         assert "Route skills before responding." not in fire("startup")
         assert "Route skills before responding." in fire("compact")
         assert "Route skills before responding." in fire("clear")
+
+
+class TestNonStringSourceFromStdin:
+    def test_non_string_source_still_emits_the_router_body(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import os
+        import subprocess
+        import sys
+
+        root = tmp_path / "p"
+        _write_skill(root, "# Using Workflow\n\nRoute skills before responding.\n")
+        _write_conventions(root, ["convention"])
+        env = {
+            **os.environ,
+            "CLAUDE_PLUGIN_ROOT": str(root),
+            "TMPDIR": str(tmp_path / "tmp"),
+        }
+        (tmp_path / "tmp").mkdir()
+
+        payload = json.dumps({"session_id": "s", "source": ["compact"]})
+        result = subprocess.run(
+            [sys.executable, str(HOOK_PATH)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        assert "Traceback" not in result.stderr
+        assert "Route skills before responding." in result.stdout

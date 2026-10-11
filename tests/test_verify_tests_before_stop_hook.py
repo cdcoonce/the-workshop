@@ -324,3 +324,17 @@ def test_pyproject_only_repo_still_selects_pytest(tmp_path: Path) -> None:
 def test_docstring_lists_detection_order_makefile_npm_pytest() -> None:
     doc = HOOK_PATH.read_text().split('"""')[1]
     assert doc.index("Makefile") < doc.index("npm test") < doc.index("pytest")
+
+
+@pytest.mark.parametrize("filename", ["Makefile", "package.json"])
+def test_detection_file_that_is_a_directory_fails_open(
+    tmp_path: Path, filename: str
+) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / filename).mkdir()
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    result = run_hook({"cwd": str(tmp_path)})
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr

@@ -187,3 +187,11 @@ def test_non_string_tool_name_no_ops() -> None:
     assert result.returncode == 0
     assert result.stdout == ""
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("tool_name", ["SkillBuilder", "myskill", "Skills", "skill_x"])
+def test_other_tool_name_containing_skill_no_ops(tool_name: str) -> None:
+    result = run({"tool_name": tool_name, "tool_input": {"skill": "vault-sync"}})
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr

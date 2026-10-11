@@ -136,6 +136,48 @@
       "oracle": "real",
       "find": "source = data.get(\"source\")",
       "replace": "source = None"
+    },
+    {
+      "label": "independent: 517 floor boundary >= to >",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "context_tokens >= threshold // 2",
+      "replace": "context_tokens > threshold // 2"
+    },
+    {
+      "label": "independent: 517 None reading rearms",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "if context_tokens is None or context_tokens >= threshold // 2:",
+      "replace": "if context_tokens is not None and context_tokens >= threshold // 2:"
+    },
+    {
+      "label": "independent: 627 Makefile except only UnicodeDecodeError",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError):\n            text = \"\"",
+      "replace": "except UnicodeDecodeError:\n            text = \"\""
+    },
+    {
+      "label": "independent: 627 package.json drops OSError",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError, json.JSONDecodeError):",
+      "replace": "except (UnicodeDecodeError, json.JSONDecodeError):"
+    },
+    {
+      "label": "independent: 723 substring match on tool_name",
+      "file": "../plugins/workbench/hooks/scripts/remind-skill-announce.py",
+      "oracle": "real",
+      "find": "tool_name.lower() != \"skill\"",
+      "replace": "\"skill\" not in tool_name.lower()"
+    },
+    {
+      "label": "independent: 743 non-str source accepted",
+      "file": "../plugins/workbench/hooks/scripts/inject-skill-router.py",
+      "oracle": "real",
+      "find": "source if isinstance(source, str) else None",
+      "replace": "source"
     }
   ]
 }
