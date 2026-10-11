@@ -1,8 +1,6 @@
 {
   "runner": "pytest",
   "test_command": [
-    "env",
-    "PYTHONPATH=plugins/workbench/skills/worktree-audit/scripts",
     "uv",
     "run",
     "--with",
@@ -11,11 +9,9 @@
     "-m",
     "pytest",
     "-q",
-    "plugins/workbench/skills/worktree-audit/scripts/tests"
+    "tests"
   ],
   "collect_command": [
-    "env",
-    "PYTHONPATH=plugins/workbench/skills/worktree-audit/scripts",
     "uv",
     "run",
     "--with",
@@ -25,7 +21,7 @@
     "pytest",
     "--collect-only",
     "-q",
-    "plugins/workbench/skills/worktree-audit/scripts/tests"
+    "tests"
   ],
   "mutants": [
     {
