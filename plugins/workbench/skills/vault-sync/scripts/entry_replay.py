@@ -1708,10 +1708,15 @@ def _merge_section_items(
         j: i1 for tag, i1, _i2, j1, j2 in session_ops if tag == "insert" for j in range(j1, j2)
     }
 
-    def origin_made_it(index: int) -> bool:
-        """Did origin itself add the very item the session moved ``index`` into?"""
-        added = origin_added_at.get(insert_gap[moves[index]])
-        return added is not None and added[tc[moves[index]]] > 0
+    # Which moved items did origin itself move the same way? Decided up front: the
+    # ``fresh`` dedupe below consumes origin's added items as it walks the ops, and a
+    # move's insert can come before its delete.
+    origin_moved = {
+        index
+        for index, moved_to in moves.items()
+        if (added := origin_added_at.get(insert_gap[moved_to])) is not None
+        and added[tc[moved_to]] > 0
+    }
 
     for tag, i1, i2, j1, j2 in session_ops:
         if tag == "equal":
@@ -1763,7 +1768,7 @@ def _merge_section_items(
             continue
         if tag == "delete":
             stale = [
-                i for i in range(i1, i2) if i in moves and i not in mapping and not origin_made_it(i)
+                i for i in range(i1, i2) if i in moves and i not in mapping and i not in origin_moved
             ]
             if stale:
                 raise RefusalError(
