@@ -981,9 +981,13 @@ def scan(
     tasks = collect_tasks(vault_root)
     vault_git: dict | None = None
     if include_vault_git and week_keys:
-        # Log window: today minus the requested span plus a 2-week margin —
-        # cheaper than inverting week keys, and _week_key filters precisely.
-        since = datetime.now(tz).date() - timedelta(weeks=len(week_keys) + 2)
+        # Log window: from the Monday of the OLDEST requested week, less a
+        # 2-week margin. The list may be sparse (backfill keeps only missing
+        # weeks), so its length says nothing about how far back it reaches;
+        # _week_key filters precisely.
+        oldest_year, oldest_week = min(week_keys).split("-W")
+        oldest_monday = date.fromisocalendar(int(oldest_year), int(oldest_week), 1)
+        since = oldest_monday - timedelta(weeks=2)
         vault_git = collect_vault_git(vault_root, tz, since)
 
     # Attention: bucket events by (week, tool, scope), cluster per bucket,
@@ -1194,7 +1198,10 @@ def main() -> int:
         else vault_utils.find_vault_root(Path(__file__).parent)
     )
     if vault_root is None:
-        print("pulse: no vault root found (.vault-context) — pass --vault-root")
+        print(
+            "pulse: no vault root found (CLAUDE.md + brain/ + perf/ signature) "
+            "— pass --vault-root"
+        )
         return 1
     tz = (
         ZoneInfo(args.tz)
