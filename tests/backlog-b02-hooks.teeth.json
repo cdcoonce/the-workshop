@@ -1,0 +1,141 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_suggest_handoff_on_context_hook.py",
+    "tests/test_verify_tests_before_stop_hook.py",
+    "tests/test_remind_skill_announce_hook.py",
+    "tests/test_vault_skill_alias_hook.py",
+    "tests/test_inject_skill_router.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_suggest_handoff_on_context_hook.py",
+    "tests/test_verify_tests_before_stop_hook.py",
+    "tests/test_remind_skill_announce_hook.py",
+    "tests/test_vault_skill_alias_hook.py",
+    "tests/test_inject_skill_router.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1061 sidechain usage read as main-thread context",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "        if record.get(\"isSidechain\") is True:\n            continue  # subagent turn: its usage is not the main thread's context\n",
+      "replace": ""
+    },
+    {
+      "label": "#517 marker never re-arms on collapse",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "if context_tokens is None or context_tokens >= threshold // 2:",
+      "replace": "if True:"
+    },
+    {
+      "label": "#517 re-arm floor above the threshold (re-arms on any reading)",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "context_tokens >= threshold // 2",
+      "replace": "context_tokens >= threshold * 2"
+    },
+    {
+      "label": "#517 marker does not record the measured count",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "marker.write_text(str(context_tokens), encoding=\"utf-8\")",
+      "replace": "marker.write_text(\"\", encoding=\"utf-8\")"
+    },
+    {
+      "label": "#627 Makefile read lets UnicodeDecodeError escape",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "        except (OSError, UnicodeDecodeError):\n            text = \"\"",
+      "replace": "        except OSError:\n            text = \"\""
+    },
+    {
+      "label": "#627 package.json read lets UnicodeDecodeError escape",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError, json.JSONDecodeError):",
+      "replace": "except (OSError, json.JSONDecodeError):"
+    },
+    {
+      "label": "#1024 any tests/ directory selects pytest",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "tests_dir.is_dir() and any(tests_dir.rglob(\"*.py\"))",
+      "replace": "tests_dir.is_dir()"
+    },
+    {
+      "label": "#1024 tests/ scan is not recursive",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "any(tests_dir.rglob(\"*.py\"))",
+      "replace": "any(tests_dir.glob(\"*.py\"))"
+    },
+    {
+      "label": "#1024 docstring lists pytest before npm",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "then `npm test`,\nthen pytest via",
+      "replace": "then pytest via"
+    },
+    {
+      "label": "#723 tool_name compared case-sensitively",
+      "file": "../plugins/workbench/hooks/scripts/remind-skill-announce.py",
+      "oracle": "real",
+      "find": "tool_name.lower() != \"skill\"",
+      "replace": "tool_name != \"Skill\""
+    },
+    {
+      "label": "#1026 duplicate alias silently overwritten",
+      "file": "../plugins/workbench/hooks/scripts/vault-skill-alias.py",
+      "oracle": "real",
+      "find": "if alias in mapping and mapping[alias] != slug:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#1026 diagnostic omits the second slug",
+      "file": "../plugins/workbench/hooks/scripts/vault-skill-alias.py",
+      "oracle": "real",
+      "find": "f\"{mapping[alias]} and {slug}; dropping it\",",
+      "replace": "f\"{mapping[alias]}; dropping it\","
+    },
+    {
+      "label": "#1026 third claimant re-adds a dropped alias",
+      "file": "../plugins/workbench/hooks/scripts/vault-skill-alias.py",
+      "oracle": "real",
+      "find": "if alias == slug or alias in collided:",
+      "replace": "if alias == slug:"
+    },
+    {
+      "label": "#743 clear/compact refire still suppressed",
+      "file": "../plugins/workbench/hooks/scripts/inject-skill-router.py",
+      "oracle": "real",
+      "find": "if not session_id or source in _REFIRE_SOURCES:",
+      "replace": "if not session_id:"
+    },
+    {
+      "label": "#743 payload source ignored",
+      "file": "../plugins/workbench/hooks/scripts/inject-skill-router.py",
+      "oracle": "real",
+      "find": "source = data.get(\"source\")",
+      "replace": "source = None"
+    }
+  ]
+}
