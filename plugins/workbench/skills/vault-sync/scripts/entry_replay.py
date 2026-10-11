@@ -1010,17 +1010,19 @@ def _refuse_amended_re_add(
 ) -> None:
     """Refuse a session-added entry that pairs with one origin added since the base.
 
-    The same date and the replay's own similarity rule (``_same_entry_edited``)
-    mark the session's entry as another version of an entry origin already
-    gained since the merge-base. That is what a pushed commit that was then
-    amended or rebased looks like (origin keeps the pushed version, the session
-    re-adds the corrected one), and replaying it would leave both. Two
+    The replay's own similarity rule (``_amend_of``: ``_same_entry_edited``, or
+    the same heading text after the date, or a mostly unchanged body) marks the session's entry as
+    another version of an entry origin already gained since the merge-base --
+    whatever the dates say, since an amend can re-date the entry. That is what a
+    pushed commit that was then amended or rebased looks like (origin keeps the
+    pushed version, the session re-adds the corrected one), and replaying it
+    would leave both. Two
     sessions that really wrote the same entry independently look the same, and
     a human settles that one too.
     """
     for origin_chunk in _origin_added_entries(base_block, origin_block):
         for chunk in kept:
-            if _same_entry_edited(origin_chunk, chunk):
+            if _amend_of(origin_chunk, chunk):
                 raise RefusalError(
                     f"{path}: the session re-adds an entry origin already has in a different "
                     f"version ({chunk.label!r} vs origin's {origin_chunk.label!r} under "
@@ -1173,6 +1175,32 @@ def _same_entry_edited(old: _Chunk, edited: _Chunk) -> bool:
     old_start = _DATE_TOKEN_RE.sub("", old.lines[0])
     new_start = _DATE_TOKEN_RE.sub("", edited.lines[0])
     return difflib.SequenceMatcher(None, old_start, new_start).ratio() >= 0.6
+
+
+_AMEND_BODY_RATIO = 0.9
+_AMEND_BODY_MIN = 60
+
+
+def _amend_of(pushed: _Chunk, readded: _Chunk) -> bool:
+    """Is ``readded`` plausibly an amended ``pushed`` entry, whatever its date says?
+
+    The amend guard's pairing: everything ``_same_entry_edited`` pairs, plus --
+    with the dates ignored, since an amend can re-date the entry -- the same
+    heading text after the date, or two bodies that are nearly unchanged
+    (``_AMEND_BODY_RATIO``, stricter than the same-day 0.6: entries of different
+    days routinely share boilerplate such as ``**Decided:** ...``, and only a
+    near copy is an amend). The start-line fallback for bodyless bullets stays
+    same-day only: without a body to compare, a different day's unrelated
+    bullet must not pass for an amend.
+    """
+    if _same_entry_edited(pushed, readded) or _heading_text(pushed) == _heading_text(readded):
+        return True
+    old_body = "\n".join(_strip_trailing_blanks(pushed.lines[1:]))
+    new_body = "\n".join(_strip_trailing_blanks(readded.lines[1:]))
+    return (
+        min(len(old_body), len(new_body)) >= _AMEND_BODY_MIN
+        and difflib.SequenceMatcher(None, old_body, new_body).ratio() >= _AMEND_BODY_RATIO
+    )
 
 
 def _pair_leftovers(
@@ -1469,6 +1497,78 @@ def _label(content: tuple[str, ...]) -> str:
     return content[0][:60] if content else "<blank>"
 
 
+def _items_alike(first: tuple[str, ...], second: tuple[str, ...], floor: float) -> bool:
+    """Do two items read as versions of one another?
+
+    True for an identical first line, for one item's text opening the other's
+    (a note appended to a short bullet: ``- x`` against ``- x (updated)``), or
+    for a difflib ratio on the text of at least ``floor``. The move/edit
+    pairing uses a loose floor (``_MOVE_RATIO``: a wrong pair only matters when
+    origin also changed the item); the handoff amend guard a strict one
+    (``_AMEND_ITEM_RATIO``: short bullets written side by side, ``- n1`` and
+    ``- o1``, are different items, and refusing them would escalate every
+    concurrent append).
+    """
+    if not (_has_content(first) and _has_content(second)):
+        return False
+    if first[0] == second[0]:
+        return True
+    a, b = "\n".join(first), "\n".join(second)
+    if a.startswith(b) or b.startswith(a):
+        return True
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= floor
+
+
+_MOVE_RATIO = 0.6
+_AMEND_ITEM_RATIO = 0.9
+
+
+def _pair_moves(
+    bc: list[tuple[str, ...]],
+    tc: list[tuple[str, ...]],
+    opcodes: list[tuple[str, int, int, int, int]],
+) -> dict[int, int]:
+    """Pair the session's deleted base items with its inserted tip items by similarity.
+
+    ``difflib`` reads a moved item, or a moved *and edited* one, as a delete of
+    the base item plus an insert of the new one, two unrelated operations whose
+    guards each look harmless. A deleted base item and an inserted tip item of
+    the same section that read as versions of one another
+    (``_items_alike``) are one edit of that item. One-to-one, best match first.
+    Returns ``{base index: tip index}``.
+    """
+    deleted = [
+        i
+        for tag, i1, i2, _j1, _j2 in opcodes
+        if tag == "delete"
+        for i in range(i1, i2)
+        if _has_content(bc[i])
+    ]
+    inserted = [
+        j
+        for tag, _i1, _i2, j1, j2 in opcodes
+        if tag == "insert"
+        for j in range(j1, j2)
+        if _has_content(tc[j])
+    ]
+    scored = sorted(
+        (
+            (bc[i] == tc[j], -abs(i - j), i, j)
+            for i in deleted
+            for j in inserted
+            if _items_alike(bc[i], tc[j], _MOVE_RATIO)
+        ),
+        reverse=True,
+    )
+    pairs: dict[int, int] = {}
+    taken: set[int] = set()
+    for _score, _distance, i, j in scored:
+        if i not in pairs and j not in taken:
+            pairs[i] = j
+            taken.add(j)
+    return pairs
+
+
 def _merge_section_items(
     base_body: list[str],
     tip_body: list[str],
@@ -1532,6 +1632,17 @@ def _merge_section_items(
         if o_tag in ("replace", "delete"):
             origin_ops.append(op)
 
+    def refuse_if_amended(j: int, added: Counter[tuple[str, ...]]) -> None:
+        """Refuse a session item that is a *version* of one origin added in this gap."""
+        content = tip_items[j][0]
+        for other, count in added.items():
+            if count > 0 and _items_alike(content, other, _AMEND_ITEM_RATIO):
+                raise RefusalError(
+                    f"{path}: in '## {name}', the session inserts an item similar to one origin "
+                    f"inserted in the same gap ({_label(content)!r} vs origin's "
+                    f"{_label(other)!r}) -- was a pushed commit amended or rebased? escalating"
+                )
+
     def fresh(j1: int, j2: int, gap: int) -> list[int]:
         """Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``."""
         added = origin_added_at.get(gap)
@@ -1542,6 +1653,31 @@ def _merge_section_items(
                 added[content] -= 1
                 continue
             kept.append(j)
+        if added is not None:
+            for j in kept:
+                refuse_if_amended(j, added)
+        return kept
+
+    def fresh_tail(kept: list[int], gap: int) -> list[int]:
+        """Drop the *end* of a replacement origin itself added right after the replaced run.
+
+        The gap after a replaced run is where origin put an item that follows the
+        item the session replaced; a session replacement that ends with that
+        very item has it already. Only the end counts (origin's item sits after
+        the run), so a repeat in the middle of the replacement is kept.
+        """
+        added = origin_added_at.get(gap)
+        if added is None:
+            return kept
+        kept = list(kept)
+        while kept:
+            content = tip_items[kept[-1]][0]
+            if not (_has_content(content) and added[content] > 0):
+                break
+            added[content] -= 1
+            kept.pop()
+        if kept:
+            refuse_if_amended(kept[-1], added)
         return kept
 
     def twinned(index: int) -> bool:
@@ -1566,8 +1702,18 @@ def _merge_section_items(
     # separators the session's own edits force on the item before a change.
     sep_fix: dict[int, int] = {}
     blank_fix: dict[int, int] = {}
-    matcher = difflib.SequenceMatcher(None, bc, tc, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+    session_ops = difflib.SequenceMatcher(None, bc, tc, autojunk=False).get_opcodes()
+    moves = _pair_moves(bc, tc, session_ops)
+    insert_gap = {
+        j: i1 for tag, i1, _i2, j1, j2 in session_ops if tag == "insert" for j in range(j1, j2)
+    }
+
+    def origin_made_it(index: int) -> bool:
+        """Did origin itself add the very item the session moved ``index`` into?"""
+        added = origin_added_at.get(insert_gap[moves[index]])
+        return added is not None and added[tc[moves[index]]] > 0
+
+    for tag, i1, i2, j1, j2 in session_ops:
         if tag == "equal":
             for offset in range(i2 - i1):
                 b_at, t_at = i1 + offset, j1 + offset
@@ -1615,6 +1761,17 @@ def _merge_section_items(
                 placements.append((anchor, anchor, incoming))
                 counts["items_inserted"] += len(incoming)
             continue
+        if tag == "delete":
+            stale = [
+                i for i in range(i1, i2) if i in moves and i not in mapping and not origin_made_it(i)
+            ]
+            if stale:
+                raise RefusalError(
+                    f"{path}: in '## {name}', the session moved and edited the item "
+                    f"{_label(bc[stale[0]])!r} (now {_label(tc[moves[stale[0]]])!r}), but it is "
+                    "not byte-identical and aligned on origin (edited or removed there); "
+                    "escalating"
+                )
         if any(
             o_tag == tag and (oi1, oi2) == (i1, i2) and oc[oj1:oj2] == tc[j1:j2]
             for o_tag, oi1, oi2, oj1, oj2 in origin_ops
@@ -1637,7 +1794,7 @@ def _merge_section_items(
             )
         start = mapping[i1]
         end = mapping[run[-1]] + 1
-        kept = fresh(j1, j2, i1)
+        kept = fresh_tail(fresh(j1, j2, i1), i2)
         replacement = [tip_items[j] for j in kept]
         alike = (not kept or kept[-1] + 1 == j2) and follows_alike(j2, end)
         if replacement and not alike:
@@ -2121,6 +2278,22 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
             merged_text, detail = _merge_hub_file(path, base_text, tip_text, origin_text)
         except RefusalError as exc:
             refusals.append({"path": path, "reason": str(exc)})
+            continue
+        except GitError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- fail closed on any merge bug
+            # The merges are pure functions of three blobs, so a bug in one is a
+            # refusal for this file, not a traceback with no report: nothing has
+            # moved yet, and the human gets the same escalation as any refusal.
+            refusals.append(
+                {
+                    "path": path,
+                    "reason": (
+                        f"internal error while merging {path}: "
+                        f"{type(exc).__name__}: {exc}; escalating"
+                    ),
+                }
+            )
             continue
         report.files[path] = detail
         merged[path] = None if detail["unchanged"] else merged_text
