@@ -1,0 +1,183 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_task_manager.py",
+    "test_vault_mcp.py",
+    "test_session_stop_integration.py",
+    "test_pre_compact.py",
+    "test_glossary_manager.py",
+    "test_session_start_ownership.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_task_manager.py",
+    "test_vault_mcp.py",
+    "test_session_stop_integration.py",
+    "test_pre_compact.py",
+    "test_glossary_manager.py",
+    "test_session_start_ownership.py"
+  ],
+  "mutants": [
+    {
+      "label": "#797 alias not stripped before comparing",
+      "file": "../engine/task_manager.py",
+      "oracle": "real",
+      "find": "m.group(1).split(\"|\", 1)[0].strip().casefold()",
+      "replace": "m.group(1).strip().casefold()"
+    },
+    {
+      "label": "#797 case-sensitive comparison",
+      "file": "../engine/task_manager.py",
+      "oracle": "real",
+      "find": "m.group(1).split(\"|\", 1)[0].strip().casefold()",
+      "replace": "m.group(1).split(\"|\", 1)[0].strip()"
+    },
+    {
+      "label": "#829 message cites retired signature",
+      "file": "../engine/vault_mcp.py",
+      "oracle": "real",
+      "find": "no .vault/vault.json marker at \"",
+      "replace": "no brain/ + perf/ + CLAUDE.md signature at \""
+    },
+    {
+      "label": "#901 TimeoutExpired not caught in branch status",
+      "file": "../engine/session-stop.py",
+      "oracle": "real",
+      "find": "except subprocess.TimeoutExpired:\n        # Hung git",
+      "replace": "except FileNotFoundError:\n        # Hung git"
+    },
+    {
+      "label": "#901 main treats timeout as a feature branch",
+      "file": "../engine/session-stop.py",
+      "oracle": "real",
+      "find": "if not on_sync_branch and not cur_branch:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#931 trigger default changed",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "event.get(\"trigger\", \"unknown\")",
+      "replace": "event.get(\"trigger\", \"manual\")"
+    },
+    {
+      "label": "#931 no-vault early return removed",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "if vault_root is None:\n        return 0",
+      "replace": "if False:\n        return 0"
+    },
+    {
+      "label": "#931 empty transcript_path guard removed",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "if not transcript_path:\n        return 0",
+      "replace": "if False:\n        return 0"
+    },
+    {
+      "label": "#931 malformed stdin crashes instead of no-op",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "except Exception:\n        return 0\n\n    transcript_path",
+      "replace": "except Exception:\n        raise\n\n    transcript_path"
+    },
+    {
+      "label": "#931 success message loses handoff pointer",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "run /handoff (it rewrites",
+      "replace": "run it (it rewrites"
+    },
+    {
+      "label": "#774 pipes not escaped",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "return value.replace(\"|\", \"\\\\|\")",
+      "replace": "return value"
+    },
+    {
+      "label": "#774 cells split on escaped pipes too",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "re.compile(r\"(?<!\\\\)\\|\")",
+      "replace": "re.compile(r\"\\|\")"
+    },
+    {
+      "label": "#774 glossary term not unescaped on parse",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "term = _unescape_cell(match.group(\"key\").strip())",
+      "replace": "term = match.group(\"key\").strip()"
+    },
+    {
+      "label": "#774 glossary removal compares escaped key",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "if match and _unescape_cell(match.group(\"key\").strip()).lower() == term.lower():",
+      "replace": "if match and match.group(\"key\").strip().lower() == term.lower():"
+    },
+    {
+      "label": "#774 quick-ref 3-col col3 unescaped",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "{_escape_cell(col2)} | {_escape_cell(col3)} |\"",
+      "replace": "{_escape_cell(col2)} | {col3} |\""
+    },
+    {
+      "label": "#774 quick-ref Terms col2 unescaped",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "row = f\"| **{_escape_cell(name)}** | {_escape_cell(col2)} |\"",
+      "replace": "row = f\"| **{_escape_cell(name)}** | {col2} |\""
+    },
+    {
+      "label": "#902 log handle not closed by a context manager",
+      "file": "../engine/session-start.py",
+      "oracle": "real",
+      "find": "with (data_dir / \"session-start.log\").open(\"a\", encoding=\"utf-8\") as log:\n            log.write(f\"[{stamp}] {message}\\n\")",
+      "replace": "(data_dir / \"session-start.log\").open(\"a\", encoding=\"utf-8\").write(f\"[{stamp}] {message}\\n\")"
+    },
+    {
+      "label": "#902 log failure propagates",
+      "file": "../engine/session-start.py",
+      "oracle": "real",
+      "find": "    except Exception:\n        pass\n\n\ndef main",
+      "replace": "    except Exception:\n        raise\n\n\ndef main"
+    },
+    {
+      "label": "#902 handoff fallback no longer logged",
+      "file": "../engine/session-start.py",
+      "oracle": "real",
+      "find": "_debug_log(vault_root, \"injected handoff (no fresh notebook found)\")",
+      "replace": "pass"
+    }
+  ]
+}

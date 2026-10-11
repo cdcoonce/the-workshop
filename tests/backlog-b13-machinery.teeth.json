@@ -1,0 +1,46 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_machinery_vendor_tools.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_machinery_vendor_tools.py"
+  ],
+  "mutants": [
+    {
+      "label": "#731 planner reads json-key without requiring an object",
+      "file": "../plugins/workbench/machinery/tools/machinery_sync.py",
+      "oracle": "real",
+      "find": "target / entry.target, entry.key, require_object=True",
+      "replace": "target / entry.target, entry.key"
+    },
+    {
+      "label": "#731 reader ignores require_object",
+      "file": "../plugins/workbench/machinery/tools/machinery_sync.py",
+      "oracle": "real",
+      "find": "        if require_object:\n            raise ValueError",
+      "replace": "        if False:\n            raise ValueError"
+    }
+  ]
+}
