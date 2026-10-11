@@ -117,7 +117,14 @@ def applies_to(
 
 
 def changed_files(repo: Path | str, sha: str) -> list[str]:
-    out = run_git(repo, "show", "--pretty=format:", "--name-only", sha).stdout
+    """Files the commit changed against its first parent.
+
+    Uses the same first-parent diff as ``commit_patch`` so a merge commit
+    reports the files its patch touches; ``git show --name-only`` prints
+    nothing for a merge.
+    """
+    parent = resolve(repo, f"{sha}^") or EMPTY_TREE
+    out = run_git(repo, "diff", "--name-only", parent, sha).stdout
     return [line for line in out.splitlines() if line.strip()]
 
 
@@ -198,7 +205,9 @@ def commit_status(repo: Path | str, rev: str, target: str) -> Result:
 
     files = changed_files(repo, sha)
     base = run_git(repo, "merge-base", sha, target_sha).stdout.strip() or target_sha
-    movers = commits_touching(repo, f"{base}..{target_sha}", files)
+    # An empty `files` would make commits_touching skip its path filter and list
+    # every commit in the range; with nothing to scope on there are no movers.
+    movers = commits_touching(repo, f"{base}..{target_sha}", files) if files else []
     evidence = [f"does not apply to {target}: the target moved under it"]
     evidence.append("files it edits: " + ", ".join(files) if files else "no files recorded")
     evidence += [f"changed on {target} since the base by {line}" for line in movers[:5]]
@@ -224,16 +233,39 @@ def branch_status(repo: Path | str, branch: str, target: str) -> Result:
         )
 
     commits = [commit_status(repo, rev, target) for rev in revs]
-    contained = [c for c in commits if c.verdict == ALREADY_DONE]
-    pending = [c for c in commits if c.verdict != ALREADY_DONE]
+    by_verdict: dict[str, list[Result]] = {
+        v: [c for c in commits if c.verdict == v]
+        for v in (ALREADY_DONE, STILL_VALID, SUPERSEDED, UNVERIFIABLE)
+    }
+    contained = by_verdict[ALREADY_DONE]
+    additive = by_verdict[STILL_VALID]
+    superseded = by_verdict[SUPERSEDED]
+    unverifiable = by_verdict[UNVERIFIABLE]
 
     evidence = [f"{len(contained)} of {len(commits)} commits are already in {target}"]
     if contained:
         evidence.append("drop: " + ", ".join(c.artifact for c in contained))
-    if pending:
-        evidence.append("genuinely additive: " + ", ".join(c.artifact for c in pending))
+    if additive:
+        evidence.append("genuinely additive: " + ", ".join(c.artifact for c in additive))
+    if superseded:
+        evidence.append(
+            "superseded (the target moved under them; reviving gains nothing): "
+            + ", ".join(c.artifact for c in superseded)
+        )
+    if unverifiable:
+        evidence.append(
+            "unverifiable (could not be determined; check by hand): "
+            + ", ".join(c.artifact for c in unverifiable)
+        )
 
-    verdict = ALREADY_DONE if not pending else STILL_VALID
+    if unverifiable:
+        verdict = UNVERIFIABLE
+    elif additive:
+        verdict = STILL_VALID
+    elif superseded:
+        verdict = SUPERSEDED
+    else:
+        verdict = ALREADY_DONE
     return Result("branch", branch, verdict, evidence, commits=commits)
 
 

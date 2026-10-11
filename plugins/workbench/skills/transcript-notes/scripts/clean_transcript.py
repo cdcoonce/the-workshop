@@ -35,9 +35,13 @@ from pathlib import Path
 WORDS_PER_MINUTE = 150
 ANCHOR_INTERVAL_DEFAULT_S = 120
 
-_VTT_TIMING = re.compile(r"^\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}")
-_SRT_TIMING = re.compile(r"^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}")
-_TIMING_START = re.compile(r"^(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->")
+_VTT_TIMING = re.compile(
+    r"^(?:\d{2}:)?\d{2}:\d{2}[.,]\d{3}\s*-->\s*(?:\d{2}:)?\d{2}:\d{2}[.,]\d{3}"
+)
+_SRT_TIMING = re.compile(
+    r"^(?:\d{2}:)?\d{2}:\d{2},\d{3}\s*-->\s*(?:\d{2}:)?\d{2}:\d{2},\d{3}"
+)
+_TIMING_START = re.compile(r"^((?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3})\s*-->")
 _LEADING_TIMESTAMP = re.compile(r"^\[?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?\]?\s*")
 _LEADING_TIMESTAMP_CAPTURE = re.compile(r"^\[?(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?)\]?")
 _INLINE_TAGS = re.compile(r"</?[cbiuv][^>]*>|<\d{2}:\d{2}:\d{2}[.,]\d{3}>")

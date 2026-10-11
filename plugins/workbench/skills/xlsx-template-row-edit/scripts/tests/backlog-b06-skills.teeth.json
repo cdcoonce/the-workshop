@@ -1,0 +1,42 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests"
+  ],
+  "mutants": [
+    {
+      "label": "[#984] absolute before path passed to git show verbatim (TestCheckoutPaths::test_absolute_path_is_accepted)",
+      "file": "../xlsx_cell_diff.py",
+      "oracle": "real",
+      "find": "repo_path = resolved.relative_to(Path(top.stdout.strip()).resolve())",
+      "replace": "repo_path = path"
+    },
+    {
+      "label": "[#985] BadZipFile not caught, traceback instead of exit 2 (TestMainExitCodes::test_bad_zip_from_loader_exits_2)",
+      "file": "../xlsx_cell_diff.py",
+      "oracle": "real",
+      "find": "(OSError, ValueError, KeyError, zipfile.BadZipFile)",
+      "replace": "(OSError, ValueError, KeyError)"
+    }
+  ]
+}
