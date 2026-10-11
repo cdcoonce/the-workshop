@@ -1,0 +1,105 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_smoke.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_smoke.py"
+  ],
+  "mutants": [
+    {
+      "label": "#736 agent loop accepts blank required field",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "                if req_field not in frontmatter or not frontmatter.get(req_field):\n                    result.errors.append(\n                        f\"Agent",
+      "replace": "                if req_field not in frontmatter:\n                    result.errors.append(\n                        f\"Agent"
+    },
+    {
+      "label": "#737 vendor-map source existence unchecked",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "if not (machinery_dir / source).is_file():",
+      "replace": "if False:"
+    },
+    {
+      "label": "#612 quote-wrapped target keeps literal quotes",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "                    link_target = _strip_quotes(link_target)\n",
+      "replace": "                    pass\n"
+    },
+    {
+      "label": "#480 line-pattern import scan flags docstring prose",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "    try:\n        tree = ast.parse(source)\n    except (SyntaxError, ValueError):\n        return []\n    modules: list[str] = []\n    for node in tree.body:",
+      "replace": "    return re.findall(r\"^(?:import|from)\\s+([A-Za-z_][A-Za-z0-9_]*)\", source, re.MULTILINE)\n    tree = ast.parse(source)\n    modules: list[str] = []\n    for node in tree.body:"
+    },
+    {
+      "label": "#645 root-relative links resolved from filesystem root",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "_LINK_SKIP_PREFIXES = (\"#\", \".claude/\", \"/\")",
+      "replace": "_LINK_SKIP_PREFIXES = (\"#\", \".claude/\")"
+    },
+    {
+      "label": "#746 nested block-sequence items dropped",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "                current_sub_key is not None\n                and isinstance",
+      "replace": "                False\n                and isinstance"
+    },
+    {
+      "label": "#480 plain ast.Import ignored",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "        if isinstance(node, ast.Import):\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "#480 relative-import level guard dropped",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "ast.ImportFrom) and node.level == 0 and node.module",
+      "replace": "ast.ImportFrom) and node.module"
+    },
+    {
+      "label": "#746 sub-key reset on top-level key dropped",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "            key = key.strip()\n            current_sub_key = None\n",
+      "replace": "            key = key.strip()\n"
+    },
+    {
+      "label": "#746 item trailing comment kept",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "item = re.sub(r\"\\s+#.*$\", \"\", stripped[1:].strip())",
+      "replace": "item = stripped[1:].strip()"
+    },
+    {
+      "label": "#746 '-x' treated as sequence item",
+      "file": "../scripts/smoke_test.py",
+      "oracle": "real",
+      "find": "(stripped == \"-\" or stripped.startswith(\"- \"))",
+      "replace": "stripped.startswith(\"-\")"
+    }
+  ]
+}
