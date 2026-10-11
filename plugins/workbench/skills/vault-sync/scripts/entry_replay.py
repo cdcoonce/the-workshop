@@ -51,11 +51,16 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    order tooth. A correction both sides made identically (origin already holds
    exactly the session's edited entry) is already applied; origin holding both
    the base version and a byte-identical copy of the edit refuses (replacing
-   would leave the edit twice). A new session entry that pairs -- same date and
-   the similarity rule below -- with an entry *origin added* since the
-   merge-base refuses ("was a pushed commit amended or rebased?"): origin keeps
-   the pushed version and the session re-adds the corrected one, and replaying
-   both would put the entry in twice. An anchor is a block's innermost non-entry
+   would leave the edit twice). A new session entry that pairs with an entry
+   *origin added* since the merge-base refuses ("was a pushed commit amended or
+   rebased?"): origin keeps the pushed version and the session re-adds the
+   corrected one, and replaying both would put the entry in twice. The pairing
+   is date-insensitive, because an amend can re-date the entry: everything the
+   similarity rule below pairs on the same day, plus -- on any day -- the same
+   heading text after the date, or two bodies of at least 60 characters that
+   are at least 90% alike (entries of different days routinely share short
+   boilerplate such as ``**Decided:**``, and only a near copy of a real body is
+   an amend). An anchor is a block's innermost non-entry
    heading (``### Wins`` under ``## Q3 2026``, ``## Technical``). An entry
    heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
    with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
@@ -86,7 +91,21 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    origin, and an inserted item lands right after its aligned base predecessor
    (one origin itself added *in the same gap* is not inserted twice; an item
    that merely looks like an existing one, or like one origin added elsewhere,
-   is kept). Items compare ignoring trailing blank lines,
+   is kept; but an inserted item that is a *version* of one origin inserted in
+   the same gap -- an identical first line, one text opening the other's, or
+   at least 90% alike, without being identical -- refuses, "was a pushed commit
+   amended or rebased?": the handoff's amend guard, as for the ledgers; the
+   same gap-after-a-replaced-run dedupe applies to the end of a replacement,
+   where origin put the item that followed the one the session replaced).
+   A *move* is an edit: a base item the session deleted and a tip item it
+   inserted elsewhere in the section that read as versions of one another
+   (identical first line, one text opening the other's, or at least 60% alike;
+   best match first) are one move, or move-and-edit, of that item, so the item
+   must be unchanged and aligned on origin like any replaced item -- difflib
+   alone reads it as an unrelated delete and insert, and origin having deleted
+   the item made the delete look already applied while the new copy resurrected
+   it (or left two versions). A move origin made identically stays already
+   applied. Items compare ignoring trailing blank lines,
    so loose and tight lists align. Both sides making the same delete or the
    same edit is already applied, and a changed item with a byte-identical twin
    in a section origin also changed refuses (the twin cannot be told apart). The
@@ -109,7 +128,9 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    Any assertion failure, any entry deletion, or any conflict outside the
    allowlist refuses and leaves the repository exactly as it found it. Every
    conflicting file is evaluated first, so the report's ``refusals`` names
-   each one. A file whose base, tip or origin ends inside an open code fence
+   each one. An exception the merge functions do not anticipate is a refusal
+   too ("internal error while merging <path>: <type>: <msg>; escalating"), with
+   the JSON report and the repository untouched, never a traceback. A file whose base, tip or origin ends inside an open code fence
    refuses too (its headings cannot be trusted). The escalation path is
    unchanged.
    Self-verification: the merged text of every file is re-checked against
