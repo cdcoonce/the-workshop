@@ -26,7 +26,17 @@ if not isinstance(file_path, str) or not file_path:
     sys.exit(0)
 
 PROTECTED_DIRS = ["node_modules", ".git"]
-PROTECTED_FILENAMES = ["package-lock.json", "uv.lock"]
+PROTECTED_FILENAMES = [
+    "package-lock.json",
+    "uv.lock",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "Pipfile.lock",
+    "Cargo.lock",
+    "composer.lock",
+    "Gemfile.lock",
+]
 PROTECTED_BASENAME_PREFIXES = [".env"]
 ALLOWED_TEMPLATE_SUFFIXES = [".example", ".sample", ".template", ".dist"]
 
@@ -34,7 +44,7 @@ path = PurePath(file_path)
 basename = path.name
 
 for directory in PROTECTED_DIRS:
-    if directory in path.parts[:-1]:
+    if directory in path.parts:
         print(
             f"Blocked: {file_path} matches protected pattern '{directory}/'",
             file=sys.stderr,
@@ -50,7 +60,7 @@ for filename in PROTECTED_FILENAMES:
         sys.exit(2)
 
 for prefix in PROTECTED_BASENAME_PREFIXES:
-    if basename.startswith(prefix):
+    if basename == prefix or basename.startswith(prefix + "."):
         if any(basename.endswith(suffix) for suffix in ALLOWED_TEMPLATE_SUFFIXES):
             continue
         print(

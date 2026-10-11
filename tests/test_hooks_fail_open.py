@@ -106,3 +106,23 @@ def test_hook_fails_open_on_unusable_input(
         f"{hook.name} exited {result.returncode} on {label} input; hooks must "
         f"fail open. stderr: {result.stderr[:400]}"
     )
+
+
+def test_git_baseline_defers_annotation_evaluation() -> None:
+    """`str | None` annotations must not evaluate at import time.
+
+    `run-hook.sh` execs bare `python3`, which can be < 3.10 on an owner machine;
+    without the future import, `Path | None` raises TypeError at def time and
+    the consuming hooks traceback instead of failing open.
+    """
+    import ast
+
+    source = (REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "_git_baseline.py").read_text()
+    tree = ast.parse(source)
+    futures = {
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "__future__"
+        for alias in node.names
+    }
+    assert "annotations" in futures

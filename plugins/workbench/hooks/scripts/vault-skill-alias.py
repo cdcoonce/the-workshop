@@ -98,6 +98,7 @@ def _alias_map(plugin_root: Path) -> dict[str, str]:
     alias lookup, it is the slug itself, and needs no routing help.
     """
     mapping: dict[str, str] = {}
+    collided: set[str] = set()
     skills_dir = plugin_root / "skills"
     if not skills_dir.is_dir():
         return mapping
@@ -114,8 +115,19 @@ def _alias_map(plugin_root: Path) -> dict[str, str]:
         if not match:
             continue
         alias = match.group(1)
-        if alias != slug:
-            mapping[alias] = slug
+        if alias == slug or alias in collided:
+            continue
+        if alias in mapping and mapping[alias] != slug:
+            # Two skills claim one alias: route neither rather than misroute.
+            print(
+                f"vault-skill-alias: alias /{alias} is claimed by both "
+                f"{mapping[alias]} and {slug}; dropping it",
+                file=sys.stderr,
+            )
+            del mapping[alias]
+            collided.add(alias)
+            continue
+        mapping[alias] = slug
     return mapping
 
 
