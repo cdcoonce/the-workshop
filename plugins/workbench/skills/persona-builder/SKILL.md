@@ -79,7 +79,7 @@ See [package-format.md](references/package-format.md) § Scenario suite.
 ### Phase 6 — Delivery
 
 Branch off fresh `origin/dev`, add the preset, rebuild docs/dist, run the gate, and
-open the PR. If the machine has no write access to this repo, fall back to emitting a
+open the PR into `dev`. If the machine has no write access to this repo, fall back to emitting a
 patch bundle for the maintainer. Then walk the owner through install on their
 harness.
 See [delivery-and-pr.md](references/delivery-and-pr.md).

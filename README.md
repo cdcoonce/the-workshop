@@ -153,7 +153,7 @@ The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and
 
 > **Skills work fully on Cortex, and plugin-level hooks execute** (probe-verified on 1.20.2, 2026-08-08 — superseding the earlier "never executed" finding from v1.1.8; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). Two caveats: `CLAUDE_PLUGIN_ROOT` is **unset** in Cortex's hook environment, so the Workshop's current hook commands (including persona injection) resolve against the wrong directory and fail there until a self-locating command form ships; and a restored window's first session fires SessionStart before plugin activation, so plugin SessionStart hooks always miss it.
 
-**Verify your install:** run `cortex skill list` and confirm the `workbench` skills appear. Then invoke `/brainstorm` — a working install answers with shaping questions. Persona injection and the other hook commands that rely on `CLAUDE_PLUGIN_ROOT` do nothing here by design (see [Platform Support](#platform-support)); a missing skill is the real failure.
+**Verify your install:** run `cortex skill list` and confirm the `workbench` skills appear. Then invoke `/brainstorm` — a working install answers with shaping questions. Persona injection and the other hook commands that rely on `CLAUDE_PLUGIN_ROOT` execute here but currently fail until a self-locating command form ships (see [Platform Support](#platform-support)); a missing skill is the real failure.
 
 ### Any Other Agent (Manual Copy)
 
