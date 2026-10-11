@@ -1143,3 +1143,76 @@ def test_done_log_counts_every_proposal_the_queue_contains(
     # plain broken + Jane Doe + drift entry + missing link, John Roe dismissed
     assert int(queued.group(1)) == 4
     assert int(logged.group(1)) == int(queued.group(1))
+
+
+def _logged_and_queued(repo: Path) -> tuple[int, int]:
+    import re
+
+    logged = re.search(r"(\d+) proposal\(s\)", (repo / gg.GARDENER_LOG_REL).read_text())
+    queued = re.search(r"(\d+) graph suggestion", gg.queue_summary(repo, "personal"))
+    assert logged and queued
+    return int(logged.group(1)), int(queued.group(1))
+
+
+def test_done_log_collapses_one_trapped_slug_across_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    sig_a = gg.proposal_signature("broken", "personal/a.md", "trapped slug")
+    sig_b = gg.proposal_signature("broken", "personal/b.md", "trapped slug")
+
+    def lane_a(*args: object, **kwargs: object) -> gg.LaneAResult:
+        result = gg.LaneAResult()
+        result.proposals.append(f"`personal/a.md`: broken `[[trapped slug]]` <!-- gsig: {sig_a} -->")
+        result.proposals.append(f"`personal/b.md`: broken `[[trapped slug]]` <!-- gsig: {sig_b} -->")
+        return result
+
+    monkeypatch.setattr(gg, "run_lane_a", lane_a)
+    monkeypatch.setattr(gg, "detect_auto_memory_drift", lambda _: {"trapped slug": "trapped.md"})
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+
+    assert gg.run_gardener("s", repo, notes_override=[note], check_debounce=False) == 0
+
+    logged, queued = _logged_and_queued(repo)
+    assert queued == 1
+    assert logged == 1
+
+
+def test_done_log_counts_a_stranded_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        gg, "detect_stranded_branches",
+        lambda _: [{"branch": "old-wip", "files": ["personal/x.md"]}],
+    )
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+
+    assert gg.run_gardener("s", repo, notes_override=[note], check_debounce=False) == 0
+
+    logged, queued = _logged_and_queued(repo)
+    assert queued == 1
+    assert logged == 1
+
+
+def test_done_log_does_not_count_an_auto_applied_repair_as_a_proposal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+
+    def lane_a(*args: object, **kwargs: object) -> gg.LaneAResult:
+        result = gg.LaneAResult()
+        result.applied.append("auto-fixed [[X]] -> [[Y]] in `personal/src.md`")
+        return result
+
+    monkeypatch.setattr(gg, "run_lane_a", lane_a)
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+
+    assert gg.run_gardener("s", repo, notes_override=[note], check_debounce=False) == 0
+
+    import re
+
+    text = (repo / gg.GARDENER_LOG_REL).read_text()
+    assert re.search(r"1 auto-repair\(s\), 0 proposal\(s\)", text)
+    assert "1 auto-repair" in gg.queue_summary(repo, "personal")
+    assert "graph suggestion" not in gg.queue_summary(repo, "personal")

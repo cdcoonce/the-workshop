@@ -650,11 +650,127 @@ def test_root_operating_manual_resolves_beside_excluded_decoys(tmp_path: Path) -
 
 def test_nested_readme_is_not_a_link_target(tmp_path: Path) -> None:
     """#811: root-excluded files stay bounded to depth one."""
-    _write(tmp_path, "README.md", "# Repo")
     _write(tmp_path, "tools/README.md", "# nested")
     _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[README]]."))
 
     report = audit(tmp_path)
 
+    assert _issues(report, "broken_links") == ["broken [[README]]"]
+
+
+def test_manuals_in_note_directories_still_resolve(tmp_path: Path) -> None:
+    """#811: only excluded directories are filtered; nested manuals stay targets."""
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(tmp_path, "brain/p/CLAUDE.md", "# Project manual")
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[p/CLAUDE]]."))
+
+    report = audit(tmp_path)
+
     assert _issues(report, "broken_links") == []
     assert _issues(report, "ambiguous_links") == []
+
+
+def test_full_path_link_resolves_before_suffix_matching(tmp_path: Path) -> None:
+    """#810: an exact vault-relative path wins over a longer path ending the same way."""
+    _write(tmp_path, "brain/a/b.md", _note("B"))
+    _write(tmp_path, "brain/x/brain/a/b.md", _note("B2"))
+    _write(tmp_path, "brain/P1.md", _note("P1", body="See [[brain/a/b]]."))
+    _write(tmp_path, "brain/P2.md", _note("P2", body="See [[brain/a/b.md]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
+
+
+def test_path_suffix_matching_two_notes_lists_both(tmp_path: Path) -> None:
+    """#810: an ambiguous suffix reports every candidate, not just the first."""
+    _write(tmp_path, "brain/a/x/N.md", _note("N1"))
+    _write(tmp_path, "brain/b/x/N.md", _note("N2"))
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[x/N]]."))
+
+    report = audit(tmp_path)
+
+    ambiguous = _issues(report, "ambiguous_links")
+    assert len(ambiguous) == 1
+    assert "brain/a/x/N.md" in ambiguous[0]
+    assert "brain/b/x/N.md" in ambiguous[0]
+
+
+def _alias_note(title: str, extra_fm: str) -> str:
+    return (
+        "---\ndate: 2026-07-08\ndescription: \"" + title + "\"\ntags:\n  - reference\n"
+        + extra_fm + "---\n\n# " + title + "\n\nBody.\n"
+    )
+
+
+def test_exact_stem_beats_normalized_equal_stem(tmp_path: Path) -> None:
+    """#810: titles that normalize equal still resolve to the exactly named file."""
+    _write(tmp_path, "brain/Foo-Bar.md", _note("FB1"))
+    _write(tmp_path, "brain/FooBar.md", _note("FB2"))
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[Foo-Bar]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
+
+
+def test_exact_alias_beats_normalized_equal_stem(tmp_path: Path) -> None:
+    """#810: an exact alias resolves even when another stem normalizes equal."""
+    _write(tmp_path, "brain/FooBar.md", _note("FB1"))
+    _write(tmp_path, "brain/Other.md", _alias_note("Other", "aliases:\n  - \"Foo Bar\"\n"))
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[Foo Bar]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
+
+
+def test_exact_frontmatter_name_beats_normalized_equal_stem(tmp_path: Path) -> None:
+    """#810: an exact frontmatter name resolves despite a normalized-equal stem."""
+    _write(tmp_path, "brain/FooBar.md", _note("FB1"))
+    _write(tmp_path, "brain/Other.md", _alias_note("Other", "name: Foo Bar\n"))
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[Foo Bar]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+    assert _issues(report, "ambiguous_links") == []
+
+
+def test_name_equal_to_alias_is_not_ambiguous(tmp_path: Path) -> None:
+    """#725: one note listing the same string as name and alias is a single target."""
+    _write(tmp_path, "brain/Thing.md", _alias_note("Thing", "name: Foo\naliases:\n  - Foo\n  - Foo\n"))
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[Foo]]."))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "ambiguous_links") == []
+    assert _issues(report, "broken_links") == []
+
+
+def test_audit_ignores_wikilinks_inside_indented_fences(tmp_path: Path) -> None:
+    """#730: an indented fence still hides its example links."""
+    body = "- item\n\n  ```\n  [[ghost one]]\n  ```\n\n  ~~~\n  [[ghost two]]\n  ~~~\n"
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body=body))
+
+    report = audit(tmp_path)
+
+    assert _issues(report, "broken_links") == []
+
+
+def test_note_and_base_sharing_a_stem_make_a_bare_link_ambiguous(tmp_path: Path) -> None:
+    """#810: the extensionless stem is indexed, so a bare name sees both files."""
+    _write(tmp_path, "brain/Foo.md", _note("Foo"))
+    _write(tmp_path, "bases/Foo.base", "filters: {}\n")
+    _write(tmp_path, "brain/Pattern.md", _note("Pattern", body="See [[Foo]]."))
+
+    report = audit(tmp_path)
+
+    ambiguous = _issues(report, "ambiguous_links")
+    assert len(ambiguous) == 1
+    assert "brain/Foo.md" in ambiguous[0]
+    assert "bases/Foo.base" in ambiguous[0]
+
