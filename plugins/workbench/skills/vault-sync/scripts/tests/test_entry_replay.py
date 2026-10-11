@@ -2585,9 +2585,12 @@ FENCED_ENTRY = (
 
 def test_a_four_backtick_fence_is_not_closed_by_an_inner_three_backtick_line() -> None:
     base = insert_under(GOTCHAS_SEED, "## Technical", FENCED_ENTRY)
-    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-20", "New."))
+    # 09-11 lands before "Bytecode ... (2026-09-10)"; had the fake "Inner fake
+    # (2026-09-01)" heading counted as an entry it would land inside the fence.
+    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-11", "New."))
     merged, detail = ledger_merge(base, tip, base, GOTCHAS)
     assert FENCED_ENTRY in merged, "the fence content (two blank lines included) must be intact"
+    assert merged.index("### New one") < merged.index("### Bytecode cache hides")
     assert detail["inserted"] == 1 and detail["replaced"] == 0
     assert merged.count("Stale tracking refs lie") == 1
 
@@ -2598,9 +2601,10 @@ def test_a_tilde_fence_is_not_closed_by_backticks_and_needs_a_long_enough_closer
         "still inside\n~~~~\n\nAfter.\n"
     )
     base = insert_under(GOTCHAS_SEED, "## Technical", entry)
-    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-20", "New."))
+    tip = insert_under(base, "## Technical", gotchas_entry("New one", "2026-09-11", "New."))
     merged, detail = ledger_merge(base, tip, base, GOTCHAS)
     assert entry in merged
+    assert merged.index("### New one") < merged.index("### Bytecode cache hides")
     assert detail["inserted"] == 1
 
 
