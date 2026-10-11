@@ -88,6 +88,20 @@
       "oracle": "real",
       "find": "tool_input.get(\"file_path\", \"\") if isinstance(tool_input, dict) else \"\"",
       "replace": "data.get(\"tool_input\", {}).get(\"file_path\", \"\")"
+    },
+    {
+      "label": "#817 non-str file_path guard removed",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "if not isinstance(file_path, str) or not file_path:",
+      "replace": "if not file_path:"
+    },
+    {
+      "label": "#744 lockfile match by endswith",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "    if basename == filename:",
+      "replace": "    if basename.endswith(filename):"
     }
   ]
 }

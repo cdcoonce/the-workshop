@@ -170,3 +170,28 @@ def test_unrelated_dotfile_sharing_env_prefix_allows(file_path: str) -> None:
 
     assert result.returncode == 0
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    ["mycargo.lock", "foo.yarn.lock", "poetry.lock.bak", "sub/dir/xCargo.lock"],
+)
+def test_lockfile_match_is_exact_basename(file_path: str) -> None:
+    """Only the exact lockfile basename is protected, not names that merely end with it."""
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["[]", "null", "3", '"x"', '{"tool_input": null}', '{"tool_input": {"file_path": 5}}'],
+)
+def test_non_object_payload_allows(raw: str) -> None:
+    result = subprocess.run(
+        [sys.executable, str(HOOK_PATH)], input=raw, capture_output=True, text=True
+    )
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr

@@ -352,3 +352,22 @@ def test_non_dict_tool_input_fails_open(tool_input: object) -> None:
     assert result.returncode == 0
     assert "Traceback" not in result.stderr
     assert "AttributeError" not in result.stderr
+
+
+@pytest.mark.parametrize("value", [5, ["a"], {"a": 1}, True])
+def test_non_str_file_path_fails_open(value) -> None:
+    result = _run_hook_stdin(WORKBENCH_HOOK, json.dumps({"tool_input": {"file_path": value}}))
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["[]", "null", "3", '"x"', '{"tool_input": null}', '{"tool_input": {"file_path": 5}}'],
+)
+def test_non_object_payload_allows(raw: str) -> None:
+    result = _run_hook_stdin(WORKBENCH_HOOK, raw)
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
