@@ -86,7 +86,12 @@ def _from_config(name: str, default: object) -> object:
 _PROJECT_ALIASES: dict[str, str] = _from_config(
     "PROJECT_ALIASES", DEFAULT_PROJECT_ALIASES
 )
-RATES: dict[str, tuple[float, float]] = _from_config("RATES", DEFAULT_RATES)
+# A partial override merges per tier over the shipped table, so a vault that only
+# re-prices one tier does not lose the others (and scan() cannot KeyError on them).
+RATES: dict[str, tuple[float, float]] = {
+    **DEFAULT_RATES,
+    **_from_config("RATES", DEFAULT_RATES),
+}
 MONTHLY_BUDGET: float = _from_config("MONTHLY_BUDGET", DEFAULT_MONTHLY_BUDGET)
 
 
@@ -256,7 +261,8 @@ def main() -> int:
         pace = _pace(spent, today, args.budget)
         over = pace["delta"] > 0
         print(f"Budget burn — {month} (work / enterprise · ${args.budget:.0f} cap)")
-        print(f"  Spent: ${spent:.2f} / ${args.budget:.0f}  ({spent / args.budget * 100:.0f}% of cap)")
+        share = f"  ({spent / args.budget * 100:.0f}% of cap)" if args.budget else ""
+        print(f"  Spent: ${spent:.2f} / ${args.budget:.0f}{share}")
         print(
             f"  Pace: day {pace['days_elapsed']}/{pace['days_in_month']} → "
             f"expected ${pace['expected_to_date']:.2f}; "
