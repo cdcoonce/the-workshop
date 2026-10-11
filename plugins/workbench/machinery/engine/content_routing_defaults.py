@@ -104,7 +104,7 @@ CATEGORIES: list[dict] = [
             "studying", "reading about",
             "TIL", "today I learned",
             "documentation", "how to",
-            "figured out", "concept",
+            "figured out", "concept of",
         ],
         "folder": "personal/learning",
         "template": "Learning Note",
