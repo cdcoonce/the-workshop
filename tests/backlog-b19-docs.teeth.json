@@ -128,6 +128,139 @@
       "oracle": "real",
       "find": "Marketplace URL unreachable",
       "replace": "Marketplace URL slow"
+    },
+    {
+      "label": "#473 timing-only inference reintroduced",
+      "file": "../CLAUDE.md",
+      "oracle": "real",
+      "find": "never infer cause from timing alone",
+      "replace": "feel free to infer cause from timing"
+    },
+    {
+      "label": "#473 wrong order claim",
+      "file": "../CLAUDE.md",
+      "oracle": "real",
+      "find": "#453 merged two minutes *before* #451",
+      "replace": "#453 merged two minutes *after* #451"
+    },
+    {
+      "label": "#473 section heading renamed away",
+      "file": "../CLAUDE.md",
+      "oracle": "real",
+      "find": "### Diagnosing merge or ref corruption",
+      "replace": "### Merge notes"
+    },
+    {
+      "label": "#728 keyword claim flipped",
+      "file": "../plugins/workbench/skills/github-cli/SKILL.md",
+      "oracle": "real",
+      "find": "Closing keywords do not fire on `dev`-targeted PRs",
+      "replace": "Closing keywords fire on `dev`-targeted PRs"
+    },
+    {
+      "label": "#728 drop-the-keyword advice removed",
+      "file": "../plugins/workbench/skills/github-cli/SKILL.md",
+      "oracle": "real",
+      "find": "Either drop the keyword from dev-targeted PR bodies and say\n\"Refs #N\", or",
+      "replace": "Either keep the keyword in dev-targeted PR bodies, or"
+    },
+    {
+      "label": "#1145 phase-transitions default branch",
+      "file": "../plugins/workbench/skills/dev-cycle/references/phase-transitions.md",
+      "oracle": "real",
+      "find": "Create a new branch from `dev` (CLAUDE.md's Branch and Promotion Policy)",
+      "replace": "Create a new branch off the repo default branch"
+    },
+    {
+      "label": "#1145 phase-transitions policy pointer dropped",
+      "file": "../plugins/workbench/skills/dev-cycle/references/phase-transitions.md",
+      "oracle": "real",
+      "find": "(CLAUDE.md's Branch and Promotion Policy)",
+      "replace": "(per repo convention)"
+    },
+    {
+      "label": "#1145 Phase 7 or default branch",
+      "file": "../plugins/workbench/skills/dev-cycle/SKILL.md",
+      "oracle": "real",
+      "find": "PRs to `dev` (never inferred",
+      "replace": "PRs to `dev` or the default branch (never inferred"
+    },
+    {
+      "label": "#1145 dev-cycle closing keyword back",
+      "file": "../plugins/workbench/skills/dev-cycle/references/phase-transitions.md",
+      "oracle": "real",
+      "find": "as `Refs #N` in the PR description",
+      "replace": "as `Closes #N` in the PR description"
+    },
+    {
+      "label": "#1146 delivery merges into main",
+      "file": "../plugins/workbench/skills/persona-builder/references/delivery-and-pr.md",
+      "oracle": "real",
+      "find": "merges into `dev`",
+      "replace": "merges into `main`"
+    },
+    {
+      "label": "#1146 patch diff against main",
+      "file": "../plugins/workbench/skills/persona-builder/references/delivery-and-pr.md",
+      "oracle": "real",
+      "find": "against the repo's `dev`",
+      "replace": "against the repo's `main`"
+    },
+    {
+      "label": "#1146 SKILL Phase 6 PR target dropped",
+      "file": "../plugins/workbench/skills/persona-builder/SKILL.md",
+      "oracle": "real",
+      "find": "open the PR into `dev`.",
+      "replace": "open the PR."
+    },
+    {
+      "label": "#1146 SKILL Phase 6 PR into main",
+      "file": "../plugins/workbench/skills/persona-builder/SKILL.md",
+      "oracle": "real",
+      "find": "open the PR into `dev`.",
+      "replace": "open the PR into `main`."
+    },
+    {
+      "label": "#585 attended row loses next-ticket claim",
+      "file": "../plugins/workbench/skills/blueprint/tests.md",
+      "oracle": "real",
+      "find": "then claims the next frontier ticket",
+      "replace": "then stops"
+    },
+    {
+      "label": "#585 scenario 1 expected text altered",
+      "file": "../plugins/workbench/skills/blueprint/tests.md",
+      "oracle": "real",
+      "find": "Updates the map for the resolved ticket and stops",
+      "replace": "Updates the map for the resolved ticket and continues"
+    },
+    {
+      "label": "#492 Cortex troubleshooting row removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "| Skill not found after install (Cortex)",
+      "replace": "| Skill missing (Cortex)"
+    },
+    {
+      "label": "#492 Codex troubleshooting row removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "| Skill not found after install (Codex)",
+      "replace": "| Skill missing (Codex)"
+    },
+    {
+      "label": "#492 Claude Code troubleshooting row removed",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "| Skill not found after install (Claude Code)",
+      "replace": "| Skill missing (Claude Code)"
+    },
+    {
+      "label": "README Cortex hooks inert claim back",
+      "file": "../README.md",
+      "oracle": "real",
+      "find": "execute here but currently fail until a self-locating command form ships",
+      "replace": "do nothing here by design"
     }
   ]
 }
