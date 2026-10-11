@@ -1,0 +1,98 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/repo-docs/scripts/tests/test_check_docs.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/repo-docs/scripts/tests/test_check_docs.py"
+  ],
+  "mutants": [
+    {
+      "label": "#779 covers group stops at whitespace again",
+      "file": "../check_docs.py",
+      "find": "covers=(?P<covers>.+?)\\s*-->\"",
+      "replace": "covers=(?P<covers>[^\\s>]+)\\s*-->\"",
+      "oracle": "real"
+    },
+    {
+      "label": "779 covers greedy",
+      "file": "../check_docs.py",
+      "find": "covers=(?P<covers>.+?)\\s*-->",
+      "replace": "covers=(?P<covers>.+)\\s*-->",
+      "oracle": "real"
+    },
+    {
+      "label": "779 covers forbids '>' in path",
+      "file": "../check_docs.py",
+      "find": "covers=(?P<covers>.+?)\\s*-->",
+      "replace": "covers=(?P<covers>[^>]+?)\\s*-->",
+      "oracle": "real"
+    },
+    {
+      "label": "779 covers split on whitespace as well",
+      "file": "../check_docs.py",
+      "find": "match.group(\"covers\").split(\",\")",
+      "replace": "match.group(\"covers\").replace(\" \", \",\").split(\",\")",
+      "oracle": "real"
+    },
+    {
+      "label": "779 per-path strip dropped",
+      "file": "../check_docs.py",
+      "find": "tuple(p.strip() for p in match.group",
+      "replace": "tuple(p for p in match.group",
+      "oracle": "real"
+    },
+    {
+      "label": "779 empty-segment filter dropped",
+      "file": "../check_docs.py",
+      "find": " if p.strip())\n    return Provenance",
+      "replace": " )\n    return Provenance",
+      "oracle": "real"
+    },
+    {
+      "label": "779 legacy marker alternation dropped",
+      "file": "../check_docs.py",
+      "find": "(?:repo-docs|repo-reference-docs|readme-generator):",
+      "replace": "(?:repo-docs|readme-generator):",
+      "oracle": "real"
+    },
+    {
+      "label": "779 readme-generator marker dropped",
+      "file": "../check_docs.py",
+      "find": "(?:repo-docs|repo-reference-docs|readme-generator):",
+      "replace": "(?:repo-docs|repo-reference-docs):",
+      "oracle": "real"
+    },
+    {
+      "label": "779 covers lazy->first whitespace only (old behaviour)",
+      "file": "../check_docs.py",
+      "find": "covers=(?P<covers>.+?)\\s*-->",
+      "replace": "covers=(?P<covers>\\S+)\\s*-->",
+      "oracle": "real"
+    },
+    {
+      "label": "779 last-footer-wins -> first",
+      "file": "../check_docs.py",
+      "find": "match = matches[-1]",
+      "replace": "match = matches[0]",
+      "oracle": "real"
+    }
+  ]
+}
