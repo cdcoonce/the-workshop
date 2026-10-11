@@ -187,3 +187,25 @@ class TestDemotions:
 
         result = get_demotions(vault, quick_ref_names=["REC", "PCI"])
         assert result == ["REC"]
+
+    def test_casing_variants_do_not_lose_session_counts(self, vault: Path) -> None:
+        """#772: a 0-session casing variant must not shadow a 6-session one."""
+        for data in (
+            {"REC": {"count": 9, "sessions": 6}, "Rec": {"count": 0, "sessions": 0}},
+            {"Rec": {"count": 0, "sessions": 0}, "REC": {"count": 9, "sessions": 6}},
+        ):
+            save_frequencies(vault, data)
+            assert get_demotions(vault, quick_ref_names=["REC"]) == []
+
+    def test_non_dict_entry_does_not_break_demotions(self, vault: Path) -> None:
+        """#772: a malformed (non-dict) entry is skipped, not an AttributeError."""
+        save_frequencies(vault, {"a": 5, "REC": {"sessions": 6}})
+        assert get_demotions(vault, quick_ref_names=["REC", "PCI"]) == ["PCI"]
+
+    def test_demotion_reads_sessions_not_count(self, vault: Path) -> None:
+        """#772: `count` contradicting `sessions` must not drive demotion."""
+        save_frequencies(
+            vault,
+            {"REC": {"count": 0, "sessions": 6}, "ZED": {"count": 9, "sessions": 0}},
+        )
+        assert get_demotions(vault, quick_ref_names=["REC", "ZED"]) == ["ZED"]

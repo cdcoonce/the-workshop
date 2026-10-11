@@ -228,14 +228,14 @@ def update_notebook(
     # If the model echoed its own header, strip it so we control the stamp line.
     if body.lstrip().startswith("# Session Notebook"):
         lines = body.splitlines()
-        # drop the model's title + its stamp line (first two non-empty lines)
-        kept: list[str] = []
-        dropped = 0
-        for ln in lines:
-            if dropped < 2 and (ln.startswith("# Session Notebook") or ln.startswith("_Live session state")):
-                dropped += 1
-                continue
-            kept.append(ln)
+        # Drop the model's title, then its stamp line only if it is the next
+        # non-blank line. Anchored to the top: later lines are never touched.
+        kept = list(lines)
+        for prefix in ("# Session Notebook", "_Live session state"):
+            first = next((i for i, ln in enumerate(kept) if ln.strip()), None)
+            if first is None or not kept[first].startswith(prefix):
+                break
+            del kept[: first + 1]
         body = "\n".join(kept).lstrip("\n")
 
     notebook_path.parent.mkdir(parents=True, exist_ok=True)
