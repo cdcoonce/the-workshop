@@ -1,0 +1,107 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_protect_files.py",
+    "tests/test_post_edit_lint_hooks.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_protect_files.py",
+    "tests/test_post_edit_lint_hooks.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1025 final path component excluded from dir check",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "if directory in path.parts:",
+      "replace": "if directory in path.parts[:-1]:"
+    },
+    {
+      "label": "#744 yarn.lock unprotected",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "    \"yarn.lock\",\n",
+      "replace": ""
+    },
+    {
+      "label": "#744 Cargo.lock unprotected",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "    \"Cargo.lock\",\n",
+      "replace": ""
+    },
+    {
+      "label": "#744 Gemfile.lock unprotected",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "    \"Gemfile.lock\",\n",
+      "replace": ""
+    },
+    {
+      "label": "#495 bare startswith .env prefix",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "if basename == prefix or basename.startswith(prefix + \".\"):",
+      "replace": "if basename.startswith(prefix):"
+    },
+    {
+      "label": "#732 no timeout on subprocess.run",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "capture_output=True, timeout=LINT_TIMEOUT_SECONDS)",
+      "replace": "capture_output=True)"
+    },
+    {
+      "label": "#732 TimeoutExpired not caught",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "except (FileNotFoundError, subprocess.TimeoutExpired):",
+      "replace": "except FileNotFoundError:"
+    },
+    {
+      "label": "#816 multiedit spelling dropped from matcher",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "write|edit|multiedit|multi_edit",
+      "replace": "write|edit|multi_edit"
+    },
+    {
+      "label": "#817 unguarded tool_input.get",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "tool_input.get(\"file_path\", \"\") if isinstance(tool_input, dict) else \"\"",
+      "replace": "data.get(\"tool_input\", {}).get(\"file_path\", \"\")"
+    },
+    {
+      "label": "#817 non-str file_path guard removed",
+      "file": "../plugins/workbench/hooks/scripts/post-edit-lint.py",
+      "oracle": "real",
+      "find": "if not isinstance(file_path, str) or not file_path:",
+      "replace": "if not file_path:"
+    },
+    {
+      "label": "#744 lockfile match by endswith",
+      "file": "../plugins/workbench/hooks/scripts/protect-files.py",
+      "oracle": "real",
+      "find": "    if basename == filename:",
+      "replace": "    if basename.endswith(filename):"
+    }
+  ]
+}

@@ -14,11 +14,15 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
+        "matcher": "write|edit|multiedit|multi_edit|Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh post-edit-lint.py"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-validate-write.py"
           }
         ]
       },
@@ -28,15 +32,6 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh remind-skill-announce.py"
-          }
-        ]
-      },
-      {
-        "matcher": "write|edit|multiedit|multi_edit|Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-validate-write.py"
           }
         ]
       }
