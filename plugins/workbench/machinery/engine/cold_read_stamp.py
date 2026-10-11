@@ -141,7 +141,10 @@ def _line_pieces(text: str) -> list[tuple[str, str]]:
         if i == last:
             if part == "":
                 continue
-            pieces.append((part, ""))
+            if part.endswith("\r"):
+                pieces.append((part[:-1], "\r"))
+            else:
+                pieces.append((part, ""))
         elif part.endswith("\r"):
             pieces.append((part[:-1], "\r\n"))
         else:
