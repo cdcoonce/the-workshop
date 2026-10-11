@@ -477,6 +477,49 @@ class TestScaffoldedConfig:
         module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
         assert module._record_cost({"input_tokens": 1_000_000}, "opus") == 100.0
 
+    def test_partial_rates_override_merges_over_defaults(self, scaffolded_config) -> None:
+        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
+        assert module.RATES["opus"] == (100.0, 200.0)
+        assert module.RATES["sonnet"] == budget_burn_defaults.RATES["sonnet"]
+        assert set(module.RATES) == set(budget_burn_defaults.RATES)
+
+    def test_scan_survives_tier_missing_from_partial_override(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(
+            project / "s.jsonl",
+            [_usage_record("req-1", model="claude-3-5-sonnet-20241022")],
+        )
+        result = module.scan(tmp_path, "2026-06")
+        assert result["total"] == 3.0
+
+    def test_zero_budget_human_report_does_not_divide_by_zero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "budget_burn.py",
+                "--context",
+                "work",
+                "--budget",
+                "0",
+                "--projects-root",
+                str(tmp_path),
+            ],
+        )
+        assert budget_burn.main() == 0
+        out = capsys.readouterr().out
+        assert "Spent:" in out
+        assert "% of cap" not in out
+
     def test_configured_budget_reaches_the_report(
         self,
         tmp_path: Path,
