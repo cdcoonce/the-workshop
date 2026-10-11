@@ -376,3 +376,63 @@ def test_main_reports_and_exits_zero(repo: Path, capsys: pytest.CaptureFixture) 
 
     assert code == 0
     assert stale_check.ALREADY_DONE in capsys.readouterr().out
+
+
+def test_branch_unverifiable_plus_still_valid_is_unverifiable(repo: Path) -> None:
+    """An undeterminable commit outranks genuinely additive work in the rollup."""
+    branch_from(repo, "feature")
+    write(repo, "unrelated.md", "untouched\nplus more\n")
+    additive_sha = commit_all(repo, "extend unrelated")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "empty marker")
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert result.verdict == stale_check.UNVERIFIABLE
+    assert any("unverifiable" in line.lower() for line in result.evidence)
+    additive = next(line for line in result.evidence if "genuinely additive" in line)
+    assert additive_sha[:7] in additive
+
+
+def test_branch_contained_plus_superseded_is_superseded_and_lists_drop(repo: Path) -> None:
+    """A cherry-picked commit plus a superseded one: SUPERSEDED, with both lines."""
+    branch_from(repo, "feature")
+    write(repo, "unrelated.md", "untouched\nplus more\n")
+    picked_sha = commit_all(repo, "extend unrelated")
+    write(repo, "docs/operations.md", "alpha\nbravo REVISED\ncharlie\n")
+    stale_sha = commit_all(repo, "revise bravo")
+
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "notes.md", "dev moved on\n")  # distinct parent -> distinct cherry-pick sha
+    commit_all(repo, "dev moves")
+    git(repo, "cherry-pick", picked_sha)
+    write(repo, "docs/operations.md", "one\ntwo\nthree\nfour\nfive\n")
+    commit_all(repo, "rewrite the table wholesale")
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert result.verdict == stale_check.SUPERSEDED
+    drop = next(line for line in result.evidence if line.startswith("drop:"))
+    assert picked_sha[:7] in drop
+    superseded = next(line for line in result.evidence if line.startswith("superseded"))
+    assert stale_sha[:7] in superseded
+
+
+def test_branch_all_commits_cherry_equivalent_is_already_done(repo: Path) -> None:
+    """Every commit re-landed by cherry-pick (not ancestors) -> ALREADY_DONE, all listed."""
+    branch_from(repo, "feature")
+    write(repo, "unrelated.md", "untouched\nplus more\n")
+    first = commit_all(repo, "extend unrelated")
+    write(repo, "docs/operations.md", "alpha\nbravo\ncharlie\ndelta\n")
+    second = commit_all(repo, "add delta")
+
+    git(repo, "checkout", "-q", "dev")
+    write(repo, "notes.md", "dev moved on\n")  # distinct parent -> distinct cherry-pick sha
+    commit_all(repo, "dev moves")
+    git(repo, "cherry-pick", first, second)
+
+    result = stale_check.branch_status(repo, "feature", "dev")
+
+    assert result.verdict == stale_check.ALREADY_DONE
+    assert len(result.commits) == 2
+    drop = next(line for line in result.evidence if line.startswith("drop:"))
+    assert first[:7] in drop and second[:7] in drop

@@ -65,6 +65,27 @@
       "oracle": "real",
       "find": "(parsed.hostname or \"\").rstrip(\".\")",
       "replace": "(parsed.hostname or \"\")"
+    },
+    {
+      "label": "[#629] youtu.be substring (test_spoofed_youtu_be_not_treated_as_short_link)",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "parsed.hostname in (\"youtu.be\",)",
+      "replace": "\"youtu.be\" in (parsed.hostname or \"\")"
+    },
+    {
+      "label": "[#629] youtu.be endswith (test_spoofed_youtu_be_not_treated_as_short_link)",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "parsed.hostname in (\"youtu.be\",)",
+      "replace": "(parsed.hostname or \"\").endswith(\"youtu.be\")"
+    },
+    {
+      "label": "[#629] youtu.be startswith (test_spoofed_youtu_be_not_treated_as_short_link)",
+      "file": "../fetch_transcript.py",
+      "oracle": "real",
+      "find": "parsed.hostname in (\"youtu.be\",)",
+      "replace": "(parsed.hostname or \"\").startswith(\"youtu.be\")"
     }
   ]
 }

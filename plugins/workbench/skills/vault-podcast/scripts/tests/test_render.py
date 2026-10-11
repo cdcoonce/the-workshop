@@ -192,8 +192,13 @@ def test_pause_non_numeric_raises() -> None:
 
 @pytest.mark.parametrize("value", ["nan", "inf", "-inf", "NaN", "Infinity", "-Infinity"])
 def test_pause_non_finite_raises(value: str) -> None:
-    with pytest.raises(render.ScriptFormatError, match="PAUSE"):
+    with pytest.raises(render.ScriptFormatError, match=r"line 2.*PAUSE"):
         render.parse_script(f"A|hi\nPAUSE|{value}\n", frozenset({"A", "PAUSE"}))
+
+
+def test_main_exits_2_for_non_finite_pause(episode_dir: Path, voices: dict[str, str]) -> None:
+    (episode_dir / "script.txt").write_text("A|hi\nPAUSE|nan\n", encoding="utf-8")
+    assert render.main(build_argv(episode_dir, voices)) == 2
 
 
 def test_over_200_turns_raises() -> None:

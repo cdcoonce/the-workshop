@@ -58,6 +58,34 @@
       "oracle": "real",
       "find": " if files else []",
       "replace": ""
+    },
+    {
+      "label": "[#964] additive checked before unverifiable (test_branch_unverifiable_plus_still_valid_is_unverifiable)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    if unverifiable:\n        verdict = UNVERIFIABLE\n    elif additive:\n        verdict = STILL_VALID",
+      "replace": "    if additive:\n        verdict = STILL_VALID\n    elif unverifiable:\n        verdict = UNVERIFIABLE"
+    },
+    {
+      "label": "[#964] superseded and not contained -> ALREADY_DONE (test_branch_contained_plus_superseded_is_superseded_and_lists_drop)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    elif superseded:\n        verdict = SUPERSEDED",
+      "replace": "    elif superseded and not contained:\n        verdict = SUPERSEDED"
+    },
+    {
+      "label": "[#964] drop line removed (test_branch_contained_plus_superseded_is_superseded_and_lists_drop)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    if contained:\n        evidence.append(\"drop: \"",
+      "replace": "    if False:\n        evidence.append(\"drop: \""
+    },
+    {
+      "label": "[#964] all-done fallthrough -> STILL_VALID (test_branch_all_commits_cherry_equivalent_is_already_done)",
+      "file": "../stale_check.py",
+      "oracle": "real",
+      "find": "    else:\n        verdict = ALREADY_DONE\n    return Result(\"branch\"",
+      "replace": "    else:\n        verdict = STILL_VALID\n    return Result(\"branch\""
     }
   ]
 }

@@ -68,6 +68,18 @@ class TestExtractVideoId:
         """A look-alike host must not have an id extracted from its URL."""
         assert extract_video_id(url) == url
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://evilyoutu.be/ROEad3SDI9Q",
+            "https://youtu.be.evil.com/ROEad3SDI9Q",
+            "https://notyoutu.be/ROEad3SDI9Q",
+        ],
+    )
+    def test_spoofed_youtu_be_not_treated_as_short_link(self, url):
+        """A look-alike short-link host must not have an id extracted."""
+        assert extract_video_id(url) == url
+
     def test_bare_id_passes_through(self):
         assert extract_video_id("ROEad3SDI9Q") == "ROEad3SDI9Q"
 
