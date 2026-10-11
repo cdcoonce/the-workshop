@@ -553,6 +553,50 @@ class TestMarkdownAnalyzerReferenceLinks:
         assert md052_issues[0].location.line_start == 7
 
 
+    def test_defined_ref_inside_code_fence_does_not_define_it(self):
+        """A definition-shaped line inside a code fence must not define the ref."""
+        content = (
+            "# Title\n\n```\n[foo]: https://example.com\n```\n\n"
+            "See [the thing][foo] for details.\n"
+        )
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert len(md052_issues) == 1
+        assert "foo" in md052_issues[0].message
+
+
+class TestMarkdownAnalyzerEncodingCorruption:
+    """Tests for the encoding-corruption map and its auto-fix."""
+
+    def test_curly_double_quote_keys_map_to_curly_quotes(self):
+        """Both curly-double-quote keys are real entries with one-character values."""
+        from markdown_analyzer import ENCODING_CORRUPTION_MAP
+
+        assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9c"] == "\u201c"
+        assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9d"] == "\u201d"
+
+    def test_corrupted_curly_quotes_suggest_proper_curly_quotes(self):
+        """The auto-fix for a mis-encoded quoted word yields real curly quotes."""
+        content = "# Title\n\n\xe2\x80\x9chello\xe2\x80\x9d\n"
+        result = analyze_markdown(content)
+
+        md050_issues = [i for i in result.issues if i.rule_id == "MD050"]
+        assert len(md050_issues) == 1
+        fix = md050_issues[0].suggested_fix
+        assert fix is not None
+        assert fix.fixed_code == "\u201chello\u201d"
+
+    def test_corrupted_right_quote_alone_is_flagged(self):
+        """A corrupted right curly quote is detected on its own."""
+        content = "# Title\n\nhello\xe2\x80\x9d\n"
+        result = analyze_markdown(content)
+
+        md050_issues = [i for i in result.issues if i.rule_id == "MD050"]
+        assert len(md050_issues) == 1
+        assert md050_issues[0].suggested_fix.fixed_code == "hello\u201d"
+
+
 class TestMarkdownAnalyzerFormatting:
     """Tests for formatting analysis."""
 
