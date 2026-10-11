@@ -967,3 +967,49 @@ def test_project_path_is_urlencoded_in_api_calls(repo, fake_glab):
     result = run_watch(repo, fake_glab, "sha")
     assert result.returncode == 0, result.stderr
     assert any(c[1].startswith("projects/group%2Fsub%2Fproject/") for c in calls(fake_glab))
+
+
+# --- consecutive-failure budget (#799) ----------------------------------------
+
+
+def test_failure_budget_gives_up_after_the_threshold(monkeypatch, capsys):
+    """The shared counter owns the give-up path for every polling loop."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(ci_watch.time, "sleep", sleeps.append)
+    monkeypatch.setattr(ci_watch, "MAX_CONSECUTIVE_FAILURES", 3)
+    budget = ci_watch.FailureBudget()
+    assert budget.fail(0.5) is False
+    assert budget.fail(0.5) is False
+    assert sleeps == [0.5, 0.5]
+    assert budget.fail(0.5) is True
+    assert sleeps == [0.5, 0.5]  # no sleep once it gives up
+    assert "3 consecutive API failures — giving up, re-query needed" in capsys.readouterr().out
+
+
+def test_failure_budget_reset_clears_the_streak(monkeypatch):
+    monkeypatch.setattr(ci_watch.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ci_watch, "MAX_CONSECUTIVE_FAILURES", 2)
+    budget = ci_watch.FailureBudget()
+    assert budget.fail(0) is False
+    budget.reset()
+    assert budget.fail(0) is False
+    assert budget.fail(0) is True
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: ci_watch.watch_pipeline("p", "abc", None, 0, float("inf")),
+        lambda: ci_watch.watch_pipeline_by_id("p", "9", 0, float("inf")),
+        lambda: ci_watch.watch_mr("p", "7", 0, 1e9),
+    ],
+    ids=["watch_pipeline", "watch_pipeline_by_id", "watch_mr"],
+)
+def test_every_watch_loop_gives_up_indeterminate_on_repeated_api_failure(
+    monkeypatch, capsys, call
+):
+    monkeypatch.setattr(ci_watch, "glab_api", lambda _path: None)
+    monkeypatch.setattr(ci_watch.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(ci_watch, "MAX_CONSECUTIVE_FAILURES", 4)
+    assert call() == ci_watch.INDETERMINATE
+    assert "4 consecutive API failures — giving up, re-query needed" in capsys.readouterr().out
