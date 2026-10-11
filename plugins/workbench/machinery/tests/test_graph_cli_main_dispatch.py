@@ -12,12 +12,11 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
 pytest.importorskip("graphmark")
-pytest.importorskip("ragmark")
 
 ENGINE = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE))
@@ -52,11 +51,17 @@ def stubbed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespace:
     monkeypatch.setattr(gc, "active_dismissed_sigs", lambda root: set())
     monkeypatch.setattr(gc, "siloed_notes", lambda g: [])
 
-    import ragmark.gaps
-
-    monkeypatch.setattr(
-        ragmark.gaps, "rank_pairs", lambda *a, **k: [("a.md", "z.md", 0.7)]
-    )
+    # main() imports ragmark.gaps lazily; a stand-in keeps this test independent of ragmark.
+    fake_gaps = ModuleType("ragmark.gaps")
+    fake_gaps.GAPS_DEFAULT_HUB_DEGREE = 8
+    fake_gaps.GAPS_DEFAULT_K = 5
+    fake_gaps.GAPS_DEFAULT_MAX_SCORE = 0.92
+    fake_gaps.GAPS_DEFAULT_THRESHOLD = 0.6
+    fake_gaps.rank_pairs = lambda *a, **k: [("a.md", "z.md", 0.7)]
+    fake_pkg = ModuleType("ragmark")
+    fake_pkg.gaps = fake_gaps
+    monkeypatch.setitem(sys.modules, "ragmark", fake_pkg)
+    monkeypatch.setitem(sys.modules, "ragmark.gaps", fake_gaps)
     return SimpleNamespace(root=tmp_path, graph=graph, calls=calls)
 
 
