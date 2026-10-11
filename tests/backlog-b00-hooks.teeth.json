@@ -1,0 +1,291 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_subagent_evidence_hooks.py",
+    "tests/test_hooks_fail_open.py",
+    "tests/test_warn_off_trunk_hook.py",
+    "tests/test_audit_config_change_hook.py",
+    "tests/test_vault_engine_dispatch.py",
+    "tests/test_vault_session_start_breadcrumb.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_subagent_evidence_hooks.py",
+    "tests/test_hooks_fail_open.py",
+    "tests/test_warn_off_trunk_hook.py",
+    "tests/test_audit_config_change_hook.py",
+    "tests/test_vault_engine_dispatch.py",
+    "tests/test_vault_session_start_breadcrumb.py"
+  ],
+  "mutants": [
+    {
+      "label": "#609: drop -z so escaped paths are parsed again [predicted: test_signature_changes_when_a_specially_named_untracked_file_is_edited]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "\"status\", \"--porcelain\", \"-z\", \"--untracked-files=all\"",
+      "replace": "\"status\", \"--porcelain\", \"--untracked-files=all\""
+    },
+    {
+      "label": "#609: rename original-path field treated as an entry [predicted: test_signature_does_not_hash_a_renames_original_path]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "if b\"R\" in entry[:2] or b\"C\" in entry[:2]:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#591: drop the future annotations import [predicted: test_git_baseline_defers_annotation_evaluation]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "from __future__ import annotations\n\nimport hashlib",
+      "replace": "import hashlib"
+    },
+    {
+      "label": "#757: read each file whole again [predicted: test_signature_hashes_a_large_file_without_reading_it_whole]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "for chunk in iter(lambda: handle.read(_HASH_CHUNK_BYTES), b\"\"):\n                    hasher.update(chunk)",
+      "replace": "hasher.update(handle.read())"
+    },
+    {
+      "label": "#619: baseline unlinked only after the claim check [predicted: test_state_file_is_removed_when_the_message_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "# Consume the baseline whenever one exists, whether or not this message turns",
+      "replace": "if not COMPLETION_CLAIM.search(message):\n    sys.exit(0)\n# Consume the baseline whenever one exists, whether or not this message turns"
+    },
+    {
+      "label": "#620: start hook uses the raw agent_id in the path [predicted: test_start_hook_keeps_the_state_file_inside_the_gate_directory]",
+      "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+      "oracle": "real",
+      "find": "/ f\"{safe_id}.txt\"",
+      "replace": "/ f\"{agent_id}.txt\""
+    },
+    {
+      "label": "#620: stop hook uses the raw agent_id in the path [predicted: test_stop_hook_does_not_delete_files_outside_the_gate_directory]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "/ f\"{safe_id}.txt\"",
+      "replace": "/ f\"{agent_id}.txt\""
+    },
+    {
+      "label": "#1062: non-string message passed through [predicted: test_non_string_final_message_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "message = data.get(\"last_assistant_message\")\nif not isinstance(message, str):",
+      "replace": "message = data.get(\"last_assistant_message\") or \"\"\nif False:"
+    },
+    {
+      "label": "#628: bare done ending is a claim again [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"(?:I'm|I am|all|it's|it is) done\\.?\\s*$)\",",
+      "replace": "r\"done\\.?\\s*$)\","
+    },
+    {
+      "label": "#628: done alternative dropped entirely [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"(?:I'm|I am|all|it's|it is) done\\.?\\s*$)\",",
+      "replace": "r\"(?!x)x)\","
+    },
+    {
+      "label": "#739: _run_git ignores a non-zero exit [predicted: test_run_git_returns_stripped_stdout_and_none_on_failure]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "        return None\n    if result.returncode != 0:\n        return None\n    return result.stdout.strip()",
+      "replace": "        return None\n    return result.stdout.strip()"
+    },
+    {
+      "label": "#739: _run_git no longer catches a timeout [predicted: test_run_git_returns_none_on_timeout]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "except (OSError, subprocess.TimeoutExpired):\n        return None\n    if result.returncode",
+      "replace": "except OSError:\n        return None\n    if result.returncode"
+    },
+    {
+      "label": "#739: head_sha bypasses _run_git [predicted: test_git_dir_and_head_sha_go_through_run_git]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "return _run_git([\"rev-parse\", \"HEAD\"], project_dir)",
+      "replace": "return None"
+    },
+    {
+      "label": "#739: warn-off-trunk grows a private _git again [predicted: test_hook_uses_the_shared_git_helper_not_a_private_copy]",
+      "file": "../plugins/workbench/hooks/scripts/warn-off-trunk.py",
+      "oracle": "real",
+      "find": "try:\n    repo_root = _run_git([\"rev-parse\", \"--show-toplevel\"], cwd)",
+      "replace": "def _git(*args):\n    return _run_git(list(args), cwd)\n\n\ntry:\n    repo_root = _run_git([\"rev-parse\", \"--show-toplevel\"], cwd)"
+    },
+    {
+      "label": "#643: audit log resolved from the per-worktree git dir [predicted: test_linked_worktree_logs_to_the_common_git_dir]",
+      "file": "../plugins/workbench/hooks/scripts/audit-config-change.py",
+      "oracle": "real",
+      "find": "from _git_baseline import git_common_dir",
+      "replace": "from _git_baseline import git_dir as git_common_dir"
+    },
+    {
+      "label": "#643: git_common_dir returns the raw relative path [predicted: test_git_common_dir_matches_git_dir_in_a_plain_repo]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "return (Path(project_dir) / out).resolve()",
+      "replace": "return Path(out)"
+    },
+    {
+      "label": "#738: wrapper re-grows an inline runpy block [predicted: test_wrapper_is_declaration_plus_one_dispatch_call]",
+      "file": "../plugins/workbench/hooks/scripts/vault-pre-compact.py",
+      "oracle": "real",
+      "find": "run_engine_script(\"pre-compact.py\")",
+      "replace": "import runpy\nrun_engine_script(\"pre-compact.py\")"
+    },
+    {
+      "label": "#738: dispatcher no longer fails open on engine errors [predicted: test_dispatcher_fails_open_on_a_broken_or_missing_engine]",
+      "file": "../plugins/workbench/hooks/scripts/_vault_engine_dispatch.py",
+      "oracle": "real",
+      "find": "except Exception as exc:",
+      "replace": "except KeyError as exc:"
+    },
+    {
+      "label": "#738: dispatcher drops extra_argv [predicted: test_dispatcher_forwards_extra_argv]",
+      "file": "../plugins/workbench/hooks/scripts/_vault_engine_dispatch.py",
+      "oracle": "real",
+      "find": "sys.argv = [str(target), *(extra_argv or [])]",
+      "replace": "sys.argv = [str(target)]"
+    },
+    {
+      "label": "#738: dispatcher skips the before hook [predicted: test_before_hook_runs_first_and_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/_vault_engine_dispatch.py",
+      "oracle": "real",
+      "find": "if before is not None:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#738: session-stop wrapper stops forwarding argv [predicted: test_session_stop_wrapper_forwards_caller_arguments]",
+      "file": "../plugins/workbench/hooks/scripts/vault-stop-3-session-sync.py",
+      "oracle": "real",
+      "find": "run_engine_script(\"session-stop.py\", extra_argv=sys.argv[1:])",
+      "replace": "run_engine_script(\"session-stop.py\")"
+    },
+    {
+      "label": "#894: platform read from CLAUDE_PLUGIN_ROOT again [predicted: test_codex_root_with_claude_plugin_root_set_reports_codex]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "platform = _platform_for(root)",
+      "replace": "platform = \"claude-code\" if os.environ.get(\"CLAUDE_PLUGIN_ROOT\") else \"other\""
+    },
+    {
+      "label": "#894: per-platform record not written [predicted: test_two_platforms_in_one_vault_keep_separate_records]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "(state_dir / f\"plugin-state.{platform}.json\").write_text(rendered)",
+      "replace": "pass"
+    },
+    {
+      "label": "#894: legacy record not written [predicted: test_legacy_breadcrumb_is_still_written_and_parses_under_check_plugin]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "(state_dir / \"plugin-state.json\").write_text(rendered)",
+      "replace": "pass"
+    },
+    {
+      "label": "#894: session field dropped [predicted: test_successive_sessions_with_unchanged_root_and_version_are_distinguishable]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "        \"session\": _session_marker(),\n",
+      "replace": ""
+    },
+    {
+      "label": "#894: write-if-changed restored [predicted: test_identical_rewrite_is_not_skipped]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "(state_dir / f\"plugin-state.{platform}.json\").write_text(rendered)",
+      "replace": "target = state_dir / f\"plugin-state.{platform}.json\"\n    if target.exists() and target.read_text() == rendered:\n        return\n    target.write_text(rendered)"
+    },
+    {
+      "label": "#894: hook payload consumed and not handed to the engine [predicted: test_engine_still_receives_the_hook_payload]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "        sys.stdin = io.StringIO(raw)\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "#894: no timestamp fallback [predicted: test_session_falls_back_to_a_utc_timestamp_without_a_session_id]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "return datetime.now(timezone.utc).isoformat()",
+      "replace": "return \"\""
+    },
+    {
+      "label": "#894: per-platform glob missing from the scaffolded gitignore [predicted: test_scaffolded_gitignore_covers_every_per_platform_breadcrumb]",
+      "file": "../plugins/workbench/machinery/scaffold/gitignore.tmpl",
+      "oracle": "real",
+      "find": ".vault/plugin-state.*.json\n",
+      "replace": ""
+    },
+    {
+      "label": "609 copy entries not skipped [predicted: test_signature_does_not_hash_a_copys_original_path]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "if b\"R\" in entry[:2] or b\"C\" in entry[:2]:",
+      "replace": "if b\"R\" in entry[:2]:"
+    },
+    {
+      "label": "609 non-zero status ignored [predicted: test_signature_is_none_outside_a_repo]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "    if status.returncode != 0:\n        return None\n\n    # `-z`",
+      "replace": "    # `-z`"
+    },
+    {
+      "label": "609 OSError on vanished file propagates [predicted: test_signature_tolerates_a_deleted_tracked_file]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "        except OSError:\n            pass\n    return hasher",
+      "replace": "        except FileNotFoundError:\n            raise\n    return hasher"
+    },
+    {
+      "label": "739 timeout param ignored [predicted: test_run_git_passes_the_timeout_through]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "timeout=timeout,\n        )\n    except (OSError",
+      "replace": "timeout=10,\n        )\n    except (OSError"
+    },
+    {
+      "label": "739 OSError not caught [predicted: test_run_git_returns_none_when_git_is_missing]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "except (OSError, subprocess.TimeoutExpired):\n        return None\n    if result.returncode != 0:\n        return None\n    return result.stdout.strip()",
+      "replace": "except subprocess.TimeoutExpired:\n        return None\n    if result.returncode != 0:\n        return None\n    return result.stdout.strip()"
+    },
+    {
+      "label": "628 anchor dropped [predicted: test_done_mid_sentence_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "done\\.?\\s*$)",
+      "replace": "done\\.?)"
+    },
+    {
+      "label": "894: closed stdin (sys.stdin None) unguarded [predicted: test_closed_stdin_still_runs_the_engine]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "if sys.stdin is not None and not sys.stdin.isatty():",
+      "replace": "if not sys.stdin.isatty():"
+    }
+  ]
+}

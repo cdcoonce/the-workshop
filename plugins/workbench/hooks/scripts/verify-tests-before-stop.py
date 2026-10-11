@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Stop hook: verify the project's test suite is green before Claude stops.
 
-Auto-detects the test command (a Makefile `test:` target, then pytest via
-pyproject.toml/tests/, then `npm test`) and only actually runs it when
+Auto-detects the test command (a Makefile `test:` target, then `npm test`,
+then pytest via pyproject.toml or a tests/ directory holding Python files) and only actually runs it when
 tracked/untracked source has changed since the last verified green run —
 so an unrelated Stop (a question, a plan, a read-only turn) is a cheap
 no-op instead of a full suite run.
@@ -59,7 +59,7 @@ def detect_test_command(project_dir: Path):
     if makefile.exists():
         try:
             text = makefile.read_text()
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             text = ""
         if re.search(r"(?m)^test:", text):
             return ["make", "test"]
@@ -68,7 +68,7 @@ def detect_test_command(project_dir: Path):
     if package_json.exists():
         try:
             pkg = json.loads(package_json.read_text())
-        except (OSError, json.JSONDecodeError):
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             pkg = {}
         scripts = pkg.get("scripts", {}) if isinstance(pkg, dict) else {}
         test_script = scripts.get("test", "")
@@ -76,7 +76,8 @@ def detect_test_command(project_dir: Path):
             return ["npm", "test", "--silent"]
 
     has_pytest_project = (project_dir / "pyproject.toml").exists()
-    has_tests_dir = (project_dir / "tests").is_dir()
+    tests_dir = project_dir / "tests"
+    has_tests_dir = tests_dir.is_dir() and any(tests_dir.rglob("*.py"))
     if has_pytest_project or has_tests_dir:
         if shutil.which("uv"):
             return ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q"]

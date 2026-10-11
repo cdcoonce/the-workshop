@@ -16,6 +16,8 @@ guards a part that one of those failures routes around.
 
 from pathlib import Path
 
+from tests.conftest import assert_sole_owner
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SLUG = "drill-me"
 SKILL_DIR = REPO_ROOT / "plugins" / "workbench" / "skills" / SLUG
@@ -51,12 +53,7 @@ def _description() -> str:
 def test_skill_is_owned_by_workbench() -> None:
     """Membership is the filesystem; one slug lives in exactly one plugin."""
     assert SKILL_MD.is_file(), f"{SKILL_MD} is missing"
-    twins = [
-        p
-        for p in REPO_ROOT.glob(f"plugins/*/skills/{SLUG}/SKILL.md")
-        if "worktrees" not in p.relative_to(REPO_ROOT).parts
-    ]
-    assert len(twins) == 1, f"slug {SLUG} shipped by {len(twins)} plugins"
+    assert_sole_owner(REPO_ROOT, SLUG)
 
 
 def test_skill_md_stays_under_the_line_budget() -> None:
@@ -101,3 +98,48 @@ def test_every_referenced_file_exists() -> None:
     """smoke_test validates this repo-wide; failing here localizes the break."""
     for ref in SKILL_DIR.glob("references/*.md"):
         assert f"references/{ref.name}" in _skill_text(), f"{ref.name} is orphaned"
+
+
+def test_position_generation_never_exceeds_the_option_count() -> None:
+    """A pre-drawn position must always name a real slot.
+
+    The protocol allows two to four options per item, so a fixed 1-4 draw hands
+    a two-option question position 3 or 4 with nowhere to put the answer.
+    SKILL.md is the only file guaranteed to load, so the rule lives there.
+    """
+    body = _skill_text()
+    assert "randint(1,4)" not in body.replace(" ", ""), (
+        "fixed 1-4 draw leaves undefined slots on items with fewer options"
+    )
+    lowered = body.lower()
+    assert "option count" in lowered or "number of options" in lowered, (
+        "SKILL.md does not tie the position draw to each item's option count"
+    )
+
+
+def test_documented_draw_stays_in_range() -> None:
+    """Run the SKILL.md draw command: every draw is a valid 1..n position."""
+    import ast
+    import re
+    import subprocess
+    import sys
+
+    block = re.search(r"```bash\n(python3 -c .*?)\n```", _skill_text(), re.DOTALL)
+    assert block, "SKILL.md has no python3 draw command in a bash block"
+    code = re.search(r'python3 -c "(.*)"\s*$', block.group(1)).group(1)
+    counts = ast.literal_eval(re.search(r"for n in (\[[\d,\s]+\])", code).group(1))
+    assert len(counts) == 12
+    seen = [set() for _ in counts]
+    for _ in range(200):
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, check=True
+        ).stdout
+        draws = ast.literal_eval(out.strip())
+        assert len(draws) == len(counts) == 12
+        assert all(1 <= d <= n for d, n in zip(draws, counts)), (draws, counts)
+        for bucket, d in zip(seen, draws):
+            bucket.add(d)
+    # The whole range is reachable: a draw that never lands on 1 (or n) is
+    # clamped, and the correct option drifts to a fixed slot.
+    for bucket, n in zip(seen, counts):
+        assert bucket == set(range(1, n + 1)), (bucket, n)

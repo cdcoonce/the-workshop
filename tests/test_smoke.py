@@ -1222,3 +1222,342 @@ class TestSmokeMachineryWiring:
 
         assert result.passed is False
         assert any("vendor-map" in e and "duplicate" in e for e in result.errors)
+
+
+class TestSmokeAgentBlankRequiredFields:
+    """A present-but-blank required agent field must fail like a missing one (#736)."""
+
+    @pytest.mark.parametrize("blank_field", ["name", "description", "role"])
+    def test_blank_required_field_fails(
+        self, tmp_path: Path, make_plugin, blank_field: str
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        fields = {
+            "name": "tdd-implementer",
+            "description": "test",
+            "role": "implementer",
+        }
+        fields[blank_field] = ""
+        body = "".join(f"{k}: {v}\n" if v else f"{k}:\n" for k, v in fields.items())
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(f"---\n{body}---\n")
+
+        result = smoke_test(plugin)
+
+        assert not result.passed
+        assert any(
+            "missing required field" in e and f"'{blank_field}'" in e
+            for e in result.errors
+        )
+
+
+class TestSmokeVendorMapSources:
+    """Every vendor-map entry's source must exist in the shipped machinery (#737)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, entries: list[dict]) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        machinery = plugin / "machinery"
+        (machinery / "engine").mkdir(parents=True)
+        (machinery / "engine" / "real.py").write_text("# engine\n")
+        (machinery / "vendor-map.json").write_text(
+            json.dumps({"schema": 2, "entries": entries})
+        )
+        return plugin
+
+    def test_existing_source_passes(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [{"kind": "file", "source": "engine/real.py", "target": ".claude/real.py"}],
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("vendor-map" in e for e in result.errors)
+
+    def test_nonexistent_source_fails(self, tmp_path: Path, make_plugin) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [
+                {
+                    "kind": "file",
+                    "source": "engine/ghost.py",
+                    "target": ".claude/ghost.py",
+                }
+            ],
+        )
+
+        result = smoke_test(plugin)
+
+        assert result.passed is False
+        assert any("vendor-map" in e and "engine/ghost.py" in e for e in result.errors)
+
+    def test_preset_rooted_source_is_not_checked_against_machinery(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            [
+                {
+                    "kind": "file",
+                    "source": "skills/x/SKILL.md",
+                    "source_root": "preset",
+                    "target": ".claude/skills/x/SKILL.md",
+                }
+            ],
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("vendor-map" in e for e in result.errors)
+
+
+class TestQuoteWrappedLinkTargets:
+    """Quote-wrapped link targets resolve with the quotes stripped (#612)."""
+
+    def test_quote_wrapped_link_to_existing_file_with_space_passes(
+        self, tmp_path: Path
+    ) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "a file.md").write_text("x")
+        (tmp_path / "s" / "SKILL.md").write_text('[text]("a file.md")\n')
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_single_quote_wrapped_link_passes(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "a file.md").write_text("x")
+        (tmp_path / "s" / "SKILL.md").write_text("[text]('a file.md')\n")
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_quote_wrapped_link_to_missing_file_still_fails(
+        self, tmp_path: Path
+    ) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text('[text]("gone file.md")\n')
+        errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
+        assert len(errors) == 1
+        assert "gone file.md" in errors[0]
+
+
+class TestMachineryImportScanner:
+    """The machinery-import check reads Python via ast, not line patterns (#480)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, test_source: str) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        engine = plugin / "machinery" / "engine"
+        engine.mkdir(parents=True)
+        (engine / "vault_utils.py").write_text("# engine module\n")
+        tests_dir = plugin / "machinery" / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_budget.py").write_text(test_source)
+        return plugin
+
+    def test_docstring_line_starting_with_from_not_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            '"""Budget tests.\n\nfrom the scaffold-owned config file.\n'
+            'import the config before use.\n"""\n\nimport pytest\n'
+            "from vault_utils import parse\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_comment_line_starting_with_import_not_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            "# import everything below\nimport pytest\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_genuinely_missing_module_still_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            '"""from the docs."""\nimport pytest\nfrom ghost_module import x\n',
+        )
+
+        result = smoke_test(plugin)
+
+        assert result.passed is False
+        assert any("ghost_module" in e and "machinery" in e for e in result.errors)
+        assert not any("imports 'the'" in e for e in result.errors)
+
+    def test_relative_import_is_not_an_engine_reference(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path, make_plugin, "from . import sibling\nimport pytest\n"
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+    def test_unparseable_test_module_does_not_crash_the_scan(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(tmp_path, make_plugin, "def broken(:\n")
+
+        result = smoke_test(plugin)
+
+        assert not any("imports" in e for e in result.errors)
+
+
+class TestRootRelativeLinksOutOfContract:
+    """Leading-slash links are out of contract, like the .claude/ carve-out (#645)."""
+
+    def test_root_relative_link_not_flagged(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text("[text](/some/root/path.md)\n")
+        assert _validate_doc_links(tmp_path, "SKILL.md", "Skill") == []
+
+    def test_relative_link_to_missing_file_still_flagged(self, tmp_path: Path) -> None:
+        from scripts.smoke_test import _validate_doc_links
+
+        (tmp_path / "s").mkdir()
+        (tmp_path / "s" / "SKILL.md").write_text("[text](some/path.md)\n")
+        errors = _validate_doc_links(tmp_path, "SKILL.md", "Skill")
+        assert len(errors) == 1
+        assert "some/path.md" in errors[0]
+
+
+class TestFrontmatterNestedBlockSequence:
+    """Nested block-sequence YAML lists parse into lists (#746)."""
+
+    def test_nested_block_sequence_parses_to_list(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nname: a\nskills:\n  add:\n    - x\n    - y\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+
+    def test_nested_block_sequence_strips_quotes_and_sibling_keys(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - 'x'\n    - \"y\"\n  remove: [z]\nrole: r\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+        assert result["skills"]["remove"] == ["z"]
+        assert result["role"] == "r"
+
+    def test_inline_list_form_unchanged(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter("---\nskills:\n  add: [x, y]\n---\n")
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x", "y"]
+
+    def test_agent_with_block_sequence_dangling_skill_flagged(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = make_plugin(tmp_path, "demo", agents=["tdd-implementer"])
+        agent_md = plugin / "agents" / "tdd-implementer" / "AGENT.md"
+        agent_md.write_text(
+            "---\nname: tdd-implementer\ndescription: test\nrole: implementer\n"
+            "skills:\n  add:\n    - nonexistent-skill\n---\n"
+        )
+
+        result = smoke_test(plugin)
+
+        assert not result.passed
+        assert any("nonexistent-skill" in e for e in result.errors)
+
+
+class TestSmokeMachineryImportForms:
+    """Import-form gap closers for the machinery import scan (#480)."""
+
+    def _plugin(self, tmp_path: Path, make_plugin, source: str) -> Path:
+        plugin = make_plugin(tmp_path, "demo")
+        (plugin / "machinery" / "engine").mkdir(parents=True)
+        tests_dir = plugin / "machinery" / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_x.py").write_text(source)
+        return plugin
+
+    def test_plain_import_of_unshipped_module_fails(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(tmp_path, make_plugin, "import ghost_module\n")
+
+        result = smoke_test(plugin)
+
+        assert any(
+            "ghost_module" in e and "machinery" in e for e in result.errors
+        )
+
+    def test_relative_imports_are_not_engine_references(
+        self, tmp_path: Path, make_plugin
+    ) -> None:
+        plugin = self._plugin(
+            tmp_path,
+            make_plugin,
+            "from .sibling import x\nfrom ..pkg import y\n",
+        )
+
+        result = smoke_test(plugin)
+
+        assert not any("machinery" in e for e in result.errors)
+
+
+class TestFrontmatterSubKeyEdges:
+    """Edge cases for nested block-sequence parsing (#746)."""
+
+    def test_sub_key_does_not_leak_into_next_top_level_key(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - x\nother:\n  - y\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x"]
+        assert not (isinstance(result["other"], dict) and "add" in result["other"])
+        assert "add" not in result["skills"].get("other", {})
+
+    def test_trailing_comment_on_list_item_is_stripped(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter(
+            "---\nskills:\n  add:\n    - x  # note\n---\n"
+        )
+
+        assert result is not None
+        assert result["skills"]["add"] == ["x"]
+
+    def test_dash_without_space_is_not_a_sequence_item(self) -> None:
+        from scripts.smoke_test import _parse_frontmatter
+
+        result = _parse_frontmatter("---\nskills:\n  add:\n    -x\n---\n")
+
+        assert result is not None
+        assert result["skills"]["add"] == ""

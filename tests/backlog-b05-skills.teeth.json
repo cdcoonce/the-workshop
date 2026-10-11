@@ -1,0 +1,123 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_assert_sole_owner.py",
+    "tests/test_drill_me_skill.py",
+    "tests/test_using_workflow_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_assert_sole_owner.py",
+    "tests/test_drill_me_skill.py",
+    "tests/test_using_workflow_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "sole-owner worktree filter is taken from the absolute path, not relative to the repo root (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "\"worktrees\" not in p.relative_to(repo_root).parts",
+      "replace": "\"worktrees\" not in p.parts"
+    },
+    {
+      "label": "sole-owner check no longer ignores worktrees path segments (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "if \"worktrees\" not in p.relative_to(repo_root).parts",
+      "replace": "if True"
+    },
+    {
+      "label": "sole-owner check accepts more than one owning plugin (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "assert len(twins) == 1,",
+      "replace": "assert len(twins) >= 1,"
+    },
+    {
+      "label": "drill-me draws every position from a fixed 1-4 range again (#815)",
+      "file": "../plugins/workbench/skills/drill-me/SKILL.md",
+      "oracle": "real",
+      "find": "random.randint(1,n) for n in [2,3,4,4,3,2,4,3,4,2,3,4]",
+      "replace": "random.randint(1,4) for _ in range(12)"
+    },
+    {
+      "label": "sole-owner glob matches slug prefixes (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "skills/{slug}/SKILL.md\")",
+      "replace": "skills/{slug}*/SKILL.md\")"
+    },
+    {
+      "label": "sole-owner check accepts zero owners (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "assert len(twins) == 1,",
+      "replace": "assert len(twins) <= 1,"
+    },
+    {
+      "label": "sole-owner helper never asserts (#814)",
+      "file": "conftest.py",
+      "oracle": "real",
+      "find": "assert len(twins) == 1, f",
+      "replace": "assert True or len(twins) == 1, f"
+    },
+    {
+      "label": "drill-me draw overshoots to n+1 (#815)",
+      "file": "../plugins/workbench/skills/drill-me/SKILL.md",
+      "oracle": "real",
+      "find": "random.randint(1,n)",
+      "replace": "random.randint(1,n+1)"
+    },
+    {
+      "label": "drill-me draw starts at 2 (#815)",
+      "file": "../plugins/workbench/skills/drill-me/SKILL.md",
+      "oracle": "real",
+      "find": "random.randint(1,n)",
+      "replace": "random.randint(2,n)"
+    },
+    {
+      "label": "drill-me draw includes 0 (#815)",
+      "file": "../plugins/workbench/skills/drill-me/SKILL.md",
+      "oracle": "real",
+      "find": "random.randint(1,n)",
+      "replace": "random.randint(0,n)"
+    },
+    {
+      "label": "drill-me counts list one entry short (#815)",
+      "file": "../plugins/workbench/skills/drill-me/SKILL.md",
+      "oracle": "real",
+      "find": "[2,3,4,4,3,2,4,3,4,2,3,4]",
+      "replace": "[2,3,4,4,3,2,4,3,4,2,3]"
+    },
+    {
+      "label": "drill_me skill contract stops calling assert_sole_owner (#814)",
+      "file": "test_drill_me_skill.py",
+      "oracle": "real",
+      "find": "    assert_sole_owner(REPO_ROOT, SLUG)",
+      "replace": "    pass"
+    },
+    {
+      "label": "using_workflow skill contract stops calling assert_sole_owner (#814)",
+      "file": "test_using_workflow_skill.py",
+      "oracle": "real",
+      "find": "    assert_sole_owner(REPO_ROOT, SLUG)",
+      "replace": "    pass"
+    }
+  ]
+}
