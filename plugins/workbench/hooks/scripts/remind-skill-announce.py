@@ -19,7 +19,7 @@ verified to hold on every turn; this hook is the deterministic backstop.
 
 Only fires when `tool_input.skill` is a non-empty string — there is no skill
 name to announce otherwise. Fails open on anything else: malformed stdin, a
-non-dict payload, a `tool_name` other than `Skill` (defensive; the PostToolUse
+non-dict payload, a `tool_name` other than `Skill`/`skill` (compared case-insensitively, matching the dual-cased matcher; defensive; the PostToolUse
 matcher normally filters this before the script ever runs, but Codex-style
 hosts may not honor matchers), or a missing/blank skill name.
 """
@@ -38,7 +38,8 @@ except (json.JSONDecodeError, ValueError):
 if not isinstance(data, dict):
     sys.exit(0)
 
-if data.get("tool_name") != "Skill":
+tool_name = data.get("tool_name")
+if not isinstance(tool_name, str) or tool_name.lower() != "skill":
     sys.exit(0)
 
 tool_input = data.get("tool_input")

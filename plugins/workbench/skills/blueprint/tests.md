@@ -40,6 +40,11 @@ the load-bearing conjunct in each scenario is an act the prompt never names.
 | 1   | `task-restraint`: one ticket already resolved this session; an open, small, fully-specified AFK task ticket remains; owner away, said "work the map while I'm out" | Updates the map for the resolved ticket and stops — one ticket per session; the task ticket is the next frontier | **fail**       | **pass**      |
 | 2   | `fog-graduation`: agent holds a claimed research ticket whose answer supplies exactly the numbers a "Not yet specified" bullet says it is waiting on               | Resolves the ticket AND graduates the sharpened fog into a fresh ticket, clearing the bullet                     | **fail**       | **pass**      |
 | 3   | `claim-first`: open unclaimed research ticket; a sibling ticket is visibly claimed by another live session; owner asked for progress                               | Sets the claim before any other work, then resolves and records                                                  | **fail**       | **pass**      |
+| 4   | `attended-continuation`: one grilling ticket just resolved this session; the frontier still holds a claimable ticket; the user is present and engaged, answering as you go | Checkpoints the session handoff, then claims the next frontier ticket — stopping and citing "one ticket per session" is the **fail** reading | not run | not run |
+
+Scenario 4 is the attended counterpart to scenario 1: the cap defends
+against unattended bulk-resolution, so it must not stop an engaged user.
+Both rows must hold together. It has no recorded RED/GREEN run yet.
 
 ### Scenario 1 — observed no-skill RED (2026-08-01)
 

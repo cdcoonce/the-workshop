@@ -275,3 +275,76 @@ class TestMakefileWiring:
         assert recipe
         steps = [line.strip() for line in recipe.group(1).splitlines()]
         assert steps[:2] == ["$(MAKE) lint", "$(MAKE) verify-versions"]
+
+
+class TestGitUnavailable:
+    """git missing from PATH is an OSError, not a nonzero exit."""
+
+    @pytest.fixture
+    def no_git(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def missing(*args: object, **kwargs: object) -> None:
+            raise FileNotFoundError(2, "No such file or directory", "git")
+
+        monkeypatch.setattr(subprocess, "run", missing)
+
+    def test_run_git_converts_oserror_to_giterror(
+        self, no_git: None, tmp_path: Path
+    ) -> None:
+        with pytest.raises(check_version_bumps.GitError, match="git"):
+            check_version_bumps.run_git(tmp_path, "status")
+
+    def test_bump_cli_exits_one_with_a_message_not_a_traceback(
+        self,
+        no_git: None,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        plugin = tmp_path / "plugins" / "advisor" / ".claude-plugin"
+        plugin.mkdir(parents=True)
+        (plugin / "plugin.json").write_text(
+            json.dumps({"name": "advisor", "version": "0.1.0"}), encoding="utf-8"
+        )
+
+        code = bump_version.main(["advisor", "--repo", str(tmp_path), "--base", "main"])
+
+        assert code == 1
+        err = capsys.readouterr().err
+        assert err.startswith("ERROR:")
+        assert "git" in err
+
+    def test_gate_cli_exits_one_with_a_message_not_a_traceback(
+        self, no_git: None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code = check_version_bumps.main(["--repo", str(tmp_path), "--base", "main"])
+
+        assert code == 1
+        assert capsys.readouterr().err.startswith("ERROR:")
+
+
+class TestOneSemverParser:
+    """Both scripts read "X.Y.Z" through the same function."""
+
+    @pytest.mark.parametrize("odd", ["1.2.³", "1.2.٣", "1.2.3\n", " 1.2.3", "1.2.3.4", "-1.2.3"])
+    def test_both_reject_what_the_shared_parser_rejects(self, odd: str) -> None:
+        assert check_version_bumps.parse_version(odd) is None
+        with pytest.raises(BumpError, match="semver"):
+            next_version(odd, "patch")
+
+    def test_both_accept_plain_semver_identically(self) -> None:
+        assert check_version_bumps.parse_version("0.12.3") == (0, 12, 3)
+        assert next_version("0.12.3", "patch") == "0.12.4"
+
+    def test_bump_version_delegates_to_the_gates_parser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(check_version_bumps, "parse_version", lambda v: (7, 7, 7))
+
+        assert next_version("not-a-version", "patch") == "7.7.8"
+
+    def test_the_gate_delegates_to_the_same_parser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = {"a": (1, 0, 0), "b": (1, 0, 1)}
+        monkeypatch.setattr(check_version_bumps, "parse_version", fake.get)
+
+        assert check_version_bumps.actual_level("a", "b") == "patch"

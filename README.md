@@ -113,6 +113,8 @@ Claude reads `.claude-plugin/marketplace.json`, finds the available packages, an
 
 > **Headless:** plugin skills load under `claude -p` too, namespaced `<plugin>:<skill>` (re-verified 2026-08-09 on Claude Code 2.1.223, including with `--setting-sources project,local`) — no project-scope copies needed for scripted automation (see [COMPATIBILITY.md](COMPATIBILITY.md) → Claude Code → Headless).
 
+**Verify your install:** run `claude plugin list` (or `/plugin` inside a session) and confirm `workbench` shows as installed and enabled. Then invoke `/brainstorm` — a working install answers with shaping questions about your idea before proposing anything. Skills are namespaced `workbench:<skill>`; if `/brainstorm` is not found, see [Troubleshooting](#troubleshooting).
+
 See [Presets](#presets) for what each package includes, or the [presets reference](docs/reference/presets.md) for full detail.
 
 ### Codex
@@ -127,7 +129,9 @@ codex plugin marketplace add https://github.com/cdcoonce/the-workshop.git
 codex plugin add workbench@the-workshop
 ```
 
-Verify with `codex plugin list`. Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
+Skills load namespaced (`workbench:<skill>`) and work immediately, including under headless `codex exec` — skill discovery is not trust-gated.
+
+**Verify your install:** run `codex plugin list` and confirm `workbench` is listed as enabled. Then invoke `workbench:brainstorm` in a session — a working install answers with shaping questions. Hooks staying silent is expected until you approve them (see the note below and [Platform Support](#platform-support)).
 
 > **What you get on Codex is skills, bundled docs, and plugin-level hooks.** Plugin-bundled hooks load when the plugin is enabled (corrected 2026-08-09 — an earlier entry read the retired `plugin_hooks` feature flag as a removed capability), but they sit behind a **silent trust gate**: Codex records trust against each hook definition's hash and skips unapproved hooks with no output and no error, so expect a re-approval prompt after every plugin update. Repo-level `.codex/hooks.json` additionally needs project trust (`trust_level = "trusted"` in `~/.codex/config.toml`). Don't rely on hook protections on Codex without reading [COMPATIBILITY.md](COMPATIBILITY.md) → Codex → Hooks. Persona plugins remain no-ops here for a different reason: their hook command interpolates `CLAUDE_PLUGIN_ROOT`, and Codex supplies `PLUGIN_ROOT` instead.
 
@@ -148,6 +152,8 @@ For example, to install `workbench`:
 The plugin installs globally to `~/.snowflake/cortex/plugins/<preset-name>/` and activates automatically. Use the Sync button in Agent Settings to pull updates.
 
 > **Skills work fully on Cortex, and plugin-level hooks execute** (probe-verified on 1.20.2, 2026-08-08 — superseding the earlier "never executed" finding from v1.1.8; see [COMPATIBILITY.md](COMPATIBILITY.md) → Cortex Code). Two caveats: `CLAUDE_PLUGIN_ROOT` is **unset** in Cortex's hook environment, so the Workshop's current hook commands (including persona injection) resolve against the wrong directory and fail there until a self-locating command form ships; and a restored window's first session fires SessionStart before plugin activation, so plugin SessionStart hooks always miss it.
+
+**Verify your install:** run `cortex skill list` and confirm the `workbench` skills appear. Then invoke `/brainstorm` — a working install answers with shaping questions. Persona injection and the other hook commands that rely on `CLAUDE_PLUGIN_ROOT` execute here but currently fail until a self-locating command form ships (see [Platform Support](#platform-support)); a missing skill is the real failure.
 
 ### Any Other Agent (Manual Copy)
 
@@ -174,14 +180,14 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 <!-- BEGIN GENERATED: plugins-table -->
 | Plugin | Version | Skills | Agents | Hooks | Description |
 | --- | --- | --- | --- | --- | --- |
-| **`advisor-product-design`** | `0.2.0` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
-| **`advisor-product-strategy`** | `0.2.0` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
+| **`advisor-product-design`** | `0.2.1` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
+| **`advisor-product-strategy`** | `0.2.1` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
 | **`persona-pair-programmer`** | `1.1.1` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
 | **`persona-ship-it`** | `1.1.1` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.34.1` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.34.10` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.3` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -336,13 +342,13 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
-| `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
-| `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
-| `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
-| `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
-| `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
-| `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: checks the explicit sync boundary without authorizing a sync. |
-| `vault-validate-write.py` | `workbench` | — | PostToolUse hook: validates frontmatter on vault note writes. |
+| `vault-pre-compact.py` | `workbench` | `PreCompact` | PreCompact hook: preserves session state before compaction. |
+| `vault-session-start.py` | `workbench` | `SessionStart` | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
+| `vault-stop-1-notebook-update.py` | `workbench` | `Stop` | Stop hook: updates the session notebook. |
+| `vault-stop-2-graph-gardener.py` | `workbench` | `Stop` | Stop hook: queues link, profile, and index repairs. |
+| `vault-stop-3-session-sync.py` | `workbench` | `Stop` | Stop hook: checks the explicit sync boundary without authorizing a sync. |
+| `vault-validate-write.py` | `workbench` | `PostToolUse` | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
 | `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
@@ -533,6 +539,11 @@ uv run pytest --cov=scripts --cov-report=term-missing
 | `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
 | `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Run `make bump PLUGIN=<name>` (one hand-written file, the rest stamped); see Plugin Versioning |
 | Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
+| Skill not found after install (Claude Code)      | Plugin not installed or not enabled, or the session predates the install | Run `claude plugin list`; install or enable `workbench`, then start a fresh session |
+| Skill not found after install (Codex)            | Marketplace not registered, or the plugin was never added          | Run `codex plugin marketplace add ...` then `codex plugin add workbench@the-workshop`; check `codex plugin list` |
+| Skill not found after install (Cortex)           | Install path wrong, or the Sync button was never pressed           | Re-run the `/github-plugin-installer` command with the `dist/<preset>` sub-path; check `cortex skill list` |
+| Hooks are silent on Codex or Cortex              | Expected: Codex skips unapproved hooks without output; Cortex lacks `CLAUDE_PLUGIN_ROOT` | Approve the hooks on Codex; otherwise see [Platform Support](#platform-support) |
+| Marketplace URL unreachable                      | A work network or proxy blocks `github.com` or `raw.githubusercontent.com` | Retry off the VPN or allow-list the hosts; or use Manual Copy from a clone |
 | Dev-cycle state file validation fails            | Frontmatter schema mismatch or phase transition error             | Check `schema_version: 1` and that phases follow strict order           |
 
 ---

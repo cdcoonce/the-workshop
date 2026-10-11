@@ -11,14 +11,15 @@ property — do not skip it because "the interview already separated things".
 
 ## PR path (machine has write access to this repo)
 
-1. `git fetch origin`, branch `feat/advisor-<role>` off `origin/main` — never off
+1. `git fetch origin`, branch `feat/advisor-<role>` off `origin/dev` — never off
    current HEAD.
 2. Add the plugin; `make stamp`; smoke-test the new plugin; `uv run
 pytest`. The layering test and the persona's own tests.md suite must be green.
 3. Conventional commit, stage explicitly (never `git add .`), no agent attribution.
-4. Push, open the PR: what the persona is, who owns it, tests.md results table,
-   pack list with researched-on dates. The maintainer reviews and merges; merge →
-   promote to `main` → marketplace → the owner receives it as a plugin update.
+4. Push, open the pull request into `dev`: what the persona is, who owns it, tests.md results table,
+   pack list with researched-on dates. The maintainer reviews and merges into `dev`; the
+   repo's fast-forward promotion then carries it to `main` → marketplace → the
+   owner receives it as a plugin update.
    The version bump is what makes that last step happen — see Plugin Versioning
    in CLAUDE.md.
 
@@ -26,7 +27,7 @@ pytest`. The layering test and the persona's own tests.md suite must be green.
 
 Detect before attempting: `gh auth status` + push permission on the repo. If
 absent, do not half-push. Instead produce `advisor-<role>-bundle/` containing the
-preset directory, a `git format-patch`-style diff against the repo's main, the
+preset directory, a `git format-patch`-style diff against the repo's `dev`, the
 tests.md results, and a one-paragraph handoff note. The owner sends the bundle to
 the maintainer, who applies it on a fresh branch and runs the same gate. The
 builder must say plainly which path it took and why.
