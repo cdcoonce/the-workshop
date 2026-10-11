@@ -42,8 +42,8 @@
       "label": "a behind head (is-ancestor exit 1) takes the contained path, skipping refresh and gate (test_behind_head_merges_and_pushes)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "    if contained.returncode == 0:\n",
-      "replace": "    if contained.returncode in (0, 1):\n"
+      "find": "    if contained:\n",
+      "replace": "    if contained is not None:\n"
     },
     {
       "label": "read_pr takes the frozen pulls base.sha (test_read_pr_takes_live_base_tip_not_frozen_base_sha)",
@@ -63,8 +63,8 @@
       "label": "a conflict message omits the conflicted files (test_conflict_names_files_and_pushes_nothing)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "            files = conflicted.stdout.strip() or \"(none listed)\"\n",
-      "replace": "            files = \"\"\n"
+      "find": "conflicts; resolve by hand:\\n{files}\")",
+      "replace": "conflicts; resolve by hand:\\n(none listed)\")"
     },
     {
       "label": "the patch-id comparison is skipped (test_nearby_base_edit_changes_patch_id_and_refuses)",
@@ -168,22 +168,22 @@
       "label": "is-ancestor arguments swapped, so a head containing the base is refreshed and gated (test_head_containing_base_skips_refresh_and_gate)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "[\"git\", \"merge-base\", \"--is-ancestor\", base_sha, head_sha]",
-      "replace": "[\"git\", \"merge-base\", \"--is-ancestor\", head_sha, base_sha]"
+      "find": "_is_ancestor(runner, base_sha, head_sha)",
+      "replace": "_is_ancestor(runner, head_sha, base_sha)"
     },
     {
       "label": "an is-ancestor exit 128 goes down the refresh path (test_ancestry_check_error_is_indeterminate)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "    if contained.returncode != 1:\n",
-      "replace": "    if contained.returncode not in (1, 128):\n"
+      "find": "    if contained is None:\n        return _refused(info, detail)\n",
+      "replace": "    if contained is None:\n        pass\n"
     },
     {
       "label": "an is-ancestor exit 128 is read as contained (test_ancestry_check_error_is_indeterminate)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "    if contained.returncode == 0:\n",
-      "replace": "    if contained.returncode != 1:\n"
+      "find": "    if contained:\n        return RefreshResult(",
+      "replace": "    if contained or contained is None:\n        return RefreshResult("
     },
     {
       "label": "the before diff honours color.diff (test_diff_config_still_lands_a_clean_refresh[color])",

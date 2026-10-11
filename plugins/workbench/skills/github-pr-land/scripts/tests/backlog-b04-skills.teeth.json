@@ -1,0 +1,94 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_promote.py",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_refresh.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_promote.py",
+    "plugins/workbench/skills/github-pr-land/scripts/tests/test_pr_land_refresh.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1140: any nonzero merge exit runs the stack search, no non-conflict refusal (test_non_conflict_merge_failure_skips_stack_search_and_shows_git_error)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "            if not files:\n                return _refused(info, f\"git merge {info.base_ref} failed without a conflict: {merged.stderr.strip()}\")\n",
+      "replace": "            files = files or \"(none listed)\"\n"
+    },
+    {
+      "label": "#1140: the non-conflict refusal drops git's real stderr (test_non_conflict_merge_failure_skips_stack_search_and_shows_git_error)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "failed without a conflict: {merged.stderr.strip()}",
+      "replace": "failed without a conflict: unknown error"
+    },
+    {
+      "label": "#1050: promote collapses git error and real divergence into 'not a fast-forward' (test_ancestry_check_git_error_is_reported_not_called_a_divergence)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if contained is None:\n        print(f\"refused: {detail}\", file=sys.stderr)\n        return INDETERMINATE\n    if not contained:\n",
+      "replace": "    if not contained:\n"
+    },
+    {
+      "label": "#1050: the ancestor helper reads any nonzero exit as a plain non-ancestor (test_ancestry_check_git_error_is_reported_not_called_a_divergence)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    return None, f\"git merge-base --is-ancestor exited",
+      "replace": "    return False, f\"git merge-base --is-ancestor exited"
+    },
+    {
+      "label": "#1051: promote does not check the head repository (test_fork_headed_promotion_is_refused_before_any_fetch_or_push)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "    if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():\n        print(\n            f\"refused: head repository",
+      "replace": "    if False:\n        print(\n            f\"refused: head repository"
+    },
+    {
+      "label": "#1051: a payload with no head repository passes the check (test_promotion_payload_without_head_repo_is_refused)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
+      "replace": "if isinstance(head_repo, str) and head_repo.casefold() != repo.casefold():"
+    },
+    {
+      "label": "#1051: head repo compared case-sensitively (test_promotion_accepts_head_repo_that_differs_only_in_case)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
+      "replace": "if not isinstance(head_repo, str) or head_repo != repo:"
+    },
+    {
+      "label": "#1051: head repo prefix-matched, admitting look-alike forks (test_head_repo_sharing_the_base_name_as_a_prefix_is_refused)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
+      "replace": "if not isinstance(head_repo, str) or not head_repo.casefold().startswith(repo.casefold()):"
+    },
+    {
+      "label": "#1051: a non-dict head.repo payload is trusted instead of refused (test_malformed_head_repo_payload_is_refused_not_a_crash)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "isinstance(head_repo_payload, dict)",
+      "replace": "head_repo_payload is not None"
+    }
+  ]
+}

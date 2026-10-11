@@ -42,7 +42,7 @@
       "label": "the ancestor check is skipped (test_release_tip_not_an_ancestor_refuses_as_not_a_fast_forward)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "    if contained.returncode != 0:\n        print(f\"refused: {release} at {tip}",
+      "find": "    if not contained:\n        print(f\"refused: {release} at {tip}",
       "replace": "    if False:\n        print(f\"refused: {release} at {tip}"
     },
     {

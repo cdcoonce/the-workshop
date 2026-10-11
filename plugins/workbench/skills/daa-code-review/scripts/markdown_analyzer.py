@@ -74,8 +74,8 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\xe2\x80\xa6": "…",  # ellipsis (â€¦)
     "\xe2\x80\x98": "'",  # left single quote
     "\xe2\x80\x99": "'",  # right single quote
-    "\xe2\x80\x9c": """,  # left double quote
-    "\xe2\x80\x9d": """,  # right double quote
+    "\xe2\x80\x9c": "\u201c",  # left double quote
+    "\xe2\x80\x9d": "\u201d",  # right double quote
     # Checkmarks and symbols
     "\xe2\x9c\x93": "✓",  # checkmark (âœ")
     "\xe2\x9c\x94": "✔",  # heavy checkmark (âœ")
@@ -680,14 +680,16 @@ class MarkdownAnalyzer:
         """
         issues: list[Issue] = []
 
+        # Mask code blocks/spans so code like matrix[0][1] isn't parsed as a
+        # reference link, and so a definition-shaped example inside a fence
+        # doesn't count as a real definition.
+        masked_content = self._mask_code_regions(content)
+
         # Find all reference definitions
         defined_refs = {
-            m.group(1).lower() for m in REFERENCE_DEF_PATTERN.finditer(content)
+            m.group(1).lower()
+            for m in REFERENCE_DEF_PATTERN.finditer(masked_content)
         }
-
-        # Mask code blocks/spans so code like matrix[0][1] isn't parsed as a
-        # reference link.
-        masked_content = self._mask_code_regions(content)
 
         # Check all reference links
         for match in REFERENCE_LINK_PATTERN.finditer(masked_content):

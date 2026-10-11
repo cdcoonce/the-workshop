@@ -48,6 +48,7 @@ class Hub:
         self.origin = origin
         self.head_sha = head_sha
         self.head_ref = "dev"
+        self.head_repo: str | None = REPO
         self.initial_main = self.main()
         self.stale_reads = 0
         self.never_merged = False
@@ -55,6 +56,9 @@ class Hub:
 
     def main(self) -> str:
         return git(self.origin, "rev-parse", "refs/heads/main")
+
+    def _head_repo(self) -> dict[str, object]:
+        return {} if self.head_repo is None else {"repo": {"full_name": self.head_repo}}
 
     def run(self, argv: list[str], cwd: str | None = None) -> Result:
         endpoint = argv[2] if argv[:2] == ["gh", "api"] and len(argv) > 2 else ""
@@ -64,7 +68,7 @@ class Hub:
                 {
                     "number": PR,
                     "merged": merged,
-                    "head": {"sha": self.head_sha, "ref": self.head_ref, "repo": {"full_name": REPO}},
+                    "head": {"sha": self.head_sha, "ref": self.head_ref, **self._head_repo()},
                     "base": {"ref": "main", "sha": self.initial_main, "repo": {"full_name": REPO}},
                 }
             )
@@ -154,6 +158,45 @@ def test_release_tip_not_an_ancestor_refuses_as_not_a_fast_forward(world, capsys
     assert "not a fast-forward" in captured.out + captured.err
     assert pushes(runner) == []
     assert hub.main() == diverged
+
+
+def test_ancestry_check_git_error_is_reported_not_called_a_divergence(world, capsys) -> None:
+    """Guards against reading an is-ancestor git failure (128: bad object) as a real divergence."""
+    hub, runner, origin = world
+    runner.overlay(["git", "merge-base", "--is-ancestor"], returncode=128, append_stderr="fatal: Not a valid commit name zzz\n")
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert code == INDETERMINATE
+    assert "exited 128" in output
+    assert "Not a valid commit name zzz" in output
+    assert "not a fast-forward" not in output
+    assert pushes(runner) == []
+    assert hub.main() == hub.initial_main
+
+
+def test_fork_headed_promotion_is_refused_before_any_fetch_or_push(world, capsys) -> None:
+    """Guards against promoting a fork PR whose branch is merely named like the trunk."""
+    hub, runner, origin = world
+    hub.head_repo = "mallory/widget"
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert "mallory/widget" in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main
+
+
+def test_promotion_payload_without_head_repo_is_refused(world, capsys) -> None:
+    """Guards against treating a PR with an unreadable head repository as same-repo."""
+    hub, runner, origin = world
+    hub.head_repo = None
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert "head repository" in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main
 
 
 def test_red_watch_returns_1_and_never_pushes(world) -> None:
@@ -247,3 +290,42 @@ def test_cli_promote_resolves_repo_and_threads_its_flags(world, capsys) -> None:
     assert clock.sleeps == [7]
     assert hub.fake.calls[0] == REPO_VIEW
     assert f"promoted pr={PR} sha={hub.head_sha}" in capsys.readouterr().out
+
+
+def test_promotion_accepts_head_repo_that_differs_only_in_case(world, capsys) -> None:
+    """Guards against refusing a same-repo PR because GitHub reports the name in another case."""
+    hub, runner, origin = world
+    hub.head_repo = REPO.upper()
+    code = promote(runner, FakeClock())
+    assert code == GREEN
+    assert hub.main() == hub.head_sha
+
+
+@pytest.mark.parametrize("head_repo", [f"{REPO}-fork", f"{REPO}2"])
+def test_head_repo_sharing_the_base_name_as_a_prefix_is_refused(world, capsys, head_repo) -> None:
+    """Guards against prefix-matching the head repository, which would admit a look-alike fork."""
+    hub, runner, origin = world
+    hub.head_repo = head_repo
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert head_repo in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main
+
+
+@pytest.mark.parametrize(
+    "head_repo_payload",
+    [{"repo": None}, {"repo": REPO}, {"repo": {"full_name": 5}}],
+    ids=["null-repo", "string-repo", "non-string-full-name"],
+)
+def test_malformed_head_repo_payload_is_refused_not_a_crash(world, capsys, head_repo_payload) -> None:
+    """Guards against a malformed head.repo crashing or being read as same-repo."""
+    hub, runner, origin = world
+    hub._head_repo = lambda: head_repo_payload
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert "head repository" in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main
