@@ -94,6 +94,8 @@ def get_demotions(vault_root: Path, quick_ref_names: set[str] | list[str]) -> li
     # zero-session variant cannot shadow a well-used one.
     sessions_lower: dict[str, int] = {}
     for key, info in data.items():
+        if not isinstance(info, dict):
+            continue
         count = info.get("sessions", 0)
         lowered = key.lower()
         sessions_lower[lowered] = max(sessions_lower.get(lowered, count), count)
