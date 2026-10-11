@@ -81,14 +81,14 @@
       "label": "byte-identical entries origin already holds are inserted again (duplicates)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        for chunk in new_entries:\n            if present[chunk.key] > 0:\n                present[chunk.key] -= 1\n                detail[\"duplicates_skipped\"] += 1\n                continue\n            kept.append(chunk)\n",
+      "find": "        for chunk in new_entries:\n            if present[chunk.key] > 0:\n                present[chunk.key] -= 1\n                detail[\"duplicates_skipped\"] += 1\n                already_on_origin.add(id(chunk))\n                continue\n            kept.append(chunk)\n",
       "replace": "        for chunk in new_entries:\n            kept.append(chunk)\n"
     },
     {
       "label": "touched handoff sections are never re-applied: origin wins everything",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    touched = [name for name, _raw, body in b_secs if t_map[name] != body]",
+      "find": "    touched = [name for name in t_names if t_map[name] != b_map[name]]",
       "replace": "    touched: list[str] = []"
     },
     {
@@ -298,7 +298,7 @@
       "label": "F6: an item both sides inserted is inserted again (duplicated)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            if _has_content(item[0]) and origin_added[item[0]] > 0:\n",
+      "find": "            if _has_content(content) and origin_added[content] > 0:\n",
       "replace": "            if False:\n"
     },
     {
@@ -323,11 +323,11 @@
       "replace": "    out.extend(added)\n"
     },
     {
-      "label": "F3: new entries are placed at the top of the block instead of by date",
+      "label": "G3: a new entry goes to the top of the block regardless of its predecessor",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        at = next((i for i, day in enumerate(origin_days) if day <= chunk.day), len(origin_days))\n",
-      "replace": "        at = 0\n"
+      "find": "            slots.setdefault(at + 1, []).append(chunk)\n",
+      "replace": "            slots.setdefault(0, []).append(chunk)\n"
     },
     {
       "label": "A2: untouched entries are re-emitted blank-normalized instead of spliced byte-identically",
@@ -337,11 +337,11 @@
       "replace": "        if replacement is None:\n            out.extend(chunk.key)\n            out.append(\"\")\n"
     },
     {
-      "label": "F3: a new entry with an equal date goes below origin's same-date entry (strictly-older rule)",
+      "label": "G3: a new entry goes to the end of the block regardless of its predecessor",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "if day <= chunk.day), len(origin_days))",
-      "replace": "if day < chunk.day), len(origin_days))"
+      "find": "            slots.setdefault(at + 1, []).append(chunk)\n",
+      "replace": "            slots.setdefault(len(origin_entries), []).append(chunk)\n"
     },
     {
       "label": "an in-place edit that also changed the heading line is treated as a deletion",
@@ -410,7 +410,7 @@
       "label": "F1: a resolved stamp or description line is accepted whatever the result holds",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        if sides[3] in candidates:\n",
+      "find": "        if r in candidates:\n",
       "replace": "        if True:\n"
     },
     {
@@ -487,7 +487,7 @@
       "label": "P1: one origin-added item absorbs every identical session item (not at most once)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "                origin_added[item[0]] -= 1\n",
+      "find": "                origin_added[content] -= 1\n",
       "replace": "                pass\n"
     },
     {
@@ -589,6 +589,146 @@
       "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of either field between them; _replay is single-threaded and the Report is only observed after it returns, so the order is inert on every path the suite can reach.",
       "find": "        report.new_head = new_head\n        report.action = \"replayed\"",
       "replace": "        report.action = \"replayed\"\n        report.new_head = new_head"
+    },
+    {
+      "label": "G1: the three-way base is --base, not the merge-base (a pushed entry comes back next to its correction)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        base_text = _blob_text(merge_base, path)\n",
+      "replace": "        base_text = _blob_text(base, path)\n"
+    },
+    {
+      "label": "G1: the path-level conflict set is computed from --base",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    session_changes = _name_status(merge_base, head)\n    origin_changes = _name_status(merge_base, origin_head)\n",
+      "replace": "    session_changes = _name_status(base, head)\n    origin_changes = _name_status(base, origin_head)\n"
+    },
+    {
+      "label": "G1: a --base that is not an ancestor of the merge-base no longer refuses",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if not _is_ancestor(base, merge_base):\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "G1: --verify keeps the caller's --base when origin holds later session commits",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    base = _effective_base(base, tip, origin)\n",
+      "replace": "    base = base\n"
+    },
+    {
+      "label": "G1: a correction both sides made identically is no longer recognised as already applied",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            if origin_keys[old.key] == 0 and origin_keys[edited.key] == 1:\n",
+      "replace": "            if False:\n"
+    },
+    {
+      "label": "G2: the anchor item keeps origin's blank count instead of taking the session's",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                    blank_fix[anchor - 1] = tip_items[max(kept[0] - 1, 0)][1]\n",
+      "replace": "                    pass\n"
+    },
+    {
+      "label": "G2: inserted items inherit the anchor's blank count (the old behaviour)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                incoming = [tip_items[j] for j in kept]\n                if anchor and _has_content(oc[anchor - 1]):\n",
+      "replace": "                incoming = [(tip_items[j][0], origin_items[anchor - 1][1] if anchor else tip_items[j][1]) for j in kept]\n                if anchor and _has_content(oc[anchor - 1]):\n"
+    },
+    {
+      "label": "G2: the last inserted item keeps its own blank count instead of origin's anchor count",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                    incoming[-1] = (incoming[-1][0], origin_items[anchor - 1][1])\n",
+      "replace": "                    pass\n"
+    },
+    {
+      "label": "G3: no successor fallback when the predecessor is not on origin exactly once",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        successor = next((e for e in tip_entries[j + 1 :] if id(e) in idents), None)\n",
+      "replace": "        successor = None\n"
+    },
+    {
+      "label": "G3: a predecessor present on origin more than once is still trusted",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        return found[0] if len(found) == 1 else None\n",
+      "replace": "        return found[0] if found else None\n"
+    },
+    {
+      "label": "G3: a new entry with no placement falls to the top instead of refusing",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if at is None:\n            raise RefusalError(\n                f\"{path}: the session's new entry",
+      "replace": "        if at is None:\n            at = 0\n        if False:\n            raise RefusalError(\n                f\"{path}: the session's new entry"
+    },
+    {
+      "label": "G3: an entry with no predecessor goes below origin's first entry instead of the top",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if predecessor is None:\n            slots.setdefault(0, []).append(chunk)\n",
+      "replace": "        if predecessor is None:\n            slots.setdefault(min(1, len(origin_entries)), []).append(chunk)\n"
+    },
+    {
+      "label": "G3: a session-edited predecessor is looked up by its edited bytes, not the base version origin holds",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                idents[id(chunk)] = old.key if origin_keys[old.key] == 1 else chunk.key\n",
+      "replace": "                idents[id(chunk)] = chunk.key\n"
+    },
+    {
+      "label": "G4: the stamp/description exemption applies to every file, not just handoffs",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    handoff = _is_handoff_path(path) if path else False\n",
+      "replace": "    handoff = True\n"
+    },
+    {
+      "label": "G4: the _Updated exemption reaches past the body preamble into sections",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        (i for i, line in enumerate(body) if not flags[i] and _SECTION_RE.match(line)), len(body)\n",
+      "replace": "        (i for i, line in enumerate(body) if False), len(body)\n"
+    },
+    {
+      "label": "G4: any side's description is acceptable, not the version the merge rule chooses",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            candidates = _expected_descriptions(b, t, o)\n",
+      "replace": "            candidates = [t, o]\n"
+    },
+    {
+      "label": "G4: either side's stamp is acceptable, not the session's when it changed it",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            candidates = [t if t != b else o]\n",
+      "replace": "            candidates = [t, o]\n"
+    },
+    {
+      "label": "G5: any section-name change is accepted as a rename",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if tip != origin or len(tip) != len(base):\n        return False\n",
+      "replace": "    return True\n"
+    },
+    {
+      "label": "G5: a rename only the session made is accepted",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if tip != origin or len(tip) != len(base):\n",
+      "replace": "    if len(tip) != len(base):\n"
+    },
+    {
+      "label": "G5: a swap of two section names reads as two renames",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "(b not in tip_set and t not in base_set)",
+      "replace": "True"
     }
   ]
 }

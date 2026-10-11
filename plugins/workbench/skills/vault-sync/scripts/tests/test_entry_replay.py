@@ -3592,3 +3592,97 @@ def test_g5_a_swap_of_two_section_names_is_a_reorder_not_a_rename() -> None:
     )
     with pytest.raises(RefusalError, match="sections"):
         handoff_merge(base, tip, tip, HANDOFF)
+
+
+# Extra pins found by the teeth run ----------------------------------------------
+
+
+def test_g1_a_path_the_session_pushed_and_origin_later_edited_is_not_a_conflict(
+    tmp_path: Path,
+) -> None:
+    """Only changes since the merge-base count as the session's: a pushed note that a
+    peer edited later must not trip the outside-the-allowlist refusal."""
+    _remote, local, peer, base = _make_vault(tmp_path)
+    note = "personal/projects/proj-a.md"
+    _write(local, note, NOTE_SEED + "\nSession paragraph.\n")
+    _commit_all(local, "mid-session note edit")
+    _git(local, "push", "-q")
+    _git(peer, "pull", "-q", "--ff-only")
+    _write(peer, note, _read(peer, note) + "\nPeer paragraph.\n")
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", PEER_GOTCHA))
+    _peer_push(peer)
+    _write(local, GOTCHAS, insert_under(_read(local, GOTCHAS), "## Technical", PUSHED_GOTCHA))
+    _commit_all(local, "vault wrap-up (end of session)")
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK))
+
+    assert report["action"] == "replayed", report
+    assert report["conflicts"] == [GOTCHAS]
+    assert "Peer paragraph." in _read(local, note)
+
+
+def test_g3_a_predecessor_duplicated_on_origin_falls_back_to_the_successor() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-09-12", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    )
+    first = gotchas_entry("Stale tracking refs lie after a push", "2026-09-15", "Body of the tracking-ref gotcha.\nSecond line of that body.")
+    origin = insert_under(base, "## Technical", first)  # a second, byte-identical copy
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    titles = _gotcha_titles(merged)
+    assert titles.index("### Session mid entry (2026-09-12)") == titles.index(
+        "### Bytecode cache hides a mutation (2026-09-10)"
+    ) - 1
+
+
+def test_g3_an_entry_after_an_edited_predecessor_stays_directly_after_it_despite_an_origin_insert() -> None:
+    base = GOTCHAS_SEED
+    new = gotchas_entry("Session mid entry", "2026-09-12", "Mid body.")
+    tip = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", new + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    ).replace("Second line of that body.", "Second line, edited by the session.")
+    peer = gotchas_entry("Origin middle entry", "2026-09-13", "Peer body.")
+    origin = base.replace(
+        "### Bytecode cache hides a mutation (2026-09-10)", peer + "\n### Bytecode cache hides a mutation (2026-09-10)"
+    )
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert _gotcha_titles(merged)[:4] == [
+        "### Stale tracking refs lie after a push (2026-09-15)",
+        "### Session mid entry (2026-09-12)",
+        "### Origin middle entry (2026-09-13)",
+        "### Bytecode cache hides a mutation (2026-09-10)",
+    ]
+    assert "edited by the session" in merged
+
+
+def test_g2_the_last_inserted_item_takes_over_the_blank_count_origins_anchor_had() -> None:
+    """Rule as specified: the separator that followed origin's anchor item now follows
+    the last inserted item, and the anchor takes the session's separator."""
+    base = _section("\n- a\n\n- b\n")
+    tip = _section("\n- a\n\n- n1\n- n2\n- b\n")
+    merged, _detail = handoff_merge(base, tip, base, HANDOFF)
+    assert "\n- a\n\n- n1\n- n2\n\n- b\n" in merged
+
+
+def test_g4_a_ledgers_frontmatter_description_is_plain_line_arithmetic() -> None:
+    """In a ledger there is no rule-resolved line: dropping the session's description
+    change is a missing line, and origin's description is simply origin's addition."""
+
+    def ledger(desc: str) -> str:
+        return f'---\ndescription: "{desc}"\n---\n\n# Gotchas\n'
+
+    verdict = compare_texts(ledger("g"), ledger("g2"), ledger("g3"), ledger("g3"), GOTCHAS)
+    assert verdict["missing"] == ['description: "g2"']
+    assert verdict["extra"] == []
+    assert verdict["resolved"] == []
+
+
+def test_g4_a_stamp_line_inside_a_section_is_not_part_of_the_stamp_rule() -> None:
+    base = _hand("d", "1")
+    tip = _hand("d", "1", "- a\n- b\n_Updated 9._\n")
+    origin = _hand("d", "3")
+    result = _hand("d", "3", "- a\n- b\n_Updated 9._\n")
+    verdict = compare_texts(base, tip, origin, result, HANDOFF)
+    assert verdict["missing"] == [] and verdict["extra"] == []
+    assert "_Updated 3._" in verdict["resolved"] and "_Updated 9._" not in verdict["resolved"]
