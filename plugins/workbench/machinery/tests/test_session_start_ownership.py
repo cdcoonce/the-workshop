@@ -162,3 +162,75 @@ def test_unreadable_own_notebook_uses_handoff(
     context = start_session({"session_id": "own"})
 
     assert "CURATED HANDOFF" in context
+
+
+def _log_lines(root: Path) -> list[str]:
+    return (root / ".claude" / "data" / "session-start.log").read_text(encoding="utf-8").splitlines()
+
+
+def test_debug_log_records_event_and_notebook_injection(
+    tmp_path: Path, start_session: StartSession
+) -> None:
+    _write_digest(tmp_path, "notebook-personal-own.md", "OWN SESSION", age=60)
+
+    start_session({"session_id": "own", "source": "resume", "hook_event_name": "SessionStart"})
+
+    lines = _log_lines(tmp_path)
+    assert len(lines) == 2
+    assert "source='resume' hook_event_name='SessionStart' session_id='own'" in lines[0]
+    assert "injected notebook: notebook-personal-own.md" in lines[1]
+
+
+def test_debug_log_records_handoff_fallback(tmp_path: Path, start_session: StartSession) -> None:
+    start_session({"session_id": "own"})
+
+    lines = _log_lines(tmp_path)
+    assert len(lines) == 2
+    assert "injected handoff (no fresh notebook found)" in lines[1]
+
+
+def test_debug_log_handles_are_closed_by_a_context_manager(
+    tmp_path: Path, start_session: StartSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_open = Path.open
+    opened: list[dict[str, bool]] = []
+
+    class Tracked:
+        def __init__(self, handle: object, state: dict[str, bool]) -> None:
+            self._handle, self._state = handle, state
+
+        def __enter__(self) -> object:
+            self._state["entered"] = True
+            return self._handle.__enter__()
+
+        def __exit__(self, *exc: object) -> object:
+            return self._handle.__exit__(*exc)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._handle, name)
+
+    def tracking_open(self: Path, mode: str = "r", *args: object, **kwargs: object) -> object:
+        handle = real_open(self, mode, *args, **kwargs)
+        if self.name != "session-start.log":
+            return handle
+        state = {"entered": False}
+        opened.append(state)
+        return Tracked(handle, state)
+
+    monkeypatch.setattr(Path, "open", tracking_open)
+
+    start_session({"session_id": "own"})
+
+    assert len(opened) == 2
+    assert all(state["entered"] for state in opened)
+
+
+def test_unwritable_debug_log_never_breaks_session_start(
+    tmp_path: Path, start_session: StartSession
+) -> None:
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "data").write_text("a file where the data dir should be")
+
+    context = start_session({"session_id": "own"})
+
+    assert "CURATED HANDOFF" in context
