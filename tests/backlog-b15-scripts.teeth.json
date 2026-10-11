@@ -144,6 +144,20 @@
       "oracle": "real",
       "find": "    if missing:\n        separate()",
       "replace": "    if missing and not levels:\n        separate()"
+    },
+    {
+      "label": "#1138 parse_version regex accepts non-ASCII digits (\\d)",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "re.compile(r\"[0-9]+\\.[0-9]+\\.[0-9]+\")",
+      "replace": "re.compile(r\"\\d+\\.\\d+\\.\\d+\")"
+    },
+    {
+      "label": "#742 blank separator between CLI error sections removed",
+      "file": "../scripts/check_version_bumps.py",
+      "oracle": "real",
+      "find": "            print(\"\", file=sys.stderr)\n        sections += 1",
+      "replace": "            pass\n        sections += 1"
     }
   ]
 }

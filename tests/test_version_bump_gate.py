@@ -896,6 +896,7 @@ class TestMainCli:
         assert "advisor: needs a major bump, got patch" in err
         assert "mentor (still 0.1.0)" in err
         assert err.index("component surface") < err.index("declare the same version")
+        assert "\n\nERROR: these plugins ship changed content" in err
 
     def test_unresolvable_base_prints_the_error_and_exits_one(
         self, two: Path, capsys: pytest.CaptureFixture[str]

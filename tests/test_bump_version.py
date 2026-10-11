@@ -324,7 +324,7 @@ class TestGitUnavailable:
 class TestOneSemverParser:
     """Both scripts read "X.Y.Z" through the same function."""
 
-    @pytest.mark.parametrize("odd", ["1.2.³", "1.2.3\n", " 1.2.3", "1.2.3.4", "-1.2.3"])
+    @pytest.mark.parametrize("odd", ["1.2.³", "1.2.٣", "1.2.3\n", " 1.2.3", "1.2.3.4", "-1.2.3"])
     def test_both_reject_what_the_shared_parser_rejects(self, odd: str) -> None:
         assert check_version_bumps.parse_version(odd) is None
         with pytest.raises(BumpError, match="semver"):
