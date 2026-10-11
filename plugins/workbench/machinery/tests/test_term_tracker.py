@@ -187,3 +187,12 @@ class TestDemotions:
 
         result = get_demotions(vault, quick_ref_names=["REC", "PCI"])
         assert result == ["REC"]
+
+    def test_casing_variants_do_not_lose_session_counts(self, vault: Path) -> None:
+        """#772: a 0-session casing variant must not shadow a 6-session one."""
+        for data in (
+            {"REC": {"count": 9, "sessions": 6}, "Rec": {"count": 0, "sessions": 0}},
+            {"Rec": {"count": 0, "sessions": 0}, "REC": {"count": 9, "sessions": 6}},
+        ):
+            save_frequencies(vault, data)
+            assert get_demotions(vault, quick_ref_names=["REC"]) == []
