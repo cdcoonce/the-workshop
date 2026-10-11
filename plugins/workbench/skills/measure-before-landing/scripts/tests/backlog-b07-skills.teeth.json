@@ -1,0 +1,63 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/measure-before-landing/scripts/tests/test_paired_ab.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/measure-before-landing/scripts/tests/test_paired_ab.py"
+  ],
+  "mutants": [
+    {
+      "label": "#890 analyze skips the missing-a2 refusal",
+      "file": "../paired_ab.py",
+      "find": "    if bracket_enabled and not args.a2:",
+      "replace": "    if False:",
+      "oracle": "real"
+    },
+    {
+      "label": "890 analyze default bracket enabled->False",
+      "file": "../paired_ab.py",
+      "find": "    bracket_enabled = bracket_cfg.get(\"enabled\", True)\n    tolerance = bracket_cfg.get(\"tolerance\", 0.0)\n\n    if bracket_enabled and not args.a2:",
+      "replace": "    bracket_enabled = bracket_cfg.get(\"enabled\", False)\n    tolerance = bracket_cfg.get(\"tolerance\", 0.0)\n\n    if bracket_enabled and not args.a2:",
+      "oracle": "real"
+    },
+    {
+      "label": "890 refusal unconditional (ignores bracket disabled)",
+      "file": "../paired_ab.py",
+      "find": "if bracket_enabled and not args.a2:",
+      "replace": "if not args.a2:",
+      "oracle": "real"
+    },
+    {
+      "label": "890 refusal only when tolerance zero",
+      "file": "../paired_ab.py",
+      "find": "if bracket_enabled and not args.a2:",
+      "replace": "if bracket_enabled and not args.a2 and tolerance == 0.0:",
+      "oracle": "real"
+    },
+    {
+      "label": "890 refusal downgraded to stderr warning",
+      "file": "../paired_ab.py",
+      "find": "        raise VoidError(\n            \"bracket is enabled but analyze got no",
+      "replace": "        print(\"warning\", file=sys.stderr)\n        VoidError(\n            \"bracket is enabled but analyze got no",
+      "oracle": "real"
+    }
+  ]
+}

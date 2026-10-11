@@ -261,10 +261,6 @@ def normalize_path_segments(path: str) -> tuple[str, bool]:
 # masking — fenced code, HTML comments, indented code blocks
 # --------------------------------------------------------------------------- #
 
-def _blank_line(line: str) -> str:
-    return ""
-
-
 def _mask_fenced_code(text: str) -> str:
     """Blank fenced code block lines (delimiters included), preserving line
     offsets. Supports ``` and ~~~ fences of 3+ characters; a fence closes

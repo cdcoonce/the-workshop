@@ -104,6 +104,10 @@ ERROR_RULES = {
     "S101",  # assert used (can be warning in prod)
 }
 
+# Pyflakes rules that are runtime defects rather than unused code; they
+# override the blanket "F" -> UNUSED_CODE prefix mapping.
+RUNTIME_ERROR_CATEGORY_RULES = {"F821", "F822", "F823"}
+
 
 def get_category_for_rule(rule_id: str) -> IssueCategory:
     """Determine the issue category for a ruff rule ID.
@@ -118,6 +122,9 @@ def get_category_for_rule(rule_id: str) -> IssueCategory:
     IssueCategory
         The corresponding issue category.
     """
+    if rule_id in RUNTIME_ERROR_CATEGORY_RULES:
+        return IssueCategory.RUNTIME_ERROR
+
     # Try progressively shorter prefixes (including digits for rules like C90)
     for prefix_len in range(len(rule_id), 0, -1):
         prefix = rule_id[:prefix_len]

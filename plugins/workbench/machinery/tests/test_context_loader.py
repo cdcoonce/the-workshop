@@ -162,6 +162,39 @@ def scaffolded_config():
     importlib.reload(context_loader)
 
 
+class TestChecklistItems:
+    """Checkbox markup is stripped before an index item enters the digest (#789)."""
+
+    def test_checkbox_markers_are_stripped(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Work Index\n\n## Active Projects\n\n"
+            "- [ ] Follow up with Jane\n"
+            "- [x] Done thing\n"
+            "- [X] Also done\n"
+            "- [[Pipeline Redesign]]\n"
+        )
+
+        ctx = load_context(vault)
+
+        assert ctx.active_work == [
+            "Follow up with Jane",
+            "Done thing",
+            "Also done",
+            "[[Pipeline Redesign]]",
+        ]
+        assert "[ ]" not in ctx.summary
+        assert "[x]" not in ctx.summary.lower()
+
+    def test_bare_empty_checkbox_is_still_skipped(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Work Index\n\n## Active Projects\n\n- [ ]\n- [x]\n- [[Real]]\n"
+        )
+
+        assert load_context(vault).active_work == ["[[Real]]"]
+
+
 class TestDigestBuckets:
     """A new workspace joins the digest by CONFIG, not by editing the engine.
 
@@ -554,3 +587,22 @@ class TestCondenseDigest:
         once = condense_digest(self._handoff(4), ".brain/h.md")
 
         assert condense_digest(once, ".brain/h.md") == once
+
+
+class TestNonCheckboxBrackets:
+    def test_non_checkbox_brackets_are_preserved(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Work Index\n\n## Active Projects\n\n"
+            "- [Draft] Spec\n"
+            "- [x]nospace\n"
+            "- Note about [x] and [ ] mid-line\n"
+            "- [1] footnote\n"
+        )
+
+        assert load_context(vault).active_work == [
+            "[Draft] Spec",
+            "[x]nospace",
+            "Note about [x] and [ ] mid-line",
+            "[1] footnote",
+        ]

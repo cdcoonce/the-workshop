@@ -93,7 +93,7 @@
       "label": "`str.splitlines` used as the line splitter (test_body_hash_matches_vector_and_survives_appended_stamp)",
       "file": "engine/cold_read_stamp.py",
       "oracle": "real",
-      "find": "    parts = text.split(\"\\n\")\n    last = len(parts) - 1\n    pieces: list[tuple[str, str]] = []\n    for i, part in enumerate(parts):\n        if i == last:\n            if part == \"\":\n                continue\n            pieces.append((part, \"\"))\n        elif part.endswith(\"\\r\"):\n            pieces.append((part[:-1], \"\\r\\n\"))\n        else:\n            pieces.append((part, \"\\n\"))\n    return pieces",
+      "find": "    parts = text.split(\"\\n\")\n    last = len(parts) - 1\n    pieces: list[tuple[str, str]] = []\n    for i, part in enumerate(parts):\n        if i == last:\n            if part == \"\":\n                continue\n            if part.endswith(\"\\r\"):\n                pieces.append((part[:-1], \"\\r\"))\n            else:\n                pieces.append((part, \"\"))\n        elif part.endswith(\"\\r\"):\n            pieces.append((part[:-1], \"\\r\\n\"))\n        else:\n            pieces.append((part, \"\\n\"))\n    return pieces",
       "replace": "    raw_lines = text.splitlines(keepends=True)\n    pieces: list[tuple[str, str]] = []\n    for raw in raw_lines:\n        content_only = raw.splitlines()[0] if raw.splitlines() else raw\n        terminator = raw[len(content_only):]\n        pieces.append((content_only, terminator))\n    return pieces"
     },
     {

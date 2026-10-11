@@ -613,10 +613,14 @@ def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], c
         return {"not_run": error, "pass": None, "policy": None, "breach_lines": [], "orphans": [], "checks": []}
 
     import dataclasses  # noqa: PLC0415
-    from graphmark.check import breach_lines, run_check  # noqa: PLC0415
-    from graphmark.config import CheckPolicy  # noqa: PLC0415
 
     try:
+        # Inside the try: a graphmark that is installed but lacks these
+        # submodules must read "gate policy rejected", not escape to the
+        # caller's blanket "graphmark unavailable" handler (#929).
+        from graphmark.check import breach_lines, run_check  # noqa: PLC0415
+        from graphmark.config import CheckPolicy  # noqa: PLC0415
+
         policy = CheckPolicy(**kwargs)
         gate_cfg = dataclasses.replace(cfg, check=policy)
         report = run_check(graph, gate_cfg)

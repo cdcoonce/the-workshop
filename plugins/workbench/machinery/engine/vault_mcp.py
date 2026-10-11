@@ -193,13 +193,13 @@ def main() -> None:
 
     The module ships inside the plugin cache (issue #677), so its own file
     position says nothing about where the vault is. Refusing to serve without
-    a signature vault beats serving the wrong subtree: every tool this server
+    a marked vault beats serving the wrong subtree: every tool this server
     exposes would otherwise read from — and report on — the plugin cache.
     """
     vault_root = find_vault_root_from_env()
     if vault_root is None:
         print(
-            "vault root not found (no brain/ + perf/ + CLAUDE.md signature at "
+            "vault root not found (no .vault/vault.json marker at "
             "CLAUDE_PROJECT_DIR or above the working directory)",
             file=sys.stderr,
         )

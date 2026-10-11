@@ -70,7 +70,7 @@ DEFAULT_README_MAX_LINES = 150
 _PROVENANCE = re.compile(
     r"<!--\s*(?:repo-docs|repo-reference-docs|readme-generator):\s*"
     r"(?:mode=(?P<mode>[A-Za-z-]+)\s+)?"
-    r"baseline=(?P<baseline>\S+)\s+covers=(?P<covers>[^\s>]+)\s*-->"
+    r"baseline=(?P<baseline>\S+)\s+covers=(?P<covers>.+?)\s*-->"
 )
 # Inline links and images: [text](target), ![alt](target), with an optional
 # "title" and optional <angle brackets> around the target.
