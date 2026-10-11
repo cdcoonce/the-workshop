@@ -31,11 +31,14 @@ if not isinstance(data, dict):
     # Fail open: a payload that isn't a JSON object isn't ours to act on.
     sys.exit(0)
 
-message = data.get("last_assistant_message") or ""
+message = data.get("last_assistant_message")
+if not isinstance(message, str):
+    # Fail open on a malformed payload: only a string can carry a claim.
+    message = ""
 agent_id = data.get("agent_id")
 cwd = Path(data.get("cwd") or ".").resolve()
 
-if not agent_id or not message:
+if not agent_id:
     sys.exit(0)
 
 # Conservative on purpose: only fire on a strong first-person completion
@@ -45,12 +48,9 @@ COMPLETION_CLAIM = re.compile(
     r"deleted|refactored|committed|resolved|written|wrote|applied)\b"
     r"|\b(?:changes? (?:are|is) complete|fix is (?:in place|complete|done)|"
     r"implementation is complete|committed the (?:fix|change)|"
-    r"done\.?\s*$)",
+    r"(?:I'm|I am|all|it's|it is) done\.?\s*$)",
     re.IGNORECASE,
 )
-
-if not COMPLETION_CLAIM.search(message):
-    sys.exit(0)
 
 try:
     from _git_baseline import git_dir, head_sha, working_tree_signature
@@ -64,7 +64,9 @@ repo_git_dir = git_dir(cwd)
 if repo_git_dir is None:
     sys.exit(0)
 
-state_file = repo_git_dir / "the-workshop-subagent-gate" / f"{agent_id}.txt"
+# agent_id comes from the hook payload: keep it a single path component.
+safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(agent_id))
+state_file = repo_git_dir / "the-workshop-subagent-gate" / f"{safe_id}.txt"
 if not state_file.exists():
     sys.exit(0)  # no baseline to compare against — nothing we can prove
 
@@ -75,10 +77,16 @@ except OSError:
 lines += [""] * (2 - len(lines))
 baseline_sha, baseline_signature = lines[0], lines[1]
 
+# Consume the baseline whenever one exists, whether or not this message turns
+# out to be a completion claim — otherwise every non-claiming subagent leaves
+# a file behind in the gate directory.
 try:
     state_file.unlink()
 except OSError:
     pass
+
+if not message or not COMPLETION_CLAIM.search(message):
+    sys.exit(0)
 
 # Normalized to match what the start hook serialized (None -> "").
 current_sha = head_sha(cwd) or ""

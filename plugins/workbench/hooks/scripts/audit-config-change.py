@@ -43,14 +43,16 @@ if not file_path:
     sys.exit(0)
 
 try:
-    from _git_baseline import git_dir
+    from _git_baseline import git_common_dir
 except ImportError:
     # Fail open: the helper module ships alongside every hook, but a stale or
     # partial install must no-op rather than crash the user's tool path.
     sys.exit(0)
 
 
-repo_git_dir = git_dir(cwd)
+# The shared .git, not a linked worktree's private dir: git deletes the latter
+# with the worktree, which would erase the very log this hook exists to keep.
+repo_git_dir = git_common_dir(cwd)
 log_path = (
     repo_git_dir / "the-workshop-config-audit.log"
     if repo_git_dir is not None

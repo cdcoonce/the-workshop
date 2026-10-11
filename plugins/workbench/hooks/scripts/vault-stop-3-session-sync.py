@@ -12,24 +12,12 @@ Nothing here runs outside a vault: ``run-vault-hook.sh`` checks for
 
 WORKSHOP_HOOK = {"event": "Stop", "runner": "vault"}
 
-import runpy  # noqa: E402
 import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-_ENGINE = Path(__file__).resolve().parents[2] / "machinery" / "engine"
-_TARGET = _ENGINE / "session-stop.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _vault_engine_dispatch import run_engine_script  # noqa: E402
 
-# Fail open, like every hook in this repo: a missing or broken engine must not
-# block the tool path. The guard already proved we are in a vault, so a failure
-# here is a real defect worth seeing on stderr -- but not worth blocking on.
-try:
-    sys.path.insert(0, str(_ENGINE))
-    # A lifecycle Stop is not a request to commit. Preserve deliberate caller
-    # arguments, but never synthesize authorization for the registered hook.
-    sys.argv = [str(_TARGET), *sys.argv[1:]]
-    runpy.run_path(str(_TARGET), run_name="__main__")
-except SystemExit:
-    raise
-except Exception as exc:  # noqa: BLE001 - fail-open is the contract
-    print(f"vault hook {_TARGET.name} failed: {exc}", file=sys.stderr)
-    sys.exit(0)
+# A lifecycle Stop is not a request to commit. Preserve deliberate caller
+# arguments, but never synthesize authorization for the registered hook.
+run_engine_script("session-stop.py", extra_argv=sys.argv[1:])
