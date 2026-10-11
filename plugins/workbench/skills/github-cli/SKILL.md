@@ -42,6 +42,14 @@ branch about to be merged. A squash-merge with `--delete-branch` auto-closes
 every open PR still targeting it — retarget or rebase any hit onto the
 post-merge base first, or surface the risk. Never merge blind.
 
+**Closing keywords do not fire on `dev`-targeted PRs.** GitHub honours
+`Closes #N` / `Fixes #N` only for PRs into the repository's default branch
+(`main`), and this repo's PRs target `dev` — so those keywords are inert here
+(PR #716's `Closes #715` left `closingIssuesReferences` empty and #715 open
+after merge). Either drop the keyword from dev-targeted PR bodies and say
+"Refs #N", or close the issue by hand once the PR merges:
+`gh issue close <N> --comment "Closed by #<PR>"`.
+
 ## Core Workflows
 
 `gh` covers the full GitHub loop from the terminal. See [references/commands.md](references/commands.md) for the exact syntax, flags, and examples for every command family below.

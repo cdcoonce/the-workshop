@@ -32,6 +32,7 @@ GRAPH_EXCLUDED_DIRS = {
     ".pytest_cache",
     ".superpowers",
     ".venv",
+    "node_modules",
     "session-logs",
     "templates",
 }

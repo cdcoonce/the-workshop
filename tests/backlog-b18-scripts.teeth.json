@@ -1,0 +1,118 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_snapshot_subagent_start_hook.py",
+    "tests/test_skill_test_discovery.py",
+    "tests/test_inject_persona.py",
+    "tests/test_dev_cycle_validate.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_snapshot_subagent_start_hook.py",
+    "tests/test_skill_test_discovery.py",
+    "tests/test_inject_persona.py",
+    "tests/test_dev_cycle_validate.py"
+  ],
+  "mutants": [
+    {
+      "label": "#647 non-git cwd no longer exits early",
+      "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+      "oracle": "real",
+      "find": "if repo_git_dir is None:\n    sys.exit(0)",
+      "replace": "if False:\n    sys.exit(0)"
+    },
+    {
+      "label": "#647 unwritable state dir raises instead of failing open",
+      "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+      "oracle": "real",
+      "find": "except OSError:\n    pass",
+      "replace": "except OSError:\n    raise"
+    },
+    {
+      "label": "#647 missing HEAD written as the literal None",
+      "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+      "oracle": "real",
+      "find": "{head_sha(cwd) or ''}",
+      "replace": "{head_sha(cwd)}"
+    },
+    {
+      "label": "#756 failing suite not recorded in failures",
+      "file": "../scripts/discover_skill_test_suites.py",
+      "oracle": "real",
+      "find": "            failures.append(str(rel))",
+      "replace": "            pass"
+    },
+    {
+      "label": "#756 failure exit code inverted",
+      "file": "../scripts/discover_skill_test_suites.py",
+      "oracle": "real",
+      "find": "        return 1\n    return 0",
+      "replace": "        return 0\n    return 0"
+    },
+    {
+      "label": "#756 no-suites path returns failure",
+      "file": "../scripts/discover_skill_test_suites.py",
+      "oracle": "real",
+      "find": "print(\"no skill-script test suites found.\")\n        return 0",
+      "replace": "print(\"no skill-script test suites found.\")\n        return 1"
+    },
+    {
+      "label": "#1023 whole file scanned for artifact rows",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "_parse_artifacts(_artifacts_section(text))",
+      "replace": "_parse_artifacts(text)"
+    },
+    {
+      "label": "#1023 Artifacts section runs past the next heading",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "if in_section and line.startswith(\"## \"):",
+      "replace": "if False:"
+    },
+    {
+      "label": "#1137 wrapper stops catching exceptions",
+      "file": "../plugins/workbench/hooks/inject_persona.py",
+      "oracle": "real",
+      "find": "    except Exception:\n        # Never let",
+      "replace": "    except KeyError:\n        # Never let"
+    },
+    {
+      "label": "#756 break after first failing suite",
+      "file": "../scripts/discover_skill_test_suites.py",
+      "oracle": "real",
+      "find": "            failures.append(str(rel))",
+      "replace": "            failures.append(str(rel))\n            break"
+    },
+    {
+      "label": "#1023 any heading ends the Artifacts section",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "if in_section and line.startswith(\"## \"):",
+      "replace": "if in_section and line.startswith(\"#\"):"
+    },
+    {
+      "label": "#1023 prefix-match Artifacts heading",
+      "file": "../scripts/dev_cycle_validate.py",
+      "oracle": "real",
+      "find": "r\"^##[ \\t]+Artifacts[ \\t]*$\"",
+      "replace": "r\"^##[ \\t]+Artifacts\""
+    }
+  ]
+}

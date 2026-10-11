@@ -13,6 +13,45 @@ from pathlib import Path
 # Wikilink patterns — shared across frontmatter_engine, task_manager, etc.
 WIKILINK_RE = re.compile(r"\[\[.+?\]\]")
 WIKILINK_CAPTURE_RE = re.compile(r"\[\[(.+?)\]\]")
+_INLINE_CODE_RE = re.compile(r"`+[^`]*`+")
+
+
+def code_spans(text: str) -> list[tuple[int, int]]:
+    """Char ranges covered by Markdown code: fenced blocks and inline spans.
+
+    Wikilinks inside these are documentation or examples, not real links, so
+    resolvers skip any match that starts inside a returned range. Fenced blocks
+    are delimited by lines starting with three backticks or three tildes (the
+    fence lines included); inline spans are backtick runs.
+
+    Parameters
+    ----------
+    text : str
+        Markdown source.
+
+    Returns
+    -------
+    list of tuple of int
+        ``(start, end)`` character offsets, end exclusive.
+    """
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    in_fence = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        is_fence = stripped.startswith("```") or stripped.startswith("~~~")
+        if in_fence:
+            spans.append((pos, pos + len(line)))
+            if is_fence:
+                in_fence = False
+        elif is_fence:
+            in_fence = True
+            spans.append((pos, pos + len(line)))
+        else:
+            for m in _INLINE_CODE_RE.finditer(line):
+                spans.append((pos + m.start(), pos + m.end()))
+        pos += len(line)
+    return spans
 
 # Fallback used only when the scaffold-owned config predates ``BATCH_MODEL``
 # (a vault rendered before #431 has no such attribute); see read_batch_model.
