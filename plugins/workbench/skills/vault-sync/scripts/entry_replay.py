@@ -49,7 +49,13 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    directly under the preamble. New entries sharing a position keep the
    session's order; the #874 ordering-drift detector, not the replay, is the
    order tooth. A correction both sides made identically (origin already holds
-   exactly the session's edited entry) is already applied. An anchor is a block's innermost non-entry
+   exactly the session's edited entry) is already applied; origin holding both
+   the base version and a byte-identical copy of the edit refuses (replacing
+   would leave the edit twice). A new session entry that pairs -- same date and
+   the similarity rule below -- with an entry *origin added* since the
+   merge-base refuses ("was a pushed commit amended or rebased?"): origin keeps
+   the pushed version and the session re-adds the corrected one, and replaying
+   both would put the entry in twice. An anchor is a block's innermost non-entry
    heading (``### Wins`` under ``## Q3 2026``, ``## Technical``). An entry
    heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
    with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
@@ -57,9 +63,17 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    changing any text outside the anchor blocks refuses. The output is
    *spliced*, not re-serialized: origin's raw lines with only the session's
    entries replaced or inserted, so the block preamble and every untouched
-   entry stay byte-identical, a replaced entry keeps origin's trailing blank
-   lines, and a new entry copies the block's separator style (a tight list
-   stays tight). A leftover base/tip entry pair counts as an edit only when
+   entry stay byte-identical. Blank lines are the session's wherever the
+   session wrote them (separator semantics): a new entry ends with the blank
+   lines it ended with in the session's file, the entry before an insertion (or
+   the preamble, for one at the top of a block) takes the blank lines the
+   session had before the new entry -- never a neighbour's, so a new entry is
+   neither glued to a neighbour that lacked a trailing blank nor does it loosen
+   a tight list -- and an entry the session kept or edited keeps origin's
+   trailing blank lines unless only the session changed them (three-way, on the
+   separator alone). A new entry whose session-side neighbour is not the entry
+   origin has there takes the separator the session used between entries (at
+   the end of a block, the end of origin's block). A leftover base/tip entry pair counts as an edit only when
    it is the unique similar match (same date; same heading text, a mostly
    unchanged body, or -- for a bodyless one-line bullet -- a mostly unchanged
    start line).
@@ -70,16 +84,22 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    inside one item). Base items are aligned to origin's by position, not
    content: every item the session replaced must be unchanged and aligned on
    origin, and an inserted item lands right after its aligned base predecessor
-   (one origin itself added is not inserted twice; an item that merely looks
-   like an existing one is kept). Items compare ignoring trailing blank lines,
+   (one origin itself added *in the same gap* is not inserted twice; an item
+   that merely looks like an existing one, or like one origin added elsewhere,
+   is kept). Items compare ignoring trailing blank lines,
    so loose and tight lists align. Both sides making the same delete or the
    same edit is already applied, and a changed item with a byte-identical twin
    in a section origin also changed refuses (the twin cannot be told apart). The
    ``_Updated`` stamp resolves three-way instead of counting as a preamble
    divergence, and the frontmatter ``description:`` is merged additively at
    clause granularity rather than restored as the session's whole paragraph.
-   An inserted item keeps the session's own blank-line separators (a paragraph
-   appended after another stays blank-separated). Sections both sides renamed
+   Blank lines are the session's (separator semantics): an inserted item keeps
+   its own separators (a paragraph appended after another stays
+   blank-separated), the item before an insertion, a deletion or a replacement
+   takes the separator the session gave it (deleting ``- b`` from ``- a``,
+   ``- b``, blank, paragraph leaves a blank before the paragraph, not a glued
+   continuation), and an item the session left in place keeps origin's
+   separator unless only the session changed it. Sections both sides renamed
    identically are matched by position; any other added, removed or reordered
    section refuses.
 5. Assertions, fail-closed: before every replacement, origin's corresponding
@@ -99,6 +119,21 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    rather than counted: the frontmatter ``description:`` and the body-preamble
    ``_Updated`` stamp, each of which must hold exactly the version the merge
    rule chooses; everywhere else such lines are ordinary lines.
+   Two structural invariants cover what a line multiset cannot see (it ignores
+   blank lines and accepts one copy of a line both sides added). *Exactness
+   (S1):* for every handoff ``##`` section and every ledger anchor block, when
+   origin's copy equals the session base's, the merged unit must be
+   byte-identical to the session's -- the merge functions assert it ("structural
+   self-check: section/block X differs from the session's although origin did
+   not change it") and the merge rules are built so that it never fires on a
+   correct merge. *Item/entry level (S2):* every unit the session touched is
+   re-split with the item/entry splitter the merge uses, and every merged item's
+   content (trailing blank lines ignored) must consume one occurrence of an item
+   origin or the session holds, an item both sides kept from the base counting
+   once; an item neither side wrote -- two items glued by a lost blank line, an
+   entry whose lines landed under another -- refuses ("structural self-check:
+   merged section X contains an item neither side wrote"). ``--verify`` reports
+   the same finding as ``glued`` and fails on it.
 6. ``ci/vault_health.py`` runs on the replayed tree before anything is
    pushed; a failure restores the original state.
 
@@ -115,8 +150,9 @@ checks that every ledger block and handoff parses under the replay grammar
 unclosed code fence), so a shape defect is fixed at write time rather
 than discovered as a refusal at sync. ``--verify --base B --tip T --origin O
 --result R`` checks a hand-built merge against both sides by multiset of
-non-blank lines over every path either side or the result touches -- run it after any user-approved hand rebuild that follows a
-refusal, and do not push on a failure. ``scripts/entry_replay_backtest.py`` in
+non-blank lines over every path either side or the result touches, and by item
+(a ``glued`` item neither side wrote fails too) -- run it after any
+user-approved hand rebuild that follows a refusal, and do not push on a failure. ``scripts/entry_replay_backtest.py`` in
 the workshop repository measures all of this against real vault history.
 """
 
@@ -714,7 +750,10 @@ def ledger_merge(
         On any session change outside the anchor blocks or in a block
         preamble, any entry deletion, any anchor missing or ambiguous on
         origin, an origin-side preamble edit, an edited entry origin no longer
-        holds byte-identically exactly once, or mixed entry shapes.
+        holds byte-identically exactly once (or holds beside a copy of the
+        edit), a new entry that re-adds one origin gained since the base, a
+        block that differs from the session's although origin left it alone, or
+        mixed entry shapes.
     """
     base = _load_doc(base_text, path, "session base")
     tip = _load_doc(tip_text, path, "session tip")
@@ -768,7 +807,7 @@ def ledger_merge(
                 "to the session base; escalating"
             )
 
-        new_entries, replaced = _diff_entries(base_block, tip_block, anchor_line, path)
+        new_entries, replaced, matched = _diff_entries(base_block, tip_block, anchor_line, path)
 
         origin_keys = Counter(chunk.key for chunk in origin_block.entries)
         swaps: dict[tuple[str, ...], _Chunk] = {}
@@ -783,6 +822,12 @@ def ledger_merge(
                     f"{path}: origin's copy of entry {old.label!r} the session edited is "
                     "not byte-identical exactly once (edited or removed on origin); escalating"
                 )
+            if origin_keys[edited.key] > 0:
+                raise RefusalError(
+                    f"{path}: origin holds both the base version of entry {old.label!r} and "
+                    "a byte-identical copy of the session's edited version; replacing the "
+                    "base one would leave the edited entry twice; escalating"
+                )
             swaps[old.key] = edited
 
         present = Counter(origin_keys)
@@ -795,6 +840,7 @@ def ledger_merge(
                 already_on_origin.add(id(chunk))
                 continue
             kept.append(chunk)
+        _refuse_amended_re_add(origin_block, base_block, kept, anchor_line, path)
 
         # Which tip entry is which origin entry: unchanged entries and entries
         # origin already holds by their own bytes; an entry the session edited by
@@ -822,7 +868,20 @@ def ledger_merge(
             )
 
         at_eof = origin_block.end_idx == len(origin.lines)
-        interior = _splice_interior(origin_block, swaps, slots, at_eof)
+        tip_at_eof = tip_block.end_idx == len(tip.lines)
+        trailing, pre_trailing = _separator_edits(
+            base_block, tip_block, origin_block, [*matched, *replaced]
+        )
+        interior = _splice_interior(
+            origin_block, swaps, slots, trailing, pre_trailing, tip_block, at_eof, tip_at_eof
+        )
+        if origin.interior(candidates[0]) == base.interior(base_span) and interior != tip.interior(
+            tip_span
+        ):
+            raise RefusalError(
+                f"{path}: structural self-check: block {anchor_line!r} differs from the "
+                "session's although origin did not change it; escalating"
+            )
         replacements.append((origin_block, interior))
         detail["anchors"].append(anchor_line)
         detail["inserted"] += len(kept)
@@ -836,6 +895,15 @@ def ledger_merge(
     return merged_text, detail
 
 
+@dataclass
+class _Placed:
+    """A new session entry with where it goes and which tip entry it was."""
+
+    chunk: _Chunk
+    tip_index: int
+    by: str  # "top" (no predecessor), "pred" (after its predecessor), "succ" (before its successor)
+
+
 def _place_new_entries(
     tip_entries: list[_Chunk],
     origin_entries: list[_Chunk],
@@ -843,8 +911,8 @@ def _place_new_entries(
     idents: dict[int, tuple[str, ...]],
     anchor_line: str,
     path: str,
-) -> dict[int, list[_Chunk]]:
-    """Where each new entry goes: ``{slot: [entries]}``, slot = origin entry index.
+) -> dict[int, list[_Placed]]:
+    """Where each new entry goes: ``{slot: [placed]}``, slot = origin entry index.
 
     Placement is positional, never by date: blocks are not uniformly ordered
     (the Brag Doc's ``### Growth`` runs oldest-first), so a date rule would
@@ -870,7 +938,7 @@ def _place_new_entries(
         return found[0] if len(found) == 1 else None
 
     new_ids = {id(chunk) for chunk in new_entries}
-    slots: dict[int, list[_Chunk]] = {}
+    slots: dict[int, list[_Placed]] = {}
     for j, chunk in enumerate(tip_entries):
         if id(chunk) not in new_ids:
             continue
@@ -878,11 +946,11 @@ def _place_new_entries(
             (e for e in reversed(tip_entries[:j]) if id(e) in idents), None
         )
         if predecessor is None:
-            slots.setdefault(0, []).append(chunk)
+            slots.setdefault(0, []).append(_Placed(chunk, j, "top"))
             continue
         at = unique_index(predecessor)
         if at is not None:
-            slots.setdefault(at + 1, []).append(chunk)
+            slots.setdefault(at + 1, []).append(_Placed(chunk, j, "pred"))
             continue
         successor = next((e for e in tip_entries[j + 1 :] if id(e) in idents), None)
         at = unique_index(successor)
@@ -893,7 +961,7 @@ def _place_new_entries(
                 "byte-identical exactly once on origin (edited, removed or duplicated there); "
                 "escalating"
             )
-        slots.setdefault(at, []).append(chunk)
+        slots.setdefault(at, []).append(_Placed(chunk, j, "succ"))
     return slots
 
 
@@ -901,66 +969,164 @@ def _trailing_blanks(chunk: _Chunk) -> list[str]:
     return chunk.lines[len(chunk.key) :]
 
 
+def _trailing_of(lines: list[str]) -> list[str]:
+    """The blank lines ``lines`` ends with (the part ``_strip_trailing_blanks`` drops)."""
+    return lines[len(_strip_trailing_blanks(lines)) :]
+
+
+def _origin_added_entries(base_block: _Block, origin_block: _Block) -> list[_Chunk]:
+    """Origin's entries that are new since the base: not an edit of a base entry.
+
+    Same classification as the session's own (``_diff_entries``): insertions,
+    plus leftover entries of a replaced span that pair with no base entry.
+    Entries origin deleted are not reported; they are not this check's concern.
+    """
+    base_keys = [chunk.key for chunk in base_block.entries]
+    origin_keys = [chunk.key for chunk in origin_block.entries]
+    added: list[_Chunk] = []
+    matcher = difflib.SequenceMatcher(None, base_keys, origin_keys, autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "insert":
+            added.extend(origin_block.entries[j1:j2])
+        elif tag == "replace":
+            unpaired = list(origin_block.entries[j1:j2])
+            lost: list[_Chunk] = []
+            for old in base_block.entries[i1:i2]:
+                partner = next((c for c in unpaired if c.lines[0] == old.lines[0]), None)
+                if partner is None:
+                    lost.append(old)
+                else:
+                    unpaired.remove(partner)
+            added.extend(_pair_leftovers(lost, unpaired)[2])
+    return added
+
+
+def _refuse_amended_re_add(
+    origin_block: _Block,
+    base_block: _Block,
+    kept: list[_Chunk],
+    anchor_line: str,
+    path: str,
+) -> None:
+    """Refuse a session-added entry that pairs with one origin added since the base.
+
+    The same date and the replay's own similarity rule (``_same_entry_edited``)
+    mark the session's entry as another version of an entry origin already
+    gained since the merge-base. That is what a pushed commit that was then
+    amended or rebased looks like (origin keeps the pushed version, the session
+    re-adds the corrected one), and replaying it would leave both. Two
+    sessions that really wrote the same entry independently look the same, and
+    a human settles that one too.
+    """
+    for origin_chunk in _origin_added_entries(base_block, origin_block):
+        for chunk in kept:
+            if _same_entry_edited(origin_chunk, chunk):
+                raise RefusalError(
+                    f"{path}: the session re-adds an entry origin already has in a different "
+                    f"version ({chunk.label!r} vs origin's {origin_chunk.label!r} under "
+                    f"{anchor_line!r}) -- was a pushed commit amended or rebased? escalating"
+                )
+
+
+def _separator_edits(
+    base_block: _Block,
+    tip_block: _Block,
+    origin_block: _Block,
+    pairs: list[tuple[_Chunk, _Chunk]],
+) -> tuple[dict[int, list[str]], list[str] | None]:
+    """The session's own blank-line changes to entries it left in place.
+
+    ``pairs`` are the ``(base, tip)`` versions of every entry the session kept
+    or edited. When origin's copy of such an entry still ends with the blank
+    lines the base one did, the session's blank lines win (three-way, on the
+    separator alone): a session that tightened a loose list, or added a spacer
+    line, has that change carried. Returns ``({origin entry index: trailing
+    lines}, preamble trailing lines or None)``.
+    """
+    index_of: dict[tuple[str, ...], list[int]] = {}
+    for index, chunk in enumerate(origin_block.entries):
+        index_of.setdefault(chunk.key, []).append(index)
+    trailing: dict[int, list[str]] = {}
+    for old, new in pairs:
+        found = index_of.get(old.key, [])
+        if len(found) != 1:
+            continue
+        origin_end = _trailing_blanks(origin_block.entries[found[0]])
+        if origin_end == _trailing_blanks(old) and _trailing_blanks(new) != origin_end:
+            trailing[found[0]] = _trailing_blanks(new)
+    pre = None
+    base_pre, tip_pre = _trailing_of(base_block.preamble), _trailing_of(tip_block.preamble)
+    if tip_pre != base_pre and _trailing_of(origin_block.preamble) == base_pre:
+        pre = tip_pre
+    return trailing, pre
+
+
 def _splice_interior(
     block: _Block,
     swaps: dict[tuple[str, ...], _Chunk],
-    slots: dict[int, list[_Chunk]],
+    slots: dict[int, list[_Placed]],
+    trailing: dict[int, list[str]],
+    pre_trailing: list[str] | None,
+    tip_block: _Block,
     at_eof: bool,
+    tip_at_eof: bool,
 ) -> list[str]:
     """Origin's block interior with only the session's entries spliced in.
 
     The block preamble and every untouched entry stay byte-identical, blank
     lines included. A replaced entry's lines (without their trailing blanks)
-    become the session's entry lines, and origin keeps its own trailing blanks
-    for that slot. A new entry is inserted at its slot with a separator that
-    copies the block's style: when the origin entry next to the slot is
-    followed by a blank line the new entry is too, otherwise (a tight list) it
-    is not.
+    become the session's entry lines. Blank lines are the session's wherever
+    the session wrote them: a replaced or kept entry ends with origin's blank
+    lines unless only the session changed them (``trailing``); a new entry
+    keeps the blank lines it ended with in the session's file; and the entry
+    before an insertion (or the preamble, for one at the top) takes the blank
+    lines the session had before the new entry -- never a neighbour's, so a
+    new entry is not glued to a neighbour that lacked a blank line, nor a
+    tight list loosened. Only an entry whose session-side neighbour is not
+    the entry origin has there falls back to the separator the session used
+    between entries (or, at the end of a block, the end of origin's block).
     """
     entries = block.entries
+    tip_entries = tip_block.entries
+    ends = [list(trailing.get(index, _trailing_blanks(chunk))) for index, chunk in enumerate(entries)]
+    end_original = _trailing_blanks(entries[-1]) if entries else None
     out = list(block.preamble)
-    if not entries:
-        new = slots.get(0, [])
-        if new:
-            if not out:
-                out.append("")
-            elif out[-1].strip():
-                out.append("")
-            for position, chunk in enumerate(new):
-                out.extend(chunk.key)
-                if not (at_eof and position == len(new) - 1):
-                    out.append("")
-        return out
+    if pre_trailing is not None:
+        out = _strip_trailing_blanks(out) + pre_trailing
+    for index, group in slots.items():
+        first = group[0]
+        if first.by == "top":
+            out = _strip_trailing_blanks(out) + _trailing_of(tip_block.preamble)
+        elif first.by == "pred" and index > 0:
+            ends[index - 1] = _trailing_blanks(tip_entries[first.tip_index - 1])
+
+    def emit(group: list[_Placed], following: _Chunk | None) -> list[str]:
+        lines: list[str] = []
+        for position, placed in enumerate(group):
+            lines.extend(placed.chunk.key)
+            tip_end = _trailing_blanks(placed.chunk)
+            if position < len(group) - 1:
+                lines.extend(tip_end)
+                continue
+            has_successor = placed.tip_index + 1 < len(tip_entries)
+            if has_successor and following is not None:
+                lines.extend(tip_end)
+            elif has_successor:
+                lines.extend(end_original if end_original is not None else tip_end)
+            elif following is None:
+                lines.extend(tip_end if tip_at_eof == at_eof or end_original is None else end_original)
+            elif placed.tip_index > 0:
+                lines.extend(_trailing_blanks(tip_entries[placed.tip_index - 1]))
+            else:
+                lines.extend([""] if _trailing_blanks(following) else [])
+        return lines
+
     for index, chunk in enumerate(entries):
-        incoming = slots.get(index, [])
-        if incoming:
-            neighbour = entries[index - 1] if index else chunk
-            separator = [""] if _trailing_blanks(neighbour) else []
-            for new_chunk in incoming:
-                out.extend(new_chunk.key)
-                out.extend(separator)
+        out.extend(emit(slots.get(index, []), chunk))
         replacement = swaps.get(chunk.key)
-        if replacement is None:
-            out.extend(chunk.lines)
-        else:
-            out.extend(replacement.key)
-            out.extend(_trailing_blanks(chunk))
-    incoming = slots.get(len(entries), [])
-    if incoming:
-        last = entries[-1]
-        if _trailing_blanks(last):
-            for new_chunk in incoming:
-                out.extend(new_chunk.key)
-                out.append("")
-        elif at_eof and any(_trailing_blanks(chunk) for chunk in entries):
-            # A loose list whose last entry ends the file: blank line between
-            # entries, none after the last.
-            for new_chunk in incoming:
-                out.append("")
-                out.extend(new_chunk.key)
-        else:
-            for new_chunk in incoming:
-                out.extend(new_chunk.key)
+        out.extend(chunk.key if replacement is None else replacement.key)
+        out.extend(ends[index])
+    out.extend(emit(slots.get(len(entries), []), None))
     return out
 
 
@@ -1037,8 +1203,10 @@ def _pair_leftovers(
 
 def _diff_entries(
     base_block: _Block, tip_block: _Block, anchor_line: str, path: str
-) -> tuple[list[_Chunk], list[tuple[_Chunk, _Chunk]]]:
-    """Classify the session's entry changes: ``(inserted, [(base, edited)])``.
+) -> tuple[list[_Chunk], list[tuple[_Chunk, _Chunk]], list[tuple[_Chunk, _Chunk]]]:
+    """Classify the session's entry changes: ``(inserted, [(base, edited)], matched)``.
+
+    ``matched`` are the ``(base, tip)`` pairs the session left byte-identical.
 
     A ``replace`` opcode pairs each base entry with the tip entry that has the
     identical start line (an in-place edit with neighbouring insertions lands
@@ -1052,9 +1220,13 @@ def _diff_entries(
     tip_keys = [chunk.key for chunk in tip_block.entries]
     inserted: list[_Chunk] = []
     replaced: list[tuple[_Chunk, _Chunk]] = []
+    matched: list[tuple[_Chunk, _Chunk]] = []
     matcher = difflib.SequenceMatcher(None, base_keys, tip_keys, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
+            matched.extend(
+                zip(base_block.entries[i1:i2], tip_block.entries[j1:j2], strict=True)
+            )
             continue
         if tag == "insert":
             inserted.extend(tip_block.entries[j1:j2])
@@ -1082,7 +1254,7 @@ def _diff_entries(
                 "entry deletions escalate to a human"
             )
         inserted.extend(unpaired_tip)
-    return inserted, replaced
+    return inserted, replaced, matched
 
 
 # ---------------------------------------------------------------------------
@@ -1283,6 +1455,11 @@ def _align_items(
     return mapping
 
 
+def _next_content(contents: list[tuple[str, ...]], index: int) -> tuple[str, ...] | None:
+    """The content of the item after ``index``, or None at the end of the section."""
+    return contents[index + 1] if index + 1 < len(contents) else None
+
+
 def _has_content(content: tuple[str, ...]) -> bool:
     return any(line.strip() for line in content)
 
@@ -1313,15 +1490,25 @@ def _merge_section_items(
       base items (both deleted them, or both rewrote them to the same text),
       there is nothing left to apply.
     * *Already present.* A session-inserted item is dropped only when it is
-      byte-identical to an item origin itself *added* (one the alignment does
-      not map from base), at most once per such origin item -- never because
-      an existing item looks the same, which would lose a move or a deliberate
-      repeat.
+      byte-identical to an item origin itself *added in the same gap* (an
+      origin insert at the same base index), at most once per such origin
+      item -- never because an existing item, or one origin added elsewhere,
+      looks the same, which would lose a move, a deliberate repeat or the
+      ``- Links: [[x]]`` bullet of a new topic.
     * *Twins.* An item the session changed (or anchors an insertion on) that
       has a byte-identical twin in the base or origin section, in a section
       origin also changed, cannot be placed with certainty: refuse.
 
     Placements that overlap refuse.
+
+    Blank lines follow the session (separator semantics): the item before an
+    insertion, a deletion or a replacement takes the separator the session gave
+    it, the last inserted or replacement item keeps the session's separator
+    while origin still follows with the item the session wrote it against, and
+    an item left in place takes the session's separator when only the session
+    changed it. With origin unchanged the section therefore comes out as the
+    session's, byte for byte (the exactness invariant ``handoff_merge``
+    asserts).
     """
     base_items = _items(base_body)
     tip_items = _items(tip_body)
@@ -1331,23 +1518,28 @@ def _merge_section_items(
     oc = [content for content, _blanks in origin_items]
     mapping = _align_items(bc, oc)
     origin_changed = bc != oc
-    mapped_origin = set(mapping.values())
-    origin_added = Counter(
-        oc[j] for j in range(len(oc)) if j not in mapped_origin and _has_content(oc[j])
-    )
-    origin_ops = [
-        op
-        for op in difflib.SequenceMatcher(None, bc, oc, autojunk=False).get_opcodes()
-        if op[0] in ("replace", "delete")
-    ]
+    # What origin itself added, keyed by the gap (base index) it added it at: a
+    # session-inserted item is "already present" only when origin put the
+    # identical item in the same gap, never because one like it sits elsewhere.
+    origin_added_at: dict[int, Counter[tuple[str, ...]]] = {}
+    origin_ops: list[tuple[str, int, int, int, int]] = []
+    for op in difflib.SequenceMatcher(None, bc, oc, autojunk=False).get_opcodes():
+        o_tag, oi1, _oi2, oj1, oj2 = op
+        if o_tag in ("insert", "replace"):
+            origin_added_at.setdefault(oi1, Counter()).update(
+                oc[j] for j in range(oj1, oj2) if _has_content(oc[j])
+            )
+        if o_tag in ("replace", "delete"):
+            origin_ops.append(op)
 
-    def fresh(j1: int, j2: int) -> list[int]:
-        """Tip item indices in ``[j1, j2)`` origin did not itself add."""
+    def fresh(j1: int, j2: int, gap: int) -> list[int]:
+        """Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``."""
+        added = origin_added_at.get(gap)
         kept: list[int] = []
         for j in range(j1, j2):
             content = tip_items[j][0]
-            if _has_content(content) and origin_added[content] > 0:
-                origin_added[content] -= 1
+            if added is not None and _has_content(content) and added[content] > 0:
+                added[content] -= 1
                 continue
             kept.append(j)
         return kept
@@ -1360,11 +1552,35 @@ def _merge_section_items(
             and (bc.count(content) > 1 or oc.count(content) > 1)
         )
 
+    def follows_alike(tip_index: int | None, origin_index: int) -> bool:
+        """Does origin follow ``origin_index - 1`` with the item the session wrote
+        its separator against (``tip_index``)? Both ends count as alike."""
+        tip_next = tc[tip_index] if tip_index is not None and tip_index < len(tc) else None
+        origin_next = oc[origin_index] if origin_index < len(oc) else None
+        return tip_next == origin_next
+
     placements: list[tuple[int, int, list[_Item]]] = []
-    blank_fix: dict[int, int] = {}  # origin item index -> blank count it ends up with
+    # origin item index -> blank count it ends up with. ``sep_fix`` is the
+    # three-way rule for the separators of items the session left in place
+    # (the session's if only the session changed it); ``blank_fix`` are the
+    # separators the session's own edits force on the item before a change.
+    sep_fix: dict[int, int] = {}
+    blank_fix: dict[int, int] = {}
     matcher = difflib.SequenceMatcher(None, bc, tc, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
+            for offset in range(i2 - i1):
+                b_at, t_at = i1 + offset, j1 + offset
+                o_at = mapping.get(b_at)
+                if (
+                    o_at is not None
+                    and tip_items[t_at][1] != base_items[b_at][1]
+                    and origin_items[o_at][1] == base_items[b_at][1]
+                    # The separator belongs to the pair it sits between: carry the
+                    # session's only while nobody changed what follows the item.
+                    and _next_content(tc, t_at) == _next_content(bc, b_at) == _next_content(oc, o_at)
+                ):
+                    sep_fix[o_at] = tip_items[t_at][1]
             continue
         if tag == "insert":
             if i1 == 0:
@@ -1383,21 +1599,18 @@ def _merge_section_items(
                     f"({_label(bc[i1 - 1])!r}) is not unchanged on origin "
                     "(byte-identical and aligned); escalating"
                 )
-            kept = fresh(j1, j2)
+            kept = fresh(j1, j2, i1)
             if kept:
-                # Inserted items keep the session's own blank separators. Next to
-                # a content item the separator after that item becomes the
-                # session's (it is now followed by the first inserted item). The
-                # last inserted item keeps the session's separator when origin
-                # still follows the anchor with the item the session wrote it
-                # against; otherwise (origin inserted there) it takes over the
-                # blank count origin's anchor had.
+                # Inserted items keep the session's own blank separators. The item
+                # before them takes the separator the session gave it (it is now
+                # followed by the first inserted item). The last inserted item keeps
+                # the session's separator when origin still follows the anchor with
+                # the item the session wrote it against; otherwise (origin inserted
+                # there) it takes over the blank count origin's anchor had.
                 incoming = [tip_items[j] for j in kept]
-                if anchor and _has_content(oc[anchor - 1]):
+                if anchor:
                     blank_fix[anchor - 1] = tip_items[max(kept[0] - 1, 0)][1]
-                    tip_next = tc[kept[-1] + 1] if kept[-1] + 1 < len(tc) else None
-                    origin_next = oc[anchor] if anchor < len(oc) else None
-                    if tip_next is None or tip_next != origin_next:
+                    if not follows_alike(kept[-1] + 1, anchor):
                         incoming[-1] = (incoming[-1][0], origin_items[anchor - 1][1])
                 placements.append((anchor, anchor, incoming))
                 counts["items_inserted"] += len(incoming)
@@ -1423,11 +1636,26 @@ def _merge_section_items(
                 "and origin also changed the section; the twin cannot be told apart; escalating"
             )
         start = mapping[i1]
-        replacement = [tip_items[j] for j in fresh(j1, j2)]
-        if replacement:
-            last_blanks = origin_items[mapping[run[-1]]][1]
-            replacement[-1] = (replacement[-1][0], last_blanks)
-        placements.append((start, start + len(run), replacement))
+        end = mapping[run[-1]] + 1
+        kept = fresh(j1, j2, i1)
+        replacement = [tip_items[j] for j in kept]
+        alike = (not kept or kept[-1] + 1 == j2) and follows_alike(j2, end)
+        if replacement and not alike:
+            replacement[-1] = (replacement[-1][0], origin_items[end - 1][1])
+        if i1 > 0 and j1 > 0 and start > 0:
+            # The item before a deleted or replaced run takes the separator the
+            # session gave it: deleting `- b` from `- a`, `- b`, <blank>, `Para`
+            # must leave a blank before `Para`, not glue it to `- a`. When origin
+            # follows the run with something else, the blank lines that
+            # separated the run from it count too; an item origin put before the
+            # run (not the one the session wrote against) never loses a blank.
+            wanted = tip_items[j1 - 1][1]
+            if not replacement and not alike:
+                wanted = max(wanted, origin_items[end - 1][1])
+            if mapping.get(i1 - 1) != start - 1:
+                wanted = max(wanted, origin_items[start - 1][1])
+            blank_fix[start - 1] = wanted
+        placements.append((start, end, replacement))
         counts["items_replaced"] += len(run)
     placements.sort(key=lambda placement: (placement[0], placement[1]))
     for (_s1, end1, _r1), (start2, _e2, _r2) in zip(placements, placements[1:], strict=False):
@@ -1436,7 +1664,7 @@ def _merge_section_items(
                 f"{path}: the session's item edits in '## {name}' overlap on origin; escalating"
             )
     merged = list(origin_items)
-    for index, blanks in blank_fix.items():
+    for index, blanks in {**sep_fix, **blank_fix}.items():
         merged[index] = (merged[index][0], blanks)
     for start, end, replacement in reversed(placements):
         merged[start:end] = replacement
@@ -1567,9 +1795,13 @@ def handoff_merge(
     for name, raw, body in o_secs:
         out_body.append(raw)
         if name in touched:
-            out_body.extend(
-                _merge_section_items(b_map[name], t_map[name], body, path, name, detail)
-            )
+            merged_body = _merge_section_items(b_map[name], t_map[name], body, path, name, detail)
+            if body == b_map[name] and merged_body != t_map[name]:
+                raise RefusalError(
+                    f"{path}: structural self-check: section '## {name}' differs from the "
+                    "session's although origin did not change it; escalating"
+                )
+            out_body.extend(merged_body)
             detail["sections_replaced"].append(name)
         else:
             out_body.extend(body)
@@ -1578,6 +1810,107 @@ def handoff_merge(
     merged_text = _join(["---", *fm, "---", *out_body])
     detail["unchanged"] = merged_text == origin_text
     return merged_text, detail
+
+
+# ---------------------------------------------------------------------------
+# structural self-check: no merged item that neither side wrote
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _Unit:
+    """One merge unit (a handoff section or a ledger anchor block) of one text."""
+
+    lines: list[str]
+    items: list[tuple[str, ...]]  # content of every item/entry, trailing blanks dropped
+
+
+def _handoff_units(text: str, path: str) -> dict[str, _Unit] | None:
+    """``{section name: unit}`` for a handoff, or None when it does not parse."""
+    try:
+        _fm, _idx, _desc, body = _split_handoff(text, path)
+        _pre, sections = _split_sections(body, path)
+    except RefusalError:
+        return None
+    return {
+        name: _Unit(
+            lines=section_body,
+            items=[content for content, _blanks in _items(section_body) if _has_content(content)],
+        )
+        for name, _raw, section_body in sections
+    }
+
+
+def _ledger_units(text: str, path: str) -> dict[str, _Unit] | None:
+    """``{anchor path: unit}`` for a ledger; None when its anchors are ambiguous."""
+    doc = _load_doc(text, path, strict=False)
+    units: dict[str, _Unit] = {}
+    for anchor_path, spans in doc.by_path().items():
+        if len(spans) != 1:
+            return None
+        try:
+            block = _parse_block(doc.lines, doc.flags, doc.headings, spans[0].anchor_idx, path)
+        except RefusalError:
+            return None
+        units[" > ".join(anchor_path)] = _Unit(
+            lines=doc.interior(spans[0]), items=[chunk.key for chunk in block.entries]
+        )
+    return units
+
+
+def _glued_items(
+    base: str, tip: str, origin: str, merged: str, path: str
+) -> list[tuple[str, str, str]]:
+    """Merged items that neither side wrote: ``[(kind, unit name, item text)]``.
+
+    The line-multiset check cannot see two items glued into one (a blank line
+    lost between a bullet and the paragraph after it keeps every line), nor
+    one copy of a line both sides added standing in for two. So each unit the
+    session touched (a handoff ``##`` section, a ledger anchor block) is
+    re-split with the same item/entry splitter the merge uses, and every merged
+    item must consume one occurrence of an item origin or the session holds,
+    where an item both sides kept from the base counts once. ``kind`` is
+    ``"section"`` or ``"block"``. Texts that do not parse report nothing: the
+    line-level check and ``--lint`` own that.
+    """
+    if _is_handoff_path(path):
+        loader, kind = _handoff_units, "section"
+    elif _is_ledger_name(path):
+        loader, kind = _ledger_units, "block"
+    else:
+        return []
+    loaded = [loader(text, path) for text in (base, tip, origin, merged)]
+    tables = [table for table in loaded if table is not None]
+    if len(tables) != len(loaded):
+        return []
+    base_units, tip_units, origin_units, merged_units = tables
+    # A handoff section both sides renamed identically is the same section.
+    base_name = {name: name for name in tip_units}
+    if kind == "section" and len(base_units) == len(tip_units):
+        base_name = dict(zip(tip_units, base_units, strict=True))
+    found: list[tuple[str, str, str]] = []
+    for name, tip_unit in tip_units.items():
+        base_unit = base_units.get(base_name[name])
+        if base_unit is not None and base_unit.lines == tip_unit.lines:
+            continue  # the session did not touch this unit
+        merged_unit = merged_units.get(name)
+        if merged_unit is None:
+            continue
+        b_count = Counter(base_unit.items if base_unit is not None else [])
+        o_count = Counter(origin_units[name].items if name in origin_units else [])
+        t_count = Counter(tip_unit.items)
+        available = Counter(
+            {
+                item: o_count[item] + t_count[item] - min(b_count[item], o_count[item], t_count[item])
+                for item in set(o_count) | set(t_count)
+            }
+        )
+        for item in merged_unit.items:
+            if available[item] > 0:
+                available[item] -= 1
+            else:
+                found.append((kind, name, " / ".join(line.strip() for line in item)[:160]))
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -1654,6 +1987,14 @@ def _merge_hub_file(
     verdict = compare_texts(base_text, tip_text, origin_text, merged_text, path)
     if verdict["missing"] or verdict["extra"]:
         raise RefusalError(_self_check_message(path, verdict))
+    glued = _glued_items(base_text, tip_text, origin_text, merged_text, path)
+    if glued:
+        kind, unit, shown = glued[0]
+        more = f" (+{len(glued) - 1} more)" if len(glued) > 1 else ""
+        raise RefusalError(
+            f"{path}: structural self-check: merged {kind} {unit!r} contains an item neither "
+            f"side wrote: {shown!r}{more}"
+        )
     return merged_text, detail
 
 
@@ -2163,6 +2504,10 @@ def compare_texts(
     if origin did, else the clause-merged one -- reported under ``resolved``;
     anything else is ``extra`` (and the chosen version ``missing``). In every
     other file, and anywhere else in a handoff, such lines are ordinary lines.
+
+    ``glued`` is the item-level check (``_glued_items``) for a hub-file path:
+    each item or entry of a merged unit the session touched that neither side
+    wrote. It needs the four texts to parse and reports nothing otherwise.
     """
     missing: set[str] = set()
     extra: set[str] = set()
@@ -2209,6 +2554,9 @@ def compare_texts(
         "extra": sorted(extra),
         "ambiguous": sorted(ambiguous),
         "resolved": sorted(resolved),
+        "glued": sorted(
+            f"{kind} {unit}: {shown}" for kind, unit, shown in _glued_items(base, tip, origin, result, path)
+        ),
     }
 
 
@@ -2265,7 +2613,10 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
         files[path] = compare_texts(
             *(_blob_or_empty(rev, path) for rev in (base, tip, origin, result)), path
         )
-    ok = all(not entry["missing"] and not entry["extra"] for entry in files.values())
+    ok = all(
+        not entry["missing"] and not entry["extra"] and not entry["glued"]
+        for entry in files.values()
+    )
     return {"ok": ok, "effective_base": base, "files": files}
 
 
@@ -2314,10 +2665,10 @@ def _main_verify(args: argparse.Namespace) -> int:
         print(json.dumps(outcome, indent=2))
     else:
         for path, entry in outcome["files"].items():
-            if not entry["missing"] and not entry["extra"]:
+            if not entry["missing"] and not entry["extra"] and not entry["glued"]:
                 continue
             print(f"FAIL {path}")
-            for kind in ("missing", "extra"):
+            for kind in ("missing", "extra", "glued"):
                 for line in entry[kind]:
                     print(f"  {kind}: {_clip(line)}")
         for path, entry in outcome["files"].items():
