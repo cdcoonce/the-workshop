@@ -41,6 +41,7 @@ the repair is to run that tool directly.
 | `scripts/check_version_bumps.py` | Fail when a plugin's shipped output changed without a version bump. |
 | `scripts/dev_cycle_validate.py` | Dev cycle state file parser and validator. |
 | `scripts/discover_skill_test_suites.py` | Discover and run every skill-script test suite in its own rootdir. |
+| `scripts/entry_replay_backtest.py` | Measure the entry-replay fallback against real concurrent vault history. |
 | `scripts/smoke_test.py` | Validate internal consistency of a source plugin directory. |
 | `scripts/stamp.py` | Stamp every generated file in the flat plugin tree from its hand-written source. |
 <!-- END GENERATED: scripts-table -->
