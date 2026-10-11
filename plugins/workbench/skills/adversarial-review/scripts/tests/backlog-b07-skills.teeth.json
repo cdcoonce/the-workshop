@@ -1,0 +1,35 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/adversarial-review/scripts/tests/test_build_fixture.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/adversarial-review/scripts/tests/test_build_fixture.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1071 PATH replaced wholesale by the three fixed dirs",
+      "file": "../build_fixture.py",
+      "find": "\"PATH\": os.pathsep.join(filter(None, [os.environ.get(\"PATH\", \"\"), _FALLBACK_PATH])),",
+      "replace": "\"PATH\": _FALLBACK_PATH,",
+      "oracle": "real"
+    }
+  ]
+}

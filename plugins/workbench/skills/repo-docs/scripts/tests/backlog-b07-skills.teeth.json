@@ -1,0 +1,35 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/repo-docs/scripts/tests/test_check_docs.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/repo-docs/scripts/tests/test_check_docs.py"
+  ],
+  "mutants": [
+    {
+      "label": "#779 covers group stops at whitespace again",
+      "file": "../check_docs.py",
+      "find": "covers=(?P<covers>.+?)\\s*-->\"",
+      "replace": "covers=(?P<covers>[^\\s>]+)\\s*-->\"",
+      "oracle": "real"
+    }
+  ]
+}

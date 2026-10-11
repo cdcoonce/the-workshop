@@ -1,0 +1,35 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/measure-before-landing/scripts/tests/test_paired_ab.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/measure-before-landing/scripts/tests/test_paired_ab.py"
+  ],
+  "mutants": [
+    {
+      "label": "#890 analyze skips the missing-a2 refusal",
+      "file": "../paired_ab.py",
+      "find": "    if bracket_enabled and not args.a2:",
+      "replace": "    if False:",
+      "oracle": "real"
+    }
+  ]
+}

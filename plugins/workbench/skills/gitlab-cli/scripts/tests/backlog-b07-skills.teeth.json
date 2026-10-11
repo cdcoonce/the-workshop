@@ -1,0 +1,70 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/gitlab-cli/scripts/tests/test_glab.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/gitlab-cli/scripts/tests/test_glab.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1144 pagination stops after the first page",
+      "file": "../_glab.py",
+      "find": "        if len(data) < PAGE_SIZE:\n            return entries",
+      "replace": "        if True:\n            return entries",
+      "oracle": "real"
+    },
+    {
+      "label": "#1144 page-cap exhaustion returns the partial list",
+      "file": "../_glab.py",
+      "find": "            return entries\n    return None\n\n\ndef parse_project_path",
+      "replace": "            return entries\n    return entries\n\n\ndef parse_project_path",
+      "oracle": "real"
+    },
+    {
+      "label": "#1144 mid-pagination failure returns the partial list",
+      "file": "../_glab.py",
+      "find": "        if not isinstance(data, list):\n            return None",
+      "replace": "        if not isinstance(data, list):\n            return entries",
+      "oracle": "real"
+    },
+    {
+      "label": "#1144 query separator always ?",
+      "file": "../_glab.py",
+      "find": "    separator = \"&\" if \"?\" in path else \"?\"",
+      "replace": "    separator = \"?\"",
+      "oracle": "real"
+    },
+    {
+      "label": "#1144 URL-form remotes not parsed",
+      "file": "../_glab.py",
+      "find": "    if \"://\" in url:",
+      "replace": "    if False:",
+      "oracle": "real"
+    },
+    {
+      "label": "#1144 .git suffix kept",
+      "file": "../_glab.py",
+      "find": "    if path.endswith(\".git\"):",
+      "replace": "    if False:",
+      "oracle": "real"
+    }
+  ]
+}

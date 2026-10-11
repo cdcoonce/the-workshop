@@ -1,0 +1,42 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/gitlab-ci-watch/scripts/tests/test_ci_watch.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/gitlab-ci-watch/scripts/tests/test_ci_watch.py"
+  ],
+  "mutants": [
+    {
+      "label": "#799 give-up threshold off by one",
+      "file": "../ci_watch.py",
+      "find": "        if self.failures >= MAX_CONSECUTIVE_FAILURES:",
+      "replace": "        if self.failures > MAX_CONSECUTIVE_FAILURES:",
+      "oracle": "real"
+    },
+    {
+      "label": "#799 reset no longer clears the streak",
+      "file": "../ci_watch.py",
+      "find": "        \"\"\"Forget the failure streak.\"\"\"\n        self.failures = 0",
+      "replace": "        \"\"\"Forget the failure streak.\"\"\"\n        pass",
+      "oracle": "real"
+    }
+  ]
+}

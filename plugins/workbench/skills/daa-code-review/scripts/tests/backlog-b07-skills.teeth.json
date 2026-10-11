@@ -1,0 +1,50 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "env",
+    "PYTHONPATH=plugins/workbench/skills/daa-code-review/scripts",
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/daa-code-review/scripts/tests"
+  ],
+  "collect_command": [
+    "env",
+    "PYTHONPATH=plugins/workbench/skills/daa-code-review/scripts",
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/daa-code-review/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "#1069 F821-F823 override removed, falls back to the F -> UNUSED_CODE prefix",
+      "file": "../python_analyzer.py",
+      "find": "    if rule_id in RUNTIME_ERROR_CATEGORY_RULES:",
+      "replace": "    if False:",
+      "oracle": "real"
+    },
+    {
+      "label": "#1069 F823 dropped from the override set",
+      "file": "../python_analyzer.py",
+      "find": "RUNTIME_ERROR_CATEGORY_RULES = {\"F821\", \"F822\", \"F823\"}",
+      "replace": "RUNTIME_ERROR_CATEGORY_RULES = {\"F821\", \"F822\"}",
+      "oracle": "real"
+    }
+  ]
+}

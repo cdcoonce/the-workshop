@@ -1,0 +1,63 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_shared_tree_safety_advance.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_shared_tree_safety_advance.py"
+  ],
+  "mutants": [
+    {
+      "label": "#983 apply --cached step dropped from the recipe",
+      "file": "../plugins/workbench/skills/shared-tree-safety/SKILL.md",
+      "find": "if [ -s \"$snap/cached.patch\" ]; then git apply --cached \"$snap/cached.patch\"; fi",
+      "replace": "true",
+      "oracle": "real"
+    },
+    {
+      "label": "#983 porcelain verification dropped from the recipe",
+      "file": "../plugins/workbench/skills/shared-tree-safety/SKILL.md",
+      "find": " || { echo \"index not restored: hand back\"; exit 1; }",
+      "replace": " || true",
+      "oracle": "real"
+    },
+    {
+      "label": "#983 ff-only no longer the first step",
+      "file": "../plugins/workbench/skills/shared-tree-safety/SKILL.md",
+      "find": "**Use `git merge --ff-only <target>`.**",
+      "replace": "**Use `git reset --keep <target>`.**",
+      "oracle": "real"
+    },
+    {
+      "label": "#983 bare-reset prohibition removed",
+      "file": "../plugins/workbench/skills/shared-tree-safety/SKILL.md",
+      "find": "Never run a bare `reset --keep`",
+      "replace": "Run a bare `reset --keep`",
+      "oracle": "real"
+    },
+    {
+      "label": "#983 vault-sync pointer removed",
+      "file": "../plugins/workbench/skills/vault-sync/references/command.md",
+      "find": "see \"Advancing a branch checked out in a shared tree\" in the `shared-tree-safety` skill",
+      "replace": "see the `shared-tree-safety` skill",
+      "oracle": "real"
+    }
+  ]
+}
