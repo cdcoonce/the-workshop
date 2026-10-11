@@ -4700,3 +4700,40 @@ def test_h3_the_guard_also_covers_the_gap_after_a_replaced_item() -> None:
     origin = _notes("\n- a\n- x\n- foo\n- b\n")
     with pytest.raises(RefusalError, match="amended or rebased"):
         handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1c_a_move_and_mid_text_edit_pairs_by_ratio_and_refuses() -> None:
+    """Neither text opens the other and the first lines differ: only the similarity ratio pairs them."""
+    base = _notes("\n- a\n- verify the gate is red today\n- b\n")
+    tip = _notes("\n- a\n- b\n- verify the gate is green now\n")
+    origin = _notes("\n- a\n- b\n- verify the gate is red today (origin)\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1_a_dissimilar_new_item_is_not_a_move_of_the_deleted_one() -> None:
+    base = _notes("\n- a\n- verify the gate is red today\n- b\n")
+    tip = _notes("\n- a\n- b\n- ship the release notes\n")
+    origin = _notes("\n- a\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+def test_h1_the_better_match_wins_the_pairing() -> None:
+    """Two deleted items, two inserted: each pairs with its own edit, so origin deleting only the
+    second still refuses on the second's move+edit and not on a cross pairing."""
+    base = _notes("\n- a\n- verify the gate is red today\n- alpha beta gamma delta\n- b\n")
+    tip = _notes("\n- a\n- b\n- alpha beta gamma delta (done)\n- verify the gate is red today (done)\n")
+    origin = _notes("\n- a\n- verify the gate is red today\n- b\n")
+    with pytest.raises(RefusalError, match="alpha beta gamma delta"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1_an_identical_move_is_preferred_to_a_merely_similar_new_item() -> None:
+    """The session moved ``b`` (origin made the same move) and, elsewhere, wrote a similar new
+    item: the move pairs with its identical copy, so it counts as already applied."""
+    base = _notes("\n- a\n- x\n- b\n- c\n")
+    tip = _notes("\n- a\n- b\n- x\n- c\n- b and more\n")
+    origin = _notes("\n- a\n- b\n- x\n- c\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip

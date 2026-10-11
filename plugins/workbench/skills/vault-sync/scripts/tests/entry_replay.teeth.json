@@ -480,8 +480,8 @@
       "label": "P1: 'already present' matches any origin item, not only items origin added",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        added = origin_added_at.get(gap)\n",
-      "replace": "        added = Counter(c for c in oc if _has_content(c))\n"
+      "find": "        \"\"\"Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``.\"\"\"\n        added = origin_added_at.get(gap)\n",
+      "replace": "        \"\"\"Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``.\"\"\"\n        added = Counter(c for c in oc if _has_content(c))\n"
     },
     {
       "label": "P1: one origin-added item absorbs every identical session item (not at most once)",
@@ -888,8 +888,8 @@
       "label": "P-b: an origin-added identical item anywhere in the section absorbs the session's (not only in the same gap)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        added = origin_added_at.get(gap)\n",
-      "replace": "        added = sum(origin_added_at.values(), Counter())\n"
+      "find": "        \"\"\"Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``.\"\"\"\n        added = origin_added_at.get(gap)\n",
+      "replace": "        \"\"\"Tip item indices in ``[j1, j2)`` origin did not itself add at ``gap``.\"\"\"\n        added = sum(origin_added_at.values(), Counter())\n"
     },
     {
       "label": "P-c: a new entry's separator after it is origin's neighbour's, not the session's",
@@ -937,7 +937,7 @@
       "label": "P-d: the amend guard never pairs the two versions",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            if _same_entry_edited(origin_chunk, chunk):\n",
+      "find": "            if _amend_of(origin_chunk, chunk):\n",
       "replace": "            if False:\n"
     },
     {
@@ -953,6 +953,148 @@
       "oracle": "real",
       "find": "            if origin_keys[edited.key] > 0:\n",
       "replace": "            if False:\n"
+    },
+    {
+      "label": "H1: a session's deleted and inserted items are never paired, so a move+edit is two harmless operations again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    moves = _pair_moves(bc, tc, session_ops)\n",
+      "replace": "    moves: dict[int, int] = {}\n"
+    },
+    {
+      "label": "H1: the stale-move guard is skipped entirely",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if tag == \"delete\":\n            stale = [",
+      "replace": "        if False:\n            stale = ["
+    },
+    {
+      "label": "H1: the stale-move guard also refuses a move origin made identically (already applied)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "i in moves and i not in mapping and i not in origin_moved",
+      "replace": "i in moves and i not in mapping"
+    },
+    {
+      "label": "H1: the stale-move guard refuses a move of an item that is unchanged and aligned on origin",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "i in moves and i not in mapping and i not in origin_moved",
+      "replace": "i in moves and i not in origin_moved"
+    },
+    {
+      "label": "H1: 'origin made it' is true for any item origin added in the gap, not the identical one",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        and added[tc[moved_to]] > 0\n",
+      "replace": "        and sum(added.values()) > 0\n"
+    },
+    {
+      "label": "H1: the move pairing ignores the similarity ratio (first line and extension only)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "_MOVE_RATIO = 0.6\n",
+      "replace": "_MOVE_RATIO = 1.1\n"
+    },
+    {
+      "label": "H1/H3: an item that merely extends another no longer counts as alike",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if a.startswith(b) or b.startswith(a):\n        return True\n",
+      "replace": "    if False:\n        return True\n"
+    },
+    {
+      "label": "H1/H3: an identical first line no longer makes two items alike",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if first[0] == second[0]:\n        return True\n",
+      "replace": "    if False:\n        return True\n"
+    },
+    {
+      "label": "H1: pairing takes the first candidate, not the best match",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            (bc[i] == tc[j], -abs(i - j), i, j)\n",
+      "replace": "            (0, 0, i, j)\n"
+    },
+    {
+      "label": "H3: an item similar to one origin inserted in the same gap is kept beside it (no handoff amend guard)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if added is not None:\n            for j in kept:\n                refuse_if_amended(j, added)\n",
+      "replace": "        if added is not None:\n            pass\n"
+    },
+    {
+      "label": "H3: the amend guard skips the gap after a replaced run",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if kept:\n            refuse_if_amended(kept[-1], added)\n",
+      "replace": "        if kept:\n            pass\n"
+    },
+    {
+      "label": "H3: the handoff amend guard uses the loose move ratio, so side-by-side short bullets escalate",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "_AMEND_ITEM_RATIO = 0.9\n",
+      "replace": "_AMEND_ITEM_RATIO = 0.5\n"
+    },
+    {
+      "label": "H4: the gap after a replaced run is not consulted, so an item origin put there is inserted twice",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        kept = fresh_tail(fresh(j1, j2, i1), i2)\n",
+      "replace": "        kept = fresh(j1, j2, i1)\n"
+    },
+    {
+      "label": "H4: the replaced-run dedupe takes the replacement's head, not its tail",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            content = tip_items[kept[-1]][0]\n            if not (_has_content(content) and added[content] > 0):\n                break\n            added[content] -= 1\n            kept.pop()\n",
+      "replace": "            content = tip_items[kept[0]][0]\n            if not (_has_content(content) and added[content] > 0):\n                break\n            added[content] -= 1\n            kept.pop(0)\n"
+    },
+    {
+      "label": "H2: the amend guard needs the same date again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if _same_entry_edited(pushed, readded) or _heading_text(pushed) == _heading_text(readded):\n        return True\n",
+      "replace": "    if _same_entry_edited(pushed, readded):\n        return True\n"
+    },
+    {
+      "label": "H2: a date-changed amend with a near-identical body and a new title escapes the guard",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        min(len(old_body), len(new_body)) >= _AMEND_BODY_MIN\n        and difflib.SequenceMatcher(None, old_body, new_body).ratio() >= _AMEND_BODY_RATIO\n",
+      "replace": "        False\n"
+    },
+    {
+      "label": "H2: any body of any size pairs across dates, so boilerplate entries of different days escalate",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "_AMEND_BODY_MIN = 60\n",
+      "replace": "_AMEND_BODY_MIN = 0\n"
+    },
+    {
+      "label": "H5: an unexpected exception in a merge function escapes replay() as a traceback",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        except Exception as exc:  # noqa: BLE001 -- fail closed on any merge bug\n",
+      "replace": "        except ZeroDivisionError as exc:  # noqa: BLE001 -- fail closed on any merge bug\n"
+    },
+    {
+      "label": "H5: a GitError in the merge phase is reported as an internal merge error",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        except GitError:\n            raise\n        except Exception",
+      "replace": "        except Exception"
+    },
+    {
+      "label": "[control] difflib autojunk on the item-similarity ratio",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "autojunk only changes the matcher for sequences of 200 or more characters; every item the suite compares is far shorter, so the ratio is identical on every path the suite reaches. It would differ for a very long handoff bullet, which is why the ratio call spells autojunk=False.",
+      "find": "    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= floor\n",
+      "replace": "    return difflib.SequenceMatcher(None, a, b, autojunk=True).ratio() >= floor\n"
     }
   ]
 }
