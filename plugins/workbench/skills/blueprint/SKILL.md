@@ -29,10 +29,12 @@ that, the law holds under every deadline and every "just ship it".
 - **Refer by name.** Titles wrapping links, never bare issue numbers.
 - **Claim first.** Assign the ticket to the driving dev before any work —
   the assignee is the claim; concurrent sessions skip claimed tickets.
-- **One ticket per session** — research tickets excepted (they run as
-  parallel background subagents). Tickets are sized to one session. The
-  user may direct continuation past one; checkpoint the session handoff
-  between tickets when they do.
+- **One ticket at a time** — research tickets excepted (they run as
+  parallel background subagents). Tickets are sized to one session. With
+  the user present and responding, continuation is the default: keep
+  working the frontier ticket-by-ticket, checkpointing the session
+  handoff between tickets, until they stop you or it drains. Unattended
+  (owner away or unresponsive) the cap holds: one ticket per session.
 - **Create, then wire.** Tickets need ids before blocking edges can point at
   them; wiring is a second pass, idempotent, re-run on any resumed chart.
 - **Fog or ticket?** Ticket when the question can be stated precisely now —
