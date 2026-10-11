@@ -196,3 +196,8 @@ class TestDemotions:
         ):
             save_frequencies(vault, data)
             assert get_demotions(vault, quick_ref_names=["REC"]) == []
+
+    def test_non_dict_entry_does_not_break_demotions(self, vault: Path) -> None:
+        """#772: a malformed (non-dict) entry is skipped, not an AttributeError."""
+        save_frequencies(vault, {"a": 5, "REC": {"sessions": 6}})
+        assert get_demotions(vault, quick_ref_names=["REC", "PCI"]) == ["PCI"]
