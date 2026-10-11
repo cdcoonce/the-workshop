@@ -15,6 +15,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
 | `/blueprint` | `workbench` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/build-review-land` | `workbench` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | `workbench` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
 | `/commit` | `workbench` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
@@ -33,7 +34,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/github-pr-land` | `workbench` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
-| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
@@ -81,11 +82,11 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
 | `/vault-podcast` | `workbench` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
-| `/vault-recall` | `workbench` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
+| `/vault-recall` | `workbench` | Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
+| `/vault-wrap-up` | `workbench` | Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | `workbench` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
 | `/warehouse-sql-test-harness` | `workbench` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |
@@ -131,6 +132,12 @@ Charts an effort too big for one session as a map of decision tickets, worked on
 *`workbench` plugin*
 
 Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. Use when the user wants to brainstorm, explore approaches to a problem, kick around a half-formed idea, or has a goal but no committed solution yet.
+
+### `/build-review-land`
+
+*`workbench` plugin*
+
+Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. Use for "worker-per-PR + mutation review", "build this PR with a worker and a reviewer", or the skywatch recipe.
 
 ### `/chart-taste`
 
@@ -190,7 +197,7 @@ Generate multiple radically different interface designs for a module using paral
 
 *`workbench` plugin*
 
-Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. Use for any teeth check, mutation run or vacuous-test doubt, and in place of hand-rolling a mutate/revert script, which loses work and runs stale bytecode.
+Prove tests catch the defect they claim to prevent: re-inject it, check the suite goes red. Use for any teeth check, mutation run or vacuous-test doubt, and in place of hand-rolling a mutate/revert script.
 
 ### `/dev-cycle`
 
@@ -244,7 +251,7 @@ Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, wa
 
 *`workbench` plugin*
 
-Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. Use after pushing to GitLab, on a `glab mr merge` 405, or to confirm post-merge CI on dev. For browsing, use gitlab-cli.
+Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state. Use after pushing to GitLab, on a `glab mr merge` 405, or to confirm post-merge CI on dev. For browsing, use gitlab-cli.
 
 ### `/gitlab-cli`
 
@@ -436,7 +443,7 @@ Run Charles's vault (The Vault) /clickup-task-sync workflow to sync vault action
 
 *`workbench` plugin*
 
-Run Charles's vault /cold-read gate — an adversarial read of an issue's SPEC before promotion to the afk executor. Trigger when Charles invokes /cold-read, asks if an issue is buildable cold, or is about to promote a `proposed` issue.
+Run Charles's vault /cold-read gate — an adversarial read of an issue's SPEC before promotion to the afk executor. Trigger when Charles invokes /cold-read, or asks if an issue is buildable cold.
 
 ### `/vault-connect`
 
@@ -448,7 +455,7 @@ Run Charles's vault (The Vault) /connect autonomous graph connection pass with p
 
 *`workbench` plugin*
 
-Runs Charles's vault /context-then-delegate workflow, resolving email/SharePoint/Slack ambiguity before writing a prompt. Trigger: Charles invokes /context-then-delegate, or is about to write a delegated prompt with unresolved domain ambiguity.
+Runs Charles's vault /context-then-delegate workflow, resolving email/SharePoint/Slack ambiguity before writing a prompt. Trigger: Charles invokes /context-then-delegate, or is about to write a delegated prompt.
 
 ### `/vault-debrief`
 
@@ -532,7 +539,7 @@ Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from lo
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
+Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes or mentions /recall.
 
 ### `/vault-standup`
 
@@ -556,7 +563,7 @@ Run Charles's vault (The Vault) /teach stateful learning workspace workflow for 
 
 *`workbench` plugin*
 
-Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. Trigger when Charles invokes /wrap-up, signals the session is ending, or explicitly asks to run this vault workflow.
+Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. Trigger when Charles invokes /wrap-up or signals the session is ending.
 
 ### `/vault-write`
 

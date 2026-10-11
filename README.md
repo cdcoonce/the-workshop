@@ -5,7 +5,7 @@
 A **portable AI development environment** — skills, methodology docs, agents, and hooks — that installs natively on **Claude Code**, **Codex**, and **Cortex Code** from one shared source. Picked up in seconds by pasting a URL. Skills run on all three platforms; plugin-level hooks execute on all three (trust-gated on Codex, env caveats on Cortex), while personas activate on Claude Code only today — see [Platform Support](#platform-support).
 
 <!-- BEGIN GENERATED: counts -->
-**84 skills · 19 agents · 22 hooks · 9 plugins**
+**85 skills · 19 agents · 22 hooks · 9 plugins**
 <!-- END GENERATED: counts -->
 
 > The counts and every component table below are generated from source by `scripts/stamp.py`. Do not edit them by hand — run `make stamp`. Deep reference lives in [`docs/reference/`](docs/reference/).
@@ -181,7 +181,7 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.33.6` | 78 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.34.0` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.3` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -200,6 +200,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
 | `/blueprint` | `workbench` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/build-review-land` | `workbench` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | `workbench` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
 | `/commit` | `workbench` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
@@ -218,7 +219,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/finish-branch` | `workbench` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | `workbench` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/github-pr-land` | `workbench` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
-| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-ci-watch` | `workbench` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state. |
 | `/gitlab-cli` | `workbench` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
@@ -266,11 +267,11 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/vault-mr-review-packet` | `workbench` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
 | `/vault-podcast` | `workbench` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | `workbench` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
-| `/vault-recall` | `workbench` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
+| `/vault-recall` | `workbench` | Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | `workbench` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | `workbench` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | `workbench` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-wrap-up` | `workbench` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
+| `/vault-wrap-up` | `workbench` | Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | `workbench` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | `workbench` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
 | `/warehouse-sql-test-harness` | `workbench` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |

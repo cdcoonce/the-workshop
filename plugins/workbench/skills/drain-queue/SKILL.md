@@ -105,6 +105,8 @@ the gaps and re-runs the surviving mutants. The slice does not land while a must
 is neither killed nor explained, and `explained` means the conductor accepts the explanation.
 The PR body carries the pass's ledger and the gaps closed. (Precedent: afk#1520 (PR #1593)
 and afk#1548 (PR #1594), two and five test gaps found after a BUILD verdict.)
+For a hand-built slice without the queue machinery, `build-review-land` is the per-PR unit: builder,
+blind mutation reviewer, RED-confirm fixer, pinned landing.
 
 **4. Land and tear down.**
 
