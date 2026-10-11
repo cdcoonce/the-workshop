@@ -1,0 +1,200 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_vault_audit.py",
+    "test_graph_gardener.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_vault_audit.py",
+    "test_graph_gardener.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1077 vault_audit shadows vault_utils.WIKILINK_RE again",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "WIKILINK_WITH_EMBED_RE = re.compile(",
+      "replace": "WIKILINK_RE = re.compile("
+    },
+    {
+      "label": "#730 code spans forget ~~~ fences",
+      "file": "../engine/vault_utils.py",
+      "oracle": "real",
+      "find": "is_fence = stripped.startswith(\"```\") or stripped.startswith(\"~~~\")",
+      "replace": "is_fence = stripped.startswith(\"```\")"
+    },
+    {
+      "label": "#730 gardener keeps its own code-span copy",
+      "file": "../engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "_code_spans = code_spans\n",
+      "replace": "_code_spans = lambda text: code_spans(text)\n"
+    },
+    {
+      "label": "#725 catalog appends a path twice",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "        if path not in index[key]:\n            index[key].append(path)",
+      "replace": "        index[key].append(path)"
+    },
+    {
+      "label": "#810 path-qualified links skip the suffix tier",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "    if \"/\" in target:\n        matches = _suffix_matches",
+      "replace": "    if False:\n        matches = _suffix_matches"
+    },
+    {
+      "label": "#810 alias tier outranks the exact filename",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "    for form in forms:\n        if form in catalog.by_name:\n            return sorted(catalog.by_name[form])\n    if target in catalog.by_alias:\n        return sorted(catalog.by_alias[target])\n",
+      "replace": "    if target in catalog.by_alias:\n        return sorted(catalog.by_alias[target])\n    for form in forms:\n        if form in catalog.by_name:\n            return sorted(catalog.by_name[form])\n"
+    },
+    {
+      "label": "#810 a colliding bare name short-circuits to one file",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "            return sorted(catalog.by_name[form])\n    if target in",
+      "replace": "            return sorted(catalog.by_name[form])[:1]\n    if target in"
+    },
+    {
+      "label": "#811 operating-file walk is unfiltered again",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "        if (is_operating_file(p) or is_root_excluded_file(p, vault_root))\n        and not is_under_excluded_dir(p, vault_root, GRAPH_EXCLUDED_DIRS)\n",
+      "replace": "        if (is_operating_file(p) or is_root_excluded_file(p, vault_root))\n"
+    },
+    {
+      "label": "#811 node_modules leaves GRAPH_EXCLUDED_DIRS",
+      "file": "../engine/vault_scope_defaults.py",
+      "oracle": "real",
+      "find": "    \"node_modules\",\n",
+      "replace": ""
+    },
+    {
+      "label": "#811 no operating manual is admitted at all (the is_graph_excluded trap)",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "        if (is_operating_file(p) or is_root_excluded_file(p, vault_root))\n",
+      "replace": "        if False and (is_operating_file(p) or is_root_excluded_file(p, vault_root))\n"
+    },
+    {
+      "label": "#729 done-log reverts to the partial sum",
+      "file": "../engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "    _, n_proposals = count_queue_entries(render_queue(\n        context, lane_a, lane_b,\n        dismissed=dismissed, stranded=stranded, memdrift=memdrift, unprofiled=unprofiled,\n    ))\n",
+      "replace": "    n_proposals = len(lane_a.proposals) + len(stranded) + sum(\n        len(lane_b.get(k, []))\n        for k in (\"missing_links\", \"orphans\")\n    )\n"
+    },
+    {
+      "label": "[teeth pass] 729 count omits memdrift",
+      "file": "../engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "dismissed=dismissed, stranded=stranded, memdrift=memdrift, unprofiled=unprofiled,\n    ))",
+      "replace": "dismissed=dismissed, stranded=stranded, memdrift=None, unprofiled=unprofiled,\n    ))"
+    },
+    {
+      "label": "[teeth pass] 729 count omits stranded",
+      "file": "../engine/graph_gardener.py",
+      "oracle": "real",
+      "find": "dismissed=dismissed, stranded=stranded, memdrift=memdrift, unprofiled=unprofiled,\n    ))",
+      "replace": "dismissed=dismissed, stranded=(), memdrift=memdrift, unprofiled=unprofiled,\n    ))"
+    },
+    {
+      "label": "[teeth pass] 730 tilde fence opener needs 3+ ... only ~~ (near-miss: opener only at col0)",
+      "file": "../engine/vault_utils.py",
+      "oracle": "real",
+      "find": "stripped = line.lstrip()\n        is_fence",
+      "replace": "stripped = line\n        is_fence"
+    },
+    {
+      "label": "[teeth pass] 725 dedupe only in normalized (by_alias dup kept)",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "catalog._add(catalog.by_alias, alias.strip(), path)",
+      "replace": "catalog.by_alias[alias.strip()].append(path)"
+    },
+    {
+      "label": "[teeth pass] 810 suffix ambiguity collapsed to one",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "        if matches:\n            return sorted(matches)\n        return sorted(catalog.by_alias.get(target, []))",
+      "replace": "        if matches:\n            return sorted(matches)[:1]\n        return sorted(catalog.by_alias.get(target, []))"
+    },
+    {
+      "label": "[teeth pass] 810 alias tier dropped",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "    if target in catalog.by_alias:\n        return sorted(catalog.by_alias[target])\n",
+      "replace": ""
+    },
+    {
+      "label": "[teeth pass] 810 by_path tier ahead dropped (suffix only)",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "    for form in forms:\n        if form in catalog.by_path:\n            return sorted(catalog.by_path[form])\n",
+      "replace": ""
+    },
+    {
+      "label": "[teeth pass] 810 stem not indexed (name only)",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "catalog._add(catalog.by_name, path.stem, path)",
+      "replace": "pass"
+    },
+    {
+      "label": "[teeth pass] 810 name frontmatter not indexed",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "            catalog._add(catalog.by_alias, name.strip(), path)\n",
+      "replace": "            pass\n"
+    },
+    {
+      "label": "[teeth pass] 811 root README bound lost",
+      "file": "../engine/vault_scope_defaults.py",
+      "oracle": "real",
+      "find": "len(parts) == 1 and path.name in ROOT_EXCLUDED_FILENAMES",
+      "replace": "len(parts) >= 1 and path.name in ROOT_EXCLUDED_FILENAMES"
+    },
+    {
+      "label": "[teeth pass] 811 filter admits only root-level manuals",
+      "file": "../engine/vault_audit.py",
+      "oracle": "real",
+      "find": "and not is_under_excluded_dir(p, vault_root, GRAPH_EXCLUDED_DIRS)",
+      "replace": "and len(p.relative_to(vault_root).parts) == 1"
+    }
+  ]
+}

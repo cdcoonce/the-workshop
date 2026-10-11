@@ -7,7 +7,7 @@ did (Ruff-only / +Prettier / +ESLint+Stylelint) without misformatting a project
 that lacks a given tool."""
 
 # scripts/stamp.py reads this to generate hooks/hooks.json.
-WORKSHOP_HOOK = {"event": "PostToolUse", "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit"}
+WORKSHOP_HOOK = {"event": "PostToolUse", "matcher": "write|edit|multiedit|multi_edit|Write|Edit|MultiEdit"}
 
 import json  # noqa: E402
 import os  # noqa: E402
@@ -24,21 +24,38 @@ except json.JSONDecodeError:
 if not isinstance(data, dict):
     # Fail open: a payload that isn't a JSON object isn't ours to act on.
     sys.exit(0)
-file_path = data.get("tool_input", {}).get("file_path", "")
+tool_input = data.get("tool_input")
+file_path = tool_input.get("file_path", "") if isinstance(tool_input, dict) else ""
 
-if not file_path:
+if not isinstance(file_path, str) or not file_path:
     sys.exit(0)
 
-actions = []
+actions: list[str] = []
+
+# Seconds a single linter may run before the hook abandons it and fails open.
+LINT_TIMEOUT_SECONDS = 30
 
 
-def run(cmd, label):
-    """Run a command silently, ignoring failures (missing tool or nonzero exit)."""
+def run(cmd: list[str], label: str) -> None:
+    """Run a command silently, ignoring failures (missing tool, nonzero exit, hang).
+
+    Parameters
+    ----------
+    cmd : list of str
+        The command and its arguments.
+    label : str
+        Name recorded in the reported actions when the command exits 0.
+
+    Notes
+    -----
+    A command still running after ``LINT_TIMEOUT_SECONDS`` is abandoned and
+    treated as a failure, so a hung linter cannot stall the tool-use loop.
+    """
     try:
-        result = subprocess.run(cmd, capture_output=True)
+        result = subprocess.run(cmd, capture_output=True, timeout=LINT_TIMEOUT_SECONDS)
         if result.returncode == 0:
             actions.append(label)
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
 
@@ -66,8 +83,19 @@ _PRETTIER_CONFIG_NAMES = (
 )
 
 
-def prettier_is_configured(path):
-    """True when some ancestor directory declares a Prettier config.
+def prettier_is_configured(path: str) -> bool:
+    """Return True when some ancestor directory declares a Prettier config.
+
+    Parameters
+    ----------
+    path : str
+        The edited file; the search starts at its directory and walks upward.
+
+    Returns
+    -------
+    bool
+        Whether a Prettier config file, or a ``prettier`` key in a
+        ``package.json``, was found.
 
     Prettier is the only tool this hook runs that acts on a project which never
     asked for it. Ruff is guarded by ``shutil.which``; ESLint and Stylelint need

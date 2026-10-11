@@ -260,18 +260,32 @@ def reap(repo: Path, verdicts: list[Verdict]) -> list[str]:
     A failure is skipped rather than raised: git refuses to delete a branch that
     is checked out in a worktree, which is a real guard rather than an error to
     work around.
+
+    Worktree removal and branch deletion are tracked independently. Once the
+    directory is gone it is reported as removed even if the branch delete then
+    fails; that failure is printed to stderr so the orphaned branch is not silent.
     """
     removed = []
     for v in verdicts:
         if v.action != "reap":
             continue
+        worktree_gone = False
         try:
             if v.path is not None:
                 _git(repo, "worktree", "remove", "--force", str(v.path))
+                worktree_gone = True
+        except (subprocess.CalledProcessError, OSError):
+            continue
+        try:
             if v.branch:
                 _git(repo, "branch", "-D", v.branch)
         except (subprocess.CalledProcessError, OSError):
-            continue
+            if not worktree_gone:
+                continue
+            print(
+                f"{repo}: removed worktree {v.name} but could not delete branch {v.branch}",
+                file=sys.stderr,
+            )
         removed.append(v.name)
     return removed
 
@@ -283,7 +297,7 @@ def find_repos(root: Path) -> list[Path]:
         if not (child / ".git").exists():
             continue
         try:
-            if len(list_worktrees(child)) or (child / ".git").is_dir():
+            if list_worktrees(child):
                 repos.append(child)
         except (subprocess.CalledProcessError, OSError):
             continue

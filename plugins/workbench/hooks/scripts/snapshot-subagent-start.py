@@ -40,7 +40,9 @@ repo_git_dir = git_dir(cwd)
 if repo_git_dir is None:
     sys.exit(0)
 
-state_file = repo_git_dir / "the-workshop-subagent-gate" / f"{agent_id}.txt"
+# agent_id comes from the hook payload: keep it a single path component.
+safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(agent_id))
+state_file = repo_git_dir / "the-workshop-subagent-gate" / f"{safe_id}.txt"
 try:
     state_file.parent.mkdir(parents=True, exist_ok=True)
     # Normalize None to "" at the boundary. The paired stop hook reads these

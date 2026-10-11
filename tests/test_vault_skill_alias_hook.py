@@ -207,3 +207,41 @@ class TestRealPluginRoot:
     def test_hook_is_executable_and_present(self) -> None:
         assert REAL_HOOK.exists(), f"{REAL_HOOK} is missing"
         assert shutil.which(sys.executable), "python is required to run this hook"
+
+
+class TestDuplicateAlias:
+    def test_two_skills_claiming_one_alias_drop_it_and_name_both_on_stderr(
+        self, hook_tree
+    ) -> None:
+        hook_path, plugin_root = hook_tree
+        _skill(plugin_root, "vault-foo-a", flagged=True, alias="foo")
+        _skill(plugin_root, "vault-foo-b", flagged=True, alias="foo")
+
+        result = run(hook_path, {"prompt": "/foo"})
+
+        assert result.returncode == 0
+        assert result.stdout == ""  # neither skill is misrouted
+        assert "vault-foo-a" in result.stderr
+        assert "vault-foo-b" in result.stderr
+        assert "Traceback" not in result.stderr
+
+    def test_unique_aliases_still_resolve_alongside_a_collision(
+        self, hook_tree
+    ) -> None:
+        hook_path, plugin_root = hook_tree
+        _skill(plugin_root, "vault-foo-a", flagged=True, alias="foo")
+        _skill(plugin_root, "vault-foo-b", flagged=True, alias="foo")
+
+        result = run(hook_path, {"prompt": "/standup"})
+
+        out = json.loads(result.stdout)
+        assert "vault-standup" in out["hookSpecificOutput"]["additionalContext"]
+
+    def test_three_way_collision_stays_dropped(self, hook_tree) -> None:
+        hook_path, plugin_root = hook_tree
+        for slug in ("vault-foo-a", "vault-foo-b", "vault-foo-c"):
+            _skill(plugin_root, slug, flagged=True, alias="foo")
+
+        result = run(hook_path, {"prompt": "/foo"})
+
+        assert result.stdout == ""

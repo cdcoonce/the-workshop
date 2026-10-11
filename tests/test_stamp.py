@@ -531,3 +531,146 @@ def test_stamp_is_runnable_as_a_module():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+# --------------------------------------------------------------------------
+# Backlog b16: stamp.py guards and wiring regexes
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("runner", ["bash", "uv", "vault"])
+def test_every_runner_command_is_recognised_as_wiring(runner: str):
+    """A hook wired through any runner must be reported as wired (#735)."""
+    command = stamp.hook_command("some-hook.py", runner)
+
+    assert stamp._script_from_command(command) == "some-hook.py"
+
+
+def test_a_vault_runner_hook_is_walked_as_wired():
+    """The docs tables read hooks.json back; vault hooks must not vanish (#735)."""
+    wiring = {
+        "hooks": {
+            "Stop": [
+                {
+                    "matcher": "Edit",
+                    "hooks": [
+                        {"type": "command", "command": stamp.hook_command("vault-x.py", "vault")}
+                    ],
+                }
+            ]
+        }
+    }
+
+    found = stamp._walk_hook_wiring(wiring)
+
+    assert found == {"vault-x.py": {"events": {"Stop"}, "matchers": {"Edit"}}}
+
+
+def test_a_skill_dir_holding_only_a_ds_store_is_leftover_debris(tmp_path: Path):
+    """A branch switch leaves gitignored .DS_Store behind in an emptied dir (#726)."""
+    skill = tmp_path / "skills" / "gone"
+    skill.mkdir(parents=True)
+    (skill / ".DS_Store").write_bytes(b"\x00")
+
+    assert stamp.is_leftover_artifact_dir(skill)
+    assert stamp._component_dirs(tmp_path / "skills") == []
+
+
+def test_a_skill_dir_with_a_real_file_beside_ds_store_is_not_debris(tmp_path: Path):
+    skill = tmp_path / "skills" / "real"
+    skill.mkdir(parents=True)
+    (skill / ".DS_Store").write_bytes(b"\x00")
+    (skill / "notes.md").write_text("hand-written\n")
+
+    assert not stamp.is_leftover_artifact_dir(skill)
+
+
+def test_an_advisor_plugin_without_hook_scripts_gets_no_run_hook(
+    flat_repo: Path, make_plugin
+):
+    """A runner with no hooks/scripts/ target is dead generated output (#733)."""
+    make_plugin(flat_repo, "workbench", hooks=True)
+    make_plugin(flat_repo, "advisor-thing", skills=["advisor-skill"])
+
+    stamp.stamp(flat_repo)
+
+    assert not (flat_repo / "plugins/advisor-thing/hooks/run-hook.sh").exists()
+
+
+def test_an_advisor_plugin_with_hook_scripts_still_gets_run_hook(
+    flat_repo: Path, make_plugin
+):
+    make_plugin(flat_repo, "workbench", hooks=True)
+    make_plugin(flat_repo, "advisor-hooked", hooks=True)
+    (flat_repo / "plugins/advisor-hooked/hooks/run-hook.sh").unlink()
+
+    stamp.stamp(flat_repo)
+
+    assert (flat_repo / "plugins/advisor-hooked/hooks/run-hook.sh").exists()
+
+
+def test_prose_mentioning_the_stamper_is_not_an_ownership_marker(flat_repo: Path):
+    """Hand-written prose that names scripts/stamp.py must not be overwritable (#745)."""
+    victim = flat_repo / "plugins" / "demo" / "README.md"
+    victim.write_text("Run `scripts/stamp.py` after editing. This file is hand-written.\n")
+
+    with pytest.raises(stamp.StampError):
+        stamp._guard_overwrite(flat_repo, victim)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        stamp._MD_MARKER + "\n\nbody\n",
+        stamp._COMMENT_MARKER + "\nbody\n",
+        json.dumps({"description": stamp._HOOKS_DESCRIPTION, "hooks": {}}, indent=2),
+        json.dumps({stamp._JSON_MARKER_KEY: stamp.GENERATED_MARKER}, indent=2),
+    ],
+)
+def test_every_real_generated_marker_is_accepted(flat_repo: Path, text: str):
+    target = flat_repo / "plugins" / "demo" / "out.txt"
+    target.write_text(text)
+
+    stamp._guard_overwrite(flat_repo, target)
+
+
+def test_an_advisor_with_an_empty_hooks_dir_gets_no_run_hook(
+    flat_repo: Path, make_plugin
+):
+    """A hooks/ dir without hooks/scripts/ leaves the runner with no caller (#733)."""
+    make_plugin(flat_repo, "workbench", hooks=True)
+    make_plugin(flat_repo, "advisor-thing", skills=["advisor-skill"])
+    hooks = flat_repo / "plugins/advisor-thing/hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / "NOTES.txt").write_text("stray, not a script\n")
+
+    stamp.stamp(flat_repo)
+
+    assert not (hooks / "run-hook.sh").exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "{}\n",
+        '{"note": "hand-written; once built by scripts/build_docs.py"}\n',
+    ],
+)
+def test_a_hand_written_file_at_a_formerly_adopted_path_is_refused(
+    flat_repo: Path, body: str
+):
+    """The one-time cutover exemptions are gone; no path is adopted on sight (#740)."""
+    victim = flat_repo / ".claude-plugin" / "marketplace.json"
+    victim.parent.mkdir(parents=True, exist_ok=True)
+    victim.write_text(body)
+
+    with pytest.raises(stamp.StampError):
+        stamp._guard_overwrite(flat_repo, victim)
+
+
+def test_an_empty_skill_dir_is_not_leftover_debris(tmp_path: Path):
+    """git never creates an empty dir on checkout, so an empty one is hand-made (#726)."""
+    skill = tmp_path / "skills" / "hollow"
+    skill.mkdir(parents=True)
+
+    assert not stamp.is_leftover_artifact_dir(skill)

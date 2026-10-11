@@ -4,14 +4,32 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import functools
 import json
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 
 class RegistryError(ValueError):
     """Raised when a registry transition would violate the orchestration contract."""
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _mutating(method: _F) -> _F:
+    """Run a load-modify-save method while holding the registry's file lock."""
+
+    @functools.wraps(method)
+    def wrapper(self: SessionRegistry, *args: Any, **kwargs: Any) -> Any:
+        with self._locked():
+            return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
 
 
 def _now() -> str:
@@ -23,6 +41,18 @@ class SessionRegistry:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Hold an exclusive advisory lock on a sibling ``.lock`` file."""
+        lock_path = self.path.with_name(self.path.name + ".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -60,6 +90,25 @@ class SessionRegistry:
             {"at": _now(), "detail": detail, "kind": kind}
         )
 
+    @staticmethod
+    def _has_identity(worker: dict[str, Any]) -> bool:
+        """Report whether a worker carries an addressable identity.
+
+        Parameters
+        ----------
+        worker : dict[str, Any]
+            One registry worker record.
+
+        Returns
+        -------
+        bool
+            ``True`` when a ``cortex-code`` worker has manual identity evidence,
+            or any other worker has a non-empty ``session_id``.
+        """
+        if worker["adapter"] == "cortex-code":
+            return bool(worker["manual_identity_evidence"])
+        return bool(worker["session_id"])
+
     def get(self, name: str) -> dict[str, Any]:
         """Return one worker, rejecting unknown human-readable names."""
         data = self._load()
@@ -68,6 +117,18 @@ class SessionRegistry:
             raise RegistryError(f"worker {name!r} does not exist")
         return worker
 
+    def all_workers(self) -> dict[str, Any]:
+        """Return every worker, keyed by registry section.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``{"workers": ..., "archived_workers": ...}`` after schema migration.
+        """
+        data = self._load()
+        return {"workers": data["workers"], "archived_workers": data["archived_workers"]}
+
+    @_mutating
     def add(
         self,
         name: str,
@@ -119,6 +180,7 @@ class SessionRegistry:
         self._event(data["workers"][name], "created", "worker registered")
         self._save(data)
 
+    @_mutating
     def set_session_id(self, name: str, session_id: str) -> None:
         """Record the platform's real addressable session identity."""
         if not session_id.strip():
@@ -130,6 +192,7 @@ class SessionRegistry:
         self._event(data["workers"][name], "session", session_id)
         self._save(data)
 
+    @_mutating
     def mark_attached(self, name: str, *, message_verified: bool = False) -> None:
         """Mark a worker running only after identity and messaging are verified."""
         data = self._load()
@@ -147,6 +210,7 @@ class SessionRegistry:
         self._event(worker, "attached", "controller message exchange verified")
         self._save(data)
 
+    @_mutating
     def mark_manual_attached(
         self,
         name: str,
@@ -175,6 +239,7 @@ class SessionRegistry:
         self._event(worker, "manual-attached", identity_evidence)
         self._save(data)
 
+    @_mutating
     def set_state(self, name: str, state: str, *, evidence: str) -> None:
         """Set an observable lifecycle state with durable evidence."""
         allowed = {"provisioning", "running", "waiting", "blocked", "completed", "lost"}
@@ -198,7 +263,7 @@ class SessionRegistry:
             if state == "running" and not worker["message_verified"]:
                 raise RegistryError("running state requires verified attachment")
             raise RegistryError(f"invalid state transition: {worker['state']} -> {state}")
-        if state == "running" and (not worker["session_id"] or not worker["message_verified"]):
+        if state == "running" and (not self._has_identity(worker) or not worker["message_verified"]):
             raise RegistryError("running state requires verified attachment")
         worker["state"] = state
         worker["last_meaningful_update"] = _now()
@@ -206,6 +271,7 @@ class SessionRegistry:
         self._event(worker, "state", f"{state}: {evidence}")
         self._save(data)
 
+    @_mutating
     def record_update(self, name: str, observation: str, *, meaningful: bool = False) -> None:
         """Record every observation without treating unchanged polls as milestones."""
         data = self._load()
@@ -218,6 +284,7 @@ class SessionRegistry:
         self._event(worker, "milestone" if meaningful else "observation", observation)
         self._save(data)
 
+    @_mutating
     def record_recovery(self, name: str, evidence: str) -> None:
         """Append one identity-reconciliation attempt and its evidence."""
         data = self._load()
@@ -231,6 +298,7 @@ class SessionRegistry:
         self._event(worker, "recovery", evidence)
         self._save(data)
 
+    @_mutating
     def amend_contract(self, name: str, amendment: str) -> None:
         """Append an explicit scope or authorization amendment."""
         if not amendment.strip():
@@ -243,6 +311,7 @@ class SessionRegistry:
         self._event(worker, "contract-amendment", amendment)
         self._save(data)
 
+    @_mutating
     def set_integration(self, name: str, status: str, *, evidence: str) -> None:
         """Record verified integration or an explicit durable handoff."""
         if status not in {"integrated", "handed-off"} or not evidence.strip():
@@ -266,6 +335,7 @@ class SessionRegistry:
         self._event(worker, "integration", f"{status}: {evidence}")
         self._save(data)
 
+    @_mutating
     def set_validation(self, name: str, *, passed: bool, evidence: str) -> None:
         """Record the required validation result and exact evidence."""
         if not evidence.strip():
@@ -279,6 +349,7 @@ class SessionRegistry:
         self._event(worker, "validation", f"{'passed' if passed else 'failed'}: {evidence}")
         self._save(data)
 
+    @_mutating
     def record_durable_status(self, name: str, evidence: str) -> None:
         """Record where the worker's durable completion status was written."""
         if not evidence.strip():
@@ -292,6 +363,7 @@ class SessionRegistry:
         self._event(worker, "durable-status", evidence)
         self._save(data)
 
+    @_mutating
     def set_follow_up(self, name: str, assignment: str) -> None:
         """Record or clear the worker's remaining assigned follow-up."""
         data = self._load()
@@ -302,6 +374,7 @@ class SessionRegistry:
         self._event(worker, "follow-up", assignment or "none")
         self._save(data)
 
+    @_mutating
     def retire(
         self,
         name: str,
@@ -324,10 +397,7 @@ class SessionRegistry:
             raise RegistryError("retirement requires durable status evidence")
         if worker["pending_follow_up"]:
             raise RegistryError("retirement requires no assigned follow-up")
-        has_identity = bool(worker["session_id"])
-        if worker["adapter"] == "cortex-code":
-            has_identity = bool(worker["manual_identity_evidence"])
-        if not has_identity or not worker["message_verified"]:
+        if not self._has_identity(worker) or not worker["message_verified"]:
             raise RegistryError("retirement requires a verified attached identity")
         expected_actions = {
             "codex": "codex-archived",
@@ -349,6 +419,7 @@ class SessionRegistry:
         data["archived_workers"][name] = data["workers"].pop(name)
         self._save(data)
 
+    @_mutating
     def record_archived_update(self, name: str, evidence: str) -> None:
         """Append durable history when a retained identity cannot be reopened."""
         if not evidence.strip():
@@ -360,13 +431,14 @@ class SessionRegistry:
         self._event(worker, "archived-update", evidence)
         self._save(data)
 
+    @_mutating
     def reopen(self, name: str, *, evidence: str) -> None:
         """Reopen a retained worker without replacing its session identity."""
         data = self._load()
         worker = data["archived_workers"].get(name)
         if worker is None:
             raise RegistryError(f"worker {name!r} does not exist")
-        if worker["state"] != "retired" or not worker["session_id"] or not evidence.strip():
+        if worker["state"] != "retired" or not self._has_identity(worker) or not evidence.strip():
             raise RegistryError("reopen requires a retired addressable worker and evidence")
         worker["state"] = "provisioning"
         worker["message_verified"] = False
@@ -457,9 +529,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    """Run the registry CLI."""
-    args = _parser().parse_args()
+def main(argv: list[str] | None = None) -> int:
+    """Run the registry CLI.
+
+    Parameters
+    ----------
+    argv : list[str] or None
+        Command-line arguments excluding the program name. ``None`` reads
+        ``sys.argv``.
+
+    Returns
+    -------
+    int
+        Process exit code.
+    """
+    args = _parser().parse_args(argv)
     registry = SessionRegistry(args.registry)
     if args.command == "add":
         registry.add(args.name, origin_project=args.origin_project, adapter=args.adapter, repository=args.repository, workspace=args.workspace, client_id=args.client_id, dependencies=args.depends_on)
@@ -500,11 +584,11 @@ def main() -> int:
     elif args.command == "archived-update":
         registry.record_archived_update(args.name, args.evidence)
     else:
-        data = registry._load()
         if args.name:
             output = registry.get(args.name)
         else:
-            output = data["archived_workers"] if args.archived else data["workers"]
+            everything = registry.all_workers()
+            output = everything["archived_workers"] if args.archived else everything["workers"]
         print(json.dumps(output, indent=2, sort_keys=True))
     return 0
 
