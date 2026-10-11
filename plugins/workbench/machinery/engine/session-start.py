@@ -34,6 +34,22 @@ from sync_manager import pull
 from vault_utils import find_vault_root, read_vault_context
 
 
+def _debug_log(vault_root: Path, message: str) -> None:
+    """Append a timestamped line to ``.claude/data/session-start.log``.
+
+    Best-effort diagnostics: any failure is swallowed so logging can never
+    break session start.
+    """
+    try:
+        data_dir = vault_root / ".claude" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with (data_dir / "session-start.log").open("a", encoding="utf-8") as log:
+            log.write(f"[{stamp}] {message}\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     # Read the hook event to learn WHY the session started: "startup" (fresh),
     # "resume" (history restored), or "clear" (history just wiped by /clear).
@@ -72,15 +88,10 @@ def main() -> int:
 
     # Debug: log raw event to confirm hook_event_name on /clear.
     hook_event_name = raw_event.get("hook_event_name", "")
-    try:
-        data_dir = vault_root / ".claude" / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        (data_dir / "session-start.log").open("a", encoding="utf-8").write(
-            f"[{stamp}] source={source!r} hook_event_name={hook_event_name!r} session_id={session_id[:8]!r}\n"
-        )
-    except Exception:
-        pass
+    _debug_log(
+        vault_root,
+        f"source={source!r} hook_event_name={hook_event_name!r} session_id={session_id[:8]!r}",
+    )
 
     lines: list[str] = []
 
@@ -154,14 +165,7 @@ def main() -> int:
             lines.append("")
             lines.append(f"## 📓 Session notebook ({context}) — recent session state")
             lines.append(condense_digest(notebook_content, f".brain/{notebook.name}"))
-            try:
-                data_dir = vault_root / ".claude" / "data"
-                stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                (data_dir / "session-start.log").open("a", encoding="utf-8").write(
-                    f"[{stamp}] injected notebook: {notebook.name}\n"
-                )
-            except Exception:
-                pass
+            _debug_log(vault_root, f"injected notebook: {notebook.name}")
         else:
             if handoff_path.exists():
                 lines.append("")
@@ -170,14 +174,7 @@ def main() -> int:
                     handoff_path.read_text(encoding="utf-8"),
                     handoff_path.relative_to(vault_root).as_posix(),
                 ))
-            try:
-                data_dir = vault_root / ".claude" / "data"
-                stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                (data_dir / "session-start.log").open("a", encoding="utf-8").write(
-                    f"[{stamp}] injected handoff (no fresh notebook found)\n"
-                )
-            except Exception:
-                pass
+            _debug_log(vault_root, "injected handoff (no fresh notebook found)")
     except Exception:
         traceback.print_exc(file=sys.stderr)
 
