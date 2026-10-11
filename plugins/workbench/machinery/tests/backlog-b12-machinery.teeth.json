@@ -120,6 +120,69 @@
       "oracle": "real",
       "find": "            del kept[: first + 1]\n",
       "replace": "            break\n"
+    },
+    {
+      "label": "#775 _has_tag: guard widened to (list, dict)",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "if not isinstance(tags, list):",
+      "replace": "if not isinstance(tags, (list, dict)):"
+    },
+    {
+      "label": "#770 query_active_work: undated default sorts first",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "[\"work/active\", \"work/incidents\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"\")), reverse=True):",
+      "replace": "[\"work/active\", \"work/incidents\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"9\")), reverse=True):"
+    },
+    {
+      "label": "#770 query_learning: undated default sorts first",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "[\"personal/learning\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"\")), reverse=True):",
+      "replace": "[\"personal/learning\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"9\")), reverse=True):"
+    },
+    {
+      "label": "#772 get_demotions: reads count instead of sessions",
+      "file": "../engine/term_tracker.py",
+      "oracle": "real",
+      "find": "        count = info.get(\"sessions\", 0)",
+      "replace": "        count = info.get(\"count\", 0)"
+    },
+    {
+      "label": "#772 get_demotions: non-dict guard removed",
+      "file": "../engine/term_tracker.py",
+      "oracle": "real",
+      "find": "        if not isinstance(info, dict):\n            continue\n",
+      "replace": ""
+    },
+    {
+      "label": "#724 classify-message: literal 'thought' also treated as default",
+      "file": "../engine/classify-message.py",
+      "oracle": "real",
+      "find": "result.category == DEFAULT_RESULT.category",
+      "replace": "result.category in (\"thought\", DEFAULT_RESULT.category)"
+    },
+    {
+      "label": "#773 sweep_stale_prep: newline taken from first line",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "newline = old[len(old.rstrip(\"\\r\\n\")):]",
+      "replace": "newline = lines[0][len(lines[0].rstrip(\"\\r\\n\")):]"
+    },
+    {
+      "label": "#773 sweep_stale_prep: CR-only ending rewritten as LF",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "newline = old[len(old.rstrip(\"\\r\\n\")):]",
+      "replace": "newline = \"\\r\\n\" if old.endswith(\"\\r\\n\") else \"\\n\""
+    },
+    {
+      "label": "#773 sweep_stale_prep: date == today flips (>= to >)",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "date.fromisoformat(meeting_date) >= today",
+      "replace": "date.fromisoformat(meeting_date) > today"
     }
   ]
 }

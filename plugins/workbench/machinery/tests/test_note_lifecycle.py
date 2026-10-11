@@ -78,3 +78,44 @@ def test_crlf_note_is_detected_and_flipped(tmp_path: Path) -> None:
     result = sweep_stale_prep(tmp_path, today=TODAY)
     assert result["count"] == 1
     assert path.read_bytes() == text.replace("status: active", "status: completed").encode()
+
+
+# ---------------------------------------------------------------------------
+# Teeth-pass gaps (#773)
+# ---------------------------------------------------------------------------
+
+def _raw(root: Path, name: str, data: bytes) -> Path:
+    path = root / "work" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def test_lf_status_line_in_crlf_note_keeps_its_own_ending(tmp_path: Path) -> None:
+    before = b"---\r\ndate: 2026-06-01\r\nstatus: active\ntags:\r\n  - meeting-prep\r\n---\r\n# B\r\n"
+    path = _raw(tmp_path, "m.md", before)
+    assert sweep_stale_prep(tmp_path, today=TODAY)["count"] == 1
+    assert path.read_bytes() == before.replace(b"status: active", b"status: completed")
+
+
+def test_crlf_status_line_in_lf_note_keeps_its_own_ending(tmp_path: Path) -> None:
+    before = b"---\ndate: 2026-06-01\nstatus: active\r\ntags:\n  - meeting-prep\n---\n# B\n"
+    path = _raw(tmp_path, "m.md", before)
+    assert sweep_stale_prep(tmp_path, today=TODAY)["count"] == 1
+    assert path.read_bytes() == before.replace(b"status: active", b"status: completed")
+
+
+def test_cr_only_note_round_trips_byte_exact(tmp_path: Path) -> None:
+    before = b"---\rdate: 2026-06-01\rstatus: active\rtags:\r  - meeting-prep\r---\r# B\r"
+    path = _raw(tmp_path, "m.md", before)
+    assert sweep_stale_prep(tmp_path, today=TODAY)["count"] == 1
+    assert path.read_bytes() == before.replace(b"status: active", b"status: completed")
+
+
+def test_date_equal_today_untouched_yesterday_flips(tmp_path: Path) -> None:
+    same = _write(tmp_path, "same.md", _note(TODAY.isoformat()))
+    prev = _write(tmp_path, "prev.md", _note("2026-06-14"))
+    result = sweep_stale_prep(tmp_path, today=TODAY)
+    assert result["flipped"] == ["work/prev.md"]
+    assert "status: active" in same.read_text(encoding="utf-8")
+    assert "status: completed" in prev.read_text(encoding="utf-8")

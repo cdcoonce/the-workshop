@@ -54,3 +54,15 @@ def test_matched_message_still_emits_hint_when_default_renamed(tmp_path: Path) -
     (tmp_path / "content_routing.py").write_text(_ROUTING, encoding="utf-8")
     out = _run("we had a production incident and an outage", tmp_path)
     assert "hookSpecificOutput" in json.loads(out)
+
+
+def test_category_named_thought_still_hints_when_default_renamed(tmp_path: Path) -> None:
+    """#724: the default is whatever is configured, not the literal 'thought'."""
+    (tmp_path / "content_routing.py").write_text(
+        _ROUTING
+        + '\nCATEGORIES = [{"name": "thought", "folder": "thinking", '
+        '"template": "none", "routing_hint": "think it", "phrases": ["pondering"]}]\n',
+        encoding="utf-8",
+    )
+    out = _run("pondering the meaning of life", tmp_path)
+    assert "hookSpecificOutput" in json.loads(out)

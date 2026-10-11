@@ -201,3 +201,11 @@ class TestDemotions:
         """#772: a malformed (non-dict) entry is skipped, not an AttributeError."""
         save_frequencies(vault, {"a": 5, "REC": {"sessions": 6}})
         assert get_demotions(vault, quick_ref_names=["REC", "PCI"]) == ["PCI"]
+
+    def test_demotion_reads_sessions_not_count(self, vault: Path) -> None:
+        """#772: `count` contradicting `sessions` must not drive demotion."""
+        save_frequencies(
+            vault,
+            {"REC": {"count": 0, "sessions": 6}, "ZED": {"count": 9, "sessions": 0}},
+        )
+        assert get_demotions(vault, quick_ref_names=["REC", "ZED"]) == ["ZED"]
