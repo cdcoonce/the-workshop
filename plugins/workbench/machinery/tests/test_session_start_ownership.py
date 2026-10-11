@@ -234,3 +234,11 @@ def test_unwritable_debug_log_never_breaks_session_start(
     context = start_session({"session_id": "own"})
 
     assert "CURATED HANDOFF" in context
+
+
+def test_debug_log_line_starts_with_timestamp(tmp_path: Path, start_session: StartSession) -> None:
+    import re
+
+    start_session({"session_id": "own"})
+
+    assert re.match(r"\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] ", _log_lines(tmp_path)[0])

@@ -568,3 +568,19 @@ class TestCustomTaskLocations:
         archived = tmp_path / "custom" / "archive-here" / "2026-W13-tasks.md"
         assert archived.exists()
         assert not (tmp_path / "personal").exists()
+
+
+class TestFormatTaskLineLinkDedup:
+    """#797: link dedup compares targets, ignoring alias, case and surrounding space."""
+
+    def test_duplicate_links_appended_once(self) -> None:
+        line = _format_task_line("do it", None, links=["A", "A"])
+        assert line.count("[[A]]") == 1
+
+    def test_aliased_existing_link_not_reappended(self) -> None:
+        line = _format_task_line("[[X]] and [[Housing|h]]", None, links=["Housing"])
+        assert "[[Housing]]" not in line
+
+    def test_padded_link_matches_existing(self) -> None:
+        line = _format_task_line("see [[Housing]]", None, links=[" Housing "])
+        assert line == "- [ ] see [[Housing]]"

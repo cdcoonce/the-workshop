@@ -116,3 +116,29 @@ class TestPreCompactMain:
         assert result.stdout == ""
         assert result.stderr == ""  # a swallowed crash would still exit 0
         assert not (elsewhere / "thinking").exists()
+
+
+class TestPreCompactHardening:
+    def test_main_enforces_max_backups(self, vault: Path, tmp_path: Path) -> None:
+        from transcript_backup import DEFAULT_MAX_BACKUPS
+
+        log_dir = vault / "thinking" / "session-logs"
+        log_dir.mkdir(parents=True)
+        for i in range(DEFAULT_MAX_BACKUPS + 5):
+            old = log_dir / f"session_auto_2020010{i % 10}_0000{i:02d}.jsonl"
+            old.write_text("x\n", encoding="utf-8")
+            os.utime(old, (1_000_000 + i, 1_000_000 + i))
+        transcript = tmp_path / "t.jsonl"
+        transcript.write_text("y\n", encoding="utf-8")
+
+        result = _run(json.dumps({"transcript_path": str(transcript), "trigger": "auto"}), project_dir=vault, cwd=vault)
+
+        assert result.returncode == 0, result.stderr
+        assert len(_backups(vault)) == DEFAULT_MAX_BACKUPS
+
+    @pytest.mark.parametrize("stdin", ["[]", '{"transcript_path": 5}'])
+    def test_malformed_event_shapes_exit_zero(self, vault: Path, stdin: str) -> None:
+        result = _run(stdin, project_dir=vault, cwd=vault)
+
+        assert result.returncode == 0
+        assert "Traceback" not in result.stderr

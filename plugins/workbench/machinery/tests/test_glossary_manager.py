@@ -352,3 +352,24 @@ class TestPipeEscaping:
         names = [e.name for e in parse_quick_reference(quick_ref)]
         assert names.count("Pipe|Name") == 1
         assert remove_quick_ref_entry(vault, "People", "Pipe|Name") is True
+
+
+def _unescaped_pipes(row: str) -> int:
+    return row.count("|") - row.count("\\|")
+
+
+class TestPipeEscapingInKeys:
+    """#774: a raw ``|`` in a term / quick-ref name must not add a table column."""
+
+    def test_glossary_term_pipe_keeps_four_pipes(self, vault: Path, glossary: Path) -> None:
+        add_glossary_entry(vault, "Split|Term", "meaning", "acronym")
+
+        row = next(line for line in glossary.read_text(encoding="utf-8").splitlines() if "Split" in line)
+        assert _unescaped_pipes(row) == 4
+
+    @pytest.mark.parametrize("section", ["People", "Projects"])
+    def test_quick_ref_name_pipe_keeps_four_pipes(self, vault: Path, quick_ref: Path, section: str) -> None:
+        add_quick_ref_entry(vault, section, "Pipe|Name", "c2", "c3")
+
+        row = next(line for line in quick_ref.read_text(encoding="utf-8").splitlines() if "Pipe" in line)
+        assert _unescaped_pipes(row) == 4
