@@ -19,8 +19,16 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    to the result; local ``main`` belongs to the primary checkout. A Codex
    session on a detached HEAD moves no branch: HEAD is left detached at the
    result, and a refusal returns it to the original detached commit.
-2. The session's per-file diff (``--base`` -> HEAD) is computed
-   content-level; after the #892 squash that is one hunk set.
+2. The session's per-file diff is computed content-level against the
+   *merge-base* of HEAD and the fetched origin head -- not against ``--base``
+   itself. ``--base`` is the commit before the session's first commit, but a
+   session that already pushed some commits mid-session shares them with
+   origin; reading those as additions on both sides would replay a pushed entry
+   next to its own later correction. So ``--base`` only has to be an ancestor of
+   (or equal to) the merge-base, else the replay refuses, and the merge-base is
+   the three-way base for every merge, for the path-level conflict set and for
+   the self-check (``--verify`` does the same). After the #892 squash the
+   session is one hunk set.
 3. Ledger rule: the session's change is read per anchor block as *whole
    entries* -- new dated entries, and existing entries edited in place (an
    in-place correction like the vault's ``2455bf8c``, even one that changes
@@ -32,10 +40,16 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    added unless origin already holds them. Nothing is re-sorted: origin's
    entries keep their exact order (real blocks are not uniformly ordered, so a
    block-wide sort would rewrite entries the session never touched), an edited
-   entry keeps its origin position, and each new entry goes immediately before
-   the first origin entry, scanning from the top, that is not newer than it
-   (else at the end) -- so a same-date new entry sits above origin's same-date
-   entries, and new entries sharing a slot keep the session's order. An anchor is a block's innermost non-entry
+   entry keeps its origin position, and each new entry is placed *positionally*,
+   not by date: immediately after the session's predecessor entry (the nearest
+   earlier entry of the tip block that origin also holds), which must appear on
+   origin exactly once byte-identical -- else immediately before the session's
+   successor entry under the same requirement, else the replay refuses. A new
+   entry that opens the session's block goes to the top of origin's block,
+   directly under the preamble. New entries sharing a position keep the
+   session's order; the #874 ordering-drift detector, not the replay, is the
+   order tooth. A correction both sides made identically (origin already holds
+   exactly the session's edited entry) is already applied. An anchor is a block's innermost non-entry
    heading (``### Wins`` under ``## Q3 2026``, ``## Technical``). An entry
    heading ends in ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD, qualifier)``, or starts
    with a date; a dated ``- **YYYY-MM-DD`` bullet inside a heading entry is
@@ -64,6 +78,10 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    ``_Updated`` stamp resolves three-way instead of counting as a preamble
    divergence, and the frontmatter ``description:`` is merged additively at
    clause granularity rather than restored as the session's whole paragraph.
+   An inserted item keeps the session's own blank-line separators (a paragraph
+   appended after another stays blank-separated). Sections both sides renamed
+   identically are matched by position; any other added, removed or reordered
+   section refuses.
 5. Assertions, fail-closed: before every replacement, origin's corresponding
    span must be byte-identical to the session-base version, with spans drawn
    per *replaced* entry / per *replaced* item -- exactly the spans the replay
@@ -77,7 +95,10 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    Self-verification: the merged text of every file is re-checked against
    both sides with the ``--verify`` line-multiset comparison before anything
    is written; a merge that loses or duplicates a line refuses ("self-check").
-   There is no flag to skip it.
+   There is no flag to skip it. Only two handoff lines are resolved by rule
+   rather than counted: the frontmatter ``description:`` and the body-preamble
+   ``_Updated`` stamp, each of which must hold exactly the version the merge
+   rule chooses; everywhere else such lines are ordinary lines.
 6. ``ci/vault_health.py`` runs on the replayed tree before anything is
    pushed; a failure restores the original state.
 
@@ -167,6 +188,9 @@ class Report:
     target_source: str | None = None
     remote: str = "origin"
     base: str | None = None
+    # ``git merge-base HEAD <origin head>``: the three-way base actually used.
+    # It equals ``base`` unless the session already published commits.
+    merge_base: str | None = None
     old_head: str | None = None
     origin_head: str | None = None
     new_head: str | None = None
@@ -667,8 +691,8 @@ def ledger_merge(
     (the narrow per-replaced-entry assertion -- origin's copies of entries the
     session did not touch simply win, including their corrections); the
     session's new entries are added unless origin already holds them. Origin's
-    entry order is never rewritten: new entries are placed by date (see
-    ``_slot_new_entries``).
+    entry order is never rewritten: new entries are placed positionally, after
+    the session's predecessor entry (see ``_place_new_entries``).
 
     Parameters
     ----------
@@ -749,6 +773,11 @@ def ledger_merge(
         origin_keys = Counter(chunk.key for chunk in origin_block.entries)
         swaps: dict[tuple[str, ...], _Chunk] = {}
         for old, edited in replaced:
+            if origin_keys[old.key] == 0 and origin_keys[edited.key] == 1:
+                # Origin already holds exactly the session's edited version and
+                # no longer the base one: both sides made the same correction.
+                detail["duplicates_skipped"] += 1
+                continue
             if origin_keys[old.key] != 1:
                 raise RefusalError(
                     f"{path}: origin's copy of entry {old.label!r} the session edited is "
@@ -758,14 +787,31 @@ def ledger_merge(
 
         present = Counter(origin_keys)
         kept: list[_Chunk] = []
+        already_on_origin: set[int] = set()
         for chunk in new_entries:
             if present[chunk.key] > 0:
                 present[chunk.key] -= 1
                 detail["duplicates_skipped"] += 1
+                already_on_origin.add(id(chunk))
                 continue
             kept.append(chunk)
 
-        slots = _slot_new_entries(origin_block.entries, kept)
+        # Which tip entry is which origin entry: unchanged entries and entries
+        # origin already holds by their own bytes; an entry the session edited by
+        # the base version origin still carries (or the edited one when origin
+        # already made the same edit).
+        idents: dict[int, tuple[str, ...]] = {}
+        edited_from = {id(edited): old for old, edited in replaced}
+        new_ids = {id(chunk) for chunk in new_entries}
+        for chunk in tip_block.entries:
+            if id(chunk) in edited_from:
+                old = edited_from[id(chunk)]
+                idents[id(chunk)] = old.key if origin_keys[old.key] == 1 else chunk.key
+            elif id(chunk) not in new_ids or id(chunk) in already_on_origin:
+                idents[id(chunk)] = chunk.key
+        slots = _place_new_entries(
+            tip_block.entries, origin_block.entries, kept, idents, anchor_line, path
+        )
         shape_check = [*origin_block.entries, *swaps.values(), *kept]
         kinds = {chunk.kind for chunk in shape_check}
         levels = {chunk.level for chunk in shape_check}
@@ -790,25 +836,63 @@ def ledger_merge(
     return merged_text, detail
 
 
-def _slot_new_entries(
-    origin_entries: list[_Chunk], new_entries: list[_Chunk]
+def _place_new_entries(
+    tip_entries: list[_Chunk],
+    origin_entries: list[_Chunk],
+    new_entries: list[_Chunk],
+    idents: dict[int, tuple[str, ...]],
+    anchor_line: str,
+    path: str,
 ) -> dict[int, list[_Chunk]]:
     """Where each new entry goes: ``{slot: [entries]}``, slot = origin entry index.
 
-    No sort: real blocks are not uniformly ordered (some run oldest-first, some
-    carry drift), so a block-wide sort would rewrite entries the session never
-    touched. Each new entry goes immediately before the first origin entry,
-    scanning from the top of the block, that is not newer than it (date on or
-    before the new entry's) -- or at the end (slot ``len(origin_entries)``)
-    when there is none. In a newest-first block that is exactly "above the
-    first older-or-same-day entry", so a same-date new entry sits above
-    origin's same-date entries. New entries that land in one slot keep the
-    session's relative order.
+    Placement is positional, never by date: blocks are not uniformly ordered
+    (the Brag Doc's ``### Growth`` runs oldest-first), so a date rule would
+    relocate entries the session placed elsewhere and invert ascending blocks.
+    A new entry goes immediately after the session's *predecessor* -- the
+    nearest earlier entry of the tip block that is also an origin entry
+    (``idents`` maps it to the key origin holds) -- provided that entry appears
+    on origin byte-identically exactly once. When it does not, the entry goes
+    immediately before the session's *successor* (the nearest later such
+    entry) under the same requirement; with neither, the replay refuses. A new
+    entry with no predecessor at all sits at the top of the session's block, so
+    it goes to the top of origin's block, directly under the preamble. New
+    entries sharing a position keep their tip order.
     """
-    origin_days = [chunk.day for chunk in origin_entries]
+    positions: dict[tuple[str, ...], list[int]] = {}
+    for index, chunk in enumerate(origin_entries):
+        positions.setdefault(chunk.key, []).append(index)
+
+    def unique_index(entry: _Chunk | None) -> int | None:
+        if entry is None:
+            return None
+        found = positions.get(idents[id(entry)], [])
+        return found[0] if len(found) == 1 else None
+
+    new_ids = {id(chunk) for chunk in new_entries}
     slots: dict[int, list[_Chunk]] = {}
-    for chunk in new_entries:
-        at = next((i for i, day in enumerate(origin_days) if day <= chunk.day), len(origin_days))
+    for j, chunk in enumerate(tip_entries):
+        if id(chunk) not in new_ids:
+            continue
+        predecessor = next(
+            (e for e in reversed(tip_entries[:j]) if id(e) in idents), None
+        )
+        if predecessor is None:
+            slots.setdefault(0, []).append(chunk)
+            continue
+        at = unique_index(predecessor)
+        if at is not None:
+            slots.setdefault(at + 1, []).append(chunk)
+            continue
+        successor = next((e for e in tip_entries[j + 1 :] if id(e) in idents), None)
+        at = unique_index(successor)
+        if at is None:
+            raise RefusalError(
+                f"{path}: the session's new entry {chunk.label!r} under {anchor_line!r} has no "
+                "safe placement: neither its predecessor nor its successor entry is "
+                "byte-identical exactly once on origin (edited, removed or duplicated there); "
+                "escalating"
+            )
         slots.setdefault(at, []).append(chunk)
     return slots
 
@@ -1257,13 +1341,15 @@ def _merge_section_items(
         if op[0] in ("replace", "delete")
     ]
 
-    def fresh(items: list[_Item]) -> list[_Item]:
-        kept: list[_Item] = []
-        for item in items:
-            if _has_content(item[0]) and origin_added[item[0]] > 0:
-                origin_added[item[0]] -= 1
+    def fresh(j1: int, j2: int) -> list[int]:
+        """Tip item indices in ``[j1, j2)`` origin did not itself add."""
+        kept: list[int] = []
+        for j in range(j1, j2):
+            content = tip_items[j][0]
+            if _has_content(content) and origin_added[content] > 0:
+                origin_added[content] -= 1
                 continue
-            kept.append(item)
+            kept.append(j)
         return kept
 
     def twinned(index: int) -> bool:
@@ -1275,6 +1361,7 @@ def _merge_section_items(
         )
 
     placements: list[tuple[int, int, list[_Item]]] = []
+    blank_fix: dict[int, int] = {}  # origin item index -> blank count it ends up with
     matcher = difflib.SequenceMatcher(None, bc, tc, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
@@ -1296,11 +1383,18 @@ def _merge_section_items(
                     f"({_label(bc[i1 - 1])!r}) is not unchanged on origin "
                     "(byte-identical and aligned); escalating"
                 )
-            incoming = fresh(tip_items[j1:j2])
-            if incoming:
+            kept = fresh(j1, j2)
+            if kept:
+                # Inserted items keep the session's own blank separators. Next to
+                # a content item the separator after that item becomes the
+                # session's (it is now followed by the first inserted item), and
+                # the last inserted item takes over the blank count origin's
+                # item had before the insertion (it is now followed by whatever
+                # followed that item).
+                incoming = [tip_items[j] for j in kept]
                 if anchor and _has_content(oc[anchor - 1]):
-                    inherited = origin_items[anchor - 1][1]
-                    incoming = [(content, inherited) for content, _blanks in incoming]
+                    blank_fix[anchor - 1] = tip_items[max(kept[0] - 1, 0)][1]
+                    incoming[-1] = (incoming[-1][0], origin_items[anchor - 1][1])
                 placements.append((anchor, anchor, incoming))
                 counts["items_inserted"] += len(incoming)
             continue
@@ -1325,7 +1419,7 @@ def _merge_section_items(
                 "and origin also changed the section; the twin cannot be told apart; escalating"
             )
         start = mapping[i1]
-        replacement = fresh(tip_items[j1:j2])
+        replacement = [tip_items[j] for j in fresh(j1, j2)]
         if replacement:
             last_blanks = origin_items[mapping[run[-1]]][1]
             replacement[-1] = (replacement[-1][0], last_blanks)
@@ -1338,9 +1432,27 @@ def _merge_section_items(
                 f"{path}: the session's item edits in '## {name}' overlap on origin; escalating"
             )
     merged = list(origin_items)
+    for index, blanks in blank_fix.items():
+        merged[index] = (merged[index][0], blanks)
     for start, end, replacement in reversed(placements):
         merged[start:end] = replacement
     return _item_lines(merged)
+
+
+def _identical_renames(base: list[str], tip: list[str], origin: list[str]) -> bool:
+    """True when tip and origin renamed the same sections the same way.
+
+    The session's section-name list equals origin's and differs from the base
+    only by renames at the same positions: same length, and every position
+    that changed holds a name that exists on neither the other side's list (a
+    swap or a move reuses names, so it is a reorder; a length change is an
+    add or a remove). Anything else keeps the "added, removed, or reordered"
+    refusal.
+    """
+    if tip != origin or len(tip) != len(base):
+        return False
+    base_set, tip_set = set(base), set(tip)
+    return all(b == t or (b not in tip_set and t not in base_set) for b, t in zip(base, tip, strict=True))
 
 
 def handoff_merge(
@@ -1377,7 +1489,10 @@ def handoff_merge(
     t_pre, t_secs = _split_sections(t_body, path)
     o_pre, o_secs = _split_sections(o_body, path)
 
-    if [name for name, _raw, _body in t_secs] != [name for name, _raw, _body in b_secs]:
+    b_names = [name for name, _raw, _body in b_secs]
+    t_names = [name for name, _raw, _body in t_secs]
+    o_section_names = [name for name, _raw, _body in o_secs]
+    if t_names != b_names and not _identical_renames(b_names, t_names, o_section_names):
         raise RefusalError(
             f"{path}: the session added, removed, or reordered handoff sections; "
             "the replay only re-applies existing sections"
@@ -1431,9 +1546,11 @@ def handoff_merge(
         desc = merge_descriptions(b_desc, t_desc, o_desc)
         detail["description"] = "merged"
 
-    b_map = {name: body for name, _raw, body in b_secs}
+    # Sections pair by position, so a section both sides renamed identically is
+    # still the same section: the base body is keyed by the tip's (= origin's) name.
+    b_map = {t_name: body for t_name, (_n, _raw, body) in zip(t_names, b_secs, strict=True)}
     t_map = {name: body for name, _raw, body in t_secs}
-    touched = [name for name, _raw, body in b_secs if t_map[name] != body]
+    touched = [name for name in t_names if t_map[name] != b_map[name]]
     o_names = {name for name, _raw, _body in o_secs}
     for name in touched:
         if name not in o_names:
@@ -1530,7 +1647,7 @@ def _merge_hub_file(
         merged_text, detail = ledger_merge(base_text, tip_text, origin_text, path)
     else:
         merged_text, detail = handoff_merge(base_text, tip_text, origin_text, path)
-    verdict = compare_texts(base_text, tip_text, origin_text, merged_text)
+    verdict = compare_texts(base_text, tip_text, origin_text, merged_text, path)
     if verdict["missing"] or verdict["extra"]:
         raise RefusalError(_self_check_message(path, verdict))
     return merged_text, detail
@@ -1593,14 +1710,23 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         report.action = "none"
         report.reason = "origin has not diverged; a plain push or rebase applies"
         return
-    if not _is_ancestor(base, origin_head):
+    # The session base is "the commit before this session's first commit", but
+    # a session that already pushed some commits mid-session shares them with
+    # origin: treating those as additions on both sides would replay a pushed
+    # entry next to its own later correction. The three-way base is therefore
+    # the merge-base of HEAD and origin, and ``base`` only has to sit at or
+    # before it (else unpushed history predates the session).
+    merge_base = _git_out("merge-base", head, origin_head)
+    report.merge_base = merge_base
+    if not _is_ancestor(base, merge_base):
         raise RefusalError(
-            f"base {base[:12]} is not an ancestor of {remote}/{target}; unpushed history "
-            "predates this session, so attribution is ambiguous"
+            f"base {base[:12]} is not an ancestor of the merge-base {merge_base[:12]} of HEAD "
+            f"and {remote}/{target}; unpushed history predates this session, so attribution "
+            "is ambiguous"
         )
 
-    session_changes = _name_status(base, head)
-    origin_changes = _name_status(base, origin_head)
+    session_changes = _name_status(merge_base, head)
+    origin_changes = _name_status(merge_base, origin_head)
 
     conflicts: dict[str, tuple[str, str]] = {}
     for path in sorted(set(session_changes) & set(origin_changes)):
@@ -1643,7 +1769,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
                 }
             )
             continue
-        base_text = _blob_text(base, path)
+        base_text = _blob_text(merge_base, path)
         tip_text = _blob_text(head, path)
         origin_text = _blob_text(origin_head, path)
         try:
@@ -1723,7 +1849,8 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
                 f"Session-only paths carried: {sum(len(v) for v in report.carried.values())}.\n"
                 "Every replaced span was asserted byte-identical to the session base\n"
                 "(per replaced entry / per replaced handoff item) before replacement;\n"
-                "new ledger entries were placed by date, origin's order untouched (the-workshop#893).\n"
+                "new ledger entries were placed after the session's predecessor entry, origin's\n"
+                "order untouched (the-workshop#893).\n"
             )
             _git_out("commit", "--quiet", "-m", message)
             new_head = _git_out("rev-parse", "HEAD")
@@ -1776,7 +1903,9 @@ def replay(base: str, remote: str, health_cmd: str | None) -> Report:
     ----------
     base:
         Resolved SHA of the commit before this session's first commit -- the
-        same session base the wrap-up audit and the #892 squash use.
+        same session base the wrap-up audit and the #892 squash use. It must
+        sit at or before ``git merge-base HEAD <origin head>``, which is the
+        actual three-way base (the session may already have pushed commits).
     remote:
         Remote name to fetch and replay onto.
     health_cmd:
@@ -1944,40 +2073,74 @@ def _blob_or_empty(rev: str, path: str) -> str:
     return proc.stdout.decode("utf-8", errors="replace")
 
 
-def _nonblank_lines(text: str) -> Counter[str]:
-    return Counter(line for line in text.splitlines() if line.strip())
+# Two handoff lines are resolved by rule rather than by line arithmetic: every
+# wrap-up rewrites the frontmatter ``description:`` and the body-preamble
+# ``_Updated`` stamp, so both sides "changing" them is expected. The exemption
+# is deliberately narrow -- handoff files only, those two lines only, and the
+# result must hold exactly the version the merge rule chooses -- so a fenced
+# ``description:`` line in a ledger, or an ``_Updated`` line deep in a section,
+# is counted like any other line.
 
 
-# Lines the merge resolves by rule rather than by line arithmetic: every
-# wrap-up rewrites the handoff's _Updated stamp and its frontmatter description,
-# so both sides "changing" them is expected and the result legitimately holds
-# either side's version (or, for the description, the clause-merged one).
-_RESOLVED_PREFIXES = (_STAMP_PREFIX, "description: ")
+def _resolved_split(text: str, handoff: bool) -> tuple[list[str], list[str], list[str]]:
+    """``(description_lines, stamp_lines, other_lines)`` for one file's text.
+
+    Only for a handoff: the frontmatter ``description:`` line(s) and the
+    body-preamble (before the first ``## `` heading, fence-aware) lines
+    starting ``_Updated `` are split out; every other line is "other".
+    """
+    lines = text.splitlines()
+    if not handoff:
+        return [], [], lines
+    exempt: set[int] = set()
+    desc: list[int] = []
+    body_start = 0
+    if lines and lines[0] == "---" and "---" in lines[1:]:
+        close = lines.index("---", 1)
+        desc = [i for i in range(1, close) if lines[i].startswith("description:")]
+        body_start = close + 1
+    body = lines[body_start:]
+    flags = _fence_flags(body)
+    first_section = next(
+        (i for i, line in enumerate(body) if not flags[i] and _SECTION_RE.match(line)), len(body)
+    )
+    stamp = [
+        body_start + i for i in range(first_section) if body[i].startswith(_STAMP_PREFIX)
+    ]
+    exempt.update(desc)
+    exempt.update(stamp)
+    other = [line for i, line in enumerate(lines) if i not in exempt]
+    return [lines[i] for i in desc], [lines[i] for i in stamp], other
 
 
-def _resolved_lines(text: str, prefix: str) -> list[str]:
-    return [line for line in text.splitlines() if line.startswith(prefix)]
+def _expected_descriptions(base: list[str], tip: list[str], origin: list[str]) -> list[list[str]]:
+    """The ``description:`` line lists a correct merge may hold (``handoff_merge``'s rule).
 
-
-def _description_candidates(base: str, tip: str, origin: str) -> list[list[str]]:
-    """The tip's, origin's, and clause-merged ``description:`` lines, as lists."""
-    candidates = [_resolved_lines(tip, "description: "), _resolved_lines(origin, "description: ")]
-    parsed = []
-    for text in (base, tip, origin):
-        found = _resolved_lines(text, "description: ")
-        match = _DESCRIPTION_RE.match(found[0]) if len(found) == 1 else None
+    Origin's when the session left it alone, the session's when origin did,
+    origin's when both made the same change, else the clause-merged one. When a
+    side is not a single parseable quoted scalar the rule cannot be applied and
+    either side's version is accepted.
+    """
+    if tip == base or tip == origin:
+        return [origin]
+    if origin == base:
+        return [tip]
+    parsed: list[str] = []
+    for side in (base, tip, origin):
+        match = _DESCRIPTION_RE.match(side[0]) if len(side) == 1 else None
         if match is None:
-            return candidates
+            return [tip, origin]
         parsed.append(match.group(1))
     try:
         merged = merge_descriptions(*parsed)
     except RefusalError:
-        return candidates
-    candidates.append([f'description: "{merged}"'])
-    return candidates
+        return [tip, origin]
+    return [[f'description: "{merged}"']]
 
 
-def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, list[str]]:
+def compare_texts(
+    base: str, tip: str, origin: str, result: str, path: str = ""
+) -> dict[str, list[str]]:
     """Compare one file's merge result to both sides by non-blank-line multisets.
 
     The result must hold every non-blank line exactly ``base - deletions +
@@ -1986,35 +2149,40 @@ def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, li
     addition lost, but also *untouched* content lost -- and ``extra`` lines it
     holds too many times (a duplicated sentence, an invented line). A line both
     sides added is ``ambiguous``: any count from one copy up to two is fine.
-    Lines starting ``_Updated `` and the frontmatter ``description: `` line are
-    resolved by rule, not arithmetic: the result must hold exactly one side's
-    version (or the clause-merged description); a match is reported under
-    ``resolved``, a mismatch or a dropped line under ``extra`` / ``missing``.
+
+    For a handoff path (``path`` names a ``handoff-<context>.md``) two lines are
+    resolved by rule, not arithmetic, and only those: the frontmatter
+    ``description:`` line and the body-preamble ``_Updated `` line (before the
+    first ``## `` heading). The result must hold exactly the version the merge
+    rule chooses -- stamp: the session's if the session changed it, else
+    origin's; description: origin's if the session left it alone, the session's
+    if origin did, else the clause-merged one -- reported under ``resolved``;
+    anything else is ``extra`` (and the chosen version ``missing``). In every
+    other file, and anywhere else in a handoff, such lines are ordinary lines.
     """
     missing: set[str] = set()
     extra: set[str] = set()
     resolved: list[str] = []
-    for prefix in _RESOLVED_PREFIXES:
-        sides = [_resolved_lines(text, prefix) for text in (base, tip, origin, result)]
-        if not any(sides):
+    handoff = _is_handoff_path(path) if path else False
+    split = [_resolved_split(text, handoff) for text in (base, tip, origin, result)]
+    for slot, rule in ((0, "description"), (1, "stamp")):
+        b, t, o, r = (part[slot] for part in split)
+        if not (b or t or o or r):
             continue
-        if prefix == "description: ":
-            candidates = _description_candidates(base, tip, origin)
+        if rule == "description":
+            candidates = _expected_descriptions(b, t, o)
         else:
-            candidates = [sides[1], sides[2]]
-        if sides[3] in candidates:
-            resolved.extend(sides[3])
-        elif sides[3]:
-            extra.update(sides[3])
+            candidates = [t if t != b else o]
+        if r in candidates:
+            resolved.extend(r)
         else:
-            missing.update(sides[1] or sides[2])
+            extra.update(r)
+            missing.update(candidates[0])
 
-    def rest(text: str) -> Counter[str]:
-        return Counter(
-            line for line in _nonblank_lines(text).elements() if not line.startswith(_RESOLVED_PREFIXES)
-        )
+    def rest(lines: list[str]) -> Counter[str]:
+        return Counter(line for line in lines if line.strip())
 
-    b, t, o, r = (rest(text) for text in (base, tip, origin, result))
+    b, t, o, r = (rest(part[2]) for part in split)
     s_add, o_add = t - b, o - b
     s_del, o_del = b - t, b - o
     # A line both sides added, or both sides deleted copies of, is ambiguous:
@@ -2040,6 +2208,23 @@ def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, li
     }
 
 
+def _effective_base(base: str, tip: str, origin: str) -> str:
+    """``merge-base(tip, origin)`` when ``base`` is a strict ancestor of it, else ``base``.
+
+    A session that pushed some commits mid-session shares them with origin; the
+    caller's ``base`` (before the session's first commit) would then count those
+    commits' content as additions on both sides. A merge-base that is not a
+    descendant of ``base`` is left alone: the caller's ``base`` stands.
+    """
+    proc = _run_git("merge-base", tip, origin)
+    if proc.returncode != 0:
+        return base
+    merge_base = proc.stdout.strip()
+    if merge_base != base and _is_ancestor(base, merge_base):
+        return merge_base
+    return base
+
+
 def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any]:
     """Check a merge result against both sides, file by file.
 
@@ -2047,6 +2232,11 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
     ``compare_texts`` for the per-file rule. A line-level check cannot see
     reordering; it catches the losses and inventions (a dropped addition, a
     duplicated sentence).
+
+    ``base`` is the session base the caller names ("the commit before this
+    session's first commit"). When the session already published some commits,
+    origin holds them too, so the three-way base is ``merge-base(tip, origin)``
+    -- used whenever ``base`` is a strict ancestor of it (``effective_base``).
 
     Parameters
     ----------
@@ -2056,8 +2246,10 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
     Returns
     -------
     dict
-        ``{"ok": bool, "files": {path: {"missing", "extra", "ambiguous"}}}``.
+        ``{"ok": bool, "effective_base": sha, "files": {path: {"missing",
+        "extra", "ambiguous", "resolved"}}}``.
     """
+    base = _effective_base(base, tip, origin)
     paths = sorted(
         set(_name_status(base, tip))
         | set(_name_status(base, origin))
@@ -2067,10 +2259,10 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
     files: dict[str, dict[str, list[str]]] = {}
     for path in paths:
         files[path] = compare_texts(
-            *(_blob_or_empty(rev, path) for rev in (base, tip, origin, result))
+            *(_blob_or_empty(rev, path) for rev in (base, tip, origin, result)), path
         )
     ok = all(not entry["missing"] and not entry["extra"] for entry in files.values())
-    return {"ok": ok, "files": files}
+    return {"ok": ok, "effective_base": base, "files": files}
 
 
 def _clip(line: str, width: int = 100) -> str:
@@ -2127,6 +2319,11 @@ def _main_verify(args: argparse.Namespace) -> int:
         for path, entry in outcome["files"].items():
             for line in entry["ambiguous"]:
                 print(f"  ambiguous (both sides added) {path}: {_clip(line)}")
+        if outcome["effective_base"] != revs["base"]:
+            print(
+                f"note: origin holds later session commits; compared against merge-base "
+                f"{outcome['effective_base'][:12]}, not --base {revs['base'][:12]}"
+            )
         print(f"verify: {'ok' if outcome['ok'] else 'FAIL'} ({len(outcome['files'])} file(s))")
     return 0 if outcome["ok"] else 1
 
