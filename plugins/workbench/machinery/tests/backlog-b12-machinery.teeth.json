@@ -1,0 +1,125 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_vault_query.py",
+    "test_term_tracker.py",
+    "test_classify_message.py",
+    "test_note_lifecycle.py",
+    "test_notebook_distill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_vault_query.py",
+    "test_term_tracker.py",
+    "test_classify_message.py",
+    "test_note_lifecycle.py",
+    "test_notebook_distill.py"
+  ],
+  "mutants": [
+    {
+      "label": "#775 _has_tag: no non-list guard (None tags crash)",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "    if not isinstance(tags, list):\n        return False\n",
+      "replace": ""
+    },
+    {
+      "label": "#770 query_active_work: unstringified date sort key",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "[\"work/active\", \"work/incidents\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"\")), reverse=True):",
+      "replace": "[\"work/active\", \"work/incidents\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: x[1].get(\"date\", \"\"), reverse=True):"
+    },
+    {
+      "label": "#770 query_learning: unstringified date sort key",
+      "file": "../engine/queries/vault_query.py",
+      "oracle": "real",
+      "find": "[\"personal/learning\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: str(x[1].get(\"date\", \"\")), reverse=True):",
+      "replace": "[\"personal/learning\"])\n    rows = []\n    for path, fm in sorted(notes, key=lambda x: x[1].get(\"date\", \"\"), reverse=True):"
+    },
+    {
+      "label": "#772 get_demotions: last-write-wins across casing variants",
+      "file": "../engine/term_tracker.py",
+      "oracle": "real",
+      "find": "max(sessions_lower.get(lowered, count), count)",
+      "replace": "count"
+    },
+    {
+      "label": "#724 classify-message: hardcoded 'thought' default",
+      "file": "../engine/classify-message.py",
+      "oracle": "real",
+      "find": "result.category == DEFAULT_RESULT.category",
+      "replace": "result.category == \"thought\""
+    },
+    {
+      "label": "#773 _frontmatter_end: opening delimiter ignores CR",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "lines[0].rstrip(\"\\r\\n\")",
+      "replace": "lines[0].rstrip(\"\\n\")"
+    },
+    {
+      "label": "#773 _frontmatter_end: closing delimiter ignores CR",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "lines[i].rstrip(\"\\r\\n\")",
+      "replace": "lines[i].rstrip(\"\\n\")"
+    },
+    {
+      "label": "#773 sweep_stale_prep: universal-newline read rewrites CRLF as LF",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "path.open(encoding=\"utf-8\", newline=\"\")",
+      "replace": "path.open(encoding=\"utf-8\")"
+    },
+    {
+      "label": "#773 sweep_stale_prep: status rewrite drops original line ending",
+      "file": "../engine/note_lifecycle.py",
+      "oracle": "real",
+      "find": "newline = old[len(old.rstrip(\"\\r\\n\")):]",
+      "replace": "newline = \"\\n\""
+    },
+    {
+      "label": "#1064 header strip: not anchored (original whole-body scan)",
+      "file": "../engine/notebook-distill.py",
+      "oracle": "real",
+      "find": "        kept = list(lines)\n        for prefix in (\"# Session Notebook\", \"_Live session state\"):\n            first = next((i for i, ln in enumerate(kept) if ln.strip()), None)\n            if first is None or not kept[first].startswith(prefix):\n                break\n            del kept[: first + 1]\n",
+      "replace": "        kept: list[str] = []\n        dropped = 0\n        for ln in lines:\n            if dropped < 2 and (ln.startswith(\"# Session Notebook\") or ln.startswith(\"_Live session state\")):\n                dropped += 1\n                continue\n            kept.append(ln)\n"
+    },
+    {
+      "label": "#1064 header strip: echoed header never stripped",
+      "file": "../engine/notebook-distill.py",
+      "oracle": "real",
+      "find": "            del kept[: first + 1]\n",
+      "replace": "            break\n"
+    }
+  ]
+}
