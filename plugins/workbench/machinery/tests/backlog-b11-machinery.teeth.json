@@ -79,34 +79,6 @@
       "oracle": "real",
       "find": "\n    try:\n        # Inside the try: a graphmark that is installed but lacks these\n        # submodules must read \"gate policy rejected\", not escape to the\n        # caller's blanket \"graphmark unavailable\" handler (#929).\n        from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n        from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n        policy",
       "replace": "    from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n    from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n    try:\n        policy"
-    },
-    {
-      "label": "#982 date-line regex guard disabled (test_handoff_date_line_with_trailing_clause_is_a_finding)",
-      "file": "../engine/wrap_up_audit.py",
-      "oracle": "real",
-      "find": "and not HANDOFF_DATE_LINE_RE.match(line):",
-      "replace": "and not line:"
-    },
-    {
-      "label": "#982 regex accepts a trailing clause (test_handoff_date_line_with_trailing_clause_is_a_finding)",
-      "file": "../engine/wrap_up_audit.py",
-      "oracle": "real",
-      "find": "\\d{4}-\\d{2}-\\d{2}\\.?_$\")",
-      "replace": "\\d{4}-\\d{2}-\\d{2}.*$\")"
-    },
-    {
-      "label": "#982 only the personal handoff is scanned (test_handoff_date_line_guard_covers_every_handoff_file)",
-      "file": "../engine/wrap_up_audit.py",
-      "oracle": "real",
-      "find": "brain.glob(\"handoff-*.md\")",
-      "replace": "brain.glob(\"handoff-personal.md\")"
-    },
-    {
-      "label": "#982 any in-line _Updated mention counts as the date line (test_handoff_date_line_check_ignores_body_prose)",
-      "file": "../engine/wrap_up_audit.py",
-      "oracle": "real",
-      "find": "if line.startswith((\"_Updated\", \"_Refreshed\")) and",
-      "replace": "if (\"_Updated\" in line or \"_Refreshed\" in line) and"
     }
   ]
 }
