@@ -39,6 +39,33 @@ def _link_targets(text: str) -> list[str]:
     return [m.split("|", 1)[0].strip() for m in WIKILINK_CAPTURE_RE.findall(text)]
 
 
+def extract_broken_displays(entries: object) -> list[str]:
+    """Pull the ``display`` strings out of one note's graphmark broken-link entries.
+
+    The single place that reads graphmark's broken-link entry shape
+    (``{"display": str, ...}``). Anything that is not a list of such dicts is
+    ignored, so a malformed or renamed entry degrades to "nothing found" rather
+    than raising.
+
+    Parameters
+    ----------
+    entries : object
+        One note's value from the raw graphmark broken-link mapping.
+
+    Returns
+    -------
+    list[str]
+        The display strings, in order, duplicates preserved.
+    """
+    if not isinstance(entries, list):
+        return []
+    return [
+        entry["display"]
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("display"), str)
+    ]
+
+
 def has_candidate_memory_link(
     note_path: Path,
     vault_root: Path,
@@ -89,11 +116,7 @@ def unpromoted_memory_links(
         if raw is None:
             return []
         broken = {
-            note: [
-                e.get("display")
-                for e in entries
-                if isinstance(e, dict) and isinstance(e.get("display"), str)
-            ]
+            note: extract_broken_displays(entries)
             for note, entries in raw.items()
             if isinstance(entries, list)
         }
