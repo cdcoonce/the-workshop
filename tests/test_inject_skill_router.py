@@ -256,3 +256,74 @@ class TestRouterBodyDeduplication:
 
         assert main(session_id="s-1") == 0
         assert "Route skills before responding." in capsys.readouterr().out
+
+
+class TestRouterBodyOnClearAndCompact:
+    """A clear/compact refire of a claimed session must re-emit the router body.
+
+    ``session_id`` persists across ``/clear`` and compaction, and compaction is
+    exactly when the body may have been summarized out of context.
+    """
+
+    def _setup(self, monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        _write_skill(root, "# Using Workflow\n\nRoute skills before responding.\n")
+        _write_conventions(root, ["Inventory before reorganizing"])
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(root))
+        monkeypatch.setenv("TMPDIR", str(root.parent / "tmp"))
+
+    @pytest.mark.parametrize("source", ["compact", "clear"])
+    def test_refire_after_startup_re_emits_the_body(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        source: str,
+    ) -> None:
+        self._setup(monkeypatch, tmp_path / "p")
+
+        assert main(session_id="s-1", source="startup") == 0
+        capsys.readouterr()
+        assert main(session_id="s-1", source=source) == 0
+
+        assert "Route skills before responding." in capsys.readouterr().out
+
+    def test_duplicate_startup_is_still_suppressed(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        self._setup(monkeypatch, tmp_path / "p")
+
+        assert main(session_id="s-1", source="startup") == 0
+        capsys.readouterr()
+        assert main(session_id="s-1", source="startup") == 0
+
+        assert "Route skills before responding." not in capsys.readouterr().out
+
+    def test_script_reads_source_from_the_stdin_payload(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import os
+        import subprocess
+        import sys
+
+        self._setup(monkeypatch, tmp_path / "p")
+        env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(tmp_path / "p")}
+
+        def fire(source: str) -> str:
+            payload = json.dumps({"session_id": "s-9", "source": source})
+            return subprocess.run(
+                [sys.executable, str(HOOK_PATH)],
+                input=payload,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=env,
+            ).stdout
+
+        assert "Route skills before responding." in fire("startup")
+        assert "Route skills before responding." not in fire("startup")
+        assert "Route skills before responding." in fire("compact")
+        assert "Route skills before responding." in fire("clear")
