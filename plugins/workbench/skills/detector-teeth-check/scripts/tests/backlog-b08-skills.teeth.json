@@ -1,7 +1,28 @@
 {
   "runner": "pytest",
-  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
-  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"
+  ],
   "mutants": [
     {
       "label": "#1073 missing-key guard removed: raw indexing raises KeyError again",
@@ -23,6 +44,27 @@
       "oracle": "real",
       "find": "label = _require_key(raw, \"label\", \"<unlabelled>\")",
       "replace": "label = raw[\"label\"]"
+    },
+    {
+      "label": "#1073 falsy guard refuses an empty replace",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if key not in raw:\n",
+      "replace": "    if not raw.get(key):\n"
+    },
+    {
+      "label": "#1073 null guard refuses a present-but-null value",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if key not in raw:\n",
+      "replace": "    if raw.get(key) is None:\n"
+    },
+    {
+      "label": "#1073 refusal drops the mutant label from the message",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "f\"mutant {label!r} is missing required key {key!r}\"",
+      "replace": "f\"mutant is missing required key {key!r}\""
     }
   ]
 }

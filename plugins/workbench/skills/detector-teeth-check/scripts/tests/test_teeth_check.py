@@ -1614,7 +1614,7 @@ def test_load_spec_refuses_a_mutant_missing_a_required_key(
 ) -> None:
     m = _mutant()
     del m[key]
-    with pytest.raises(SpecError, match=key):
+    with pytest.raises(SpecError, match=f"required key '{key}'"):
         load_spec(_write_spec(tmp_path, [m]))
 
 
@@ -1628,4 +1628,26 @@ def test_main_refuses_a_mutant_missing_a_required_key(
     assert code == 2
     err = capsys.readouterr().err
     assert err.startswith("refusing to run: ")
-    assert key in err
+    assert f"required key '{key}'" in err
+
+
+@pytest.mark.parametrize("key", ["file", "find", "replace"])
+def test_missing_key_refusal_names_the_offending_mutant_label(
+    tmp_path: Path, key: str
+) -> None:
+    m = _mutant(label="the-offending-row")
+    del m[key]
+    with pytest.raises(SpecError, match="the-offending-row"):
+        load_spec(_write_spec(tmp_path, [m]))
+
+
+def test_load_spec_accepts_an_empty_replace(tmp_path: Path) -> None:
+    spec = load_spec(_write_spec(tmp_path, [_mutant(replace="")]))
+    assert spec.mutants[0].replace == ""
+
+
+def test_load_spec_passes_a_null_replace_through_unrefused(tmp_path: Path) -> None:
+    # Issue #1073 is silent on null; this pins current behavior (key present
+    # means accepted), it does not endorse it.
+    spec = load_spec(_write_spec(tmp_path, [_mutant(replace=None)]))
+    assert spec.mutants[0].replace is None
