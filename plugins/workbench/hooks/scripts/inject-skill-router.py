@@ -13,7 +13,9 @@ engineering instructions (purely additive — it never replaces the base prompt)
 
 The router body is byte-identical in every preset that ships this hook, and Claude
 Code runs each installed copy on SessionStart — so the body is claimed once per
-`session_id` and later copies emit only their own conventions. Deduplication is a
+`session_id` and later copies emit only their own conventions. A `clear` or `compact`
+refire of an already-claimed session re-emits the body, since the earlier copy may
+no longer be in context. Deduplication is a
 pure optimization: if the claim cannot be recorded, the body is emitted anyway.
 
 Cross-platform by design: pure Python via `uv run`, no bash. Fails safe — any error
@@ -33,6 +35,9 @@ import tempfile  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 
+_REFIRE_SOURCES = frozenset({"clear", "compact"})
+
+
 def _strip_frontmatter(text: str) -> str:
     """Return the markdown body with a leading YAML frontmatter block removed."""
     if text.startswith("---"):
@@ -48,14 +53,18 @@ def _format_conventions(conventions: list[str]) -> str:
     return f"## Project Conventions\n\n{bullets}"
 
 
-def _claim_router_body(session_id: str | None) -> bool:
+def _claim_router_body(session_id: str | None, source: str | None = None) -> bool:
     """Return True if this process is the one that should emit the router body.
+
+    A ``clear`` or ``compact`` refire always claims: ``session_id`` persists across
+    both, and compaction is when the body may have been summarized out of context.
+    Only a repeated startup (or an unknown source) is deduplicated.
 
     The claim is an exclusive-create of a per-session marker, so concurrent hook
     copies cannot both win. Any failure to record the claim returns True: a
     duplicated router is a wasted paragraph, a missing one changes behavior.
     """
-    if not session_id:
+    if not session_id or source in _REFIRE_SOURCES:
         return True
     try:
         # `TMPDIR` first, uncached: `tempfile.gettempdir()` memoizes its answer and
@@ -79,25 +88,31 @@ def _claim_router_body(session_id: str | None) -> bool:
     return True
 
 
-def _read_session_id() -> str | None:
-    """Read `session_id` from the SessionStart payload, if a payload arrives at all."""
+def _read_payload() -> tuple[str | None, str | None]:
+    """Read ``(session_id, source)`` from the SessionStart payload, if one arrives."""
     try:
         if sys.stdin is None or sys.stdin.isatty():
-            return None
+            return None, None
         raw = sys.stdin.read()
     except (OSError, ValueError):
-        return None
+        return None, None
     if not raw.strip():
-        return None  # Codex delivers hooks no stdin payload.
+        return None, None  # Codex delivers hooks no stdin payload.
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        return None
-    session_id = data.get("session_id") if isinstance(data, dict) else None
-    return session_id if isinstance(session_id, str) else None
+        return None, None
+    if not isinstance(data, dict):
+        return None, None
+    session_id = data.get("session_id")
+    source = data.get("source")
+    return (
+        session_id if isinstance(session_id, str) else None,
+        source if isinstance(source, str) else None,
+    )
 
 
-def main(session_id: str | None = None) -> int:
+def main(session_id: str | None = None, source: str | None = None) -> int:
     root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if not root:
         return 0  # fail safe: nothing to inject
@@ -128,7 +143,7 @@ def main(session_id: str | None = None) -> int:
     formatted_conventions = _format_conventions(conventions)
     context = (
         f"{body}\n\n{formatted_conventions}"
-        if _claim_router_body(session_id)
+        if _claim_router_body(session_id, source)
         else formatted_conventions
     )
 
@@ -147,7 +162,7 @@ def main(session_id: str | None = None) -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main(session_id=_read_session_id()))
+        sys.exit(main(*_read_payload()))
     except Exception:
         # Never let the skill router hook break a session.
         sys.exit(0)
