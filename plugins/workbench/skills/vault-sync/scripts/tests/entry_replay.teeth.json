@@ -270,7 +270,7 @@
       "label": "a replaced handoff item that origin changed or removed is overwritten anyway",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        run = list(range(i1, i2))\n        if any(index not in mapping for index in run) or any(\n            mapping[b] + 1 != mapping[a] for a, b in zip(run[1:], run, strict=False)\n        ):\n            raise RefusalError(\n                f\"{path}: in '## {name}', the session's changed item \"\n                f\"{base_items[i1][0][:60]!r} is not byte-identical, aligned, and contiguous \"\n                \"on origin (edited or removed there); escalating\"\n            )\n",
+      "find": "        run = list(range(i1, i2))\n        if any(index not in mapping for index in run) or any(\n            mapping[b] + 1 != mapping[a] for a, b in zip(run[1:], run, strict=False)\n        ):\n            raise RefusalError(\n                f\"{path}: in '## {name}', the session's changed item \"\n                f\"{_label(bc[i1])!r} is not byte-identical, aligned, \"\n                \"and contiguous on origin (edited or removed there); escalating\"\n            )\n",
       "replace": "        run = list(range(i1, i2))\n        for index in run:\n            mapping.setdefault(index, 0)\n"
     },
     {
@@ -284,22 +284,22 @@
       "label": "F2: handoff items align by content (first identical origin item) instead of by position",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    matcher = difflib.SequenceMatcher(None, base_items, origin_items, autojunk=False)\n    for tag, i1, i2, j1, _j2 in matcher.get_opcodes():\n        if tag == \"equal\":\n            for offset in range(i2 - i1):\n                mapping[i1 + offset] = j1 + offset\n    return mapping",
-      "replace": "    for index, item in enumerate(base_items):\n        if item in origin_items:\n            mapping[index] = origin_items.index(item)\n    return mapping"
+      "find": "    matcher = difflib.SequenceMatcher(None, base, origin, autojunk=False)\n    for tag, i1, i2, j1, _j2 in matcher.get_opcodes():\n        if tag == \"equal\":\n            for offset in range(i2 - i1):\n                mapping[i1 + offset] = j1 + offset\n    return mapping",
+      "replace": "    for index, item in enumerate(base):\n        if item in origin:\n            mapping[index] = origin.index(item)\n    return mapping"
     },
     {
       "label": "F2: a handoff insertion whose predecessor origin changed is dropped at the section top",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            else:\n                raise RefusalError(\n                    f\"{path}: in '## {name}', the item before the session's insertion \"\n                    f\"({base_items[i1 - 1][0][:60]!r}) is not unchanged on origin \"\n                    \"(byte-identical and aligned); escalating\"\n                )\n",
+      "find": "            else:\n                raise RefusalError(\n                    f\"{path}: in '## {name}', the item before the session's insertion \"\n                    f\"({_label(bc[i1 - 1])!r}) is not unchanged on origin \"\n                    \"(byte-identical and aligned); escalating\"\n                )\n",
       "replace": "            else:\n                anchor = 0\n"
     },
     {
       "label": "F6: an item both sides inserted is inserted again (duplicated)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            fresh = [\n                item\n                for item in tip_items[j1:j2]\n                if not any(line.strip() for line in item) or item not in origin_items\n            ]",
-      "replace": "            fresh = list(tip_items[j1:j2])"
+      "find": "            if _has_content(item[0]) and origin_added[item[0]] > 0:\n",
+      "replace": "            if False:\n"
     },
     {
       "label": "F8: handoff items ignore code fences (a blank or bullet line in a fence opens an item)",
@@ -330,11 +330,11 @@
       "replace": "        at = 0\n"
     },
     {
-      "label": "F3: the whole block is re-sorted newest-first again, rewriting origin's order",
+      "label": "A2: untouched entries are re-emitted blank-normalized instead of spliced byte-identically",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "    placed.extend(slots.get(len(origin_entries), []))\n    return placed\n",
-      "replace": "    placed.extend(slots.get(len(origin_entries), []))\n    placed.sort(key=lambda chunk: chunk.day, reverse=True)\n    return placed\n"
+      "find": "        if replacement is None:\n            out.extend(chunk.lines)\n",
+      "replace": "        if replacement is None:\n            out.extend(chunk.key)\n            out.append(\"\")\n"
     },
     {
       "label": "F3: a new entry with an equal date goes below origin's same-date entry (strictly-older rule)",
@@ -347,15 +347,15 @@
       "label": "an in-place edit that also changed the heading line is treated as a deletion",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            if (\n                len(lost) == 1\n                and len(unpaired_tip) == 1\n                and _same_entry_edited(lost[0], unpaired_tip[0])\n            ):\n                replaced.append((lost.pop(), unpaired_tip.pop()))\n",
-      "replace": ""
+      "find": "            pairs, lost, unpaired_tip = _pair_leftovers(lost, unpaired_tip)\n",
+      "replace": "            pairs = []\n"
     },
     {
-      "label": "F5: the single leftover entry is paired whatever it contains (an overwrite reads as an edit)",
+      "label": "F5: a leftover entry is paired whatever it contains (an overwrite reads as an edit)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "                and _same_entry_edited(lost[0], unpaired_tip[0])\n",
-      "replace": "                and True\n"
+      "find": "        id(old): [new for new in unpaired_tip if _same_entry_edited(old, new)] for old in lost\n",
+      "replace": "        id(old): [new for new in unpaired_tip] for old in lost\n"
     },
     {
       "label": "F5: the date check is dropped when pairing a leftover entry",
@@ -389,15 +389,15 @@
       "label": "F1: --verify is blind to lost untouched content (only lost additions count as missing)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        low = kept[line] + (\n            max(s_add[line], o_add[line]) if line in ambiguous else s_add[line] + o_add[line]\n        )\n",
-      "replace": "        low = (\n            max(s_add[line], o_add[line]) if line in ambiguous else s_add[line] + o_add[line]\n        )\n"
+      "find": "        low = kept_low + add_low\n",
+      "replace": "        low = add_low\n"
     },
     {
       "label": "F1: a line both sides added must appear exactly twice instead of once or twice",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            max(s_add[line], o_add[line]) if line in ambiguous else s_add[line] + o_add[line]\n        )\n        high",
-      "replace": "            s_add[line] + o_add[line]\n        )\n        high"
+      "find": "        add_low = max(s_add[line], o_add[line]) if both_add else s_add[line] + o_add[line]\n",
+      "replace": "        add_low = s_add[line] + o_add[line]\n"
     },
     {
       "label": "--verify no longer reports a line the result holds too often",
@@ -433,6 +433,153 @@
       "oracle": "real",
       "find": "    if not checked and not findings:\n",
       "replace": "    if False:\n"
+    },
+    {
+      "label": "A1: the replay's self-check is disabled (a lossy merge is written)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if verdict[\"missing\"] or verdict[\"extra\"]:\n        raise RefusalError(_self_check_message(path, verdict))\n",
+      "replace": "    if False:\n        raise RefusalError(_self_check_message(path, verdict))\n"
+    },
+    {
+      "label": "A1: both sides deleting copies of a repeated line is no longer ambiguous",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        kept_low = max(0, b[line] - s_del[line] - o_del[line]) if both_del else kept_high\n",
+      "replace": "        kept_low = kept_high\n"
+    },
+    {
+      "label": "A2: a new entry always gets a blank separator, even in a tight list",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            separator = [\"\"] if _trailing_blanks(neighbour) else []\n",
+      "replace": "            separator = [\"\"]\n"
+    },
+    {
+      "label": "A2: a replaced entry loses origin's trailing blank lines",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            out.extend(replacement.key)\n            out.extend(_trailing_blanks(chunk))\n",
+      "replace": "            out.extend(replacement.key)\n"
+    },
+    {
+      "label": "A2: the block preamble loses its trailing blank line",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    out = list(block.preamble)\n    if not entries:",
+      "replace": "    out = _strip_trailing_blanks(list(block.preamble))\n    if not entries:"
+    },
+    {
+      "label": "A2: an end-of-file loose list gets no blank before a new last entry",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            for new_chunk in incoming:\n                out.append(\"\")\n                out.extend(new_chunk.key)\n",
+      "replace": "            for new_chunk in incoming:\n                out.extend(new_chunk.key)\n"
+    },
+    {
+      "label": "P1: 'already present' matches any origin item, not only items origin added",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        oc[j] for j in range(len(oc)) if j not in mapped_origin and _has_content(oc[j])\n",
+      "replace": "        oc[j] for j in range(len(oc)) if _has_content(oc[j])\n"
+    },
+    {
+      "label": "P1: one origin-added item absorbs every identical session item (not at most once)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                origin_added[item[0]] -= 1\n",
+      "replace": "                pass\n"
+    },
+    {
+      "label": "P2: a file ending inside an open code fence is no longer refused",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if open_at_end:\n        raise RefusalError(",
+      "replace": "    if False:\n        raise RefusalError("
+    },
+    {
+      "label": "P2: --lint no longer reports an unclosed fence in a ledger",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if _fence_scan(doc.lines)[1]:\n        findings.append(_OPEN_FENCE_FINDING.format(path=path, what=\"ledger\"))\n",
+      "replace": "    if False:\n        findings.append(_OPEN_FENCE_FINDING.format(path=path, what=\"ledger\"))\n"
+    },
+    {
+      "label": "P6: --lint no longer reports an unclosed fence in a handoff",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    if _fence_scan(body)[1]:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "P6: --lint no longer counts the section headings an open fence hides",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if duplicates:\n            findings.append(f\"{path}: duplicate handoff section heading(s) {duplicates}\")\n",
+      "replace": ""
+    },
+    {
+      "label": "P6: --lint no longer reports a duplicated anchor path",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    try:\n        _unique_spans(doc, \"file\", path)\n    except RefusalError as exc:\n        findings.append(str(exc))\n",
+      "replace": ""
+    },
+    {
+      "label": "P3: a bodyless entry is paired on a same-date start line however different",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    return difflib.SequenceMatcher(None, old_start, new_start).ratio() >= 0.6\n",
+      "replace": "    return True\n"
+    },
+    {
+      "label": "P5a: a leftover base entry with several candidate tip entries is paired with the first",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if len(options) == 1 and claims[id(options[0])] == 1:\n",
+      "replace": "        if options:\n"
+    },
+    {
+      "label": "P4: a twin item is no longer ambiguous when origin left the section alone... or changed it",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            origin_changed\n            and _has_content(content)\n",
+      "replace": "            _has_content(content)\n"
+    },
+    {
+      "label": "P4: a session-changed item with a twin is placed anyway",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if any(twinned(index) for index in run):\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "P4: an insertion anchored on a twin item is placed anyway",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                if twinned(i1 - 1):\n",
+      "replace": "                if False:\n"
+    },
+    {
+      "label": "P5b: a change both sides made identically is reported as a conflict again",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if any(\n            o_tag == tag and (oi1, oi2) == (i1, i2)",
+      "replace": "        if False and any(\n            o_tag == tag and (oi1, oi2) == (i1, i2)"
+    },
+    {
+      "label": "P5c: handoff items compare with their trailing blank lines (loose lists collide)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        items.append((tuple(lines[:stop]), len(lines) - stop))\n",
+      "replace": "        items.append((tuple(lines), 0))\n"
+    },
+    {
+      "label": "P7: --verify checks only the paths changed base->tip and base->origin",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        | set(_name_status(base, result))\n        | set(_name_status(origin, result))\n",
+      "replace": ""
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",

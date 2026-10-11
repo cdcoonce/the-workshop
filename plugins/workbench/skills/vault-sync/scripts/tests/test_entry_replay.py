@@ -2934,6 +2934,14 @@ def test_p1_an_item_both_sides_added_inside_a_replace_appears_once() -> None:
     assert merged == _hd("## S\n\n- A\n- Q\n- B2\n- C\n")
 
 
+def test_p1_each_origin_added_item_absorbs_at_most_one_session_duplicate() -> None:
+    b = _hd("## S\n\n- A\n")
+    o = _hd("## S\n\n- A\n- Q\n")
+    t = _hd("## S\n\n- A\n- Q\n- Q\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    assert merged.count("- Q\n") == 2
+
+
 # P2 -- unclosed fences ---------------------------------------------------------
 
 F_ENTRY = "### F (2026-10-10)\n\n- step:\n    ```bash\n    echo hi\n  ```\n- then done\n\n"
@@ -3099,6 +3107,7 @@ def test_p6_lint_reports_an_unclosed_fence_in_a_ledger_and_a_handoff(tmp_path: P
     assert result.returncode == 1
     messages = [item["message"] for item in json.loads(result.stdout)["findings"]]
     assert sum("unclosed or unrecognized code fence" in m for m in messages) == 2
+    assert any("duplicate handoff section" in m for m in messages)
 
 
 # P7 -- --verify covers every path the result touches ---------------------------
