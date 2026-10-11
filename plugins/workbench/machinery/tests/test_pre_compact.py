@@ -91,6 +91,7 @@ class TestPreCompactMain:
 
         assert result.returncode == 0, result.stderr
         assert result.stdout == ""
+        assert result.stderr == ""  # a swallowed crash would still exit 0
         assert _backups(vault) == []
 
     @pytest.mark.parametrize("stdin", ["", "   \n", "{not json"], ids=["empty", "blank", "malformed"])
@@ -99,6 +100,7 @@ class TestPreCompactMain:
 
         assert result.returncode == 0, result.stderr
         assert result.stdout == ""
+        assert result.stderr == ""  # a swallowed crash would still exit 0
         assert _backups(vault) == []
 
     def test_no_vault_root_returns_without_backing_up(self, tmp_path: Path) -> None:
@@ -112,4 +114,5 @@ class TestPreCompactMain:
 
         assert result.returncode == 0, result.stderr
         assert result.stdout == ""
+        assert result.stderr == ""  # a swallowed crash would still exit 0
         assert not (elsewhere / "thinking").exists()

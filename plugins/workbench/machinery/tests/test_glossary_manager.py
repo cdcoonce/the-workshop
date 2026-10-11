@@ -332,3 +332,23 @@ class TestPipeEscaping:
         entry = next(e for e in parse_quick_reference(quick_ref) if e.name == "PipeTerm")
 
         assert entry.col2 == "x | y"
+
+    def test_glossary_term_with_pipe_is_deduped_and_removable(
+        self, glossary: Path, vault: Path
+    ) -> None:
+        add_glossary_entry(vault, "Split|Term", "m", "c")
+        add_glossary_entry(vault, "split|term", "other", "other")
+
+        assert [e.term for e in parse_glossary(glossary)].count("Split|Term") == 1
+        assert remove_glossary_entry(vault, "Split|Term") is True
+        assert "Split|Term" not in [e.term for e in parse_glossary(glossary)]
+
+    def test_quick_ref_name_with_pipe_is_deduped_and_removable(
+        self, quick_ref: Path, vault: Path
+    ) -> None:
+        add_quick_ref_entry(vault, "People", "Pipe|Name", "a", "b")
+        add_quick_ref_entry(vault, "People", "pipe|name", "c", "d")
+
+        names = [e.name for e in parse_quick_reference(quick_ref)]
+        assert names.count("Pipe|Name") == 1
+        assert remove_quick_ref_entry(vault, "People", "Pipe|Name") is True
