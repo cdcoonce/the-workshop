@@ -169,7 +169,7 @@ def test_identical_rewrite_is_not_skipped(home: Path, vault: Path) -> None:
     assert target.stat().st_mtime_ns != 1, "an identical payload was skipped instead of rewritten"
 
 
-@pytest.mark.parametrize("stdin", ["", "not json", "[]", json.dumps({"session_id": 5})])
+@pytest.mark.parametrize("stdin", ["", "not json", "[]", json.dumps({"session_id": 5}), json.dumps({"session_id": ""})])
 def test_session_falls_back_to_a_utc_timestamp_without_a_session_id(
     home: Path, vault: Path, stdin: str
 ) -> None:
@@ -220,3 +220,27 @@ def test_scaffolded_gitignore_covers_every_per_platform_breadcrumb(
     )
 
     assert result.returncode == 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX fd semantics")
+def test_closed_stdin_still_runs_the_engine(home: Path, vault: Path) -> None:
+    """With fd 0 closed, ``sys.stdin`` is None; the breadcrumb must not abort the hook."""
+    root = _fake_plugin(home, ROOTS["codex"])
+    (root / "machinery" / "engine" / "session-start.py").write_text(
+        "import os\n"
+        "open(os.path.join(os.environ['CLAUDE_PROJECT_DIR'], 'engine-stdin.txt'), 'w').write('ran')\n"
+    )
+    env = {"PATH": os.environ["PATH"], "HOME": str(home), "CLAUDE_PROJECT_DIR": str(vault)}
+
+    result = subprocess.run(
+        [sys.executable, str(root / "hooks" / "scripts" / "vault-session-start.py")],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+        preexec_fn=lambda: os.close(0),
+    )
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
+    assert (vault / "engine-stdin.txt").exists()

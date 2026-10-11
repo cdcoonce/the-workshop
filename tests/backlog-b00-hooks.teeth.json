@@ -237,6 +237,55 @@
       "oracle": "real",
       "find": ".vault/plugin-state.*.json\n",
       "replace": ""
+    },
+    {
+      "label": "609 copy entries not skipped [predicted: test_signature_does_not_hash_a_copys_original_path]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "if b\"R\" in entry[:2] or b\"C\" in entry[:2]:",
+      "replace": "if b\"R\" in entry[:2]:"
+    },
+    {
+      "label": "609 non-zero status ignored [predicted: test_signature_is_none_outside_a_repo]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "    if status.returncode != 0:\n        return None\n\n    # `-z`",
+      "replace": "    # `-z`"
+    },
+    {
+      "label": "609 OSError on vanished file propagates [predicted: test_signature_tolerates_a_deleted_tracked_file]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "        except OSError:\n            pass\n    return hasher",
+      "replace": "        except FileNotFoundError:\n            raise\n    return hasher"
+    },
+    {
+      "label": "739 timeout param ignored [predicted: test_run_git_passes_the_timeout_through]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "timeout=timeout,\n        )\n    except (OSError",
+      "replace": "timeout=10,\n        )\n    except (OSError"
+    },
+    {
+      "label": "739 OSError not caught [predicted: test_run_git_returns_none_when_git_is_missing]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "except (OSError, subprocess.TimeoutExpired):\n        return None\n    if result.returncode != 0:\n        return None\n    return result.stdout.strip()",
+      "replace": "except subprocess.TimeoutExpired:\n        return None\n    if result.returncode != 0:\n        return None\n    return result.stdout.strip()"
+    },
+    {
+      "label": "628 anchor dropped [predicted: test_done_mid_sentence_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "done\\.?\\s*$)",
+      "replace": "done\\.?)"
+    },
+    {
+      "label": "894: closed stdin (sys.stdin None) unguarded [predicted: test_closed_stdin_still_runs_the_engine]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "if sys.stdin is not None and not sys.stdin.isatty():",
+      "replace": "if not sys.stdin.isatty():"
     }
   ]
 }

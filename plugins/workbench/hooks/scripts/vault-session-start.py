@@ -49,7 +49,7 @@ def _session_marker() -> str:
     parses the same stream, still sees it.
     """
     raw = ""
-    if not sys.stdin.isatty():
+    if sys.stdin is not None and not sys.stdin.isatty():
         raw = sys.stdin.read()
         sys.stdin = io.StringIO(raw)
     try:

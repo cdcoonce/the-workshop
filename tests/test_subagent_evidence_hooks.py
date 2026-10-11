@@ -572,3 +572,104 @@ def test_signature_does_not_hash_a_renames_original_path(tmp_path: Path) -> None
     expected = hashlib.sha256(status + (tmp_path / "new.txt").read_bytes()).hexdigest()
 
     assert working_tree_signature(tmp_path) == expected
+
+
+def test_signature_tolerates_a_deleted_tracked_file(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    (tmp_path / "README.md").write_text("changed\n")
+    before = working_tree_signature(tmp_path)
+
+    (tmp_path / "README.md").unlink()
+    after = working_tree_signature(tmp_path)
+
+    assert isinstance(after, str)
+    assert after != before
+
+
+def test_signature_is_none_outside_a_repo(tmp_path: Path) -> None:
+    assert working_tree_signature(tmp_path) is None
+
+
+def test_signature_does_not_hash_a_copys_original_path(tmp_path: Path) -> None:
+    """A copy entry (status `C`) carries the original path as a second field."""
+    import hashlib
+
+    _init_git_repo(tmp_path)
+    subprocess.run(["git", "config", "status.renames", "copies"], cwd=tmp_path, check=True)
+    (tmp_path / "abc-old.txt").write_text("one\n" * 20)
+    (tmp_path / "-old.txt").write_text("phantom\n")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
+    # git only detects a copy whose source is also modified in the same change.
+    (tmp_path / "abc-old.txt").write_text("one\n" * 20 + "extra\n")
+    (tmp_path / "copy.txt").write_text("one\n" * 20)
+    subprocess.run(["git", "add", "abc-old.txt", "copy.txt"], cwd=tmp_path, check=True)
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert b"C " in status, "fixture must produce a copy entry"
+    # The modified source and the copy are hashed; the copy's original-path field is not.
+    hasher = hashlib.sha256(status)
+    for name in ("abc-old.txt", "copy.txt"):
+        hasher.update((tmp_path / name).read_bytes())
+
+    assert working_tree_signature(tmp_path) == hasher.hexdigest()
+
+
+@pytest.mark.skipif(sys.platform == "darwin", reason="APFS rejects non-UTF-8 file names")
+def test_signature_tolerates_non_utf8_path_bytes(tmp_path: Path) -> None:
+    import os
+
+    _init_git_repo(tmp_path)
+    (tmp_path / os.fsdecode(os.fsencode("bad\udcff.txt"))).write_text("x\n")
+
+    assert isinstance(working_tree_signature(tmp_path), str)
+
+
+def test_run_git_returns_none_when_git_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _missing(*args: object, **kwargs: object) -> None:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(_git_baseline.subprocess, "run", _missing)
+
+    assert _git_baseline._run_git(["rev-parse", "HEAD"], tmp_path) is None
+
+
+def test_run_git_passes_the_timeout_through(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    def _record(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout="ok\n")
+
+    monkeypatch.setattr(_git_baseline.subprocess, "run", _record)
+
+    assert _git_baseline._run_git(["status"], tmp_path, timeout=3) == "ok"
+    assert seen["timeout"] == 3
+
+
+def test_done_mid_sentence_is_not_a_completion_claim(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    start(tmp_path, "agent-mid")
+
+    result = run(
+        STOP_HOOK,
+        {
+            "cwd": str(tmp_path),
+            "agent_id": "agent-mid",
+            "last_assistant_message": "I'm done reading the files, nothing changed yet.",
+        },
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
