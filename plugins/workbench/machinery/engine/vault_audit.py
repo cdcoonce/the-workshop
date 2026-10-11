@@ -22,7 +22,9 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from frontmatter_engine import _parse_frontmatter, validate  # noqa: E402
 from vault_scope_resolved import (  # noqa: E402
+    GRAPH_EXCLUDED_DIRS,
     TRANSIENT_PREFIXES,
+    is_under_excluded_dir,
     is_operating_file,
     is_root_excluded_file,
     is_governed_markdown_note,
@@ -30,11 +32,9 @@ from vault_scope_resolved import (  # noqa: E402
     iter_graph_markdown_notes,
     rel_posix,
 )
-from vault_utils import find_vault_root  # noqa: E402
+from vault_utils import code_spans as _code_spans, find_vault_root  # noqa: E402
 
-WIKILINK_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
-FENCED_CODE_RE = re.compile(r"(^|\n)```.*?(?:\n```|$)", re.DOTALL)
-INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+WIKILINK_WITH_EMBED_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
 OBSIDIAN_BASE_RECOMMENDATIONS = (
     "Decisions.base",
     "People Missing Context.base",
@@ -83,33 +83,78 @@ def _is_transient(rel: str) -> bool:
     return rel.startswith(TRANSIENT_PREFIXES)
 
 
-def _catalog(vault_root: Path) -> tuple[dict[str, Path], dict[str, list[Path]]]:
-    """Build exact/path/stem/normalized resolution catalogs."""
-    exact: dict[str, Path] = {}
-    normalized: dict[str, list[Path]] = defaultdict(list)
+class _Catalog:
+    """Link-resolution index over every resolvable file in a vault.
 
-    resolvable = list({
+    Each namespace maps a lookup key to *all* paths that own it, so a
+    collision is visible to the resolver instead of being overwritten by
+    whichever file happened to be indexed last.
+
+    Attributes
+    ----------
+    by_path : dict of str to list of Path
+        Vault-relative path, with and without its extension.
+    by_name : dict of str to list of Path
+        Bare filename and bare stem.
+    by_alias : dict of str to list of Path
+        Frontmatter ``aliases`` entries and ``name``.
+    normalized : dict of str to list of Path
+        Case/punctuation-insensitive titles (stem, aliases, name).
+    """
+
+    def __init__(self) -> None:
+        self.by_path: dict[str, list[Path]] = defaultdict(list)
+        self.by_name: dict[str, list[Path]] = defaultdict(list)
+        self.by_alias: dict[str, list[Path]] = defaultdict(list)
+        self.normalized: dict[str, list[Path]] = defaultdict(list)
+
+    @staticmethod
+    def _add(index: dict[str, list[Path]], key: str, path: Path) -> None:
+        if path not in index[key]:
+            index[key].append(path)
+
+
+def _catalog(vault_root: Path) -> _Catalog:
+    """Build the path/name/alias/normalized resolution catalog.
+
+    Parameters
+    ----------
+    vault_root : Path
+        Vault root to index.
+
+    Returns
+    -------
+    _Catalog
+        Deterministic index: files are visited in sorted order and every key
+        lists each owning path once.
+    """
+    catalog = _Catalog()
+
+    resolvable = {
         *iter_graph_markdown_notes(vault_root),
         *iter_governed_markdown_notes(vault_root),
-    })
-    resolvable.extend(
+    }
+    # Operating manuals and root docs join the catalog only from outside an
+    # excluded directory: a copy under .claude/worktrees, .venv or
+    # node_modules is somebody else's file, not vault policy.
+    resolvable.update(
         p for p in vault_root.rglob("*.md")
-        if is_operating_file(p) or is_root_excluded_file(p, vault_root)
+        if (is_operating_file(p) or is_root_excluded_file(p, vault_root))
+        and not is_under_excluded_dir(p, vault_root, GRAPH_EXCLUDED_DIRS)
     )
     bases_dir = vault_root / "bases"
     if bases_dir.is_dir():
-        resolvable.extend(sorted(bases_dir.glob("*.base")))
+        resolvable.update(bases_dir.glob("*.base"))
 
-    for path in resolvable:
+    for path in sorted(resolvable):
         rel = rel_posix(path, vault_root)
         if rel is None:
             continue
-        no_ext = rel.rsplit(".", 1)[0]
-        exact[rel] = path
-        exact[no_ext] = path
-        exact[path.name] = path
-        exact[path.stem] = path
-        normalized[_norm_title(path.stem)].append(path)
+        catalog._add(catalog.by_path, rel, path)
+        catalog._add(catalog.by_path, rel.rsplit(".", 1)[0], path)
+        catalog._add(catalog.by_name, path.name, path)
+        catalog._add(catalog.by_name, path.stem, path)
+        catalog._add(catalog.normalized, _norm_title(path.stem), path)
         fm = _frontmatter(path)
         aliases = fm.get("aliases", [])
         if isinstance(aliases, str):
@@ -117,23 +162,68 @@ def _catalog(vault_root: Path) -> tuple[dict[str, Path], dict[str, list[Path]]]:
         if isinstance(aliases, list):
             for alias in aliases:
                 if isinstance(alias, str) and alias.strip():
-                    exact[alias.strip()] = path
-                    normalized[_norm_title(alias)].append(path)
+                    catalog._add(catalog.by_alias, alias.strip(), path)
+                    catalog._add(catalog.normalized, _norm_title(alias), path)
         name = fm.get("name")
         if isinstance(name, str) and name.strip():
-            exact[name.strip()] = path
-            normalized[_norm_title(name)].append(path)
-    return exact, normalized
+            catalog._add(catalog.by_alias, name.strip(), path)
+            catalog._add(catalog.normalized, _norm_title(name), path)
+    return catalog
 
 
-def _resolve(target: str, exact: dict[str, Path], normalized: dict[str, list[Path]]) -> list[Path]:
-    if target in exact:
-        return [exact[target]]
-    if f"{target}.md" in exact:
-        return [exact[f"{target}.md"]]
-    if f"{target}.base" in exact:
-        return [exact[f"{target}.base"]]
-    return normalized.get(_norm_title(Path(target).name), [])
+def _suffix_matches(target: str, vault_root: Path, catalog: _Catalog) -> list[Path]:
+    """Notes whose vault-relative path ends with the link's path segments."""
+    segments = [_norm_title(s) for s in target.split("/") if s.strip()]
+    if not segments:
+        return []
+    matches: list[Path] = []
+    for path in catalog.normalized.get(segments[-1], []):
+        rel = rel_posix(path, vault_root)
+        if rel is None:
+            continue
+        parts = [_norm_title(s) for s in rel.rsplit(".", 1)[0].split("/")]
+        if parts[-len(segments):] == segments and path not in matches:
+            matches.append(path)
+    return matches
+
+
+def _resolve(target: str, vault_root: Path, catalog: _Catalog) -> list[Path]:
+    """Resolve a link target to every note it could name, in precedence order.
+
+    Tiers: full vault-relative path, then path-suffix (for ``/`` targets),
+    then filename/stem, then frontmatter alias/name, then the normalized
+    title. The first tier with any match decides; more than one match in that
+    tier means the link is ambiguous.
+
+    Parameters
+    ----------
+    target : str
+        Link target with alias, heading and ``.md`` already stripped.
+    vault_root : Path
+        Vault root, used to read candidate paths relative to it.
+    catalog : _Catalog
+        Index built by :func:`_catalog`.
+
+    Returns
+    -------
+    list of Path
+        Matching files, sorted; empty when nothing matches.
+    """
+    forms = (target, f"{target}.md", f"{target}.base")
+    for form in forms:
+        if form in catalog.by_path:
+            return sorted(catalog.by_path[form])
+    if "/" in target:
+        matches = _suffix_matches(target, vault_root, catalog)
+        if matches:
+            return sorted(matches)
+        return sorted(catalog.by_alias.get(target, []))
+    for form in forms:
+        if form in catalog.by_name:
+            return sorted(catalog.by_name[form])
+    if target in catalog.by_alias:
+        return sorted(catalog.by_alias[target])
+    return sorted(catalog.normalized.get(_norm_title(Path(target).name), []))
 
 
 def _attachment_exists(target: str, vault_root: Path) -> bool:
@@ -145,12 +235,6 @@ def _attachment_exists(target: str, vault_root: Path) -> bool:
     return any(candidate.is_file() for candidate in candidates)
 
 
-def _code_spans(text: str) -> list[tuple[int, int]]:
-    spans = [(m.start(), m.end()) for m in FENCED_CODE_RE.finditer(text)]
-    spans.extend((m.start(), m.end()) for m in INLINE_CODE_RE.finditer(text))
-    return spans
-
-
 def _inside_spans(pos: int, spans: list[tuple[int, int]]) -> bool:
     return any(start <= pos < end for start, end in spans)
 
@@ -159,7 +243,7 @@ def _links(path: Path) -> list[tuple[bool, str]]:
     out: list[tuple[bool, str]] = []
     text = _read(path)
     code_spans = _code_spans(text)
-    for match in WIKILINK_RE.finditer(text):
+    for match in WIKILINK_WITH_EMBED_RE.finditer(text):
         if _inside_spans(match.start(), code_spans):
             continue
         bang, raw = match.groups()
@@ -246,7 +330,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     governed = iter_governed_markdown_notes(vault_root)
     graph_notes = iter_graph_markdown_notes(vault_root)
-    exact, normalized = _catalog(vault_root)
+    catalog = _catalog(vault_root)
 
     frontmatter_issues: list[Issue] = []
     for path in governed:
@@ -266,7 +350,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
         if len(body) > 300 and not note_links:
             no_wikilinks.append(Issue(rel, f"{len(body)} chars, no wikilinks"))
         for _, target in note_links:
-            matches = _resolve(target, exact, normalized)
+            matches = _resolve(target, vault_root, catalog)
             if len(matches) == 1:
                 incoming[matches[0]].add(path)
             elif len(matches) == 0:
