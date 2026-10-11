@@ -22,6 +22,7 @@ Checks:
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -40,8 +41,10 @@ VALID_ROLES = (
 )
 
 # Link prefixes that are not intra-doc relative paths and should be skipped
-# during link resolution (anchors, project-root-relative paths).
-_LINK_SKIP_PREFIXES = ("#", ".claude/")
+# during link resolution (anchors, project-root-relative paths, and
+# leading-slash root-relative links, which pathlib would resolve from the
+# filesystem root).
+_LINK_SKIP_PREFIXES = ("#", ".claude/", "/")
 
 # Matches any URI scheme prefix (e.g. "http:", "mailto:", "tel:") so such
 # links aren't mistaken for relative file paths.
@@ -150,6 +153,8 @@ def _validate_doc_links(docs_dir: Path, doc_filename: str, label: str) -> list[s
                 # spaces.
                 if link_target and not link_target.startswith(("'", '"')):
                     link_target = link_target.split(None, 1)[0]
+                else:
+                    link_target = _strip_quotes(link_target)
                 if not link_target or _is_out_of_contract(link_target):
                     continue
                 file_part = re.split(r"[#?]", link_target, maxsplit=1)[0]
@@ -232,6 +237,7 @@ def _parse_frontmatter(text: str) -> dict | None:
     result: dict = {}
     current_key: str | None = None
     block_scalar = False
+    current_sub_key: str | None = None
     for line in frontmatter_text.split("\n"):
         stripped = line.strip()
         if not stripped:
@@ -242,6 +248,7 @@ def _parse_frontmatter(text: str) -> dict | None:
         if ":" in stripped and not stripped.startswith("-") and not is_indented:
             key, _, value = stripped.partition(":")
             key = key.strip()
+            current_sub_key = None
             value = re.sub(r"\s+#.*$", "", value.strip())
             if value.startswith("[") and value.endswith("]"):
                 result[key] = [
@@ -271,12 +278,26 @@ def _parse_frontmatter(text: str) -> dict | None:
             if block_scalar:
                 # Fold every indented line into the value, colons and all.
                 result[current_key] = f"{result[current_key]} {stripped}".strip()
+            elif (
+                current_sub_key is not None
+                and isinstance(result[current_key], dict)
+                and (stripped == "-" or stripped.startswith("- "))
+            ):
+                # Nested block-sequence item under the preceding ``sub_key:``.
+                items = result[current_key].get(current_sub_key)
+                if not isinstance(items, list):
+                    items = []
+                    result[current_key][current_sub_key] = items
+                item = re.sub(r"\s+#.*$", "", stripped[1:].strip())
+                if item:
+                    items.append(_strip_quotes(item))
             elif ":" in stripped:
                 if not isinstance(result[current_key], dict):
                     result[current_key] = {}
                 sub_key, _, sub_value = stripped.partition(":")
                 sub_key = sub_key.strip()
                 sub_value = sub_value.strip()
+                current_sub_key = sub_key
                 if sub_value.startswith("[") and sub_value.endswith("]"):
                     result[current_key][sub_key] = [
                         _strip_quotes(v.strip())
@@ -396,10 +417,36 @@ _MACHINERY_EXTERNAL_MODULES = frozenset(
     {"pytest", "hypothesis", "numpy", "yaml", "ragmark"}
 )
 
-# Top-level (column-0) import statements in a machinery test module.
-_MACHINERY_IMPORT_PATTERN = re.compile(
-    r"^(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE
-)
+def _machinery_imported_modules(source: str) -> list[str]:
+    """Return the top-level module names a machinery test module imports.
+
+    Walks the module's top-level statements with ``ast`` so prose in
+    docstrings or comments that happens to start with ``from``/``import`` is
+    never mistaken for an import. Relative imports and unparseable source
+    yield nothing.
+
+    Parameters
+    ----------
+    source
+        Python source text of a machinery test module.
+
+    Returns
+    -------
+    list[str]
+        First dotted component of each absolute import, in source order.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return []
+    modules: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            modules.extend(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules.append(node.module.split(".")[0])
+    return modules
+
 
 # Engine file references built from the tests' SCRIPTS_DIR anchor, e.g.
 # `SCRIPTS_DIR / "session-stop.py"` or `SCRIPTS_DIR / "queries" / "x.py"`.
@@ -441,7 +488,7 @@ def _validate_machinery(machinery_dir: Path) -> list[str]:
     for test_file in sorted(tests_dir.glob("*.py")):
         text = test_file.read_text(encoding="utf-8")
 
-        for module_name in _MACHINERY_IMPORT_PATTERN.findall(text):
+        for module_name in _machinery_imported_modules(text):
             if module_name in sys.stdlib_module_names:
                 continue
             if module_name in _MACHINERY_EXTERNAL_MODULES:
@@ -479,6 +526,7 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
       adapter would only fail later inside a vault.
     - The vendor map must parse and keep unique targets: a duplicated
       target would silently overwrite one managed file with another.
+    - Every machinery-rooted vendor-map entry's ``source`` must exist.
     """
     errors: list[str] = []
     engine_dir = machinery_dir / "engine"
@@ -530,6 +578,17 @@ def _validate_machinery_wiring(machinery_dir: Path) -> list[str]:
                     f"machinery vendor-map.json has duplicate target '{target}'"
                 )
             seen.add(target)
+            # Entries rooted at the preset resolve outside the shipped
+            # machinery tree; only machinery-rooted sources are checkable here.
+            if entry.get("source_root") == "preset":
+                continue
+            source = entry.get("source", "")
+            if not (machinery_dir / source).is_file():
+                errors.append(
+                    f"machinery vendor-map.json entry for target '{target}' "
+                    f"names source '{source}' but machinery/{source} is not "
+                    f"in the plugin"
+                )
 
     return errors
 
@@ -658,7 +717,7 @@ def smoke_test(plugin_path: Path) -> SmokeTestResult:
 
             # Check required fields
             for req_field in ["name", "description", "role"]:
-                if req_field not in frontmatter:
+                if req_field not in frontmatter or not frontmatter.get(req_field):
                     result.errors.append(
                         f"Agent '{agent_dir.name}/AGENT.md' missing required "
                         f"field '{req_field}'"
