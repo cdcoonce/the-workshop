@@ -174,14 +174,14 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 <!-- BEGIN GENERATED: plugins-table -->
 | Plugin | Version | Skills | Agents | Hooks | Description |
 | --- | --- | --- | --- | --- | --- |
-| **`advisor-product-design`** | `0.2.0` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
-| **`advisor-product-strategy`** | `0.2.0` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
+| **`advisor-product-design`** | `0.2.1` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
+| **`advisor-product-strategy`** | `0.2.1` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
 | **`persona-pair-programmer`** | `1.1.1` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
 | **`persona-ship-it`** | `1.1.1` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.34.0` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.34.1` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.3` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -336,13 +336,13 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: suggest /wrap-up once the session's context grows large. |
-| `vault-pre-compact.py` | `workbench` | — | PreCompact hook: preserves session state before compaction. |
-| `vault-session-start.py` | `workbench` | — | SessionStart hook: pulls from remote and injects vault context. |
-| `vault-skill-alias.py` | `workbench` | — | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
-| `vault-stop-1-notebook-update.py` | `workbench` | — | Stop hook: updates the session notebook. |
-| `vault-stop-2-graph-gardener.py` | `workbench` | — | Stop hook: queues link, profile, and index repairs. |
-| `vault-stop-3-session-sync.py` | `workbench` | — | Stop hook: checks the explicit sync boundary without authorizing a sync. |
-| `vault-validate-write.py` | `workbench` | — | PostToolUse hook: validates frontmatter on vault note writes. |
+| `vault-pre-compact.py` | `workbench` | `PreCompact` | PreCompact hook: preserves session state before compaction. |
+| `vault-session-start.py` | `workbench` | `SessionStart` | SessionStart hook: pulls from remote and injects vault context. |
+| `vault-skill-alias.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: route a short alias for an explicit-invoke skill. |
+| `vault-stop-1-notebook-update.py` | `workbench` | `Stop` | Stop hook: updates the session notebook. |
+| `vault-stop-2-graph-gardener.py` | `workbench` | `Stop` | Stop hook: queues link, profile, and index repairs. |
+| `vault-stop-3-session-sync.py` | `workbench` | `Stop` | Stop hook: checks the explicit sync boundary without authorizing a sync. |
+| `vault-validate-write.py` | `workbench` | `PostToolUse` | PostToolUse hook: validates frontmatter on vault note writes. |
 | `verify-subagent-evidence.py` | `workbench` | `SubagentStop` | SubagentStop hook: catch a subagent claiming a change it never made. |
 | `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
 | `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
