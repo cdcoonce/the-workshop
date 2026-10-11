@@ -69,7 +69,9 @@ irrelevant and can say why.
 
 Build output and vendored packages are not source: the script skips `target/`,
 `dbt_packages/`, `dbt_modules/`, `.git/`, and `logs/`, plus any `target-path` or
-`packages-install-path` set at the top level of `dbt_project.yml`. If that file
+`packages-install-path` set at the top level of `dbt_project.yml` (a quoted value keeps any `#` inside
+it; an unquoted one ends at a whitespace-preceded `#` comment; a leading UTF-8
+BOM is tolerated). If that file
 is missing or unreadable, or a value is empty, absolute, templated, or outside
 the project, only the defaults apply, so a project with custom paths will read
 as stale until the file is fixed or `--allow-stale` is passed.

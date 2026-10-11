@@ -75,6 +75,21 @@ def load_manifest(path: Path) -> dict:
     return manifest
 
 
+def _scalar(raw: str) -> str:
+    """A YAML scalar from the rest of a ``key:`` line, minus any inline comment.
+
+    A quoted value is read up to its closing quote, so a ``#`` inside it
+    survives; an unquoted one ends at whitespace followed by ``#``.
+    """
+    raw = raw.strip()
+    if raw[:1] in ("'", '"'):
+        end = raw.find(raw[0], 1)
+        if end != -1:
+            return raw[1:end]
+        return raw[1:].strip()
+    return re.split(r"(?:^|\s)#", raw, maxsplit=1)[0].strip()
+
+
 def _project_ignored_paths(project_dir: Path) -> list[tuple[str, ...]]:
     """Custom build/package directories declared in ``dbt_project.yml``.
 
@@ -84,7 +99,7 @@ def _project_ignored_paths(project_dir: Path) -> list[tuple[str, ...]]:
     nothing and the defaults in ``IGNORED_DIRS`` apply alone.
     """
     try:
-        text = (project_dir / "dbt_project.yml").read_text(encoding="utf-8")
+        text = (project_dir / "dbt_project.yml").read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
         return []
     found: list[tuple[str, ...]] = []
@@ -92,7 +107,7 @@ def _project_ignored_paths(project_dir: Path) -> list[tuple[str, ...]]:
         match = re.search(rf"^{re.escape(key)}:[ \t]*(.*)$", text, re.MULTILINE)
         if not match:
             continue
-        value = match.group(1).split(" #")[0].strip().strip("\"'")
+        value = _scalar(match.group(1))
         parts = tuple(p for p in Path(value).parts if p != ".")
         if not parts or Path(value).is_absolute() or ".." in parts or "{{" in value:
             continue
