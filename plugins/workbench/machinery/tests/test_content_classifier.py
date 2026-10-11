@@ -158,6 +158,10 @@ class TestIdeaCategory:
         result = classify("Brainstorm: automated anomaly detection for our key metrics")
         assert result.category == "project-idea"
 
+    def test_concept_for_is_an_idea_not_learning(self) -> None:
+        result = classify("I have a concept for a budget tracker app")
+        assert result.category == "project-idea"
+
 
 class TestDefaultCategory:
     def test_empty_string(self) -> None:

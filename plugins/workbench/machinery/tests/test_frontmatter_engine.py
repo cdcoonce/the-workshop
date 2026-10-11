@@ -160,6 +160,20 @@ class TestMissingFields:
         field_names = [e.field for e in errors]
         assert "tags" in field_names
 
+    @pytest.mark.parametrize("tags_yaml", ["5", "{a: 1}", "true"])
+    def test_non_list_non_str_tags_return_error_not_crash(
+        self, vault: Path, tags_yaml: str
+    ) -> None:
+        p = _write_note(vault, "brain/scalar-tags.md", (
+            "---\n"
+            "date: 2026-04-04\n"
+            "description: \"Has description\"\n"
+            f"tags: {tags_yaml}\n"
+            "---\n\nContent.\n"
+        ))
+        errors = validate(p, vault)
+        assert "tags" in [e.field for e in errors]
+
 
 # ---------------------------------------------------------------------------
 # Bad date format
