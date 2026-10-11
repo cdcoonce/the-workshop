@@ -33,6 +33,41 @@ class TestExtractVideoId:
     def test_extracts_id_from_url_forms(self, url):
         assert extract_video_id(url) == "ROEad3SDI9Q"
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://m.youtube.com/watch?v=ROEad3SDI9Q",
+            "https://music.youtube.com/watch?v=ROEad3SDI9Q",
+            "https://WWW.YouTube.COM/watch?v=ROEad3SDI9Q",
+            "https://www.youtube.com:443/watch?v=ROEad3SDI9Q",
+            "https://www.youtube.com./watch?v=ROEad3SDI9Q",
+            "https://user:pw@www.youtube.com/watch?v=ROEad3SDI9Q",
+            "https://evil.com@youtube.com/watch?v=ROEad3SDI9Q",
+        ],
+    )
+    def test_legitimate_hostname_variants_accepted(self, url):
+        assert extract_video_id(url) == "ROEad3SDI9Q"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://youtube.com.evil.com/watch?v=ROEad3SDI9Q",
+            "https://notyoutube.com.evil.com/watch?v=ROEad3SDI9Q",
+            "https://www.youtube.com.evil.com/embed/ROEad3SDI9Q",
+            "https://evilyoutube.com/watch?v=ROEad3SDI9Q",
+            "https://fakeyoutube.com/shorts/ROEad3SDI9Q",
+            "https://youtube.com.evil.com:8443/watch?v=ROEad3SDI9Q",
+            "https://youtube.com@evil.com/watch?v=ROEad3SDI9Q",
+            "https://youtube.com:pw@evil.com/watch?v=ROEad3SDI9Q",
+            "https://EVILYOUTUBE.COM/watch?v=ROEad3SDI9Q",
+            "https://evil.com./youtube.com/watch?v=ROEad3SDI9Q",
+            "https://youtube.com.evil.com./watch?v=ROEad3SDI9Q",
+        ],
+    )
+    def test_spoofed_hostname_is_not_treated_as_youtube(self, url):
+        """A look-alike host must not have an id extracted from its URL."""
+        assert extract_video_id(url) == url
+
     def test_bare_id_passes_through(self):
         assert extract_video_id("ROEad3SDI9Q") == "ROEad3SDI9Q"
 
