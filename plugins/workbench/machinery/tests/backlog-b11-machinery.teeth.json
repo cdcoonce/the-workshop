@@ -79,6 +79,27 @@
       "oracle": "real",
       "find": "\n    try:\n        # Inside the try: a graphmark that is installed but lacks these\n        # submodules must read \"gate policy rejected\", not escape to the\n        # caller's blanket \"graphmark unavailable\" handler (#929).\n        from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n        from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n        policy",
       "replace": "    from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n    from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n    try:\n        policy"
+    },
+    {
+      "label": "#782 since anchored on max(week_keys) instead of the oldest (test_since_is_oldest_monday_minus_exactly_two_weeks_on_sparse_list)",
+      "file": "../engine/pulse.py",
+      "oracle": "real",
+      "find": "min(week_keys).split(",
+      "replace": "max(week_keys).split("
+    },
+    {
+      "label": "#782 two-week margin removed (test_since_across_a_year_boundary_anchors_on_the_oldest_key)",
+      "file": "../engine/pulse.py",
+      "oracle": "real",
+      "find": "since = oldest_monday - timedelta(weeks=2)",
+      "replace": "since = oldest_monday"
+    },
+    {
+      "label": "#782 Sunday anchor instead of Monday (test_since_is_oldest_monday_minus_exactly_two_weeks_on_sparse_list)",
+      "file": "../engine/pulse.py",
+      "oracle": "real",
+      "find": "int(oldest_week), 1)",
+      "replace": "int(oldest_week), 7)"
     }
   ]
 }

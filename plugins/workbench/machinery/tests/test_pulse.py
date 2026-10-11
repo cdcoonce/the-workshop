@@ -1572,6 +1572,54 @@ class TestVaultGitWindow:
         oldest_monday = date.fromisocalendar(int(year), int(week), 1)
         assert seen["since"] <= oldest_monday
 
+    @staticmethod
+    def _since_for(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keys: list[str]):
+        from datetime import date
+
+        seen: dict[str, date] = {}
+
+        def fake_collect(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
+            seen["since"] = since
+            return {}
+
+        monkeypatch.setattr(pulse, "collect_vault_git", fake_collect)
+        pulse.scan(
+            projects_root=tmp_path / "p",
+            codex_root=tmp_path / "c",
+            repos_root=tmp_path / "r",
+            vault_root=tmp_path,
+            week_keys=keys,
+            tz=ZoneInfo("UTC"),
+            include_vault_git=True,
+        )
+        return seen["since"]
+
+    @staticmethod
+    def _monday(key: str):
+        from datetime import date
+
+        year, week = key.split("-W")
+        return date.fromisocalendar(int(year), int(week), 1)
+
+    def test_since_is_oldest_monday_minus_exactly_two_weeks_on_sparse_list(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        today = datetime.now(ZoneInfo("UTC")).date()
+        keys = [pulse._week_of_date(today - timedelta(weeks=k)) for k in (5, 50)]
+        since = self._since_for(tmp_path, monkeypatch, keys)
+        oldest_monday = self._monday(min(keys))
+        assert oldest_monday - since == timedelta(weeks=2)
+
+    def test_since_across_a_year_boundary_anchors_on_the_oldest_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        keys = ["2025-W52", "2026-W01"]
+        since = self._since_for(tmp_path, monkeypatch, keys)
+        # 2025-W52 starts Monday 2025-12-22; the margin is exactly two weeks.
+        assert self._monday("2025-W52").isoformat() == "2025-12-22"
+        assert since.isoformat() == "2025-12-08"
+        assert since.weekday() == 0
+
 
 # ---------------------------------------------------------------------------
 # DOMAIN_RULES hygiene (#1074) — first match wins, so a repeated substring
