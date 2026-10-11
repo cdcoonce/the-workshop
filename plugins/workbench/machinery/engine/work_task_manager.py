@@ -142,8 +142,9 @@ def parse_work_tasks(file_path: Path) -> list[WorkTask]:
         # Detect section headers
         if line.startswith("## "):
             header = line[3:].strip()
-            if header in SECTIONS:
-                current_section = header
+            # An unrecognized header closes the prior section: tasks under it
+            # belong to no recognized section and are skipped, not misfiled.
+            current_section = header if header in SECTIONS else ""
             continue
 
         # Try to match a task line
@@ -184,8 +185,11 @@ def add_work_task(
 ) -> None:
     """Add a task line under the specified section in work/Tasks.md.
 
-    Raises ValueError if the section name is not in SECTIONS.
+    Raises ValueError if the section name is not in SECTIONS, or if the title
+    contains ``*`` (``TASK_RE`` could never match such a line back).
     """
+    if "*" in title:
+        raise ValueError(f"Task title must not contain '*': {title!r}")
     if section not in SECTIONS:
         raise ValueError(
             f"Invalid section '{section}'. Must be one of: {', '.join(SECTIONS)}"
@@ -237,9 +241,14 @@ def complete_work_task(vault_root: Path, title: str) -> bool:
 
     # Find the task line
     task_line_idx = None
+    current_section = ""
     for i, line in enumerate(lines):
+        if line.startswith("## "):
+            header = line[3:].strip()
+            current_section = header if header in SECTIONS else ""
+            continue
         match = TASK_RE.match(line)
-        if match and match.group("status") == " ":
+        if match and current_section and match.group("status") == " ":
             if match.group("title").strip().lower() == title.lower():
                 task_line_idx = i
                 break
@@ -432,6 +441,12 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
 
         return output
 
+    # Content under non-canonical headers is preserved verbatim (not filtered):
+    # the re-emit loop below only walks SECTIONS and would otherwise drop it.
+    extra_sections = [
+        name for name in sections if name != "_preamble" and name not in SECTIONS
+    ]
+
     new_lines = fm_lines + ["", "# Work Tasks", ""]
     for section in SECTIONS:
         new_lines.append(f"## {section}")
@@ -441,6 +456,18 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
         filtered = _filter_carry_forward(sections.get(section, []))
         if filtered:
             new_lines.extend(filtered)
+            new_lines.append("")
+
+    for name in extra_sections:
+        kept = list(sections[name])
+        while kept and not kept[0].strip():
+            kept.pop(0)
+        while kept and not kept[-1].strip():
+            kept.pop()
+        new_lines.append(f"## {name}")
+        new_lines.append("")
+        if kept:
+            new_lines.extend(kept)
             new_lines.append("")
 
     tasks_path.write_text("\n".join(new_lines).rstrip() + "\n", encoding="utf-8")
