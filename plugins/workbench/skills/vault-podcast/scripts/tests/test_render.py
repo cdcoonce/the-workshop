@@ -196,7 +196,9 @@ def test_pause_non_finite_raises(value: str) -> None:
         render.parse_script(f"A|hi\nPAUSE|{value}\n", frozenset({"A", "PAUSE"}))
 
 
-def test_main_exits_2_for_non_finite_pause(episode_dir: Path, voices: dict[str, str]) -> None:
+def test_main_exits_2_for_non_finite_pause(
+    episode_dir: Path, voices: dict[str, str], patch_platform: None
+) -> None:
     (episode_dir / "script.txt").write_text("A|hi\nPAUSE|nan\n", encoding="utf-8")
     assert render.main(build_argv(episode_dir, voices)) == 2
 
