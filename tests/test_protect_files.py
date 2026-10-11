@@ -119,3 +119,79 @@ def test_missing_tool_input_allows() -> None:
     result = run_hook({})
 
     assert result.returncode == 0
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        ".git",
+        "/repo/.claude/worktrees/x/.git",
+        "node_modules",
+        "project/node_modules",
+    ],
+)
+def test_protected_directory_as_final_component_blocks(file_path: str) -> None:
+    """A target that IS ``.git`` (a linked worktree's gitlink file) is blocked."""
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 2
+    assert "Blocked" in result.stderr
+    assert file_path in result.stderr
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "Pipfile.lock",
+        "Cargo.lock",
+        "composer.lock",
+        "Gemfile.lock",
+        "sub/dir/Cargo.lock",
+    ],
+)
+def test_other_ecosystem_lockfile_blocks_with_reason(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+    basename = file_path.rsplit("/", 1)[-1]
+
+    assert result.returncode == 2
+    assert f"'{basename}'" in result.stderr
+    assert file_path in result.stderr
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [".environment.md", ".envrc.notes", ".envy", "docs/.environment.md"],
+)
+def test_unrelated_dotfile_sharing_env_prefix_allows(file_path: str) -> None:
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    ["mycargo.lock", "foo.yarn.lock", "poetry.lock.bak", "sub/dir/xCargo.lock"],
+)
+def test_lockfile_match_is_exact_basename(file_path: str) -> None:
+    """Only the exact lockfile basename is protected, not names that merely end with it."""
+    result = run_hook({"tool_input": {"file_path": file_path}})
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["[]", "null", "3", '"x"', '{"tool_input": null}', '{"tool_input": {"file_path": 5}}'],
+)
+def test_non_object_payload_allows(raw: str) -> None:
+    result = subprocess.run(
+        [sys.executable, str(HOOK_PATH)], input=raw, capture_output=True, text=True
+    )
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr

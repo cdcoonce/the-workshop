@@ -1,0 +1,84 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_stamp.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_stamp.py"
+  ],
+  "mutants": [
+    {
+      "label": "#735 regex only recognises run-hook.sh again",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "run-(?:vault-)?hook\\.sh",
+      "replace": "run-hook\\.sh"
+    },
+    {
+      "label": "#726 .DS_Store no longer counted as debris",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "_BUILD_ARTIFACT_FILES = frozenset({\".DS_Store\"})",
+      "replace": "_BUILD_ARTIFACT_FILES = frozenset()"
+    },
+    {
+      "label": "#733 advisor-* plugins get run-hook.sh unconditionally",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "        and (plugin_dir / \"hooks\" / \"scripts\").is_dir()\n",
+      "replace": "        and True\n"
+    },
+    {
+      "label": "#745 bare prose mention accepted as ownership marker",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    if any(marker in text for marker in _OWNERSHIP_MARKERS):\n        return\n    relative",
+      "replace": "    if GENERATED_MARKER in text:\n        return\n    relative"
+    },
+    {
+      "label": "#733 run-hook gate checks hooks/ instead of hooks/scripts/",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "(plugin_dir / \"hooks\" / \"scripts\").is_dir()",
+      "replace": "(plugin_dir / \"hooks\").is_dir()"
+    },
+    {
+      "label": "#740 cutover-path exemption re-added",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite",
+      "replace": "    relative = path.relative_to(root).as_posix()\n    if relative in {\".claude-plugin/marketplace.json\", \".agents/plugins/marketplace.json\", \"plugins/workbench/hooks/hooks.json\"}:\n        return\n    raise StampError(\n        f\"Refusing to overwrite"
+    },
+    {
+      "label": "#740 predecessor-marker exemption re-added",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite",
+      "replace": "    if any(m in text for m in (\"scripts/build_docs.py\", \"scripts/build_marketplace.py\")):\n        return\n    relative = path.relative_to(root).as_posix()\n    raise StampError(\n        f\"Refusing to overwrite"
+    },
+    {
+      "label": "#726 empty dir counted as debris (bool(files) dropped)",
+      "file": "../scripts/stamp.py",
+      "oracle": "real",
+      "find": "return bool(files) and all(",
+      "replace": "return all("
+    }
+  ]
+}

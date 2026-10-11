@@ -77,3 +77,43 @@ def test_main_falls_back_when_owner_value_absent(tmp_path, monkeypatch, owner_sc
     )
     assert nd.main() == 0
     assert captured["argv"] == ["claude", "-p", "--model", vault_utils.DEFAULT_BATCH_MODEL]
+
+
+# ---------------------------------------------------------------------------
+# #1064 — header stripping is anchored to the top of the distilled body
+# ---------------------------------------------------------------------------
+
+def _run_main_with_output(tmp_path, monkeypatch, distilled: str) -> str:
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript(transcript)
+    monkeypatch.setattr(nd, "distill", lambda prompt, model: distilled)
+    monkeypatch.setattr(
+        nd.sys, "argv", ["notebook-distill.py", str(transcript), "sess-h", str(tmp_path)]
+    )
+    assert nd.main() == 0
+    (written,) = (tmp_path / ".brain").glob("notebook-*-sess-h.md")
+    return written.read_text(encoding="utf-8")
+
+
+def test_echoed_header_at_top_is_stripped(tmp_path, monkeypatch):
+    distilled = (
+        "# Session Notebook — Work\n\n"
+        "_Live session state · updated old · session old_\n\n"
+        "## Established\n- fact\n"
+    )
+    out = _run_main_with_output(tmp_path, monkeypatch, distilled)
+    assert out.count("# Session Notebook") == 1
+    assert out.count("_Live session state") == 1
+    assert "## Established\n- fact" in out
+
+
+def test_mid_document_header_like_lines_survive(tmp_path, monkeypatch):
+    distilled = (
+        "# Session Notebook — Work\n\n"
+        "## Established\n"
+        "# Session Notebook is the file this hook writes\n"
+        "_Live session state is stamped by the hook_\n"
+    )
+    out = _run_main_with_output(tmp_path, monkeypatch, distilled)
+    assert "# Session Notebook is the file this hook writes" in out
+    assert "_Live session state is stamped by the hook_" in out

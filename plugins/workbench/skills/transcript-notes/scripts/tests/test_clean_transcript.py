@@ -49,6 +49,24 @@ Gradient descent is an
 optimization algorithm.
 """
 
+VTT_SHORT = """WEBVTT
+
+00:01.000 --> 00:03.000
+first line of the talk.
+
+05:10.500 --> 05:12.000
+much later in the talk.
+"""
+
+SRT_SHORT = """1
+00:01,000 --> 00:04,000
+Gradient descent is an
+
+2
+00:04,000 --> 00:07,000
+optimization algorithm.
+"""
+
 TIMESTAMPED_PLAIN = """[00:00:00] softmax normalizes the
 [00:00:02] softmax normalizes the scores
 [00:00:04] into a probability distribution.
@@ -202,3 +220,27 @@ class TestAnchorTimestamps:
         raw = _timestamped([(0, "alpha beta gamma."), (200, "delta epsilon zeta.")])
         result = clean_transcript(raw)
         assert result.word_count == 6
+
+
+class TestShortFormTimings:
+    """``MM:SS.mmm`` cues (under an hour) are valid WebVTT/SRT timing lines."""
+
+    def test_short_vtt_timing_is_not_emitted_as_prose(self):
+        text = clean_transcript(VTT_SHORT).text
+        assert "-->" not in text
+        assert "00:01.000" not in text
+
+    def test_short_vtt_cue_updates_anchor_time(self):
+        text = clean_transcript(VTT_SHORT).text
+        anchors = [ln for ln in text.splitlines() if is_anchor_line(ln)]
+        assert anchors == ["[t=00:00:01]", "[t=00:05:10]"]
+
+    def test_short_vtt_without_header_is_detected_as_vtt(self):
+        raw = VTT_SHORT.replace("WEBVTT\n\n", "")
+        assert detect_format(raw) is TranscriptFormat.VTT
+
+    def test_short_srt_is_detected_and_timed(self):
+        assert detect_format(SRT_SHORT) is TranscriptFormat.SRT
+        text = clean_transcript(SRT_SHORT).text
+        assert "-->" not in text
+        assert text.splitlines()[0] == "[t=00:00:01]"

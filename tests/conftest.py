@@ -25,6 +25,29 @@ import sys  # noqa: E402
 sys.exit(0)
 '''
 
+def assert_sole_owner(repo_root: Path, slug: str) -> None:
+    """Assert that exactly one plugin under *repo_root* ships skill *slug*.
+
+    Membership is the filesystem: a skill belongs to whichever plugin directory
+    holds ``skills/<slug>/SKILL.md``. Paths with a ``worktrees`` segment below
+    *repo_root* are ignored, so a checked-out linked worktree never counts as a
+    second owner.
+
+    Parameters
+    ----------
+    repo_root : Path
+        Repository root the ``plugins/*/skills/<slug>/SKILL.md`` glob runs from.
+    slug : str
+        Skill directory name.
+    """
+    twins = [
+        p
+        for p in repo_root.glob(f"plugins/*/skills/{slug}/SKILL.md")
+        if "worktrees" not in p.relative_to(repo_root).parts
+    ]
+    assert len(twins) == 1, f"slug {slug} shipped by {len(twins)} plugins"
+
+
 _RUN_HOOK = """#!/usr/bin/env bash
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec python3 "$HOOK_DIR/scripts/$1" "${@:2}"

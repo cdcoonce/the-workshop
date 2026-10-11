@@ -123,6 +123,17 @@ This repo **integrates on GitHub**.
   it updates the local ref without moving HEAD, so the working checkout stays
   on whatever branch it was already on.
 
+### Diagnosing merge or ref corruption
+
+Before a PR description, commit message, or comment states a **root cause** for
+merge or ref corruption, verify it against the actual parent-commit SHAs and
+merge timestamps (`git log --graph --parents`, `git show -s --format='%H %P %cI'`)
+— never infer cause from timing alone. PR #462's first diagnosis blamed a ref
+race with #453 for orphaning the #451 squash; cross-checking the parents showed
+#453 merged two minutes *before* #451 and orphaned nothing. The actual cause was
+GitHub computing the #451 squash against a stale base from rapid-sequence
+merges, and the wrong claim had to be retracted in a follow-up comment.
+
 ### GitLab (downstream copy)
 
 GitLab is no longer kept in sync by an automated mirror job — `git push gitlab

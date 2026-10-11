@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import importlib.util
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -174,6 +175,8 @@ def _parse_pause_seconds(payload: str, line_no: int) -> float:
         seconds = float(payload)
     except ValueError as exc:
         raise ScriptFormatError(f"line {line_no}: bad PAUSE value {payload!r}") from exc
+    if not math.isfinite(seconds):
+        raise ScriptFormatError(f"line {line_no}: bad PAUSE value {payload!r}")
     return min(max(seconds, PAUSE_MIN_SECONDS), PAUSE_MAX_SECONDS)
 
 def load_entries(episode_dir: Path, speakers: frozenset[str]) -> list[ScriptEntry]:

@@ -1881,3 +1881,35 @@ def test_new_orphans_in_scope_flag_true_when_claimed(tmp_path: Path) -> None:
     new_orphans = report["checks"]["new_orphans"]["findings"]
     b_entry = next(f for f in new_orphans if f["file"] == "brain/B.md")
     assert b_entry["in_scope"] is True
+
+
+def test_gate_import_error_on_check_submodule_is_gate_only_not_graphmark_unavailable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # #929: an installed graphmark that lacks .check/.config must degrade to
+    # "gate policy rejected", never escape to the blanket handler that labels
+    # the whole audit "graphmark unavailable" and drops the other findings.
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[Missing]]."))
+    _git_commit_all(tmp_path, "init")
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, *args, **kwargs):
+        caller = (globals or {}).get("__name__")
+        if caller == "wrap_up_audit" and name in ("graphmark.check", "graphmark.config"):
+            raise ImportError(f"{name} missing in this graphmark")
+        return real_import(name, globals, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    gate = report["checks"]["gate"]
+    assert gate["not_run"] is not None
+    assert gate["not_run"].startswith("gate policy rejected")
+    assert "graphmark unavailable" not in gate["not_run"]
+    unresolved_files = {f["file"] for f in report["checks"]["unresolved_links"]["findings"]}
+    assert "brain/A.md" in unresolved_files
+    assert not any(nr["check"] == "unresolved_links" for nr in report["not_run"])
+    assert not any(nr["check"] == "orphans" for nr in report["not_run"])

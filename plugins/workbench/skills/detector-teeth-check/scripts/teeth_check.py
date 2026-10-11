@@ -641,14 +641,21 @@ def _read_runner(data: dict) -> str:
     return name
 
 
+def _require_key(raw: dict, key: str, label: str) -> object:
+    """Return ``raw[key]``, refusing with a ``SpecError`` naming a missing key."""
+    if key not in raw:
+        raise SpecError(f"mutant {label!r} is missing required key {key!r}")
+    return raw[key]
+
+
 def _build_mutation(raw: dict, base: Path) -> Mutation:
-    label = raw["label"]
+    label = _require_key(raw, "label", "<unlabelled>")
     expect, why = _read_expectation(raw, label)
     return Mutation(
         label=label,
-        path=(base / raw["file"]).resolve(),
-        find=raw["find"],
-        replace=raw["replace"],
+        path=(base / _require_key(raw, "file", label)).resolve(),
+        find=_require_key(raw, "find", label),
+        replace=_require_key(raw, "replace", label),
         oracle=_read_oracle(raw, label),
         expect=expect,
         why=why,

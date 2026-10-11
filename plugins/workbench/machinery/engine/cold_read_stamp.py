@@ -141,7 +141,10 @@ def _line_pieces(text: str) -> list[tuple[str, str]]:
         if i == last:
             if part == "":
                 continue
-            pieces.append((part, ""))
+            if part.endswith("\r"):
+                pieces.append((part[:-1], "\r"))
+            else:
+                pieces.append((part, ""))
         elif part.endswith("\r"):
             pieces.append((part[:-1], "\r\n"))
         else:
@@ -171,22 +174,6 @@ def _strip_stamp_lines(text: str) -> str:
             continue
         kept.append(content + terminator)
     return "".join(kept)
-
-
-def _count_stamp_lines(text: str) -> int:
-    """Count stamp lines in *text*, by the exact rule ``body_hash`` strips by.
-
-    Parameters
-    ----------
-    text : str
-        The text to scan.
-
-    Returns
-    -------
-    int
-        The number of stamp lines.
-    """
-    return sum(1 for content, _ in _line_pieces(text) if STAMP_LINE_RE.fullmatch(content))
 
 
 def _stamp_line_contents(text: str) -> list[str]:
