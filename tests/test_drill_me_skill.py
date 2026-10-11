@@ -101,3 +101,20 @@ def test_every_referenced_file_exists() -> None:
     """smoke_test validates this repo-wide; failing here localizes the break."""
     for ref in SKILL_DIR.glob("references/*.md"):
         assert f"references/{ref.name}" in _skill_text(), f"{ref.name} is orphaned"
+
+
+def test_position_generation_never_exceeds_the_option_count() -> None:
+    """A pre-drawn position must always name a real slot.
+
+    The protocol allows two to four options per item, so a fixed 1-4 draw hands
+    a two-option question position 3 or 4 with nowhere to put the answer.
+    SKILL.md is the only file guaranteed to load, so the rule lives there.
+    """
+    body = _skill_text()
+    assert "randint(1,4)" not in body.replace(" ", ""), (
+        "fixed 1-4 draw leaves undefined slots on items with fewer options"
+    )
+    lowered = body.lower()
+    assert "option count" in lowered or "number of options" in lowered, (
+        "SKILL.md does not tie the position draw to each item's option count"
+    )
