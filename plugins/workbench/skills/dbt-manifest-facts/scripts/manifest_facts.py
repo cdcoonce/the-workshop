@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -37,7 +38,12 @@ CONSUMER_TYPES = frozenset({"model", "snapshot", "analysis", "operation"})
 SOURCE_GLOBS = ("**/*.sql", "**/*.yml", "**/*.yaml", "**/*.csv")
 
 # Directories that hold build output or vendored packages rather than source.
+# `dbt_project.yml` may name different `target-path` / `packages-install-path`
+# directories; those are added on top of these defaults, never instead of them.
 IGNORED_DIRS = frozenset({"target", "dbt_packages", "dbt_modules", ".git", "logs"})
+
+# Top-level dbt_project.yml keys that name build output or vendored packages.
+_PATH_KEYS = ("target-path", "packages-install-path")
 
 
 class ManifestError(Exception):
@@ -69,20 +75,52 @@ def load_manifest(path: Path) -> dict:
     return manifest
 
 
+def _project_ignored_paths(project_dir: Path) -> list[tuple[str, ...]]:
+    """Custom build/package directories declared in ``dbt_project.yml``.
+
+    Stdlib only, so this reads the two top-level keys with a line match rather
+    than a YAML parser. A missing, unreadable, or undecodable file, or a value
+    that is empty, absolute, templated, or climbs out of the project, yields
+    nothing and the defaults in ``IGNORED_DIRS`` apply alone.
+    """
+    try:
+        text = (project_dir / "dbt_project.yml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    found: list[tuple[str, ...]] = []
+    for key in _PATH_KEYS:
+        match = re.search(rf"^{re.escape(key)}:[ \t]*(.*)$", text, re.MULTILINE)
+        if not match:
+            continue
+        value = match.group(1).split(" #")[0].strip().strip("\"'")
+        parts = tuple(p for p in Path(value).parts if p != ".")
+        if not parts or Path(value).is_absolute() or ".." in parts or "{{" in value:
+            continue
+        found.append(parts)
+    return found
+
+
 def stale_sources(manifest_path: Path, project_dir: Path) -> list[Path]:
     """Return project files modified after the manifest was written.
 
     A stale manifest is worse than a missing one: it answers every question
     confidently, about a project that no longer exists. Callers surface this
     rather than silently reporting yesterday's structure.
+
+    Build output and vendored packages are not source: ``IGNORED_DIRS`` plus any
+    ``target-path`` / ``packages-install-path`` set in ``dbt_project.yml``.
     """
     if not manifest_path.is_file():
         return []
     cutoff = manifest_path.stat().st_mtime
+    custom = _project_ignored_paths(project_dir)
     newer: list[Path] = []
     for pattern in SOURCE_GLOBS:
         for candidate in project_dir.glob(pattern):
             if IGNORED_DIRS & set(candidate.parts):
+                continue
+            relative = candidate.relative_to(project_dir).parts
+            if any(relative[: len(prefix)] == prefix for prefix in custom):
                 continue
             if candidate.is_file() and candidate.stat().st_mtime > cutoff:
                 newer.append(candidate)

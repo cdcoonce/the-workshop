@@ -67,6 +67,13 @@ files and **refuses to report** when it is behind, listing what changed. Re-run
 `dbt parse`; use `--allow-stale` only when you have decided the drift is
 irrelevant and can say why.
 
+Build output and vendored packages are not source: the script skips `target/`,
+`dbt_packages/`, `dbt_modules/`, `.git/`, and `logs/`, plus any `target-path` or
+`packages-install-path` set at the top level of `dbt_project.yml`. If that file
+is missing or unreadable, or a value is empty, absolute, templated, or outside
+the project, only the defaults apply, so a project with custom paths will read
+as stale until the file is fixed or `--allow-stale` is passed.
+
 Two more limits worth stating before quoting a number:
 
 - The manifest describes the **checked-out branch**, not `main`. Pin the branch
