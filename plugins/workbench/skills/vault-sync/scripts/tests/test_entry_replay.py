@@ -4397,3 +4397,306 @@ def test_pc_an_entry_inserted_at_the_top_takes_the_sessions_blank_lines_under_th
     origin = base.replace("### Wins\n\n", "### Wins\n\n\n")  # origin widened the gap under the heading
     merged, _detail = ledger_merge(base, tip, origin, BRAG)
     assert merged == tip
+
+
+# ---------------------------------------------------------------------------
+# Fifth adversarial pass (H1-H5): granularity holes that accepted a content change.
+# ---------------------------------------------------------------------------
+
+import entry_replay as _er  # noqa: E402
+
+
+def _items_of(merged: str) -> str:
+    """The ``## Notes`` section's text of a merged ``_notes`` handoff."""
+    return merged.split("## Notes")[1].split("## Mode")[0]
+
+
+# H1 -- a session move+edit of a handoff item is an EDIT of that item
+
+
+def test_h1a_a_moved_and_edited_item_origin_deleted_refuses() -> None:
+    base = _notes("\n- A\n- X\n- B\n")
+    tip = _notes("\n- X (updated)\n- A\n- B\n")
+    origin = _notes("\n- A\n- B\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1b_a_moved_and_edited_item_origin_also_edited_refuses() -> None:
+    base = _notes("\n- a\n- x: check the gate\n- b\n")
+    tip = _notes("\n- a\n- b\n- x: check the gate (session: still red)\n")
+    origin = _notes("\n- a\n- b\n- x: check the gate (origin: done, green)\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1_a_pure_move_of_an_item_origin_deleted_refuses() -> None:
+    base = _notes("\n- A\n- X\n- B\n")
+    tip = _notes("\n- X\n- A\n- B\n")
+    origin = _notes("\n- A\n- B\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h1_a_pure_move_of_an_item_origin_left_alone_is_applied() -> None:
+    base = _notes("\n- A\n- X\n- B\n")
+    tip = _notes("\n- X\n- A\n- B\n")
+    origin = _notes("\n- A\n- X\n- B\n- o\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert _items_of(merged) == "\n\n- X\n- A\n- B\n- o\n\n"
+
+
+def test_h1_a_move_with_an_edit_of_an_item_origin_left_alone_is_applied() -> None:
+    base = _notes("\n- A\n- X\n- B\n")
+    tip = _notes("\n- X (updated)\n- A\n- B\n")
+    origin = _notes("\n- A\n- X\n- B\n- o\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert _items_of(merged) == "\n\n- X (updated)\n- A\n- B\n- o\n\n"
+
+
+def test_h1_the_same_move_and_edit_made_on_both_sides_is_already_applied() -> None:
+    base = _notes("\n- a\n- x: check the gate\n- b\n")
+    both = _notes("\n- a\n- b\n- x: check the gate (done)\n")
+    merged, _detail = handoff_merge(base, both, both, HANDOFF)
+    assert merged == both
+
+
+def test_h1_an_unrelated_delete_and_insert_origin_also_made_are_not_a_pair() -> None:
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- b\n- wholly different\n")
+    origin = _notes("\n- a\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+# H2 -- the ledger amend guard is date-insensitive
+
+
+def _retry_pair(session_day: str, session_title: str = "Retry storms need jitter", body: str | None = None):
+    base = insert_under(
+        GOTCHAS_SEED, "## Technical", gotchas_entry("Old thing", "2026-10-01", "Body here.")
+    )
+    text = (
+        "Retry storms need jitter or every client retries in lockstep.\n"
+        "Second line of it: the thundering herd comes back together."
+    )
+    origin = insert_under(
+        base, "## Technical", gotchas_entry("Retry storms need jitter", "2026-10-01", text)
+    )
+    tip = insert_under(
+        base, "## Technical", gotchas_entry(session_title, session_day, body or text)
+    )
+    return base, tip, origin
+
+
+def test_h2_a_date_only_amend_of_a_pushed_entry_refuses() -> None:
+    base, tip, origin = _retry_pair("2026-10-11")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_h2_a_date_and_body_amend_with_the_same_heading_refuses() -> None:
+    base, tip, origin = _retry_pair("2026-10-11", body="A body that was entirely rewritten.")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_h2_a_date_changed_amend_with_a_similar_body_refuses() -> None:
+    base, tip, origin = _retry_pair(
+        "2026-10-11",
+        session_title="Retry storms want jitter",
+        body=(
+            "Retry storms need jitter or every client retries in lockstep.\n"
+            "Second line of it: the thundering herd comes back together, amended."
+        ),
+    )
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_h2_a_different_entry_on_a_different_day_is_not_an_amend() -> None:
+    base, tip, origin = _retry_pair(
+        "2026-10-11",
+        session_title="Cache warmers double up",
+        body="Nothing to do with it: the cache warmed twice at boot.",
+    )
+    merged, detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert detail["inserted"] == 1
+    assert "### Cache warmers double up (2026-10-11)" in merged
+    assert "### Retry storms need jitter (2026-10-01)" in merged
+
+
+def test_h2_the_edit_pairing_stays_date_sensitive() -> None:
+    """``_same_entry_edited`` (the in-place-edit pairing) still needs the same date."""
+    base = GOTCHAS_SEED
+    tip = base.replace("(2026-09-15)", "(2026-09-16)")  # a re-dated entry is not an in-place edit
+    with pytest.raises(RefusalError, match="deleted entry"):
+        ledger_merge(base, tip, base.replace("Second line of that body.", "Edited."), GOTCHAS)
+
+
+# H3 -- the handoff amend guard
+
+
+def test_h3_a_session_item_similar_to_one_origin_inserted_in_the_same_gap_refuses() -> None:
+    base = _notes("\n- a\n- b\n")
+    tip = _notes("\n- a\n- foo bar\n- b\n")
+    origin = _notes("\n- a\n- foo\n- b\n")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h3_an_identical_first_line_with_a_different_continuation_refuses() -> None:
+    base = _notes("\n- a\n- b\n")
+    tip = _notes("\n- a\n- Next: ship it\n  with the second line\n- b\n")
+    origin = _notes("\n- a\n- Next: ship it\n  and something else entirely\n- b\n")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h3_an_identical_item_in_the_same_gap_is_still_deduped() -> None:
+    base = _notes("\n- a\n- b\n")
+    both = _notes("\n- a\n- foo\n- b\n")
+    merged, _detail = handoff_merge(base, both, both, HANDOFF)
+    assert merged == both
+
+
+def test_h3_a_dissimilar_item_in_the_same_gap_is_kept_beside_origins() -> None:
+    base = _notes("\n- a\n- b\n")
+    tip = _notes("\n- a\n- the session wrote this\n- b\n")
+    origin = _notes("\n- a\n- zzz origin wrote that\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- the session wrote this" in merged and "- zzz origin wrote that" in merged
+
+
+def test_h3_a_similar_item_origin_added_in_another_gap_is_not_an_amend() -> None:
+    base = _notes("\n- a\n- b\n- c\n")
+    tip = _notes("\n- a\n- foo bar\n- b\n- c\n")
+    origin = _notes("\n- a\n- b\n- c\n- foo\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- foo bar" in merged and "- foo\n" in merged
+
+
+# H4 -- per-gap dedupe also consults the gap after a replaced run
+
+
+def test_h4_an_item_origin_added_after_a_replaced_item_is_not_inserted_twice() -> None:
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- x2\n- y\n- b\n")
+    origin = _notes("\n- a\n- x\n- y\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+def test_h4_a_different_item_origin_added_after_the_replaced_one_is_kept() -> None:
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- x2\n- y\n- b\n")
+    origin = _notes("\n- a\n- x\n- zzzz unrelated\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert _items_of(merged) == "\n\n- a\n- x2\n- y\n- zzzz unrelated\n- b\n\n"
+
+
+def test_h4_only_the_tail_of_a_replacement_is_deduped_against_the_next_gap() -> None:
+    """A repeat that does not end the session's replacement is not origin's item: origin put
+    its copy *after* the replaced run, so the session's leading copy is a deliberate one."""
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- y\n- x2\n- b\n")
+    origin = _notes("\n- a\n- x\n- y\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert _items_of(merged) == "\n\n- a\n- y\n- x2\n- y\n- b\n\n"
+
+
+# H5 -- an unexpected exception in the merge phase is a refusal, not a traceback
+
+
+def _conflicting_vault(tmp_path: Path) -> tuple[Path, str]:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    peer_chunk = decisions_entry("2026-09-20", "Peer session decision", "**Decided:** peer thing.")
+    _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
+    _peer_push(peer)
+    mine = decisions_entry("2026-09-18", "Session decision", "**Decided:** session thing.")
+    _write(local, DECISIONS, insert_under(_read(local, DECISIONS), "## Recent", mine))
+    _commit_all(local, "vault wrap-up")
+    return local, base
+
+
+def test_h5_an_internal_error_in_the_merge_phase_is_a_refusal_with_a_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, base = _conflicting_vault(tmp_path)
+    for key, value in _env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.chdir(local)
+
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(_er, "ledger_merge", boom)
+    head_before, branch_before = _head(local), _branch(local)
+
+    rc = _er.main(["--base", base, "--json", *_health_args(tmp_path, HEALTH_OK)])
+
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 1 and out["action"] == "refused"
+    assert "internal error while merging brain/Key Decisions.md: ValueError: boom" in out["reason"]
+    assert "escalating" in out["reason"]
+    assert out["refusals"] == [{"path": DECISIONS, "reason": out["reason"]}]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_h5_a_git_failure_is_still_reported_as_a_git_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local, base = _conflicting_vault(tmp_path)
+    for key, value in _env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.chdir(local)
+
+    def git_boom(*_args: object, **_kwargs: object) -> object:
+        raise _er.GitError("simulated")
+
+    monkeypatch.setattr(_er, "ledger_merge", git_boom)
+    report = _er.replay(_git(local, "rev-parse", base), "origin", None)
+    assert report.action == "refused" and report.reason == "git failure: simulated"
+
+
+def test_h2_entries_of_different_days_sharing_boilerplate_are_not_an_amend() -> None:
+    base = DECISIONS_SEED
+    theirs = decisions_entry("2026-09-24", "Peer session decision", "**Decided:** peer thing.")
+    mine = decisions_entry("2026-09-23", "Worktree session decision", "**Decided:** session thing.")
+    merged, detail = ledger_merge(
+        base,
+        insert_under(base, "## Recent", mine),
+        insert_under(base, "## Recent", theirs),
+        DECISIONS,
+    )
+    assert detail["inserted"] == 1 and "Peer session decision" in merged and "Worktree" in merged
+
+
+def test_h2_a_one_line_bullet_with_the_same_text_on_another_day_is_an_amend() -> None:
+    base = _brag_block(_A)
+    pushed = "- **2026-10-01 — Shipped the thing.** All of it.\n"
+    amended = "- **2026-10-11 — Shipped the thing.** All of it.\n"
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        ledger_merge(base, _brag_block(amended + _A), _brag_block(pushed + _A), BRAG)
+
+
+def test_h3_short_bullets_written_side_by_side_are_both_kept() -> None:
+    base = _notes("\n- a\n")
+    merged, _detail = handoff_merge(base, _notes("\n- a\n- n1\n"), _notes("\n- a\n- o1\n"), HANDOFF)
+    assert "- n1" in merged and "- o1" in merged
+
+
+def test_h3_the_guard_also_covers_the_gap_before_a_replaced_item() -> None:
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- foo bar\n- x2\n- b\n")
+    origin = _notes("\n- a\n- foo\n- x\n- b\n")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_h3_the_guard_also_covers_the_gap_after_a_replaced_item() -> None:
+    base = _notes("\n- a\n- x\n- b\n")
+    tip = _notes("\n- a\n- x2\n- foo bar\n- b\n")
+    origin = _notes("\n- a\n- x\n- foo\n- b\n")
+    with pytest.raises(RefusalError, match="amended or rebased"):
+        handoff_merge(base, tip, origin, HANDOFF)
