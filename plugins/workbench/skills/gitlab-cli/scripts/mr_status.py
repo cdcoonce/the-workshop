@@ -37,7 +37,7 @@ def count_unresolved(discussions: list[dict]) -> int:
     )
 
 
-def find_branch_mr(project: str, remote: str) -> int:
+def find_branch_mr(project: str) -> int:
     code, branch, stderr = run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
     if code != 0:
         fail_setup(f"cannot read current branch: {stderr}")
@@ -76,7 +76,7 @@ def main() -> int:
     args = parser.parse_args()
 
     project = resolve_project(args.remote, args.project)
-    iid = args.iid if args.iid is not None else find_branch_mr(project, args.remote)
+    iid = args.iid if args.iid is not None else find_branch_mr(project)
     mr = glab_json(f"projects/{project}/merge_requests/{iid}")
     if not isinstance(mr, dict):
         say(f"cannot read MR !{iid}")
