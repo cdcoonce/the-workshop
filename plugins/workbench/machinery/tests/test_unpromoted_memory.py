@@ -26,6 +26,7 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE_DIR))
 
 from unpromoted_memory import (  # noqa: E402
+    extract_broken_displays,
     has_candidate_memory_link,
     unpromoted_memory_links,
 )
@@ -289,3 +290,38 @@ class TestCandidatePrefilter:
         self, vault: Path, mem_base: Path
     ) -> None:
         assert has_candidate_memory_link(vault / "nope.md", vault, mem_base=mem_base) is False
+
+
+class TestExtractBrokenDisplays:
+    """The one place graphmark's broken-link entry shape is read (issue #933)."""
+
+    def test_returns_display_strings_in_order(self) -> None:
+        entries = [{"display": "A", "reason": "missing"}, {"display": "B"}]
+        assert extract_broken_displays(entries) == ["A", "B"]
+
+    def test_skips_malformed_entries(self) -> None:
+        entries = ["bare", None, {"display": 3}, {"no": "display"}, {"display": "ok"}]
+        assert extract_broken_displays(entries) == ["ok"]
+
+    def test_non_list_input_yields_nothing(self) -> None:
+        assert extract_broken_displays("oops") == []
+        assert extract_broken_displays(None) == []
+        assert extract_broken_displays({"display": "x"}) == []
+
+    def test_unpromoted_memory_links_reads_displays_through_the_helper(
+        self, vault: Path, mem_base: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import unpromoted_memory
+
+        monkeypatch.setattr(
+            unpromoted_memory, "_graphmark_broken",
+            lambda root: {"n.md": [{"display": "absent-rows-cannot-prove-a-detector-fires"}]},
+        )
+        seen: list[object] = []
+        real = unpromoted_memory.extract_broken_displays
+        monkeypatch.setattr(
+            unpromoted_memory, "extract_broken_displays",
+            lambda entries: seen.append(entries) or real(entries),
+        )
+        unpromoted_memory.unpromoted_memory_links(vault, "n.md", mem_base=mem_base)
+        assert seen == [[{"display": "absent-rows-cannot-prove-a-detector-fires"}]]
