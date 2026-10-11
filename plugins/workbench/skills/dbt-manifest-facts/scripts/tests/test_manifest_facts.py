@@ -396,3 +396,95 @@ def test_cli_missing_manifest_exits_two(tmp_path, capsys):
     code = mf.main(["summary", "--project-dir", str(tmp_path)])
     assert code == 2
     assert "dbt parse" in capsys.readouterr().err
+
+
+# --- #786 independent-pass gaps: dbt_project.yml path guards ----------------
+
+
+def _touch_newer(manifest_path, rel):
+    import os
+
+    path = manifest_path.parent.parent / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("select 1")
+    stamp = manifest_path.stat().st_mtime + 10
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def test_a_templated_target_path_is_ignored(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "target-path: \"{{ env_var('X') }}\"\n")
+    assert noise in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_a_dot_target_path_does_not_hide_everything(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    model = _touch_newer(manifest_path, "models/x.sql")
+    _write_project_yml(tmp_path, "target-path: .\n")
+    assert model in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_absolute_and_parent_escaping_paths_are_ignored(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    for value in ("/abs/build", "../build", "a/../build"):
+        _write_project_yml(tmp_path, f"target-path: {value}\n")
+        assert noise in mf.stale_sources(manifest_path, tmp_path), value
+
+
+def test_a_nested_key_is_not_a_top_level_path(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "vars:\n  target-path: build\n")
+    assert noise in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_a_sibling_of_a_custom_path_is_still_source(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "vendor/pkgs")
+    other = _touch_newer(manifest_path, "vendor/other/a.sql")
+    _write_project_yml(tmp_path, "packages-install-path: vendor/pkgs\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == [other]
+
+
+def test_deep_files_under_a_custom_path_are_ignored(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _touch_newer(manifest_path, "build/a/b/c/deep.sql")
+    _write_project_yml(tmp_path, "target-path: build\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_defaults_still_ignored_when_a_custom_path_is_set(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "dbt_packages")
+    _touch_newer(manifest_path, "build/x.sql")
+    _write_project_yml(tmp_path, "target-path: build\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_both_path_keys_are_honoured_together(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _touch_newer(manifest_path, "vendor/pkgs/p.sql")
+    _write_project_yml(
+        tmp_path, "target-path: build\npackages-install-path: vendor/pkgs\n"
+    )
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+# --- #786 parser bugs -------------------------------------------------------
+
+
+def test_a_quoted_value_containing_a_hash_parses_whole(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "my #dir")
+    _write_project_yml(tmp_path, 'target-path: "my #dir"\n')
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+    assert mf._project_ignored_paths(tmp_path) == [("my #dir",)]
+
+
+def test_a_tab_before_an_inline_comment_is_stripped(tmp_path):
+    _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "target-path: build\t# c\n")
+    assert mf._project_ignored_paths(tmp_path) == [("build",)]
+
+
+def test_a_utf8_bom_before_the_first_key_still_matches(tmp_path):
+    _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, raw=b"\xef\xbb\xbftarget-path: build\n")
+    assert mf._project_ignored_paths(tmp_path) == [("build",)]
