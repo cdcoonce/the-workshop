@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -166,6 +167,11 @@ def render_codex_hooks(entries: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# A true closing delimiter is a `---` line (trailing blanks allowed), not any
+# line that merely starts with `---`.
+_FRONTMATTER_CLOSE_RE = re.compile(r"\n---[ \t]*(?:\n|\Z)")
+
+
 def _parse_agent_md(md_path: Path) -> tuple[str, str, str]:
     """(name, description, body) from a canonical agent ``.md``.
 
@@ -177,11 +183,11 @@ def _parse_agent_md(md_path: Path) -> tuple[str, str, str]:
     text = md_path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         raise WiringSpecError(f"{md_path} has no frontmatter")
-    end = text.find("\n---", 4)
-    if end == -1:
+    close = _FRONTMATTER_CLOSE_RE.search(text, 4)
+    if close is None:
         raise WiringSpecError(f"{md_path} has unterminated frontmatter")
-    frontmatter = text[4:end]
-    body = text[end + len("\n---"):]
+    frontmatter = text[4:close.start()]
+    body = text[close.end():]
     fields = {}
     for line in frontmatter.splitlines():
         if ":" in line and not line.startswith((" ", "\t", "-")):
@@ -226,12 +232,17 @@ def _agent_runtimes(md_path: Path) -> tuple[str, ...]:
     text = md_path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         return ()
-    end = text.find("\n---", 4)
-    if end == -1:
+    close = _FRONTMATTER_CLOSE_RE.search(text, 4)
+    if close is None:
         return ()
-    for line in text[4:end].splitlines():
+    for line in text[4:close.start()].splitlines():
         key, _, value = line.partition(":")
         if key.strip() == "runtimes":
+            if not value.strip():
+                raise WiringSpecError(
+                    f"{md_path} has an empty inline 'runtimes:' value; "
+                    "block-style lists are unsupported, use 'runtimes: [claude, codex]'"
+                )
             return tuple(
                 part.strip()
                 for part in value.strip().strip("[]").split(",")

@@ -1,0 +1,42 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests"
+  ],
+  "mutants": [
+    {
+      "label": "[#796] non-finite PAUSE not rejected (test_pause_non_finite_raises)",
+      "file": "../render.py",
+      "oracle": "real",
+      "find": "    if not math.isfinite(seconds):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "[#796] message drops line number (test_pause_non_finite_raises)",
+      "file": "../render.py",
+      "oracle": "real",
+      "find": "f\"line {line_no}: bad PAUSE value {payload!r}\")\n    return",
+      "replace": "f\"bad PAUSE value {payload!r}\")\n    return"
+    }
+  ]
+}

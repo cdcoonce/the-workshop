@@ -1,0 +1,147 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_wiring_gen.py",
+    "test_work_task_manager.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_wiring_gen.py",
+    "test_work_task_manager.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1075 frontmatter close unanchored (any line starting with ---)",
+      "file": "../tools/wiring_gen.py",
+      "oracle": "real",
+      "find": "re.compile(r\"\\n---[ \\t]*(?:\\n|\\Z)\")",
+      "replace": "re.compile(r\"\\n---\")"
+    },
+    {
+      "label": "#771 empty runtimes value no longer raises (block list silently ())",
+      "file": "../tools/wiring_gen.py",
+      "oracle": "real",
+      "find": "            if not value.strip():\n",
+      "replace": "            if False:\n"
+    },
+    {
+      "label": "#903 parse reuses prior section on unrecognized header",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "            # An unrecognized header closes the prior section: tasks under it\n            # belong to no recognized section and are skipped, not misfiled.\n            current_section = header if header in SECTIONS else \"\"",
+      "replace": "            if header in SECTIONS:\n                current_section = header"
+    },
+    {
+      "label": "#830 complete_work_task matches lines outside any recognized section",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "        if match and current_section and match.group(\"status\") == \" \":",
+      "replace": "        if match and match.group(\"status\") == \" \":"
+    },
+    {
+      "label": "#830/#903 complete_work_task keeps prior section on unrecognized header",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "    for i, line in enumerate(lines):\n        if line.startswith(\"## \"):\n            header = line[3:].strip()\n            current_section = header if header in SECTIONS else \"\"",
+      "replace": "    for i, line in enumerate(lines):\n        if line.startswith(\"## \"):\n            header = line[3:].strip()\n            current_section = header if header in SECTIONS else current_section"
+    },
+    {
+      "label": "#903 rollover drops content under non-canonical headers",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "    for name, block in extra_blocks:",
+      "replace": "    for name, block in []:"
+    },
+    {
+      "label": "#904 add_work_task accepts asterisk titles",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "    if \"*\" in title:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "#903 duplicate non-canonical header keeps only the last",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "                extra_blocks.append((current_section, current_lines))",
+      "replace": "                extra_blocks[:] = [b for b in extra_blocks if b[0] != current_section]\n                extra_blocks.append((current_section, current_lines))"
+    },
+    {
+      "label": "#903 rollover drops preamble text",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "    if preamble:\n        new_lines.extend(preamble)",
+      "replace": "    if False:\n        new_lines.extend(preamble)"
+    },
+    {
+      "label": "#903 extras filtered through _filter_carry_forward",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "        kept = list(block)",
+      "replace": "        kept = _filter_carry_forward(block)"
+    },
+    {
+      "label": "#903 extras lose [x] lines",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "        kept = list(block)",
+      "replace": "        kept = [ln for ln in block if not re.match(r\"^\\s*- \\[x\\]\", ln)]"
+    },
+    {
+      "label": "#903 only first extra section emitted",
+      "file": "../engine/work_task_manager.py",
+      "oracle": "real",
+      "find": "    for name, block in extra_blocks:",
+      "replace": "    for name, block in extra_blocks[:1]:"
+    },
+    {
+      "label": "#1075 close delimiter at EOF without newline not recognized",
+      "file": "../tools/wiring_gen.py",
+      "oracle": "real",
+      "find": "re.compile(r\"\\n---[ \\t]*(?:\\n|\\Z)\")",
+      "replace": "re.compile(r\"\\n---[ \\t]*\\n\")"
+    },
+    {
+      "label": "#771 empty flow list yields ('',)",
+      "file": "../tools/wiring_gen.py",
+      "oracle": "real",
+      "find": "                if part.strip()\n",
+      "replace": "                if True\n"
+    },
+    {
+      "label": "#771 scalar runtimes value ignored",
+      "file": "../tools/wiring_gen.py",
+      "oracle": "real",
+      "find": "for part in value.strip().strip(\"[]\").split(\",\")",
+      "replace": "for part in (value.strip().split(\",\") if \"[\" in value else [])"
+    }
+  ]
+}

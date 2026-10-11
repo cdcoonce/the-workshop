@@ -10,13 +10,20 @@ neither: a variance formula re-pointed to pre-shift rows, and a frame-bar
 fill dropped from the columns flanking the data range.
 """
 
+import subprocess
+import zipfile
+from pathlib import Path
+
 import pytest
 
+import xlsx_cell_diff
 from xlsx_cell_diff import (
     CellSnapshot,
+    _checkout,
     diff_workbooks,
     format_report,
     is_blank,
+    main,
 )
 
 
@@ -235,3 +242,76 @@ class TestBlankScreening:
     def test_font_alone_does_not_rescue_an_empty_cell(self):
         """Inherited font on an empty cell is noise, not content."""
         assert is_blank(cell(None, font=("Arial", 14.0, True, False, "FF000000")))
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+class TestCheckoutPaths:
+    """``before`` may be absolute or relative; git wants a repo-root-relative path."""
+
+    @pytest.fixture
+    def tracked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        repo = tmp_path / "repo"
+        (repo / "sub").mkdir(parents=True)
+        _git(repo, "init", "-q")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "T")
+        (repo / "sub" / "book.xlsx").write_bytes(b"committed-bytes")
+        _git(repo, "add", "sub/book.xlsx")
+        _git(repo, "commit", "-q", "-m", "init")
+        monkeypatch.chdir(repo)
+        return repo
+
+    def test_absolute_path_is_accepted(self, tracked: Path, tmp_path: Path):
+        out = tmp_path / "out"
+        out.mkdir()
+
+        result = _checkout("HEAD", tracked / "sub" / "book.xlsx", out)
+
+        assert result.read_bytes() == b"committed-bytes"
+
+    def test_relative_path_still_works(self, tracked: Path, tmp_path: Path):
+        out = tmp_path / "out"
+        out.mkdir()
+
+        result = _checkout("HEAD", Path("sub/book.xlsx"), out)
+
+        assert result.read_bytes() == b"committed-bytes"
+
+    def test_absolute_path_works_from_a_subdirectory(
+        self, tracked: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        out = tmp_path / "out"
+        out.mkdir()
+        monkeypatch.chdir(tracked / "sub")
+
+        result = _checkout("HEAD", tracked / "sub" / "book.xlsx", out)
+
+        assert result.read_bytes() == b"committed-bytes"
+
+
+class TestMainExitCodes:
+    """Exit 2 means "could not run", including an unreadable workbook."""
+
+    def test_bad_zip_from_loader_exits_2(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ):
+        def explode(path: Path):
+            raise zipfile.BadZipFile("File is not a zip file")
+
+        monkeypatch.setattr(xlsx_cell_diff, "load_snapshot", explode)
+        book = tmp_path / "book.xlsx"
+        book.write_bytes(b"not a zip")
+
+        assert main([str(book), str(book)]) == 2
+        assert "could not read workbook" in capsys.readouterr().err
+
+    def test_non_zip_xlsx_file_exits_2(self, tmp_path: Path, capsys):
+        pytest.importorskip("openpyxl")
+        book = tmp_path / "book.xlsx"
+        book.write_bytes(b"this is not a zip archive")
+
+        assert main([str(book), str(book)]) == 2
+        assert "could not read workbook" in capsys.readouterr().err

@@ -12,6 +12,8 @@ when they fire and what failing them means.
 
 from pathlib import Path
 
+from tests.conftest import assert_sole_owner
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SLUG = "using-workflow"
 SKILL_MD = REPO_ROOT / "plugins" / "workbench" / "skills" / SLUG / "SKILL.md"
@@ -24,12 +26,7 @@ def _skill_text() -> str:
 def test_skill_is_owned_by_workbench() -> None:
     """Membership is the filesystem; one slug lives in exactly one plugin."""
     assert SKILL_MD.is_file(), f"{SKILL_MD} is missing"
-    twins = [
-        p
-        for p in REPO_ROOT.glob(f"plugins/*/skills/{SLUG}/SKILL.md")
-        if "worktrees" not in p.relative_to(REPO_ROOT).parts
-    ]
-    assert len(twins) == 1, f"slug {SLUG} shipped by {len(twins)} plugins"
+    assert_sole_owner(REPO_ROOT, SLUG)
 
 
 def test_router_wires_workflow_builds_to_a_teeth_stage() -> None:

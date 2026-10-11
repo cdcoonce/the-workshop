@@ -142,6 +142,37 @@ def test_leaf_marts_are_orphans_only_when_nothing_consumes_them(manifest):
     assert {"mart_slots", "mart_history"} <= found
 
 
+def _source(name):
+    return {
+        "unique_id": f"source.proj.raw.{name}",
+        "name": name,
+        "resource_type": "source",
+        "original_file_path": "models/sources.yml",
+    }
+
+
+@pytest.fixture
+def manifest_with_sources(manifest):
+    """The base project plus one source a model reads and one nothing reads."""
+    used, unused = _source("used_src"), _source("unused_src")
+    manifest["sources"] = {used["unique_id"]: used, unused["unique_id"]: unused}
+    manifest["nodes"]["model.proj.stg_thing"]["depends_on"]["nodes"].append(used["unique_id"])
+    manifest["child_map"][used["unique_id"]] = ["model.proj.stg_thing"]
+    manifest["child_map"][unused["unique_id"]] = []
+    return manifest
+
+
+def test_orphans_reports_an_unreferenced_source_and_spares_a_referenced_one(
+    manifest_with_sources,
+):
+    """The source branch reads `sources`, not `nodes`; seeds and models never hit it."""
+    found = {o["name"]: o for o in mf.orphans(manifest_with_sources)}
+    assert "unused_src" in found
+    assert found["unused_src"]["resource_type"] == "source"
+    assert found["unused_src"]["path"] == "models/sources.yml"
+    assert "used_src" not in found
+
+
 # --- keys ------------------------------------------------------------------
 
 
@@ -237,6 +268,75 @@ def test_stale_sources_ignores_build_output_and_vendored_packages(tmp_path):
     assert mf.stale_sources(manifest_path, tmp_path) == []
 
 
+def _write_project_yml(tmp_path, text=None, raw=None):
+    """Write dbt_project.yml older than the manifest, so it is not itself stale."""
+    import os
+
+    path = tmp_path / "dbt_project.yml"
+    if raw is not None:
+        path.write_bytes(raw)
+    else:
+        path.write_text(text)
+    old = (tmp_path / "target" / "manifest.json").stat().st_mtime - 100
+    os.utime(path, (old, old))
+
+
+def _stale_project(tmp_path, build_dir):
+    """A project whose manifest is older than a file inside *build_dir*."""
+    import os
+
+    target = tmp_path / "target"
+    target.mkdir()
+    manifest_path = target / "manifest.json"
+    manifest_path.write_text("{}")
+    noise = tmp_path / build_dir / "compiled.sql"
+    noise.parent.mkdir(parents=True, exist_ok=True)
+    noise.write_text("select 1")
+    stamp = manifest_path.stat().st_mtime + 10
+    os.utime(noise, (stamp, stamp))
+    return manifest_path, noise
+
+
+def test_stale_sources_flags_custom_build_output_without_a_dbt_project_yml(tmp_path):
+    """The default set only knows `target`; `build/` is source until told otherwise."""
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    assert noise in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_stale_sources_honours_a_custom_target_path(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "name: proj\ntarget-path: \"build\"  # custom output\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_stale_sources_honours_a_custom_packages_install_path(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "vendor/pkgs")
+    _write_project_yml(tmp_path, "name: proj\npackages-install-path: vendor/pkgs\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_a_custom_path_does_not_hide_real_source_edits(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "target-path: build\n")
+    import os
+
+    model = tmp_path / "models" / "later.sql"
+    model.parent.mkdir()
+    model.write_text("select 1")
+    stamp = manifest_path.stat().st_mtime + 10
+    os.utime(model, (stamp, stamp))
+    assert mf.stale_sources(manifest_path, tmp_path) == [model]
+
+
+def test_unreadable_dbt_project_yml_falls_back_to_the_defaults(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "target")
+    _write_project_yml(tmp_path, raw=b"\xff\xfe not utf-8 \x00")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+    (tmp_path / "dbt_project.yml").unlink()
+    (tmp_path / "dbt_project.yml").mkdir()  # a directory cannot be read as a file
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
 # --- CLI -------------------------------------------------------------------
 
 
@@ -296,3 +396,95 @@ def test_cli_missing_manifest_exits_two(tmp_path, capsys):
     code = mf.main(["summary", "--project-dir", str(tmp_path)])
     assert code == 2
     assert "dbt parse" in capsys.readouterr().err
+
+
+# --- #786 independent-pass gaps: dbt_project.yml path guards ----------------
+
+
+def _touch_newer(manifest_path, rel):
+    import os
+
+    path = manifest_path.parent.parent / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("select 1")
+    stamp = manifest_path.stat().st_mtime + 10
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def test_a_templated_target_path_is_ignored(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "target-path: \"{{ env_var('X') }}\"\n")
+    assert noise in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_a_dot_target_path_does_not_hide_everything(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    model = _touch_newer(manifest_path, "models/x.sql")
+    _write_project_yml(tmp_path, "target-path: .\n")
+    assert model in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_absolute_and_parent_escaping_paths_are_ignored(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    for value in ("/abs/build", "../build", "a/../build"):
+        _write_project_yml(tmp_path, f"target-path: {value}\n")
+        assert noise in mf.stale_sources(manifest_path, tmp_path), value
+
+
+def test_a_nested_key_is_not_a_top_level_path(tmp_path):
+    manifest_path, noise = _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "vars:\n  target-path: build\n")
+    assert noise in mf.stale_sources(manifest_path, tmp_path)
+
+
+def test_a_sibling_of_a_custom_path_is_still_source(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "vendor/pkgs")
+    other = _touch_newer(manifest_path, "vendor/other/a.sql")
+    _write_project_yml(tmp_path, "packages-install-path: vendor/pkgs\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == [other]
+
+
+def test_deep_files_under_a_custom_path_are_ignored(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _touch_newer(manifest_path, "build/a/b/c/deep.sql")
+    _write_project_yml(tmp_path, "target-path: build\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_defaults_still_ignored_when_a_custom_path_is_set(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "dbt_packages")
+    _touch_newer(manifest_path, "build/x.sql")
+    _write_project_yml(tmp_path, "target-path: build\n")
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+def test_both_path_keys_are_honoured_together(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "build")
+    _touch_newer(manifest_path, "vendor/pkgs/p.sql")
+    _write_project_yml(
+        tmp_path, "target-path: build\npackages-install-path: vendor/pkgs\n"
+    )
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+
+
+# --- #786 parser bugs -------------------------------------------------------
+
+
+def test_a_quoted_value_containing_a_hash_parses_whole(tmp_path):
+    manifest_path, _ = _stale_project(tmp_path, "my #dir")
+    _write_project_yml(tmp_path, 'target-path: "my #dir"\n')
+    assert mf.stale_sources(manifest_path, tmp_path) == []
+    assert mf._project_ignored_paths(tmp_path) == [("my #dir",)]
+
+
+def test_a_tab_before_an_inline_comment_is_stripped(tmp_path):
+    _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, "target-path: build\t# c\n")
+    assert mf._project_ignored_paths(tmp_path) == [("build",)]
+
+
+def test_a_utf8_bom_before_the_first_key_still_matches(tmp_path):
+    _stale_project(tmp_path, "build")
+    _write_project_yml(tmp_path, raw=b"\xef\xbb\xbftarget-path: build\n")
+    assert mf._project_ignored_paths(tmp_path) == [("build",)]
