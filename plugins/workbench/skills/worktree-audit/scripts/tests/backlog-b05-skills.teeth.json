@@ -1,0 +1,60 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "env",
+    "PYTHONPATH=plugins/workbench/skills/worktree-audit/scripts",
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/worktree-audit/scripts/tests"
+  ],
+  "collect_command": [
+    "env",
+    "PYTHONPATH=plugins/workbench/skills/worktree-audit/scripts",
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/worktree-audit/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "reap skips the removed-worktree count when the branch delete fails (#749)",
+      "file": "../worktree_audit.py",
+      "oracle": "real",
+      "find": "                worktree_gone = True\n",
+      "replace": "                pass\n"
+    },
+    {
+      "label": "reap swallows the branch-delete failure without a diagnostic (#749)",
+      "file": "../worktree_audit.py",
+      "oracle": "real",
+      "find": "                file=sys.stderr,\n",
+      "replace": "                file=sys.stdout,\n"
+    },
+    {
+      "label": "reap counts a worktree whose removal failed (#749)",
+      "file": "../worktree_audit.py",
+      "oracle": "real",
+      "find": "                worktree_gone = True\n        except (subprocess.CalledProcessError, OSError):\n            continue\n",
+      "replace": "                worktree_gone = True\n        except (subprocess.CalledProcessError, OSError):\n            pass\n"
+    },
+    {
+      "label": "find_repos lists every ordinary checkout again (#611)",
+      "file": "../worktree_audit.py",
+      "oracle": "real",
+      "find": "            if list_worktrees(child):",
+      "replace": "            if list_worktrees(child) or (child / \".git\").is_dir():"
+    }
+  ]
+}

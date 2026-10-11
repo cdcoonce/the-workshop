@@ -1,0 +1,63 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/dbt-manifest-facts/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/dbt-manifest-facts/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "orphans stops considering sources (#787)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "    candidates += [(uid, node) for uid, node in manifest.get(\"sources\", {}).items()]\n",
+      "replace": "    candidates += []\n"
+    },
+    {
+      "label": "stale_sources ignores dbt_project.yml entirely (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "    custom = _project_ignored_paths(project_dir)",
+      "replace": "    custom = []"
+    },
+    {
+      "label": "only target-path is read, packages-install-path is dropped (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "for key in _PATH_KEYS:",
+      "replace": "for key in _PATH_KEYS[:1]:"
+    },
+    {
+      "label": "a custom path hides every project file, not just its own subtree (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "relative[: len(prefix)] == prefix",
+      "replace": "True"
+    },
+    {
+      "label": "an undecodable dbt_project.yml raises instead of falling back (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError):",
+      "replace": "except OSError:"
+    }
+  ]
+}
