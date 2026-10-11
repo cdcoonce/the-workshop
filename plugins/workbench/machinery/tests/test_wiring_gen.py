@@ -60,6 +60,11 @@ class TestFrontmatterClose:
         md.write_text("---\nname: a\ndescription: d\n---  \n\nbody\n", encoding="utf-8")
         assert wiring_gen._parse_agent_md(md)[2] == "body"
 
+    def test_close_delimiter_at_eof_without_newline(self, wiring_gen, tmp_path: Path) -> None:
+        md = tmp_path / "AGENT.md"
+        md.write_text("---\nname: a\ndescription: d\n---", encoding="utf-8")
+        assert wiring_gen._parse_agent_md(md) == ("a", "d", "")
+
     def test_unterminated_still_raises(self, wiring_gen, tmp_path: Path) -> None:
         md = tmp_path / "AGENT.md"
         md.write_text("---\nname: a\ndescription: d\n---x\nbody\n", encoding="utf-8")
@@ -80,6 +85,14 @@ class TestAgentRuntimes:
     def test_absent_is_claude_only(self, wiring_gen, tmp_path: Path) -> None:
         md = _agent(tmp_path / "AGENT.md", "name: a\ndescription: d")
         assert wiring_gen._agent_runtimes(md) == ()
+
+    def test_empty_flow_list_is_empty(self, wiring_gen, tmp_path: Path) -> None:
+        md = _agent(tmp_path / "AGENT.md", "name: a\ndescription: d\nruntimes: []")
+        assert wiring_gen._agent_runtimes(md) == ()
+
+    def test_scalar_value_is_single_runtime(self, wiring_gen, tmp_path: Path) -> None:
+        md = _agent(tmp_path / "AGENT.md", "name: a\ndescription: d\nruntimes: claude")
+        assert wiring_gen._agent_runtimes(md) == ("claude",)
 
     def test_block_list_raises(self, wiring_gen, tmp_path: Path) -> None:
         md = _agent(

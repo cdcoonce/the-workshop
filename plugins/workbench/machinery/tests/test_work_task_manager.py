@@ -551,7 +551,6 @@ class TestNonCanonicalHeaders:
         add_work_task(vault, "Known", "Active")
         text = path.read_text(encoding="utf-8")
         text = text.replace("## Waiting On", "## Waitng On", 1)
-        text += ""
         path.write_text(text + "\n", encoding="utf-8")
         # a task under the typo header must not be attributed to the prior section
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -593,3 +592,54 @@ class TestAsteriskTitles:
         assert [t.title for t in parse_work_tasks(path)] == ["Fix this bug"]
         assert has_duplicate(vault, "Fix this bug") is True
         assert complete_work_task(vault, "Fix this bug") is True
+
+
+class TestRolloverVerbatimExtras:
+    def _new(self, vault: Path) -> str:
+        return (vault / "work" / "Tasks.md").read_text(encoding="utf-8")
+
+    def test_rollover_preserves_both_duplicate_unknown_headers(self, vault: Path) -> None:
+        body = "## Scratch\nFIRST\n\n## Active\n- [ ] **A**\n\n## Scratch\nSECOND\n\n## Done\n"
+        _write_work_tasks(vault, "2026-04-13", body)
+        assert rollover_work_tasks(vault, today=date(2026, 4, 20))["rolled_over"] is True
+        new = self._new(vault)
+        assert new.count("## Scratch") == 2
+        assert "FIRST" in new and "SECOND" in new
+        assert new.index("FIRST") < new.index("SECOND")
+
+    def test_rollover_preserves_preamble_text(self, vault: Path) -> None:
+        body = "Keep this intro paragraph.\n\n## Active\n- [ ] **A**\n\n## Done\n"
+        _write_work_tasks(vault, "2026-04-13", body)
+        rollover_work_tasks(vault, today=date(2026, 4, 20))
+        new = self._new(vault)
+        assert "Keep this intro paragraph." in new
+        assert new.count("# Work Tasks") == 1
+        assert new.index("Keep this intro") < new.index("## Active")
+
+    def test_rollover_extra_section_is_verbatim(self, vault: Path) -> None:
+        body = (
+            "## Active\n- [ ] **A**\n\n"
+            "## Scratch\n- [x] **Done thing**\n### sub\n- [ ] **Open thing**\n\n"
+            "## Notes\njust text, no tasks\n\n"
+            "## Done\n"
+        )
+        _write_work_tasks(vault, "2026-04-13", body)
+        rollover_work_tasks(vault, today=date(2026, 4, 20))
+        new = self._new(vault)
+        needles = [
+            "## Scratch", "- [x] **Done thing**", "### sub", "- [ ] **Open thing**",
+            "## Notes", "just text, no tasks",
+        ]
+        positions = [new.index(n) for n in needles]
+        assert positions == sorted(positions)
+
+
+class TestParseStrayHeaderFirst:
+    def test_stray_header_right_after_title(self, vault: Path) -> None:
+        path = vault / "work" / "Tasks.md"
+        path.write_text(
+            "---\ndate: 2026-01-01\nweek: \"2026-04-13\"\n---\n\n# Work Tasks\n\n"
+            "## Stray\n- [ ] **Orphan**\n\n## Active\n- [ ] **Known**\n",
+            encoding="utf-8",
+        )
+        assert {t.title: t.section for t in parse_work_tasks(path)} == {"Known": "Active"}
