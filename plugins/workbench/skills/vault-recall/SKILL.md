@@ -1,7 +1,7 @@
 ---
 name: vault-recall
 description: >
-  Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes /recall, mentions /recall, or asks for this vault workflow by name.
+  Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. Trigger when Charles invokes or mentions /recall.
 ---
 
 # Vault Recall

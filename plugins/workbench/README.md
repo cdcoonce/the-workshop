@@ -20,6 +20,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/adversarial-review` | Attacks finished work by trying to disprove what it claims, reporting what survives with evidence. |
 | `/blueprint` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
 | `/brainstorm` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/build-review-land` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
 | `/commit` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
@@ -38,7 +39,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/finish-branch` | Use when implementation is complete, all tests pass, and you need to decide how to integrate a finished development branch — merge, open a PR, keep it, or discard it. |
 | `/github-cli` | GitHub CLI (gh) integration for issues, pull requests, branches, commits, and Actions workflows from the terminal. |
 | `/github-pr-land` | Lands a GitHub PR only at a CI-tested head: refreshes a moved base, re-gates, waits on that exact SHA, merges pinned. |
-| `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state, reporting every job's status. |
+| `/gitlab-ci-watch` | Watches GitLab CI until a pushed commit, MR, or integration branch reaches a terminal state. |
 | `/gitlab-cli` | GitLab CLI (glab) for issues, MR review, and CI/CD pipelines. |
 | `/gitlab-mr-create` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
@@ -84,11 +85,11 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/vault-mr-review-packet` | Run Charles's vault (The Vault) /mr-review-packet workflow to build a self-guided reviewer walkthrough for a large merge request directly in the MR description (standalone packet docs are retired). |
 | `/vault-podcast` | Run Charles's vault /podcast workflow to render NotebookLM-style two-host audio episodes from vault notes or teach lesson workspaces. |
 | `/vault-pulse` | Run Charles's vault (The Vault) /pulse weekly work-quantification ledger from local activity data. |
-| `/vault-recall` | Run Charles's vault (The Vault) /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
+| `/vault-recall` | Run Charles's vault /recall post-build consolidation workflow for afk merge outcomes, stubs, brag candidates, and handoff refresh. |
 | `/vault-standup` | Run Charles's vault (The Vault) /standup context-loading workflow, including lean, deep, and comprehensive modes. |
 | `/vault-sync` | Run Charles's vault (The Vault) /sync git synchronization workflow with rebase-before-push and conflict-safe handling. |
 | `/vault-teach` | Run Charles's vault (The Vault) /teach stateful learning workspace workflow for a topic. |
-| `/vault-wrap-up` | Run Charles's vault (The Vault) /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
+| `/vault-wrap-up` | Run Charles's vault /wrap-up session audit, handoff refresh, git sync, and optional post-sync session launches. |
 | `/vault-write` | Draft Outlook or Teams messages in Charles's voice using The Vault's /write communication rules. |
 | `/walkthrough` | Interactive visual walkthrough of a repo, MR, email, project, or database using Mermaid/D3 visuals the user drills into. |
 | `/warehouse-sql-test-harness` | Executes committed warehouse SQL (Snowflake, BigQuery, Redshift) against DuckDB via sqlglot to prove views and MERGE statements run, instead of asserting on text. |
