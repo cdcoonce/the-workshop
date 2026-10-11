@@ -515,3 +515,81 @@ class TestCustomTaskLocations:
         new = (vault / "work" / "Tasks.md").read_text(encoding="utf-8")
         assert "**Open A**" in new
         assert "**Shipped thing**" not in new
+
+
+# ---------------------------------------------------------------------------
+# #830 / #903 / #904 - section scoping, non-canonical headers, asterisk titles
+# ---------------------------------------------------------------------------
+
+
+class TestCompleteScopedToRecognizedSection:
+    def test_stray_checkbox_before_any_section_is_untouched(self, vault: Path) -> None:
+        path = ensure_work_tasks_file(vault)
+        text = path.read_text(encoding="utf-8")
+        text = text.replace("# Work Tasks\n", "# Work Tasks\n\n- [ ] **Stray**\n", 1)
+        path.write_text(text, encoding="utf-8")
+
+        assert complete_work_task(vault, "Stray") is False
+        assert path.read_text(encoding="utf-8") == text
+
+    def test_checkbox_under_unrecognized_header_is_untouched(self, vault: Path) -> None:
+        path = ensure_work_tasks_file(vault)
+        text = path.read_text(encoding="utf-8") + "\n## Scratch\n\n- [ ] **Custom**\n"
+        path.write_text(text, encoding="utf-8")
+
+        assert complete_work_task(vault, "Custom") is False
+        assert path.read_text(encoding="utf-8") == text
+
+    def test_checkbox_under_recognized_section_still_completes(self, vault: Path) -> None:
+        add_work_task(vault, "Real", "Active")
+        assert complete_work_task(vault, "Real") is True
+
+
+class TestNonCanonicalHeaders:
+    def test_parse_does_not_misfile_tasks_under_unknown_header(self, vault: Path) -> None:
+        path = ensure_work_tasks_file(vault)
+        add_work_task(vault, "Known", "Active")
+        text = path.read_text(encoding="utf-8")
+        text = text.replace("## Waiting On", "## Waitng On", 1)
+        text += ""
+        path.write_text(text + "\n", encoding="utf-8")
+        # a task under the typo header must not be attributed to the prior section
+        lines = path.read_text(encoding="utf-8").splitlines()
+        idx = lines.index("## Waitng On")
+        lines.insert(idx + 1, "- [ ] **Under typo**")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        titles = {t.title: t.section for t in parse_work_tasks(path)}
+        assert titles == {"Known": "Active"}
+
+    def test_rollover_preserves_content_under_unknown_header(self, vault: Path) -> None:
+        body = (
+            "## Active\n- [ ] **Open one**\n\n"
+            "## Scratch\n\nsome notes\n- [ ] **Parked**\n\n"
+            "## Waiting On\n\n## Someday\n\n## Done\n"
+        )
+        _write_work_tasks(vault, "2026-04-13", body)
+        result = rollover_work_tasks(vault, today=date(2026, 4, 20))
+
+        assert result["rolled_over"] is True
+        new = (vault / "work" / "Tasks.md").read_text(encoding="utf-8")
+        assert "## Scratch" in new
+        assert "some notes" in new
+        assert "- [ ] **Parked**" in new
+        assert "**Open one**" in new
+
+
+class TestAsteriskTitles:
+    def test_add_rejects_asterisk_title_and_leaves_file_unchanged(self, vault: Path) -> None:
+        path = ensure_work_tasks_file(vault)
+        before = path.read_text(encoding="utf-8")
+        with pytest.raises(ValueError, match=r"\*"):
+            add_work_task(vault, "Fix *this* bug", "Active")
+        assert path.read_text(encoding="utf-8") == before
+
+    def test_plain_title_round_trips(self, vault: Path) -> None:
+        add_work_task(vault, "Fix this bug", "Active")
+        path = vault / "work" / "Tasks.md"
+        assert [t.title for t in parse_work_tasks(path)] == ["Fix this bug"]
+        assert has_duplicate(vault, "Fix this bug") is True
+        assert complete_work_task(vault, "Fix this bug") is True
