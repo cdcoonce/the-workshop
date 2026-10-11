@@ -27,12 +27,18 @@ uninterpretable and cost a re-run to recover the signal. The pull comes from the
 habit of listing a recommended option first; assessment inverts that. Eyeballing
 a distribution is exactly what fails, so compute it:
 
+Decide each item's option count (two to four) first, then draw its position
+within that range, so no drawn position names a slot the item lacks. Example for
+twelve items with option counts `2 3 4 4 3 2 4 3 4 2 3 4`:
+
 ```bash
-python3 -c "import random; print([random.randint(1,4) for _ in range(12)])"
+python3 -c "import random; print([random.randint(1,n) for n in [2,3,4,4,3,2,4,3,4,2,3,4]])"
 ```
 
-Honour the list, including runs that look insufficiently random. If the drill
-outlives the list, generate another.
+Honour the list, including runs that look insufficiently random. Never clamp or
+reroll a drawn position after the fact; if an item's option count changes, redraw
+that item's position over its new range. If the drill outlives the list,
+generate another.
 
 ## Required reading
 
