@@ -156,6 +156,22 @@ class TestAddTask:
         # Should only appear once
         assert content.count("[[Housing]]") == 1
 
+    def test_does_not_duplicate_aliased_wikilink(self, vault: Path) -> None:
+        add_task(vault, "Review [[Housing|home stuff]] docs", links=["Housing"])
+        content = get_or_create_weekly_file(vault).read_text(encoding="utf-8")
+        assert "[[Housing]]" not in content
+        assert content.count("[[Housing|home stuff]]") == 1
+
+    def test_does_not_duplicate_case_variant_wikilink(self, vault: Path) -> None:
+        add_task(vault, "Review [[Housing]] docs", links=["housing"])
+        content = get_or_create_weekly_file(vault).read_text(encoding="utf-8")
+        assert "[[housing]]" not in content
+        assert content.count("[[Housing]]") == 1
+
+    def test_appends_link_when_only_a_different_target_present(self, vault: Path) -> None:
+        line = _format_task_line("Review [[Other|Housing]] docs", links=["Housing"])
+        assert line.endswith("[[Housing]]")
+
     def test_raises_on_empty_text(self, vault: Path) -> None:
         with pytest.raises(ValueError, match="empty"):
             add_task(vault, "")
