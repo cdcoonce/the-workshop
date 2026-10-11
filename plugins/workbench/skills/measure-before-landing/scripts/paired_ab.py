@@ -627,6 +627,12 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     bracket_enabled = bracket_cfg.get("enabled", True)
     tolerance = bracket_cfg.get("tolerance", 0.0)
 
+    if bracket_enabled and not args.a2:
+        raise VoidError(
+            "bracket is enabled but analyze got no --a2 arm output, so no A-B-A "
+            "check can run; pass --a2 or set bracket.enabled = false in the spec"
+        )
+
     mean_a2: float | None = None
     if args.a2:
         stdout_a2 = Path(args.a2).read_text()
