@@ -24,7 +24,6 @@ from scripts import check_version_bumps as gate
 from scripts.stamp import StampError, stamp
 
 _VERSION_LINE = re.compile(r'("version"\s*:\s*")([^"]*)(")')
-_SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
 class BumpError(Exception):
@@ -41,10 +40,10 @@ class BumpResult:
 
 
 def _parse(version: str | None) -> tuple[int, int, int]:
-    if not version or not _SEMVER.fullmatch(version):
+    parts = gate.parse_version(version)
+    if parts is None:
         raise BumpError(f"version {version!r} is not plain semver (X.Y.Z)")
-    major, minor, patch = (int(c) for c in version.split("."))
-    return major, minor, patch
+    return parts
 
 
 def next_version(released: str, level: str) -> str:
@@ -108,7 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     repo = Path(args.repo)
     try:
         result = bump(repo, args.plugin, args.base, args.level)
-    except (BumpError, StampError) as error:
+        changed_files = _changed_files(repo)
+    except (BumpError, StampError, gate.GitError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{result.plugin}: {result.released} -> {result.new} ({result.level} against {args.base})")
     else:
         print(f"{result.plugin}: already at {result.new}, past the {result.level} bump from {result.released}; nothing to do")
-    for name in _changed_files(repo):
+    for name in changed_files:
         print(f"  {name}")
     return 0
 

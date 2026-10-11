@@ -78,7 +78,9 @@ def extract_video_id(url: str) -> str:
     parsed = urlparse(cleaned)
     if parsed.hostname in ("youtu.be",):
         return parsed.path.lstrip("/")
-    if parsed.hostname and "youtube.com" in parsed.hostname:
+    # urlparse lowercases the hostname; a trailing root dot is the same host.
+    host = (parsed.hostname or "").rstrip(".")
+    if host == "youtube.com" or host.endswith(".youtube.com"):
         if parsed.path == "/watch":
             candidate = parse_qs(parsed.query).get("v", [None])[0]
             if candidate:

@@ -35,6 +35,7 @@ import argparse
 import subprocess
 import sys
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -209,8 +210,28 @@ def load_snapshot(path: Path) -> WorkbookSnapshot:
 
 def _checkout(ref: str, path: Path, into: Path) -> Path:
     """Materialise ``path`` as of ``ref`` so a working copy can be compared."""
+    resolved = path.resolve()
+    # `git show <ref>:<path>` wants a path relative to the repo root, so anchor
+    # on the file's own repository and relativise; absolute arguments work too.
+    top = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=resolved.parent if resolved.parent.is_dir() else None,
+    )
+    if top.returncode == 0:
+        try:
+            repo_path = resolved.relative_to(Path(top.stdout.strip()).resolve())
+        except ValueError:
+            repo_path = path
+    else:
+        repo_path = path
     result = subprocess.run(
-        ["git", "show", f"{ref}:{path}"], capture_output=True, check=False
+        ["git", "show", f"{ref}:{repo_path.as_posix()}"],
+        capture_output=True,
+        check=False,
+        cwd=resolved.parent if top.returncode == 0 else None,
     )
     if result.returncode != 0:
         raise SystemExit(f"cannot read {path} at {ref}: {result.stderr.decode().strip()}")
@@ -239,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         print(exc, file=sys.stderr)
         return 2
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
         print(f"could not read workbook: {exc}", file=sys.stderr)
         return 2
 
