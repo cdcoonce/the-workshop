@@ -52,6 +52,8 @@ What it does (issue #893, codifying the vault's `3164dec0` hand-built union):
 
 Read the outcome, don't infer it: `replayed` (exit 0) means HEAD — the session's local branch, or a still-detached HEAD (the report's `branch` is `null`) — now sits on the tip of `origin/<target>` (the report's `target`) and step 6's `git push origin HEAD:<target>` is a fast-forward — proceed. `none` (exit 0) means the fallback had nothing to do — proceed exactly as today. `refused` (exit 1) means a fail-closed guard fired — including an in-flight rebase, merge, or bisect — and the repository is already restored to its original branch or detached commit; list the files from the report, alert the user, and never re-attempt the merge with hand-rolled git commands.
 
+After a hand merge or a replay, the primary checkout's local `main` may be left behind `origin/<target>` while another live session holds staged work in it. Advance it with `git merge --ff-only`, never a bare `git reset --keep` (which drops the index); see "Advancing a branch checked out in a shared tree" in the `shared-tree-safety` skill.
+
 ### Pull
 
 1. Resolve the sync target as in Push step 5, then run `git pull --rebase origin <target>`

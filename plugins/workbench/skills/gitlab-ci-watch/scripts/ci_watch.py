@@ -365,13 +365,38 @@ def unreachable_reason(ref: str | None) -> str | None:
     )
 
 
+class FailureBudget:
+    """Consecutive-API-failure counter shared by every polling loop.
+
+    ``fail`` records one failed poll: it announces the give-up and returns True
+    once ``MAX_CONSECUTIVE_FAILURES`` is reached, otherwise sleeps ``interval``
+    and returns False. ``reset`` clears the streak after a good poll.
+    """
+
+    def __init__(self) -> None:
+        self.failures = 0
+
+    def fail(self, interval: float) -> bool:
+        """Count one failure; True means give up (INDETERMINATE), False means retry."""
+        self.failures += 1
+        if self.failures >= MAX_CONSECUTIVE_FAILURES:
+            say(f"{self.failures} consecutive API failures — giving up, re-query needed")
+            return True
+        time.sleep(interval)
+        return False
+
+    def reset(self) -> None:
+        """Forget the failure streak."""
+        self.failures = 0
+
+
 def watch_pipeline(
     project: str, sha: str, ref: str | None, interval: float, deadline: float
 ) -> int:
     query = f"projects/{project}/pipelines?sha={sha}"
     if ref:
         query += f"&ref={urllib.parse.quote(ref, safe='')}"
-    failures = 0
+    budget = FailureBudget()
     last_status: dict[int, str] = {}
     waiting_announced = False
     empty_polls = 0
@@ -383,13 +408,10 @@ def watch_pipeline(
         data = glab_api(query)
         pipes = newest_per_ref(data, ref) if isinstance(data, list) else None
         if pipes is None:
-            failures += 1
-            if failures >= MAX_CONSECUTIVE_FAILURES:
-                say(f"{failures} consecutive API failures — giving up, re-query needed")
+            if budget.fail(interval):
                 return INDETERMINATE
-            time.sleep(interval)
             continue
-        failures = 0
+        budget.reset()
         if not pipes:
             empty_polls += 1
             if not waiting_announced:
@@ -427,7 +449,7 @@ def watch_pipeline_by_id(
 ) -> int:
     """Watch one specific pipeline — the direct escape hatch when a SHA
     carries several pipelines and exactly one of them is the question."""
-    failures = 0
+    budget = FailureBudget()
     last_status: str | None = None
     while True:
         if time.time() > deadline:
@@ -435,13 +457,10 @@ def watch_pipeline_by_id(
             return INDETERMINATE
         data = glab_api(f"projects/{project}/pipelines/{pipeline_id}")
         if not isinstance(data, dict) or "id" not in data:
-            failures += 1
-            if failures >= MAX_CONSECUTIVE_FAILURES:
-                say(f"{failures} consecutive API failures — giving up, re-query needed")
+            if budget.fail(interval):
                 return INDETERMINATE
-            time.sleep(interval)
             continue
-        failures = 0
+        budget.reset()
         status = data.get("status", "unknown")
         if status != last_status:
             say(f"pipeline {pipeline_id}: {status}")
@@ -453,7 +472,7 @@ def watch_pipeline_by_id(
 
 def watch_mr(project: str, iid: str, interval: float, timeout: float) -> int:
     deadline = time.time() + timeout
-    failures = 0
+    budget = FailureBudget()
     last_state: str | None = None
     while True:
         if time.time() > deadline:
@@ -461,13 +480,10 @@ def watch_mr(project: str, iid: str, interval: float, timeout: float) -> int:
             return INDETERMINATE
         data = glab_api(f"projects/{project}/merge_requests/{iid}")
         if not isinstance(data, dict):
-            failures += 1
-            if failures >= MAX_CONSECUTIVE_FAILURES:
-                say(f"{failures} consecutive API failures — giving up, re-query needed")
+            if budget.fail(interval):
                 return INDETERMINATE
-            time.sleep(interval)
             continue
-        failures = 0
+        budget.reset()
         state = data.get("state", "unknown")
         if state != last_state:
             say(f"MR !{iid}: {state}")
