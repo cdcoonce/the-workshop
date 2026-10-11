@@ -96,4 +96,4 @@ Success prints exactly one ledger line and exits 0:
 
 ## `promote`
 
-`python3 "<skill base dir>/scripts/pr_land.py" promote <pr> [--trunk dev] [--release main] [--timeout 2700] [--interval 15]`, with Bash `run_in_background: true`, for a `dev`→`main` PR: it refuses a non-fast-forward, watches the head SHA, pushes that literal SHA to `main` (never forced), and waits for the branch and a merged PR before printing `promoted pr=<n> sha=<sha>`. Exit 2 with `Bypassed rule violations` means the SHA landed but protection was bypassed, not satisfied — report it to Charles.
+`python3 "<skill base dir>/scripts/pr_land.py" promote <pr> [--trunk dev] [--release main] [--timeout 2700] [--interval 15]`, with Bash `run_in_background: true`, for a `dev`→`main` PR: it refuses a PR whose head lives in another repository (a fork), refuses a non-fast-forward, watches the head SHA, pushes that literal SHA to `main` (never forced), and waits for the branch and a merged PR before printing `promoted pr=<n> sha=<sha>`. Exit 2 with `Bypassed rule violations` means the SHA landed but protection was bypassed, not satisfied — report it to Charles.
