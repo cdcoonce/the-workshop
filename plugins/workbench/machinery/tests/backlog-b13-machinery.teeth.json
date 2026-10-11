@@ -99,15 +99,15 @@
       "label": "#931 empty transcript_path guard removed",
       "file": "../engine/pre-compact.py",
       "oracle": "real",
-      "find": "if not transcript_path:\n        return 0",
-      "replace": "if False:\n        return 0"
+      "find": "if not transcript_path or not isinstance(transcript_path, str):\n        return 0",
+      "replace": "if not isinstance(transcript_path, str):\n        return 0"
     },
     {
       "label": "#931 malformed stdin crashes instead of no-op",
       "file": "../engine/pre-compact.py",
       "oracle": "real",
-      "find": "except Exception:\n        return 0\n\n    transcript_path",
-      "replace": "except Exception:\n        raise\n\n    transcript_path"
+      "find": "except Exception:\n        return 0\n\n    if not isinstance(event",
+      "replace": "except Exception:\n        raise\n\n    if not isinstance(event"
     },
     {
       "label": "#931 success message loses handoff pointer",
@@ -178,6 +178,62 @@
       "oracle": "real",
       "find": "_debug_log(vault_root, \"injected handoff (no fresh notebook found)\")",
       "replace": "pass"
+    },
+    {
+      "label": "#774 glossary term escape dropped (gap test)",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "**{_escape_cell(term)}**",
+      "replace": "**{term}**"
+    },
+    {
+      "label": "#774 quickref 3col name escape dropped (gap test)",
+      "file": "../engine/glossary_manager.py",
+      "oracle": "real",
+      "find": "row = f\"| **{_escape_cell(name)}** | {_escape_cell(col2)} | {_escape_cell(col3)} |\"",
+      "replace": "row = f\"| **{name}** | {_escape_cell(col2)} | {_escape_cell(col3)} |\""
+    },
+    {
+      "label": "#797 duplicate links re-appended",
+      "file": "../engine/task_manager.py",
+      "oracle": "real",
+      "find": "                present.add(link.strip().casefold())\n",
+      "replace": ""
+    },
+    {
+      "label": "#797 link not stripped before compare",
+      "file": "../engine/task_manager.py",
+      "oracle": "real",
+      "find": "if link.strip().casefold() not in present",
+      "replace": "if link.casefold() not in present"
+    },
+    {
+      "label": "#931 retention not enforced",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "enforce_retention(log_dir, MAX_BACKUPS)",
+      "replace": "pass"
+    },
+    {
+      "label": "#931 non-dict event guard removed",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "if not isinstance(event, dict):",
+      "replace": "if False:"
+    },
+    {
+      "label": "#931 non-str path guard removed",
+      "file": "../engine/pre-compact.py",
+      "oracle": "real",
+      "find": "if not transcript_path or not isinstance(transcript_path, str):",
+      "replace": "if not transcript_path:"
+    },
+    {
+      "label": "#902 log stamp dropped",
+      "file": "../engine/session-start.py",
+      "oracle": "real",
+      "find": "log.write(f\"[{stamp}] {message}\\n\")",
+      "replace": "log.write(f\"{message}\\n\")"
     }
   ]
 }
