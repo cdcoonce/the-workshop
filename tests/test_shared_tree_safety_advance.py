@@ -147,7 +147,7 @@ def test_recipe_hands_back_when_the_snapshot_does_not_match(scenario: Path) -> N
 def test_the_section_names_ff_only_first_and_forbids_bare_reset() -> None:
     section = _section()
     assert "git merge --ff-only" in section
-    assert section.index("git merge --ff-only") < section.index("git reset --keep")
+    assert section.index("git merge --ff-only") < section.index("git reset --keep \"$TARGET\"")
     assert re.search(r"[Nn]ever .*bare .*reset", section)
 
 
