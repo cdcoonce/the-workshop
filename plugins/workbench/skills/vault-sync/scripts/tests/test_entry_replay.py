@@ -490,10 +490,18 @@ def test_detached_worktree_session_replays_and_stays_detached(tmp_path: Path) ->
 
 def test_equal_dates_keep_session_entry_above_origin_entry(tmp_path: Path) -> None:
     _remote, local, peer, base = _make_vault(tmp_path)
-    peer_chunk = decisions_entry("2026-09-20", "Peer same-day decision", "**Decided:** peer.")
+    peer_chunk = decisions_entry(
+        "2026-09-20",
+        "Peer same-day decision",
+        "**Decided:** keep the nightly probe on the spare laptop until the UI is worth sharing.",
+    )
     _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
     _peer_push(peer)
-    session_chunk = decisions_entry("2026-09-20", "Session same-day decision", "**Decided:** me.")
+    session_chunk = decisions_entry(
+        "2026-09-20",
+        "Session same-day decision",
+        "**Decided:** pin graphmark below 0.9 until the parity gate lands.",
+    )
     _write(local, DECISIONS, insert_under(_read(local, DECISIONS), "## Recent", session_chunk))
     _commit_all(local, "vault wrap-up 2026-09-20")
 
@@ -3697,3 +3705,647 @@ def test_g4_a_stamp_line_inside_a_section_is_not_part_of_the_stamp_rule() -> Non
     verdict = compare_texts(base, tip, origin, result, HANDOFF)
     assert verdict["missing"] == [] and verdict["extra"] == []
     assert "_Updated 3._" in verdict["resolved"] and "_Updated 9._" not in verdict["resolved"]
+
+
+# ---------------------------------------------------------------------------
+# Round 4 -- the fourth adversarial pass: two structural invariants (S1, S2)
+# that close the class "the line-level self-check cannot see it", then the
+# point fixes P-a..P-e.
+# ---------------------------------------------------------------------------
+
+import random  # noqa: E402
+
+from entry_replay import _merge_hub_file  # noqa: E402
+
+_NOTES_TAIL = "\n## Mode\n\nVault first.\n"
+
+
+def _notes(body: str) -> str:
+    """A handoff whose only touched section is ``## Notes`` with ``body`` as its text."""
+    return _hd("## Notes\n" + body + _NOTES_TAIL)
+
+
+def _with_origin_stamp(text: str) -> str:
+    return text.replace("_Updated 2026-10-10_", "_Updated 2026-10-11_")
+
+
+# S1 -- origin did not change a unit => the merged unit is the session's, byte for byte
+
+S1_HANDOFF_CASES = {
+    "insert mid tight list": ("\n- a\n- b\n- c\n", "\n- a\n- n\n- b\n- c\n"),
+    "insert into a loose list": ("\n- a\n\n- b\n", "\n- a\n\n- n\n\n- b\n"),
+    "insert at the top": ("\n- a\n- b\n", "\n- n\n- a\n- b\n"),
+    "append a bullet": ("\n- a\n- b\n", "\n- a\n- b\n- n\n"),
+    "paragraph after a tight list": ("\n- a\n- b\n", "\n- a\n- b\n\nClosing paragraph.\n"),
+    "paragraph after a paragraph": ("\nOne.\n", "\nOne.\n\nTwo.\n"),
+    "bullets after a paragraph stay tight": ("\nIntro.\n", "\nIntro.\n\n- n1\n- n2\n"),
+    "delete a bullet before a paragraph": (
+        "\n- a open\n- b resolved\n\nCarried paragraph.\n",
+        "\n- a open\n\nCarried paragraph.\n",
+    ),
+    "delete a bullet between paragraphs": (
+        "\nIntro.\n\n- x\n\nOutro.\n",
+        "\nIntro.\n\nOutro.\n",
+    ),
+    "delete the last bullet": ("\n- a\n- b\n", "\n- a\n"),
+    "delete the first bullet": ("\n- a\n\n- b\n", "\n- b\n"),
+    "delete every item": ("\n- a\n- b\n", "\n"),
+    "replace a bullet with a paragraph": (
+        "\n- a\n- b\n- c\n",
+        "\n- a\n\nb is now a paragraph.\n- c\n",
+    ),
+    "replace a paragraph with a bullet": (
+        "\n- a\n\nPara.\n\n- c\n",
+        "\n- a\n- Para as a bullet.\n\n- c\n",
+    ),
+    "replace one bullet with two": ("\n- a\n- b\n- c\n", "\n- a\n- b1\n- b2\n- c\n"),
+    "reword the last bullet": ("\n- a\n- b\n", "\n- a\n- b reworded\n"),
+    "reword an item with a continuation": (
+        "\n- a\n  continued\n- b\n",
+        "\n- a\n  continued, reworded\n- b\n",
+    ),
+    "tighten a loose list": ("\n- a\n\n- b\n\n- c\n", "\n- a\n- b\n- c\n"),
+    "loosen a tight list": ("\n- a\n- b\n- c\n", "\n- a\n\n- b\n\n- c\n"),
+    "a double blank collapses": ("\n- a\n\n\n- b\n", "\n- a\n\n- b\n"),
+    "insert and delete in one section": (
+        "\n- a\n- b\n\nTail.\n",
+        "\n- n\n- a\n\nTail.\n\n- m\n",
+    ),
+    "delete a fenced item": (
+        "\n- a\n- f\n  ```\n  code\n\n  more\n  ```\n- c\n\nTail.\n",
+        "\n- a\n- c\n\nTail.\n",
+    ),
+    "insert a fenced paragraph": (
+        "\n- a\n\nTail.\n",
+        "\n- a\n\n```\ncode\n\n- not a bullet\n```\n\nTail.\n",
+    ),
+    "a repeated Links bullet": (
+        "\n**A** a.\n- Links: [[x]]\n\n**B** b.\n- Links: [[x]]\n",
+        "\n**A** a.\n- Links: [[x]]\n\n**B** b.\n- Links: [[x]]\n\n**C** c.\n- Links: [[x]]\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(S1_HANDOFF_CASES))
+def test_s1_handoff_reproduces_the_session_when_origin_did_not_change_the_section(case: str) -> None:
+    base_body, tip_body = S1_HANDOFF_CASES[case]
+    base, tip = _notes(base_body), _notes(tip_body)
+    origin = _with_origin_stamp(base)  # origin only moved the stamp
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == _with_origin_stamp(tip), case
+    # ...and with origin == base the whole file is the session's, byte for byte.
+    assert handoff_merge(base, tip, base, HANDOFF)[0] == tip, case
+
+
+def _random_handoff_pair(seed: int) -> tuple[str, str]:
+    """A base ``## Notes`` section and a session edit of it: random items, separators and edits."""
+    rng = random.Random(seed)
+    counter = [0]
+
+    def item() -> tuple[str, list[str]]:
+        counter[0] += 1
+        n = counter[0]
+        kind = rng.choice(
+            ["bullet", "bullet", "bullet", "para", "cont", "links", "fence", "fenced-para", "spaced"]
+        )
+        return {
+            "bullet": ("b", [f"- item {n}"]),
+            "cont": ("b", [f"- item {n}", f"  continued {n}"]),
+            "links": ("b", ["- Links: [[x]]"]),
+            "para": ("p", [f"Paragraph {n}."]),
+            "fence": ("b", [f"- fenced {n}", "  ```", f"  code {n}", "", "  more", "  ```"]),
+            "fenced-para": ("p", ["```", f"code {n}", "", "- not a bullet", "```"]),
+            "spaced": ("b", [f"- spaced {n}", "  "]),
+        }[kind]
+
+    def render(items: list[tuple[str, list[str]]], seps: list[int]) -> str:
+        seps = [
+            max(sep, 1) if pos + 1 < len(items) and items[pos + 1][0] == "p" else sep
+            for pos, sep in enumerate(seps)
+        ]
+        lines = [""]
+        for (_kind, body), sep in zip(items, seps, strict=True):
+            lines.extend(body)
+            lines.extend([""] * sep)
+        while lines and lines[-1] == "":
+            lines.pop()
+        return "\n".join([*lines, ""]) + "\n"
+
+    items = [item() for _ in range(rng.randint(1, 6))]
+    seps = [rng.choice([0, 0, 1, 1, 2]) for _ in items]
+    tip_items, tip_seps = list(items), list(seps)
+    for _ in range(rng.randint(1, 3)):
+        op = rng.choice(["insert", "insert", "delete", "replace", "separator"])
+        if op == "insert":
+            at = rng.randint(0, len(tip_items))
+            new = [item() for _ in range(rng.randint(1, 3))]
+            tip_items[at:at] = new
+            tip_seps[at:at] = [rng.choice([0, 0, 1, 1]) for _ in new]
+        elif op == "delete" and tip_items:
+            at = rng.randrange(len(tip_items))
+            span = rng.randint(1, min(2, len(tip_items) - at))
+            del tip_items[at : at + span], tip_seps[at : at + span]
+        elif op == "replace" and tip_items:
+            at = rng.randrange(len(tip_items))
+            new = [item() for _ in range(rng.randint(1, 2))]
+            tip_items[at : at + 1] = new
+            tip_seps[at : at + 1] = [rng.choice([0, 1, 1]) for _ in new]
+        elif op == "separator" and tip_seps:
+            tip_seps[rng.randrange(len(tip_seps))] = rng.choice([0, 1, 2])
+    return render(items, seps), render(tip_items, tip_seps)
+
+
+def test_s1_random_handoff_edits_reproduce_the_session_byte_for_byte() -> None:
+    checked = 0
+    for seed in range(600):
+        base_body, tip_body = _random_handoff_pair(seed)
+        if base_body == tip_body:
+            continue
+        base, tip = _notes(base_body), _notes(tip_body)
+        merged, _detail = handoff_merge(base, tip, base, HANDOFF)
+        assert merged == tip, f"seed {seed}: {base_body!r} -> {tip_body!r} gave {merged!r}"
+        checked += 1
+    assert checked > 500, "the generator must produce real edits, not a vacuous pass"
+
+
+def _gotchas_block(entries: str, tail: str = "") -> str:
+    return f"# Gotchas\n\n## Technical\n\n{entries}{tail}"
+
+
+def _brag_block(entries: str, tail: str = "") -> str:
+    return f"# Brag Doc\n\n## Q3 2026\n\n### Wins\n\n{entries}{tail}"
+
+
+_A = "- **2026-09-02 — A.** a detail.\n"
+_B = "- **2026-09-01 — B.** b detail.\n  continued.\n"
+_N = "- **2026-09-03 — N.** new detail.\n"
+_M = "- **2026-09-04 — M.** more new detail.\n"
+_G1 = "### One (2026-09-02)\n\nBody one.\n"
+_G2 = "### Two (2026-09-01)\n\nBody two.\n"
+_GN = "### New (2026-09-03)\n\nBody new.\n"
+
+S1_LEDGER_CASES = {
+    "tight list: insert mid": (_brag_block(_A + _B), _brag_block(_A + _N + _B)),
+    "tight list: append": (_brag_block(_A + _B), _brag_block(_A + _B + _N)),
+    "tight list: insert at top": (_brag_block(_A + _B), _brag_block(_N + _A + _B)),
+    "loose list: insert mid": (_brag_block(_A + "\n" + _B), _brag_block(_A + "\n" + _N + "\n" + _B)),
+    "loose list: append before another anchor": (
+        _brag_block(_A + "\n" + _B + "\n", "### Growth\n\nOther.\n"),
+        _brag_block(_A + "\n" + _B + "\n" + _N + "\n", "### Growth\n\nOther.\n"),
+    ),
+    "loose list ending the file: append keeps no trailing blank": (
+        _brag_block(_A + "\n" + _B),
+        _brag_block(_A + "\n" + _B + "\n" + _N),
+    ),
+    "loose list ending the file: insert mid": (
+        _brag_block(_A + "\n" + _B),
+        _brag_block(_A + "\n" + _N + "\n" + _B),
+    ),
+    "mixed separators: append two": (
+        _brag_block(_A + _B),
+        _brag_block(_A + _B + _N + "\n" + _M),
+    ),
+    "headings: insert at the top": (
+        _gotchas_block(_G1 + "\n" + _G2), _gotchas_block(_GN + "\n" + _G1 + "\n" + _G2)
+    ),
+    "headings: append at the end of the file": (
+        _gotchas_block(_G1 + "\n" + _G2), _gotchas_block(_G1 + "\n" + _G2 + "\n" + _GN)
+    ),
+    "headings with double blanks: insert mid": (
+        _gotchas_block(_G1 + "\n\n" + _G2), _gotchas_block(_G1 + "\n\n" + _GN + "\n" + _G2)
+    ),
+    "edit in place and widen its separator": (
+        _gotchas_block(_G1 + "\n" + _G2),
+        _gotchas_block(_G1.replace("Body one.", "Body one, edited.") + "\n\n" + _G2),
+    ),
+    "only the blank lines change": (
+        _brag_block(_A + _B), _brag_block(_A + "\n" + _B)
+    ),
+    "only the preamble spacing changes": (
+        "# Brag Doc\n\n## Q3 2026\n\n### Wins\nTop note.\n" + _A,
+        "# Brag Doc\n\n## Q3 2026\n\n### Wins\nTop note.\n\n\n" + _A,
+    ),
+    "preamble spacing and an insertion": (
+        "# Brag Doc\n\n## Q3 2026\n\n### Wins\nTop note.\n" + _A,
+        "# Brag Doc\n\n## Q3 2026\n\n### Wins\nTop note.\n\n" + _N + _A,
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(S1_LEDGER_CASES))
+def test_s1_ledger_reproduces_the_session_when_origin_did_not_change_the_block(case: str) -> None:
+    base, tip = S1_LEDGER_CASES[case]
+    merged, _detail = ledger_merge(base, tip, base, BRAG)
+    assert merged == tip, case
+
+
+def _random_ledger_pair(seed: int) -> tuple[str, str]:
+    rng = random.Random(seed)
+    counter = [0]
+    heading = rng.random() < 0.5
+
+    def entry() -> list[str]:
+        counter[0] += 1
+        n = counter[0]
+        day = f"2026-09-{n:02d}"  # one entry per day: an edit pairs with its entry unambiguously
+        if heading:
+            second = [f"Second {n}."] if rng.random() < 0.5 else []
+            return [f"### Title {n} ({day})", "", f"Body {n}.", *second]
+        return [f"- **{day} — Win {n}.** Detail {n}.", *([f"  cont {n}"] if rng.random() < 0.5 else [])]
+
+    def render(entries: list[list[str]], seps: list[int], preamble: list[str]) -> str:
+        lines = ["# Doc", "", "## Technical" if heading else "### Wins", *preamble]
+        for lines_of, sep in zip(entries, seps, strict=True):
+            lines.extend(lines_of)
+            lines.extend([""] * sep)
+        if tail:
+            lines.extend(["## Process" if heading else "### Growth", "", "Other."])
+        return "\n".join(lines) + "\n"
+
+    tail = rng.random() < 0.5
+    entries = [entry() for _ in range(rng.randint(1, 5))]
+    low = 1 if heading else 0
+    seps = [rng.choice([low, 1, 1, 2]) for _ in entries]
+    preamble = rng.choice([[""], [""], ["Preamble text.", ""]])
+    if not tail and rng.random() < 0.7:
+        seps[-1] = 0
+    tip_entries, tip_seps = list(entries), list(seps)
+    for _ in range(rng.randint(1, 3)):
+        op = rng.choice(["insert", "insert", "edit", "separator"])
+        if op == "insert":
+            at = rng.randint(0, len(tip_entries))
+            new = [entry() for _ in range(rng.randint(1, 2))]
+            tip_entries[at:at] = new
+            tip_seps[at:at] = [rng.choice([low, 1, 1]) for _ in new]
+        elif op == "edit":
+            at = rng.randrange(len(tip_entries))
+            tip_entries[at] = [*tip_entries[at][:-1], tip_entries[at][-1] + " EDITED"]
+        elif op == "separator":
+            tip_seps[rng.randrange(len(tip_seps))] = rng.choice([low, 1, 2])
+    return render(entries, seps, preamble), render(tip_entries, tip_seps, preamble)
+
+
+def test_s1_random_ledger_edits_reproduce_the_session_byte_for_byte() -> None:
+    checked = 0
+    for seed in range(600):
+        base, tip = _random_ledger_pair(seed)
+        if base == tip:
+            continue
+        merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+        assert merged == tip, f"seed {seed}: {base!r} -> {tip!r} gave {merged!r}"
+        checked += 1
+    assert checked > 500
+
+
+def test_s1_assertion_refuses_a_handoff_section_that_differs_from_the_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import entry_replay
+
+    base, tip = _notes("\n- a\n- b\n"), _notes("\n- a\n- b\n- n\n")
+    monkeypatch.setattr(
+        entry_replay, "_merge_section_items", lambda *args, **kwargs: ["", "- a", "- b", "", "- n"]
+    )
+    with pytest.raises(RefusalError, match="structural self-check: section '## Notes' differs"):
+        handoff_merge(base, tip, base, HANDOFF)
+    # Origin changed the section: the session's text is no longer the target, so
+    # the exactness assertion stays out of the way (the item-level check owns it).
+    origin = _notes("\n- a\n- b\n- o\n")
+    handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_s1_assertion_refuses_a_ledger_block_that_differs_from_the_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import entry_replay
+
+    base, tip = _brag_block(_A + _B), _brag_block(_A + _N + _B)
+    monkeypatch.setattr(
+        entry_replay, "_splice_interior", lambda *args, **kwargs: ["", *_A.splitlines(), *_B.splitlines()]
+    )
+    with pytest.raises(RefusalError, match="structural self-check: block .* differs"):
+        ledger_merge(base, tip, base, BRAG)
+    origin = _brag_block(_A + _B + _M)
+    ledger_merge(base, tip, origin, BRAG)
+
+
+# S2 -- no merged item that neither side wrote
+
+GLUE_BASE = _notes("\n- a open\n- b resolved\n\nCarried paragraph.\n")
+GLUE_TIP = _notes("\n- a open\n\nCarried paragraph.\n")
+GLUE_GLUED = _notes("\n- a open\nCarried paragraph.\n")
+
+
+def test_s2_compare_texts_reports_a_glued_item_the_line_check_cannot_see() -> None:
+    verdict = compare_texts(GLUE_BASE, GLUE_TIP, GLUE_BASE, GLUE_GLUED, HANDOFF)
+    assert verdict["missing"] == [] and verdict["extra"] == []
+    assert len(verdict["glued"]) == 1 and "Carried paragraph." in verdict["glued"][0]
+    assert compare_texts(GLUE_BASE, GLUE_TIP, GLUE_BASE, GLUE_TIP, HANDOFF)["glued"] == []
+
+
+def test_s2_an_item_beyond_what_either_side_holds_is_glued() -> None:
+    base, tip = _notes("\n- a\n"), _notes("\n- a\n- n\n")
+    thrice = _notes("\n- a\n- n\n- n\n- n\n")
+    assert compare_texts(base, tip, base, thrice, HANDOFF)["glued"]
+    both_added = compare_texts(base, tip, _notes("\n- a\n- n\n"), _notes("\n- a\n- n\n- n\n"), HANDOFF)
+    assert both_added["glued"] == [], "an item both sides wrote may stand twice"
+
+
+def test_s2_merge_refuses_a_glued_handoff_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    import entry_replay
+
+    origin = _hd("## Other\n\n- o\n\n") + "## Notes\n- a open\n- b resolved\n\nCarried paragraph.\n"
+    base = _hd("## Other\n\n- x\n\n") + "## Notes\n- a open\n- b resolved\n\nCarried paragraph.\n"
+    tip = _hd("## Other\n\n- x\n\n") + "## Notes\n- a open\n\nCarried paragraph.\n"
+    glued = _hd("## Other\n\n- o\n\n") + "## Notes\n- a open\nCarried paragraph.\n"
+    monkeypatch.setattr(entry_replay, "handoff_merge", lambda *a, **k: (glued, {"unchanged": False}))
+    with pytest.raises(RefusalError, match="structural self-check: merged section 'Notes' contains an item"):
+        _merge_hub_file(HANDOFF, base, tip, origin)
+
+
+def test_s2_merge_refuses_a_ledger_entry_whose_lines_landed_under_another_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every line is there, but N's continuation moved under B: the line check passes."""
+    import entry_replay
+
+    note = "- **2026-09-03 — N.** new detail.\n  n continuation.\n"
+    base = _brag_block(_A + "\n" + _B)
+    tip = _brag_block(_A + "\n" + note + "\n" + _B)
+    origin = _brag_block(_A + "\n" + _B + "\n" + _M)
+    moved = _brag_block(
+        _A
+        + "\n- **2026-09-03 — N.** new detail.\n\n"
+        + "- **2026-09-01 — B.** b detail.\n  n continuation.\n  continued.\n"
+        + "\n"
+        + _M
+    )
+    monkeypatch.setattr(entry_replay, "ledger_merge", lambda *a, **k: (moved, {"unchanged": False}))
+    with pytest.raises(RefusalError, match="structural self-check: merged block .* contains an item"):
+        _merge_hub_file(BRAG, base, tip, origin)
+
+
+def test_s2_real_merges_with_origin_edits_never_trip_the_glue_check() -> None:
+    """A correct merge has no glued item: origin edits the same section, the check stays quiet."""
+    merged_count = 0
+    for seed in range(300):
+        base_body, tip_body = _random_handoff_pair(seed)
+        _unused, origin_body = _random_handoff_pair(seed)  # same base, an independent-looking edit
+        origin_body = _random_handoff_pair(seed + 5000)[1] if False else origin_body
+        base, tip, origin = _notes(base_body), _notes(tip_body), _notes(origin_body)
+        try:
+            _merge_hub_file(HANDOFF, base, tip, origin)
+        except RefusalError as exc:
+            assert "structural self-check" not in str(exc), f"seed {seed}: {exc}"
+            continue
+        merged_count += 1
+    assert merged_count > 100
+
+
+def test_s2_verify_fails_on_a_glued_rebuild(tmp_path: Path) -> None:
+    _remote, local, peer, _seed_base = _make_vault(tmp_path)
+    carried = _read(local, HANDOFF).replace(
+        "- [[proj-b]]: close the parity ticket.\n",
+        "- [[proj-b]]: close the parity ticket.\n- [[proj-c]]: resolved thread.\n\nCarried paragraph.\n",
+    )
+    _write(local, HANDOFF, carried)
+    _commit_all(local, "seed the carried paragraph")
+    _git(local, "push", "-q")
+    _git(peer, "pull", "-q", "--ff-only")
+    base = _head(local)
+    _write(peer, HANDOFF, _read(peer, HANDOFF).replace("Nothing unattended.", "One probe running."))
+    origin = _peer_push(peer)
+    _write(local, HANDOFF, carried.replace("- [[proj-c]]: resolved thread.\n", ""))
+    tip = _commit_all(local, "session resolves the thread")
+    _git(local, "fetch", "-q", "origin")
+    _git(local, "switch", "-q", "-c", "rebuild", origin)
+    glued = (
+        _read(local, HANDOFF)
+        .replace("- [[proj-c]]: resolved thread.\n", "")
+        .replace("ticket.\n\nCarried paragraph.", "ticket.\nCarried paragraph.")
+    )
+    _write(local, HANDOFF, glued)
+    result = _commit_all(local, "glued rebuild")
+    _git(local, "switch", "-q", "main")
+
+    proc = _verify(local, base, tip, origin, result)
+
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    entry = json.loads(proc.stdout)["files"][HANDOFF]
+    assert entry["glued"] and "Carried paragraph." in entry["glued"][0]
+    assert entry["missing"] == [] and entry["extra"] == []
+    text = _run_raw(
+        local, "--verify", "--base", base, "--tip", tip, "--origin", origin, "--result", result
+    ).stdout
+    assert "glued:" in text and "verify: FAIL" in text
+
+
+# P-a -- the item before a deleted or replaced run takes the session's separator
+
+
+def test_pa_deleting_a_bullet_keeps_the_blank_line_before_the_paragraph_that_followed_it() -> None:
+    base = _hd(
+        "## Open threads\n\n- a open\n- b resolved\n\nCarried paragraph.\n\n## Mode\n\nVault first.\n"
+    )
+    tip = base.replace("- b resolved\n", "")
+    origin = base.replace("Vault first.", "Vault first, and tests.")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- a open\n\nCarried paragraph.\n" in merged
+    assert merged == tip.replace("Vault first.", "Vault first, and tests.")
+
+
+def test_pa_turning_a_tight_bullet_into_a_paragraph_keeps_it_apart_from_the_bullet_above() -> None:
+    base = _hd("## Open threads\n\n- a open\n- b open\n- c open\n\n## Mode\n\nVault first.\n")
+    tip = base.replace("- b open\n", "\nb is now a paragraph.\n")
+    origin = base.replace("Vault first.", "Vault first, and tests.")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- a open\n\nb is now a paragraph.\n- c open\n" in merged
+
+
+def test_pa_a_bullet_deleted_next_to_an_item_origin_added_does_not_glue() -> None:
+    base = _hd("## Open threads\n\n- a open\n- b resolved\n\nCarried paragraph.\n\n## Mode\n\nVault first.\n")
+    tip = base.replace("- b resolved\n", "")
+    origin = base.replace("- a open\n", "- a open\n- o added by origin\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "- o added by origin\n\nCarried paragraph.\n" in merged
+    assert "- b resolved" not in merged
+
+
+# P-b -- an inserted item is a duplicate only of what origin put in the same gap
+
+TOPICS_BASE = _notes("\n**Topic A** a.\n- Links: [[x]]\n\n**Topic B** b.\n")
+
+
+def test_pb_a_links_bullet_survives_an_identical_one_origin_added_elsewhere() -> None:
+    tip = TOPICS_BASE.replace(_NOTES_TAIL, "\n**Topic C** c.\n- Links: [[x]]\n" + _NOTES_TAIL)
+    origin = TOPICS_BASE.replace(
+        "\n**Topic B** b.", "**Topic D** d.\n- Links: [[x]]\n\n**Topic B** b."
+    ).replace("- Links: [[x]]\n**Topic D**", "- Links: [[x]]\n\n**Topic D**")
+    merged, _detail = handoff_merge(TOPICS_BASE, tip, origin, HANDOFF)
+    assert "**Topic C** c.\n- Links: [[x]]\n" in merged
+    assert merged.count("- Links: [[x]]") == 3
+    assert "**Topic D** d.\n- Links: [[x]]\n" in merged
+
+
+def test_pb_an_item_both_sides_added_in_the_same_gap_is_still_not_inserted_twice() -> None:
+    base = _notes("\n- a\n- b\n")
+    tip = _notes("\n- a\n- b\n- shared\n")
+    origin = _notes("\n- a\n- b\n- shared\n- o\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.count("- shared") == 1 and "- o" in merged
+
+
+# P-c -- a new ledger entry keeps the session's own blank lines
+
+
+def test_pc_a_new_entry_is_not_glued_to_a_neighbour_origin_left_without_a_blank_line() -> None:
+    base = _brag_block(_A + "\n" + _B)
+    tip = _brag_block(_A + "\n" + _N + "\n" + _B)
+    origin = _brag_block(_A + _B)  # origin tightened the list
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert merged == _brag_block(_A + "\n" + _N + "\n" + _B)
+
+
+def test_pc_an_entry_appended_after_the_same_predecessor_as_origins_keeps_a_blank_before_origins() -> None:
+    base = _brag_block(_A)
+    tip = _brag_block(_A + "\n" + _N)
+    origin = _brag_block(_A + _M)  # tight, ends the file
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert merged == _brag_block(_A + "\n" + _N + "\n" + _M)
+
+
+def test_pc_a_tight_session_list_stays_tight_when_origin_is_loose() -> None:
+    base = _brag_block(_A + _B)
+    tip = _brag_block(_A + _N + _B)
+    origin = _brag_block(_A + "\n" + _B + "\n" + _M)
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert _A + _N + "\n" + _B in merged or _A + _N + _B in merged
+    assert "N.** new detail.\n- **2026-09-01" in merged, "the session's tight separator after N is kept"
+
+
+def test_pc_a_new_entry_at_the_top_takes_the_sessions_separator_under_the_preamble() -> None:
+    base = _gotchas_block(_G1 + "\n" + _G2)
+    tip = _gotchas_block(_GN + "\n" + _G1 + "\n" + _G2)
+    origin = base.replace("Body two.", "Body two, edited on origin.")
+    merged, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert merged == _gotchas_block(_GN + "\n" + _G1 + "\n" + _G2.replace("Body two.", "Body two, edited on origin."))
+
+
+# P-d -- the amend guard: the session re-adds an entry origin already has since the base
+
+
+def test_pd_an_amended_pushed_entry_refuses(tmp_path: Path) -> None:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    pushed = gotchas_entry("Retry budget", "2026-09-18", "The probe gives up after 3 retries.")
+    _write(local, GOTCHAS, insert_under(_read(local, GOTCHAS), "## Technical", pushed))
+    _commit_all(local, "vault wrap-up (mid-session)")
+    _git(local, "push", "-q")
+    _git(peer, "pull", "-q", "--ff-only")
+    # The session amends the pushed commit: the entry now says 5 retries.
+    _write(local, GOTCHAS, _read(local, GOTCHAS).replace("after 3 retries", "after 5 retries"))
+    _git(local, "add", "-A")
+    _git(local, "commit", "-q", "--amend", "--no-edit")
+    peer_entry = gotchas_entry("Peer gotcha", "2026-09-19", "Peer body, nothing to do with retries.")
+    _write(peer, GOTCHAS, insert_under(_read(peer, GOTCHAS), "## Technical", peer_entry))
+    _peer_push(peer)
+    head_before, branch_before = _head(local), _branch(local)
+
+    report = _run_replay(local, base, *_health_args(tmp_path, HEALTH_OK), expect_rc=1)
+
+    assert report["action"] == "refused"
+    assert "amended or rebased" in report["reason"], report["reason"]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_pd_the_guard_is_about_the_same_entry_not_every_same_day_entry() -> None:
+    base = GOTCHAS_SEED
+    theirs = gotchas_entry("Origin entry", "2026-09-20", "Origin explains the rate limiter in detail.")
+    mine = gotchas_entry("Session entry", "2026-09-20", "A wholly separate matter: the cache warmed twice.")
+    merged, detail = ledger_merge(
+        base,
+        insert_under(base, "## Technical", mine),
+        insert_under(base, "## Technical", theirs),
+        GOTCHAS,
+    )
+    assert detail["inserted"] == 1 and "Origin entry" in merged and "Session entry" in merged
+
+
+def test_pd_the_same_entry_added_identically_on_both_sides_is_not_a_re_add() -> None:
+    base = GOTCHAS_SEED
+    both = gotchas_entry("Both wrote it", "2026-09-20", "Identical body.")
+    merged, detail = ledger_merge(
+        base, insert_under(base, "## Technical", both), insert_under(base, "## Technical", both), GOTCHAS
+    )
+    assert merged.count("### Both wrote it") == 1 and detail["duplicates_skipped"] == 1
+
+
+# P-e -- origin already holds the session's edited version beside the base one
+
+
+def test_pe_origin_holding_both_the_old_entry_and_a_copy_of_the_edit_refuses() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Second line of that body.", "Second line, corrected.")
+    edited = gotchas_entry(
+        "Stale tracking refs lie after a push",
+        "2026-09-15",
+        "Body of the tracking-ref gotcha.\nSecond line, corrected.",
+    )
+    origin = base.replace("### Bytecode cache hides a mutation (2026-09-10)", edited + "\n### Bytecode cache hides a mutation (2026-09-10)")
+    with pytest.raises(RefusalError, match="twice"):
+        ledger_merge(base, tip, origin, GOTCHAS)
+
+
+def test_pe_origin_that_already_made_the_same_correction_still_accepts() -> None:
+    base = GOTCHAS_SEED
+    tip = base.replace("Second line of that body.", "Second line, corrected.")
+    merged, detail = ledger_merge(base, tip, tip, GOTCHAS)
+    assert merged == tip and detail["duplicates_skipped"] == 1
+
+
+# Edges the mutation run asked for ---------------------------------------------
+
+
+def test_pc_an_entry_written_before_a_neighbour_origin_removed_ends_origins_block() -> None:
+    """The session wrote N before B, but origin removed B: N ends origin's block, so it
+    takes origin's end-of-block separator, not the one that led into B."""
+    base = _brag_block(_A + "\n" + _B)
+    tip = _brag_block(_A + "\n" + _N + "\n" + _B)
+    merged, _detail = ledger_merge(base, tip, _brag_block(_A), BRAG)
+    assert merged == _brag_block(_A + "\n" + _N)
+
+
+def test_pc_an_entry_ending_the_sessions_file_does_not_glue_to_the_next_anchor_on_origin() -> None:
+    base = _brag_block(_A)
+    tip = _brag_block(_A + "\n" + _N)  # the session's block ends the file
+    origin = _brag_block(_A + "\n", "### Growth\n\nOther.\n")  # origin's does not
+    merged, _detail = ledger_merge(base, tip, origin, BRAG)
+    assert merged == _brag_block(_A + "\n" + _N + "\n", "### Growth\n\nOther.\n")
+
+
+def test_pa_a_deleted_bullet_leaves_a_blank_before_a_paragraph_origin_appended() -> None:
+    """The session's blank count for the item before the deletion was written against the
+    end of the section; origin put a paragraph after the deleted bullet, so the blank
+    that separated the bullet from it is kept."""
+    base = _notes("\nPara.\n- b\n")
+    tip = _notes("\nPara.\n")
+    origin = _notes("\nPara.\n- b\n\nParagraph O.\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged.split("## Notes")[1] == "\n\nPara.\n\nParagraph O.\n\n## Mode\n\nVault first.\n"
+
+
+def test_s2_a_base_item_both_sides_kept_stands_once() -> None:
+    base, tip = _notes("\n- a\n"), _notes("\n- a\n- n\n")
+    twice = _notes("\n- a\n- a\n- n\n")
+    assert compare_texts(base, tip, base, twice, HANDOFF)["glued"]
+    assert compare_texts(base, tip, base, tip, HANDOFF)["glued"] == []
+
+
+def test_pd_an_entry_similar_to_one_both_sides_already_had_is_not_a_re_add() -> None:
+    """The guard is about entries origin ADDED since the base, not every entry on origin."""
+    base = GOTCHAS_SEED
+    twin = gotchas_entry(
+        "Stale tracking refs lie after a push", "2026-09-15", "Body of the tracking-ref gotcha, restated."
+    )
+    tip = insert_under(base, "## Technical", twin)
+    merged, detail = ledger_merge(base, tip, base.replace("Second line of that body.", "Edited on origin."), GOTCHAS)
+    assert detail["inserted"] == 1 and merged.count("### Stale tracking refs lie after a push") == 2

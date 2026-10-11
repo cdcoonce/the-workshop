@@ -149,3 +149,41 @@ def test_classify_origins_lines_reordered_is_not_order_preserving() -> None:
     # O moves below B: origin's own line order (O before A before B) is broken.
     bucket, _flags = _grade(reordered)
     assert bucket == "blank-structure-equal"
+
+
+# ---------------------------------------------------------------------------
+# Self-replay: origin == base must give back the commit byte for byte
+# ---------------------------------------------------------------------------
+
+
+def test_self_replay_counts_a_hub_commit_as_exact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _isolate_git(monkeypatch)
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _git(vault, "init", "-q", "-b", "main")
+    ledger = vault / "brain" / "Gotchas.md"
+    ledger.parent.mkdir()
+    ledger.write_text(LEDGER, encoding="utf-8")
+    _git(vault, "add", "-A")
+    _git(vault, "commit", "-q", "-m", "seed")
+    ledger.write_text(
+        LEDGER.replace("### Old", _entry("Session gotcha", "2026-09-20") + "### Old"),
+        encoding="utf-8",
+    )
+    _git(vault, "commit", "-qam", "session wrap-up")
+
+    rc = backtest.main(
+        ["--vault", str(vault), "--since", "2020-01-01", "--baseline-ref", "HEAD", "--ref", "main"]
+    )
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "self-replay (origin == base)" in out
+    section = out.split("self-replay (origin == base)", 1)[1]
+    assert "hub-file commits" in section and "brain/Gotchas.md" in section
+    exact_row = next(line for line in section.splitlines() if line.strip().startswith("exact"))
+    assert exact_row.split()[-1] == "1"  # the candidate (last column) reproduces the commit
+    inexact_row = next(line for line in section.splitlines() if line.strip().startswith("inexact"))
+    assert inexact_row.split()[-1] == "0"

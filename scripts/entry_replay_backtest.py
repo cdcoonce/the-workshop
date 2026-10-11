@@ -15,7 +15,7 @@ Usage, from the workshop repository root::
 
 The vault is only ever read (``git show``, ``git merge-file`` on temp copies).
 
-Two measurements, both run in the vault repository:
+Three measurements, all run in the vault repository:
 
 1. **Reflog events.** Every ``rebase ... (start)`` line in
    ``<git-common-dir>/logs/HEAD``, ``worktrees/*/logs/HEAD`` and
@@ -29,6 +29,13 @@ Two measurements, both run in the vault repository:
    ``A^``, origin ``A``, tip = B's change applied to ``A^``. The expected
    result is ``B:f``; pairs are stratified by whether plain
    ``git merge-file`` of the same three versions conflicts.
+
+3. **Self-replay.** Every first-parent commit C since ``--since`` that changed
+   a hub file is replayed with ``origin == base``: base ``C^:f``, tip ``C:f``,
+   origin ``C^:f``. Nobody else touched the file, so a correct merge must give
+   back ``C:f`` byte for byte (the exactness invariant S1). Reported per module
+   as exact / accepted-but-not-exact / refused (with the structural
+   self-check refusals counted apart) / crashed, overall and per file.
 
 An accepted pair is graded against the text the session really committed
 (``classify_merge``), not just by whether it has the same lines: ``exact``,
@@ -323,6 +330,7 @@ class Tally:
     files_crash: int = 0
     invariant_violations: int = 0
     reasons: Counter[str] = field(default_factory=Counter)
+    refusals: list[str] = field(default_factory=list)  # "tip..onto path: full reason"
 
 
 def measure_reflog(
@@ -370,6 +378,7 @@ def measure_reflog(
                     tally.files_refuse += outcome.status == "refuse"
                     tally.files_crash += outcome.status == "crash"
                     tally.reasons[outcome.reason[:90]] += 1
+                    tally.refusals.append(f"{tip[:8]}..{onto[:8]} {path}: {outcome.reason}")
             tally.event_pass += accepted_all
     return counts, tallies, notes
 
@@ -426,6 +435,50 @@ def measure_pairs(
 
 
 # ---------------------------------------------------------------------------
+# Measurement 3: self-replay (origin == base)
+# ---------------------------------------------------------------------------
+
+
+def measure_self_replay(
+    vault: Vault, ref: str, since: str, modules: dict[str, ModuleType], checker: ModuleType
+) -> tuple[Counter[str], list[str]]:
+    """Replay each hub-file commit with nothing else changed: the result must be the commit.
+
+    For a first-parent commit C that changed hub file ``f`` (both versions
+    exist), ``base = C^:f``, ``tip = C:f``, ``origin = base``. A merge that does
+    not return ``tip`` byte for byte has damaged the session's own change.
+    """
+    counts: Counter[str] = Counter()
+    notes: list[str] = []
+    for path in hub_files(vault, ref, checker):
+        revs = vault.git(
+            "log", "--first-parent", "--format=%H", "--since", since, ref, "--", path
+        ).stdout.split()
+        for rev in revs:
+            base, tip = vault.blob(rev + "^", path), vault.blob(rev, path)
+            if base is None or tip is None or base == tip:
+                counts["skipped"] += 1
+                continue
+            counts["commits"] += 1
+            counts[f"path:{path}"] += 1
+            for label, module in modules.items():
+                outcome = run_merge(module, path, base, tip, base)
+                if outcome.status == "accept":
+                    kind = "exact" if outcome.merged == tip else "inexact"
+                elif "structural self-check" in outcome.reason:
+                    kind = "structural-refused"
+                else:
+                    kind = outcome.status  # "refuse" | "crash"
+                counts[f"{label}-{kind}"] += 1
+                counts[f"{label}-{kind}:{path}"] += 1
+                if kind in ("refuse", "structural-refused"):
+                    counts[f"reason:{label}:{outcome.reason[:80]}"] += 1
+                if kind in ("inexact", "structural-refused", "crash"):
+                    notes.append(f"{label} {kind} {path} {rev[:8]}: {outcome.reason[:120]}")
+    return counts, notes
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
@@ -438,6 +491,8 @@ def print_report(
     pair_counts: Counter[str],
     wrong: list[str],
     labels: list[str],
+    self_counts: Counter[str] | None = None,
+    self_notes: list[str] | None = None,
 ) -> None:
     hub = counts["hub-only-events"]
     print(f"== reflog events since {since} ==")
@@ -494,6 +549,45 @@ def print_report(
     for item in wrong[:10]:
         print(f"  !! LINES DIFFER {item}")
 
+    if self_counts is not None:
+        print_self_replay(since, self_counts, self_notes or [], labels)
+    for label in labels:
+        if tallies[label].refusals:
+            print(f"\n== every refusal of a hub-only conflicting event ({label}) ==")
+            for line in tallies[label].refusals:
+                print(f"  {line}")
+
+
+def print_self_replay(
+    since: str, counts: Counter[str], notes: list[str], labels: list[str]
+) -> None:
+    header = "".join(f"{label:>12}" for label in labels)
+    print(f"\n== self-replay (origin == base) since {since} ==")
+    print(f"  {'hub-file commits':26} {counts['commits']}   (skipped: {counts['skipped']})")
+    print(f"\n  {'result':26}{header}")
+    for kind in ("exact", "inexact", "structural-refused", "refuse", "crash"):
+        cells = "".join(f"{counts[f'{label}-{kind}']:>12}" for label in labels)
+        print(f"  {kind:26}{cells}")
+    paths = sorted(key.removeprefix("path:") for key in counts if key.startswith("path:"))
+    if paths:
+        print("\n  per file: exact / commits")
+        for path in paths:
+            total = counts[f"path:{path}"]
+            cells = "".join(f"{counts[f'{label}-exact:{path}']}/{total}".rjust(12) for label in labels)
+            print(f"  {path[:26]:26}{cells}")
+    for label in labels:
+        reasons = [
+            (n, key.split(":", 2)[2])
+            for key, n in counts.items()
+            if key.startswith(f"reason:{label}:")
+        ]
+        if reasons:
+            print(f"\n  self-replay refusals by reason ({label}):")
+            for n, reason in sorted(reasons, reverse=True)[:8]:
+                print(f"    {n:3}  {reason}")
+    for note in notes[:20]:
+        print(f"  !! {note}")
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Backtest entry_replay against vault history.")
@@ -528,7 +622,10 @@ def main(argv: list[str] | None = None) -> int:
     modules = {"baseline": baseline, "candidate": candidate}
     counts, tallies, notes = measure_reflog(vault, since_epoch, modules, candidate)
     pair_counts, wrong = measure_pairs(vault, ref, args.since, modules, candidate)
-    print_report(args.since, counts, tallies, notes, pair_counts, wrong, list(modules))
+    self_counts, self_notes = measure_self_replay(vault, ref, args.since, modules, candidate)
+    print_report(
+        args.since, counts, tallies, notes, pair_counts, wrong, list(modules), self_counts, self_notes
+    )
     return 0
 
 
