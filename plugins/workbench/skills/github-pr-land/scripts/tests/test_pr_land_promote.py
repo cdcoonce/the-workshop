@@ -290,3 +290,42 @@ def test_cli_promote_resolves_repo_and_threads_its_flags(world, capsys) -> None:
     assert clock.sleeps == [7]
     assert hub.fake.calls[0] == REPO_VIEW
     assert f"promoted pr={PR} sha={hub.head_sha}" in capsys.readouterr().out
+
+
+def test_promotion_accepts_head_repo_that_differs_only_in_case(world, capsys) -> None:
+    """Guards against refusing a same-repo PR because GitHub reports the name in another case."""
+    hub, runner, origin = world
+    hub.head_repo = REPO.upper()
+    code = promote(runner, FakeClock())
+    assert code == GREEN
+    assert hub.main() == hub.head_sha
+
+
+@pytest.mark.parametrize("head_repo", [f"{REPO}-fork", f"{REPO}2"])
+def test_head_repo_sharing_the_base_name_as_a_prefix_is_refused(world, capsys, head_repo) -> None:
+    """Guards against prefix-matching the head repository, which would admit a look-alike fork."""
+    hub, runner, origin = world
+    hub.head_repo = head_repo
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert head_repo in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main
+
+
+@pytest.mark.parametrize(
+    "head_repo_payload",
+    [{"repo": None}, {"repo": REPO}, {"repo": {"full_name": 5}}],
+    ids=["null-repo", "string-repo", "non-string-full-name"],
+)
+def test_malformed_head_repo_payload_is_refused_not_a_crash(world, capsys, head_repo_payload) -> None:
+    """Guards against a malformed head.repo crashing or being read as same-repo."""
+    hub, runner, origin = world
+    hub._head_repo = lambda: head_repo_payload
+    code = promote(runner, FakeClock())
+    captured = capsys.readouterr()
+    assert code == INDETERMINATE
+    assert "head repository" in captured.out + captured.err
+    assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
+    assert hub.main() == hub.initial_main

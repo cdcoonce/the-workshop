@@ -565,6 +565,14 @@ class TestMarkdownAnalyzerReferenceLinks:
         assert len(md052_issues) == 1
         assert "foo" in md052_issues[0].message
 
+    def test_reference_label_case_differs_between_definition_and_use(self):
+        """Guards against reporting [Foo] as undefined when [foo] is used (labels are case-insensitive)."""
+        content = "# Title\n\nSee [the thing][foo].\n\n[Foo]: https://example.com\n"
+        result = analyze_markdown(content)
+
+        md052_issues = [i for i in result.issues if i.rule_id == "MD052"]
+        assert md052_issues == []
+
 
 class TestMarkdownAnalyzerEncodingCorruption:
     """Tests for the encoding-corruption map and its auto-fix."""
@@ -575,6 +583,12 @@ class TestMarkdownAnalyzerEncodingCorruption:
 
         assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9c"] == "\u201c"
         assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9d"] == "\u201d"
+
+    def test_corruption_map_has_the_expected_entry_count(self):
+        """Guards against the dict silently losing or merging entries (the #608 collapse)."""
+        from markdown_analyzer import ENCODING_CORRUPTION_MAP
+
+        assert len(ENCODING_CORRUPTION_MAP) == 63
 
     def test_corrupted_curly_quotes_suggest_proper_curly_quotes(self):
         """The auto-fix for a mis-encoded quoted word yields real curly quotes."""

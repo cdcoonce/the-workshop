@@ -68,6 +68,27 @@
       "oracle": "real",
       "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
       "replace": "if isinstance(head_repo, str) and head_repo.casefold() != repo.casefold():"
+    },
+    {
+      "label": "#1051: head repo compared case-sensitively (test_promotion_accepts_head_repo_that_differs_only_in_case)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
+      "replace": "if not isinstance(head_repo, str) or head_repo != repo:"
+    },
+    {
+      "label": "#1051: head repo prefix-matched, admitting look-alike forks (test_head_repo_sharing_the_base_name_as_a_prefix_is_refused)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():",
+      "replace": "if not isinstance(head_repo, str) or not head_repo.casefold().startswith(repo.casefold()):"
+    },
+    {
+      "label": "#1051: a non-dict head.repo payload is trusted instead of refused (test_malformed_head_repo_payload_is_refused_not_a_crash)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "isinstance(head_repo_payload, dict)",
+      "replace": "head_repo_payload is not None"
     }
   ]
 }
