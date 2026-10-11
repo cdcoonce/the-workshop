@@ -20,7 +20,7 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from content_classifier import classify, routing_hook_output
+from content_classifier import DEFAULT_RESULT, classify, routing_hook_output
 
 
 def main() -> int:
@@ -41,8 +41,8 @@ def main() -> int:
     # Classify the message
     result = classify(prompt)
 
-    # Only inject hints if we matched something (not the default "thought")
-    if result.category == "thought":
+    # Only inject hints if we matched something (not the configured default category)
+    if result.category == DEFAULT_RESULT.category:
         return 0
 
     print(json.dumps(routing_hook_output(result)))

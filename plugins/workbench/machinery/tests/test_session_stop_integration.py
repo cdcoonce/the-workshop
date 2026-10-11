@@ -290,3 +290,52 @@ class TestSystemMessageShapes:
         payload = json.loads(result.stdout)
         assert set(payload.keys()) == {"systemMessage"}
         assert "Session stop hook crashed" in payload["systemMessage"]
+
+
+class TestBranchStatusTimeout:
+    """A hung git call must degrade to a skipped auto-sync, not abort the hook."""
+
+    @staticmethod
+    def _hang(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="git", timeout=10)
+
+    def test_sync_branch_status_swallows_timeout(self, vault: Path) -> None:
+        with patch("session_stop.subprocess.run", side_effect=self._hang):
+            on_sync_branch, _cur, _default = session_stop._sync_branch_status(vault)
+
+        assert on_sync_branch is False
+
+    def test_sync_branch_status_swallows_timeout_on_second_call(self, vault: Path) -> None:
+        calls = {"n": 0}
+
+        def second_hangs(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise subprocess.TimeoutExpired(cmd="git", timeout=10)
+            return subprocess.CompletedProcess(args, 0, stdout="main\n", stderr="")
+
+        with patch("session_stop.subprocess.run", side_effect=second_hangs):
+            on_sync_branch, _cur, _default = session_stop._sync_branch_status(vault)
+
+        assert calls["n"] == 2
+        assert on_sync_branch is False
+
+    def test_main_skips_sync_on_branch_status_timeout(
+        self,
+        vault: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (vault / "perf").mkdir()
+        (vault / ".vault").mkdir(parents=True, exist_ok=True)
+        (vault / ".vault" / "vault.json").write_text('{"vault": "test"}\n')
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(vault))
+        with patch("session_stop.subprocess.run", side_effect=self._hang), \
+             patch("session_stop.push") as mock_push, \
+             patch.object(sys, "argv", ["session-stop.py", "--explicit-sync", "--path", "note.md"]):
+            exit_code = session_stop.main()
+
+        assert exit_code == 0
+        mock_push.assert_not_called()
+        payload = json.loads(capsys.readouterr().out)
+        assert "timed out" in payload["systemMessage"]

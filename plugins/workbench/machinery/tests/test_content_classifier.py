@@ -158,6 +158,32 @@ class TestIdeaCategory:
         result = classify("Brainstorm: automated anomaly detection for our key metrics")
         assert result.category == "project-idea"
 
+    def test_concept_for_is_an_idea_not_learning(self) -> None:
+        result = classify("I have a concept for a budget tracker app")
+        assert result.category == "project-idea"
+
+
+class TestConceptPhrasings:
+    """#1142: narrowing bare 'concept' must not orphan learning phrasings."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "I read about the concept of monads",
+            "the concept behind CAP",
+            "explaining a concept to my team",
+            "concepts in distributed systems",
+        ],
+    )
+    def test_concept_phrasings_route_to_learning(self, text: str) -> None:
+        assert classify(text).category == "learning"
+
+    def test_concept_for_still_project_idea(self) -> None:
+        assert classify("concept for a habit app").category == "project-idea"
+
+    def test_a_concept_for_still_project_idea(self) -> None:
+        assert classify("a concept for a habit app").category == "project-idea"
+
 
 class TestDefaultCategory:
     def test_empty_string(self) -> None:

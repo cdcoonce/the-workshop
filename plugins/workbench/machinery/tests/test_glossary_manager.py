@@ -278,3 +278,98 @@ class TestEnsureFiles:
         assert "## People" in content
         assert "## Terms" in content
         assert "## Projects" in content
+
+
+class TestPipeEscaping:
+    """A literal ``|`` in a value must not add a column to the written row."""
+
+    def test_glossary_entry_with_pipe_round_trips(self, glossary: Path, vault: Path) -> None:
+        add_glossary_entry(vault, "Split|Term", "internal | external facing", "Ops | Sales")
+
+        entries = {e.term: e for e in parse_glossary(glossary)}
+
+        entry = entries["Split|Term"]
+        assert entry.meaning == "internal | external facing"
+        assert entry.category == "Ops | Sales"
+
+    def test_glossary_pipe_entry_does_not_disturb_neighbours(
+        self, glossary: Path, vault: Path
+    ) -> None:
+        before = {e.term: (e.meaning, e.category) for e in parse_glossary(glossary)}
+        add_glossary_entry(vault, "Piped", "a | b", "c")
+
+        after = {e.term: (e.meaning, e.category) for e in parse_glossary(glossary)}
+
+        assert after.pop("Piped") == ("a | b", "c")
+        assert after == before
+
+    def test_glossary_pipe_entry_can_be_removed_and_deduped(
+        self, glossary: Path, vault: Path
+    ) -> None:
+        add_glossary_entry(vault, "Piped", "a | b", "c")
+        add_glossary_entry(vault, "piped", "other", "other")
+
+        assert [e.term for e in parse_glossary(glossary)].count("Piped") == 1
+        assert remove_glossary_entry(vault, "Piped") is True
+
+    @pytest.mark.parametrize("section", ["People", "Projects"])
+    def test_quick_ref_three_column_entry_with_pipe_round_trips(
+        self, quick_ref: Path, vault: Path, section: str
+    ) -> None:
+        add_quick_ref_entry(vault, section, "Pipe|Name", "IT | Ops", "contact | owner")
+
+        entry = next(e for e in parse_quick_reference(quick_ref) if e.name == "Pipe|Name")
+
+        assert entry.section == section
+        assert entry.col2 == "IT | Ops"
+        assert entry.col3 == "contact | owner"
+
+    def test_quick_ref_terms_entry_with_pipe_round_trips(
+        self, quick_ref: Path, vault: Path
+    ) -> None:
+        add_quick_ref_entry(vault, "Terms", "PipeTerm", "x | y", "")
+
+        entry = next(e for e in parse_quick_reference(quick_ref) if e.name == "PipeTerm")
+
+        assert entry.col2 == "x | y"
+
+    def test_glossary_term_with_pipe_is_deduped_and_removable(
+        self, glossary: Path, vault: Path
+    ) -> None:
+        add_glossary_entry(vault, "Split|Term", "m", "c")
+        add_glossary_entry(vault, "split|term", "other", "other")
+
+        assert [e.term for e in parse_glossary(glossary)].count("Split|Term") == 1
+        assert remove_glossary_entry(vault, "Split|Term") is True
+        assert "Split|Term" not in [e.term for e in parse_glossary(glossary)]
+
+    def test_quick_ref_name_with_pipe_is_deduped_and_removable(
+        self, quick_ref: Path, vault: Path
+    ) -> None:
+        add_quick_ref_entry(vault, "People", "Pipe|Name", "a", "b")
+        add_quick_ref_entry(vault, "People", "pipe|name", "c", "d")
+
+        names = [e.name for e in parse_quick_reference(quick_ref)]
+        assert names.count("Pipe|Name") == 1
+        assert remove_quick_ref_entry(vault, "People", "Pipe|Name") is True
+
+
+def _unescaped_pipes(row: str) -> int:
+    return row.count("|") - row.count("\\|")
+
+
+class TestPipeEscapingInKeys:
+    """#774: a raw ``|`` in a term / quick-ref name must not add a table column."""
+
+    def test_glossary_term_pipe_keeps_four_pipes(self, vault: Path, glossary: Path) -> None:
+        add_glossary_entry(vault, "Split|Term", "meaning", "acronym")
+
+        row = next(line for line in glossary.read_text(encoding="utf-8").splitlines() if "Split" in line)
+        assert _unescaped_pipes(row) == 4
+
+    @pytest.mark.parametrize("section", ["People", "Projects"])
+    def test_quick_ref_name_pipe_keeps_four_pipes(self, vault: Path, quick_ref: Path, section: str) -> None:
+        add_quick_ref_entry(vault, section, "Pipe|Name", "c2", "c3")
+
+        row = next(line for line in quick_ref.read_text(encoding="utf-8").splitlines() if "Pipe" in line)
+        assert _unescaped_pipes(row) == 4

@@ -151,6 +151,9 @@ def _read_note(vault_path: Path, name: str) -> str:
     return _read_file_content(vault_path / relative)
 
 
+_CHECKBOX_RE = re.compile(r"^\[[ xX]\](?:\s+|$)")
+
+
 def _extract_section_items(content: str, section_header: str) -> list[str]:
     """Extract items listed under a markdown section header.
 
@@ -172,8 +175,8 @@ def _extract_section_items(content: str, section_header: str) -> list[str]:
             if stripped.startswith("## ") or stripped.startswith("# "):
                 break
             # Capture list items and wikilinks
-            if stripped.startswith("- ") and stripped != "- [ ]":
-                item = stripped[2:].strip()
+            if stripped.startswith("- "):
+                item = _CHECKBOX_RE.sub("", stripped[2:].strip()).strip()
                 if item and not item.startswith("<!--"):
                     items.append(item)
 

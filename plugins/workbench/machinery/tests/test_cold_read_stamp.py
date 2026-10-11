@@ -15,6 +15,7 @@ from cold_read_stamp import (  # noqa: E402
     cmd_stamp,
     main,
 )
+from cold_read_stamp import _line_pieces, _stamp_line_contents  # noqa: E402
 
 VECTOR_PATH = Path(__file__).resolve().parent / "fixtures" / "cold_read_stamp_vector.json"
 VECTOR = json.loads(VECTOR_PATH.read_text(encoding="utf-8"))
@@ -562,3 +563,24 @@ def test_main_argparse_error_exits_2() -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["check", "--repo", REPO, "--issue", "abc"])
     assert excinfo.value.code == 2
+
+
+# --------------------------------------------------------------------------- #
+# bare trailing CR on the final line (#1053)
+# --------------------------------------------------------------------------- #
+
+def test_line_pieces_final_line_bare_cr_goes_to_terminator_and_is_lossless() -> None:
+    text = "a\nb\r"
+    pieces = _line_pieces(text)
+    assert pieces == [("a", "\n"), ("b", "\r")]
+    assert "".join(content + term for content, term in pieces) == text
+
+
+def test_stamp_line_contents_and_check_find_stamp_ending_in_bare_cr(fake_gh) -> None:
+    rest = "hello\n"
+    stamp = _stamp(body_hash(rest)[:12], "dev", "0" * 12, "-")
+    body = "hello\n" + stamp + "\r"
+    assert _stamp_line_contents(body) == [stamp]
+
+    fake_gh.set_issue(REPO, 42, body)
+    assert cmd_check(REPO, 42) == 0

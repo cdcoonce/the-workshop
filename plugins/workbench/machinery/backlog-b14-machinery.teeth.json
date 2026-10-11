@@ -1,0 +1,406 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_graph_cli_main_dispatch.py",
+    "tests/test_unpromoted_memory.py",
+    "tests/test_budget_burn.py",
+    "tests/test_content_classifier.py",
+    "tests/test_frontmatter_engine.py",
+    "tests/test_context_loader.py",
+    "tests/test_validate_write.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_graph_cli_main_dispatch.py",
+    "tests/test_unpromoted_memory.py",
+    "tests/test_budget_burn.py",
+    "tests/test_content_classifier.py",
+    "tests/test_frontmatter_engine.py",
+    "tests/test_context_loader.py",
+    "tests/test_validate_write.py"
+  ],
+  "mutants": [
+    {
+      "label": "#932 --gaps falls through to stats",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "    elif args.gaps:\n        if args.note",
+      "replace": "    elif False:\n        if args.note"
+    },
+    {
+      "label": "#932 --clusters wired to bridges",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        _emit(clusters(graph))",
+      "replace": "        _emit(bridges(graph))"
+    },
+    {
+      "label": "#932 --unresolved unsorted",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit(dict(sorted(graph.unresolved.items())))",
+      "replace": "_emit(dict(graph.unresolved.items()))"
+    },
+    {
+      "label": "#932 --hubs count not forwarded",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit(hubs(graph, args.hubs))",
+      "replace": "_emit(hubs(graph, 10))"
+    },
+    {
+      "label": "#933 helper accepts non-string display",
+      "file": "engine/unpromoted_memory.py",
+      "oracle": "real",
+      "find": "if isinstance(entry, dict) and isinstance(entry.get(\"display\"), str)",
+      "replace": "if isinstance(entry, dict) and \"display\" in entry"
+    },
+    {
+      "label": "#933 helper iterates non-list input",
+      "file": "engine/unpromoted_memory.py",
+      "oracle": "real",
+      "find": "    if not isinstance(entries, list):\n        return []\n    return [",
+      "replace": "    return ["
+    },
+    {
+      "label": "#933 unpromoted_memory_links re-inlines the filter",
+      "file": "engine/unpromoted_memory.py",
+      "oracle": "real",
+      "find": "note: extract_broken_displays(entries)",
+      "replace": "note: [e[\"display\"] for e in entries if isinstance(e, dict) and isinstance(e.get(\"display\"), str)]"
+    },
+    {
+      "label": "#788 RATES replaced wholesale",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "RATES: dict[str, tuple[float, float]] = {\n    **DEFAULT_RATES,\n    **_from_config(\"RATES\", DEFAULT_RATES),\n}",
+      "replace": "RATES: dict[str, tuple[float, float]] = _from_config(\"RATES\", DEFAULT_RATES)"
+    },
+    {
+      "label": "#788 zero budget divides",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "if args.budget else \"\"",
+      "replace": "if True else \"\""
+    },
+    {
+      "label": "#1142 bare concept restored",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"figured out\", \"concept of\",",
+      "replace": "\"figured out\", \"concept\","
+    },
+    {
+      "label": "#783 scalar tags iterated",
+      "file": "engine/frontmatter_engine.py",
+      "oracle": "real",
+      "find": "    elif not isinstance(tags, list):\n        return None  # scalar",
+      "replace": "    elif False:\n        return None  # scalar"
+    },
+    {
+      "label": "#783 validate does not report scalar tags",
+      "file": "engine/frontmatter_engine.py",
+      "oracle": "real",
+      "find": "elif not isinstance(tags, (list, str)):",
+      "replace": "elif False:"
+    },
+    {
+      "label": "#789 checkbox markup retained",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "item = _CHECKBOX_RE.sub(\"\", stripped[2:].strip()).strip()",
+      "replace": "item = stripped[2:].strip()"
+    },
+    {
+      "label": "#789 uppercase X not stripped",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "r\"^\\[[ xX]\\](?:\\s+|$)\"",
+      "replace": "r\"^\\[[ x]\\](?:\\s+|$)\""
+    },
+    {
+      "label": "indep: 932 vault-root fallback env dropped",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "        else vault_utils.find_vault_root_from_env()",
+      "replace": "        else Path('/nonexistent-xyz')"
+    },
+    {
+      "label": "indep: 932 vault-root None not rejected",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "    if vault_root is None:\n        print(",
+      "replace": "    if False:\n        print("
+    },
+    {
+      "label": "indep: 932 suggest not forwarded",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_broken_entry(graph, display, args.suggest)",
+      "replace": "_broken_entry(graph, display, 5)"
+    },
+    {
+      "label": "indep: 932 diagnose unsorted",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "for note, displays in sorted(graph.unresolved.items())",
+      "replace": "for note, displays in graph.unresolved.items()"
+    },
+    {
+      "label": "indep: 932 orphans arg cfg dropped",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit(orphans(graph, cfg))",
+      "replace": "_emit(orphans(graph, None))"
+    },
+    {
+      "label": "indep: 932 hubs flag 0 falsy",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "elif args.hubs is not None:",
+      "replace": "elif args.hubs:"
+    },
+    {
+      "label": "indep: 932 dismiss after build",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "    if args.dismiss:\n        record_dismissal",
+      "replace": "    if False:\n        record_dismissal"
+    },
+    {
+      "label": "indep: 932 gaps note ignored",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "targets = [args.note]",
+      "replace": "targets = list(graph.nodes.keys())"
+    },
+    {
+      "label": "indep: 932 gaps near-bridges ignored",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "targets = list(siloed_notes(graph))",
+      "replace": "targets = list(graph.nodes.keys())"
+    },
+    {
+      "label": "indep: 932 gaps top ignored",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "_emit(result[: args.top])",
+      "replace": "_emit(result)"
+    },
+    {
+      "label": "indep: 932 gaps threshold ignored",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "threshold=args.threshold,",
+      "replace": "threshold=0.0,"
+    },
+    {
+      "label": "indep: 932 gaps transient not filtered",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "targets = [t for t in targets if not t.startswith(transient)]",
+      "replace": "pass"
+    },
+    {
+      "label": "indep: 932 neighborhood depth fixed",
+      "file": "engine/graph_cli.py",
+      "oracle": "real",
+      "find": "neighborhood(graph, args.neighborhood, args.depth)",
+      "replace": "neighborhood(graph, args.neighborhood, 1)"
+    },
+    {
+      "label": "indep: 933 helper dedups",
+      "file": "engine/unpromoted_memory.py",
+      "oracle": "real",
+      "find": "    return [\n        entry[\"display\"]\n        for entry in entries\n        if isinstance(entry, dict) and isinstance(entry.get(\"display\"), str)\n    ]",
+      "replace": "    return list(dict.fromkeys(\n        entry[\"display\"]\n        for entry in entries\n        if isinstance(entry, dict) and isinstance(entry.get(\"display\"), str)\n    ))"
+    },
+    {
+      "label": "indep: 933 helper keeps empty-str skip",
+      "file": "engine/unpromoted_memory.py",
+      "oracle": "real",
+      "find": "if isinstance(entry, dict) and isinstance(entry.get(\"display\"), str)\n    ]",
+      "replace": "if isinstance(entry, dict) and entry.get(\"display\")\n    ]"
+    },
+    {
+      "label": "indep: 933 validate-write passes raw not entries",
+      "file": "engine/validate-write.py",
+      "oracle": "real",
+      "find": "extract_broken_displays(entries)",
+      "replace": "extract_broken_displays(raw)"
+    },
+    {
+      "label": "indep: 933 validate-write no dedup",
+      "file": "engine/validate-write.py",
+      "oracle": "real",
+      "find": "list(dict.fromkeys(extract_broken_displays(entries)))",
+      "replace": "extract_broken_displays(entries)"
+    },
+    {
+      "label": "indep: 788 override wins reversed",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "    **DEFAULT_RATES,\n    **_from_config(\"RATES\", DEFAULT_RATES),",
+      "replace": "    **_from_config(\"RATES\", DEFAULT_RATES),\n    **DEFAULT_RATES,"
+    },
+    {
+      "label": "indep: 788 override ignored",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "    **_from_config(\"RATES\", DEFAULT_RATES),\n}",
+      "replace": "}"
+    },
+    {
+      "label": "indep: 788 zero-budget guard on negative only",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "if args.budget else \"\"",
+      "replace": "if args.budget >= 0 else \"\""
+    },
+    {
+      "label": "indep: 788 pct line dropped entirely",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "share = f\"  ({spent / args.budget * 100:.0f}% of cap)\" if args.budget else \"\"",
+      "replace": "share = \"\""
+    },
+    {
+      "label": "indep: 788 projected guard dropped",
+      "file": "engine/budget_burn.py",
+      "oracle": "real",
+      "find": "{'  \u26a0\ufe0f over cap' if pace['projected_eom'] > args.budget else ''}",
+      "replace": "{'  over' if pace['projected_eom'] / args.budget > 1 else ''}"
+    },
+    {
+      "label": "indep: 1142 concept dropped entirely",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"figured out\", \"concept of\",",
+      "replace": "\"figured out\","
+    },
+    {
+      "label": "indep: 1142 concept of -> concept in",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"concept of\"",
+      "replace": "\"concept in\""
+    },
+    {
+      "label": "indep: 1142 idea 'concept for' removed",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"brainstorm\", \"concept for\",",
+      "replace": "\"brainstorm\","
+    },
+    {
+      "label": "indep: 789 spaceless checkbox ok (near-miss)",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "(?:\\s+|$)",
+      "replace": "(?:\\s*|$)"
+    },
+    {
+      "label": "indep: 789 over-broad bracket strip",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "\\[[ xX]\\]",
+      "replace": "\\[[^\\[\\]]{0,12}\\]"
+    },
+    {
+      "label": "indep: 789 lowercase only",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "\\[[ xX]\\]",
+      "replace": "\\[[ x]\\]"
+    },
+    {
+      "label": "indep: 789 strip anywhere not anchored",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "_CHECKBOX_RE.sub(\"\", stripped[2:].strip()).strip()",
+      "replace": "re.sub(r\"\\[[ xX]\\]\\s*\", \"\", stripped[2:].strip()).strip()"
+    },
+    {
+      "label": "indep: 789 empty bare retained",
+      "file": "engine/context_loader.py",
+      "oracle": "real",
+      "find": "if item and not item.startswith(\"<!--\"):",
+      "replace": "if not item.startswith(\"<!--\"):"
+    },
+    {
+      "label": "indep: 783 list nontstr tag unguarded",
+      "file": "engine/frontmatter_engine.py",
+      "oracle": "real",
+      "find": "if isinstance(tag, str) and tag in type_fields:",
+      "replace": "if tag in type_fields:"
+    },
+    {
+      "label": "indep: 783 mapping tags crash",
+      "file": "engine/frontmatter_engine.py",
+      "oracle": "real",
+      "find": "    elif not isinstance(tags, list):\n        return None  # scalar",
+      "replace": "    elif False:\n        return None  # scalar"
+    },
+    {
+      "label": "indep: 783 validate msg err only list",
+      "file": "engine/frontmatter_engine.py",
+      "oracle": "real",
+      "find": "elif not isinstance(tags, (list, str)):",
+      "replace": "elif False:"
+    },
+    {
+      "label": "#1142 fix: 'concept behind' dropped",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"concept of\", \"concept behind\",",
+      "replace": "\"concept of\","
+    },
+    {
+      "label": "#1142 fix: 'concepts' dropped",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"concepts\", \"explaining a concept\",",
+      "replace": "\"explaining a concept\","
+    },
+    {
+      "label": "#1142 fix: 'explaining a concept' dropped",
+      "file": "engine/content_routing_defaults.py",
+      "oracle": "real",
+      "find": "\"explaining a concept\", \"explain the concept\",",
+      "replace": "\"explain the concept\","
+    }
+  ]
+}
