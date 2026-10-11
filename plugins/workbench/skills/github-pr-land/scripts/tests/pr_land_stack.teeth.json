@@ -42,8 +42,8 @@
       "label": "a merged PR whose merge commit is not in the base's history is accepted (test_merge_commit_outside_the_base_keeps_todays_refusal)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "            if landed.returncode == 0:\n",
-      "replace": "            if landed.returncode in (0, 1):\n"
+      "find": "            if reached:\n",
+      "replace": "            if reached is not None:\n"
     },
     {
       "label": "the oldest candidate is tried first instead of the newest (test_chain_refreshes_with_the_newest_merged_base)",
@@ -77,15 +77,15 @@
       "label": "an ancestry-check error (rc other than 0/1) counts as landed (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "            if landed.returncode == 0:\n                return StackBase(number, sha, merge_commit)\n",
-      "replace": "            if landed.returncode != 1:\n                return StackBase(number, sha, merge_commit)\n"
+      "find": "            if reached is None:\n                return None\n            if reached:\n                return StackBase(number, sha, merge_commit)\n",
+      "replace": "            if reached is not False:\n                return StackBase(number, sha, merge_commit)\n"
     },
     {
       "label": "an ancestry-check error moves on to the next candidate instead of giving up (test_ancestry_check_error_gives_up_without_trying_an_older_candidate)",
       "file": "../pr_land.py",
       "oracle": "real",
-      "find": "            if landed.returncode != 1:\n                return None\n",
-      "replace": "            if landed.returncode != 1:\n                continue\n"
+      "find": "            if reached is None:\n                return None\n",
+      "replace": "            if reached is None:\n                continue\n"
     },
     {
       "label": "an unmerged candidate ends the search instead of being skipped (test_unmerged_newest_candidate_is_skipped_for_an_older_merged_one)",

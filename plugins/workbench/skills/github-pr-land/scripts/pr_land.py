@@ -581,10 +581,10 @@ def _stack_base(runner: Runner, repo: str, info: PrInfo) -> StackBase | None:
                 continue
             if not FULL_SHA.fullmatch(merge_commit):
                 return None
-            landed, _ = _is_ancestor(runner, merge_commit, info.base_sha)
-            if landed is None:
+            reached, _ = _is_ancestor(runner, merge_commit, info.base_sha)
+            if reached is None:
                 return None
-            if landed:
+            if reached:
                 return StackBase(number, sha, merge_commit)
     return None
 
