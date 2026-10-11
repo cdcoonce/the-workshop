@@ -452,6 +452,78 @@ def test_cli_attach_without_flag_is_refused(tmp_path: Path) -> None:
         _cli(path, "attach", "ledger")
 
 
+@pytest.mark.parametrize("adapter", ["codex", "claude-code", "cortex-code"])
+def test_cli_add_records_adapter_on_disk(tmp_path: Path, adapter: str) -> None:
+    path = tmp_path / "registry.json"
+
+    assert _cli(path, "add", "w", "--origin-project", "p", "--adapter", adapter) == 0
+
+    assert _on_disk(path)["workers"]["w"]["adapter"] == adapter
+
+
+def test_cli_cortex_manual_lifecycle(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    assert _cli(path, "add", "cx", "--origin-project", "p", "--adapter", "cortex-code") == 0
+
+    assert _cli(path, "manual-attach", "cx", "owner confirmed session", "--message-verified") == 0
+    worker = _on_disk(path)["workers"]["cx"]
+    assert worker["state"] == "running"
+    assert worker["manual_identity_evidence"] == "owner confirmed session"
+    assert worker["message_verified"] is True
+    assert worker["session_id"] == ""
+
+    before = worker["last_meaningful_update"]
+    assert _cli(path, "update", "cx", "checked in", "--meaningful") == 0
+    worker = _on_disk(path)["workers"]["cx"]
+    assert worker["last_observation"] == "checked in"
+    assert worker["last_meaningful_update"] >= before
+    assert worker["events"][-1]["kind"] == "milestone"
+
+    assert _cli(path, "amend", "cx", "scope widened") == 0
+    last = _on_disk(path)["workers"]["cx"]["events"][-1]
+    assert (last["kind"], last["detail"]) == ("contract-amendment", "scope widened")
+
+    assert _cli(path, "follow-up", "cx", "write docs") == 0
+    assert _on_disk(path)["workers"]["cx"]["pending_follow_up"] == "write docs"
+    assert _cli(path, "follow-up", "cx") == 0
+    assert _on_disk(path)["workers"]["cx"]["pending_follow_up"] == ""
+
+    assert _cli(path, "state", "cx", "completed", "done") == 0
+    assert _cli(path, "integrate", "cx", "integrated", "merged") == 0
+    assert _cli(path, "validate", "cx", "--passed", "ok") == 0
+    assert _cli(path, "status-record", "cx", "committed") == 0
+    assert _cli(path, "retire", "cx", "cortex-manual-retained", "retained") == 0
+    data = _on_disk(path)
+    assert "cx" not in data["workers"]
+    assert data["archived_workers"]["cx"]["state"] == "retired"
+
+    assert _cli(path, "archived-update", "cx", "late note") == 0
+    data = _on_disk(path)
+    assert data["archived_workers"]["cx"]["state"] == "retired"
+    assert data["archived_workers"]["cx"]["events"][-1]["kind"] == "archived-update"
+    assert data["archived_workers"]["cx"]["events"][-1]["detail"] == "late note"
+
+    assert _cli(path, "reopen", "cx", "owner reopened") == 0
+    data = _on_disk(path)
+    assert "cx" not in data["archived_workers"]
+    worker = data["workers"]["cx"]
+    assert worker["state"] == "provisioning"
+    assert worker["manual_identity_evidence"] == "owner confirmed session"
+    assert worker["last_observation"] == "owner reopened"
+
+
+def test_cli_manual_attach_without_flag_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    assert _cli(path, "add", "cx", "--origin-project", "p", "--adapter", "cortex-code") == 0
+
+    with pytest.raises(RegistryError, match="manual attachment requires"):
+        _cli(path, "manual-attach", "cx", "owner confirmed session")
+
+    worker = _on_disk(path)["workers"]["cx"]
+    assert worker["state"] == "provisioning"
+    assert worker["message_verified"] is False
+
+
 def test_cli_add_rejects_unknown_adapter(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         _cli(tmp_path / "registry.json", "add", "x", "--origin-project", "p", "--adapter", "bogus")
@@ -786,9 +858,85 @@ def test_read_only_get_is_not_blocked_by_a_held_lock(tmp_path: Path) -> None:
     path = tmp_path / "registry.json"
     registry = SessionRegistry(path)
     registry.add("w", project="p", adapter="codex")
+    results: dict[str, object] = {}
+
+    def _read() -> None:
+        results["state"] = registry.get("w")["state"]
+        results["names"] = set(registry.all_workers()["workers"])
 
     with _lock_path(path).open("a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
-        assert registry.get("w")["state"] == "provisioning"
-        assert "w" in registry.all_workers()["workers"]
+        reader = threading.Thread(target=_read, daemon=True)
+        reader.start()
+        reader.join(timeout=5)
+        finished = not reader.is_alive()
         fcntl.flock(handle, fcntl.LOCK_UN)
+    reader.join(timeout=5)
+
+    assert finished, "read-only get/all_workers blocked on the registry lock"
+    assert results == {"state": "provisioning", "names": {"w"}}
+
+
+def test_all_workers_applies_schema_migration(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "workers": {
+                    "old": {"state": "retired", "session_id": "t-1", "project": "legacy-proj"},
+                    "live": {"state": "provisioning", "session_id": "", "project": "live-proj"},
+                },
+            }
+        )
+        + "\n"
+    )
+
+    everything = SessionRegistry(path).all_workers()
+
+    assert set(everything["workers"]) == {"live"}
+    assert set(everything["archived_workers"]) == {"old"}
+    assert everything["archived_workers"]["old"]["origin_project"] == "legacy-proj"
+    assert everything["workers"]["live"]["origin_project"] == "live-proj"
+    assert "project" not in everything["archived_workers"]["old"]
+
+
+def _edit_worker(path: Path, name: str, section: str, **fields: object) -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data[section][name].update(fields)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_cortex_with_session_id_but_no_manual_evidence_has_no_identity(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    _manual_cortex_worker(registry)
+    registry.set_state("cortex", "waiting", evidence="paused")
+    _edit_worker(path, "cortex", "workers", session_id="x", manual_identity_evidence="")
+
+    with pytest.raises(RegistryError, match="verified attachment"):
+        registry.set_state("cortex", "running", evidence="resumed")
+
+    registry.set_state("cortex", "completed", evidence="done")
+    registry.set_integration("cortex", "integrated", evidence="merged")
+    registry.set_validation("cortex", passed=True, evidence="ok")
+    registry.record_durable_status("cortex", "committed")
+    _edit_worker(path, "cortex", "workers", session_id="x", manual_identity_evidence="e")
+    registry.retire("cortex", platform_action="cortex-manual-retained", platform_evidence="retained")
+    _edit_worker(path, "cortex", "archived_workers", session_id="x", manual_identity_evidence="")
+
+    with pytest.raises(RegistryError, match="reopen requires"):
+        registry.reopen("cortex", evidence="try anyway")
+
+
+def test_native_adapter_with_evidence_but_empty_session_id_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "registry.json"
+    registry = SessionRegistry(path)
+    registry.add("w", project="p", adapter="codex")
+    registry.set_session_id("w", "native-1")
+    registry.mark_attached("w", message_verified=True)
+    registry.set_state("w", "waiting", evidence="paused")
+    _edit_worker(path, "w", "workers", session_id="", manual_identity_evidence="e")
+
+    with pytest.raises(RegistryError, match="verified attachment"):
+        registry.set_state("w", "running", evidence="resumed")

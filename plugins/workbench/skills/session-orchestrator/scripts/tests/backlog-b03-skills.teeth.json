@@ -128,6 +128,83 @@
       "oracle": "real",
       "find": "    @_mutating\n    def add(",
       "replace": "    def add("
+    },
+    {
+      "label": "#987 add dispatch drops adapter [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "adapter=args.adapter, repository",
+      "replace": "adapter=\"codex\", repository"
+    },
+    {
+      "label": "#987 (extra) manual-attach drops message_verified [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "identity_evidence=args.identity_evidence,\n            message_verified=args.message_verified,",
+      "replace": "identity_evidence=args.identity_evidence,\n            message_verified=True,"
+    },
+    {
+      "label": "#987 (extra) update ignores --meaningful [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "meaningful=args.meaningful)",
+      "replace": "meaningful=False)"
+    },
+    {
+      "label": "#987 (extra) reopen dispatch calls record_archived_update [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "registry.reopen(args.name, evidence=args.evidence)",
+      "replace": "registry.record_archived_update(args.name, args.evidence)"
+    },
+    {
+      "label": "#987 (extra) follow-up dispatch drops assignment [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "registry.set_follow_up(args.name, args.assignment)",
+      "replace": "registry.set_follow_up(args.name, \"\")"
+    },
+    {
+      "label": "#987 (extra) amend/recovery cross-wired [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "registry.amend_contract(args.name, args.amendment)",
+      "replace": "registry.record_recovery(args.name, args.amendment)"
+    },
+    {
+      "label": "#937 accessor skips migration (raw file read) [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "        data = self._load()\n        return {\"workers\"",
+      "replace": "        data = json.loads(self.path.read_text()) if self.path.exists() else {\"workers\": {}, \"archived_workers\": {}}\n        return {\"workers\""
+    },
+    {
+      "label": "#1022 cortex identity gated on session_id|evidence (loosened) [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "return bool(worker[\"manual_identity_evidence\"])",
+      "replace": "return bool(worker[\"manual_identity_evidence\"] or worker[\"session_id\"])"
+    },
+    {
+      "label": "#1022 non-cortex also accepts evidence (codex w/ evidence, empty sid) [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "        return bool(worker[\"session_id\"])\n\n    def get",
+      "replace": "        return bool(worker[\"session_id\"] or worker[\"manual_identity_evidence\"])\n\n    def get"
+    },
+    {
+      "label": "#1022 claude-code treated as evidence-based [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "if worker[\"adapter\"] == \"cortex-code\":\n            return bool",
+      "replace": "if worker[\"adapter\"] in (\"cortex-code\", \"claude-code\"):\n            return bool"
+    },
+    {
+      "label": "#1070 get takes the lock (read-only affected beyond waiting?) [teeth-pass gap]",
+      "file": "../registry.py",
+      "oracle": "real",
+      "find": "    def get(self, name: str) -> dict[str, Any]:",
+      "replace": "    @_mutating\n    def get(self, name: str) -> dict[str, Any]:"
     }
   ]
 }
