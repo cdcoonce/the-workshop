@@ -51,6 +51,13 @@
       "oracle": "real",
       "find": "            if list_worktrees(child):",
       "replace": "            if list_worktrees(child) or (child / \".git\").is_dir():"
+    },
+    {
+      "label": "reap counts an orphan branch whose delete failed (#749, independent pass)",
+      "file": "../worktree_audit.py",
+      "oracle": "real",
+      "find": "            if not worktree_gone:\n                continue\n",
+      "replace": "            if False:\n                continue\n"
     }
   ]
 }

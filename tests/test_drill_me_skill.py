@@ -115,3 +115,31 @@ def test_position_generation_never_exceeds_the_option_count() -> None:
     assert "option count" in lowered or "number of options" in lowered, (
         "SKILL.md does not tie the position draw to each item's option count"
     )
+
+
+def test_documented_draw_stays_in_range() -> None:
+    """Run the SKILL.md draw command: every draw is a valid 1..n position."""
+    import ast
+    import re
+    import subprocess
+    import sys
+
+    block = re.search(r"```bash\n(python3 -c .*?)\n```", _skill_text(), re.DOTALL)
+    assert block, "SKILL.md has no python3 draw command in a bash block"
+    code = re.search(r'python3 -c "(.*)"\s*$', block.group(1)).group(1)
+    counts = ast.literal_eval(re.search(r"for n in (\[[\d,\s]+\])", code).group(1))
+    assert len(counts) == 12
+    seen = [set() for _ in counts]
+    for _ in range(200):
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, check=True
+        ).stdout
+        draws = ast.literal_eval(out.strip())
+        assert len(draws) == len(counts) == 12
+        assert all(1 <= d <= n for d, n in zip(draws, counts)), (draws, counts)
+        for bucket, d in zip(seen, draws):
+            bucket.add(d)
+    # The whole range is reachable: a draw that never lands on 1 (or n) is
+    # clamped, and the correct option drifts to a fixed slot.
+    for bucket, n in zip(seen, counts):
+        assert bucket == set(range(1, n + 1)), (bucket, n)

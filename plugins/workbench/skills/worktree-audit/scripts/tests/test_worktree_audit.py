@@ -293,6 +293,14 @@ def test_reap_does_not_count_a_worktree_it_failed_to_remove(
     assert reap(repo, [verdict]) == []
 
 
+def test_reap_does_not_count_an_orphan_branch_it_failed_to_delete(repo: Path):
+    verdict = Verdict(
+        "orphan", "reap", "authored nothing", path=None, branch="no-such-branch"
+    )
+
+    assert reap(repo, [verdict]) == []
+
+
 # --- find_repos ---------------------------------------------------------------
 
 

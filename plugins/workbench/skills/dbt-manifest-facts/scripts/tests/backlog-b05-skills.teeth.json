@@ -58,6 +58,90 @@
       "oracle": "real",
       "find": "except (OSError, UnicodeDecodeError):",
       "replace": "except OSError:"
+    },
+    {
+      "label": "custom paths are never read (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "    custom = _project_ignored_paths(project_dir)",
+      "replace": "    custom = []"
+    },
+    {
+      "label": "only target-path is honoured (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "_PATH_KEYS = (\"target-path\", \"packages-install-path\")",
+      "replace": "_PATH_KEYS = (\"target-path\",)"
+    },
+    {
+      "label": "only packages-install-path is honoured (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "_PATH_KEYS = (\"target-path\", \"packages-install-path\")",
+      "replace": "_PATH_KEYS = (\"packages-install-path\",)"
+    },
+    {
+      "label": "custom prefix matches the first segment only (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "relative[: len(prefix)] == prefix",
+      "replace": "relative[0] == prefix[0]"
+    },
+    {
+      "label": "custom path replaces the default ignores (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "            if IGNORED_DIRS & set(candidate.parts):",
+      "replace": "            if not custom and IGNORED_DIRS & set(candidate.parts):"
+    },
+    {
+      "label": "dot target-path guard removed (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "if not parts or Path(value)",
+      "replace": "if Path(value)"
+    },
+    {
+      "label": "key anchor removed so nested keys match (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "rf\"^{re.escape(key)}:",
+      "replace": "rf\"{re.escape(key)}:"
+    },
+    {
+      "label": "custom path matches exact dir only, not subtree (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "relative[: len(prefix)] == prefix",
+      "replace": "relative[:-1] == prefix"
+    },
+    {
+      "label": "first key found stops the scan (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "        found.append(parts)",
+      "replace": "        found.append(parts)\n        break"
+    },
+    {
+      "label": "inline comment strip ignores tabs (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "re.split(r\"(?:^|\\s)#\", raw, maxsplit=1)[0].strip()",
+      "replace": "raw.split(\" #\")[0].strip()"
+    },
+    {
+      "label": "quoted values are not read to their closing quote (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "        end = raw.find(raw[0], 1)\n",
+      "replace": "        end = -1\n"
+    },
+    {
+      "label": "BOM is not stripped when reading dbt_project.yml (#786)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "encoding=\"utf-8-sig\"",
+      "replace": "encoding=\"utf-8\""
     }
   ]
 }
