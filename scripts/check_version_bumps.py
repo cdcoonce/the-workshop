@@ -32,8 +32,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from scripts.stamp import StampError, owned_paths
@@ -41,10 +43,18 @@ from scripts.stamp import StampError, owned_paths
 DEFAULT_BASE = "origin/main"
 
 
+class GitError(Exception):
+    """git could not answer; the gate must fail rather than guess."""
+
+
 def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
-    )
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
+        )
+    except OSError as error:
+        # git missing from PATH (or not executable) never reaches a returncode.
+        raise GitError(f"could not run git: {error}") from error
 
 
 def resolve_base(repo: Path, base: str) -> str:
@@ -108,12 +118,17 @@ def output_changed(repo: Path, base: str, plugin: str, exclusions: list[str]) ->
     definition, which is the invariant that keeps this from drifting back.
     """
     pathspecs = [f":(exclude){path}" for path in exclusions]
-    return (
-        run_git(
-            repo, "diff", "--quiet", base, "--", f"plugins/{plugin}", *pathspecs
-        ).returncode
-        != 0
+    result = run_git(
+        repo, "diff", "--quiet", base, "--", f"plugins/{plugin}", *pathspecs
     )
+    # 0 = identical, 1 = differs; anything else is git failing (bad revision,
+    # bad pathspec), which is not evidence the plugin changed.
+    if result.returncode not in (0, 1):
+        raise GitError(
+            f"git diff against {base} for plugins/{plugin} failed "
+            f"(exit {result.returncode}): {result.stderr.strip()}"
+        )
+    return result.returncode == 1
 
 
 def manifest_version(repo: Path, plugin: str, ref: str | None = None) -> str | None:
@@ -130,24 +145,55 @@ def manifest_version(repo: Path, plugin: str, ref: str | None = None) -> str | N
             return None
         text = result.stdout
     try:
-        return json.loads(text).get("version")
+        version = json.loads(text).get("version")
     except (json.JSONDecodeError, AttributeError):
         return None
+    # The manifest is hand-edited: an unquoted `1.1` parses as a float, which
+    # has no `.split`. Coerce so a typo reaches the malformed-version report.
+    return None if version is None else str(version)
 
 
-def find_missing_bumps(repo: Path, base: str = DEFAULT_BASE) -> list[str]:
+@dataclass(frozen=True)
+class GateContext:
+    """Per-run state every finder needs: computed once, passed to each.
+
+    Attributes
+    ----------
+    base_sha : str
+        Full sha `base` resolved to.
+    changed : tuple of str
+        Plugins (sorted) whose shipped output differs from `base_sha`.
+    """
+
+    base_sha: str
+    changed: tuple[str, ...]
+
+
+def build_context(repo: Path, base: str = DEFAULT_BASE) -> GateContext:
+    """Resolve `base`, derive the stamper exclusions, diff each plugin once."""
+    base_sha = resolve_base(repo, base)
+    exclusions = _stamper_exclusions(repo)
+    changed = tuple(
+        plugin
+        for plugin in shipped_plugins(repo)
+        if output_changed(repo, base_sha, plugin, exclusions)
+    )
+    return GateContext(base_sha, changed)
+
+
+def find_missing_bumps(
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
+) -> list[str]:
     """Plugins whose shipped output changed since `base` without a version bump.
 
     A plugin absent from `base` is new — there is no prior version to bump
     from. A plugin absent from the working tree was deleted, and a deleted
     plugin needs no bump either.
     """
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     missing = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         if released is None:
             continue  # new plugin
@@ -193,8 +239,13 @@ def _components_at(repo: Path, plugin: str, ref: str | None) -> set[str]:
     prefix = f"plugins/{plugin}/"
     if ref is None:
         base = repo / "plugins" / plugin
+        # Files only, matching `ls-tree -r` on the ref path: a directory is
+        # implied by the files inside it, and a bare directory entry (a
+        # `hooks/scripts/fixtures/`) is not a capability.
         paths = (
-            [str(p.relative_to(repo)) for p in base.rglob("*")] if base.is_dir() else []
+            [str(p.relative_to(repo)) for p in base.rglob("*") if p.is_file()]
+            if base.is_dir()
+            else []
         )
     else:
         result = run_git(repo, "ls-tree", "-r", "--name-only", ref, "--", prefix)
@@ -203,7 +254,9 @@ def _components_at(repo: Path, plugin: str, ref: str | None) -> set[str]:
     components = set()
     for path in paths:
         parts = Path(path).relative_to(f"plugins/{plugin}").parts if path.startswith(prefix) else ()
-        if len(parts) >= 2 and parts[0] in ("skills", "agents"):
+        # `skills/<name>/...` and `agents/<name>/...`: the component is the
+        # directory, so a file sitting directly under `skills/` is not one.
+        if len(parts) >= 3 and parts[0] in ("skills", "agents"):
             components.add(f"{parts[0]}/{parts[1]}")
         elif len(parts) == 3 and parts[0] == "hooks" and parts[1] == "scripts":
             if not parts[2].startswith("_"):
@@ -221,13 +274,29 @@ def required_level(repo: Path, plugin: str, base_sha: str) -> str:
     return "patch"
 
 
-def _parts(version: str | None) -> tuple[int, int, int] | None:
-    if not version:
+_SEMVER = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
+
+
+def parse_version(version: str | None) -> tuple[int, int, int] | None:
+    """Split a plain ``X.Y.Z`` version into ints, or None when it is not one.
+
+    The single source of truth for "is this a version we can compare": the gate
+    and `scripts.bump_version` both read versions through it. ASCII digits only
+    (``str.isdigit`` accepts ``"\u00b3"``, which ``int`` then rejects).
+
+    Parameters
+    ----------
+    version : str or None
+        A manifest version string.
+
+    Returns
+    -------
+    tuple of int or None
+        ``(major, minor, patch)``, or None for anything but ``N.N.N``.
+    """
+    if not version or not _SEMVER.fullmatch(version):
         return None
-    chunks = version.split(".")
-    if len(chunks) != 3 or not all(c.isdigit() for c in chunks):
-        return None
-    major, minor, patch = (int(c) for c in chunks)
+    major, minor, patch = (int(c) for c in version.split("."))
     return major, minor, patch
 
 
@@ -238,7 +307,7 @@ def actual_level(released: str | None, current: str | None) -> str | None:
     satisfies a `major` requirement. Demanding `1.0.0` to drop a skill from a
     0.x plugin would force a release meaning nobody intends.
     """
-    before, after = _parts(released), _parts(current)
+    before, after = parse_version(released), parse_version(current)
     if before is None or after is None or after <= before:
         return None
     if after[0] != before[0]:
@@ -249,15 +318,13 @@ def actual_level(released: str | None, current: str | None) -> str | None:
 
 
 def find_level_violations(
-    repo: Path, base: str = DEFAULT_BASE
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
 ) -> list[tuple[str, str, str]]:
     """(plugin, required, actual) where the bump is too small for the change."""
-    base_sha = resolve_base(repo, base)
-    exclusions = _stamper_exclusions(repo)
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
     violations = []
-    for plugin in shipped_plugins(repo):
-        if not output_changed(repo, base_sha, plugin, exclusions):
-            continue
+    for plugin in context.changed:
         released = manifest_version(repo, plugin, base_sha)
         current = manifest_version(repo, plugin)
         if released is None or current is None:
@@ -271,6 +338,55 @@ def find_level_violations(
     return violations
 
 
+def find_version_regressions(
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
+) -> list[tuple[str, str, str]]:
+    """(plugin, released, current) where changed output carries a lowered version.
+
+    `find_missing_bumps` only sees `current == released` and `find_level_violations`
+    only sees a version that advanced, so a version that went *down* (a bad edit
+    or rebase) belongs to neither. Versions that do not parse are
+    `find_malformed_versions`' to report.
+    """
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
+    regressions = []
+    for plugin in context.changed:
+        released = manifest_version(repo, plugin, base_sha)
+        current = manifest_version(repo, plugin)
+        if released is None or current is None:
+            continue
+        before, after = parse_version(released), parse_version(current)
+        if before is None or after is None:
+            continue
+        if after < before:
+            regressions.append((plugin, released, current))
+    return regressions
+
+
+def find_malformed_versions(
+    repo: Path, base: str = DEFAULT_BASE, context: GateContext | None = None
+) -> list[tuple[str, str, str]]:
+    """(plugin, released, current) where changed output has a non-semver version.
+
+    A version the gate cannot parse cannot be compared, so the level check has
+    nothing to say about it; skipping it would wave through exactly the edit
+    (`1.2.0 -> 1.2.1-beta` beside a removed skill) the level rule exists to
+    catch. An *unchanged* version is `find_missing_bumps`' to report.
+    """
+    context = context or build_context(repo, base)
+    base_sha = context.base_sha
+    malformed = []
+    for plugin in context.changed:
+        released = manifest_version(repo, plugin, base_sha)
+        current = manifest_version(repo, plugin)
+        if released is None or current is None or released == current:
+            continue
+        if parse_version(released) is None or parse_version(current) is None:
+            malformed.append((plugin, released, current))
+    return malformed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
@@ -279,20 +395,55 @@ def main(argv: list[str] | None = None) -> int:
 
     repo = Path(args.repo)
     try:
-        missing = find_missing_bumps(repo, args.base)
-        levels = find_level_violations(repo, args.base)
+        context = build_context(repo, args.base)
+        missing = find_missing_bumps(repo, args.base, context)
+        levels = find_level_violations(repo, args.base, context)
+        regressions = find_version_regressions(repo, args.base, context)
+        malformed = find_malformed_versions(repo, args.base, context)
     except LookupError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    except GitError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     except StampError as error:
         print(f"ERROR: could not resolve stamper-owned paths: {error}", file=sys.stderr)
         return 1
 
-    if not missing and not levels:
+    if not (missing or levels or regressions or malformed):
         print(f"version-bump gate: no unbumped plugins against {args.base}.")
         return 0
 
+    sections = 0
+
+    def separate() -> None:
+        nonlocal sections
+        if sections:
+            print("", file=sys.stderr)
+        sections += 1
+
+    if malformed:
+        separate()
+        print(
+            "ERROR: these plugins changed, but a version is not valid semver "
+            "(X.Y.Z), so the bump cannot be checked:",
+            file=sys.stderr,
+        )
+        for plugin, released, current in malformed:
+            print(f"  {plugin}: {released} -> {current}", file=sys.stderr)
+
+    if regressions:
+        separate()
+        print(
+            "ERROR: these plugins changed, but their version is lower than "
+            f"the one released at {args.base}:",
+            file=sys.stderr,
+        )
+        for plugin, released, current in regressions:
+            print(f"  {plugin}: {released} -> {current}", file=sys.stderr)
+
     if levels:
+        separate()
         print(
             "ERROR: these plugins changed their component surface by more than "
             "their version bump claims:",
@@ -310,23 +461,22 @@ def main(argv: list[str] | None = None) -> int:
             "capability. See Preset Versioning in CLAUDE.md.",
             file=sys.stderr,
         )
-        if not missing:
-            return 1
-        print("", file=sys.stderr)
 
-    print(
-        "ERROR: these plugins ship changed content but declare the same version "
-        f"as {args.base}:",
-        file=sys.stderr,
-    )
-    for plugin in missing:
-        version = manifest_version(Path(args.repo), plugin)
-        print(f"  {plugin} (still {version})", file=sys.stderr)
-    print(
-        "\nBump each plugin's .claude-plugin/plugin.json version, or the change "
-        "merges green and never reaches anyone who has it installed.",
-        file=sys.stderr,
-    )
+    if missing:
+        separate()
+        print(
+            "ERROR: these plugins ship changed content but declare the same version "
+            f"as {args.base}:",
+            file=sys.stderr,
+        )
+        for plugin in missing:
+            version = manifest_version(repo, plugin)
+            print(f"  {plugin} (still {version})", file=sys.stderr)
+        print(
+            "\nBump each plugin's .claude-plugin/plugin.json version, or the change "
+            "merges green and never reaches anyone who has it installed.",
+            file=sys.stderr,
+        )
     return 1
 
 

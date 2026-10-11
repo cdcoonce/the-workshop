@@ -42,6 +42,8 @@ REQUIRED_FIELDS = ("feature", "status", "current_phase")
 # spellings and column counts.
 _SEPARATOR_ROW_RE = re.compile(r"^\|[\s:|-]+\|$")
 
+_ARTIFACTS_HEADING_RE = re.compile(r"^##[ \t]+Artifacts[ \t]*$")
+
 # Values that mean "no artifact": em dash, hyphen, empty string.
 _EMPTY_ARTIFACT_MARKERS = ("—", "-", "")
 
@@ -69,6 +71,33 @@ class StateFile:
     path: Path = field(default_factory=lambda: Path())
     artifacts: list[ArtifactRow] = field(default_factory=list)
     had_schema_version: bool = True
+
+
+def _artifacts_section(text: str) -> str:
+    """Return the lines between the ``## Artifacts`` heading and the next ``## `` heading.
+
+    Parameters
+    ----------
+    text : str
+        Full text content of the state file.
+
+    Returns
+    -------
+    str
+        The Artifacts section body, or an empty string when the file has no
+        ``## Artifacts`` heading.
+    """
+    section: list[str] = []
+    in_section = False
+    for line in text.splitlines():
+        if _ARTIFACTS_HEADING_RE.match(line):
+            in_section = True
+            continue
+        if in_section and line.startswith("## "):
+            break
+        if in_section:
+            section.append(line)
+    return "\n".join(section)
 
 
 def _parse_artifacts(text: str) -> list[ArtifactRow]:
@@ -163,7 +192,7 @@ def parse_state_file(path: Path) -> StateFile:
         path=path,
         had_schema_version=had_schema_version,
     )
-    state.artifacts = _parse_artifacts(text)
+    state.artifacts = _parse_artifacts(_artifacts_section(text))
     return state
 
 
