@@ -92,7 +92,7 @@ See [references/phase-transitions.md](references/phase-transitions.md) for phase
 
 - **Phases 1–4:** Run on current branch (documentation only)
 - **Phase 5:** Creates `feat/{feature-slug}` branch
-- **Phase 7:** PRs to the default branch (detected via `gh repo view --json defaultBranchRef`)
+- **Phase 7:** PRs to `dev` (never inferred from the GitHub default branch — see CLAUDE.md's Branch and Promotion Policy)
 - **Resume at Phase 5+:** Check out feature branch if not already on it
 
 ## Archival
