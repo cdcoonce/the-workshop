@@ -394,13 +394,22 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
     body_lines = lines[fm_end + 1:]
     sections: dict[str, list[str]] = {"_preamble": []}
     current_section = "_preamble"
+    # Non-canonical blocks are kept as an ordered list so a header that
+    # appears twice survives twice (a dict keyed by name would keep only the last).
+    extra_blocks: list[tuple[str, list[str]]] = []
+    current_lines = sections["_preamble"]
 
     for line in body_lines:
         if line.startswith("## "):
             current_section = line[3:].strip()
-            sections[current_section] = []
+            if current_section in SECTIONS:
+                sections[current_section] = []
+                current_lines = sections[current_section]
+            else:
+                current_lines = []
+                extra_blocks.append((current_section, current_lines))
             continue
-        sections[current_section].append(line)
+        current_lines.append(line)
 
     # Capture done items for the Brag Doc scan before discarding
     done_items: list[str] = []
@@ -443,11 +452,21 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
 
     # Content under non-canonical headers is preserved verbatim (not filtered):
     # the re-emit loop below only walks SECTIONS and would otherwise drop it.
-    extra_sections = [
-        name for name in sections if name != "_preamble" and name not in SECTIONS
-    ]
+    # Text between the title and the first `##` header is likewise preserved.
+    preamble = list(sections["_preamble"])
+    while preamble and not preamble[0].strip():
+        preamble.pop(0)
+    if preamble and preamble[0].strip() == "# Work Tasks":
+        preamble.pop(0)
+    while preamble and not preamble[0].strip():
+        preamble.pop(0)
+    while preamble and not preamble[-1].strip():
+        preamble.pop()
 
     new_lines = fm_lines + ["", "# Work Tasks", ""]
+    if preamble:
+        new_lines.extend(preamble)
+        new_lines.append("")
     for section in SECTIONS:
         new_lines.append(f"## {section}")
         new_lines.append("")
@@ -458,8 +477,8 @@ def rollover_work_tasks(vault_root: Path, today: date | None = None) -> dict:
             new_lines.extend(filtered)
             new_lines.append("")
 
-    for name in extra_sections:
-        kept = list(sections[name])
+    for name, block in extra_blocks:
+        kept = list(block)
         while kept and not kept[0].strip():
             kept.pop(0)
         while kept and not kept[-1].strip():
