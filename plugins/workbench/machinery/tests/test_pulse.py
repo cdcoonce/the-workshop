@@ -28,7 +28,7 @@ import importlib
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -1399,7 +1399,14 @@ class TestVaultRootDetection:
         )
 
         assert pulse.main() == 1
-        assert "no vault root found" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "no vault root found" in out
+        # The message must name the signature detection actually keys on
+        # (#594), not the retired bare `.vault-context` marker.
+        assert "CLAUDE.md" in out
+        assert "brain/" in out
+        assert "perf/" in out
+        assert ".vault-context" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -1526,3 +1533,52 @@ class TestCli:
         assert len(payload["rows"]) == 2
         ledger = tmp_path / "perf" / "metrics" / "pulse-personal.csv"
         assert ledger.exists()
+
+
+# ---------------------------------------------------------------------------
+# Backfill git-log window (#782) — `since` must reach the OLDEST requested
+# week, not be sized by how many weeks were requested.
+# ---------------------------------------------------------------------------
+class TestVaultGitWindow:
+    def test_sparse_far_past_weeks_are_covered_by_since(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from datetime import date
+
+        tz = ZoneInfo("UTC")
+        today = datetime.now(tz).date()
+        old_keys = [
+            pulse._week_of_date(today - timedelta(weeks=k)) for k in (42, 41, 40)
+        ]
+        seen: dict[str, date] = {}
+
+        def fake_collect(vault_root: Path, tz: ZoneInfo, since: date) -> dict:
+            seen["since"] = since
+            return {}
+
+        monkeypatch.setattr(pulse, "collect_vault_git", fake_collect)
+        pulse.scan(
+            projects_root=tmp_path / "p",
+            codex_root=tmp_path / "c",
+            repos_root=tmp_path / "r",
+            vault_root=tmp_path,
+            week_keys=old_keys,
+            tz=tz,
+            include_vault_git=True,
+        )
+
+        oldest = min(old_keys)
+        year, week = oldest.split("-W")
+        oldest_monday = date.fromisocalendar(int(year), int(week), 1)
+        assert seen["since"] <= oldest_monday
+
+
+# ---------------------------------------------------------------------------
+# DOMAIN_RULES hygiene (#1074) — first match wins, so a repeated substring
+# key is dead data.
+# ---------------------------------------------------------------------------
+class TestDomainRulesUnique:
+    def test_no_duplicate_substring_keys(self) -> None:
+        keys = [substring for substring, _ in pulse_defaults.DOMAIN_RULES]
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        assert dupes == []
