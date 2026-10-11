@@ -558,3 +558,35 @@ def test_analyze_subcommand_over_saved_arm_json(tmp_path, capsys):
     assert ledger["stats"]["mde"] is None
     raw_text = ledger_path.read_text()
     assert "Infinity" not in raw_text
+
+
+def test_void_analyze_with_bracket_enabled_and_no_a2(tmp_path, capsys):
+    """`analyze` must not claim an A-B-A bracket it never checked (#890)."""
+    prereg_rel = _write_prereg(tmp_path)
+    a_json = tmp_path / "a.json"
+    b_json = tmp_path / "b.json"
+    a_json.write_text(json.dumps({"rows": [{"query": "q1", "recall": 0.5}]}))
+    b_json.write_text(json.dumps({"rows": [{"query": "q1", "recall": 0.9}]}))
+    spec_path = _write_spec(
+        tmp_path,
+        prereg_rel=prereg_rel,
+        include_cmds=False,
+        bracket_enabled=True,
+    )
+    exit_code = main(
+        [
+            "analyze",
+            "--spec",
+            str(spec_path),
+            "--a",
+            str(a_json),
+            "--b",
+            str(b_json),
+            "--cwd",
+            str(tmp_path),
+        ]
+    )
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert "VOID" in captured.err
+    assert "--a2" in captured.err
