@@ -1606,3 +1606,26 @@ def test_check_anchors_with_changed_since_is_a_usage_error(
 
     assert exc.value.code == 2
     assert "--changed-since" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("key", ["label", "file", "find", "replace"])
+def test_load_spec_refuses_a_mutant_missing_a_required_key(
+    tmp_path: Path, key: str
+) -> None:
+    m = _mutant()
+    del m[key]
+    with pytest.raises(SpecError, match=key):
+        load_spec(_write_spec(tmp_path, [m]))
+
+
+@pytest.mark.parametrize("key", ["label", "file", "find", "replace"])
+def test_main_refuses_a_mutant_missing_a_required_key(
+    tmp_path: Path, key: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _mutant()
+    del m[key]
+    code = main([str(_write_spec(tmp_path, [m]))])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("refusing to run: ")
+    assert key in err
