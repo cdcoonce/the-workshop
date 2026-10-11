@@ -2591,7 +2591,7 @@ def test_a_four_backtick_fence_is_not_closed_by_an_inner_three_backtick_line() -
 
 def test_a_tilde_fence_is_not_closed_by_backticks_and_needs_a_long_enough_closer() -> None:
     entry = (
-        "### Tilde fence entry (2026-09-12)\n\n~~~~\n```\n### Inner fake (2026-09-01)\n~~~\n\n"
+        "### Tilde fence entry (2026-09-12)\n\n~~~~\n````\n### Inner fake (2026-09-01)\n~~~\n\n"
         "still inside\n~~~~\n\nAfter.\n"
     )
     base = insert_under(GOTCHAS_SEED, "## Technical", entry)
