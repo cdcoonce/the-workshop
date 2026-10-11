@@ -1787,18 +1787,15 @@ def test_handoff_same_bullet_edited_by_both_sides_refuses() -> None:
     assert "byte-identical" in str(info.value)
 
 
-def test_handoff_origin_duplicating_an_item_does_not_stop_a_positional_edit() -> None:
-    """Origin added a second identical bullet; the session's edit lands on the
-    aligned (first) copy and origin's added copy survives -- nothing is lost."""
+def test_handoff_origin_duplicating_the_edited_item_refuses_as_a_twin() -> None:
     base = HANDOFF_SEED
     tip = base.replace("- [[proj-a]]: watch the deploy.", "- [[proj-a]]: session wording.")
     origin = base.replace(
         "- [[proj-a]]: watch the deploy.\n",
         "- [[proj-a]]: watch the deploy.\n- [[proj-a]]: watch the deploy.\n",
     )
-    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
-    assert merged.count("session wording.") == 1
-    assert merged.count("- [[proj-a]]: watch the deploy.") == 1
+    with pytest.raises(RefusalError, match="twin"):
+        handoff_merge(base, tip, origin, HANDOFF)
 
 
 def test_handoff_insertion_after_an_item_origin_removed_refuses() -> None:
@@ -2459,13 +2456,19 @@ def test_handoff_insert_after_a_duplicate_item_origin_edited_refuses() -> None:
         handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
 
 
-def test_handoff_duplicate_items_session_edit_lands_on_the_right_copy() -> None:
+def test_handoff_duplicate_items_with_an_origin_edit_elsewhere_refuse_as_twins() -> None:
+    """P4: the session edits one of two byte-identical items while origin also
+    changed the section -- the twin cannot be told apart, so refuse."""
     tip = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[z]]")
     origin = DUP_LINKS_BASE.replace("- B topic", "- B topic, origin-edited")
-    merged, _detail = handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
-    assert merged.index("- A topic\n- Links: [[x]]\n") < merged.index("- B topic, origin-edited")
-    assert merged.count("[[x]], [[z]]") == 1
-    assert merged.index("[[x]], [[z]]") > merged.index("B topic")
+    with pytest.raises(RefusalError, match="twin"):
+        handoff_merge(DUP_LINKS_BASE, tip, origin, HANDOFF)
+
+
+def test_handoff_duplicate_items_with_origin_unchanged_still_replay() -> None:
+    tip = _second_links(DUP_LINKS_BASE, "- Links: [[x]], [[z]]")
+    merged, _detail = handoff_merge(DUP_LINKS_BASE, tip, DUP_LINKS_BASE, HANDOFF)
+    assert merged == tip
 
 
 def test_handoff_prepend_to_a_middle_section_with_origin_unchanged_accepts() -> None:
@@ -2716,3 +2719,407 @@ def test_redating_an_entry_heading_is_a_deletion_even_with_the_same_body() -> No
     )
     with pytest.raises(RefusalError, match="deleted"):
         ledger_merge(base, tip, base, GOTCHAS)
+
+
+# ---------------------------------------------------------------------------
+# Round 3 -- the second adversarial pass: architecture (A1, A2) and points.
+# ---------------------------------------------------------------------------
+
+_H_FM = '---\ntitle: h\ndescription: "a; b"\n---\n_Updated 2026-10-10_\n\n'
+
+
+def _hd(body: str) -> str:
+    return _H_FM + body
+
+
+def _lossless(base: str, tip: str, origin: str, merged: str) -> None:
+    verdict = compare_texts(base, tip, origin, merged)
+    assert verdict["missing"] == [] and verdict["extra"] == [], verdict
+
+
+# A1 -- self-verification inside the replay -----------------------------------
+
+
+def test_compare_texts_both_sides_deleting_a_repeated_line_is_ambiguous() -> None:
+    base, tip, origin = "a\nx\nx\n", "a\nx\n", "a\nx\n"
+    for copies, ok in ((0, True), (1, True), (2, False)):
+        verdict = compare_texts(base, tip, origin, "a\n" + "x\n" * copies)
+        assert (not verdict["missing"] and not verdict["extra"]) is ok, copies
+    assert compare_texts(base, tip, origin, "a\nx\n")["ambiguous"] == ["x"]
+
+
+def _in_process_replay(local: Path, base: str, monkeypatch: pytest.MonkeyPatch):
+    import entry_replay
+
+    for key, value in _env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.chdir(local)
+    return entry_replay.replay(base, "origin", None)
+
+
+def _concurrent_decisions(tmp_path: Path) -> tuple[Path, str]:
+    _remote, local, peer, base = _make_vault(tmp_path)
+    peer_chunk = decisions_entry("2026-09-20", "Peer decision", "**Decided:** peer.")
+    _write(peer, DECISIONS, insert_under(_read(peer, DECISIONS), "## Recent", peer_chunk))
+    _peer_push(peer)
+    chunk = decisions_entry("2026-09-21", "Session decision", "**Decided:** mine.")
+    _write(local, DECISIONS, insert_under(_read(local, DECISIONS), "## Recent", chunk))
+    _commit_all(local, "vault wrap-up")
+    return local, base
+
+
+def test_replay_self_check_refuses_a_merge_that_drops_a_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import entry_replay
+
+    local, base = _concurrent_decisions(tmp_path)
+    head_before, branch_before = _head(local), _branch(local)
+    real = entry_replay.ledger_merge
+
+    def lossy(base_text: str, tip_text: str, origin_text: str, path: str):
+        merged, detail = real(base_text, tip_text, origin_text, path)
+        return merged.replace("**Decided:** peer.\n", "", 1), detail
+
+    monkeypatch.setattr(entry_replay, "ledger_merge", lossy)
+    report = _in_process_replay(local, base, monkeypatch)
+
+    assert report.action == "refused"
+    assert "self-check" in report.reason
+    assert "**Decided:** peer." in report.reason
+    assert [item["path"] for item in report.refusals] == [DECISIONS]
+    _assert_untouched(local, head_before, branch_before)
+
+
+def test_replay_self_check_refuses_a_merge_that_duplicates_a_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import entry_replay
+
+    local, base = _concurrent_decisions(tmp_path)
+    real = entry_replay.ledger_merge
+
+    def doubling(base_text: str, tip_text: str, origin_text: str, path: str):
+        merged, detail = real(base_text, tip_text, origin_text, path)
+        return merged.replace("**Decided:** mine.\n", "**Decided:** mine.\n**Decided:** mine.\n", 1), detail
+
+    monkeypatch.setattr(entry_replay, "ledger_merge", doubling)
+    report = _in_process_replay(local, base, monkeypatch)
+    assert report.action == "refused" and "self-check" in report.reason
+
+
+def test_replay_self_check_passes_the_real_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local, base = _concurrent_decisions(tmp_path)
+    report = _in_process_replay(local, base, monkeypatch)
+    assert report.action == "replayed", report.reason
+    assert report.refusals == []
+
+
+# A2 -- splice, don't re-serialize ----------------------------------------------
+
+
+def _removed_lines(origin: str, merged: str) -> list[str]:
+    import difflib
+
+    return [
+        line[1:]
+        for line in difflib.unified_diff(origin.splitlines(), merged.splitlines(), lineterm="", n=0)
+        if line.startswith("-") and not line.startswith("---")
+    ]
+
+
+QUIRKY_ORIGIN = (
+    "# Gotchas\n\n## Technical\n\nNote that stays.\n\n"
+    "### Entry one (2026-09-10)\n\nBody one.\n\n\n"
+    "### Entry two (2026-09-05)\n\nBody two.   \n\n\n\n"
+    "### Entry three (2026-09-01)\n\nBody three.\n\n## Process\n\nProse.\n"
+)
+
+
+def test_splice_leaves_every_untouched_origin_line_byte_identical() -> None:
+    new = gotchas_entry("Session entry", "2026-09-07", "Session body.")
+    tip = QUIRKY_ORIGIN.replace("### Entry two", new + "\n### Entry two")
+    assert tip != QUIRKY_ORIGIN
+    merged, detail = ledger_merge(QUIRKY_ORIGIN, tip, QUIRKY_ORIGIN, GOTCHAS)
+    assert detail["inserted"] == 1
+    assert _removed_lines(QUIRKY_ORIGIN, merged) == []
+    assert "### Session entry (2026-09-07)\n\nSession body.\n" in merged
+    assert merged.index("Session body.") < merged.index("### Entry two")
+
+
+def test_splice_replaced_entry_keeps_origin_trailing_blanks_and_nothing_else_moves() -> None:
+    tip = QUIRKY_ORIGIN.replace("Body two.   ", "Body two, fixed.")
+    merged, detail = ledger_merge(QUIRKY_ORIGIN, tip, QUIRKY_ORIGIN, GOTCHAS)
+    assert detail["replaced"] == 1
+    assert _removed_lines(QUIRKY_ORIGIN, merged) == ["Body two.   "]
+    assert "Body two, fixed.\n\n\n\n### Entry three" in merged
+
+
+def test_splice_preserves_the_block_preamble_and_a_second_replay_still_accepts() -> None:
+    base = "# G\n\n## Technical\n\nNewest first.\n\n### a (2026-10-01)\n\nA\n"
+    tip = base.replace("Newest first.\n\n", "Newest first.\n\n### s (2026-10-10)\n\nS\n\n")
+    origin = base.replace("A\n", "A fixed\n")
+    out, _detail = ledger_merge(base, tip, origin, GOTCHAS)
+    assert out.startswith("# G\n\n## Technical\n\nNewest first.\n\n### s (2026-10-10)")
+    second = base.replace("### a (2026-10-01)", "### c (2026-10-05)\n\nC\n\n### a (2026-10-01)")
+    merged, _detail = ledger_merge(base, second, out, GOTCHAS)
+    assert "### c (2026-10-05)" in merged and "### s (2026-10-10)" in merged
+
+
+def test_splice_keeps_a_tight_bullet_list_tight() -> None:
+    base = "# B\n\n## Q\n\n### Wins\n\n- **2026-09-15 a** x\n- **2026-09-10 b** y\n"
+    tip = base.replace("- **2026-09-15 a** x\n", "- **2026-09-20 s** s\n- **2026-09-15 a** x\n")
+    merged, _detail = ledger_merge(base, tip, base, BRAG)
+    assert merged == tip
+    tail = base.replace("- **2026-09-10 b** y\n", "- **2026-09-10 b** y\n")
+    tip_end = tail + "- **2026-09-01 z** z\n"
+    merged_end, _detail = ledger_merge(base, tip_end, base, BRAG)
+    assert merged_end == tip_end
+
+
+def test_splice_loose_list_at_end_of_file_stays_loose() -> None:
+    base = "# B\n\n## Q\n\n### Wins\n\n- **2026-09-15 a** x\n\n- **2026-09-10 b** y\n"
+    tip = base + "\n- **2026-09-01 z** z\n"
+    merged, _detail = ledger_merge(base, tip, base, BRAG)
+    assert merged == tip
+
+
+def test_splice_new_entry_into_an_empty_block() -> None:
+    base = "# G\n\n## Empty\n\n## Other\n\nProse.\n"
+    tip = base.replace("## Empty\n", "## Empty\n\n### New (2026-09-20)\n\nBody.\n", 1)
+    merged, _detail = ledger_merge(base, tip, base, GOTCHAS)
+    assert "### New (2026-09-20)\n\nBody.\n\n## Other" in merged
+
+
+# P1 -- the handoff 'already present' filter ------------------------------------
+
+
+def test_p1_reorder_never_loses_an_item() -> None:
+    b = _hd("## Next\n\n- A\n- B\n- C\n\n## Other\n\nx\n")
+    t = _hd("## Next\n\n- B\n- A\n- C\n\n## Other\n\nx\n")
+    o = _hd("## Next\n\n- A\n- B\n- C2\n\n## Other\n\nx\n")
+    try:
+        merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    except RefusalError:
+        return
+    _lossless(b, t, o, merged)
+    for item in ("- A\n", "- B\n", "- C2\n"):
+        assert merged.count(item) == 1
+
+
+def test_p1_move_to_the_end_never_loses_an_item() -> None:
+    b = _hd("## Next\n\n- A\n- B\n- C\n\n## Other\n\nx\n")
+    t = _hd("## Next\n\n- B\n- C\n- A\n\n## Other\n\nx\n")
+    o = _hd("## Next\n\n- A\n- B\n- C\n\n## Other\n\nx2\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    _lossless(b, t, o, merged)
+    assert merged.count("- A\n") == 1 and merged.count("x2") == 1
+
+
+def test_p1_a_new_item_identical_to_an_existing_one_is_kept() -> None:
+    b = _hd("## Topics\n\n### alpha\n\n- Links: [[x]]\n\n### beta\n\n- note\n")
+    t = _hd("## Topics\n\n### alpha\n\n- Links: [[x]]\n\n### beta\n\n- note\n- Links: [[x]]\n")
+    o = _hd("## Topics\n\n### alpha\n\n- Links: [[x]]\n- new origin\n\n### beta\n\n- note\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    assert merged.count("- Links: [[x]]") == 2 and "- new origin" in merged
+
+
+def test_p1_an_item_both_sides_added_inside_a_replace_appears_once() -> None:
+    b = _hd("## S\n\n- A\n- B\n- C\n")
+    o = _hd("## S\n\n- A\n- Q\n- B\n- C\n")
+    t = _hd("## S\n\n- A\n- Q\n- B2\n- C\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    assert merged == _hd("## S\n\n- A\n- Q\n- B2\n- C\n")
+
+
+# P2 -- unclosed fences ---------------------------------------------------------
+
+F_ENTRY = "### F (2026-10-10)\n\n- step:\n    ```bash\n    echo hi\n  ```\n- then done\n\n"
+F_BASE = "# Gotchas\n\n## Technical\n\n### b (2026-10-09)\n\nbody b\n\n## Process\n\n### c (2026-10-08)\n\nc\n"
+
+
+def test_p2_origin_ending_in_an_open_fence_refuses() -> None:
+    origin = F_BASE.replace("### b (2026-10-09)", F_ENTRY + "### b (2026-10-09)")
+    tip = F_BASE.replace("body b\n", "body b\n\n### N (2026-10-01)\n\nnew\n")
+    with pytest.raises(RefusalError, match="unclosed or unrecognized code fence"):
+        ledger_merge(F_BASE, tip, origin, GOTCHAS)
+
+
+def test_p2_a_session_or_base_with_an_open_fence_refuses() -> None:
+    bad = F_BASE.replace("body b\n", "body b\n\n```\nunclosed\n")
+    tip = bad.replace("c\n", "c\n\n### N (2026-10-01)\n\nnew\n")
+    with pytest.raises(RefusalError, match="unclosed or unrecognized code fence"):
+        ledger_merge(bad, tip, bad, GOTCHAS)
+
+
+def test_p2_handoff_with_an_open_fence_refuses() -> None:
+    bad = _hd("## A\n\n```\n- a\n\n## B\n\n- b\n")
+    with pytest.raises(RefusalError, match="unclosed or unrecognized code fence"):
+        handoff_merge(bad, bad.replace("- b", "- b2"), bad, HANDOFF)
+
+
+# P3 -- bodyless same-date entries ----------------------------------------------
+
+_PRE = "# Brag Doc\n\n## Q4 2026\n\n### Wins\n\n"
+_TAIL = "\n### Growth\n\n- g\n"
+_X = "- **2026-10-10: Shipped apipulse to prod.** PR #31.\n"
+_Y = "- **2026-10-10: Wrote a talk on SQL.** Slides at x.\n"
+_Z = "- **2026-10-09: Older win.** z\n"
+_O = "- **2026-10-10: Origin win.** o\n"
+
+
+def test_p3_overwriting_a_bodyless_bullet_with_an_unrelated_one_refuses() -> None:
+    b = _PRE + _X + _Z + _TAIL
+    t = _PRE + _Y + _Z + _TAIL
+    o = _PRE + _O + _X + _Z + _TAIL
+    with pytest.raises(RefusalError, match="deleted"):
+        ledger_merge(b, t, o, BRAG)
+
+
+# P4 -- twin ambiguity ----------------------------------------------------------
+
+
+def test_p4_twin_when_origin_deleted_one_copy_refuses() -> None:
+    b = _hd("## S\n\n- A\n- L\n- L\n- Z\n")
+    o = _hd("## S\n\n- A\n- L\n- Z\n")
+    t = _hd("## S\n\n- A\n- L2\n- L\n- Z\n")
+    with pytest.raises(RefusalError, match="twin"):
+        handoff_merge(b, t, o, HANDOFF)
+
+
+def test_p4_twin_session_edits_second_copy_origin_deleted_second_refuses() -> None:
+    b = _hd("## S\n\n- A\n- L\n- L\n- Z\n")
+    o = _hd("## S\n\n- A\n- L\n- Z\n")
+    t = _hd("## S\n\n- A\n- L\n- L2\n- Z\n")
+    with pytest.raises(RefusalError):
+        handoff_merge(b, t, o, HANDOFF)
+
+
+def test_p4_twin_of_an_insertion_predecessor_refuses_when_origin_changed() -> None:
+    b = _hd("## S\n\n- A\n- L\n- L\n- Z\n")
+    o = _hd("## S\n\n- A\n- L\n- L\n- Z\n- O\n")
+    t = _hd("## S\n\n- A\n- L\n- L\n- ins\n- Z\n")
+    with pytest.raises(RefusalError, match="twin"):
+        handoff_merge(b, t, o, HANDOFF)
+
+
+def test_p4_origin_removed_the_topic_the_session_edits_refuses() -> None:
+    b = _hd("## Open threads\n\n- Topic A: x\n- Links: [[x]]\n- Topic B: y\n- Links: [[x]]\n- tail\n")
+    o = _hd("## Open threads\n\n- Topic B: y\n- Links: [[x]]\n- tail\n")
+    t = _hd(
+        "## Open threads\n\n- Topic A: x\n- Links: [[x]], [[a]]\n- Topic B: y\n- Links: [[x]]\n- tail\n"
+    )
+    with pytest.raises(RefusalError):
+        handoff_merge(b, t, o, HANDOFF)
+
+
+# P5 -- real-use cases that must ACCEPT ------------------------------------------
+
+
+def test_p5a_start_line_edit_plus_a_new_same_date_entry_above_accepts() -> None:
+    b = _PRE + _X + _Z + _TAIL
+    xp = "- **2026-10-10: Shipped apipulse live on rammingspeed.** PR #31.\n"
+    n = "- **2026-10-10: New thing.** n\n"
+    t = _PRE + n + xp + _Z + _TAIL
+    o = _PRE + _O + _X + _Z + _TAIL
+    merged, detail = ledger_merge(b, t, o, BRAG)
+    _lossless(b, t, o, merged)
+    assert detail["replaced"] == 1 and detail["inserted"] == 1
+    assert xp in merged and n in merged and _X not in merged and _O in merged
+
+
+def test_p5a_a_base_entry_with_no_unique_match_refuses() -> None:
+    b = "# G\n\n## Technical\n\n### One (2026-10-10)\n\nSame body here.\n\n### Two (2026-10-10)\n\nSame body here.\n"
+    t = "# G\n\n## Technical\n\n### Uno (2026-10-10)\n\nSame body here.\n\n### Dos (2026-10-10)\n\nSame body here.\n"
+    with pytest.raises(RefusalError, match="deleted"):
+        ledger_merge(b, t, b, GOTCHAS)
+
+
+def test_p5b_both_sides_deleting_the_same_item_is_not_a_conflict() -> None:
+    b = _hd("## S\n\n- A\n- stale\n- C\n")
+    o = _hd("## S\n\n- O\n- A\n- C\n")
+    t = _hd("## S\n\n- A\n- C\n- T\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    _lossless(b, t, o, merged)
+    assert "- stale" not in merged and "- O" in merged and "- T" in merged
+
+
+def test_p5b_both_sides_making_the_identical_edit_is_not_a_conflict() -> None:
+    b = _hd("## S\n\n- A\n- B\n- C\n")
+    o = _hd("## S\n\n- A\n- B2\n- C\n- O\n")
+    t = _hd("## S\n\n- A\n- B2\n- C\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    _lossless(b, t, o, merged)
+    assert merged.count("- B2") == 1 and "- O" in merged
+
+
+def test_p5c_loose_list_both_sides_appending_a_bullet_accepts() -> None:
+    b = _hd("## Where\n\n- a\n\n- b\n\n## Next\n\n- n\n")
+    t = _hd("## Where\n\n- a\n\n- b\n\n- s\n\n## Next\n\n- n\n")
+    o = _hd("## Where\n\n- a\n\n- b\n\n- o\n\n## Next\n\n- n\n")
+    merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    _lossless(b, t, o, merged)
+    assert "- s" in merged and "- o" in merged
+    assert merged == _hd("## Where\n\n- a\n\n- b\n\n- s\n\n- o\n\n## Next\n\n- n\n")
+
+
+def test_p5_moving_a_bullet_between_sections_never_loses_it() -> None:
+    b = _hd("## Resume\n\n- A\n- B\n\n## Done\n\n- D\n")
+    t = _hd("## Resume\n\n- B\n\n## Done\n\n- A\n- D\n")
+    o = _hd("## Resume\n\n- A\n- B\n- O\n\n## Done\n\n- D\n")
+    try:
+        merged, _detail = handoff_merge(b, t, o, HANDOFF)
+    except RefusalError:
+        return
+    _lossless(b, t, o, merged)
+
+
+# P6 -- more lint ----------------------------------------------------------------
+
+
+def test_p6_lint_reports_a_duplicated_anchor_path(tmp_path: Path) -> None:
+    dup = (
+        "# Brag Doc\n\n## Q4 2026\n\n### Wins\n\n- **2026-10-10: a** x\n\n"
+        "## Q4 2026\n\n### Wins\n\n- **2026-10-09: b** y\n"
+    )
+    _write(tmp_path, BRAG, dup)
+    result = _lint(tmp_path, "--json", str(tmp_path / BRAG))
+    assert result.returncode == 1
+    assert any("appears 2 times" in item["message"] for item in json.loads(result.stdout)["findings"])
+
+
+def test_p6_lint_reports_an_unclosed_fence_in_a_ledger_and_a_handoff(tmp_path: Path) -> None:
+    unclosed = "# Gotchas\n\n## Technical\n\n### a (2026-10-10)\n\nbody\n```bash\necho\n\n### b (2026-10-09)\n\nb\n"
+    _write(tmp_path, GOTCHAS, unclosed)
+    hand = "---\ndescription: \"x\"\n---\n_Updated 1_\n\n## A\n\n```\n- a\n\n## B\n\n- b\n## B\n"
+    _write(tmp_path, ".brain/handoff-x.md", hand)
+    result = _lint(tmp_path, "--json", str(tmp_path / GOTCHAS), str(tmp_path / ".brain/handoff-x.md"))
+    assert result.returncode == 1
+    messages = [item["message"] for item in json.loads(result.stdout)["findings"]]
+    assert sum("unclosed or unrecognized code fence" in m for m in messages) == 2
+
+
+# P7 -- --verify covers every path the result touches ---------------------------
+
+
+def test_p7_verify_reports_a_file_the_hand_rebuild_reformatted(tmp_path: Path) -> None:
+    local, base, tip, origin = _verify_setup(tmp_path)
+    git_branch = "hand-rebuild-extra"
+    _git(local, "switch", "-q", "-c", git_branch, origin)
+    _write(
+        local,
+        HANDOFF,
+        _read(local, HANDOFF).replace(
+            "- [[proj-a]]: watch the deploy.", "- [[proj-a]]: deploy watched. Session sentence."
+        ),
+    )
+    _write(local, "personal/projects/proj-a.md", NOTE_SEED + "\nReformatted in the rebuild.\n")
+    result = _commit_all(local, "hand rebuild touching another file")
+    _git(local, "switch", "-q", "main")
+    proc = _verify(local, base, tip, origin, result)
+    assert proc.returncode == 1
+    files = json.loads(proc.stdout)["files"]
+    assert "personal/projects/proj-a.md" in files
+    assert "Reformatted in the rebuild." in files["personal/projects/proj-a.md"]["extra"][0]

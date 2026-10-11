@@ -268,14 +268,19 @@ def _join(lines: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _fence_flags(lines: list[str]) -> list[bool]:
-    """Per-line "inside (or delimiting) a code fence" flags, per CommonMark.
+def _fence_scan(lines: list[str]) -> tuple[list[bool], bool]:
+    """``(flags, open_at_end)`` for ``lines`` under CommonMark fence rules.
 
-    A fence opens on 3+ backticks or tildes (up to three spaces of indent; a
-    backtick fence's info string holds no backtick) and closes only on a line
-    of the *same* character at least as long as the opener with nothing but
+    ``flags`` marks every line inside or delimiting a code fence. A fence
+    opens on 3+ backticks or tildes (up to three spaces of indent; a backtick
+    fence's info string holds no backtick) and closes only on a line of the
+    *same* character at least as long as the opener with nothing but
     whitespace after it -- so a four-backtick fence is not ended by an inner
-    three-backtick line, and an unclosed fence runs to the end of the text.
+    three-backtick line. ``open_at_end`` is True when a fence is still open
+    after the last line: either genuinely unclosed, or closed by something
+    this recognizer does not accept (an over-indented opener, say, whose
+    closer then reads as a new opener). Either way the file's heading
+    structure cannot be trusted, so the replay refuses it.
     """
     flags: list[bool] = []
     fence_char = ""
@@ -299,6 +304,22 @@ def _fence_flags(lines: list[str]) -> list[bool]:
             flags.append(True)
             continue
         flags.append(False)
+    return flags, bool(fence_char)
+
+
+def _fence_flags(lines: list[str]) -> list[bool]:
+    """Per-line "inside (or delimiting) a code fence" flags (see ``_fence_scan``)."""
+    return _fence_scan(lines)[0]
+
+
+def _require_closed_fences(lines: list[str], path: str, what: str) -> list[bool]:
+    """Fence flags for ``lines``, refusing when a fence is still open at the end."""
+    flags, open_at_end = _fence_scan(lines)
+    if open_at_end:
+        raise RefusalError(
+            f"{path}: the {what} ends inside an unclosed or unrecognized code fence; "
+            "its headings cannot be trusted, so the replay refuses it"
+        )
     return flags
 
 
@@ -521,22 +542,6 @@ def _parse_block(
     )
 
 
-def _emit_interior(preamble: list[str], chunks: list[_Chunk], at_eof: bool) -> list[str]:
-    """Reassemble a block interior: chunks verbatim, single-blank separated."""
-    segments: list[list[str]] = []
-    pre = _strip_trailing_blanks(preamble)
-    if pre:
-        segments.append(pre)
-    segments.extend(list(chunk.key) for chunk in chunks)
-    out: list[str] = []
-    for segment in segments:
-        out.append("")
-        out.extend(segment)
-    if not at_eof:
-        out.append("")
-    return out
-
-
 # ---------------------------------------------------------------------------
 # ledger rule
 # ---------------------------------------------------------------------------
@@ -609,9 +614,11 @@ def _anchor_spans(
     return spans
 
 
-def _load_doc(text: str) -> _Doc:
+def _load_doc(
+    text: str, path: str = "<ledger>", what: str = "ledger", strict: bool = True
+) -> _Doc:
     lines = _lines(text)
-    flags = _fence_flags(lines)
+    flags = _require_closed_fences(lines, path, what) if strict else _fence_flags(lines)
     headings = _headings(lines, flags)
     return _Doc(lines, flags, headings, _anchor_spans(lines, flags, headings))
 
@@ -642,7 +649,7 @@ def ledger_merge(
     session did not touch simply win, including their corrections); the
     session's new entries are added unless origin already holds them. Origin's
     entry order is never rewritten: new entries are placed by date (see
-    ``_place_entries``).
+    ``_slot_new_entries``).
 
     Parameters
     ----------
@@ -666,9 +673,9 @@ def ledger_merge(
         origin, an origin-side preamble edit, an edited entry origin no longer
         holds byte-identically exactly once, or mixed entry shapes.
     """
-    base = _load_doc(base_text)
-    tip = _load_doc(tip_text)
-    origin = _load_doc(origin_text)
+    base = _load_doc(base_text, path, "session base")
+    tip = _load_doc(tip_text, path, "session tip")
+    origin = _load_doc(origin_text, path, "origin copy")
     base_spans = _unique_spans(base, "session base", path)
     tip_spans = _unique_spans(tip, "session tip", path)
 
@@ -739,9 +746,10 @@ def ledger_merge(
                 continue
             kept.append(chunk)
 
-        merged_entries = _place_entries(origin_block.entries, swaps, kept)
-        kinds = {chunk.kind for chunk in merged_entries}
-        levels = {chunk.level for chunk in merged_entries}
+        slots = _slot_new_entries(origin_block.entries, kept)
+        shape_check = [*origin_block.entries, *swaps.values(), *kept]
+        kinds = {chunk.kind for chunk in shape_check}
+        levels = {chunk.level for chunk in shape_check}
         if len(kinds) > 1 or len(levels) > 1:
             raise RefusalError(
                 f"{path}: entries under {anchor_line!r} mix shapes across the two sides; "
@@ -749,7 +757,7 @@ def ledger_merge(
             )
 
         at_eof = origin_block.end_idx == len(origin.lines)
-        interior = _emit_interior(origin_block.preamble, merged_entries, at_eof)
+        interior = _splice_interior(origin_block, swaps, slots, at_eof)
         replacements.append((origin_block, interior))
         detail["anchors"].append(anchor_line)
         detail["inserted"] += len(kept)
@@ -763,34 +771,94 @@ def ledger_merge(
     return merged_text, detail
 
 
-def _place_entries(
-    origin_entries: list[_Chunk],
-    swaps: dict[tuple[str, ...], _Chunk],
-    new_entries: list[_Chunk],
-) -> list[_Chunk]:
-    """Origin's entries in origin's exact order, plus the session's new ones.
+def _slot_new_entries(
+    origin_entries: list[_Chunk], new_entries: list[_Chunk]
+) -> dict[int, list[_Chunk]]:
+    """Where each new entry goes: ``{slot: [entries]}``, slot = origin entry index.
 
-    No sort: real blocks are not uniformly ordered (some run oldest-first,
-    some carry drift), so a whole-block re-sort would rewrite entries the
-    session never touched. An edited entry keeps its origin position even if
-    it was re-dated. Each new entry goes immediately before the first origin
-    entry, scanning from the top of the block, that is not newer than it (date
-    on or before the new entry's) -- or at the end when there is none. In a
-    newest-first block that is exactly "above the first older-or-same-day
-    entry", so a same-date new entry sits above origin's same-date entries.
-    New entries that land in the same slot keep the session's relative order.
+    No sort: real blocks are not uniformly ordered (some run oldest-first, some
+    carry drift), so a block-wide sort would rewrite entries the session never
+    touched. Each new entry goes immediately before the first origin entry,
+    scanning from the top of the block, that is not newer than it (date on or
+    before the new entry's) -- or at the end (slot ``len(origin_entries)``)
+    when there is none. In a newest-first block that is exactly "above the
+    first older-or-same-day entry", so a same-date new entry sits above
+    origin's same-date entries. New entries that land in one slot keep the
+    session's relative order.
     """
     origin_days = [chunk.day for chunk in origin_entries]
     slots: dict[int, list[_Chunk]] = {}
     for chunk in new_entries:
         at = next((i for i, day in enumerate(origin_days) if day <= chunk.day), len(origin_days))
         slots.setdefault(at, []).append(chunk)
-    placed: list[_Chunk] = []
-    for index, entry in enumerate(origin_entries):
-        placed.extend(slots.get(index, []))
-        placed.append(swaps.get(entry.key, entry))
-    placed.extend(slots.get(len(origin_entries), []))
-    return placed
+    return slots
+
+
+def _trailing_blanks(chunk: _Chunk) -> list[str]:
+    return chunk.lines[len(chunk.key) :]
+
+
+def _splice_interior(
+    block: _Block,
+    swaps: dict[tuple[str, ...], _Chunk],
+    slots: dict[int, list[_Chunk]],
+    at_eof: bool,
+) -> list[str]:
+    """Origin's block interior with only the session's entries spliced in.
+
+    The block preamble and every untouched entry stay byte-identical, blank
+    lines included. A replaced entry's lines (without their trailing blanks)
+    become the session's entry lines, and origin keeps its own trailing blanks
+    for that slot. A new entry is inserted at its slot with a separator that
+    copies the block's style: when the origin entry next to the slot is
+    followed by a blank line the new entry is too, otherwise (a tight list) it
+    is not.
+    """
+    entries = block.entries
+    out = list(block.preamble)
+    if not entries:
+        new = slots.get(0, [])
+        if new:
+            if not out:
+                out.append("")
+            elif out[-1].strip():
+                out.append("")
+            for position, chunk in enumerate(new):
+                out.extend(chunk.key)
+                if not (at_eof and position == len(new) - 1):
+                    out.append("")
+        return out
+    for index, chunk in enumerate(entries):
+        incoming = slots.get(index, [])
+        if incoming:
+            neighbour = entries[index - 1] if index else chunk
+            separator = [""] if _trailing_blanks(neighbour) else []
+            for new_chunk in incoming:
+                out.extend(new_chunk.key)
+                out.extend(separator)
+        replacement = swaps.get(chunk.key)
+        if replacement is None:
+            out.extend(chunk.lines)
+        else:
+            out.extend(replacement.key)
+            out.extend(_trailing_blanks(chunk))
+    incoming = slots.get(len(entries), [])
+    if incoming:
+        last = entries[-1]
+        if _trailing_blanks(last):
+            for new_chunk in incoming:
+                out.extend(new_chunk.key)
+                out.append("")
+        elif at_eof and any(_trailing_blanks(chunk) for chunk in entries):
+            # A loose list whose last entry ends the file: blank line between
+            # entries, none after the last.
+            for new_chunk in incoming:
+                out.append("")
+                out.extend(new_chunk.key)
+        else:
+            for new_chunk in incoming:
+                out.extend(new_chunk.key)
+    return out
 
 
 def _heading_text(chunk: _Chunk) -> str:
@@ -810,13 +878,20 @@ def _heading_text(chunk: _Chunk) -> str:
     return text[: trail.start()].strip() if trail else text.strip()
 
 
+_DATE_TOKEN_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
 def _same_entry_edited(old: _Chunk, edited: _Chunk) -> bool:
     """Is ``edited`` plausibly ``old`` with its start line changed?
 
-    Required before the single unpaired leftover of a ``replace`` is treated
-    as an in-place edit: otherwise overwriting an entry with a brand-new one
-    would read as an edit and silently lose the old entry. Same date, and
-    either the same heading text or a body that is mostly unchanged.
+    Required before a leftover entry of a ``replace`` is treated as an
+    in-place edit: otherwise overwriting an entry with a brand-new one would
+    read as an edit and silently lose the old entry. Same date, and either the
+    same heading text or enough similarity: a body that is mostly unchanged,
+    or -- when either side has no body at all (a one-line Brag bullet) -- a
+    start line that is mostly unchanged once the date token is removed. With
+    nothing but a start line to go on, an unrelated same-day entry must not
+    pass for an edit.
     """
     if old.day != edited.day:
         return False
@@ -824,7 +899,37 @@ def _same_entry_edited(old: _Chunk, edited: _Chunk) -> bool:
         return True
     old_body = "\n".join(_strip_trailing_blanks(old.lines[1:]))
     new_body = "\n".join(_strip_trailing_blanks(edited.lines[1:]))
-    return difflib.SequenceMatcher(None, old_body, new_body).ratio() >= 0.6
+    if old_body and new_body:
+        return difflib.SequenceMatcher(None, old_body, new_body).ratio() >= 0.6
+    old_start = _DATE_TOKEN_RE.sub("", old.lines[0])
+    new_start = _DATE_TOKEN_RE.sub("", edited.lines[0])
+    return difflib.SequenceMatcher(None, old_start, new_start).ratio() >= 0.6
+
+
+def _pair_leftovers(
+    lost: list[_Chunk], unpaired_tip: list[_Chunk]
+) -> tuple[list[tuple[_Chunk, _Chunk]], list[_Chunk], list[_Chunk]]:
+    """Pair leftover base entries with leftover tip entries by unique similarity.
+
+    A base entry pairs with a tip entry only when it is the base entry's one
+    candidate (``_same_entry_edited``) and no other base entry also claims it.
+    Returns ``(pairs, still_lost, still_unpaired_tip)``.
+    """
+    candidates = {
+        id(old): [new for new in unpaired_tip if _same_entry_edited(old, new)] for old in lost
+    }
+    claims = Counter(id(options[0]) for options in candidates.values() if len(options) == 1)
+    pairs: list[tuple[_Chunk, _Chunk]] = []
+    still_lost: list[_Chunk] = []
+    taken: set[int] = set()
+    for old in lost:
+        options = candidates[id(old)]
+        if len(options) == 1 and claims[id(options[0])] == 1:
+            pairs.append((old, options[0]))
+            taken.add(id(options[0]))
+        else:
+            still_lost.append(old)
+    return pairs, still_lost, [new for new in unpaired_tip if id(new) not in taken]
 
 
 def _diff_entries(
@@ -833,11 +938,12 @@ def _diff_entries(
     """Classify the session's entry changes: ``(inserted, [(base, edited)])``.
 
     A ``replace`` opcode pairs each base entry with the tip entry that has the
-    identical start line (an in-place edit with one or more neighbouring
-    insertions lands in one opcode); when exactly one base and one tip entry
-    remain unpaired they are an in-place edit that also changed the start
-    line. Remaining tip entries are insertions. Any base entry left without a
-    partner -- and any ``delete`` -- is a deletion and refuses.
+    identical start line (an in-place edit with neighbouring insertions lands
+    in one opcode); leftover base entries then pair with the leftover tip
+    entry that is plausibly the same entry with its start line changed, when
+    that match is unique (``_pair_leftovers``). Remaining tip entries are
+    insertions. Any base entry left without a partner -- and any ``delete`` --
+    is a deletion and refuses.
     """
     base_keys = [chunk.key for chunk in base_block.entries]
     tip_keys = [chunk.key for chunk in tip_block.entries]
@@ -865,12 +971,8 @@ def _diff_entries(
                 else:
                     unpaired_tip.remove(partner)
                     replaced.append((old, partner))
-            if (
-                len(lost) == 1
-                and len(unpaired_tip) == 1
-                and _same_entry_edited(lost[0], unpaired_tip[0])
-            ):
-                replaced.append((lost.pop(), unpaired_tip.pop()))
+            pairs, lost, unpaired_tip = _pair_leftovers(lost, unpaired_tip)
+            replaced.extend(pairs)
         if lost:
             raise RefusalError(
                 f"{path}: the session deleted entry {lost[0].label!r} under {anchor_line!r}; "
@@ -965,7 +1067,7 @@ def _split_sections(
     body: list[str], path: str
 ) -> tuple[list[str], list[tuple[str, str, list[str]]]]:
     """``(preamble, [(name, heading_line, body_lines)])`` -- level-2 model."""
-    flags = _fence_flags(body)
+    flags = _require_closed_fences(body, path, "handoff body")
     marks: list[tuple[int, str, str]] = []
     for idx, line in enumerate(body):
         if flags[idx]:
@@ -1000,25 +1102,30 @@ def _unstamped(preamble: list[str]) -> list[str]:
     return [line for line in preamble if not line.startswith(_STAMP_PREFIX)]
 
 
-def _items(body: list[str]) -> list[tuple[str, ...]]:
+_Item = tuple[tuple[str, ...], int]  # (content lines, trailing blank-line count)
+
+
+def _items(body: list[str]) -> list[_Item]:
     """Split a section body into items: the replay's unit inside a section.
 
     An item is a top-level ``- `` bullet plus its continuation (the indented
-    lines and blank lines that follow it), or a non-bullet unindented line that
-    follows a blank line, which opens a new paragraph item. Whatever precedes
-    the first item (typically the blank line under the heading) is its own
-    item, and so are the blank lines that end the section: two wrap-ups that
-    both append a bullet to a section's end would otherwise each rewrite the
-    last bullet's trailing blank and collide. Lines inside a code fence never
-    open an item, so a blank or ``- `` line in a fenced block stays with the
-    item that holds the fence; the fence's own opening line can. Concatenating
-    the items reproduces the body exactly.
+    lines that follow it), or a non-bullet unindented line that follows a
+    blank line, which opens a new paragraph item. Each item is ``(content,
+    blanks)``: its lines without trailing blank lines, and how many blank
+    lines followed -- the separator is carried, not compared, so a tight list
+    and a loose one (or a last bullet that gained a trailing blank on both
+    sides) still align. Whatever precedes the first item (typically the blank
+    line under the heading) is an item of empty content, and so are the blank
+    lines that end the section. Lines inside a code fence never open an item,
+    so a blank or ``- `` line in a fenced block stays with the item that
+    holds the fence; the fence's own opening line can. ``_item_lines`` turns
+    items back into the exact original lines.
     """
     end = len(body)
     while end > 0 and body[end - 1] == "":
         end -= 1
     flags = _fence_flags(body)
-    items: list[tuple[str, ...]] = []
+    raw: list[list[str]] = []
     current: list[str] = []
     for idx, line in enumerate(body[:end]):
         inside_fence = flags[idx] and not _is_fence_opener(flags, idx)
@@ -1029,14 +1136,24 @@ def _items(body: list[str]) -> list[tuple[str, ...]]:
             and (line.startswith("- ") or (bool(current) and current[-1] == ""))
         )
         if opens and current:
-            items.append(tuple(current))
+            raw.append(current)
             current = []
         current.append(line)
     if current:
-        items.append(tuple(current))
+        raw.append(current)
     if end < len(body):
-        items.append(tuple(body[end:]))
+        raw.append(body[end:])
+    items: list[_Item] = []
+    for lines in raw:
+        stop = len(lines)
+        while stop > 0 and lines[stop - 1] == "":
+            stop -= 1
+        items.append((tuple(lines[:stop]), len(lines) - stop))
     return items
+
+
+def _item_lines(items: list[_Item]) -> list[str]:
+    return [line for content, blanks in items for line in (*content, *([""] * blanks))]
 
 
 def _is_fence_opener(flags: list[bool], idx: int) -> bool:
@@ -1045,7 +1162,7 @@ def _is_fence_opener(flags: list[bool], idx: int) -> bool:
 
 
 def _align_items(
-    base_items: list[tuple[str, ...]], origin_items: list[tuple[str, ...]]
+    base: list[tuple[str, ...]], origin: list[tuple[str, ...]]
 ) -> dict[int, int]:
     """Map base item index -> origin item index for items unchanged on origin.
 
@@ -1055,12 +1172,21 @@ def _align_items(
     ordered diff are mapped; everything else was changed or removed on origin.
     """
     mapping: dict[int, int] = {}
-    matcher = difflib.SequenceMatcher(None, base_items, origin_items, autojunk=False)
+    matcher = difflib.SequenceMatcher(None, base, origin, autojunk=False)
     for tag, i1, i2, j1, _j2 in matcher.get_opcodes():
         if tag == "equal":
             for offset in range(i2 - i1):
                 mapping[i1 + offset] = j1 + offset
     return mapping
+
+
+def _has_content(content: tuple[str, ...]) -> bool:
+    return any(line.strip() for line in content)
+
+
+def _label(content: tuple[str, ...]) -> str:
+    """A short name for an item in a refusal message."""
+    return content[0][:60] if content else "<blank>"
 
 
 def _merge_section_items(
@@ -1073,20 +1199,64 @@ def _merge_section_items(
 ) -> list[str]:
     """Re-apply the session's item-level edits of one section onto origin's body.
 
-    Base items are aligned to origin's by position (``_align_items``). Every
-    item the session replaced or deleted must be mapped -- unchanged and
-    aligned on origin -- and the mapped run contiguous; an insertion anchors
-    on the mapped origin position of the base item before it (an insertion at
-    the very top goes to the section top). A session-inserted item origin's
-    section already holds byte-identically is not inserted again. Placements
-    that overlap refuse.
+    Base items are aligned to origin's by position (``_align_items``) on their
+    content, ignoring trailing blank lines. Every item the session replaced or
+    deleted must be mapped -- unchanged and aligned on origin -- and the mapped
+    run contiguous; an insertion anchors on the mapped origin position of the
+    base item before it (an insertion at the very top goes to the section
+    top). Further guards, each fail-closed:
+
+    * *Already applied.* When origin made the identical change to the same
+      base items (both deleted them, or both rewrote them to the same text),
+      there is nothing left to apply.
+    * *Already present.* A session-inserted item is dropped only when it is
+      byte-identical to an item origin itself *added* (one the alignment does
+      not map from base), at most once per such origin item -- never because
+      an existing item looks the same, which would lose a move or a deliberate
+      repeat.
+    * *Twins.* An item the session changed (or anchors an insertion on) that
+      has a byte-identical twin in the base or origin section, in a section
+      origin also changed, cannot be placed with certainty: refuse.
+
+    Placements that overlap refuse.
     """
     base_items = _items(base_body)
     tip_items = _items(tip_body)
     origin_items = _items(origin_body)
-    mapping = _align_items(base_items, origin_items)
-    placements: list[tuple[int, int, list[tuple[str, ...]]]] = []
-    matcher = difflib.SequenceMatcher(None, base_items, tip_items, autojunk=False)
+    bc = [content for content, _blanks in base_items]
+    tc = [content for content, _blanks in tip_items]
+    oc = [content for content, _blanks in origin_items]
+    mapping = _align_items(bc, oc)
+    origin_changed = bc != oc
+    mapped_origin = set(mapping.values())
+    origin_added = Counter(
+        oc[j] for j in range(len(oc)) if j not in mapped_origin and _has_content(oc[j])
+    )
+    origin_ops = [
+        op
+        for op in difflib.SequenceMatcher(None, bc, oc, autojunk=False).get_opcodes()
+        if op[0] in ("replace", "delete")
+    ]
+
+    def fresh(items: list[_Item]) -> list[_Item]:
+        kept: list[_Item] = []
+        for item in items:
+            if _has_content(item[0]) and origin_added[item[0]] > 0:
+                origin_added[item[0]] -= 1
+                continue
+            kept.append(item)
+        return kept
+
+    def twinned(index: int) -> bool:
+        content = bc[index]
+        return (
+            origin_changed
+            and _has_content(content)
+            and (bc.count(content) > 1 or oc.count(content) > 1)
+        )
+
+    placements: list[tuple[int, int, list[_Item]]] = []
+    matcher = difflib.SequenceMatcher(None, bc, tc, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             continue
@@ -1094,33 +1264,53 @@ def _merge_section_items(
             if i1 == 0:
                 anchor = 0
             elif i1 - 1 in mapping:
+                if twinned(i1 - 1):
+                    raise RefusalError(
+                        f"{path}: in '## {name}', the item before the session's insertion "
+                        f"({_label(bc[i1 - 1])!r}) has a byte-identical twin and origin also "
+                        "changed the section; the twin cannot be told apart; escalating"
+                    )
                 anchor = mapping[i1 - 1] + 1
             else:
                 raise RefusalError(
                     f"{path}: in '## {name}', the item before the session's insertion "
-                    f"({base_items[i1 - 1][0][:60]!r}) is not unchanged on origin "
+                    f"({_label(bc[i1 - 1])!r}) is not unchanged on origin "
                     "(byte-identical and aligned); escalating"
                 )
-            fresh = [
-                item
-                for item in tip_items[j1:j2]
-                if not any(line.strip() for line in item) or item not in origin_items
-            ]
-            if fresh:
-                placements.append((anchor, anchor, fresh))
-                counts["items_inserted"] += len(fresh)
+            incoming = fresh(tip_items[j1:j2])
+            if incoming:
+                if anchor and _has_content(oc[anchor - 1]):
+                    inherited = origin_items[anchor - 1][1]
+                    incoming = [(content, inherited) for content, _blanks in incoming]
+                placements.append((anchor, anchor, incoming))
+                counts["items_inserted"] += len(incoming)
             continue
+        if any(
+            o_tag == tag and (oi1, oi2) == (i1, i2) and oc[oj1:oj2] == tc[j1:j2]
+            for o_tag, oi1, oi2, oj1, oj2 in origin_ops
+        ):
+            continue  # origin already made this exact change
         run = list(range(i1, i2))
         if any(index not in mapping for index in run) or any(
             mapping[b] + 1 != mapping[a] for a, b in zip(run[1:], run, strict=False)
         ):
             raise RefusalError(
                 f"{path}: in '## {name}', the session's changed item "
-                f"{base_items[i1][0][:60]!r} is not byte-identical, aligned, and contiguous "
-                "on origin (edited or removed there); escalating"
+                f"{_label(bc[i1])!r} is not byte-identical, aligned, "
+                "and contiguous on origin (edited or removed there); escalating"
+            )
+        if any(twinned(index) for index in run):
+            raise RefusalError(
+                f"{path}: in '## {name}', the session's changed item "
+                f"{next(_label(bc[i]) for i in run if twinned(i))!r} has a byte-identical twin "
+                "and origin also changed the section; the twin cannot be told apart; escalating"
             )
         start = mapping[i1]
-        placements.append((start, start + len(run), tip_items[j1:j2]))
+        replacement = fresh(tip_items[j1:j2])
+        if replacement:
+            last_blanks = origin_items[mapping[run[-1]]][1]
+            replacement[-1] = (replacement[-1][0], last_blanks)
+        placements.append((start, start + len(run), replacement))
         counts["items_replaced"] += len(run)
     placements.sort(key=lambda placement: (placement[0], placement[1]))
     for (_s1, end1, _r1), (start2, _e2, _r2) in zip(placements, placements[1:], strict=False):
@@ -1131,7 +1321,7 @@ def _merge_section_items(
     merged = list(origin_items)
     for start, end, replacement in reversed(placements):
         merged[start:end] = replacement
-    return [line for item in merged for line in item]
+    return _item_lines(merged)
 
 
 def handoff_merge(
@@ -1295,6 +1485,38 @@ def _run_health(health_cmd: str | None, report: Report) -> None:
     report.health = "passed"
 
 
+def _self_check_message(path: str, verdict: dict[str, list[str]]) -> str:
+    parts = []
+    for kind, verb in (("missing", "loses"), ("extra", "duplicates or invents")):
+        lines = verdict[kind]
+        if lines:
+            shown = "; ".join(repr(line[:80]) for line in lines[:3])
+            more = f" (+{len(lines) - 3} more)" if len(lines) > 3 else ""
+            parts.append(f"{verb} {len(lines)} line(s): {shown}{more}")
+    return f"{path}: self-check: merged output " + " and ".join(parts)
+
+
+def _merge_hub_file(
+    path: str, base_text: str, tip_text: str, origin_text: str
+) -> tuple[str, dict[str, Any]]:
+    """Merge one conflicted hub file and verify the result before it can be used.
+
+    Every rule is narrow by construction, but a rule can still be wrong in a
+    case nobody wrote a test for. So the merged text is re-checked against
+    both sides with the same line-multiset comparison ``--verify`` applies to
+    a hand rebuild (``compare_texts``): a merge that loses or duplicates any
+    line refuses. There is no flag to skip this.
+    """
+    if path in LEDGER_FILES:
+        merged_text, detail = ledger_merge(base_text, tip_text, origin_text, path)
+    else:
+        merged_text, detail = handoff_merge(base_text, tip_text, origin_text, path)
+    verdict = compare_texts(base_text, tip_text, origin_text, merged_text)
+    if verdict["missing"] or verdict["extra"]:
+        raise RefusalError(_self_check_message(path, verdict))
+    return merged_text, detail
+
+
 def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> None:
     marker = _operation_in_progress()
     if marker is not None:
@@ -1406,10 +1628,7 @@ def _replay(base: str, remote: str, health_cmd: str | None, report: Report) -> N
         tip_text = _blob_text(head, path)
         origin_text = _blob_text(origin_head, path)
         try:
-            if path in LEDGER_FILES:
-                merged_text, detail = ledger_merge(base_text, tip_text, origin_text, path)
-            else:
-                merged_text, detail = handoff_merge(base_text, tip_text, origin_text, path)
+            merged_text, detail = _merge_hub_file(path, base_text, tip_text, origin_text)
         except RefusalError as exc:
             refusals.append({"path": path, "reason": str(exc)})
             continue
@@ -1572,10 +1791,22 @@ def _is_handoff_path(path: str) -> bool:
     return bool(_HANDOFF_NAME_RE.match(Path(path).name))
 
 
+_OPEN_FENCE_FINDING = (
+    "{path}: the {what} ends inside an unclosed or unrecognized code fence; "
+    "its headings cannot be trusted, so the replay would refuse it"
+)
+
+
 def _lint_ledger(text: str, path: str) -> list[str]:
-    """Findings for one ledger: every anchor block must parse, no orphan entries."""
-    doc = _load_doc(text)
+    """Findings for one ledger: closed fences, unique anchors, every block parses."""
+    doc = _load_doc(text, path, strict=False)
     findings: list[str] = []
+    if _fence_scan(doc.lines)[1]:
+        findings.append(_OPEN_FENCE_FINDING.format(path=path, what="ledger"))
+    try:
+        _unique_spans(doc, "file", path)
+    except RefusalError as exc:
+        findings.append(str(exc))
     covered = [False] * len(doc.lines)
     for span in doc.spans:
         for idx in range(span.anchor_idx + 1, span.end_idx):
@@ -1596,9 +1827,21 @@ def _lint_ledger(text: str, path: str) -> list[str]:
 
 
 def _lint_handoff(text: str, path: str) -> list[str]:
-    """Findings for one handoff: frontmatter/description parse, unique sections."""
+    """Findings for one handoff: frontmatter, closed fences, unique sections."""
     try:
         _fm, _desc_idx, _desc, body = _split_handoff(text, path)
+    except RefusalError as exc:
+        return [str(exc)]
+    if _fence_scan(body)[1]:
+        # An open fence hides every later heading from the replay's section
+        # model, so flag the fence and count the headings it hides naively.
+        findings = [_OPEN_FENCE_FINDING.format(path=path, what="handoff body")]
+        names = [m.group(1) for line in body if (m := _SECTION_RE.match(line))]
+        duplicates = [name for name, count in Counter(names).items() if count > 1]
+        if duplicates:
+            findings.append(f"{path}: duplicate handoff section heading(s) {duplicates}")
+        return findings
+    try:
         _split_sections(body, path)
     except RefusalError as exc:
         return [str(exc)]
@@ -1754,13 +1997,18 @@ def compare_texts(base: str, tip: str, origin: str, result: str) -> dict[str, li
 
     b, t, o, r = (rest(text) for text in (base, tip, origin, result))
     s_add, o_add = t - b, o - b
-    kept = b - ((b - t) | (b - o))
-    ambiguous = set(s_add) & set(o_add)
+    s_del, o_del = b - t, b - o
+    # A line both sides added, or both sides deleted copies of, is ambiguous:
+    # the two edits may or may not have touched the same copy.
+    ambiguous = (set(s_add) & set(o_add)) | (set(s_del) & set(o_del))
     for line in set(b) | set(t) | set(o) | set(r):
-        low = kept[line] + (
-            max(s_add[line], o_add[line]) if line in ambiguous else s_add[line] + o_add[line]
-        )
-        high = kept[line] + s_add[line] + o_add[line]
+        both_add = s_add[line] and o_add[line]
+        both_del = s_del[line] and o_del[line]
+        kept_high = b[line] - max(s_del[line], o_del[line])
+        kept_low = max(0, b[line] - s_del[line] - o_del[line]) if both_del else kept_high
+        add_low = max(s_add[line], o_add[line]) if both_add else s_add[line] + o_add[line]
+        low = kept_low + add_low
+        high = kept_high + s_add[line] + o_add[line]
         if r[line] < low:
             missing.add(line)
         if r[line] > high:
@@ -1791,7 +2039,12 @@ def verify_merge(base: str, tip: str, origin: str, result: str) -> dict[str, Any
     dict
         ``{"ok": bool, "files": {path: {"missing", "extra", "ambiguous"}}}``.
     """
-    paths = sorted(set(_name_status(base, tip)) | set(_name_status(base, origin)))
+    paths = sorted(
+        set(_name_status(base, tip))
+        | set(_name_status(base, origin))
+        | set(_name_status(base, result))
+        | set(_name_status(origin, result))
+    )
     files: dict[str, dict[str, list[str]]] = {}
     for path in paths:
         files[path] = compare_texts(

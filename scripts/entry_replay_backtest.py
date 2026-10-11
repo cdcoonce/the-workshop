@@ -171,9 +171,16 @@ class Outcome:
 
 
 def run_merge(module: ModuleType, path: str, base: str, tip: str, origin: str) -> Outcome:
+    # The candidate verifies its own output inside the replay (`_merge_hub_file`);
+    # measure that same path, so a self-check refusal shows up as a refusal. The
+    # baseline predates the self-check and is run through its bare merge rules.
+    self_checked = getattr(module, "_merge_hub_file", None)
     merge = module.ledger_merge if path in module.LEDGER_FILES else module.handoff_merge
     try:
-        merged, _detail = merge(base, tip, origin, path)
+        if self_checked is not None:
+            merged, _detail = self_checked(path, base, tip, origin)
+        else:
+            merged, _detail = merge(base, tip, origin, path)
     except module.RefusalError as exc:
         return Outcome("refuse", reason=str(exc).split(": ", 1)[-1])
     except Exception as exc:  # noqa: BLE001 -- a crash is a measurement, not a stop
