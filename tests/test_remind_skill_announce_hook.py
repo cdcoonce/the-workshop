@@ -171,3 +171,19 @@ def test_pre_tool_use_matcher_is_left_unanchored_on_purpose() -> None:
     assert pattern.search("Edit")
     assert pattern.search("edit")
     assert pattern.search("mcp__server__write_file")
+
+
+@pytest.mark.parametrize("tool_name", ["skill", "Skill"])
+def test_tool_name_is_matched_case_insensitively(tool_name: str) -> None:
+    """The matcher is dual-cased, so the script gate must accept both casings."""
+    result = run({"tool_name": tool_name, "tool_input": {"skill": "vault-sync"}})
+    assert result.returncode == 0
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "vault-sync" in context
+
+
+def test_non_string_tool_name_no_ops() -> None:
+    result = run({"tool_name": ["skill"], "tool_input": {"skill": "vault-sync"}})
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
