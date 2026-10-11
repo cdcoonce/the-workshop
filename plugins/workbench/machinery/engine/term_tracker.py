@@ -90,10 +90,18 @@ def get_demotions(vault_root: Path, quick_ref_names: set[str] | list[str]) -> li
     Comparison is case-insensitive.
     """
     data = load_frequencies(vault_root)
-    data_lower = {k.lower(): v for k, v in data.items()}
+    # Casing variants are separate keys; merge them by max sessions so a
+    # zero-session variant cannot shadow a well-used one.
+    sessions_lower: dict[str, int] = {}
+    for key, info in data.items():
+        if not isinstance(info, dict):
+            continue
+        count = info.get("sessions", 0)
+        lowered = key.lower()
+        sessions_lower[lowered] = max(sessions_lower.get(lowered, count), count)
     return [
         name
         for name in quick_ref_names
-        if name.lower() not in data_lower
-        or data_lower[name.lower()].get("sessions", 0) <= DEMOTE_THRESHOLD
+        if name.lower() not in sessions_lower
+        or sessions_lower[name.lower()] <= DEMOTE_THRESHOLD
     ]
