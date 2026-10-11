@@ -106,6 +106,9 @@ Three new tests cover the half-cent boundary.
 BRANCH = "fix/settlement-rounding"
 
 
+_FALLBACK_PATH = "/usr/bin:/bin:/usr/local/bin"
+
+
 def _git(repo: Path, *args: str) -> None:
     """Run a git command in `repo` with author and committer dates pinned."""
     env = {
@@ -115,7 +118,7 @@ def _git(repo: Path, *args: str) -> None:
         "GIT_AUTHOR_EMAIL": "fixture@local",
         "GIT_COMMITTER_NAME": "Fixture",
         "GIT_COMMITTER_EMAIL": "fixture@local",
-        "PATH": "/usr/bin:/bin:/usr/local/bin",
+        "PATH": os.pathsep.join(filter(None, [os.environ.get("PATH", ""), _FALLBACK_PATH])),
     }
     subprocess.run(["git", "-C", str(repo), *args], check=True, env=env, capture_output=True)
 
