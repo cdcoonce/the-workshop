@@ -724,6 +724,13 @@
       "replace": "    if len(tip) != len(base):\n"
     },
     {
+      "label": "G2: the last inserted item always takes origin's anchor separator (loosens a tight list)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                    if tip_next is None or tip_next != origin_next:\n",
+      "replace": "                    if True:\n"
+    },
+    {
       "label": "G5: a swap of two section names reads as two renames",
       "file": "../entry_replay.py",
       "oracle": "real",

@@ -3657,13 +3657,23 @@ def test_g3_an_entry_after_an_edited_predecessor_stays_directly_after_it_despite
     assert "edited by the session" in merged
 
 
-def test_g2_the_last_inserted_item_takes_over_the_blank_count_origins_anchor_had() -> None:
-    """Rule as specified: the separator that followed origin's anchor item now follows
-    the last inserted item, and the anchor takes the session's separator."""
+def test_g2_the_last_inserted_item_keeps_the_sessions_separator_to_the_same_next_item() -> None:
+    """The session wrote n2 tight against b; origin still follows a with b, so the
+    session's separator is authoritative (backtest pair 6e450eec..c8a4cca2)."""
     base = _section("\n- a\n\n- b\n")
     tip = _section("\n- a\n\n- n1\n- n2\n- b\n")
     merged, _detail = handoff_merge(base, tip, base, HANDOFF)
-    assert "\n- a\n\n- n1\n- n2\n\n- b\n" in merged
+    assert "\n- a\n\n- n1\n- n2\n- b\n" in merged
+
+
+def test_g2_the_last_inserted_item_takes_origins_anchor_separator_when_origin_inserted_after_it() -> None:
+    """Origin put o1 after a, so n1 is now followed by o1, not by the b the session
+    wrote against: it takes the separator origin's anchor had."""
+    base = _section("\n- a\n\n- b\n")
+    origin = _section("\n- a\n\n- o1\n\n- b\n")
+    tip = _section("\n- a\n\n- n1\n- b\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert "\n- a\n\n- n1\n\n- o1\n\n- b\n" in merged
 
 
 def test_g4_a_ledgers_frontmatter_description_is_plain_line_arithmetic() -> None:

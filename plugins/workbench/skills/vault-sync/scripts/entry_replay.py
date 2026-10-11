@@ -1387,14 +1387,18 @@ def _merge_section_items(
             if kept:
                 # Inserted items keep the session's own blank separators. Next to
                 # a content item the separator after that item becomes the
-                # session's (it is now followed by the first inserted item), and
-                # the last inserted item takes over the blank count origin's
-                # item had before the insertion (it is now followed by whatever
-                # followed that item).
+                # session's (it is now followed by the first inserted item). The
+                # last inserted item keeps the session's separator when origin
+                # still follows the anchor with the item the session wrote it
+                # against; otherwise (origin inserted there) it takes over the
+                # blank count origin's anchor had.
                 incoming = [tip_items[j] for j in kept]
                 if anchor and _has_content(oc[anchor - 1]):
                     blank_fix[anchor - 1] = tip_items[max(kept[0] - 1, 0)][1]
-                    incoming[-1] = (incoming[-1][0], origin_items[anchor - 1][1])
+                    tip_next = tc[kept[-1] + 1] if kept[-1] + 1 < len(tc) else None
+                    origin_next = oc[anchor] if anchor < len(oc) else None
+                    if tip_next is None or tip_next != origin_next:
+                        incoming[-1] = (incoming[-1][0], origin_items[anchor - 1][1])
                 placements.append((anchor, anchor, incoming))
                 counts["items_inserted"] += len(incoming)
             continue
