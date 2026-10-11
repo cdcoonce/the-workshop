@@ -399,6 +399,22 @@ class TestMainRootResolution:
         assert captured["ran"] is True
         assert captured["root"].samefile(tmp_path)
 
+    def test_refusal_message_names_the_vault_json_marker(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        import vault_mcp
+
+        monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(SystemExit):
+            vault_mcp.main()
+
+        err = capsys.readouterr().err
+        assert ".vault/vault.json" in err
+        assert "brain/" not in err
+        assert "CLAUDE.md" not in err
+
     def test_refuses_to_serve_without_a_vault(self, tmp_path, monkeypatch) -> None:
         import vault_mcp
 

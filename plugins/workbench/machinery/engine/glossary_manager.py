@@ -28,6 +28,23 @@ from frontmatter_engine import generate
 
 TABLE_ROW_RE = re.compile(r"^\|\s*\*\*(?P<key>[^*]+)\*\*\s*\|(?P<rest>.+)\|$")
 
+_UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
+
+
+def _escape_cell(value: str) -> str:
+    """Escape literal ``|`` as ``\\|`` so a value cannot add a table column."""
+    return value.replace("|", "\\|")
+
+
+def _unescape_cell(value: str) -> str:
+    """Inverse of :func:`_escape_cell`."""
+    return value.replace("\\|", "|")
+
+
+def _split_cells(rest: str) -> list[str]:
+    """Split a row's trailing cells on unescaped ``|`` and unescape ``\\|``."""
+    return [_unescape_cell(c.strip()) for c in _UNESCAPED_PIPE_RE.split(rest)]
+
 
 @dataclass
 class GlossaryEntry:
@@ -107,8 +124,8 @@ def parse_glossary(file_path: Path) -> list[GlossaryEntry]:
         match = TABLE_ROW_RE.match(line.strip())
         if not match:
             continue
-        term = match.group("key").strip()
-        rest_cols = [c.strip() for c in match.group("rest").split("|")]
+        term = _unescape_cell(match.group("key").strip())
+        rest_cols = _split_cells(match.group("rest"))
         meaning = rest_cols[0] if len(rest_cols) > 0 else ""
         category = rest_cols[1] if len(rest_cols) > 1 else ""
         entries.append(GlossaryEntry(term=term, meaning=meaning, category=category))
@@ -124,7 +141,7 @@ def add_glossary_entry(vault_root: Path, term: str, meaning: str, category: str)
         return
 
     content = path.read_text(encoding="utf-8")
-    row = f"| **{term}** | {meaning} | {category} |"
+    row = f"| **{_escape_cell(term)}** | {_escape_cell(meaning)} | {_escape_cell(category)} |"
     lines = content.splitlines()
 
     # Locate the glossary table and insert at the end of its contiguous block of
@@ -165,7 +182,7 @@ def remove_glossary_entry(vault_root: Path, term: str) -> bool:
 
     for line in lines:
         match = TABLE_ROW_RE.match(line.strip())
-        if match and match.group("key").strip().lower() == term.lower():
+        if match and _unescape_cell(match.group("key").strip()).lower() == term.lower():
             found = True
             continue
         new_lines.append(line)
@@ -206,8 +223,8 @@ def parse_quick_reference(file_path: Path) -> list[QuickRefEntry]:
         if not match:
             continue
 
-        name = match.group("key").strip()
-        rest_cols = [c.strip() for c in match.group("rest").split("|")]
+        name = _unescape_cell(match.group("key").strip())
+        rest_cols = _split_cells(match.group("rest"))
         col2 = rest_cols[0] if len(rest_cols) > 0 else ""
         col3 = rest_cols[1] if len(rest_cols) > 1 else ""
 
@@ -230,9 +247,9 @@ def add_quick_ref_entry(vault_root: Path, section: str, name: str, col2: str, co
 
     # Terms section is 2-column; People and Projects are 3-column
     if section == "Terms":
-        row = f"| **{name}** | {col2} |"
+        row = f"| **{_escape_cell(name)}** | {_escape_cell(col2)} |"
     else:
-        row = f"| **{name}** | {col2} | {col3} |"
+        row = f"| **{_escape_cell(name)}** | {_escape_cell(col2)} | {_escape_cell(col3)} |"
 
     # Find end of section's table: last table row (|...) before a blank line or next ##
     in_section = False
@@ -285,7 +302,7 @@ def remove_quick_ref_entry(vault_root: Path, section: str, name: str) -> bool:
         if (
             current_section == section
             and match
-            and match.group("key").strip().lower() == name.lower()
+            and _unescape_cell(match.group("key").strip()).lower() == name.lower()
         ):
             found = True
             continue

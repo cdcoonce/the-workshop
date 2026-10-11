@@ -41,6 +41,7 @@ def _link_advisory_lines(file_path: Path, vault_root: Path) -> list[str]:
     """
     try:
         from unpromoted_memory import (
+            extract_broken_displays,
             format_warning,
             unpromoted_memory_links,
         )
@@ -59,11 +60,7 @@ def _link_advisory_lines(file_path: Path, vault_root: Path) -> list[str]:
                 "unresolved links in this file will not be caught until the commit gate."
             ]
         entries = raw.get(rel, [])
-        displays = list(dict.fromkeys(
-            entry["display"]
-            for entry in entries
-            if isinstance(entry, dict) and isinstance(entry.get("display"), str)
-        ))
+        displays = list(dict.fromkeys(extract_broken_displays(entries)))
         if not displays:
             return []
 

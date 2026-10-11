@@ -93,8 +93,9 @@ Schema 2 (W4) adds two constructs, and this reader accepts both schemas:
   of the live key against the rendered source value. Adopt records the
   canonical hash (plus ``kind``/``key``) in the lock entry; upgrade rewrites
   only that key, preserving every sibling key, and reformats the file with
-  ``indent=2``. A target file that is not valid JSON refuses even under
-  ``--force`` — a key rewrite cannot preserve siblings it cannot parse.
+  ``indent=2``. A target file that is not valid JSON, or whose top level is
+  not an object, refuses even under ``--force`` — a key rewrite cannot
+  preserve siblings it cannot parse.
 
 A stale schema-1 reader hard-errors on a schema-2 map ("schema 2 is not
 supported") — deliberate: a stale vendored tool must refuse a newer map
@@ -178,20 +179,32 @@ def canonical_json_sha256(value) -> str:
 _ABSENT = object()
 
 
-def _read_json_key(path: Path, key: str):
+def _read_json_key(path: Path, key: str, *, require_object: bool = False):
     """The value of ``key`` in the JSON file at ``path``.
+
+    Parameters
+    ----------
+    path
+        JSON file to read.
+    key
+        Top-level key to look up.
+    require_object
+        When true, a file whose top-level value is not a JSON object raises
+        instead of reading as absence.
 
     Returns
     -------
     Any
         The key's value; ``_ABSENT`` when the file is missing, the document
-        is not a JSON object, or the key is not present.
+        is not a JSON object (unless ``require_object``), or the key is not
+        present.
 
     Raises
     ------
     ValueError
-        When the file exists but is not valid JSON — callers treat that as
-        an unresolvable local state, never as absence.
+        When the file exists but is not valid JSON, or (with
+        ``require_object``) is valid JSON but not an object — callers treat
+        that as an unresolvable local state, never as absence.
     """
     if not path.is_file():
         return _ABSENT
@@ -199,7 +212,11 @@ def _read_json_key(path: Path, key: str):
         document = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path} is not valid JSON: {exc}")
-    if not isinstance(document, dict) or key not in document:
+    if not isinstance(document, dict):
+        if require_object:
+            raise ValueError(f"{path} is not a JSON object")
+        return _ABSENT
+    if key not in document:
         return _ABSENT
     return document[key]
 
@@ -720,11 +737,14 @@ def _plan_json_key_entry(
         vendor_map.source_path(entry).read_text(encoding="utf-8")
     )
     try:
-        live_value = _read_json_key(target / entry.target, entry.key)
+        live_value = _read_json_key(
+            target / entry.target, entry.key, require_object=True
+        )
     except ValueError:
         # Not downgraded by --force: rewriting one key cannot preserve
-        # sibling keys the file no longer parses well enough to read.
-        return ACTION_REFUSE, "target is not valid JSON"
+        # sibling keys the file no longer parses (or whose top level is not
+        # an object) well enough to read.
+        return ACTION_REFUSE, "target is not a valid JSON object"
     if live_value is not _ABSENT and canonical_json_sha256(
         live_value
     ) == canonical_json_sha256(source_value):
@@ -757,7 +777,8 @@ def _plan_upgrade(
     disk -> copy (restore); unmodified since lock -> copy; locally edited ->
     keep-local (flagged now or recorded in the lock) or REFUSE, with
     ``--force`` downgrading every refusal to a copy — except a json-key
-    target that is no longer valid JSON, which always refuses.
+    target that is no longer valid JSON or whose top level is not an object,
+    which always refuses.
     """
     locked_files: dict[str, dict] = lock["files"]
     plan: list[dict] = []
@@ -788,18 +809,20 @@ def _apply_json_key_copy(
     """Rewrite only ``entry.key`` in the target JSON file.
 
     Sibling keys and their order are preserved; the file is reformatted with
-    ``indent=2`` and a trailing newline. A missing or non-object target
-    becomes ``{<key>: <value>}``.
+    ``indent=2`` and a trailing newline. A missing target becomes
+    ``{<key>: <value>}``; a non-object target is refused at plan time and
+    never reaches this function.
     """
     source_value = json.loads(
         vendor_map.source_path(entry).read_text(encoding="utf-8")
     )
     candidate = target / entry.target
-    document = {}
+    document: dict = {}
     if candidate.is_file():
         loaded = json.loads(candidate.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            document = loaded
+        if not isinstance(loaded, dict):
+            raise ValueError(f"{candidate} is not a JSON object")
+        document = loaded
     document[entry.key] = source_value
     payload = (json.dumps(document, indent=2) + "\n").encode("utf-8")
     writer.write_bytes(entry.target, payload)

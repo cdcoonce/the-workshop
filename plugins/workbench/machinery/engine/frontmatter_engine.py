@@ -212,10 +212,12 @@ def _detect_note_type(fm: dict[str, Any]) -> str | None:
     tags = fm.get("tags", [])
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",")]
+    elif not isinstance(tags, list):
+        return None  # scalar/mapping/None tags: no type detectable; validate() reports it
 
     type_fields = _type_fields()
     for tag in tags:
-        if tag in type_fields:
+        if isinstance(tag, str) and tag in type_fields:
             return tag
     return None
 
@@ -300,6 +302,9 @@ def validate(file_path: str | Path, vault_root: str | Path | None = None) -> lis
         errors.append(ValidationError(rel_name, "tags", "Tags list is empty — at least one tag required"))
     elif isinstance(tags, str) and tags.strip() == "":
         errors.append(ValidationError(rel_name, "tags", "Tags field is empty — at least one tag required"))
+    elif not isinstance(tags, (list, str)):
+        errors.append(ValidationError(rel_name, "tags",
+                      f"Tags must be a list or string, got {type(tags).__name__}"))
 
     # --- Type-specific validation ---
     note_type = _detect_note_type(fm)  # fm is guaranteed non-None here (guarded + returned above)
