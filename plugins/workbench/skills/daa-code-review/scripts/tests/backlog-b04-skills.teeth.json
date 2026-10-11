@@ -8,10 +8,8 @@
     "python",
     "-m",
     "pytest",
-    "-o",
-    "pythonpath=plugins/workbench/skills/daa-code-review/scripts",
     "-q",
-    "plugins/workbench/skills/daa-code-review/scripts/tests/test_markdown_analyzer.py"
+    "tests/test_markdown_analyzer.py"
   ],
   "collect_command": [
     "uv",
@@ -21,11 +19,9 @@
     "python",
     "-m",
     "pytest",
-    "-o",
-    "pythonpath=plugins/workbench/skills/daa-code-review/scripts",
     "--collect-only",
     "-q",
-    "plugins/workbench/skills/daa-code-review/scripts/tests/test_markdown_analyzer.py"
+    "tests/test_markdown_analyzer.py"
   ],
   "mutants": [
     {
