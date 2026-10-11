@@ -1,0 +1,28 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "plugins/workbench/skills/detector-teeth-check/scripts/tests/test_teeth_check.py"],
+  "mutants": [
+    {
+      "label": "#1073 missing-key guard removed: raw indexing raises KeyError again",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if key not in raw:\n        raise SpecError(f\"mutant {label!r} is missing required key {key!r}\")",
+      "replace": "    if False:\n        raise SpecError(f\"mutant {label!r} is missing required key {key!r}\")"
+    },
+    {
+      "label": "#1073 refusal no longer names the missing key",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "is missing required key {key!r}\")",
+      "replace": "is missing a required key\")"
+    },
+    {
+      "label": "#1073 label read bypasses the guard: a labelless row crashes with KeyError",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "label = _require_key(raw, \"label\", \"<unlabelled>\")",
+      "replace": "label = raw[\"label\"]"
+    }
+  ]
+}
