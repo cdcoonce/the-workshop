@@ -628,3 +628,18 @@ class TestVaultRootAutoDetection:
 
         assert isinstance(errors, list)
         assert errors == []
+
+
+class TestExoticTagsDoNotRaise:
+    @pytest.mark.parametrize("tags_yaml", ["[{a: 1}]", "[null, 5]"])
+    def test_non_string_tag_items_return_without_raising(
+        self, vault: Path, tags_yaml: str
+    ) -> None:
+        p = _write_note(vault, "brain/exotic-tags.md", (
+            "---\n"
+            "date: 2026-04-04\n"
+            "description: \"Has description\"\n"
+            f"tags: {tags_yaml}\n"
+            "---\n\nContent.\n"
+        ))
+        assert isinstance(validate(p, vault), list)

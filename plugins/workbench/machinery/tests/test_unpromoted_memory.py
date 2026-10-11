@@ -325,3 +325,7 @@ class TestExtractBrokenDisplays:
         )
         unpromoted_memory.unpromoted_memory_links(vault, "n.md", mem_base=mem_base)
         assert seen == [[{"display": "absent-rows-cannot-prove-a-detector-fires"}]]
+
+
+def test_extract_broken_displays_keeps_duplicates() -> None:
+    assert extract_broken_displays([{"display": "A"}, {"display": "A"}]) == ["A", "A"]

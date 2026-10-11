@@ -555,3 +555,20 @@ class TestCrashPayloadShapes:
         additional_context = payload["hookSpecificOutput"]["additionalContext"]
         assert "crashed" in additional_context.lower()
         assert "systemMessage" not in payload
+
+
+class TestDuplicateBrokenLinks:
+    def test_two_identical_broken_links_yield_one_bullet(
+        self, vault: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        note = vault / "work" / "dup.md"
+        note.write_text(VALID_FRONTMATTER + "\nAgain [[Ghost X]] and [[Ghost X]].\n", encoding="utf-8")
+        raw = {"work/dup.md": [{"display": "Ghost X"}, {"display": "Ghost X"}]}
+        event = json.dumps({"tool_input": {"file_path": str(note)}})
+
+        with patch("validate_write._graphmark_broken", return_value=raw), \
+             patch.object(sys, "stdin", io.StringIO(event)):
+            validate_write.main()
+
+        out = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+        assert out.count("• [[Ghost X]]") == 1

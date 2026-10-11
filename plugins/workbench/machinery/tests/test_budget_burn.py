@@ -579,3 +579,20 @@ class TestScaffoldedConfig:
         _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
         result = module.scan(tmp_path, "2026-06")
         assert result["by_project"] == {"unaliased-proj": 5.0}
+
+
+class TestBudgetOverride:
+    def test_budget_flag_keeps_percent_of_cap(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        monkeypatch.setattr(budget_burn, "__file__", str(tmp_path / "engine" / "budget_burn.py"))
+        monkeypatch.setattr(
+            sys, "argv",
+            ["budget_burn.py", "--context", "work", "--budget", "300", "--projects-root", str(tmp_path)],
+        )
+
+        assert budget_burn.main() == 0
+
+        out = capsys.readouterr().out
+        assert "/ $300" in out
+        assert "% of cap" in out

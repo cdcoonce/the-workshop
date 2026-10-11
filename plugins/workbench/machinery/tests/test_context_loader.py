@@ -587,3 +587,22 @@ class TestCondenseDigest:
         once = condense_digest(self._handoff(4), ".brain/h.md")
 
         assert condense_digest(once, ".brain/h.md") == once
+
+
+class TestNonCheckboxBrackets:
+    def test_non_checkbox_brackets_are_preserved(self, vault: Path) -> None:
+        (vault / "work" / "Index.md").write_text(
+            "---\ndate: 2026-04-04\ndescription: work index\ntags:\n  - index\n---\n\n"
+            "# Work Index\n\n## Active Projects\n\n"
+            "- [Draft] Spec\n"
+            "- [x]nospace\n"
+            "- Note about [x] and [ ] mid-line\n"
+            "- [1] footnote\n"
+        )
+
+        assert load_context(vault).active_work == [
+            "[Draft] Spec",
+            "[x]nospace",
+            "Note about [x] and [ ] mid-line",
+            "[1] footnote",
+        ]
