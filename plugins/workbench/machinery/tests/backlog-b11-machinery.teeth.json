@@ -1,0 +1,112 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "test_pulse.py",
+    "test_cold_read_stamp.py",
+    "test_wrap_up_audit.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.10,<0.11",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--collect-only",
+    "test_pulse.py",
+    "test_cold_read_stamp.py",
+    "test_wrap_up_audit.py"
+  ],
+  "mutants": [
+    {
+      "label": "#594 vault-root message names the retired marker (test_no_brain_perf_signature_is_rejected)",
+      "file": "../engine/pulse.py",
+      "oracle": "real",
+      "find": "print(\n            \"pulse: no vault root found (CLAUDE.md + brain/ + perf/ signature) \"\n            \"\u2014 pass --vault-root\"\n        )",
+      "replace": "print(\"pulse: no vault root found (.vault-context) \u2014 pass --vault-root\")"
+    },
+    {
+      "label": "#782 git window sized by count of requested weeks (test_sparse_far_past_weeks_are_covered_by_since)",
+      "file": "../engine/pulse.py",
+      "oracle": "real",
+      "find": "        since = oldest_monday - timedelta(weeks=2)",
+      "replace": "        since = datetime.now(tz).date() - timedelta(weeks=len(week_keys) + 2)"
+    },
+    {
+      "label": "#1074 duplicate school rule re-added (test_no_duplicate_substring_keys)",
+      "file": "../engine/pulse_defaults.py",
+      "oracle": "real",
+      "find": "    (\"housing-commute\", \"home\"),\n",
+      "replace": "    (\"housing-commute\", \"home\"),\n    (\"school\", \"school\"),\n"
+    },
+    {
+      "label": "#1053 final-line bare CR stays in content (test_line_pieces_final_line_bare_cr_goes_to_terminator_and_is_lossless)",
+      "file": "../engine/cold_read_stamp.py",
+      "oracle": "real",
+      "find": "            if part.endswith(\"\\r\"):\n                pieces.append((part[:-1], \"\\r\"))\n            else:\n                pieces.append((part, \"\"))",
+      "replace": "            pieces.append((part, \"\"))"
+    },
+    {
+      "label": "#929 graphmark.check/config imports hoisted above the try (test_gate_import_error_on_check_submodule_is_gate_only_not_graphmark_unavailable)",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "\n    try:\n        # Inside the try: a graphmark that is installed but lacks these\n        # submodules must read \"gate policy rejected\", not escape to the\n        # caller's blanket \"graphmark unavailable\" handler (#929).\n        from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n        from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n        policy",
+      "replace": "    from graphmark.check import breach_lines, run_check  # noqa: PLC0415\n    from graphmark.config import CheckPolicy  # noqa: PLC0415\n\n    try:\n        policy"
+    },
+    {
+      "label": "#982 date-line regex guard disabled (test_handoff_date_line_with_trailing_clause_is_a_finding)",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "and not HANDOFF_DATE_LINE_RE.match(line):",
+      "replace": "and not line:"
+    },
+    {
+      "label": "#982 regex accepts a trailing clause (test_handoff_date_line_with_trailing_clause_is_a_finding)",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "\\d{4}-\\d{2}-\\d{2}\\.?_$\")",
+      "replace": "\\d{4}-\\d{2}-\\d{2}.*$\")"
+    },
+    {
+      "label": "#982 only the personal handoff is scanned (test_handoff_date_line_guard_covers_every_handoff_file)",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "brain.glob(\"handoff-*.md\")",
+      "replace": "brain.glob(\"handoff-personal.md\")"
+    },
+    {
+      "label": "#982 any in-line _Updated mention counts as the date line (test_handoff_date_line_check_ignores_body_prose)",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "if line.startswith((\"_Updated\", \"_Refreshed\")) and",
+      "replace": "if (\"_Updated\" in line or \"_Refreshed\" in line) and"
+    }
+  ]
+}
