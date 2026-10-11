@@ -91,6 +91,12 @@ class TestRuleMapping:
         assert get_category_for_rule("F401") == IssueCategory.UNUSED_CODE
         assert get_category_for_rule("F841") == IssueCategory.UNUSED_CODE
 
+    def test_undefined_name_rules_are_runtime_errors(self):
+        """F821/F822/F823 are runtime errors, not unused code (#1069)."""
+        assert get_category_for_rule("F821") == IssueCategory.RUNTIME_ERROR
+        assert get_category_for_rule("F822") == IssueCategory.RUNTIME_ERROR
+        assert get_category_for_rule("F823") == IssueCategory.RUNTIME_ERROR
+
     def test_complexity_category(self):
         """Test that C90 rules map to COMPLEXITY category."""
         assert get_category_for_rule("C901") == IssueCategory.COMPLEXITY
