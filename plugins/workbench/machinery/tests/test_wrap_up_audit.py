@@ -1926,11 +1926,12 @@ def _handoff_with_date_line(date_line: str) -> str:
 
 def _date_line_report(tmp_path: Path, files: dict[str, str]) -> dict:
     _git_init(tmp_path)
-    _write(tmp_path, "brain/Anchor.md", _note("Anchor"))
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
     for rel, text in files.items():
         _write(tmp_path, rel, text)
     _git_commit_all(tmp_path, "init")
-    return collect(tmp_path, files=["brain/Anchor.md"], base="HEAD")
+    return collect(tmp_path, files=["brain/A.md"], base="HEAD")
 
 
 @pytest.mark.parametrize(

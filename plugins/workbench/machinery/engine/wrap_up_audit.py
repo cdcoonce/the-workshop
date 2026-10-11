@@ -613,10 +613,14 @@ def _run_gate(vault_root: Path, graph: Any, cfg: Any, orphan_paths: list[str], c
         return {"not_run": error, "pass": None, "policy": None, "breach_lines": [], "orphans": [], "checks": []}
 
     import dataclasses  # noqa: PLC0415
-    from graphmark.check import breach_lines, run_check  # noqa: PLC0415
-    from graphmark.config import CheckPolicy  # noqa: PLC0415
 
     try:
+        # Inside the try: a graphmark that is installed but lacks these
+        # submodules must read "gate policy rejected", not escape to the
+        # caller's blanket "graphmark unavailable" handler (#929).
+        from graphmark.check import breach_lines, run_check  # noqa: PLC0415
+        from graphmark.config import CheckPolicy  # noqa: PLC0415
+
         policy = CheckPolicy(**kwargs)
         gate_cfg = dataclasses.replace(cfg, check=policy)
         report = run_check(graph, gate_cfg)
@@ -841,6 +845,53 @@ def _parse_diff_hunks(diff_text: str) -> tuple[list[int], list[int]]:
     return new_lines, old_lines
 
 
+HANDOFF_DATE_LINE_RE = re.compile(r"^_(Updated|Refreshed) \d{4}-\d{2}-\d{2}\.?_$")
+
+
+def _handoff_date_lines(vault_root: Path) -> tuple[list[dict[str, Any]], str | None]:
+    """Find handoff date lines that are not exactly date-only (#982).
+
+    The line starting ``_Updated`` or ``_Refreshed`` in any
+    ``.brain/handoff-*.md`` must match ``_Updated YYYY-MM-DD_`` (or
+    ``_Refreshed``, optional trailing period). Anything else is a changelog
+    clause and fails closed as a finding.
+
+    Parameters
+    ----------
+    vault_root : Path
+        The vault root.
+
+    Returns
+    -------
+    tuple[list[dict[str, Any]], str | None]
+        Findings (``file``, ``line``, ``detail``), and a reason when a handoff
+        file could not be read (the check then cannot vouch, so not-run).
+    """
+    findings: list[dict[str, Any]] = []
+    brain = vault_root / ".brain"
+    if not brain.is_dir():
+        return findings, None
+    for path in sorted(brain.glob("handoff-*.md")):
+        rel = f".brain/{path.name}"
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return findings, f"cannot read {rel}: {type(exc).__name__}"
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if line.startswith(("_Updated", "_Refreshed")) and not HANDOFF_DATE_LINE_RE.match(line):
+                findings.append(
+                    {
+                        "file": rel,
+                        "line": lineno,
+                        "detail": (
+                            f"line {lineno} is not date-only "
+                            "(expected `_Updated YYYY-MM-DD_`; history belongs in the commit message)"
+                        ),
+                    }
+                )
+    return findings, None
+
+
 def _handoff_sections(vault_root: Path, base: str) -> dict[str, Any]:
     ctx = read_vault_context(vault_root)
     if ctx == "unknown":
@@ -978,6 +1029,11 @@ def _collect_inner(
     if handoff.get("not_run"):
         not_run.append({"check": "handoff_sections", "reason": handoff["not_run"]})
 
+    date_line_findings, date_line_error = _handoff_date_lines(vault_root)
+    if date_line_error:
+        not_run.append({"check": "handoff_date_line", "reason": date_line_error})
+    date_line_capped, date_line_elided = _cap(date_line_findings, limit)
+
     frontmatter_findings, frontmatter_elided = _cap(scoped["frontmatter"], limit)
     no_wikilinks_findings, no_wikilinks_elided = _cap(scoped["no_wikilinks"], limit)
     index_findings, index_elided = _cap(scoped["index_membership"], limit)
@@ -994,6 +1050,7 @@ def _collect_inner(
         + len(orphan_findings)
         + len(scoped["index_membership"])
         + len(new_orphans_findings)
+        + len(date_line_findings)
         + (1 if gate_breach else 0)
     )
 
@@ -1057,6 +1114,11 @@ def _collect_inner(
                 "elided": index_elided,
             },
             "gate": gate,
+            "handoff_date_line": {
+                "count": len(date_line_findings),
+                "findings": date_line_capped,
+                "elided": date_line_elided,
+            },
             "handoff_sections": handoff,
         },
         "not_run": not_run,
@@ -1141,6 +1203,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"  - {bl}")
         for o in gate["orphans"]:
             lines.append(f"  - orphan `{o['file']}` (in_scope: {str(o['in_scope']).lower()})")
+    _render_check(lines, "Handoff Date Line", checks["handoff_date_line"])
     lines.append("")
 
     handoff = checks["handoff_sections"]
