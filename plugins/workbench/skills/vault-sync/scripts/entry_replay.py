@@ -1556,7 +1556,13 @@ def _pair_moves(
     guards each look harmless. A deleted base item and an inserted tip item of
     the same section that read as versions of one another
     (``_items_alike``) are one edit of that item. One-to-one, best match first.
-    Returns ``{base index: tip index}``.
+    A moved item that lands next to an edit of its new neighbour sits inside a
+    ``replace`` opcode, so the tip side of every ``replace`` is a candidate
+    too, in a second round: the deleted items still unpaired after the plain
+    inserts took their matches. The second round never takes a pair from the
+    first, so it only adds pairs (and so only adds refusals). Works the same
+    on base -> origin opcodes, pairing origin's own moves. Returns ``{base
+    index: tip index}``.
     """
     deleted = [
         i
@@ -1572,6 +1578,25 @@ def _pair_moves(
         for j in range(j1, j2)
         if _has_content(tc[j])
     ]
+    replacing = [
+        j
+        for tag, _i1, _i2, j1, j2 in opcodes
+        if tag == "replace"
+        for j in range(j1, j2)
+        if _has_content(tc[j])
+    ]
+    pairs = _best_pairs(bc, tc, deleted, inserted)
+    pairs.update(_best_pairs(bc, tc, [i for i in deleted if i not in pairs], replacing))
+    return pairs
+
+
+def _best_pairs(
+    bc: list[tuple[str, ...]],
+    tc: list[tuple[str, ...]],
+    deleted: list[int],
+    inserted: list[int],
+) -> dict[int, int]:
+    """One-to-one ``_items_alike`` pairs, identical first, then nearest."""
     scored = sorted(
         (
             (bc[i] == tc[j], -abs(i - j), i, j)
@@ -1588,6 +1613,139 @@ def _pair_moves(
             pairs[i] = j
             taken.add(j)
     return pairs
+
+
+_Ref = tuple[str, int]  # (section name, item index)
+
+
+def _pair_across_sections(
+    sections: dict[str, tuple[list[tuple[str, ...]], list[tuple[str, ...]]]],
+    sources: set[str],
+) -> dict[_Ref, _Ref]:
+    """Pair items deleted from one section with items inserted into ANOTHER.
+
+    ``sections`` maps a section name to ``(base item contents, other side's
+    item contents)``; only deletions from a section in ``sources`` count. A
+    candidate is a deleted or inserted (``insert`` or ``replace`` tip side)
+    item its own section's ``_pair_moves`` left unpaired: an in-section move
+    is that section's business, and since that pairing is greedy over every
+    alike pair, no two leftovers of one section are alike: every pair found
+    here crosses sections. One-to-one, identical before merely alike.
+    Returns ``{(section, base index): (other section, other index)}``.
+    """
+    deleted: dict[_Ref, tuple[str, ...]] = {}
+    inserted: dict[_Ref, tuple[str, ...]] = {}
+    for name, (bc, xc) in sections.items():
+        ops = difflib.SequenceMatcher(None, bc, xc, autojunk=False).get_opcodes()
+        own = _pair_moves(bc, xc, ops)
+        claimed = set(own.values())
+        for tag, i1, i2, j1, j2 in ops:
+            if tag == "delete" and name in sources:
+                deleted.update(
+                    ((name, i), bc[i]) for i in range(i1, i2) if i not in own and _has_content(bc[i])
+                )
+            if tag in ("insert", "replace"):
+                inserted.update(
+                    ((name, j), xc[j])
+                    for j in range(j1, j2)
+                    if j not in claimed and _has_content(xc[j])
+                )
+    scored = sorted(
+        (
+            (deleted[gone] == inserted[new], gone, new)
+            for gone in deleted
+            for new in inserted
+            if _items_alike(deleted[gone], inserted[new], _MOVE_RATIO)
+        ),
+        reverse=True,
+    )
+    pairs: dict[_Ref, _Ref] = {}
+    taken: set[_Ref] = set()
+    for _identical, gone, new in scored:
+        if gone not in pairs and new not in taken:
+            pairs[gone] = new
+            taken.add(new)
+    return pairs
+
+
+def _insert_gaps(opcodes: list[tuple[str, int, int, int, int]]) -> dict[int, int]:
+    """Map each inserted or replacing item's index -> the base gap it went in at."""
+    return {
+        j: i1
+        for tag, i1, _i2, j1, j2 in opcodes
+        if tag in ("insert", "replace")
+        for j in range(j1, j2)
+    }
+
+
+def _refuse_cross_section_moves(
+    base: dict[str, list[str]],
+    tip: dict[str, list[str]],
+    origin: dict[str, list[str]],
+    origin_base: dict[str, list[str]],
+    touched: list[str],
+    path: str,
+) -> None:
+    """Refuse a move of a handoff item between sections that the other side raced.
+
+    ``_merge_section_items`` works one section at a time, so a session that
+    moves (and edits) an item into another section reads there as a harmless
+    delete plus an unrelated insert -- and when origin deleted, edited or also
+    moved the item, the delete looked already applied while the new copy
+    resurrected it, or two versions came out. The session's cross-section
+    pairs (``_pair_across_sections``) therefore need the moved base item
+    unchanged and aligned on origin in its own section, unless origin made
+    the identical move (the same item into the same gap). The mirror case:
+    origin moved an item into another section that the session deleted -- the
+    session's delete would be dropped. ``base`` and ``tip`` are the touched
+    sections' bodies; ``origin`` every origin section, with ``origin_base``
+    its base counterpart.
+    """
+    contents = {
+        side: {name: [content for content, _blanks in _items(body)] for name, body in bodies.items()}
+        for side, bodies in (("base", base), ("tip", tip), ("origin", origin), ("ob", origin_base))
+    }
+    bcs, tcs, ocs, obs = contents["base"], contents["tip"], contents["origin"], contents["ob"]
+    sources = set(touched)
+    session = _pair_across_sections({name: (bcs[name], tcs[name]) for name in touched}, sources)
+    origin_moves = _pair_across_sections({name: (obs[name], ocs[name]) for name in ocs}, sources)
+
+    def gaps(before: list[tuple[str, ...]], after: list[tuple[str, ...]]) -> dict[int, int]:
+        return _insert_gaps(difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes())
+
+    for (src, i), (dest, j) in sorted(session.items()):
+        if i in _align_items(bcs[src], ocs[src]):
+            continue  # unchanged on origin: the two sections' merges apply the move
+        theirs = origin_moves.get((src, i))
+        if (
+            theirs is not None
+            and theirs[0] == dest
+            and ocs[dest][theirs[1]] == tcs[dest][j]
+            and gaps(obs[dest], ocs[dest]).get(theirs[1]) == gaps(bcs[dest], tcs[dest]).get(j)
+        ):
+            continue  # origin made the identical move: already applied
+        raise RefusalError(
+            f"{path}: the session moved and edited the item {_label(bcs[src][i])!r} from "
+            f"'## {src}' into '## {dest}' (now {_label(tcs[dest][j])!r}), but it is not "
+            "byte-identical and aligned on origin (edited, removed or moved there); escalating"
+        )
+    for (src, i), (dest, j) in sorted(origin_moves.items()):
+        if (src, i) in session:
+            continue  # the session moved it too, identically (checked above)
+        deleted = {
+            index
+            for tag, i1, i2, _j1, _j2 in difflib.SequenceMatcher(
+                None, bcs[src], tcs[src], autojunk=False
+            ).get_opcodes()
+            if tag == "delete"
+            for index in range(i1, i2)
+        }
+        if i in deleted:
+            raise RefusalError(
+                f"{path}: origin moved the item {_label(bcs[src][i])!r} from '## {src}' into "
+                f"'## {dest}' (now {_label(ocs[dest][j])!r}), and the session deleted it; "
+                "escalating"
+            )
 
 
 def _merge_section_items(
@@ -1644,7 +1802,11 @@ def _merge_section_items(
     # identical item in the same gap, never because one like it sits elsewhere.
     origin_added_at: dict[int, Counter[tuple[str, ...]]] = {}
     origin_ops: list[tuple[str, int, int, int, int]] = []
-    for op in difflib.SequenceMatcher(None, bc, oc, autojunk=False).get_opcodes():
+    origin_opcodes = difflib.SequenceMatcher(None, bc, oc, autojunk=False).get_opcodes()
+    # Origin's own moves: origin's delete of an item it re-inserted elsewhere is half
+    # of a move, never an "already applied" match for the session's delete.
+    origin_moves = _pair_moves(bc, oc, origin_opcodes)
+    for op in origin_opcodes:
         o_tag, oi1, _oi2, oj1, oj2 = op
         if o_tag in ("insert", "replace"):
             origin_added_at.setdefault(oi1, Counter()).update(
@@ -1725,9 +1887,7 @@ def _merge_section_items(
     blank_fix: dict[int, int] = {}
     session_ops = difflib.SequenceMatcher(None, bc, tc, autojunk=False).get_opcodes()
     moves = _pair_moves(bc, tc, session_ops)
-    insert_gap = {
-        j: i1 for tag, i1, _i2, j1, j2 in session_ops if tag == "insert" for j in range(j1, j2)
-    }
+    insert_gap = _insert_gaps(session_ops)
 
     # Which moved items did origin itself move the same way? Decided up front: the
     # ``fresh`` dedupe below consumes origin's added items as it walks the ops, and a
@@ -1797,6 +1957,13 @@ def _merge_section_items(
                     f"{_label(bc[stale[0]])!r} (now {_label(tc[moves[stale[0]]])!r}), but it is "
                     "not byte-identical and aligned on origin (edited or removed there); "
                     "escalating"
+                )
+            moved_away = [i for i in range(i1, i2) if i in origin_moves and i not in origin_moved]
+            if moved_away:
+                raise RefusalError(
+                    f"{path}: in '## {name}', origin moved the item {_label(bc[moved_away[0]])!r} "
+                    f"(now {_label(oc[origin_moves[moved_away[0]]])!r}), and the session deleted "
+                    "it; escalating"
                 )
         if any(
             o_tag == tag and (oi1, oi2) == (i1, i2) and oc[oj1:oj2] == tc[j1:j2]
@@ -1973,6 +2140,24 @@ def handoff_merge(
                 f"{path}: section '## {name}' this session touched was not found on "
                 "origin; the replay never guesses"
             )
+
+    # Each origin section's base counterpart: by name, else (origin renamed it alone)
+    # by position when the section count is unchanged, else none.
+    o_map = {name: body for name, _raw, body in o_secs}
+    o_base = {
+        name: b_map.get(
+            name, b_secs[index][2] if len(b_secs) == len(o_secs) and index < len(b_secs) else []
+        )
+        for index, (name, _raw, _body) in enumerate(o_secs)
+    }
+    _refuse_cross_section_moves(
+        {name: b_map[name] for name in touched},
+        {name: t_map[name] for name in touched},
+        o_map,
+        o_base,
+        touched,
+        path,
+    )
 
     out_body = list(pre)
     for name, raw, body in o_secs:

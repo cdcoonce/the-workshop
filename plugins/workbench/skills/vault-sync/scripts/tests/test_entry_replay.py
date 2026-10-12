@@ -4737,3 +4737,142 @@ def test_h1_an_identical_move_is_preferred_to_a_merely_similar_new_item() -> Non
     origin = _notes("\n- a\n- b\n- x\n- c\n")
     merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
     assert merged == tip
+
+
+# ---------------------------------------------------------------------------
+# Move residue (M1-M3): a moved handoff item the per-section, delete/insert-only
+# pairing could not see, raced by the other side. Each fix only adds refusals.
+# ---------------------------------------------------------------------------
+
+
+def _two(notes_body: str, done_body: str) -> str:
+    """A handoff with two touched-able sections, ``## Notes`` then ``## Done``."""
+    return _hd("## Notes\n" + notes_body + "\n## Done\n" + done_body + _NOTES_TAIL)
+
+
+def _done_of(merged: str) -> str:
+    """The ``## Done`` section's text of a merged ``_two`` handoff."""
+    return merged.split("## Done")[1].split("## Mode")[0]
+
+
+# M1 -- origin moved an item the session deleted: the delete is not "already applied"
+
+
+def test_m1_origin_moved_and_edited_an_item_the_session_deleted_refuses() -> None:
+    """Origin's delete opcode is half of origin's move: matching the session's delete
+    against it kept origin's moved copy and dropped the session's delete."""
+    base = _notes("\n- A\n- X\n- B\n- C\n")
+    tip = _notes("\n- A\n- B\n- C\n")
+    origin = _notes("\n- A\n- B\n- C\n- X; CI green\n")
+    with pytest.raises(RefusalError, match="origin moved"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m1_origin_purely_moved_an_item_the_session_deleted_refuses() -> None:
+    base = _notes("\n- A\n- X\n- B\n- C\n")
+    tip = _notes("\n- A\n- B\n- C\n")
+    origin = _notes("\n- A\n- B\n- C\n- X\n")
+    with pytest.raises(RefusalError, match="origin moved"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m1_origin_moved_an_item_the_session_deleted_into_another_section_refuses() -> None:
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- X (done)\n")
+    with pytest.raises(RefusalError, match="origin moved"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m1_an_item_both_sides_deleted_is_still_already_applied() -> None:
+    """Origin's other new item is not a version of the deleted one: a real delete on both sides."""
+    base = _notes("\n- A\n- X\n- B\n- C\n")
+    tip = _notes("\n- A\n- B\n- C\n")
+    origin = _notes("\n- A\n- B\n- C\n- wholly unrelated news\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == origin
+
+
+# M2 -- a session move+edit into ANOTHER section is an edit of the moved item
+
+
+def test_m2_a_cross_section_move_and_edit_origin_deleted_refuses() -> None:
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X (done)\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m2_a_cross_section_move_origin_moved_elsewhere_refuses() -> None:
+    """Both sides moved X into ``## Done``, to different gaps with different edits: the merge
+    held both versions."""
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n- E\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X (done)\n- E\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- E\n- X (origin)\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m2_a_cross_section_move_origin_left_alone_is_applied() -> None:
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X (done)\n")
+    origin = _two("\n- A\n- X\n- B\n- o\n", "\n- D\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == _two("\n- A\n- B\n- o\n", "\n- D\n- X (done)\n")
+
+
+def test_m2_the_same_cross_section_move_on_both_sides_is_already_applied() -> None:
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n")
+    both = _two("\n- A\n- B\n", "\n- D\n- X (done)\n")
+    merged, _detail = handoff_merge(base, both, both, HANDOFF)
+    assert merged == both
+
+
+# M3 -- a moved item that lands next to a session edit sits in a ``replace`` opcode
+
+
+def test_m3_a_move_landing_inside_a_replace_origin_deleted_refuses() -> None:
+    base = _notes("\n- A\n- X\n- B\n- C\n")
+    tip = _notes("\n- A\n- B\n- X (updated)\n- C2\n")
+    origin = _notes("\n- A\n- B\n- C\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m3_a_move_landing_inside_a_replace_origin_left_alone_is_applied() -> None:
+    base = _notes("\n- A\n- X\n- B\n- C\n")
+    tip = _notes("\n- A\n- B\n- X (updated)\n- C2\n")
+    origin = _notes("\n- A\n- X\n- B\n- C\n- o\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert _items_of(merged) == "\n\n- A\n- B\n- X (updated)\n- C2\n- o\n\n"
+
+
+def test_m2_the_same_cross_section_move_into_a_different_gap_refuses() -> None:
+    """Both sides moved X into ``## Done`` with the same text but at different places: not the
+    identical move, and the per-gap dedupe would keep both copies."""
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n- E\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X (done)\n- E\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- E\n- X (done)\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m1_a_section_origin_renamed_alone_is_compared_with_its_base_counterpart() -> None:
+    """Origin renamed ``## Done`` (the session left it alone): its items are the base's, not
+    new ones, so its old note is not read as origin moving X there."""
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n- X note\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X note\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- X note\n").replace("## Done", "## Closed")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == origin
+
+
+def test_m3_the_replace_round_never_takes_a_plain_insert_pair() -> None:
+    """X's identical move+edit (origin made it too) is a plain insert; a nearer, merely similar
+    replacement must not steal the pairing and turn an already-applied move into a refusal."""
+    base = _notes("\n- a\n- x: check the gate\n- b\n- c\n- d\n- e\n")
+    tip = _notes("\n- a\n- b\n- x: check the gate again\n- d\n- e\n- x: check the gate (done)\n")
+    origin = _notes("\n- a\n- b\n- c\n- d\n- e\n- x: check the gate (done)\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip

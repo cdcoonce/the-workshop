@@ -582,15 +582,6 @@
       "replace": ""
     },
     {
-      "label": "[control] reorder the new_head and action writes on the success report",
-      "file": "../entry_replay.py",
-      "oracle": "real",
-      "expect": "survived",
-      "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of either field between them; _replay is single-threaded and the Report is only observed after it returns, so the order is inert on every path the suite can reach.",
-      "find": "        report.new_head = new_head\n        report.action = \"replayed\"",
-      "replace": "        report.action = \"replayed\"\n        report.new_head = new_head"
-    },
-    {
       "label": "G1: the three-way base is --base, not the merge-base (a pushed entry comes back next to its correction)",
       "file": "../entry_replay.py",
       "oracle": "real",
@@ -1086,6 +1077,99 @@
       "oracle": "real",
       "find": "        except GitError:\n            raise\n        except Exception",
       "replace": "        except Exception"
+    },
+    {
+      "label": "M1: origin's in-section move of an item the session deleted reads as 'already applied' (the session's delete is dropped)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            if moved_away:\n                raise RefusalError(\n                    f\"{path}: in '## {name}', origin moved",
+      "replace": "            if False:\n                raise RefusalError(\n                    f\"{path}: in '## {name}', origin moved"
+    },
+    {
+      "label": "M1: the origin-move guard also refuses a move the session made identically (already applied)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            moved_away = [i for i in range(i1, i2) if i in origin_moves and i not in origin_moved]\n",
+      "replace": "            moved_away = [i for i in range(i1, i2) if i in origin_moves]\n"
+    },
+    {
+      "label": "M1: origin's move of an item the session deleted into another section is not refused",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if i in deleted:\n            raise RefusalError(",
+      "replace": "        if False:\n            raise RefusalError("
+    },
+    {
+      "label": "M1: the cross-section origin-move guard also refuses a cross-section move the session made identically",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if (src, i) in session:\n            continue  # the session moved it too, identically (checked above)\n",
+      "replace": ""
+    },
+    {
+      "label": "M1: an origin section renamed alone has no base counterpart, so all its items read as origin inserts",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            name, b_secs[index][2] if len(b_secs) == len(o_secs) and index < len(b_secs) else []\n",
+      "replace": "            name, []\n"
+    },
+    {
+      "label": "M2: a session move+edit into another section is never checked against origin's copy (resurrection / both versions)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if i in _align_items(bcs[src], ocs[src]):\n            continue  # unchanged on origin",
+      "replace": "        if True:\n            continue  # unchanged on origin"
+    },
+    {
+      "label": "M2: a cross-section move origin made identically is refused instead of already applied",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if (\n            theirs is not None\n            and theirs[0] == dest\n",
+      "replace": "        if (\n            False\n            and theirs[0] == dest\n"
+    },
+    {
+      "label": "M2: 'origin made the identical move' ignores the text the item was moved as",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            and ocs[dest][theirs[1]] == tcs[dest][j]\n",
+      "replace": ""
+    },
+    {
+      "label": "M2: 'origin made the identical move' ignores the gap it landed in (both copies kept)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            and gaps(obs[dest], ocs[dest]).get(theirs[1]) == gaps(bcs[dest], tcs[dest]).get(j)\n",
+      "replace": ""
+    },
+    {
+      "label": "M3: the tip side of a replace opcode is never a move candidate (a move landing next to an edit escapes)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    pairs.update(_best_pairs(bc, tc, [i for i in deleted if i not in pairs], replacing))\n",
+      "replace": ""
+    },
+    {
+      "label": "M3: replace-tip candidates compete in one round with plain inserts, so a nearer similar edit steals a move's pair",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "    pairs = _best_pairs(bc, tc, deleted, inserted)\n    pairs.update(_best_pairs(bc, tc, [i for i in deleted if i not in pairs], replacing))\n",
+      "replace": "    pairs = _best_pairs(bc, tc, deleted, inserted + replacing)\n"
+    },
+    {
+      "label": "M3: a replace's items have no insert gap, so a move pair into one crashes the 'origin made it' lookup",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if tag in (\"insert\", \"replace\")\n        for j in range(j1, j2)\n    }\n",
+      "replace": "        if tag == \"insert\"\n        for j in range(j1, j2)\n    }\n"
+    },
+    {
+      "label": "[control] reorder the new_head and action writes on the success report",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two writes to distinct attributes of the same in-memory dataclass with no read of either field between them; _replay is single-threaded and the Report is only observed after it returns, so the order is inert on every path the suite can reach.",
+      "find": "        report.new_head = new_head\n        report.action = \"replayed\"",
+      "replace": "        report.action = \"replayed\"\n        report.new_head = new_head"
     },
     {
       "label": "[control] difflib autojunk on the item-similarity ratio",
