@@ -4911,3 +4911,31 @@ def test_m2_an_in_place_edit_in_another_section_is_not_a_cross_section_move() ->
     origin = _two("\n- A\n- B\n", "\n- D\n- **[[skywatch]] (2026-10-10, new today):** page landed\n")
     merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
     assert merged == tip
+
+
+def test_m2_the_same_cross_section_move_landing_as_a_replacement_tail_is_already_applied() -> None:
+    """Fuzz-found: both moved X into ``## Notes``; the session put it in place of O0 (which it
+    deleted), origin right after O0. The tail of a replaced run lands in the gap after the run
+    (``fresh_tail``), so it is the identical move."""
+    base = _two("\n- O0 is an old note\n- O1\n- O2\n", "\n- D\n- X moved into notes\n")
+    tip = _two("\n- X moved into notes\n- O1\n- O2\n", "\n- D\n")
+    origin = _two("\n- O0 is an old note\n- X moved into notes\n- O1\n- O2\n", "\n- D\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+def test_m3_the_same_move_landing_as_a_replacement_tail_is_already_applied() -> None:
+    base = _notes("\n- A\n- O0 is an old note\n- B\n- X moved up\n")
+    tip = _notes("\n- A\n- X moved up\n- B\n")
+    origin = _notes("\n- A\n- O0 is an old note\n- X moved up\n- B\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+def test_m2_the_same_cross_section_move_replacing_an_item_on_both_sides_is_already_applied() -> None:
+    """Both sides moved X into ``## Done`` in place of O: origin's copy is a replacement too, so
+    its gap is the replaced run's start, the same as the session's."""
+    base = _two("\n- A\n- X moved to done\n- B\n", "\n- D\n- O is an old note\n")
+    both = _two("\n- A\n- B\n", "\n- D\n- X moved to done\n")
+    merged, _detail = handoff_merge(base, both, both, HANDOFF)
+    assert merged == both

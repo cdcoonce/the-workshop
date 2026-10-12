@@ -1138,7 +1138,7 @@
       "label": "M2: 'origin made the identical move' ignores the gap it landed in (both copies kept)",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "            and gaps(obs[dest], ocs[dest]).get(theirs[1]) == gaps(bcs[dest], tcs[dest]).get(j)\n",
+      "find": "            and gaps(obs[dest], ocs[dest]).get(theirs[1])\n            in _landing_gaps(\n                difflib.SequenceMatcher(None, bcs[dest], tcs[dest], autojunk=False).get_opcodes()\n            ).get(j, ())\n",
       "replace": ""
     },
     {
@@ -1156,11 +1156,11 @@
       "replace": "    pairs = _best_pairs(bc, tc, deleted, inserted + replacing)\n"
     },
     {
-      "label": "M3: a replace's items have no insert gap, so a move pair into one crashes the 'origin made it' lookup",
+      "label": "M3: a replace's items have no landing gap, so a move pair into one crashes the 'origin made it' lookup",
       "file": "../entry_replay.py",
       "oracle": "real",
-      "find": "        if tag in (\"insert\", \"replace\")\n        for j in range(j1, j2)\n    }\n",
-      "replace": "        if tag == \"insert\"\n        for j in range(j1, j2)\n    }\n"
+      "find": "        elif tag == \"replace\":\n            gaps.update((j, (i1,)) for j in range(j1, j2 - 1))\n            gaps[j2 - 1] = (i1, i2)\n",
+      "replace": ""
     },
     {
       "label": "M3: an in-place edit of an item alike a deleted one counts as the deleted item's move (false refusal)",
@@ -1175,6 +1175,20 @@
       "oracle": "real",
       "find": "                    if j in movable and j not in claimed and _has_content(xc[j])\n",
       "replace": "                    if j not in claimed and _has_content(xc[j])\n"
+    },
+    {
+      "label": "M2: origin's replacing copy of a cross-section move has no gap, so the identical move refuses",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        if tag in (\"insert\", \"replace\")\n        for j in range(j1, j2)\n    }\n",
+      "replace": "        if tag == \"insert\"\n        for j in range(j1, j2)\n    }\n"
+    },
+    {
+      "label": "M2/M3: a replaced run's last item lands only at the run's start, not right after it (identical move refuses)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "            gaps[j2 - 1] = (i1, i2)\n",
+      "replace": "            gaps[j2 - 1] = (i1,)\n"
     },
     {
       "label": "[control] reorder the new_head and action writes on the success report",

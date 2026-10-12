@@ -1697,6 +1697,26 @@ def _pair_across_sections(
     return pairs
 
 
+def _landing_gaps(opcodes: list[tuple[str, int, int, int, int]]) -> dict[int, tuple[int, ...]]:
+    """Map each inserted or replacing tip item's index -> the base gaps it lands in.
+
+    An inserted item lands at its insert's gap and a replacing item at the
+    replaced run's start; the run's *last* item also lands right after the
+    run, the gap ``fresh_tail`` dedupes the end of a replacement against (an
+    item moved into the place of one the session deleted sits where origin
+    puts it when origin inserts it after that item). Used to decide whether
+    origin made a session move identically.
+    """
+    gaps: dict[int, tuple[int, ...]] = {}
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == "insert":
+            gaps.update((j, (i1,)) for j in range(j1, j2))
+        elif tag == "replace":
+            gaps.update((j, (i1,)) for j in range(j1, j2 - 1))
+            gaps[j2 - 1] = (i1, i2)
+    return gaps
+
+
 def _insert_gaps(opcodes: list[tuple[str, int, int, int, int]]) -> dict[int, int]:
     """Map each inserted or replacing item's index -> the base gap it went in at."""
     return {
@@ -1724,7 +1744,7 @@ def _refuse_cross_section_moves(
     resurrected it, or two versions came out. The session's cross-section
     pairs (``_pair_across_sections``) therefore need the moved base item
     unchanged and aligned on origin in its own section, unless origin made
-    the identical move (the same item into the same gap). The mirror case:
+    the identical move (the same item into the same gap, ``_landing_gaps``). The mirror case:
     origin moved an item into another section that the session deleted -- the
     session's delete would be dropped. ``base`` and ``tip`` are the touched
     sections' bodies; ``origin`` every origin section, with ``origin_base``
@@ -1750,7 +1770,10 @@ def _refuse_cross_section_moves(
             theirs is not None
             and theirs[0] == dest
             and ocs[dest][theirs[1]] == tcs[dest][j]
-            and gaps(obs[dest], ocs[dest]).get(theirs[1]) == gaps(bcs[dest], tcs[dest]).get(j)
+            and gaps(obs[dest], ocs[dest]).get(theirs[1])
+            in _landing_gaps(
+                difflib.SequenceMatcher(None, bcs[dest], tcs[dest], autojunk=False).get_opcodes()
+            ).get(j, ())
         ):
             continue  # origin made the identical move: already applied
         raise RefusalError(
@@ -1916,7 +1939,7 @@ def _merge_section_items(
     blank_fix: dict[int, int] = {}
     session_ops = difflib.SequenceMatcher(None, bc, tc, autojunk=False).get_opcodes()
     moves = _pair_moves(bc, tc, session_ops)
-    insert_gap = _insert_gaps(session_ops)
+    landing_gaps = _landing_gaps(session_ops)
 
     # Which moved items did origin itself move the same way? Decided up front: the
     # ``fresh`` dedupe below consumes origin's added items as it walks the ops, and a
@@ -1924,7 +1947,8 @@ def _merge_section_items(
     origin_moved = {
         index
         for index, moved_to in moves.items()
-        if (added := origin_added_at.get(insert_gap[moved_to])) is not None
+        for gap in landing_gaps[moved_to]
+        if (added := origin_added_at.get(gap)) is not None
         and added[tc[moved_to]] > 0
     }
 
