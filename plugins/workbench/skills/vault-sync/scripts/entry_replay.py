@@ -105,7 +105,15 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    alone reads it as an unrelated delete and insert, and origin having deleted
    the item made the delete look already applied while the new copy resurrected
    it (or left two versions). A move origin made identically stays already
-   applied. Items compare ignoring trailing blank lines,
+   applied. The new copy counts wherever it lands: next to an edit of its
+   neighbour (the tip side of a ``replace`` opcode, paired in a second round
+   that never takes a plain insert's pair) or in another touched section
+   (``_refuse_cross_section_moves``: the item must be unchanged and aligned on
+   origin in its own section unless origin made the identical move, same
+   text into the same gap). The pairing runs on origin's side too: an item
+   origin moved, within its section or into another, that the session deleted
+   refuses -- origin's delete is half of a move, not an already-applied
+   delete. Items compare ignoring trailing blank lines,
    so loose and tight lists align. Both sides making the same delete or the
    same edit is already applied, and a changed item with a byte-identical twin
    in a section origin also changed refuses (the twin cannot be told apart). The
