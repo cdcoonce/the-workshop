@@ -27,9 +27,11 @@ What keeps them behavioral rather than incidental:
   which is what real top-k truncation produces and what makes ``-k``,
   ``--note`` and ``--near-bridges`` observable.
 
-The band, hub and ``k`` defaults come from graphmark's published
-``GAPS_DEFAULT_*`` constants, imported here exactly as ``graph_cli`` imports
-them, so the tests track the band the CLI documents (0.6-0.92 inclusive).
+The band, hub and ``k`` defaults (0.6-0.92 inclusive, hub degree 40, ``k`` 8)
+are read below from graphmark's published ``GAPS_DEFAULT_*`` constants.
+``graph_cli`` itself takes them from ``ragmark.gaps`` since the migration. The
+two sets are equal today, so a wheel whose defaults drifted from graphmark's
+turns the tests that sit on those edges red.
 """
 
 from __future__ import annotations
