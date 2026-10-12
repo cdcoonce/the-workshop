@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MACHINERY = ROOT / "plugins" / "workbench" / "machinery"
 GRAPHMARK_REQUIREMENT = "graphmark>=0.10,<0.11"
 # ragmark is not on PyPI: every surface resolves the v0.3.0 release wheel by URL.
+# Moving this constant also re-bases test_graphmark_dependencies.teeth.json: its
+# wheel rows anchor on the literal v0.3.0, so `make check-teeth-anchors` fails the
+# bump until they name the new version.
 RAGMARK_WHEEL = (
     "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/"
     "ragmark-0.3.0-py3-none-any.whl"
@@ -263,6 +266,20 @@ def test_engine_scripts_pin_the_release_wheel(name: str) -> None:
     requirements = _engine_scripts_declaring_ragmark()[name]
     [ragmark] = [item for item in requirements if _requirement_name(item) == "ragmark"]
     assert _wheel_url(ragmark) == RAGMARK_WHEEL
+
+
+def test_vault_mcp_script_requires_the_ragmark_mcp_extra() -> None:
+    # The wheel URL resolves with or without `[mcp]`, so the check above passes a
+    # header that drops it; only the extra installs fastmcp, which
+    # `ragmark.mcp.build_server` (what vault_mcp.py builds) needs.
+    declared = _engine_scripts_declaring_ragmark()
+    assert "vault_mcp.py" in declared
+    [ragmark] = [
+        item for item in declared["vault_mcp.py"] if _requirement_name(item) == "ragmark"
+    ]
+    extras = re.match(r"ragmark\s*\[([^\]]*)\]", ragmark)
+    assert extras is not None, ragmark
+    assert "mcp" in {extra.strip() for extra in extras.group(1).split(",")}
 
 
 def test_machinery_project_pins_the_release_wheel() -> None:
