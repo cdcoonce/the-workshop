@@ -1163,6 +1163,20 @@
       "replace": "        if tag == \"insert\"\n        for j in range(j1, j2)\n    }\n"
     },
     {
+      "label": "M3: an in-place edit of an item alike a deleted one counts as the deleted item's move (false refusal)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "        and not any(_items_alike(bc[i], tc[j], _MOVE_RATIO) for i in range(i1, i2))\n",
+      "replace": ""
+    },
+    {
+      "label": "M2: a cross-section move candidate may be an in-place edit in another section (false refusal)",
+      "file": "../entry_replay.py",
+      "oracle": "real",
+      "find": "                    if j in movable and j not in claimed and _has_content(xc[j])\n",
+      "replace": "                    if j not in claimed and _has_content(xc[j])\n"
+    },
+    {
       "label": "[control] reorder the new_head and action writes on the success report",
       "file": "../entry_replay.py",
       "oracle": "real",

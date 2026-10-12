@@ -107,7 +107,8 @@ The procedure codifies the 2026-09-19 hand-built union merge (the vault's
    it (or left two versions). A move origin made identically stays already
    applied. The new copy counts wherever it lands: next to an edit of its
    neighbour (the tip side of a ``replace`` opcode, paired in a second round
-   that never takes a plain insert's pair) or in another touched section
+   that never takes a plain insert's pair; a replacement that reads as an edit
+   of the item it replaced is that edit, not a move) or in another touched section
    (``_refuse_cross_section_moves``: the item must be unchanged and aligned on
    origin in its own section unless origin made the identical move, same
    text into the same gap). The pairing runs on origin's side too: an item
@@ -1586,16 +1587,33 @@ def _pair_moves(
         for j in range(j1, j2)
         if _has_content(tc[j])
     ]
-    replacing = [
-        j
-        for tag, _i1, _i2, j1, j2 in opcodes
-        if tag == "replace"
-        for j in range(j1, j2)
-        if _has_content(tc[j])
-    ]
+    replacing = _replacing(bc, tc, opcodes)
     pairs = _best_pairs(bc, tc, deleted, inserted)
     pairs.update(_best_pairs(bc, tc, [i for i in deleted if i not in pairs], replacing))
     return pairs
+
+
+def _replacing(
+    bc: list[tuple[str, ...]],
+    tc: list[tuple[str, ...]],
+    opcodes: list[tuple[str, int, int, int, int]],
+) -> list[int]:
+    """Tip items of ``replace`` opcodes that may be a moved item's new copy.
+
+    A tip item alike (``_items_alike``) one of the base items its own run
+    replaces reads as that item's in-place edit, not as a move of some other
+    item: two bullets about one project (``- [[proj-a]]: ... staging`` and
+    ``... prod``) are alike, and editing one while the other is deleted is
+    not a move.
+    """
+    return [
+        j
+        for tag, i1, i2, j1, j2 in opcodes
+        if tag == "replace"
+        for j in range(j1, j2)
+        if _has_content(tc[j])
+        and not any(_items_alike(bc[i], tc[j], _MOVE_RATIO) for i in range(i1, i2))
+    ]
 
 
 def _best_pairs(
@@ -1634,8 +1652,9 @@ def _pair_across_sections(
 
     ``sections`` maps a section name to ``(base item contents, other side's
     item contents)``; only deletions from a section in ``sources`` count. A
-    candidate is a deleted or inserted (``insert`` or ``replace`` tip side)
-    item its own section's ``_pair_moves`` left unpaired: an in-section move
+    candidate is a deleted or inserted (an ``insert``, or a ``replace`` tip
+    item that is not an in-place edit: ``_replacing``) item its own section's
+    ``_pair_moves`` left unpaired: an in-section move
     is that section's business, and since that pairing is greedy over every
     alike pair, no two leftovers of one section are alike: every pair found
     here crosses sections. One-to-one, identical before merely alike.
@@ -1647,6 +1666,8 @@ def _pair_across_sections(
         ops = difflib.SequenceMatcher(None, bc, xc, autojunk=False).get_opcodes()
         own = _pair_moves(bc, xc, ops)
         claimed = set(own.values())
+        movable = {j for tag, *_rest, j1, j2 in ops if tag == "insert" for j in range(j1, j2)}
+        movable.update(_replacing(bc, xc, ops))
         for tag, i1, i2, j1, j2 in ops:
             if tag == "delete" and name in sources:
                 deleted.update(
@@ -1656,7 +1677,7 @@ def _pair_across_sections(
                 inserted.update(
                     ((name, j), xc[j])
                     for j in range(j1, j2)
-                    if j not in claimed and _has_content(xc[j])
+                    if j in movable and j not in claimed and _has_content(xc[j])
                 )
     scored = sorted(
         (

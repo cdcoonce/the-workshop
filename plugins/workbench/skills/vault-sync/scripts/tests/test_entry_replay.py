@@ -4886,3 +4886,28 @@ def test_m2_a_cross_section_move_origin_made_into_the_same_gap_with_other_text_r
     origin = _two("\n- A\n- B\n", "\n- D\n- X (done, origin)\n")
     with pytest.raises(RefusalError, match="moved and edited"):
         handoff_merge(base, tip, origin, HANDOFF)
+
+
+def test_m3_an_in_place_edit_of_an_item_alike_a_deleted_one_is_not_a_move() -> None:
+    """Both sides deleted X; the session also edited C in place, and C (a bullet about the same
+    project) reads as a version of X. The replacement is C's edit, not X moved: no refusal."""
+    base = _notes(
+        "\n- A\n- [[proj-a]]: watch the deploy on staging\n- B\n- [[proj-a]]: watch the deploy on prod\n"
+    )
+    tip = _notes("\n- A\n- B\n- [[proj-a]]: watch the deploy on prod (green)\n")
+    origin = _notes("\n- A\n- B\n- [[proj-a]]: watch the deploy on prod\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
+
+
+def test_m2_an_in_place_edit_in_another_section_is_not_a_cross_section_move() -> None:
+    """Fuzz-found: the session deleted a ``## Notes`` bullet origin also deleted, and edited a
+    look-alike bullet of the same project in ``## Done`` in place."""
+    base = _two(
+        "\n- A\n- **[[skywatch]] (2026-10-10, two sessions):** bls landed\n- B\n",
+        "\n- D\n- **[[skywatch]] (2026-10-10, new today):** page landed\n",
+    )
+    tip = _two("\n- A\n- B\n", "\n- D\n- ~~**[[skywatch]] (2026-10-10, new today):** page landed~~ done\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- **[[skywatch]] (2026-10-10, new today):** page landed\n")
+    merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
+    assert merged == tip
