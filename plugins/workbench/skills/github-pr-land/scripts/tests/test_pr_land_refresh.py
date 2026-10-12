@@ -222,6 +222,19 @@ def test_conflict_names_files_and_pushes_nothing(world: World) -> None:
     assert world.origin_ref("feat/x") == head
 
 
+def test_non_conflict_merge_failure_skips_stack_search_and_shows_git_error(world: World) -> None:
+    """Guards against relabelling a non-conflict merge failure as a conflict after a pointless stack search."""
+    head, base = behind(world)
+    world.runner.overlay(["git", "merge", "--no-edit"], returncode=128, append_stderr="fatal: unable to write new index file\n")
+    result = run(world, head, base)
+    assert (result.exit_code, result.pushed) == (2, False)
+    assert "unable to write new index file" in result.message
+    assert "conflicts" not in result.message
+    searched = [argv for argv, _ in world.runner.calls if argv[:2] in (["git", "rev-list"], ["git", "ls-remote"]) or argv[:2] == ["gh", "api"]]
+    assert searched == []
+    assert world.origin_ref("feat/x") == head
+
+
 def test_conflict_aborts_the_merge_in_the_scratch_tree(world: World) -> None:
     """Guards against leaving a half-merged scratch tree behind by skipping `git merge --abort`."""
     world.commit("main", "f.txt", LINES, "chore: f")

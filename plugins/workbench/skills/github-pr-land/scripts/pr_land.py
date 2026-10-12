@@ -523,6 +523,33 @@ def _pull_heads(runner: Runner) -> dict[str, list[int]] | None:
     return {sha: sorted(numbers, reverse=True) for sha, numbers in heads.items()}
 
 
+def _is_ancestor(runner: Runner, ancestor: str, descendant: str) -> tuple[bool | None, str]:
+    """Decode ``git merge-base --is-ancestor`` into yes, no or error.
+
+    Git exits 0 for an ancestor and 1 for a real non-ancestor; any other code is
+    a git failure (128 for an invalid object, say), never a verdict.
+
+    Parameters
+    ----------
+    runner : Runner
+        Runs ``git`` in the caller's clone.
+    ancestor, descendant : str
+        The two commits, in ``git merge-base --is-ancestor`` order.
+
+    Returns
+    -------
+    tuple[bool | None, str]
+        ``(True, "")`` or ``(False, "")`` for a verdict; ``(None, detail)`` on a
+        git error, where *detail* names the exit code and git's stderr.
+    """
+    proc = runner.run(["git", "merge-base", "--is-ancestor", ancestor, descendant])
+    if proc.returncode == 0:
+        return True, ""
+    if proc.returncode == 1:
+        return False, ""
+    return None, f"git merge-base --is-ancestor exited {proc.returncode}: {proc.stderr.strip()}"
+
+
 def _stack_base(runner: Runner, repo: str, info: PrInfo) -> StackBase | None:
     """Find the squash-merged PR the dependent head was stacked on, if any.
 
@@ -554,11 +581,11 @@ def _stack_base(runner: Runner, repo: str, info: PrInfo) -> StackBase | None:
                 continue
             if not FULL_SHA.fullmatch(merge_commit):
                 return None
-            landed = runner.run(["git", "merge-base", "--is-ancestor", merge_commit, info.base_sha])
-            if landed.returncode == 0:
-                return StackBase(number, sha, merge_commit)
-            if landed.returncode != 1:
+            reached, _ = _is_ancestor(runner, merge_commit, info.base_sha)
+            if reached is None:
                 return None
+            if reached:
+                return StackBase(number, sha, merge_commit)
     return None
 
 
@@ -664,11 +691,11 @@ def refresh_and_gate(
     fetched = runner.run(["git", "fetch", "origin", head_sha, base_sha])
     if fetched.returncode != 0:
         return _refused(info, f"git fetch failed: {fetched.stderr.strip()}")
-    contained = runner.run(["git", "merge-base", "--is-ancestor", base_sha, head_sha])
-    if contained.returncode == 0:
+    contained, detail = _is_ancestor(runner, base_sha, head_sha)
+    if contained:
         return RefreshResult(head_sha, False, "not run (head contained base)", GREEN, "")
-    if contained.returncode != 1:
-        return _refused(info, f"git merge-base --is-ancestor exited {contained.returncode}: {contained.stderr.strip()}")
+    if contained is None:
+        return _refused(info, detail)
     fork_point = runner.run(["git", "merge-base", base_sha, head_sha])
     if fork_point.returncode != 0:
         return _refused(info, f"git merge-base failed: {fork_point.stderr.strip()}")
@@ -683,7 +710,9 @@ def refresh_and_gate(
         if merged.returncode != 0:
             conflicted = runner.run(["git", "diff", "--name-only", "--diff-filter=U"], cwd=scratch)
             runner.run(["git", "merge", "--abort"], cwd=scratch)
-            files = conflicted.stdout.strip() or "(none listed)"
+            files = conflicted.stdout.strip()
+            if not files:
+                return _refused(info, f"git merge {info.base_ref} failed without a conflict: {merged.stderr.strip()}")
             stack = _stack_base(runner, repo, info)
             if stack is None:
                 return _refused(info, f"merging {info.base_ref} conflicts; resolve by hand:\n{files}")
@@ -1013,8 +1042,16 @@ def promote_pr(
     head_ref = head.get("ref") if isinstance(head, dict) else None
     base_ref = base.get("ref") if isinstance(base, dict) else None
     sha = head.get("sha") if isinstance(head, dict) else None
+    head_repo_payload = head.get("repo") if isinstance(head, dict) else None
+    head_repo = head_repo_payload.get("full_name") if isinstance(head_repo_payload, dict) else None
     if not isinstance(sha, str) or not FULL_SHA.fullmatch(sha):
         print(f"refused: cannot read the head of pull request {pr}", file=sys.stderr)
+        return INDETERMINATE
+    if not isinstance(head_repo, str) or head_repo.casefold() != repo.casefold():
+        print(
+            f"refused: head repository of pull request {pr} is {head_repo!r}, not {repo!r}; fork PRs are not promoted",
+            file=sys.stderr,
+        )
         return INDETERMINATE
     if head_ref != trunk or base_ref != release:
         print(f"refused: pull request {pr} is {head_ref} into {base_ref}, not {trunk} into {release}", file=sys.stderr)
@@ -1028,8 +1065,11 @@ def promote_pr(
     if tip is None:
         print(f"refused: cannot read the tip of {release}", file=sys.stderr)
         return INDETERMINATE
-    contained = runner.run(["git", "merge-base", "--is-ancestor", tip, sha])
-    if contained.returncode != 0:
+    contained, detail = _is_ancestor(runner, tip, sha)
+    if contained is None:
+        print(f"refused: {detail}", file=sys.stderr)
+        return INDETERMINATE
+    if not contained:
         print(f"refused: {release} at {tip} is not an ancestor of {sha}; not a fast-forward", file=sys.stderr)
         return INDETERMINATE
 

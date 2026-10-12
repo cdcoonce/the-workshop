@@ -27,9 +27,11 @@ What keeps them behavioral rather than incidental:
   which is what real top-k truncation produces and what makes ``-k``,
   ``--note`` and ``--near-bridges`` observable.
 
-The band, hub and ``k`` defaults come from graphmark's published
-``GAPS_DEFAULT_*`` constants, imported here exactly as ``graph_cli`` imports
-them, so the tests track the band the CLI documents (0.6-0.92 inclusive).
+The band, hub and ``k`` defaults (0.6-0.92 inclusive, hub degree 40, ``k`` 8)
+are read below from graphmark's published ``GAPS_DEFAULT_*`` constants.
+``graph_cli`` itself takes them from ``ragmark.gaps`` since the migration. The
+two sets are equal today, so a wheel whose defaults drifted from graphmark's
+turns the tests that sit on those edges red.
 """
 
 from __future__ import annotations
@@ -788,3 +790,119 @@ def test_the_reader_is_built_for_the_resolved_vault_root(tmp_path, capsys, monke
 
     assert (rc, out) == (0, "[]\n")
     assert built_for == [root.resolve()]
+
+
+# ---------------------------------------------------------------------------
+# 9. Behavior the handler inherits from the ranking library
+# ---------------------------------------------------------------------------
+# Since the migration to ragmark.gaps.rank_pairs these decisions live in the
+# installed wheel, not in this handler. Mutating the wheel's source left each one
+# unguarded, so a ragmark release that changed it would have passed this suite.
+
+# A path containing the signature separator, and four paths whose unescaped
+# signatures would collide: ("brain/a.md", "work/b.md|reference/c1.md") and
+# ("brain/a.md|work/b.md", "reference/c1.md") both join to
+# "brain/a.md|work/b.md|reference/c1.md".
+PIPE_NOTE = "reference/p|q.md"
+TWIN_A1, TWIN_A2 = "brain/a.md", "work/b.md|reference/c1.md"
+TWIN_B1, TWIN_B2 = "brain/a.md|work/b.md", "reference/c1.md"
+
+
+def test_dismissed_pair_with_a_pipe_in_its_path_stays_dismissed(tmp_path, capsys, similarity):
+    root = make_vault(tmp_path, notes=(*NOTES, PIPE_NOTE))
+    similarity({(PIPE_NOTE, GAMMA): 0.80})
+    assert pair(PIPE_NOTE, GAMMA) in ordered(gaps(root, capsys))
+
+    rc, out = run(root, capsys, "--dismiss", PIPE_NOTE, GAMMA)
+
+    assert rc == 0
+    assert json.loads(out) == {"dismissed": weaklink_sig(PIPE_NOTE, GAMMA)}
+    assert json.loads(out)["dismissed"].startswith("weaklink2|")
+    assert pair(PIPE_NOTE, GAMMA) not in ordered(gaps(root, capsys))
+
+
+def test_pairs_whose_paths_join_to_the_same_string_do_not_share_a_dismissal(
+    tmp_path, capsys, similarity
+):
+    root = make_vault(tmp_path, notes=(TWIN_A1, TWIN_A2, TWIN_B1, TWIN_B2))
+    similarity({(TWIN_A1, TWIN_A2): 0.80, (TWIN_B1, TWIN_B2): 0.70})
+    assert ordered(gaps(root, capsys)) == [pair(TWIN_A1, TWIN_A2), pair(TWIN_B1, TWIN_B2)]
+
+    run(root, capsys, "--dismiss", TWIN_A1, TWIN_A2)
+
+    # Only the dismissed pair goes; its colliding twin stays visible.
+    assert ordered(gaps(root, capsys)) == [pair(TWIN_B1, TWIN_B2)]
+
+
+def test_hub_degree_counts_a_mutual_link_once(tmp_path, capsys, similarity):
+    # ALPHA and each of BETA, GAMMA, DELTA link to one another: three neighbours,
+    # so the undirected simple-graph degree is 3, not 6.
+    links = (
+        (ALPHA, BETA), (BETA, ALPHA),
+        (ALPHA, GAMMA), (GAMMA, ALPHA),
+        (ALPHA, DELTA), (DELTA, ALPHA),
+    )
+    root = make_vault(tmp_path, links=links)
+    similarity({(ALPHA, EPSILON): 0.90, (ZETA, ETA): 0.70})
+    hub_pair, plain_pair = pair(ALPHA, EPSILON), pair(ZETA, ETA)
+
+    assert ordered(gaps(root, capsys, "--hub-degree", "4")) == [hub_pair, plain_pair]
+    assert ordered(gaps(root, capsys, "--hub-degree", "3")) == [plain_pair, hub_pair]
+
+
+def test_a_pair_listed_by_both_sides_keeps_the_higher_score_and_its_orientation(
+    tmp_path, capsys, similarity
+):
+    # Cosine similarity is symmetric, so a real index lists a pair with one score;
+    # an asymmetric reader is the only way to tell which score wins.
+    root = make_vault(tmp_path)
+    similarity(directed={(ALPHA, ZETA): 0.85, (ZETA, ALPHA): 0.70})
+
+    entries = gaps(root, capsys)
+
+    assert [(e["a"], e["b"], e["score"]) for e in entries] == [(ALPHA, ZETA, 0.85)]
+
+
+def test_a_neighbour_outside_the_graph_is_emitted_not_dropped_or_fatal(
+    tmp_path, capsys, similarity
+):
+    # Characterization, not an endorsement (ragmark#203). The index can know
+    # notes the graph lacks. Neither graphmark's gaps() nor rank_pairs checks that
+    # a neighbour is a graph node, so the pair is emitted; a ranking that looked a
+    # neighbour's degree up unguarded would raise KeyError.
+    ghost = "reference/not-in-the-graph.md"
+    root = make_vault(tmp_path)
+    similarity(directed={(ALPHA, ghost): 0.80})
+
+    entries = gaps(root, capsys)
+
+    assert [(e["a"], e["b"]) for e in entries] == [(ALPHA, ghost)]
+
+
+def test_importing_graph_cli_does_not_require_ragmark(monkeypatch):
+    # cold_read_evidence, graph_gardener and wrap_up_audit import graph_cli
+    # in-process for build()/diagnose(), some under an environment that has
+    # graphmark only; ragmark must stay a lazy import inside main().
+    monkeypatch.setitem(sys.modules, "ragmark", None)
+    monkeypatch.setitem(sys.modules, "ragmark.gaps", None)
+    spec = importlib.util.spec_from_file_location("graph_cli_without_ragmark", ENGINE / "graph_cli.py")
+    module = importlib.util.module_from_spec(spec)
+
+    spec.loader.exec_module(module)
+
+    assert callable(module.build) and callable(module.main)
+
+
+def test_a_root_level_note_has_no_folder_so_a_root_pair_ranks_below_a_cross_folder_pair(
+    tmp_path, capsys, similarity
+):
+    # Root-level notes are not graph nodes, but --note scans any path it is given and the
+    # index can list root-level neighbours. A root-level note has no top-level folder, so two
+    # of them count as the same folder and rank after a cross-folder pair despite a higher score.
+    root_note, other_root_note = "rootnote.md", "other-root.md"
+    root = make_vault(tmp_path)
+    similarity(directed={(root_note, other_root_note): 0.90, (root_note, ALPHA): 0.70})
+
+    entries = gaps(root, capsys, "--note", root_note)
+
+    assert [(e["a"], e["b"]) for e in entries] == [(root_note, ALPHA), (root_note, other_root_note)]
