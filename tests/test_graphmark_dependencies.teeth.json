@@ -1,0 +1,176 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_graphmark_dependencies.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_graphmark_dependencies.py"
+  ],
+  "mutants": [
+    {
+      "label": "graph_cli.py PEP 723 header left on v0.2.0",
+      "file": "../plugins/workbench/machinery/engine/graph_cli.py",
+      "oracle": "real",
+      "find": "v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+      "replace": "v0.2.0/ragmark-0.2.0-py3-none-any.whl"
+    },
+    {
+      "label": "semantic_index.py PEP 723 header left on v0.2.0",
+      "file": "../plugins/workbench/machinery/engine/semantic_index.py",
+      "oracle": "real",
+      "find": "v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+      "replace": "v0.2.0/ragmark-0.2.0-py3-none-any.whl"
+    },
+    {
+      "label": "vault_mcp.py PEP 723 header left on v0.2.0",
+      "file": "../plugins/workbench/machinery/engine/vault_mcp.py",
+      "oracle": "real",
+      "find": "v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+      "replace": "v0.2.0/ragmark-0.2.0-py3-none-any.whl"
+    },
+    {
+      "label": "pyproject.toml dependency left on v0.2.0",
+      "file": "../plugins/workbench/machinery/pyproject.toml",
+      "oracle": "real",
+      "find": "v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+      "replace": "v0.2.0/ragmark-0.2.0-py3-none-any.whl"
+    },
+    {
+      "label": "Makefile MACHINERY_TEST_PYTHON left on v0.2.0",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+      "replace": "v0.2.0/ragmark-0.2.0-py3-none-any.whl"
+    },
+    {
+      "label": "uv.lock package source left on v0.2.0",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "source = { url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\" }",
+      "replace": "source = { url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl\" }"
+    },
+    {
+      "label": "uv.lock wheel entry left on v0.2.0",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "{ url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\", hash",
+      "replace": "{ url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl\", hash"
+    },
+    {
+      "label": "uv.lock dependent's requirement left on v0.2.0",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "{ name = \"ragmark\", url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\" }",
+      "replace": "{ name = \"ragmark\", url = \"https://github.com/cdcoonce/ragmark/releases/download/v0.2.0/ragmark-0.2.0-py3-none-any.whl\" }"
+    },
+    {
+      "label": "uv.lock ragmark package version left on 0.2.0 (URL still names v0.3.0)",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "name = \"ragmark\"\nversion = \"0.3.0\"\n",
+      "replace": "name = \"ragmark\"\nversion = \"0.2.0\"\n"
+    },
+    {
+      "label": "semantic_index.py PEP 723 header drops its ragmark declaration",
+      "file": "../plugins/workbench/machinery/engine/semantic_index.py",
+      "oracle": "real",
+      "find": "\"ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\", ",
+      "replace": ""
+    },
+    {
+      "label": "graph_cli.py PEP 723 header loosened to the wheel's fastembed range",
+      "file": "../plugins/workbench/machinery/engine/graph_cli.py",
+      "oracle": "real",
+      "find": "\"fastembed==0.8.0\"]",
+      "replace": "\"fastembed>=0.8,<0.9\"]"
+    },
+    {
+      "label": "semantic_index.py PEP 723 header loosened to the wheel's fastembed range",
+      "file": "../plugins/workbench/machinery/engine/semantic_index.py",
+      "oracle": "real",
+      "find": "\"fastembed==0.8.0\"]",
+      "replace": "\"fastembed>=0.8,<0.9\"]"
+    },
+    {
+      "label": "vault_mcp.py PEP 723 header loosened to the wheel's fastembed range",
+      "file": "../plugins/workbench/machinery/engine/vault_mcp.py",
+      "oracle": "real",
+      "find": "\"fastembed==0.8.0\"]",
+      "replace": "\"fastembed>=0.8,<0.9\"]"
+    },
+    {
+      "label": "pyproject.toml fastembed dependency loosened to the wheel's range",
+      "file": "../plugins/workbench/machinery/pyproject.toml",
+      "oracle": "real",
+      "find": "\"fastembed==0.8.0\",",
+      "replace": "\"fastembed>=0.8,<0.9\","
+    },
+    {
+      "label": "Makefile MACHINERY_TEST_PYTHON fastembed loosened to the wheel's range",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "--with 'fastembed==0.8.0'",
+      "replace": "--with 'fastembed>=0.8,<0.9'"
+    },
+    {
+      "label": "uv.lock resolves fastembed to a patch release past the pin",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "name = \"fastembed\"\nversion = \"0.8.0\"\n",
+      "replace": "name = \"fastembed\"\nversion = \"0.8.1\"\n"
+    },
+    {
+      "label": "uv.lock dependent's fastembed requirement loosened to the wheel's range",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "{ name = \"fastembed\", specifier = \"==0.8.0\" }",
+      "replace": "{ name = \"fastembed\", specifier = \">=0.8,<0.9\" }"
+    },
+    {
+      "label": "a teeth spec's command resolves ragmark with no fastembed pin",
+      "file": "../plugins/workbench/machinery/teeth-spec-sync-target.json",
+      "oracle": "real",
+      "find": "\"test_command\": [\n",
+      "replace": "\"test_command\": [\n    \"ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\",\n"
+    },
+    {
+      "label": "[control] uv.lock wheel hash is wrong by one digit",
+      "file": "../plugins/workbench/machinery/uv.lock",
+      "oracle": "real",
+      "find": "hash = \"sha256:700e6caf8e5e1356b1725f18b0cbeda3e44c5d137b135441d62a35c61cb75a24\"",
+      "replace": "hash = \"sha256:700e6caf8e5e1356b1725f18b0cbeda3e44c5d137b135441d62a35c61cb75a25\"",
+      "expect": "survived",
+      "why": "Not inert, and no dependency test can see it: each test compares one declaration site (the lock, a manifest, the Makefile) to a constant in the test file, and none of those constants holds the release asset's digest, so nothing can grade the hash. The installer is the guard: uv refuses a wheel whose sha256 differs from the one recorded (checked with `uv pip install --require-hashes` on this wheel, one digit off: exit 1, 'Hash mismatch'). Carried as a control so the gap sits in the executable record: if a test ever pins the digest this row goes control-broken and must be turned into a killing row."
+    },
+    {
+      "label": "[control] Makefile pin comment reworded",
+      "file": "../Makefile",
+      "oracle": "real",
+      "find": "# equals machinery/pyproject.toml's and each engine script's inline one, and",
+      "replace": "# matches machinery/pyproject.toml's and each engine script's inline one, and",
+      "expect": "survived",
+      "why": "A prose comment in the Makefile; make ignores it, and the dependency tests read the MACHINERY_TEST_PYTHON assignment (through `make -n`) and the manifests, not comment text. Inert on every path unless a test greps this comment, in which case the runner reports the control as broken."
+    }
+  ]
+}
