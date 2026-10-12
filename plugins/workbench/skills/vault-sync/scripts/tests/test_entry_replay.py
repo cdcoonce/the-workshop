@@ -4764,7 +4764,7 @@ def test_m1_origin_moved_and_edited_an_item_the_session_deleted_refuses() -> Non
     base = _notes("\n- A\n- X\n- B\n- C\n")
     tip = _notes("\n- A\n- B\n- C\n")
     origin = _notes("\n- A\n- B\n- C\n- X; CI green\n")
-    with pytest.raises(RefusalError, match="origin moved"):
+    with pytest.raises(RefusalError, match="in '## Notes', origin moved"):
         handoff_merge(base, tip, origin, HANDOFF)
 
 
@@ -4772,7 +4772,7 @@ def test_m1_origin_purely_moved_an_item_the_session_deleted_refuses() -> None:
     base = _notes("\n- A\n- X\n- B\n- C\n")
     tip = _notes("\n- A\n- B\n- C\n")
     origin = _notes("\n- A\n- B\n- C\n- X\n")
-    with pytest.raises(RefusalError, match="origin moved"):
+    with pytest.raises(RefusalError, match="in '## Notes', origin moved"):
         handoff_merge(base, tip, origin, HANDOFF)
 
 
@@ -4836,7 +4836,7 @@ def test_m3_a_move_landing_inside_a_replace_origin_deleted_refuses() -> None:
     base = _notes("\n- A\n- X\n- B\n- C\n")
     tip = _notes("\n- A\n- B\n- X (updated)\n- C2\n")
     origin = _notes("\n- A\n- B\n- C\n")
-    with pytest.raises(RefusalError, match="moved and edited"):
+    with pytest.raises(RefusalError, match="in '## Notes', the session moved and edited"):
         handoff_merge(base, tip, origin, HANDOFF)
 
 
@@ -4876,3 +4876,13 @@ def test_m3_the_replace_round_never_takes_a_plain_insert_pair() -> None:
     origin = _notes("\n- a\n- b\n- c\n- d\n- e\n- x: check the gate (done)\n")
     merged, _detail = handoff_merge(base, tip, origin, HANDOFF)
     assert merged == tip
+
+
+def test_m2_a_cross_section_move_origin_made_into_the_same_gap_with_other_text_refuses() -> None:
+    """Same destination and gap, different edits: not the identical move, and the two texts are
+    too far apart for the amend guard, so the merge held both versions."""
+    base = _two("\n- A\n- X\n- B\n", "\n- D\n")
+    tip = _two("\n- A\n- B\n", "\n- D\n- X (done, session)\n")
+    origin = _two("\n- A\n- B\n", "\n- D\n- X (done, origin)\n")
+    with pytest.raises(RefusalError, match="moved and edited"):
+        handoff_merge(base, tip, origin, HANDOFF)
