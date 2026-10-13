@@ -51,6 +51,15 @@ Claude-Code-only features (`type: "agent"` hooks, fields like
 `stop_hook_active`/`session_id` that other tools may never send — treat their
 absence as a safe default, never a crash).
 
+**Never steer the session's lifecycle from a hook.** `additionalContext` and
+plain stdout reach the agent as a system-reminder it treats as the user
+speaking, fresher and more specific than the repo rules it read earlier. Use it
+only for facts and discipline the consuming repo already endorses, never to
+suggest ending, `/wrap-up`, `/handoff`, `/clear` or a fresh session: that is the
+user's call, and the vault's AGENTS.md forbids agents suggesting it. A notice
+for the human goes in top-level `systemMessage`; print exactly one JSON object,
+or stray stdout makes it all plain-text context (suggest-handoff-on-context, 2026-10-12).
+
 ## 3. Think about whether "unchanged since last check" needs a content-aware signature
 
 `git status --porcelain` alone only reports path-status flags, not content —
