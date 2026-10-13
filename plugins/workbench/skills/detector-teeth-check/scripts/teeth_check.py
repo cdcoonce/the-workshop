@@ -40,23 +40,43 @@ version of this loop gets them wrong:
    therefore declares its ``oracle``, and the report keeps the two kinds of
    kill apart instead of summing them into one reassuring number.
 
-The source file is restored from its saved bytes in a `finally`, so a crash
-mid-run cannot leave mutated code on disk, and a CRLF file comes back
-byte-identical rather than rewritten with LF endings.
+The source file is restored from its saved bytes in a `finally`, never by
+`git checkout`, and a CRLF file comes back byte-identical rather than
+rewritten with LF endings. The `finally` runs on an exception, Ctrl-C, SIGTERM
+and SIGHUP (the CLI turns the last two into an exception; a library caller of
+`run_teeth_check` installs no handlers), and the test command's whole process
+group dies with the run. It cannot run on SIGKILL or power loss, so each
+mutation target is also locked by the OS (a second run on the same file
+refuses) and journalled in a state directory (``~/.workshop/detector-teeth-check``,
+or ``$TEETH_CHECK_STATE_DIR``): the next run on that target, or ``--recover``,
+puts the original back, but only if the file still holds the exact mutant the
+dead run wrote. A restore likewise never overwrites a file someone edited while
+the mutant was on disk; it saves the original beside the journal and refuses.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
+import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt
 
 _FAILED_RE = re.compile(r"^FAILED\s+(\S+)", re.MULTILINE)
 _COLLECTED_RE = re.compile(r"^(\S+::\S+)\s*$", re.MULTILINE)
@@ -87,6 +107,54 @@ class BaselineNotGreen(Exception):
 
 class SpecError(Exception):
     """Raised when a spec is unreadable — a refusal, never a verdict."""
+
+
+class Interrupted(BaseException):
+    """Raised by ``main``'s SIGTERM/SIGHUP handler so ``finally`` restores run.
+
+    A ``BaseException``, like ``KeyboardInterrupt``: nothing that catches
+    ``Exception`` may swallow a request to stop.
+    """
+
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
+class TargetLocked(Exception):
+    """Raised when another live run holds a mutation target's lock."""
+
+    def __init__(self, path: Path, pid: int | None) -> None:
+        super().__init__(
+            f"another teeth_check run (pid {pid if pid is not None else 'unknown'})"
+            f" holds {path}"
+        )
+        self.path = path
+        self.pid = pid
+
+
+class RecoveryRefused(Exception):
+    """Raised when a killed run's mutant cannot be undone without clobbering."""
+
+    def __init__(self, path: Path, saved: Path) -> None:
+        super().__init__(
+            f"{path} changed after a killed run left a mutant in it; "
+            f"the original is saved at {saved}"
+        )
+        self.path = path
+        self.saved = saved
+
+
+class ConcurrentEdit(Exception):
+    """Raised when a target was edited while its mutant was on disk."""
+
+    def __init__(self, path: Path, saved: Path) -> None:
+        super().__init__(
+            f"{path} was edited while a mutant was on disk; left as found, "
+            f"the original is saved at {saved}"
+        )
+        self.path = path
+        self.saved = saved
 
 
 class TargetUnreadable(Exception):
@@ -384,12 +452,289 @@ def _purge_cached_bytecode(path: Path) -> None:
         stale.unlink(missing_ok=True)
 
 
+#: Seconds a SIGTERMed test-command group gets before it is SIGKILLed.
+_KILL_GRACE_SECONDS = 5
+
+_STATE_ENV = "TEETH_CHECK_STATE_DIR"
+
+
+def _terminate_group(proc: "subprocess.Popen[str]") -> None:
+    """Stop *proc* and everything it started: SIGTERM, a grace, then SIGKILL.
+
+    The test command is ``uv`` -> pytest -> xdist workers; killing only the
+    process we spawned orphans the rest, still running against the code the
+    caller is about to restore.
+    """
+    if os.name != "posix":
+        proc.kill()
+        proc.wait()
+        return
+    group = proc.pid  # start_new_session made it the group leader
+    # EPERM is macOS answering for a group whose members are all zombies.
+    gone = (ProcessLookupError, PermissionError)
+
+    def group_alive() -> bool:
+        proc.poll()  # reap the leader, or it counts as a live member
+        try:
+            os.killpg(group, 0)
+        except gone:
+            return False
+        return True
+
+    with contextlib.suppress(*gone):
+        os.killpg(group, signal.SIGTERM)
+    deadline = time.monotonic() + _KILL_GRACE_SECONDS
+    while group_alive() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    with contextlib.suppress(*gone):
+        os.killpg(group, signal.SIGKILL)
+    proc.wait()
+
+
 def _default_runner(cmd: list[str]) -> tuple[int, str]:
     # Purging before the run is not enough on its own: without this, each run
     # writes the cache the *next* row would have to survive.
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
-    return proc.returncode, proc.stdout + proc.stderr
+    # Its own session, so the whole tree can be signalled as one group (and so
+    # a terminal's Ctrl-C reaches only us, which then stops the group).
+    extra = {"start_new_session": True} if os.name == "posix" else {}
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        **extra,  # type: ignore[arg-type]
+    )
+    try:
+        stdout, stderr = proc.communicate()
+    except BaseException:
+        _terminate_group(proc)
+        raise
+    return proc.returncode, stdout + stderr
+
+
+def _state_dir() -> Path:
+    """Machine-local state: ``$TEETH_CHECK_STATE_DIR`` or ``~/.workshop/...``."""
+    override = os.environ.get(_STATE_ENV)
+    if override:
+        return Path(override)
+    return Path.home() / ".workshop" / "detector-teeth-check"
+
+
+def _plain_record(path: Path) -> dict:
+    return {"pid": os.getpid(), "path": str(path)}
+
+
+def _save_original(path: Path, original: bytes) -> Path:
+    """Keep *original* beside the journal when it cannot safely be written back."""
+    digest = hashlib.sha256(original).hexdigest()
+    saved = _state_dir() / "recovered" / f"{path.name}.{digest[:12]}.orig"
+    saved.parent.mkdir(parents=True, exist_ok=True)
+    saved.write_bytes(original)
+    return saved
+
+
+@contextlib.contextmanager
+def _signals_deferred() -> Iterator[None]:
+    """Hold SIGTERM/SIGHUP/SIGINT back across a file write.
+
+    A handler that fires between ``open("wb")`` truncating a file and the write
+    landing would strand an empty file that is neither the original nor the
+    mutant, which no restore could then recognise. The signal is delivered the
+    moment the write is over.
+    """
+    if not hasattr(signal, "pthread_sigmask"):
+        yield
+        return
+    held = {signal.SIGINT, signal.SIGTERM}
+    if hasattr(signal, "SIGHUP"):
+        held.add(signal.SIGHUP)
+    signal.pthread_sigmask(signal.SIG_BLOCK, held)
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
+
+
+class _TargetLock:
+    """An OS lock on one mutation target, whose file doubles as its journal.
+
+    The lock is held by an open file descriptor, so the OS drops it when the
+    process dies, even by SIGKILL. The file's content is one JSON object: this
+    run's ``pid`` and ``path``, plus — only while a mutant is on disk — the
+    original's bytes and both hashes, which is what lets a later run undo a
+    mutant the dead run could not.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()
+        self.lockfile = _state_dir() / "locks" / f"{digest}.lock"
+        self.fd: int | None = None
+
+    def acquire(self) -> None:
+        self.lockfile.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:  # best-effort on Windows
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except (BlockingIOError, PermissionError):
+            record = self._read(fd)
+            os.close(fd)
+            pid = record.get("pid")
+            raise TargetLocked(self.path, pid if isinstance(pid, int) else None)
+        except BaseException:
+            os.close(fd)
+            raise
+        self.fd = fd
+
+    @staticmethod
+    def _read(fd: int) -> dict:
+        chunks = []
+        offset = 0
+        while chunk := os.pread(fd, 1 << 16, offset):
+            chunks.append(chunk)
+            offset += len(chunk)
+        try:
+            record = json.loads(b"".join(chunks))
+        except ValueError:
+            return {}
+        return record if isinstance(record, dict) else {}
+
+    def read(self) -> dict:
+        assert self.fd is not None
+        return self._read(self.fd)
+
+    def _write(self, record: dict) -> None:
+        assert self.fd is not None
+        data = json.dumps(record).encode("utf-8")
+        os.ftruncate(self.fd, 0)
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        os.write(self.fd, data)
+        os.fsync(self.fd)
+
+    def clear(self) -> None:
+        self._write(_plain_record(self.path))
+
+    def begin(self, original: bytes, mutant: bytes) -> None:
+        """Journal *original* durably, before the mutant reaches the disk."""
+        self._write(
+            {
+                **_plain_record(self.path),
+                "original_b64": base64.b64encode(original).decode("ascii"),
+                "original_sha256": hashlib.sha256(original).hexdigest(),
+                "mutant_sha256": hashlib.sha256(mutant).hexdigest(),
+            }
+        )
+
+    def release(self) -> None:
+        if self.fd is not None:
+            os.close(self.fd)  # drops the lock
+            self.fd = None
+
+    def recover(self) -> tuple[str, int | None]:
+        """Undo what a killed holder left behind; return ``(outcome, its pid)``.
+
+        The original is written back only when the file still holds exactly
+        the mutant the record names. Anything else — someone edited it since,
+        or it is gone — is left as found.
+        """
+        record = self.read()
+        mutant_sha = record.get("mutant_sha256")
+        if not mutant_sha:
+            self.clear()
+            return "clean", None
+        dead_pid = record.get("pid")
+        dead_pid = dead_pid if isinstance(dead_pid, int) else None
+        try:
+            original = base64.b64decode(record.get("original_b64", ""))
+        except ValueError:
+            original = b""
+        try:
+            current: str | None = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        except OSError:
+            current = None
+        if current == mutant_sha and (
+            hashlib.sha256(original).hexdigest() == record.get("original_sha256")
+        ):
+            with _signals_deferred():
+                self.path.write_bytes(original)
+                _purge_cached_bytecode(self.path)
+                self.clear()
+            return "recovered", dead_pid
+        if current == record.get("original_sha256"):
+            self.clear()
+            return "clean", None
+        saved = _save_original(self.path, original)
+        self.clear()
+        raise RecoveryRefused(self.path, saved)
+
+
+def _target_paths(spec: "Spec") -> list[Path]:
+    return sorted({m.path.resolve() for m in spec.mutants}, key=str)
+
+
+@contextlib.contextmanager
+def _held_targets(
+    paths: list[Path],
+) -> Iterator[tuple[dict[Path, _TargetLock], list[tuple[Path, int | None]]]]:
+    """Lock every path, undo any killed run's mutant, hold until the block ends.
+
+    All locks are taken before any recovery writes, so a refusal on one target
+    has mutated nothing on another. Yields the locks and the targets recovered.
+    """
+    locks: dict[Path, _TargetLock] = {}
+    try:
+        for path in paths:
+            lock = _TargetLock(path)
+            lock.acquire()
+            locks[path] = lock
+        recovered: list[tuple[Path, int | None]] = []
+        for path, lock in locks.items():
+            outcome, dead_pid = lock.recover()
+            if outcome == "recovered":
+                recovered.append((path, dead_pid))
+        yield locks, recovered
+    finally:
+        for lock in locks.values():
+            lock.release()
+
+
+def _recovered_line(path: Path, dead_pid: int | None) -> str:
+    pid = dead_pid if dead_pid is not None else "unknown"
+    return (
+        f"recovered {path}: restored the original a killed run (pid {pid}) "
+        "left mutated"
+    )
+
+
+def _restore(
+    path: Path, original: bytes, mutant: bytes, journal: _TargetLock
+) -> ConcurrentEdit | None:
+    """Put *original* back, unless the file is no longer what this run wrote.
+
+    A file that is neither the mutant nor the original was edited by someone
+    else while the mutant was on disk; writing the original over it would
+    destroy that work, so it is left as found and the original is saved.
+    """
+    with _signals_deferred():
+        try:
+            current: bytes | None = path.read_bytes()
+        except OSError:
+            current = None
+        edit = None
+        if current == mutant:
+            path.write_bytes(original)
+        elif current != original:
+            edit = ConcurrentEdit(path, _save_original(path, original))
+        # Then drop the cache again: bytecode built from the mutant would
+        # otherwise stay live and a *later* row would score this mutation.
+        _purge_cached_bytecode(path)
+        journal.clear()
+    return edit
 
 
 def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
@@ -397,8 +742,26 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
 
     The baseline runs first: if the suite is not green before any mutation,
     the whole exercise is meaningless and this raises rather than reporting.
+
+    Every distinct target is locked for the whole call, before the collect
+    command or the baseline, so only one run mutates a file at a time. A
+    target held by another live run raises ``TargetLocked`` having mutated
+    nothing; a mutant a killed run left behind is undone first (or raises
+    ``RecoveryRefused`` if the file changed since). A target edited while its
+    mutant was on disk raises ``ConcurrentEdit``. No signal handlers are
+    installed here: that is ``main``'s job, so a library caller keeps its own.
     """
     run = _default_runner if runner is None else runner
+    with _held_targets(_target_paths(spec)) as (locks, recovered):
+        for path, dead_pid in recovered:
+            print(_recovered_line(path, dead_pid), file=sys.stderr)
+        return _score_mutants(spec, run, locks)
+
+
+def _score_mutants(
+    spec: Spec, run: Runner, locks: dict[Path, _TargetLock]
+) -> Report:
+    """Baseline, then score each mutant; the caller holds every target's lock."""
     runner_spec = RUNNERS[spec.runner]
 
     collected: list[str] | None = None
@@ -471,17 +834,22 @@ def run_teeth_check(spec: Spec, *, runner: Runner | None = None) -> Report:
                 )
                 continue
 
+        mutated_bytes = mutated.encode("utf-8")
+        journal = locks[mutant.path.resolve()]
+        # The original is on disk in the journal before the mutant is, so a
+        # run killed past any `finally` still leaves the way back.
+        journal.begin(original, mutated_bytes)
         try:
-            mutant.path.write_bytes(mutated.encode("utf-8"))
+            with _signals_deferred():
+                mutant.path.write_bytes(mutated_bytes)
             _purge_cached_bytecode(mutant.path)
             code, out = run(spec.test_command)
         finally:
             # Restore before anything else can fail. A crash here would leave
             # deliberately-broken code in the working tree.
-            mutant.path.write_bytes(original)
-            # Then drop the cache again: bytecode built from the mutant would
-            # otherwise stay live and a *later* row would score this mutation.
-            _purge_cached_bytecode(mutant.path)
+            edit = _restore(mutant.path, original, mutated_bytes, journal)
+            if edit is not None:
+                raise edit
 
         if code == 0:
             # A control that stays green held, as its author predicted; an
@@ -883,7 +1251,60 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
     return dataclasses.replace(spec, mutants=keep)
 
 
+def _recover_targets(spec: Spec) -> list[tuple[Path, str, str]]:
+    """Lock, repair and release each distinct target; one outcome per target.
+
+    Each outcome is ``(path, status, detail)``: ``clean``, ``recovered`` (detail
+    is the killed run's pid), or ``refused`` (detail is the refusal text).
+    """
+    outcomes: list[tuple[Path, str, str]] = []
+    for path in _target_paths(spec):
+        try:
+            with _held_targets([path]) as (_, recovered):
+                if recovered:
+                    pid = recovered[0][1]
+                    outcomes.append((path, "recovered", str(pid or "unknown")))
+                else:
+                    outcomes.append((path, "clean", ""))
+        except (TargetLocked, RecoveryRefused) as exc:
+            outcomes.append((path, "refused", f"refusing to run: {exc}"))
+    return outcomes
+
+
+def _raise_interrupted(signum: int, frame: object) -> None:
+    raise Interrupted(signum)
+
+
 def main(argv: list[str] | None = None) -> int:
+    """Run the CLI; SIGTERM and SIGHUP restore the mutants, then exit 128+n.
+
+    The handlers live here, not in ``run_teeth_check``, so a library caller
+    keeps its own; they are put back when this returns.
+    """
+    caught = [signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        caught.append(signal.SIGHUP)
+    previous = {}
+    try:
+        for signum in caught:
+            previous[signum] = signal.signal(signum, _raise_interrupted)
+    except ValueError:  # not the main thread: no handlers can be installed
+        pass
+    try:
+        return _main(argv)
+    except Interrupted as exc:
+        name = signal.Signals(exc.signum).name
+        print(f"interrupted by {name}; mutated files were restored", file=sys.stderr)
+        return 128 + exc.signum
+    except KeyboardInterrupt:
+        print("interrupted by SIGINT; mutated files were restored", file=sys.stderr)
+        return 130
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def _main(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("spec", type=Path, help="JSON spec file")
     parser.add_argument(
@@ -908,6 +1329,14 @@ def main(argv: list[str] | None = None) -> int:
             "controls — a fix round's inner loop, never the recorded tally"
         ),
     )
+    mode.add_argument(
+        "--recover",
+        action="store_true",
+        help=(
+            "undo any mutant a killed run left in the spec's targets, then "
+            "exit — no baseline, no test command"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -929,6 +1358,25 @@ def main(argv: list[str] | None = None) -> int:
             for label, error in outcomes:
                 print(f"{label}: {'ok' if error is None else error}")
         return 0 if all(error is None for _, error in outcomes) else 1
+
+    if args.recover:
+        outcomes = _recover_targets(spec)
+        for path, status, detail in outcomes:
+            print(detail if status == "refused" else f"{path}: {status}")
+        return 2 if any(status == "refused" for _, status, _ in outcomes) else 0
+
+    # A mutant a killed run left on disk has already broken its own anchor, so
+    # it must be undone before the anchor preflight can mistake it for drift.
+    outcomes = _recover_targets(spec)
+    for path, status, detail in outcomes:
+        if status == "recovered":
+            pid = int(detail) if detail.isdigit() else None
+            print(_recovered_line(path, pid), file=sys.stderr)
+    refused = [detail for _, status, detail in outcomes if status == "refused"]
+    if refused:
+        for detail in refused:
+            print(detail, file=sys.stderr)
+        return 2
 
     # A stale row costs nothing to find here and a whole run to find in the
     # loop, which reaches it only after the baseline and every row before it
@@ -973,7 +1421,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         report = run_teeth_check(spec)
-    except BaselineNotGreen as exc:
+    except (BaselineNotGreen, TargetLocked, RecoveryRefused, ConcurrentEdit) as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 
