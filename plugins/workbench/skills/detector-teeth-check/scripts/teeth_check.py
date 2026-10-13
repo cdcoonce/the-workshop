@@ -1472,7 +1472,8 @@ def _tree_changed_message(
         names = _git_text(["diff-tree", "-r", "--name-only", old, new], where.top)
     except LedgerRefused:
         names = ""
-    changed = ", ".join(names.split("\n")[:10]) if names.strip() else "unknown"
+    paths = [name for name in names.splitlines() if name]
+    changed = ", ".join(paths[:10]) if paths else "unknown"
     return (
         f"refusing to continue: the tree changed during the run (was {old[:12]}, "
         f"now {new[:12]}; changed: {changed}); {recorded} rows stay recorded "
