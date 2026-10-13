@@ -1,0 +1,107 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_suggest_handoff_on_context_hook.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_suggest_handoff_on_context_hook.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1 B1 user-only channel: fire path prints the old hookSpecificOutput.additionalContext shape",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "print(json.dumps({\"systemMessage\": _message(context_tokens, threshold)}))",
+      "replace": "print(json.dumps({\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": _message(context_tokens, threshold)}}))"
+    },
+    {
+      "label": "#2 B1 no dual channel: fire path prints systemMessage AND hookSpecificOutput.additionalContext in one object",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "print(json.dumps({\"systemMessage\": _message(context_tokens, threshold)}))",
+      "replace": "print(json.dumps({\"systemMessage\": _message(context_tokens, threshold), \"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": _message(context_tokens, threshold)}}))"
+    },
+    {
+      "label": "#3 B1 exactly one JSON object: a stray print runs before the JSON print",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "print(json.dumps({\"systemMessage\": _message(context_tokens, threshold)}))",
+      "replace": "print(\"[context checkpoint]\")\n    print(json.dumps({\"systemMessage\": _message(context_tokens, threshold)}))"
+    },
+    {
+      "label": "#4 B2 measured count shown: used_k computed from the threshold instead of context_tokens",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "used_k = round(context_tokens / 1000)",
+      "replace": "used_k = round(threshold / 1000)"
+    },
+    {
+      "label": "#5 B2 threshold in force: limit_k uses DEFAULT_THRESHOLD instead of the passed threshold",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "limit_k = round(threshold / 1000)",
+      "replace": "limit_k = round(DEFAULT_THRESHOLD / 1000)"
+    },
+    {
+      "label": "#6 B3 no directive: the message appends a Tell-the-user /wrap-up instruction",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "f\"(threshold {limit_k}k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).\"",
+      "replace": "f\"(threshold {limit_k}k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it). Tell the user it's a good moment to run `/wrap-up`.\""
+    },
+    {
+      "label": "#7 B4 below-threshold no-op: fire condition context_tokens < threshold becomes context_tokens < 0",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "if context_tokens is None or context_tokens < threshold:",
+      "replace": "if context_tokens is None or context_tokens < 0:"
+    },
+    {
+      "label": "#8 [control] docstring body: one word changed in the re-arm paragraph (first line untouched)",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Only the docstring text changes, so no code path differs; no test in the scoped hook test file reads the docstring body, and make stamp reads only its first line. Inert for this test_command; it would not be inert for a test that pins the docstring body.",
+      "find": "A legacy empty or unreadable\nmarker counts as armed-with-unknown-count.",
+      "replace": "A historical empty or unreadable\nmarker counts as armed-with-unknown-count."
+    },
+    {
+      "label": "#9 [added] B2 at/above threshold: a reading exactly at the threshold no longer fires (< becomes <=)",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "if context_tokens is None or context_tokens < threshold:",
+      "replace": "if context_tokens is None or context_tokens <= threshold:"
+    },
+    {
+      "label": "#10 [added] B2 limit_k rounds: floors the threshold instead of rounding it",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "limit_k = round(threshold / 1000)",
+      "replace": "limit_k = threshold // 1000"
+    },
+    {
+      "label": "#11 [added] B2 used_k rounds: floors the reading instead of rounding it",
+      "file": "../plugins/workbench/hooks/scripts/suggest-handoff-on-context.py",
+      "oracle": "real",
+      "find": "used_k = round(context_tokens / 1000)",
+      "replace": "used_k = context_tokens // 1000"
+    }
+  ]
+}
