@@ -321,6 +321,13 @@
       "oracle": "real",
       "find": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except OSError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n",
       "replace": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except ZeroDivisionError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n"
+    },
+    {
+      "label": "R1197-F3: a journal with a wrong-typed original is refused, not a TypeError",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if isinstance(encoded, str):\n            try:\n",
+      "replace": "        if True:\n            try:\n"
     }
   ]
 }

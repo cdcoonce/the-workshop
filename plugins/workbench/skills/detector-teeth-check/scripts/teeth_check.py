@@ -150,11 +150,21 @@ class StateDirUnusable(Exception):
 class RecoveryRefused(Exception):
     """Raised when a killed run's mutant cannot be undone without clobbering."""
 
-    def __init__(self, path: Path, saved: Path) -> None:
-        super().__init__(
-            f"{path} changed after a killed run left a mutant in it; "
-            f"the original is saved at {saved}"
-        )
+    def __init__(self, path: Path, saved: Path | None) -> None:
+        if saved is None:
+            # The record claimed a mutant but is unreadable, so there is no
+            # original to save and nothing safe to write.
+            message = (
+                f"{path} may hold a mutant a killed run left in it, but that "
+                "run's journal record is malformed; the file was not touched "
+                "and the record is cleared. Check the file by hand"
+            )
+        else:
+            message = (
+                f"{path} changed after a killed run left a mutant in it; "
+                f"the original is saved at {saved}"
+            )
+        super().__init__(message)
         self.path = path
         self.saved = saved
 
@@ -671,23 +681,40 @@ class _TargetLock:
             return "clean", None
         dead_pid = record.get("pid")
         dead_pid = dead_pid if isinstance(dead_pid, int) else None
-        try:
-            original = base64.b64decode(record.get("original_b64", ""))
-        except ValueError:
-            original = b""
+        original_sha = record.get("original_sha256")
+        encoded = record.get("original_b64")
+        decoded: bytes | None = None
+        if isinstance(encoded, str):
+            try:
+                decoded = base64.b64decode(encoded, validate=True)
+            except ValueError:  # binascii.Error is one
+                pass
+        if (
+            decoded is None
+            or not isinstance(mutant_sha, str)
+            or not isinstance(original_sha, str)
+        ):
+            # A record that claims a mutant but cannot be trusted: wrong types
+            # (only a hand edit or a foreign writer makes them) or bad base64.
+            # Never write from it. Clear it, or every later run on this target
+            # would meet the same record and refuse.
+            saved = _save_original(self.path, decoded) if decoded is not None else None
+            self.clear()
+            raise RecoveryRefused(self.path, saved)
+        original = decoded
         try:
             current: str | None = hashlib.sha256(self.path.read_bytes()).hexdigest()
         except OSError:
             current = None
         if current == mutant_sha and (
-            hashlib.sha256(original).hexdigest() == record.get("original_sha256")
+            hashlib.sha256(original).hexdigest() == original_sha
         ):
             with _signals_deferred():
                 self.path.write_bytes(original)
                 _purge_cached_bytecode(self.path)
                 self.clear()
             return "recovered", dead_pid
-        if current == record.get("original_sha256"):
+        if current == original_sha:
             self.clear()
             return "clean", None
         saved = _save_original(self.path, original)
