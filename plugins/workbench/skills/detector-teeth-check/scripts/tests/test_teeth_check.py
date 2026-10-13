@@ -1651,3 +1651,841 @@ def test_load_spec_passes_a_null_replace_through_unrefused(tmp_path: Path) -> No
     # means accepted), it does not endorse it.
     spec = load_spec(_write_spec(tmp_path, [_mutant(replace=None)]))
     assert spec.mutants[0].replace is None
+
+
+# ---------------------------------------------------------------------------
+# Signal-safe restore, one run per target, recovery of a killed run (#1195)
+#
+# The restore used to live in a `finally`, which CPython's default SIGTERM
+# disposition skips: `pkill` left the mutant on disk and the test command
+# running, and a second run then read that mutant as its "original" and made
+# it permanent. Nothing here may touch the real ~/.workshop, so every test in
+# this module gets a throwaway state directory.
+# ---------------------------------------------------------------------------
+
+import base64  # noqa: E402
+import fcntl  # noqa: E402
+import os  # noqa: E402
+import signal  # noqa: E402
+import subprocess  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+
+import teeth_check as tc  # noqa: E402
+
+ORIGINAL = "LIMIT = 25\nGUARD = True\n"
+MUTANT_TEXT = "LIMIT = 999\nGUARD = True\n"
+
+
+@pytest.fixture(autouse=True)
+def _state_dir(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    state = tmp_path_factory.mktemp("teeth-state")
+    monkeypatch.setenv("TEETH_CHECK_STATE_DIR", str(state))
+    return state
+
+
+def _state() -> Path:
+    return Path(os.environ["TEETH_CHECK_STATE_DIR"])
+
+
+def _lock_path(target: Path) -> Path:
+    digest = hashlib.sha256(str(target.resolve()).encode()).hexdigest()
+    return _state() / "locks" / f"{digest}.lock"
+
+
+def _record(target: Path) -> dict:
+    return json.loads(_lock_path(target).read_text())
+
+
+def _write_journal(
+    target: Path, *, original: bytes, mutant: bytes, pid: int = 2_000_000
+) -> None:
+    """Leave the lock file a hard-killed run would have left behind."""
+    lock = _lock_path(target)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(
+        json.dumps(
+            {
+                "pid": pid,
+                "path": str(target.resolve()),
+                "original_b64": base64.b64encode(original).decode(),
+                "original_sha256": hashlib.sha256(original).hexdigest(),
+                "mutant_sha256": hashlib.sha256(mutant).hexdigest(),
+            }
+        )
+    )
+
+
+def _hold_lock(target: Path, record: dict | None) -> int:
+    """Take the lock as another live run would; return the fd to release."""
+    lock = _lock_path(target)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if record is not None:
+        os.write(fd, json.dumps(record).encode())
+    return fd
+
+
+def _green(cmd: list[str]) -> tuple[int, str]:
+    return 0, "2 passed in 0.1s\n"
+
+
+def _mutation(target: Path) -> Mutation:
+    return Mutation("cap", target, "LIMIT = 25", "LIMIT = 999")
+
+
+def _cli_spec(tmp_path: Path, target: Path, test_command: list[str]) -> Path:
+    spec = tmp_path / "cli-spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "test_command": test_command,
+                "mutants": [
+                    {
+                        "label": "cap",
+                        "file": target.name,
+                        "find": "LIMIT = 25",
+                        "replace": "LIMIT = 999",
+                        "oracle": "real",
+                    }
+                ],
+            }
+        )
+    )
+    return spec
+
+
+# --- B1: SIGTERM and SIGHUP restore; library callers get no handlers -------
+
+
+def test_main_installs_term_and_hup_handlers_and_puts_them_back(
+    target: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sentinel = lambda signum, frame: None  # noqa: E731
+    prior_term = signal.signal(signal.SIGTERM, sentinel)
+    prior_hup = signal.signal(signal.SIGHUP, sentinel)
+    seen: list[object] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        seen.append((signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP)))
+        return 0, "ok\n"
+
+    monkeypatch.setattr("teeth_check._default_runner", runner)
+    try:
+        main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+        after = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP))
+    finally:
+        signal.signal(signal.SIGTERM, prior_term)
+        signal.signal(signal.SIGHUP, prior_hup)
+
+    assert seen, "the runner never ran"
+    assert all(s[0] is not sentinel and s[1] is not sentinel for s in seen)
+    assert after == (sentinel, sentinel)
+
+
+def test_library_callers_get_no_handlers(target: Path) -> None:
+    seen: list[object] = []
+    before = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP))
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        seen.append((signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP)))
+        return 0, "ok\n"
+
+    run_teeth_check(_spec(target, _mutation(target)), runner=runner)
+
+    assert seen and all(s == before for s in seen)
+
+
+@pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
+def test_a_signal_mid_mutant_restores_and_exits_128_plus_signum(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    signum: signal.Signals,
+) -> None:
+    calls: list[int] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:  # the mutant is on disk
+            assert target.read_text() == MUTANT_TEXT
+            os.kill(os.getpid(), signum)
+            time.sleep(5)  # main's handler raises long before this returns
+        return 0, "ok\n"
+
+    monkeypatch.setattr("teeth_check._default_runner", runner)
+    # Without main's handler this signal would kill the pytest process itself;
+    # a swallowing placeholder keeps a failing run a failure, not a vanished one.
+    prior = signal.signal(signum, lambda s, f: None)
+    try:
+        code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+    finally:
+        signal.signal(signum, prior)
+
+    assert code == 128 + signum
+    assert target.read_text() == ORIGINAL
+    assert (
+        f"interrupted by {signal.Signals(signum).name}; mutated files were restored"
+        in capsys.readouterr().err
+    )
+
+
+def test_ctrl_c_mid_mutant_restores_and_exits_130(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[int] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        return 0, "ok\n"
+
+    monkeypatch.setattr("teeth_check._default_runner", runner)
+
+    try:
+        code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+    except KeyboardInterrupt:  # would abort the whole pytest session
+        pytest.fail("KeyboardInterrupt escaped main")
+
+    assert code == 130
+    assert target.read_text() == ORIGINAL
+    assert "interrupted by SIGINT; mutated files were restored" in capsys.readouterr().err
+
+
+# --- subprocess harness: the real CLI against a test command that sleeps ---
+
+_SLEEPER = """\
+import os, subprocess, sys, time
+from pathlib import Path
+
+target, pidfile = Path(sys.argv[1]), Path(sys.argv[2])
+if "LIMIT = 999" in target.read_text():
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+    pidfile.write_text(f"{os.getpid()} {child.pid}")
+    time.sleep(300)
+"""
+
+
+def _wait_until(predicate: object, what: str, timeout: float = 30.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():  # type: ignore[operator]
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"timed out after {timeout}s waiting for {what}")
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+class _LiveRun:
+    """The CLI running against a test command that sleeps once mutated."""
+
+    def __init__(self, tmp_path: Path, target: Path, cleanup: list[int]) -> None:
+        self.tmp_path = tmp_path
+        self.target = target
+        self.pidfile = tmp_path / "pids.txt"
+        script = tmp_path / "sleeper.py"
+        script.write_text(_SLEEPER)
+        self.spec = _cli_spec(
+            tmp_path, target, [sys.executable, str(script), str(target), str(self.pidfile)]
+        )
+        self.env = {**os.environ, "TEETH_CHECK_STATE_DIR": str(_state())}
+        self.out = (tmp_path / "live.out").open("w+")
+        self.cleanup = cleanup
+        self.proc = subprocess.Popen(
+            [sys.executable, str(SCRIPTS_DIR / "teeth_check.py"), str(self.spec)],
+            stdout=self.out,
+            stderr=subprocess.STDOUT,
+            env=self.env,
+        )
+        cleanup.append(self.proc.pid)
+
+    def wait_mutated(self) -> tuple[int, int]:
+        """Block until the mutant is on disk and the test command is running."""
+
+        def ready() -> bool:
+            try:
+                runner_pid, child = self.pidfile.read_text().split()
+                int(runner_pid), int(child)
+            except (OSError, ValueError):
+                return False
+            return self.target.read_text() == MUTANT_TEXT
+
+        _wait_until(ready, "the mutant to reach disk")
+        test_pid, grandchild = (int(p) for p in self.pidfile.read_text().split())
+        self.cleanup += [test_pid, grandchild]
+        return test_pid, grandchild
+
+    def finish(self) -> tuple[int, str]:
+        code = self.proc.wait(timeout=180)
+        self.out.seek(0)
+        return code, self.out.read()
+
+
+@pytest.fixture
+def live(tmp_path: Path, target: Path):  # type: ignore[no-untyped-def]
+    cleanup: list[int] = []
+    run = _LiveRun(tmp_path, target, cleanup)
+    yield run
+    for pid in cleanup:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    run.proc.wait(timeout=60)
+    run.out.close()
+
+
+@pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
+def test_cli_signal_restores_the_target_and_kills_the_test_commands_group(
+    live: _LiveRun, signum: signal.Signals
+) -> None:
+    """B1 and B2 against the real CLI: no mutant left, no orphaned child."""
+    test_pid, grandchild = live.wait_mutated()
+
+    live.proc.send_signal(signum)
+    code, out = live.finish()
+
+    assert live.target.read_text() == ORIGINAL
+    assert code == 128 + signum, out
+    assert (
+        f"interrupted by {signal.Signals(signum).name}; mutated files were restored"
+        in out
+    )
+    _wait_until(lambda: not _alive(test_pid), "the test command to die")
+    _wait_until(lambda: not _alive(grandchild), "the test command's child to die")
+
+
+# --- B2: the whole process group dies with the run -------------------------
+
+_LEADER = """\
+import os, signal, subprocess, sys, time
+from pathlib import Path
+
+pidfile, marker = Path(sys.argv[1]), Path(sys.argv[2])
+signal.signal(signal.SIGTERM, signal.SIG_IGN)  # inherited across exec
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+def on_term(signum, frame):
+    marker.write_text("got SIGTERM")
+    os._exit(0)
+signal.signal(signal.SIGTERM, on_term)
+pidfile.write_text(f"{os.getpid()} {child.pid}")
+time.sleep(300)
+"""
+
+
+def test_default_runner_terminates_then_kills_the_whole_group_on_an_interrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SIGTERM reaches the group first; what ignores it is SIGKILLed after the grace."""
+    monkeypatch.setattr(tc, "_KILL_GRACE_SECONDS", 1, raising=False)
+    script = tmp_path / "leader.py"
+    script.write_text(_LEADER)
+    pidfile, marker = tmp_path / "pids.txt", tmp_path / "marker.txt"
+    pids: list[int] = []
+
+    class Boom(BaseException):
+        pass
+
+    def raise_boom(signum: int, frame: object) -> None:
+        raise Boom
+
+    prior = signal.signal(signal.SIGUSR1, raise_boom)
+    main_ident = threading.main_thread().ident
+
+    def poke() -> None:
+        def ready() -> bool:
+            try:
+                pids[:] = [int(p) for p in pidfile.read_text().split()]
+            except (OSError, ValueError):
+                return False
+            return len(pids) == 2
+
+        try:
+            _wait_until(ready, "the leader to start")
+        finally:
+            signal.pthread_kill(main_ident, signal.SIGUSR1)
+
+    thread = threading.Thread(target=poke)
+    thread.start()
+    try:
+        with pytest.raises(Boom):
+            _default_runner([sys.executable, str(script), str(pidfile), str(marker)])
+    finally:
+        signal.signal(signal.SIGUSR1, prior)
+        thread.join()
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    assert len(pids) == 2
+    assert marker.read_text() == "got SIGTERM"
+    _wait_until(lambda: not _alive(pids[1]), "the signal-ignoring child to die")
+
+
+# --- B3: one run per target, enforced by an OS lock ------------------------
+
+
+def test_a_second_run_on_a_locked_target_refuses_before_running_anything(
+    target: Path,
+) -> None:
+    fd = _hold_lock(target, {"pid": 4242, "path": str(target.resolve())})
+    try:
+        with pytest.raises(tc.TargetLocked):
+            run_teeth_check(
+                _spec(target, _mutation(target), collect=True),
+                runner=lambda cmd: pytest.fail(f"ran {cmd} on a locked target"),
+            )
+    finally:
+        os.close(fd)
+
+    assert target.read_text() == ORIGINAL
+
+
+def test_main_names_the_holder_and_exits_2(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+    fd = _hold_lock(target, {"pid": 4242, "path": str(target.resolve())})
+    try:
+        code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+    finally:
+        os.close(fd)
+
+    assert code == 2
+    assert (
+        f"refusing to run: another teeth_check run (pid 4242) holds {target.resolve()}"
+        in capsys.readouterr().err
+    )
+
+
+def test_main_says_pid_unknown_when_the_holder_left_no_record(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+    fd = _hold_lock(target, None)
+    try:
+        code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+    finally:
+        os.close(fd)
+
+    assert code == 2
+    assert "(pid unknown)" in capsys.readouterr().err
+
+
+def test_the_lock_is_released_when_the_run_returns_and_when_it_raises(
+    target: Path,
+) -> None:
+    run_teeth_check(_spec(target, _mutation(target)), runner=_green)
+    fd = _hold_lock(target, None)  # would raise BlockingIOError if still held
+    os.close(fd)
+
+    def boom(cmd: list[str]) -> tuple[int, str]:
+        raise RuntimeError("test command exploded")
+
+    with pytest.raises(RuntimeError):
+        run_teeth_check(_spec(target, _mutation(target)), runner=boom)
+    os.close(_hold_lock(target, None))
+
+
+def test_each_distinct_target_is_locked_and_a_duplicate_is_locked_once(
+    target: Path, tmp_path: Path
+) -> None:
+    other = tmp_path / "other.py"
+    other.write_text("LIMIT = 25\n")
+    held = _hold_lock(other, None)
+    try:
+        with pytest.raises(tc.TargetLocked):
+            run_teeth_check(
+                _spec(
+                    target,
+                    _mutation(target),
+                    Mutation("again", target, "GUARD = True", "GUARD = False"),
+                    _mutation(other),
+                ),
+                runner=_green,
+            )
+    finally:
+        os.close(held)
+
+    # `target` was free, so refusing on `other` must not leave it locked.
+    os.close(_hold_lock(target, None))
+    run_teeth_check(
+        _spec(
+            target,
+            _mutation(target),
+            Mutation("again", target, "GUARD = True", "GUARD = False"),
+        ),
+        runner=_green,
+    )
+
+
+def test_check_anchors_takes_no_lock(target: Path, tmp_path: Path) -> None:
+    fd = _hold_lock(target, {"pid": 4242, "path": str(target.resolve())})
+    try:
+        assert main(["--check-anchors", str(_cli_spec(tmp_path, target, ["x"]))]) == 0
+    finally:
+        os.close(fd)
+
+
+# --- B4: the lock file is a journal ---------------------------------------
+
+
+def test_the_lock_file_journals_the_original_around_each_mutant(target: Path) -> None:
+    states: list[dict] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        states.append(_record(target))
+        return 0, "ok\n"
+
+    run_teeth_check(_spec(target, _mutation(target), collect=True), runner=runner)
+
+    resolved = str(target.resolve())
+    original = ORIGINAL.encode()
+    plain = {"pid": os.getpid(), "path": resolved}
+    # collect, baseline: acquired, nothing mutated yet. Then the mutant run.
+    assert states[0] == plain and states[1] == plain
+    assert states[2] == {
+        **plain,
+        "original_b64": base64.b64encode(original).decode(),
+        "original_sha256": hashlib.sha256(original).hexdigest(),
+        "mutant_sha256": hashlib.sha256(MUTANT_TEXT.encode()).hexdigest(),
+    }
+    assert _record(target) == plain  # cleared after the restore
+
+
+def test_the_journal_is_cleared_even_when_the_run_raises(target: Path) -> None:
+    calls: list[int] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("boom")
+        return 0, "ok\n"
+
+    with pytest.raises(RuntimeError):
+        run_teeth_check(_spec(target, _mutation(target)), runner=runner)
+
+    assert target.read_text() == ORIGINAL
+    assert _record(target) == {"pid": os.getpid(), "path": str(target.resolve())}
+
+
+# --- B5: recovery of a hard-killed run ------------------------------------
+
+
+def test_a_run_restores_the_mutant_a_killed_run_left_and_says_so(
+    target: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target.write_text(MUTANT_TEXT)
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+    cache = target.parent / "__pycache__"
+    cache.mkdir()
+    stale = cache / "mod.cpython-313.pyc"
+    stale.write_bytes(b"mutant bytecode")
+    seen: list[str] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        seen.append(target.read_text())
+        return 0, "ok\n"
+
+    run_teeth_check(_spec(target, _mutation(target)), runner=runner)
+
+    assert seen[0] == ORIGINAL  # the baseline saw the recovered file
+    assert target.read_text() == ORIGINAL
+    assert not stale.exists()
+    assert (
+        f"recovered {target.resolve()}: restored the original a killed run "
+        "(pid 2000000) left mutated" in capsys.readouterr().err
+    )
+
+
+def test_a_record_whose_file_already_holds_the_original_clears_silently(
+    target: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+
+    run_teeth_check(_spec(target, _mutation(target)), runner=_green)
+
+    assert target.read_text() == ORIGINAL
+    assert "recovered" not in capsys.readouterr().err
+    assert "mutant_sha256" not in _lock_path(target).read_text()
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_a_file_edited_after_the_kill_is_never_written_and_the_original_is_saved(
+    target: Path, missing: bool
+) -> None:
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+    if missing:
+        target.unlink()
+    else:
+        target.write_text("LIMIT = 25\nGUARD = True\n# edited by hand after the kill\n")
+    before = None if missing else target.read_bytes()
+
+    with pytest.raises(tc.RecoveryRefused):
+        run_teeth_check(
+            _spec(target, _mutation(target), collect=True),
+            runner=lambda cmd: pytest.fail(f"ran {cmd} after a refusal"),
+        )
+
+    assert (target.read_bytes() if target.exists() else None) == before
+    digest = hashlib.sha256(ORIGINAL.encode()).hexdigest()[:12]
+    saved = _state() / "recovered" / f"mod.py.{digest}.orig"
+    assert saved.read_bytes() == ORIGINAL.encode()
+    assert "mutant_sha256" not in _lock_path(target).read_text()
+
+
+def test_main_recovers_before_the_stale_anchor_preflight(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A mutant on disk makes its own anchor stale; recovery has to come first."""
+    target.write_text(MUTANT_TEXT)
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+
+    code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+
+    err = capsys.readouterr().err
+    assert "anchor(s) no longer resolve" not in err
+    assert "recovered" in err
+    assert code == 0
+    assert target.read_text() == ORIGINAL
+
+
+def test_main_refuses_with_the_saved_path_and_exits_2(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+    target.write_text("LIMIT = 25\n# hand edit\n")
+
+    code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+
+    digest = hashlib.sha256(ORIGINAL.encode()).hexdigest()[:12]
+    saved = _state() / "recovered" / f"mod.py.{digest}.orig"
+    assert code == 2
+    assert (
+        f"refusing to run: {target.resolve()} changed after a killed run left a "
+        f"mutant in it; the original is saved at {saved}"
+    ) in capsys.readouterr().err
+
+
+def test_a_sigkilled_run_leaves_a_mutant_and_the_next_run_recovers_it(
+    live: _LiveRun, tmp_path: Path
+) -> None:
+    test_pid, grandchild = live.wait_mutated()
+    live.proc.kill()
+    live.proc.wait(timeout=180)
+    os.kill(grandchild, signal.SIGKILL)
+    os.kill(test_pid, signal.SIGKILL)
+
+    # Positive control: SIGKILL really did strand the mutant. Without this the
+    # recovery assertions below could pass on a rig that never left one.
+    assert live.target.read_text() == MUTANT_TEXT
+
+    quick = _cli_spec(tmp_path, live.target, [sys.executable, "-c", "pass"])
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "teeth_check.py"), str(quick)],
+        capture_output=True,
+        text=True,
+        env=live.env,
+        timeout=180,
+    )
+
+    assert "recovered" in result.stderr
+    assert live.target.read_text() == ORIGINAL
+    assert result.returncode == 1  # the surviving mutant, not a refusal
+
+
+# --- B6: a restore never clobbers a concurrent edit -----------------------
+
+
+def test_a_restore_does_not_overwrite_an_edit_made_while_the_mutant_was_on_disk(
+    target: Path,
+) -> None:
+    calls: list[int] = []
+    edited = "LIMIT = 25\n# somebody's new work\n"
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:
+            target.write_text(edited)
+        return 0, "ok\n"
+
+    with pytest.raises(tc.ConcurrentEdit):
+        run_teeth_check(_spec(target, _mutation(target)), runner=runner)
+
+    assert target.read_text() == edited
+    digest = hashlib.sha256(ORIGINAL.encode()).hexdigest()[:12]
+    assert (
+        _state() / "recovered" / f"mod.py.{digest}.orig"
+    ).read_bytes() == ORIGINAL.encode()
+    assert _record(target) == {"pid": os.getpid(), "path": str(target.resolve())}
+
+
+def test_a_target_deleted_mid_run_is_not_recreated(target: Path) -> None:
+    calls: list[int] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:
+            target.unlink()
+        return 0, "ok\n"
+
+    with pytest.raises(tc.ConcurrentEdit):
+        run_teeth_check(_spec(target, _mutation(target)), runner=runner)
+
+    assert not target.exists()
+    digest = hashlib.sha256(ORIGINAL.encode()).hexdigest()[:12]
+    assert (_state() / "recovered" / f"mod.py.{digest}.orig").exists()
+
+
+def test_main_reports_a_concurrent_edit_and_exits_2(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[int] = []
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        calls.append(1)
+        if len(calls) == 2:
+            target.write_text("LIMIT = 25\n# new work\n")
+        return 0, "ok\n"
+
+    monkeypatch.setattr("teeth_check._default_runner", runner)
+
+    code = main([str(_cli_spec(tmp_path, target, ["pytest"]))])
+
+    digest = hashlib.sha256(ORIGINAL.encode()).hexdigest()[:12]
+    saved = _state() / "recovered" / f"mod.py.{digest}.orig"
+    assert code == 2
+    assert (
+        f"refusing to run: {target.resolve()} was edited while a mutant was on "
+        f"disk; left as found, the original is saved at {saved}"
+    ) in capsys.readouterr().err
+
+
+# --- B7: --recover ---------------------------------------------------------
+
+
+def test_recover_reports_clean_and_runs_nothing(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+
+    code = main(["--recover", str(_cli_spec(tmp_path, target, ["pytest"]))])
+
+    assert code == 0
+    assert capsys.readouterr().out.splitlines() == [f"{target.resolve()}: clean"]
+    assert target.read_text() == ORIGINAL
+
+
+def test_recover_restores_a_stranded_mutant(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+    target.write_text(MUTANT_TEXT)
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+
+    code = main(["--recover", str(_cli_spec(tmp_path, target, ["pytest"]))])
+
+    assert code == 0
+    assert capsys.readouterr().out.splitlines() == [f"{target.resolve()}: recovered"]
+    assert target.read_text() == ORIGINAL
+
+
+def test_recover_reports_every_target_and_exits_2_on_any_refusal(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _poison_runner(monkeypatch)
+    locked = tmp_path / "locked.py"
+    locked.write_text("LIMIT = 25\n")
+    edited = tmp_path / "edited.py"
+    edited.write_text("LIMIT = 25\n# hand edit\n")
+    _write_journal(edited, original=b"LIMIT = 25\n", mutant=b"LIMIT = 999\n")
+    target.write_text(MUTANT_TEXT)
+    _write_journal(target, original=ORIGINAL.encode(), mutant=MUTANT_TEXT.encode())
+    spec = tmp_path / "multi.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "test_command": ["pytest"],
+                "mutants": [
+                    {
+                        "label": name,
+                        "file": f,
+                        "find": "LIMIT = 25",
+                        "replace": "LIMIT = 999",
+                        "oracle": "real",
+                    }
+                    for name, f in [
+                        ("a", "locked.py"),
+                        ("b", "edited.py"),
+                        ("c", "mod.py"),
+                        ("d", "mod.py"),
+                    ]
+                ],
+            }
+        )
+    )
+    fd = _hold_lock(locked, {"pid": 31337, "path": str(locked.resolve())})
+    try:
+        code = main(["--recover", str(spec)])
+    finally:
+        os.close(fd)
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 2
+    assert len(lines) == 3  # one per distinct target
+    assert any("pid 31337" in line and str(locked.resolve()) in line for line in lines)
+    assert any("changed after a killed run" in line for line in lines)
+    assert f"{target.resolve()}: recovered" in lines
+    assert target.read_text() == ORIGINAL
+
+
+def test_recover_is_exclusive_with_the_other_modes(
+    target: Path, tmp_path: Path
+) -> None:
+    spec = str(_cli_spec(tmp_path, target, ["pytest"]))
+    with pytest.raises(SystemExit) as exc:
+        main(["--recover", "--check-anchors", spec])
+    assert exc.value.code == 2
