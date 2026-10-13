@@ -235,6 +235,85 @@
       "why": "Rows equal under == are interchangeable here: after this line `unmatched` is only read by `raw in unmatched` and `unmatched.remove(raw)`, both of which compare by equality and never by position or identity, so removing the last equal copy instead of the first leaves every later membership answer, and so the selection, identical. The index cannot raise, because the line runs only inside `if raw in unmatched`. Inert on every input while `unmatched` is only queried by equality; it would stop being inert if anything later read the list by position.",
       "find": "            unmatched.remove(raw)\n",
       "replace": "            del unmatched[len(unmatched) - 1 - unmatched[::-1].index(raw)]\n"
+    },
+    {
+      "label": "R1199-1: untracked files are in the fingerprint",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        _git_text([\"add\", \"-A\", \"--\", \".\"], where.top, index=temp_index)\n",
+      "replace": "        _git_text([\"add\", \"-u\", \"--\", \".\"], where.top, index=temp_index)\n"
+    },
+    {
+      "label": "R1199-2: the spec file is excluded from the fingerprint",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        _git_text(\n            [\"rm\", \"--cached\", \"-q\", \"--ignore-unmatch\", \"--\", where.spec_rel],\n            where.top,\n            index=temp_index,\n        )\n",
+      "replace": "        _git_text([\"write-tree\"], where.top, index=temp_index)\n"
+    },
+    {
+      "label": "R1199-3: a tree change during a row refuses and records nothing",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if now != tree:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-4: the budget stops a ledger run before the next row",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-5: at least one row runs per invocation",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if (time.monotonic() - started) + estimate > budget:\n"
+    },
+    {
+      "label": "R1199-6: never_killed is computed over the full ledger",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        never_killed=_never_killed(ledger.collected, results, runner_spec)\n",
+      "replace": "        never_killed=_never_killed(ledger.collected, results[-1:], runner_spec)\n"
+    },
+    {
+      "label": "R1199-7: test_command is part of the settings hash",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "                \"test_command\": spec.test_command,\n",
+      "replace": "                \"test_command\": None,\n"
+    },
+    {
+      "label": "R1199-8: an incomplete ledger exits 3 whatever the rows say",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    return _exit_code(report) if complete else 3\n",
+      "replace": "    return _exit_code(report)\n"
+    },
+    {
+      "label": "R1199-9: --report runs no command",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            path = _ledger_path(tree, where)\n            keys = _row_keys(args.spec)\n",
+      "replace": "            path = _ledger_path(tree, where)\n            keys = _row_keys(args.spec)\n            _default_runner(spec.test_command)\n"
+    },
+    {
+      "label": "R1199-10: the ledger lock refuses a concurrent ledger run",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        ledger_lock.acquire()\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "R1199-11: [control] ledger line key order",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Each ledger line is read back only through json.loads in _read_ledger, which is order-blind, and no hash, key or comparison is ever taken over the line text, so key order in the written line changes nothing observable; it would stop being inert if anything compared or hashed ledger lines as text.",
+      "find": "    line = json.dumps(entry, sort_keys=True) + \"\\n\"\n",
+      "replace": "    line = json.dumps(entry, sort_keys=False) + \"\\n\"\n"
     }
   ]
 }
