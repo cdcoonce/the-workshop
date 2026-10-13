@@ -91,8 +91,8 @@
       "label": "the run lets an unreadable target escape as a traceback",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "            original, text = _read_source(mutant.path)\n        except TargetUnreadable as exc:",
-      "replace": "            original, text = _read_source(mutant.path)\n        except SpecError as exc:"
+      "find": "        original, text = _read_source(mutant.path)\n    except TargetUnreadable as exc:",
+      "replace": "        original, text = _read_source(mutant.path)\n    except SpecError as exc:"
     },
     {
       "label": "only a missing target is caught, so a directory target still crashes",
@@ -105,8 +105,8 @@
       "label": "a missing target scores as a survivor, not a spec error",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"not-applied\",",
-      "replace": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"survived\","
+      "find": "    except TargetUnreadable as exc:\n        return verdict(\"not-applied\", detail=str(exc))",
+      "replace": "    except TargetUnreadable as exc:\n        return verdict(\"survived\", detail=str(exc))"
     },
     {
       "label": "a target that is not UTF-8 escapes as a traceback (the 8.15.5 defect)",

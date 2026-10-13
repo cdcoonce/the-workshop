@@ -2813,9 +2813,7 @@ def test_committing_does_not_void_a_ledger(
 def test_a_separate_worktree_at_the_same_content_shares_the_ledger(
     repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch
 ) -> None:
-    spec = _write_ledger_spec(repo)
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", "spec")
+    spec = _write_ledger_spec(repo)  # identical to the committed spec
     assert _cli(capsys, "--budget", 1000, spec)[0] == 0
     before = _report_json(capsys, spec)
 
@@ -2843,7 +2841,7 @@ def test_a_tree_edit_during_a_row_refuses_and_records_nothing_for_that_row(
     assert "1 rows stay recorded under " in err
     assert "this row was not recorded" in err
     lines = _ledger_lines(old["path"])
-    assert [(l["kind"], l.get("label")) for l in lines] == [
+    assert [(e["kind"], e.get("label")) for e in lines] == [
         ("collect", None),
         ("row", "cap"),
     ]
@@ -2866,7 +2864,7 @@ def test_an_interrupt_mid_row_records_nothing_for_that_row(
 
     assert rc == 130
     assert "interrupted by SIGINT" in err
-    assert [l["kind"] for l in _ledger_lines(old["path"])] == ["collect"]
+    assert [e["kind"] for e in _ledger_lines(old["path"])] == ["collect"]
     assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"
 
 
@@ -3000,8 +2998,8 @@ def test_ledger_lines_are_collect_then_rows_with_seconds(
         "kind": "collect",
         "collected": ["t.py::test_cap", "t.py::test_guard", "t.py::test_extra"],
     }
-    assert [l["kind"] for l in lines[1:]] == ["row", "row"]
-    assert all(re.fullmatch(r"[0-9a-f]{64}:0", l["key"]) for l in lines[1:])
+    assert [e["kind"] for e in lines[1:]] == ["row", "row"]
+    assert all(re.fullmatch(r"[0-9a-f]{64}:0", e["key"]) for e in lines[1:])
     assert lines[1]["result"]["status"] == "killed"
     assert isinstance(lines[1]["seconds"], float)
 
