@@ -237,6 +237,99 @@
       "replace": "            del unmatched[len(unmatched) - 1 - unmatched[::-1].index(raw)]\n"
     },
     {
+      "label": "R1197-1: SIGTERM restores the mutant",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    caught = [signal.SIGTERM]\n",
+      "replace": "    caught = []\n"
+    },
+    {
+      "label": "R1197-2: SIGHUP restores the mutant",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        caught.append(signal.SIGHUP)\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "R1197-3: the test command's process group dies with the run",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if os.name != \"posix\":\n        proc.kill()\n",
+      "replace": "    if True:\n        proc.kill()\n"
+    },
+    {
+      "label": "R1197-4: a second run on a locked target refuses",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n",
+      "replace": "                pass\n"
+    },
+    {
+      "label": "R1197-5: the journal is cleared after a normal restore",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        journal.clear()\n    return edit\n",
+      "replace": "        pass\n    return edit\n"
+    },
+    {
+      "label": "R1197-6: a killed run's mutant is recovered on acquire",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if not mutant_sha:\n",
+      "replace": "        if True:\n"
+    },
+    {
+      "label": "R1197-7: recovery refuses on an edited file",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if current == mutant_sha and (\n",
+      "replace": "        if (\n"
+    },
+    {
+      "label": "R1197-8: a restore does not clobber a concurrent edit",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if current == mutant:\n",
+      "replace": "        if True:\n"
+    },
+    {
+      "label": "R1197-9: --recover restores a stranded mutant",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if args.recover:\n        outcomes = _recover_targets(spec)\n",
+      "replace": "    if args.recover:\n        return 0\n        outcomes = _recover_targets(spec)\n"
+    },
+    {
+      "label": "R1197-10: [control] kill grace 5 -> 6 seconds",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Only the length of the SIGTERM-to-SIGKILL grace changes: every test either mocks the grace to 1 second or stops its test command with a SIGTERM the command honours, so none waits it out, and nothing reads the constant's value except `_terminate_group`'s deadline.",
+      "find": "_KILL_GRACE_SECONDS = 5\n",
+      "replace": "_KILL_GRACE_SECONDS = 6\n"
+    },
+    {
+      "label": "R1197-F1: a deferral hands back the caller's signal mask, not an unblock",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        signal.pthread_sigmask(signal.SIG_SETMASK, previous)\n",
+      "replace": "        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)\n"
+    },
+    {
+      "label": "R1197-F2: an unusable state dir is a refusal, not a traceback",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except OSError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n",
+      "replace": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except ZeroDivisionError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n"
+    },
+    {
+      "label": "R1197-F3: a journal with a wrong-typed original is refused, not a TypeError",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if isinstance(encoded, str):\n            try:\n",
+      "replace": "        if True:\n            try:\n"
+    },
+    {
       "label": "R1199-1: untracked files are in the fingerprint",
       "file": "../teeth_check.py",
       "oracle": "real",

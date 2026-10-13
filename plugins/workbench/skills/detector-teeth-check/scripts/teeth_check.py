@@ -144,14 +144,38 @@ class TargetLocked(Exception):
         self.pid = pid
 
 
+class StateDirUnusable(Exception):
+    """Raised when the state directory cannot be created or written.
+
+    ``$TEETH_CHECK_STATE_DIR`` may name a regular file, or a place this user
+    cannot write. Nothing has been mutated, and running on without the lock
+    and the journal would defeat both, so it is a refusal, not a crash.
+    """
+
+    def __init__(self, state: Path, cause: OSError) -> None:
+        super().__init__(f"cannot use the state directory {state}: {cause}")
+        self.state = state
+        self.cause = cause
+
+
 class RecoveryRefused(Exception):
     """Raised when a killed run's mutant cannot be undone without clobbering."""
 
-    def __init__(self, path: Path, saved: Path) -> None:
-        super().__init__(
-            f"{path} changed after a killed run left a mutant in it; "
-            f"the original is saved at {saved}"
-        )
+    def __init__(self, path: Path, saved: Path | None) -> None:
+        if saved is None:
+            # The record claimed a mutant but is unreadable, so there is no
+            # original to save and nothing safe to write.
+            message = (
+                f"{path} may hold a mutant a killed run left in it, but that "
+                "run's journal record is malformed; the file was not touched "
+                "and the record is cleared. Check the file by hand"
+            )
+        else:
+            message = (
+                f"{path} changed after a killed run left a mutant in it; "
+                f"the original is saved at {saved}"
+            )
+        super().__init__(message)
         self.path = path
         self.saved = saved
 
@@ -541,8 +565,11 @@ def _save_original(path: Path, original: bytes) -> Path:
     """Keep *original* beside the journal when it cannot safely be written back."""
     digest = hashlib.sha256(original).hexdigest()
     saved = _state_dir() / "recovered" / f"{path.name}.{digest[:12]}.orig"
-    saved.parent.mkdir(parents=True, exist_ok=True)
-    saved.write_bytes(original)
+    try:
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_bytes(original)
+    except OSError as exc:
+        raise StateDirUnusable(_state_dir(), exc) from exc
     return saved
 
 
@@ -561,11 +588,13 @@ def _signals_deferred() -> Iterator[None]:
     held = {signal.SIGINT, signal.SIGTERM}
     if hasattr(signal, "SIGHUP"):
         held.add(signal.SIGHUP)
-    signal.pthread_sigmask(signal.SIG_BLOCK, held)
+    # Put back what the caller had, not "unblocked": a signal they were
+    # already holding back must stay held.
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, held)
     try:
         yield
     finally:
-        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 class _TargetLock:
@@ -585,8 +614,11 @@ class _TargetLock:
         self.fd: int | None = None
 
     def acquire(self) -> None:
-        self.lockfile.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            self.lockfile.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+        except OSError as exc:
+            raise StateDirUnusable(_state_dir(), exc) from exc
         try:
             if fcntl is not None:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -660,23 +692,40 @@ class _TargetLock:
             return "clean", None
         dead_pid = record.get("pid")
         dead_pid = dead_pid if isinstance(dead_pid, int) else None
-        try:
-            original = base64.b64decode(record.get("original_b64", ""))
-        except ValueError:
-            original = b""
+        original_sha = record.get("original_sha256")
+        encoded = record.get("original_b64")
+        decoded: bytes | None = None
+        if isinstance(encoded, str):
+            try:
+                decoded = base64.b64decode(encoded, validate=True)
+            except ValueError:  # binascii.Error is one
+                pass
+        if (
+            decoded is None
+            or not isinstance(mutant_sha, str)
+            or not isinstance(original_sha, str)
+        ):
+            # A record that claims a mutant but cannot be trusted: wrong types
+            # (only a hand edit or a foreign writer makes them) or bad base64.
+            # Never write from it. Clear it, or every later run on this target
+            # would meet the same record and refuse.
+            saved = _save_original(self.path, decoded) if decoded is not None else None
+            self.clear()
+            raise RecoveryRefused(self.path, saved)
+        original = decoded
         try:
             current: str | None = hashlib.sha256(self.path.read_bytes()).hexdigest()
         except OSError:
             current = None
         if current == mutant_sha and (
-            hashlib.sha256(original).hexdigest() == record.get("original_sha256")
+            hashlib.sha256(original).hexdigest() == original_sha
         ):
             with _signals_deferred():
                 self.path.write_bytes(original)
                 _purge_cached_bytecode(self.path)
                 self.clear()
             return "recovered", dead_pid
-        if current == record.get("original_sha256"):
+        if current == original_sha:
             self.clear()
             return "clean", None
         saved = _save_original(self.path, original)
@@ -1603,7 +1652,7 @@ def _recover_targets(spec: Spec) -> list[tuple[Path, str, str]]:
                     outcomes.append((path, "recovered", str(pid or "unknown")))
                 else:
                     outcomes.append((path, "clean", ""))
-        except (TargetLocked, RecoveryRefused) as exc:
+        except (TargetLocked, RecoveryRefused, StateDirUnusable) as exc:
             outcomes.append((path, "refused", f"refusing to run: {exc}"))
     return outcomes
 
@@ -1854,7 +1903,13 @@ def _main(argv: list[str] | None) -> int:
 
     try:
         report = run_teeth_check(spec)
-    except (BaselineNotGreen, TargetLocked, RecoveryRefused, ConcurrentEdit) as exc:
+    except (
+        BaselineNotGreen,
+        TargetLocked,
+        RecoveryRefused,
+        ConcurrentEdit,
+        StateDirUnusable,
+    ) as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 
