@@ -3326,7 +3326,7 @@ def test_a_spec_named_with_glob_characters_is_still_excluded(
     repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     log = tmp_path / "runs.log"
-    spec = repo / "spec[1].json"
+    spec = repo / "spec*.json"  # as a pathspec it would also match spec.json
     spec.write_text(
         _write_ledger_spec(repo, ("cap", "guard", "survivor"), "--log", str(log)).read_text()
     )
@@ -3340,3 +3340,8 @@ def test_a_spec_named_with_glob_characters_is_still_excluded(
 
     assert out.splitlines()[0].startswith("LEDGER: 3 of 3 rows")
     assert len(log.read_text().splitlines()) == 1 + 1  # baseline + the edited row
+
+    # The glob in the spec's own name must not exclude its tracked sibling too.
+    sibling = repo / "spec.json"
+    sibling.write_text(sibling.read_text() + "\n")
+    assert _report_json(capsys, spec)["ledger"]["recorded"] == 0

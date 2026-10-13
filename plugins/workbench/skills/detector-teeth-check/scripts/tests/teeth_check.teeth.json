@@ -314,6 +314,76 @@
       "why": "Each ledger line is read back only through json.loads in _read_ledger, which is order-blind, and no hash, key or comparison is ever taken over the line text, so key order in the written line changes nothing observable; it would stop being inert if anything compared or hashed ledger lines as text.",
       "find": "    line = json.dumps(entry, sort_keys=True) + \"\\n\"\n",
       "replace": "    line = json.dumps(entry, sort_keys=False) + \"\\n\"\n"
+    },
+    {
+      "label": "R1199-X14: the budget compares elapsed time plus the estimate",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if ran and estimate > budget:\n"
+    },
+    {
+      "label": "R1199-X4: each row run raises the estimate",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        estimate = max(estimate, seconds)\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X3: the estimate includes the recorded rows' seconds",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        + [row[\"seconds\"] for row in ledger.rows.values()]\n",
+      "replace": "        + []\n"
+    },
+    {
+      "label": "R1199-X13: identical rows are keyed apart by occurrence",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        seen[digest] = seen.get(digest, 0) + 1\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X12: an append after a partial line starts a new line",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if partial:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-X2: collect runs once per ledger",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if not ledger.has_collect:\n",
+      "replace": "    if True:\n"
+    },
+    {
+      "label": "R1199-X5: the tree-change message lists up to ten paths",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    changed = \", \".join(paths[:10]) if paths else \"unknown\"\n",
+      "replace": "    changed = \", \".join(paths[:1]) if paths else \"unknown\"\n"
+    },
+    {
+      "label": "R1199-X1: every ledger line is fsynced",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        os.fsync(handle.fileno())\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X10: GIT_INDEX_FILE is stripped from git's environment",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    env = {k: v for k, v in os.environ.items() if k != \"GIT_INDEX_FILE\"}\n",
+      "replace": "    env = dict(os.environ)\n"
+    },
+    {
+      "label": "R1199-X11: git pathspecs are literal",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            [\"git\", \"--literal-pathspecs\", *args],\n",
+      "replace": "            [\"git\", *args],\n"
     }
   ]
 }
