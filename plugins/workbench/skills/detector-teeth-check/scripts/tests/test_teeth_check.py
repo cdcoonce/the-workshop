@@ -1799,6 +1799,20 @@ def test_library_callers_get_no_handlers(target: Path) -> None:
     assert seen and all(s == before for s in seen)
 
 
+def test_signals_deferred_restores_the_callers_prior_mask(target: Path) -> None:
+    """The deferral is a loan: whatever the caller had blocked stays blocked."""
+    before = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
+    try:
+        run_teeth_check(_spec(target, _mutation(target)), runner=_killing_runner())
+        after = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, before)
+
+    assert signal.SIGINT in after  # blocked by the caller, so still blocked
+    assert signal.SIGTERM not in after  # never blocked, so still not
+    assert signal.SIGINT not in before  # positive control: the rig changed it
+
+
 @pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
 def test_a_signal_mid_mutant_restores_and_exits_128_plus_signum(
     target: Path,
@@ -2489,3 +2503,109 @@ def test_recover_is_exclusive_with_the_other_modes(
     with pytest.raises(SystemExit) as exc:
         main(["--recover", "--check-anchors", spec])
     assert exc.value.code == 2
+
+
+# --- review follow-ups (1197): the state dir, and a malformed journal ------
+
+
+@pytest.mark.parametrize("mode", ["run", "recover"])
+def test_a_state_dir_that_is_a_file_is_a_refusal_not_a_traceback(
+    target: Path, tmp_path: Path, mode: str
+) -> None:
+    state_file = tmp_path / "state-is-a-file"
+    state_file.write_text("not a directory")
+    spec = _cli_spec(tmp_path, target, [sys.executable, "-c", "raise SystemExit(0)"])
+    argv = [sys.executable, str(SCRIPTS_DIR / "teeth_check.py")]
+    argv += ["--recover", str(spec)] if mode == "recover" else [str(spec)]
+
+    result = subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "TEETH_CHECK_STATE_DIR": str(state_file)},
+        timeout=180,
+    )
+
+    # --recover prints its refusals to stdout, a run to stderr; either way the
+    # line is the same "refusing to run:" one.
+    lines = (result.stdout + result.stderr).splitlines()
+    assert "Traceback" not in result.stdout + result.stderr
+    assert result.returncode == 2
+    assert any(
+        line.startswith("refusing to run:") and str(state_file) in line
+        for line in lines
+    ), lines
+    assert target.read_text() == ORIGINAL
+    assert state_file.read_text() == "not a directory"
+
+
+def _write_raw_journal(target: Path, record: dict) -> None:
+    lock = _lock_path(target)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(json.dumps(record))
+
+
+def _sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+_WELL_FORMED = {
+    "original_b64": base64.b64encode(ORIGINAL.encode()).decode(),
+    "original_sha256": _sha(ORIGINAL.encode()),
+    "mutant_sha256": _sha(MUTANT_TEXT.encode()),
+}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"original_b64": 5},
+        {"original_b64": None},
+        {"original_b64": ["x"]},
+        {"original_sha256": 5},
+        {"mutant_sha256": 5},
+        {"mutant_sha256": ["x"]},
+        # Not base64, and the empty bytes it used to decay to hash exactly as
+        # the record's original_sha256 says: the old code wrote an EMPTY file
+        # over the target.
+        {"original_b64": "a", "original_sha256": _sha(b"")},
+    ],
+    ids=lambda bad: ",".join(f"{k}={v!r}" for k, v in bad.items()),
+)
+def test_a_journal_with_a_non_string_original_is_refused_not_crashed(
+    target: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    bad: dict,
+) -> None:
+    target.write_text(MUTANT_TEXT)
+    _write_raw_journal(
+        target, {"pid": 1, "path": str(target.resolve()), **_WELL_FORMED, **bad}
+    )
+    _poison_runner(monkeypatch)
+    spec = _cli_spec(tmp_path, target, ["pytest"])
+
+    code = main([str(spec)])
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert err.startswith("refusing to run:")
+    assert "Traceback" not in err
+    assert target.read_text() == MUTANT_TEXT  # never written
+    # The record is cleared, so the refusal is not a standing wedge ...
+    assert "mutant_sha256" not in _lock_path(target).read_text()
+
+    # ... and once the file is put right by hand, the next run goes ahead.
+    target.write_text(ORIGINAL)
+    monkeypatch.setattr("teeth_check._default_runner", _killing_runner())
+    assert main([str(spec)]) == 0
+    assert target.read_text() == ORIGINAL
+
+    # --recover on the same malformed record refuses too, and does not write.
+    target.write_text(MUTANT_TEXT)
+    _write_raw_journal(
+        target, {"pid": 1, "path": str(target.resolve()), **_WELL_FORMED, **bad}
+    )
+    assert main(["--recover", str(spec)]) == 2
+    assert target.read_text() == MUTANT_TEXT
