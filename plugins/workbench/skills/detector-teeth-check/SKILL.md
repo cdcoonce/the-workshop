@@ -77,6 +77,10 @@ SIGKILLed run left in the spec's targets (see **Safety**) and exits 0, or 2 if
 a target is held by a live run or was edited since. A normal run does the same
 before it starts.
 
+`--budget SECONDS` and `--report` are the two ledger modes, for specs too long
+to run in one foreground command; see **Long specs**. Like `--check-anchors`,
+`--changed-since` and `--recover`, they are mutually exclusive.
+
 Re-running the mutants after a genuine restructure is **not** waste: the old
 mutants described defects in code that no longer exists, so those verdicts
 really did expire. The waste is re-deriving the table from a shell history,
@@ -135,6 +139,62 @@ score, or a declared control gets caught, so it can gate CI. `--json` emits the
 machine-readable form. `collect_command` is optional; without it the
 caught-no-mutant list reads _not computed_, not an empty all-clear. `oracle` is
 required per mutant — see **Traps that fake a kill**.
+
+### Long specs
+
+A 168-row spec at about 40 s a row takes one to two and a half hours, and a
+worker may run at most ten minutes in the foreground. Do not hand-cut it into
+slice specs. Run ONE foreground command, again and again, until it stops
+returning 3:
+
+```bash
+python3 "<skill base directory>/scripts/teeth_check.py" --budget 540 spec.json; echo rc=$?
+```
+
+Each call runs pending rows until the next would overrun the budget (estimated
+from the slowest row and baseline so far), records each verdict in a ledger,
+and exits **3**: not done, run the same command again. It always runs at least
+one row, so a budget smaller than a row still advances. Exit 3 means incomplete
+and nothing else. Once the last row is recorded the call prints the full report
+and exits 0 or 1 exactly as a single run would. Run one runner per tree, in the
+foreground: no loop, no background job, no `pkill`. A second run on the same
+ledger refuses (`another teeth_check run holds ledger ...`).
+
+```bash
+python3 "<skill base directory>/scripts/teeth_check.py" --report spec.json
+```
+
+`--report` prints the ledger for the current tree and runs nothing: no lock, no
+baseline, no test command. While rows are missing it opens with
+`INCOMPLETE: k of N rows recorded ...` and exits 3, never printing a
+never-killed list; when complete it opens with `LEDGER: N of N rows ...` and
+prints the tally. `--json` works with both and adds a `ledger` block
+(`tree`, `recorded`, `of`, `path`).
+
+**Why not hand-cut slices.** A slice is a whole spec to the runner, so every
+slice prints a never-killed list that is false for the real spec (a test
+that kills a row in another slice reads as killing nothing). And slices carry
+no tree: if the code changed between slice 3 and slice 4, the pasted tally
+mixes verdicts no single tree earned.
+
+**What the ledger is keyed on.** The content of the working tree: a git tree of
+tracked plus untracked, non-ignored files, minus the spec file itself, plus a
+hash of `test_command`, `collect_command`, `runner`, the working directory and
+the spec's path. It is content-keyed, so committing does not void it, and a
+separate worktree at the same content shares it. Editing one row of the spec
+reruns only that row (rows are keyed by their own JSON); editing any other file,
+or adding an untracked one, starts a fresh ledger. Ledgers live under
+`ledgers/` in the state directory. The baseline reruns on every call (the
+environment is not in the fingerprint); the collect command runs once per
+ledger.
+
+**If the tree changes mid-run** the call refuses (exit 2,
+`refusing to continue: the tree changed during the run`), discards that row,
+and names up to ten paths that moved. Earlier rows stay recorded under the old
+tree. Read the paths: if the test command writes an un-ignored cache directory
+(`.pytest_cache`, a build directory), the fix is a `.gitignore` entry, not a
+retry. A run needs the spec in a git worktree with every mutation target and
+the working directory inside it.
 
 ## Runners
 
@@ -398,7 +458,7 @@ the original bytes and the mutant's hash before the mutant is written.
 - **One run per target.** A second run on a file another live run holds
   refuses before its baseline, mutating nothing (exit 2), naming the holder's
   pid. The OS drops the lock if the holder dies, so a stale one cannot jam you.
-  `--check-anchors` writes nothing and takes no lock.
+  `--check-anchors` writes nothing and takes no lock. `--budget` also locks its ledger; `--report` locks nothing.
 - **A killed run is repaired by the next run on that target**, or by
   `--recover spec.json`, which touches no baseline or test command and prints
   `<path>: clean` or `recovered` per target. The original is written back only
