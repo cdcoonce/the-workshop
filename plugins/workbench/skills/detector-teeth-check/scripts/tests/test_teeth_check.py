@@ -3466,3 +3466,47 @@ def test_a_spec_named_with_glob_characters_is_still_excluded(
     sibling.write_text(sibling.read_text() + "\n")
     assert _report_json(capsys, spec)["ledger"]["recorded"] == 0
 
+
+# --- the merge of 1197 into 1199: ledger mode meets the unusable state dir ---
+
+
+@pytest.mark.parametrize("mode", ["--budget", "--report"])
+@pytest.mark.parametrize("unusable", ["state-is-a-file", "ledgers-is-a-file"])
+def test_ledger_mode_on_an_unusable_state_dir_is_a_refusal(
+    repo: Path, tmp_path: Path, unusable: str, mode: str
+) -> None:
+    """The ledger, its ``ledgers/`` dir and its lock all live in the state dir.
+
+    ``state-is-a-file`` is stopped by the target lock, before any ledger code
+    runs. ``ledgers-is-a-file`` leaves the target lock usable, so only the
+    ledger's own lock and file can meet the problem.
+    """
+    state = tmp_path / "state"
+    if unusable == "state-is-a-file":
+        state.write_text("not a directory")
+        blocker = state
+    else:
+        state.mkdir()
+        blocker = state / "ledgers"
+        blocker.write_text("not a directory")
+    spec = _write_ledger_spec(repo)
+    flags = ["--budget", "60"] if mode == "--budget" else ["--report"]
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "teeth_check.py"), *flags, str(spec)],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+        env={**os.environ, "TEETH_CHECK_STATE_DIR": str(state)},
+        timeout=180,
+    )
+
+    output = result.stdout + result.stderr
+    assert "Traceback" not in output, output
+    assert result.returncode == 2, output
+    assert any(
+        line.startswith("refusing to run:") and str(state) in line
+        for line in output.splitlines()
+    ), output
+    assert blocker.read_text() == "not a directory"
+    assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"

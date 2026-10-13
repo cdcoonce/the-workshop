@@ -1476,6 +1476,8 @@ def _read_ledger(path: Path, keys: list[str]) -> _Ledger:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ledger
+    except OSError as exc:  # e.g. the state dir, or ledgers/, is not a directory
+        raise StateDirUnusable(_state_dir(), exc) from exc
     for line in text.splitlines():
         try:
             entry = json.loads(line)
@@ -1497,6 +1499,14 @@ def _read_ledger(path: Path, keys: list[str]) -> _Ledger:
 
 
 def _append_ledger(path: Path, entry: dict) -> None:
+    """Append one ledger line; an unusable state dir is a refusal, not a crash."""
+    try:
+        _write_ledger_line(path, entry)
+    except OSError as exc:
+        raise StateDirUnusable(_state_dir(), exc) from exc
+
+
+def _write_ledger_line(path: Path, entry: dict) -> None:
     """Append one JSON line, flushed and fsynced before this returns."""
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, sort_keys=True) + "\n"
@@ -1821,12 +1831,11 @@ def _main(argv: list[str] | None) -> int:
             tree = _tree_fingerprint(where)
             path = _ledger_path(tree, where)
             keys = _row_keys(args.spec)
-        except LedgerRefused as exc:
+            ledger = _read_ledger(path, keys)
+        except (LedgerRefused, StateDirUnusable) as exc:
             print(f"refusing to run: {exc}", file=sys.stderr)
             return 2
-        return _ledger_report(
-            spec, keys, _read_ledger(path, keys), tree, path, as_json=args.json
-        )
+        return _ledger_report(spec, keys, ledger, tree, path, as_json=args.json)
 
     # A mutant a killed run left on disk has already broken its own anchor, so
     # it must be undone before the anchor preflight can mistake it for drift.
@@ -1869,6 +1878,7 @@ def _main(argv: list[str] | None) -> int:
             ConcurrentEdit,
             LedgerLocked,
             LedgerRefused,
+            StateDirUnusable,
         ) as exc:
             print(f"refusing to run: {exc}", file=sys.stderr)
             return 2
