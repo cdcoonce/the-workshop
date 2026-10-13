@@ -183,6 +183,20 @@
       "replace": "                    f\"{day} (line {idx}) follows the older \""
     },
     {
+      "label": "drift: the replay narrows its trailing date to the bare (DATE) form and the audit copy is not updated",
+      "file": "../../skills/vault-sync/scripts/entry_replay.py",
+      "oracle": "real",
+      "find": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})(?:[ ,][^()]*)?\\)$\")",
+      "replace": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})\\)$\")"
+    },
+    {
+      "label": "drift: the replay stops treating dated bullets in a heading-entry block as body text and the audit copy is not updated",
+      "file": "../../skills/vault-sync/scripts/entry_replay.py",
+      "oracle": "real",
+      "find": "    if any(started[0] == \"heading\" for _idx, started in starts):\n        starts = [(idx, started) for idx, started in starts if started[0] == \"heading\"]\n",
+      "replace": ""
+    },
+    {
       "label": "[control] drop the fence-length reset on close",
       "file": "../engine/vault_audit.py",
       "oracle": "real",
