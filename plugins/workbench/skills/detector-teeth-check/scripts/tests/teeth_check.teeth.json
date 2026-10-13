@@ -307,6 +307,13 @@
       "why": "Only the length of the SIGTERM-to-SIGKILL grace changes: every test either mocks the grace to 1 second or stops its test command with a SIGTERM the command honours, so none waits it out, and nothing reads the constant's value except `_terminate_group`'s deadline.",
       "find": "_KILL_GRACE_SECONDS = 5\n",
       "replace": "_KILL_GRACE_SECONDS = 6\n"
+    },
+    {
+      "label": "R1197-F1: a deferral hands back the caller's signal mask, not an unblock",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        signal.pthread_sigmask(signal.SIG_SETMASK, previous)\n",
+      "replace": "        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)\n"
     }
   ]
 }

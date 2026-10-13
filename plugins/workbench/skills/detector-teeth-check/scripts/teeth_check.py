@@ -550,11 +550,13 @@ def _signals_deferred() -> Iterator[None]:
     held = {signal.SIGINT, signal.SIGTERM}
     if hasattr(signal, "SIGHUP"):
         held.add(signal.SIGHUP)
-    signal.pthread_sigmask(signal.SIG_BLOCK, held)
+    # Put back what the caller had, not "unblocked": a signal they were
+    # already holding back must stay held.
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, held)
     try:
         yield
     finally:
-        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 class _TargetLock:
