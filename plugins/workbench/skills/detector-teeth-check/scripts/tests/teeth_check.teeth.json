@@ -314,6 +314,13 @@
       "oracle": "real",
       "find": "        signal.pthread_sigmask(signal.SIG_SETMASK, previous)\n",
       "replace": "        signal.pthread_sigmask(signal.SIG_UNBLOCK, held)\n"
+    },
+    {
+      "label": "R1197-F2: an unusable state dir is a refusal, not a traceback",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except OSError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n",
+      "replace": "            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)\n        except ZeroDivisionError as exc:\n            raise StateDirUnusable(_state_dir(), exc) from exc\n"
     }
   ]
 }

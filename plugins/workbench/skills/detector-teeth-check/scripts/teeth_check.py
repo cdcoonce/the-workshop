@@ -133,6 +133,20 @@ class TargetLocked(Exception):
         self.pid = pid
 
 
+class StateDirUnusable(Exception):
+    """Raised when the state directory cannot be created or written.
+
+    ``$TEETH_CHECK_STATE_DIR`` may name a regular file, or a place this user
+    cannot write. Nothing has been mutated, and running on without the lock
+    and the journal would defeat both, so it is a refusal, not a crash.
+    """
+
+    def __init__(self, state: Path, cause: OSError) -> None:
+        super().__init__(f"cannot use the state directory {state}: {cause}")
+        self.state = state
+        self.cause = cause
+
+
 class RecoveryRefused(Exception):
     """Raised when a killed run's mutant cannot be undone without clobbering."""
 
@@ -530,8 +544,11 @@ def _save_original(path: Path, original: bytes) -> Path:
     """Keep *original* beside the journal when it cannot safely be written back."""
     digest = hashlib.sha256(original).hexdigest()
     saved = _state_dir() / "recovered" / f"{path.name}.{digest[:12]}.orig"
-    saved.parent.mkdir(parents=True, exist_ok=True)
-    saved.write_bytes(original)
+    try:
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_bytes(original)
+    except OSError as exc:
+        raise StateDirUnusable(_state_dir(), exc) from exc
     return saved
 
 
@@ -576,8 +593,11 @@ class _TargetLock:
         self.fd: int | None = None
 
     def acquire(self) -> None:
-        self.lockfile.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            self.lockfile.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(self.lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+        except OSError as exc:
+            raise StateDirUnusable(_state_dir(), exc) from exc
         try:
             if fcntl is not None:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -1268,7 +1288,7 @@ def _recover_targets(spec: Spec) -> list[tuple[Path, str, str]]:
                     outcomes.append((path, "recovered", str(pid or "unknown")))
                 else:
                     outcomes.append((path, "clean", ""))
-        except (TargetLocked, RecoveryRefused) as exc:
+        except (TargetLocked, RecoveryRefused, StateDirUnusable) as exc:
             outcomes.append((path, "refused", f"refusing to run: {exc}"))
     return outcomes
 
@@ -1423,7 +1443,13 @@ def _main(argv: list[str] | None) -> int:
 
     try:
         report = run_teeth_check(spec)
-    except (BaselineNotGreen, TargetLocked, RecoveryRefused, ConcurrentEdit) as exc:
+    except (
+        BaselineNotGreen,
+        TargetLocked,
+        RecoveryRefused,
+        ConcurrentEdit,
+        StateDirUnusable,
+    ) as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 
