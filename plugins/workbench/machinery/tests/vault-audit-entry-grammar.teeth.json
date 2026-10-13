@@ -17,8 +17,7 @@
     "-m",
     "pytest",
     "-q",
-    "test_vault_audit.py",
-    "test_entry_grammar_parity.py"
+    "test_vault_audit.py"
   ],
   "collect_command": [
     "uv",
@@ -38,83 +37,82 @@
     "pytest",
     "--collect-only",
     "-q",
-    "test_vault_audit.py",
-    "test_entry_grammar_parity.py"
+    "test_vault_audit.py"
   ],
   "mutants": [
     {
       "label": "Gotchas trailing-date headings are not entries (the pre-unification blind spot)",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    trail = _TRAIL_DATE_RE.search(text)\n",
       "replace": "    trail = None\n"
     },
     {
       "label": "only the bare (DATE) trailing form is read; (DATE, qualifier) is not",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})(?:[ ,][^()]*)?\\)$\")",
       "replace": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})\\)$\")"
     },
     {
       "label": "a qualified heading is dated by its last date, not its first",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        return (\"heading\", trail.group(1))",
       "replace": "        return (\"heading\", re.findall(r\"\\d{4}-\\d{2}-\\d{2}\", text)[-1])"
     },
     {
       "label": "dated bullets in a heading-entry run are read as entries",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        if any(starts[idx][0] == \"heading\" for idx in indices):\n            indices = [idx for idx in indices if starts[idx][0] == \"heading\"]\n",
       "replace": "        indices = list(indices)\n"
     },
     {
       "label": "dated lines inside a code fence are read as entries",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
-      "find": "        if flags[idx]:\n            continue\n        started = _entry_start(line)",
-      "replace": "        started = _entry_start(line)"
+      "find": "        if flags[idx]:\n            continue\n        started = entry_start(line)",
+      "replace": "        started = entry_start(line)"
     },
     {
       "label": "a shorter backtick line closes a longer fence",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "                and len(m.group(1)) >= fence_len\n",
       "replace": ""
     },
     {
       "label": "a level-2 dated heading is an entry, not an anchor",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    if hm is None or len(hm.group(1)) < 3:",
       "replace": "    if hm is None or len(hm.group(1)) < 2:"
     },
     {
       "label": "dated headings are read only down to level 4 (the old #{2,4} cap)",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    if hm is None or len(hm.group(1)) < 3:",
       "replace": "    if hm is None or not 3 <= len(hm.group(1)) <= 4:"
     },
     {
       "label": "a bullet's date is not checked against the calendar",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    if bm and _valid_date(bm.group(1)):",
       "replace": "    if bm:"
     },
     {
       "label": "a leading heading date is not checked against the calendar",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    if lead and _valid_date(lead.group(1)):",
       "replace": "    if lead:"
     },
     {
       "label": "a trailing heading date is not checked against the calendar",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "    if trail and _valid_date(trail.group(1)):",
       "replace": "    if trail:"
@@ -123,40 +121,40 @@
       "label": "order is compared across the whole file, not per run (the pre-unification scope)",
       "file": "../engine/vault_audit.py",
       "oracle": "real",
-      "find": "        for _anchor, entries in _entry_runs(_read(path).splitlines()):",
-      "replace": "        for _anchor, entries in [(None, sorted(e for _a, run in _entry_runs(_read(path).splitlines()) for e in run))]:"
+      "find": "        for _anchor, entries in entry_runs(_read(path).splitlines()):",
+      "replace": "        for _anchor, entries in [(None, sorted(e for _a, run in entry_runs(_read(path).splitlines()) for e in run))]:"
     },
     {
       "label": "an anchor need not be innermost, so a quarter heading swallows Wins and Growth",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "                continue  # a deeper non-entry heading follows: not innermost\n",
       "replace": "                pass\n"
     },
     {
       "label": "an anchor block runs past a sibling heading of its own level",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        end = next((j for j, jlvl in headings if j > idx and jlvl <= lvl), len(lines))",
       "replace": "        end = next((j for j, jlvl in headings if j > idx and jlvl < lvl), len(lines))"
     },
     {
       "label": "a nested subheading inside an anchor block becomes its own run",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        if lvl < 2 or idx in starts or owner[idx] is not None:",
       "replace": "        if lvl < 2 or idx in starts:"
     },
     {
       "label": "an unanchored run is split at entry headings too, so each heading entry stands alone",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        if current is None or (idx in heading_lines and idx not in starts):",
       "replace": "        if current is None or idx in heading_lines:"
     },
     {
       "label": "an unanchored run is not split at a non-entry heading",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "        if current is None or (idx in heading_lines and idx not in starts):",
       "replace": "        if current is None:"
@@ -183,22 +181,8 @@
       "replace": "                    f\"{day} (line {idx}) follows the older \""
     },
     {
-      "label": "drift: the replay narrows its trailing date to the bare (DATE) form and the audit copy is not updated",
-      "file": "../../skills/vault-sync/scripts/entry_replay.py",
-      "oracle": "real",
-      "find": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})(?:[ ,][^()]*)?\\)$\")",
-      "replace": "_TRAIL_DATE_RE = re.compile(r\"\\((\\d{4}-\\d{2}-\\d{2})\\)$\")"
-    },
-    {
-      "label": "drift: the replay stops treating dated bullets in a heading-entry block as body text and the audit copy is not updated",
-      "file": "../../skills/vault-sync/scripts/entry_replay.py",
-      "oracle": "real",
-      "find": "    if any(started[0] == \"heading\" for _idx, started in starts):\n        starts = [(idx, started) for idx, started in starts if started[0] == \"heading\"]\n",
-      "replace": ""
-    },
-    {
       "label": "[control] drop the fence-length reset on close",
-      "file": "../engine/vault_audit.py",
+      "file": "../engine/vault_utils.py",
       "oracle": "real",
       "find": "                fence_len = 0\n",
       "replace": "",

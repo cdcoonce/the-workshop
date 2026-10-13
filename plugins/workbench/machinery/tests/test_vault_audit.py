@@ -672,6 +672,14 @@ def test_audit_reports_the_inverted_entry_at_its_file_line(tmp_path: Path) -> No
     ]
 
 
+def test_entry_order_reads_entries_through_the_shared_vault_utils_grammar() -> None:
+    """The grammar the vault-sync parity test pins is the one the detector runs."""
+    import vault_audit
+    import vault_utils
+
+    assert vault_audit.entry_runs is vault_utils.entry_runs
+
+
 # --- #1077: no module-level name shadows the shared vault_utils pattern ---
 
 

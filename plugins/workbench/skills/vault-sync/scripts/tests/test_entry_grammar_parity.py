@@ -1,9 +1,10 @@
-"""vault_audit's entry grammar stays the vault-sync entry replay's.
+"""The engine's entry grammar stays the vault-sync entry replay's.
 
-``vault_audit.py`` is vendored into the vault (``.claude/scripts/``) and runs
-standalone there, while ``entry_replay.py`` runs from the plugin's vault-sync
-skill, so neither can import the other at runtime and the audit carries its
-own copy of the grammar. This test is what keeps the copy honest: over hand
+``vault_audit.py``'s ordering detector reads hub-file entries through
+``vault_utils.entry_runs``. Both are vendored into the vault
+(``.claude/scripts/``) and run standalone there, while ``entry_replay.py``
+runs from the plugin's vault-sync skill, so neither can import the other at
+runtime and the engine carries its own copy of the grammar. This test is what keeps the copy honest: over hand
 fixtures and a seeded generator, every anchor block the replay parses must
 hold exactly the entries the audit reads, at the same lines with the same
 dates. A block the replay refuses (mixed levels, an undated heading at entry
@@ -19,13 +20,13 @@ from pathlib import Path
 
 import pytest
 
-ENGINE_DIR = Path(__file__).resolve().parent.parent / "engine"
-REPLAY_DIR = Path(__file__).resolve().parents[2] / "skills" / "vault-sync" / "scripts"
+REPLAY_DIR = Path(__file__).resolve().parent.parent
+ENGINE_DIR = REPLAY_DIR.parents[2] / "machinery" / "engine"
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(REPLAY_DIR))
 
 import entry_replay  # noqa: E402
-import vault_audit  # noqa: E402
+import vault_utils  # noqa: E402
 
 Blocks = dict[int, list[tuple[int, str]]]
 
@@ -63,7 +64,7 @@ def _replay_blocks(text: str) -> Blocks | None:
 def _audit_blocks(text: str) -> Blocks:
     return {
         anchor: entries
-        for anchor, entries in vault_audit._entry_runs(text.splitlines())
+        for anchor, entries in vault_utils.entry_runs(text.splitlines())
         if anchor is not None
     }
 
