@@ -156,6 +156,37 @@ class TestThreshold:
         )
         assert _notice(result) == _checkpoint(307, 300)
 
+    @pytest.mark.parametrize(
+        ("threshold", "tokens", "expected"),
+        [
+            pytest.param(None, 300_000, _checkpoint(300, 300), id="default-threshold"),
+            pytest.param(
+                "200000", 200_000, _checkpoint(200, 200), id="env-override-threshold"
+            ),
+        ],
+    )
+    def test_reading_exactly_at_the_threshold_fires(
+        self, tmp_path: Path, markers: Path, threshold, tokens: int, expected: str
+    ) -> None:
+        # "Crosses a threshold" is inclusive: a reading equal to the threshold fires.
+        transcript = _transcript(tmp_path, _assistant_line(0, tokens, 0))
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)},
+            tmpdir=markers,
+            threshold=threshold,
+        )
+        assert _notice(result) == expected
+
+    def test_reading_one_below_the_threshold_is_silent(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        transcript = _transcript(tmp_path, _assistant_line(0, 299_999, 0))
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
+        )
+        assert result.returncode == 0
+        assert result.stdout == ""
+
     def test_uses_last_assistant_usage_not_earlier(
         self, tmp_path: Path, markers: Path
     ) -> None:
@@ -239,6 +270,13 @@ class TestUserOnlyNotice:
                 "Context checkpoint: this session's context is ~305k tokens "
                 "(threshold 300k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
                 id="rounds-rather-than-floors",
+            ),
+            pytest.param(
+                250_000,
+                "200600",
+                "Context checkpoint: this session's context is ~250k tokens "
+                "(threshold 201k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
+                id="threshold-rounds-rather-than-floors",
             ),
         ],
     )
