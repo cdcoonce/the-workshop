@@ -57,7 +57,7 @@ Every event this repo ships a hook for, with the mechanism it depends on:
 | ------------------ | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                                                               |
 | `PostToolUse`      | `post-edit-lint.py`                           | side effect only                                                                  |
-| `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `additionalContext`                                                               |
+| `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `systemMessage`                                                                   |
 | `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block                                                              |
 | `SubagentStart`    | `snapshot-subagent-start.py`                  | side effect only; **cannot block**                                                |
 | `SubagentStop`     | `verify-subagent-evidence.py`                 | top-level `decision: "block"`                                                     |
@@ -388,7 +388,7 @@ What that means for the hooks this repo ships:
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `protect-files.py` (PreToolUse, exit 2)                      | works                                                                                                                                  |
 | `post-edit-lint.py` (PostToolUse)                            | works                                                                                                                                  |
-| `suggest-handoff-on-context.py` (UserPromptSubmit)           | event exists; `additionalContext` support unconfirmed                                                                                  |
+| `suggest-handoff-on-context.py` (UserPromptSubmit)           | event exists; `systemMessage` support unconfirmed                                                                                      |
 | `verify-tests-before-stop.py` (Stop, exit 2)                 | works                                                                                                                                  |
 | `inject-skill-router.py`, `inject_persona.py` (SessionStart) | event exists; `additionalContext` support unconfirmed                                                                                  |
 | `snapshot-subagent-start.py` (SubagentStart)                 | **never fires — no such event**                                                                                                        |
