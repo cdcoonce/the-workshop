@@ -13,9 +13,15 @@ import copy
 import importlib
 import inspect
 import json
+import os
 import re
+import subprocess
+import sys
+import tomllib
+import venv
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 import jsonschema
 import pytest
@@ -764,31 +770,159 @@ def test_the_skill_says_a_case_with_no_gated_items_is_never_retried():
     assert _harness_function("scorer", "should_retry")({}, 0, 0) is False
 
 
+_STALE_INSTALL_FIX = "uv pip uninstall the-workshop"
+
+# Prints where `python` has a ``the-workshop`` distribution installed, or nothing.
+_STALE_INSTALL_PROBE = (
+    "import importlib.metadata as metadata, sys\n"
+    "try:\n"
+    "    distribution = metadata.distribution('the-workshop')\n"
+    "except metadata.PackageNotFoundError:\n"
+    "    sys.exit(0)\n"
+    "print(distribution.locate_file(''))\n"
+)
+
+
+class _RunModes(NamedTuple):
+    inline: subprocess.CompletedProcess
+    outside: subprocess.CompletedProcess
+    with_path: subprocess.CompletedProcess
+
+
+def _conductor_run_modes(python: Path, scratch: Path) -> _RunModes:
+    """Run the three invocations the skill describes, under *python*.
+
+    ``inline`` is ``python -c`` from the checkout root; ``outside`` is the same
+    import from a script saved under *scratch* and run from there; ``with_path``
+    is that script run from the checkout root with ``PYTHONPATH`` pointing at it.
+    """
+    scratch.mkdir(parents=True, exist_ok=True)
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    script = scratch / "conductor.py"
+    script.write_text("import evals._harness.dispatch\nprint('imported')\n", encoding="utf-8")
+
+    inline = subprocess.run(
+        [str(python), "-c", "import evals._harness.dispatch; print('imported')"],
+        cwd=_REPO_ROOT, env=environment, capture_output=True, text=True,
+    )
+    outside = subprocess.run(
+        [str(python), str(script)], cwd=scratch, env=environment, capture_output=True, text=True
+    )
+    with_path = subprocess.run(
+        [str(python), str(script)], cwd=_REPO_ROOT,
+        env={**environment, "PYTHONPATH": str(_REPO_ROOT)}, capture_output=True, text=True,
+    )
+    return _RunModes(inline, outside, with_path)
+
+
+def _stale_editable_install(
+    python: Path, pyproject: Path = _REPO_ROOT / "pyproject.toml"
+) -> str | None:
+    """Why *python* cannot judge the "outside the checkout" claim, or ``None``.
+
+    ``pyproject.toml`` declares ``[tool.uv] package = false``: the repo is
+    served in place, never installed, so a ``the-workshop`` distribution in
+    the interpreter is an editable install from before that line, which uv no
+    longer manages or removes. Its ``.pth`` puts the checkout on ``sys.path``
+    for every cwd, so a script saved outside the checkout imports ``evals``
+    for a reason the skill text has nothing to do with. Neither interpreter
+    flag is the fix: ``-I`` still processes a venv's ``.pth`` files (checked
+    on CPython 3.13), and ``-S`` drops site-packages entirely, so the probe
+    could no longer notice the repo becoming a real package either. Should
+    the repo become one, an installed copy is intended and the claim is
+    simply judged.
+    """
+    uv_settings = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("uv", {})
+    if uv_settings.get("package", True):
+        return None
+    probe = subprocess.run([str(python), "-c", _STALE_INSTALL_PROBE], capture_output=True, text=True)
+    location = probe.stdout.strip()
+    if probe.returncode != 0 or not location:
+        return None
+    return (
+        f"{python} has the-workshop installed at {location} although pyproject.toml "
+        f"declares [tool.uv] package = false: that stale editable install puts the checkout "
+        f"on sys.path for every cwd, so a script outside the checkout imports evals whatever "
+        f"the skill says. Run `{_STALE_INSTALL_FIX}` in that environment and re-run."
+    )
+
+
+def _check_conductor_run_modes(python: Path, scratch: Path) -> None:
+    """Skip when *python* cannot judge the claim; else assert the three run modes behave as the skill says."""
+    reason = _stale_editable_install(python)
+    if reason is not None:
+        pytest.skip(reason)
+    modes = _conductor_run_modes(python, scratch)
+    assert modes.inline.returncode == 0 and "imported" in modes.inline.stdout
+    assert modes.outside.returncode != 0 and "No module named 'evals'" in modes.outside.stderr
+    assert modes.with_path.returncode == 0 and "imported" in modes.with_path.stdout
+
+
+def _scratch_interpreter(env_dir: Path) -> Path:
+    """A fresh venv at *env_dir* without pip; returns its interpreter."""
+    venv.create(env_dir, with_pip=False, symlinks=True)
+    return env_dir / "bin" / "python"
+
+
+def _plant_stale_editable_install(python: Path) -> Path:
+    """Recreate the 2026-10-14 artefact in *python*'s site-packages; returns that directory."""
+    purelib = subprocess.run(
+        [str(python), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+        capture_output=True, text=True, check=True,
+    )
+    site_packages = Path(purelib.stdout.strip())
+    (site_packages / "_editable_impl_the_workshop.pth").write_text(f"{_REPO_ROOT}\n", encoding="utf-8")
+    dist_info = site_packages / "the_workshop-0.1.0.dist-info"
+    dist_info.mkdir()
+    (dist_info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: the-workshop\nVersion: 0.1.0\n", encoding="utf-8"
+    )
+    return site_packages
+
+
 def test_the_skill_says_how_to_run_a_conductor_script_and_that_it_is_true(tmp_path):
     text = _normalize(_skill_text())
     assert re.search(r"`python -c` or `python -m`, or with `PYTHONPATH=\.`, from the checkout root", text)
     assert "No module named 'evals'" in text
+    _check_conductor_run_modes(Path(sys.executable), tmp_path)
 
-    import os
-    import subprocess
-    import sys
 
-    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
-    script = tmp_path / "conductor.py"
-    script.write_text("import evals._harness.dispatch\nprint('imported')\n", encoding="utf-8")
+def test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text(tmp_path):
+    """The checkout root on ``sys.path`` for every cwd is not the skill's fault.
 
-    inline = subprocess.run(
-        [sys.executable, "-c", "import evals._harness.dispatch; print('imported')"],
-        cwd=_REPO_ROOT, env=environment, capture_output=True, text=True,
-    )
-    outside = subprocess.run(
-        [sys.executable, str(script)], cwd=tmp_path, env=environment, capture_output=True, text=True
-    )
-    with_path = subprocess.run(
-        [sys.executable, str(script)], cwd=_REPO_ROOT,
-        env={**environment, "PYTHONPATH": str(_REPO_ROOT)}, capture_output=True, text=True,
-    )
+    On 2026-10-14 the main checkout's ``.venv`` still carried
+    ``_editable_impl_the_workshop.pth`` and ``the_workshop-0.1.0.dist-info``
+    from an editable install older than ``[tool.uv] package = false``; uv no
+    longer manages that install, so nothing removed it. The ``.pth`` put the
+    checkout on ``sys.path`` for every interpreter in the venv, the "outside
+    the checkout" probe imported ``evals``, and the test above blamed the skill
+    text. The check must name the install and its fix instead.
+    """
+    python = _scratch_interpreter(tmp_path / "venv")
+    _check_conductor_run_modes(python, tmp_path / "clean")
 
-    assert inline.returncode == 0 and "imported" in inline.stdout
-    assert outside.returncode != 0 and "No module named 'evals'" in outside.stderr
-    assert with_path.returncode == 0 and "imported" in with_path.stdout
+    site_packages = _plant_stale_editable_install(python)
+    assert _conductor_run_modes(python, tmp_path / "stale").outside.returncode == 0
+    with pytest.raises(pytest.skip.Exception) as skipped:
+        _check_conductor_run_modes(python, tmp_path / "stale")
+    reason = str(skipped.value)
+    assert str(site_packages) in reason
+    assert "uv pip uninstall the-workshop" in reason
+
+
+def test_an_install_the_repo_intends_is_judged_not_excused(tmp_path):
+    """Only an install the repo disowns earns the skip.
+
+    Were ``pyproject.toml`` to stop declaring ``[tool.uv] package = false``,
+    uv would install the project on purpose, and a script outside the
+    checkout importing ``evals`` would make the skill's claim false. That
+    must fail the run-mode test, not skip it, or the guard turns vacuous the
+    day the repo becomes a package.
+    """
+    python = _scratch_interpreter(tmp_path / "venv")
+    _plant_stale_editable_install(python)
+    packaged = tmp_path / "pyproject.toml"
+    packaged.write_text('[project]\nname = "the-workshop"\n\n[tool.uv]\npackage = true\n', encoding="utf-8")
+
+    assert _stale_editable_install(python, pyproject=packaged) is None
+    assert _stale_editable_install(python) is not None
