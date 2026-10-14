@@ -109,11 +109,11 @@
       "replace": "if rename.old not in seen:"
     },
     {
-      "label": "a removed line with no partner is compared against nothing and chased",
+      "label": "a removed line with no partner is paired with the last added line and chased",
       "file": "../rename_detector.py",
       "oracle": "real",
-      "find": "    for old_line, new_line in zip(removed, added):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n        if not new_tokens:\n            continue\n",
-      "replace": "    for old_line, new_line in zip(removed, added + [\"\"] * len(removed)):\n        old_tokens = _tokens(old_line)\n        new_tokens = _tokens(new_line)\n"
+      "find": "    for old_line, new_line in zip(removed, added):\n",
+      "replace": "    for old_line, new_line in zip(removed, added + added[-1:] * len(removed)):\n"
     },
     {
       "label": "qualified names are compared whole, so the bare schema is never chased",
