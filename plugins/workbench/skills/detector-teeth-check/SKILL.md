@@ -72,6 +72,11 @@ rots all of them at once, silently, until someone re-runs the matrix and
 rebuilds the table by hand. Run it wherever the repo already runs something
 fast, and the spec breaks while its author still has the context.
 
+`--recover` also runs no suite: it undoes a mutant a
+SIGKILLed run left in the spec's targets (see **Safety**) and exits 0, or 2 if
+a target is held by a live run or was edited since. A normal run does the same
+before it starts.
+
 Re-running the mutants after a genuine restructure is **not** waste: the old
 mutants described defects in code that no longer exists, so those verdicts
 really did expire. The waste is re-deriving the table from a shell history,
@@ -377,6 +382,32 @@ comes back byte-identical. The only files it
 deletes are `__pycache__` entries for the modules it mutates: regenerable
 bytecode, never source. Commit before running
 anyway: `git status` is then an independent check that everything was restored.
+
+What the restore survives: an exception, Ctrl-C, SIGTERM and SIGHUP (the CLI
+turns the last two into an exception, so a plain `kill <pid>` of the runner
+stops it cleanly, exit `128+signal`). The test command runs in its own process
+group, which dies with the run. **Stop a run with `kill <pid>` of the runner,
+never `pkill` on the children of a loop around it**: the loop starts the next
+spec on the file a killed child left half-run.
+
+What it cannot survive is SIGKILL or power loss, so it keeps a journal. Under
+the state directory (`~/.workshop/detector-teeth-check/`, or
+`$TEETH_CHECK_STATE_DIR`) each mutation target has an OS lock file that records
+the original bytes and the mutant's hash before the mutant is written.
+
+- **One run per target.** A second run on a file another live run holds
+  refuses before its baseline, mutating nothing (exit 2), naming the holder's
+  pid. The OS drops the lock if the holder dies, so a stale one cannot jam you.
+  `--check-anchors` writes nothing and takes no lock.
+- **A killed run is repaired by the next run on that target**, or by
+  `--recover spec.json`, which touches no baseline or test command and prints
+  `<path>: clean` or `recovered` per target. The original is written back only
+  when the file still holds exactly the mutant that run wrote. If it was edited
+  since, nothing is written: the original is saved under `recovered/` in the
+  state directory and the run refuses (exit 2).
+- **A restore never overwrites a concurrent edit.** If the file is not the
+  mutant this run wrote when it comes time to restore, the original is saved
+  to `recovered/` instead, the file is left as found, and the run refuses.
 
 ## Related
 
