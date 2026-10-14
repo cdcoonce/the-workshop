@@ -1,0 +1,58 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_vault_session_start_breadcrumb.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_vault_session_start_breadcrumb.py"
+  ],
+  "mutants": [
+    {
+      "label": "worktree root never added: only CLAUDE_PROJECT_DIR gets the breadcrumb (the original defect)",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "            roots.append(session_root)\n",
+      "replace": "            roots.append(project_root)\n"
+    },
+    {
+      "label": "cwd taken as the vault root without walking up to .vault/vault.json",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "        session_root = _vault_root_containing(Path(cwd))\n",
+      "replace": "        session_root = Path(cwd)\n"
+    },
+    {
+      "label": "main checkout breadcrumb dropped: cwd's vault replaces CLAUDE_PROJECT_DIR instead of joining it",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "    roots = [project_root]\n",
+      "replace": "    roots = []\n"
+    },
+    {
+      "label": "[control] skip the dedupe against the project root",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "When cwd's vault is the project dir itself, the only effect is a second write of byte-identical content to the same two files, which leaves identical state on every path the suite reaches; the dedupe is an economy, not a behaviour. It is not inert for a reader racing the second write, which no test drives.",
+      "find": "        if session_root is not None and session_root.resolve() != project_root.resolve():\n",
+      "replace": "        if session_root is not None:\n"
+    }
+  ]
+}
