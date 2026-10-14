@@ -207,7 +207,7 @@
       "label": "#894: session field dropped [predicted: test_successive_sessions_with_unchanged_root_and_version_are_distinguishable]",
       "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
       "oracle": "real",
-      "find": "        \"session\": _session_marker(),\n",
+      "find": "        \"session\": _session_marker(payload),\n",
       "replace": ""
     },
     {
