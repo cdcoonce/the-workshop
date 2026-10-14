@@ -47,8 +47,8 @@ the next session continuity.
 
 Correct it mid-conversation ("push harder", "shorter", "drop the opening
 questions") and it applies the change immediately and logs it. Say **"retune"**
-(or let the session wrap-up do it) and it proposes a concrete edit to your
-`local/tuning.md`, applying only what you approve, with a changelog line.
+(or let the end-of-exchange review do it) and it proposes a concrete edit to
+your `local/tuning.md`, applying only what you approve, with a changelog line.
 Every dial in its calibration table — pushback level, length, critique mode,
 all of it — is yours to move this way. If a change would help every user of
 the skill — not just you — it will suggest promoting it upstream; that's

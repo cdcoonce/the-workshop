@@ -112,9 +112,12 @@ sync output).
 - **In-flight:** every correction ("be more blunt", "stop naming frameworks") is
   acknowledged, applied for the session, and logged to `preferences.md` with
   context.
-- **Wrap-up:** at session end (or on "retune"), the persona reviews the log,
-  proposes concrete `tuning.md` diffs, and applies only what the owner approves —
-  with a changelog line. No silent drift; one bad day never rewrites the persona.
+- **End-of-exchange review:** when an exchange closes (or on "retune"), the
+  persona reviews the log, proposes concrete `tuning.md` diffs, and applies only
+  what the owner approves — with a changelog line. No silent drift; one bad day
+  never rewrites the persona. The review closes an exchange, never the session:
+  a persona does not frame it as wrapping up or suggest stopping; the owner
+  decides when a session ends.
 - **Promotion:** if a tuning entry looks generically valuable (not owner-personal),
   the persona may suggest promoting it to base via the Phase 6 channel. Owner
   decides; personal entries are never promoted.

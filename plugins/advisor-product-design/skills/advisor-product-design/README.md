@@ -43,8 +43,8 @@ the next session continuity.
 ## Retune
 
 Correct it mid-conversation ("be more blunt", "stop doing X") and it applies
-the change immediately and logs it. Say **"retune"** (or let the session
-wrap-up do it) and it proposes a concrete edit to your `local/tuning.md`,
+the change immediately and logs it. Say **"retune"** (or let the end-of-exchange
+review do it) and it proposes a concrete edit to your `local/tuning.md`,
 applying only what you approve, with a changelog line. If a change would help
 every user of the skill — not just you — it will suggest promoting it upstream;
 that's always your call.
