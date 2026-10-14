@@ -92,7 +92,12 @@ def test_no_baseline_snapshot_fails_open(tmp_path: Path) -> None:
     assert result.stdout == ""
 
 
-def test_claim_with_no_git_change_is_blocked(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "message",
+    ["I've fixed the bug and all tests pass.", "I\u2019ve fixed the bug in parser.py."],
+    ids=["straight-apostrophe", "typographic-apostrophe"],
+)
+def test_claim_with_no_git_change_is_blocked(tmp_path: Path, message: str) -> None:
     _init_git_repo(tmp_path)
     (tmp_path / "README.md").write_text("hello\n")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
@@ -105,7 +110,7 @@ def test_claim_with_no_git_change_is_blocked(tmp_path: Path) -> None:
         {
             "cwd": str(tmp_path),
             "agent_id": "agent-1",
-            "last_assistant_message": "I've fixed the bug and all tests pass.",
+            "last_assistant_message": message,
         },
     )
 
@@ -421,7 +426,16 @@ def test_non_string_final_message_fails_open(tmp_path: Path, message: object) ->
 
 @pytest.mark.parametrize(
     "message",
-    ["Task not done.", "Nothing is done yet.", "Nothing is done.", "The migration is not done"],
+    [
+        "Task not done.",
+        "Nothing is done yet.",
+        "Nothing is done.",
+        "The migration is not done",
+        "Not all done.",
+        "Task not all done.",
+        "It isn't all done.",
+        "The tests aren\u2019t all done.",
+    ],
 )
 def test_negated_done_ending_is_not_a_completion_claim(tmp_path: Path, message: str) -> None:
     _init_git_repo(tmp_path)
@@ -437,7 +451,17 @@ def test_negated_done_ending_is_not_a_completion_claim(tmp_path: Path, message: 
     assert result.stdout == ""
 
 
-@pytest.mark.parametrize("message", ["All done.", "I'm done.", "Reviewed everything. I am done"])
+@pytest.mark.parametrize(
+    "message",
+    [
+        "All done.",
+        "I'm done.",
+        "Reviewed everything. I am done",
+        "I\u2019m done.",
+        "It\u2019s done.",
+        "Committed and pushed. We're all done.",
+    ],
+)
 def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, message: str) -> None:
     _init_git_repo(tmp_path)
     _commit_readme(tmp_path)
