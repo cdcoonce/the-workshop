@@ -2609,3 +2609,904 @@ def test_a_journal_with_a_non_string_original_is_refused_not_crashed(
     )
     assert main(["--recover", str(spec)]) == 2
     assert target.read_text() == MUTANT_TEXT
+
+
+# ---------------------------------------------------------------------------
+# Budgeted, resumable runs (--budget / --report)
+#
+# A 168-row spec at ~40 s a row takes hours and a worker may run for ten
+# minutes. Hand-cut slice specs print a false never-killed list and mix
+# verdicts from different trees. `--budget SECONDS` runs pending rows until the
+# next would overrun and exits 3; a ledger keyed by the working-tree
+# fingerprint (plus the settings) holds each row's verdict, so the tally comes
+# from one tree and is only ever printed when every row is recorded.
+# ---------------------------------------------------------------------------
+
+import re  # noqa: E402
+
+_FAKE_SUITE = '''\
+import pathlib
+import sys
+import time
+
+args = sys.argv[1:]
+
+
+def opt(name):
+    return args[args.index(name) + 1] if name in args else None
+
+
+if "--collect" in args:
+    print("t.py::test_cap\\nt.py::test_guard\\nt.py::test_extra")
+    sys.exit(0)
+if opt("--marker"):
+    pathlib.Path(opt("--marker")).write_text("ran")
+if opt("--log"):
+    with open(opt("--log"), "a") as log:
+        log.write("run\\n")
+src = pathlib.Path("mod.py").read_text()
+mutant = "LIMIT = 25" not in src or "GUARD = True" not in src
+if mutant and "--sleep" in args:
+    time.sleep(1.0)
+if "GUARD = True" not in src and opt("--touch-on-guard"):
+    pathlib.Path(opt("--touch-on-guard")).write_text("x")
+if mutant and opt("--touch-many"):
+    for i in range(int(opt("--touch-many"))):
+        pathlib.Path(f"side_{i:02d}.txt").write_text("x")
+failed = []
+if "LIMIT = 25" not in src:
+    failed.append("t.py::test_cap")
+if "GUARD = True" not in src:
+    failed.append("t.py::test_guard")
+for name in failed:
+    print("FAILED", name)
+sys.exit(1 if failed else 0)
+'''
+
+_LEDGER_ROWS = {
+    "cap": ("LIMIT = 25", "LIMIT = 999"),
+    "guard": ("GUARD = True", "GUARD = False"),
+    "survivor": ("OTHER = 1", "OTHER = 2"),
+}
+
+
+def _ledger_row(name: str, *, replace: str | None = None) -> dict:
+    find, default_replace = _LEDGER_ROWS[name]
+    return {
+        "label": name,
+        "file": "mod.py",
+        "oracle": "real",
+        "find": find,
+        "replace": default_replace if replace is None else replace,
+    }
+
+
+def _write_ledger_spec(
+    repo: Path, names: tuple[str, ...] = ("cap", "guard"), *flags: str, **over: object
+) -> Path:
+    spec = {
+        "test_command": [sys.executable, "fake_suite.py", *flags],
+        "collect_command": [sys.executable, "fake_suite.py", "--collect"],
+        "mutants": [_ledger_row(n) for n in names],
+        **over,
+    }
+    path = repo / "spec.json"
+    path.write_text(json.dumps(spec))
+    return path
+
+
+@pytest.fixture
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A committed git repo under tmp_path, cwd inside it, nothing inherited."""
+    for var in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE"):
+        monkeypatch.delenv(var, raising=False)
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "mod.py").write_text("LIMIT = 25\nGUARD = True\nOTHER = 1\n")
+    (root / "fake_suite.py").write_text(_FAKE_SUITE)
+    (root / ".gitignore").write_text("__pycache__/\n")
+    _write_ledger_spec(root)
+    _git(root, "init", "-q")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "init")
+    monkeypatch.chdir(root)
+    return root
+
+
+def _cli(
+    capsys: pytest.CaptureFixture[str], *args: object
+) -> tuple[int, str, str]:
+    rc = main([str(a) for a in args])
+    captured = capsys.readouterr()
+    return rc, captured.out, captured.err
+
+
+def _report_json(capsys: pytest.CaptureFixture[str], spec: Path) -> dict:
+    rc, out, _ = _cli(capsys, "--report", "--json", spec)
+    return json.loads(out)
+
+
+def _ledger_lines(path: str | Path) -> list[dict]:
+    return [json.loads(line) for line in Path(path).read_text().splitlines()]
+
+
+def test_budget_runs_exactly_one_row_per_invocation_until_complete(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A tiny budget still runs one row, and each re-run picks up the next."""
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"), "--sleep")
+
+    rc, out, _ = _cli(capsys, "--budget", 0.001, spec)
+    assert rc == 3
+    assert out.splitlines()[0].startswith("INCOMPLETE: 1 of 3 rows recorded for tree ")
+    assert out.splitlines()[0].endswith(" — re-run the same command; not the tally")
+
+    rc, out, _ = _cli(capsys, "--budget", 0.001, spec)
+    assert rc == 3
+    assert out.splitlines()[0].startswith("INCOMPLETE: 2 of 3 rows recorded for tree ")
+
+    rc, out, _ = _cli(capsys, "--budget", 0.001, spec)
+    first = out.splitlines()[0]
+    assert re.fullmatch(r"LEDGER: 3 of 3 rows for tree [0-9a-f]{12} \(.+\.jsonl\)", first)
+    assert rc == 1  # the survivor is a finding, as in a single run
+
+
+def test_an_incomplete_ledger_exits_3_whatever_the_recorded_rows_say(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--sleep")
+
+    rc, out, _ = _cli(capsys, "--budget", 0.001, spec)
+
+    assert rc == 3  # the one recorded row was a clean kill
+    assert "never-killed tests: not computed (incomplete ledger)" in out
+    assert "cap" in out and "guard" not in out.split("\n", 1)[1]
+
+
+def test_a_complete_clean_ledger_exits_0_and_a_rerun_runs_nothing(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    marker = tmp_path / "marker"
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--marker", str(marker))
+
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+    assert rc == 0
+    assert out.splitlines()[0].startswith("LEDGER: 2 of 2 rows for tree ")
+    assert marker.exists()
+
+    marker.unlink()
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+    assert rc == 0
+    assert out.splitlines()[0].startswith("LEDGER: 2 of 2 rows for tree ")
+    assert not marker.exists(), "nothing pending: no baseline, no collect, no row"
+
+
+def test_json_carries_the_ledger_block_and_a_null_never_killed_when_incomplete(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--sleep")
+
+    rc, out, _ = _cli(capsys, "--json", "--budget", 0.001, spec)
+    payload = json.loads(out)
+    assert rc == 3
+    assert payload["never_killed"] is None
+    assert [m["label"] for m in payload["mutants"]] == ["cap"]
+    assert payload["ledger"]["recorded"] == 1 and payload["ledger"]["of"] == 2
+    assert re.fullmatch(r"[0-9a-f]{40}", payload["ledger"]["tree"])
+
+    rc, out, _ = _cli(capsys, "--json", "--budget", 0.001, spec)
+    payload = json.loads(out)
+    assert rc == 0
+    assert payload["never_killed"] == ["t.py::test_extra"]
+    assert payload["ledger"]["recorded"] == 2 and payload["ledger"]["of"] == 2
+
+
+def test_never_killed_after_several_invocations_equals_a_single_full_run(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"), "--sleep")
+    for _ in range(3):
+        rc, out, _ = _cli(capsys, "--json", "--budget", 0.001, spec)
+    ledgered = json.loads(out)
+
+    rc, out, _ = _cli(capsys, "--json", spec)  # no ledger: one whole run
+    single = json.loads(out)
+
+    assert single["never_killed"] == ["t.py::test_extra"]
+    assert ledgered["never_killed"] == single["never_killed"]
+    assert [m["status"] for m in ledgered["mutants"]] == [
+        m["status"] for m in single["mutants"]
+    ]
+
+
+def test_the_ledger_lives_under_the_state_dir_keyed_by_tree_and_settings(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    payload = _report_json(capsys, spec)
+    path = Path(payload["ledger"]["path"])
+
+    settings = hashlib.sha256(
+        json.dumps(
+            {
+                "schema": 1,
+                "test_command": [sys.executable, "fake_suite.py"],
+                "collect_command": [sys.executable, "fake_suite.py", "--collect"],
+                "runner": "pytest",
+                "cwd": ".",
+                "spec": "spec.json",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    assert path.parent == _state() / "ledgers"
+    assert path.name == f"{payload['ledger']['tree']}-{settings[:16]}.jsonl"
+
+
+def test_an_untracked_file_change_starts_a_fresh_ledger(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    before = _report_json(capsys, spec)
+    assert before["ledger"]["recorded"] == 2
+
+    (repo / "notes.txt").write_text("new, untracked\n")
+    after = _report_json(capsys, spec)
+
+    assert after["ledger"]["recorded"] == 0
+    assert after["ledger"]["tree"] != before["ledger"]["tree"]
+    assert after["ledger"]["path"] != before["ledger"]["path"]
+
+
+def test_an_ignored_file_does_not_change_the_fingerprint(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    before = _report_json(capsys, spec)
+
+    (repo / "__pycache__").mkdir()
+    (repo / "__pycache__" / "x.pyc").write_bytes(b"junk")
+
+    assert _report_json(capsys, spec)["ledger"]["tree"] == before["ledger"]["tree"]
+
+
+def test_editing_one_spec_row_reruns_only_that_row(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    log = tmp_path / "runs.log"
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"), "--log", str(log))
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 1
+    assert len(log.read_text().splitlines()) == 1 + 3  # baseline + three rows
+
+    log.unlink()
+    text = json.loads(spec.read_text())
+    text["mutants"][1] = _ledger_row("guard", replace="GUARD = None")
+    spec.write_text(json.dumps(text))
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+
+    assert out.splitlines()[0].startswith("LEDGER: 3 of 3 rows")
+    assert len(log.read_text().splitlines()) == 1 + 1  # baseline + the edited row
+
+
+def test_identical_rows_are_keyed_apart_by_their_position(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    log = tmp_path / "runs.log"
+    spec = _write_ledger_spec(repo, ("cap", "cap"), "--log", str(log))
+
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+
+    assert out.splitlines()[0].startswith("LEDGER: 2 of 2 rows")
+    assert len(log.read_text().splitlines()) == 1 + 2
+
+
+def test_a_changed_test_command_starts_a_fresh_ledger(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    spec = _write_ledger_spec(repo)
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    before = _report_json(capsys, spec)
+
+    _write_ledger_spec(repo, ("cap", "guard"), "--log", str(tmp_path / "other.log"))
+    after = _report_json(capsys, spec)
+
+    assert before["ledger"]["recorded"] == 2
+    assert after["ledger"]["recorded"] == 0
+    assert after["ledger"]["path"] != before["ledger"]["path"]
+
+
+def test_committing_does_not_void_a_ledger(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    (repo / "new.txt").write_text("untracked until committed\n")
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    before = _report_json(capsys, spec)
+
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "commit the new file")
+    after = _report_json(capsys, spec)
+
+    assert after["ledger"] == before["ledger"]
+    assert after["ledger"]["recorded"] == 2
+
+
+def test_a_separate_worktree_at_the_same_content_shares_the_ledger(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch
+) -> None:
+    spec = _write_ledger_spec(repo)  # identical to the committed spec
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    before = _report_json(capsys, spec)
+
+    other = tmp_path / "other-worktree"
+    _git(repo, "worktree", "add", "-q", "--detach", str(other))
+    monkeypatch.chdir(other)
+    after = _report_json(capsys, other / "spec.json")
+
+    assert after["ledger"] == before["ledger"]
+
+
+def test_a_tree_edit_during_a_row_refuses_and_records_nothing_for_that_row(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(
+        repo, ("cap", "guard", "survivor"), "--touch-on-guard", "side.txt"
+    )
+    old = _report_json(capsys, spec)["ledger"]
+
+    rc, out, err = _cli(capsys, "--budget", 1000, spec)
+
+    assert rc == 2
+    assert err.startswith("refusing to continue: the tree changed during the run (was ")
+    assert "side.txt" in err
+    assert "1 rows stay recorded under " in err
+    assert "this row was not recorded" in err
+    lines = _ledger_lines(old["path"])
+    assert [(e["kind"], e.get("label")) for e in lines] == [
+        ("collect", None),
+        ("row", "cap"),
+    ]
+    assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"
+
+
+def test_an_interrupt_mid_row_records_nothing_for_that_row(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard"))
+    old = _report_json(capsys, spec)["ledger"]
+
+    def runner(cmd: list[str]) -> tuple[int, str]:
+        if "LIMIT = 25" not in (repo / "mod.py").read_text():
+            raise KeyboardInterrupt
+        return 0, ""
+
+    monkeypatch.setattr(tc, "_default_runner", runner)
+    rc, _, err = _cli(capsys, "--budget", 1000, spec)
+
+    assert rc == 130
+    assert "interrupted by SIGINT" in err
+    assert [e["kind"] for e in _ledger_lines(old["path"])] == ["collect"]
+    assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"
+
+
+def test_report_runs_no_command_and_reads_zero_rows_on_a_fresh_tree(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    marker = tmp_path / "marker"
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--marker", str(marker))
+
+    rc, out, _ = _cli(capsys, "--report", spec)
+
+    assert rc == 3
+    assert out.splitlines()[0].startswith("INCOMPLETE: 0 of 2 rows recorded for tree ")
+    assert not marker.exists()
+    assert not (_state() / "ledgers").exists() or not list(
+        (_state() / "ledgers").glob("*.jsonl")
+    )
+
+
+def test_report_takes_no_lock(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    held = tc._TargetLock((repo / "mod.py").resolve())
+    held.acquire()
+    try:
+        rc, out, _ = _cli(capsys, "--report", spec)
+    finally:
+        held.release()
+
+    assert rc == 3
+    assert out.startswith("INCOMPLETE: 0 of 2")
+
+
+def test_report_of_a_complete_ledger_is_the_tally(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"))
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 1
+
+    rc, out, _ = _cli(capsys, "--report", spec)
+
+    assert rc == 1
+    assert out.splitlines()[0].startswith("LEDGER: 3 of 3 rows for tree ")
+    assert "SURVIVORS" in out and "t.py::test_extra" in out
+
+
+def test_a_second_run_on_a_held_ledger_refuses_before_running_anything(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    marker = tmp_path / "marker"
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--marker", str(marker))
+    path = Path(_report_json(capsys, spec)["ledger"]["path"])
+    held = tc._LedgerLock(path)
+    held.acquire()
+    try:
+        rc, out, err = _cli(capsys, "--budget", 1000, spec)
+    finally:
+        held.release()
+
+    assert rc == 2
+    assert f"another teeth_check run holds ledger {path}" in err
+    assert not marker.exists()
+    assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"
+
+
+def test_fingerprinting_never_writes_the_real_index(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    (repo / "untracked.txt").write_text("a plain `git add -A` would stage this\n")
+    index = repo / ".git" / "index"
+    before = index.read_bytes()
+
+    _cli(capsys, "--report", spec)
+    _cli(capsys, "--budget", 1000, spec)
+
+    assert index.read_bytes() == before
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"], cwd=repo, capture_output=True, text=True
+    ).stdout
+    assert staged == ""
+
+
+def test_a_truncated_last_ledger_line_is_ignored_and_the_next_row_still_lands(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard"))
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    path = Path(_report_json(capsys, spec)["ledger"]["path"])
+    text = path.read_text()
+    last = text.rstrip("\n").rsplit("\n", 1)[1]
+    path.write_text(text[: text.rindex(last)] + last[: len(last) // 2])  # crash mid-write
+
+    assert _report_json(capsys, spec)["ledger"]["recorded"] == 1
+
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+    assert rc == 0
+    assert out.splitlines()[0].startswith("LEDGER: 2 of 2 rows")
+    # Re-read the file: the row just appended must not have been glued onto the
+    # partial line, or it is lost on disk while the run above still reports it.
+    assert _report_json(capsys, spec)["ledger"]["recorded"] == 2
+
+
+def test_unknown_kinds_and_rows_no_longer_in_the_spec_are_ignored(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    path = Path(_report_json(capsys, spec)["ledger"]["path"])
+    with path.open("a") as handle:
+        handle.write(json.dumps({"kind": "from-the-future", "x": 1}) + "\n")
+        handle.write(
+            json.dumps(
+                {"kind": "row", "key": "0" * 64 + ":0", "label": "gone", "result": {}, "seconds": 1}
+            )
+            + "\n"
+        )
+
+    payload = _report_json(capsys, spec)
+
+    assert payload["ledger"]["recorded"] == 2
+    assert [m["label"] for m in payload["mutants"]] == ["cap", "guard"]
+
+
+def test_ledger_lines_are_collect_then_rows_with_seconds(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+    lines = _ledger_lines(_report_json(capsys, spec)["ledger"]["path"])
+
+    assert lines[0] == {
+        "kind": "collect",
+        "collected": ["t.py::test_cap", "t.py::test_guard", "t.py::test_extra"],
+    }
+    assert [e["kind"] for e in lines[1:]] == ["row", "row"]
+    assert all(re.fullmatch(r"[0-9a-f]{64}:0", e["key"]) for e in lines[1:])
+    assert lines[1]["result"]["status"] == "killed"
+    assert isinstance(lines[1]["seconds"], float)
+
+
+@pytest.mark.parametrize("value", ["0", "-3", "soon", "nan"])
+def test_budget_must_be_a_positive_number(
+    repo: Path, capsys: pytest.CaptureFixture[str], value: str
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--budget", value, str(repo / "spec.json")])
+
+    assert exc.value.code == 2
+    assert "greater than 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "other", [["--report"], ["--check-anchors"], ["--recover"], ["--changed-since", "HEAD"]]
+)
+def test_budget_is_exclusive_with_the_other_modes(
+    repo: Path, capsys: pytest.CaptureFixture[str], other: list[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--budget", "5", *other, str(repo / "spec.json")])
+
+    assert exc.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+
+
+def test_report_is_exclusive_with_the_other_modes(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--report", "--check-anchors", str(repo / "spec.json")])
+
+    assert exc.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("mode", ["--budget", "--report"])
+def test_ledger_mode_refuses_a_spec_outside_a_git_worktree(
+    target: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for var in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE"):
+        monkeypatch.delenv(var, raising=False)
+    spec = _cli_spec(tmp_path, target, ["pytest"])
+    monkeypatch.chdir(tmp_path)
+    argv = [mode, "5", str(spec)] if mode == "--budget" else [mode, str(spec)]
+
+    rc = main(argv)
+
+    assert rc == 2
+    assert "refusing to run:" in capsys.readouterr().err
+    assert target.read_text() == ORIGINAL
+
+
+def test_ledger_mode_refuses_a_target_outside_the_worktree(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    outside = tmp_path / "outside.py"
+    outside.write_text("LIMIT = 25\n")
+    spec = _write_ledger_spec(repo)
+    data = json.loads(spec.read_text())
+    data["mutants"][0]["file"] = "../outside.py"
+    spec.write_text(json.dumps(data))
+
+    for argv in (["--report", str(spec)], ["--budget", "5", str(spec)]):
+        rc = main(argv)
+        assert rc == 2
+        assert "refusing to run:" in capsys.readouterr().err
+    assert outside.read_text() == "LIMIT = 25\n"
+
+
+def test_ledger_mode_refuses_a_working_directory_outside_the_worktree(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _write_ledger_spec(repo)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    for argv in (["--report", str(spec)], ["--budget", "5", str(spec)]):
+        assert main(argv) == 2
+        assert "refusing to run:" in capsys.readouterr().err
+
+
+def test_a_run_without_ledger_flags_does_not_touch_the_ledger_dir(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo)
+
+    rc, out, _ = _cli(capsys, spec)
+
+    assert rc == 0
+    assert out.startswith("mutant ")
+    assert not (_state() / "ledgers").exists()
+
+
+# ---------------------------------------------------------------------------
+# Review fixes for the ledger: the budget's clock, the estimate, the key of an
+# identical row, one collect per ledger, the changed-paths list, fsync, and the
+# two git environment hardenings.
+# ---------------------------------------------------------------------------
+
+
+class _FakeClock:
+    """A ``time`` stand-in whose ``monotonic`` moves only when a command ends."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(time, name)
+
+
+def _drive_clock(
+    monkeypatch: pytest.MonkeyPatch, repo: Path, cost: object
+) -> _FakeClock:
+    """Make every test-command call take ``cost(mod_py_text)`` fake seconds.
+
+    The runner is wrapped, not replaced: the real fake suite still runs, and the
+    mutant is still on disk when ``cost`` reads ``mod.py`` after the call.
+    """
+    clock = _FakeClock()
+    monkeypatch.setattr(tc, "time", clock)
+    real = tc._default_runner
+
+    def run(cmd: list[str]) -> tuple[int, str]:
+        result = real(cmd)
+        clock.now += cost((repo / "mod.py").read_text())  # type: ignore[operator]
+        return result
+
+    monkeypatch.setattr(tc, "_default_runner", run)
+    return clock
+
+
+_PRISTINE = "LIMIT = 25\nGUARD = True\nOTHER = 1\n"
+
+
+def _four_rows(repo: Path) -> Path:
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"))
+    doc = json.loads(spec.read_text())
+    doc["mutants"].append(_ledger_row("survivor", replace="OTHER = 3"))
+    spec.write_text(json.dumps(doc))
+    return spec
+
+
+@pytest.mark.parametrize(
+    ("rows", "cost", "budget", "recorded"),
+    [
+        pytest.param(
+            4,
+            lambda src: 1 if src == _PRISTINE else 10,
+            25,
+            2,
+            id="uniform-rows",
+        ),
+        pytest.param(
+            3,
+            lambda src: 30 if "LIMIT = 999" in src else 1,
+            35,
+            1,
+            id="one-slow-row",
+        ),
+    ],
+)
+def test_budget_counts_elapsed_time_across_rows(
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    rows: int,
+    cost: object,
+    budget: int,
+    recorded: int,
+) -> None:
+    """The next row waits when the time already spent plus the slowest row seen overruns."""
+    spec = _four_rows(repo) if rows == 4 else _write_ledger_spec(
+        repo, ("cap", "guard", "survivor")
+    )
+    _drive_clock(monkeypatch, repo, cost)
+
+    rc, out, _ = _cli(capsys, "--json", "--budget", budget, spec)
+
+    assert json.loads(out)["ledger"]["recorded"] == recorded
+    assert rc == 3
+
+
+def test_the_estimate_uses_the_slowest_recorded_row(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later invocation knows an earlier one's slow row, though its baseline is fast."""
+    spec = _write_ledger_spec(repo, ("cap", "guard", "survivor"))
+
+    def cost(src: str) -> int:
+        if "LIMIT = 999" in src:
+            return 30
+        if "GUARD = False" in src or "OTHER = 2" in src:
+            return 10
+        return 1
+
+    _drive_clock(monkeypatch, repo, cost)
+    assert _cli(capsys, "--budget", 0.001, spec)[0] == 3  # the 30 s row, alone
+
+    rc, out, _ = _cli(capsys, "--json", "--budget", 35, spec)
+
+    assert json.loads(out)["ledger"]["recorded"] == 2  # not 3: 11 s + 30 s > 35 s
+    assert rc == 3
+
+
+def test_identical_rows_each_run_when_the_budget_splits_them(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    log = tmp_path / "runs.log"
+    spec = _write_ledger_spec(repo, ("cap", "cap"), "--log", str(log))
+
+    assert _cli(capsys, "--budget", 0.001, spec)[0] == 3
+    rc, out, _ = _cli(capsys, "--budget", 0.001, spec)
+
+    assert rc == 0
+    assert out.splitlines()[0].startswith("LEDGER: 2 of 2 rows")
+    assert len(log.read_text().splitlines()) == 2 + 2  # a baseline and a row, twice
+
+
+def test_collect_runs_once_per_ledger(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    counter = tmp_path / "collects"
+    script = (
+        "import pathlib, sys\n"
+        "pathlib.Path(sys.argv[1]).open('a').write('c\\n')\n"
+        "print('t.py::test_cap')\n"
+    )
+    spec = _write_ledger_spec(
+        repo,
+        ("cap", "guard", "survivor"),
+        collect_command=[sys.executable, "-c", script, str(counter)],
+    )
+
+    for _ in range(3):
+        _cli(capsys, "--budget", 0.001, spec)
+
+    assert counter.read_text().splitlines() == ["c"]
+
+
+def _changed_paths(err: str) -> list[str]:
+    match = re.search(r"changed: ([^)]*)\)", err)
+    assert match, err
+    return match.group(1).split(", ")
+
+
+def test_tree_change_message_names_at_most_ten_paths_with_no_empty_entry(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--touch-many", "12")
+    rc, _, err = _cli(capsys, "--budget", 1000, spec)
+    assert rc == 2
+    assert _changed_paths(err) == [f"side_{i:02d}.txt" for i in range(10)]
+
+    for stale in repo.glob("side_*.txt"):
+        stale.unlink()
+    spec = _write_ledger_spec(repo, ("cap", "guard"), "--touch-many", "1")
+    rc, _, err = _cli(capsys, "--budget", 1000, spec)
+    assert rc == 2
+    assert _changed_paths(err) == ["side_00.txt"]
+    assert ", )" not in err
+
+
+def test_every_ledger_line_is_fsynced(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    synced: list[int] = []
+    real = os.fsync
+
+    def spy(fd: int) -> None:
+        synced.append(os.fstat(fd).st_ino)
+        real(fd)
+
+    monkeypatch.setattr(os, "fsync", spy)
+    spec = _write_ledger_spec(repo, ("cap", "guard"))
+
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 0
+
+    path = Path(_report_json(capsys, spec)["ledger"]["path"])
+    assert len(_ledger_lines(path)) == 3  # collect + two rows
+    assert synced.count(path.stat().st_ino) == 3
+
+
+def test_a_stray_git_index_file_in_the_environment_does_not_change_the_fingerprint(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _write_ledger_spec(repo)
+    (repo / "__pycache__").mkdir()
+    (repo / "__pycache__" / "x.pyc").write_bytes(b"ignored, yet staged in the decoy")
+    decoy = repo.parent / "decoy-index"
+    decoy.write_bytes((repo / ".git" / "index").read_bytes())
+    subprocess.run(  # the decoy, and only the decoy, tracks a file .gitignore hides
+        ["git", "add", "-f", "__pycache__/x.pyc"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env={**os.environ, "GIT_INDEX_FILE": str(decoy)},
+    )
+    unset = _report_json(capsys, spec)["ledger"]["tree"]
+    before = decoy.read_bytes()
+
+    monkeypatch.setenv("GIT_INDEX_FILE", str(decoy))
+    set_ = _report_json(capsys, spec)["ledger"]["tree"]
+
+    assert set_ == unset
+    assert decoy.read_bytes() == before
+
+
+def test_a_spec_named_with_glob_characters_is_still_excluded(
+    repo: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    log = tmp_path / "runs.log"
+    spec = repo / "spec*.json"  # as a pathspec it would also match spec.json
+    spec.write_text(
+        _write_ledger_spec(repo, ("cap", "guard", "survivor"), "--log", str(log)).read_text()
+    )
+    assert _cli(capsys, "--budget", 1000, spec)[0] == 1
+    log.unlink()
+
+    doc = json.loads(spec.read_text())
+    doc["mutants"][1] = _ledger_row("guard", replace="GUARD = None")
+    spec.write_text(json.dumps(doc))
+    rc, out, _ = _cli(capsys, "--budget", 1000, spec)
+
+    assert out.splitlines()[0].startswith("LEDGER: 3 of 3 rows")
+    assert len(log.read_text().splitlines()) == 1 + 1  # baseline + the edited row
+
+    # The glob in the spec's own name must not exclude its tracked sibling too.
+    sibling = repo / "spec.json"
+    sibling.write_text(sibling.read_text() + "\n")
+    assert _report_json(capsys, spec)["ledger"]["recorded"] == 0
+
+
+# --- the merge of 1197 into 1199: ledger mode meets the unusable state dir ---
+
+
+@pytest.mark.parametrize("mode", ["--budget", "--report"])
+@pytest.mark.parametrize("unusable", ["state-is-a-file", "ledgers-is-a-file"])
+def test_ledger_mode_on_an_unusable_state_dir_is_a_refusal(
+    repo: Path, tmp_path: Path, unusable: str, mode: str
+) -> None:
+    """The ledger, its ``ledgers/`` dir and its lock all live in the state dir.
+
+    ``state-is-a-file`` is stopped by the target lock, before any ledger code
+    runs. ``ledgers-is-a-file`` leaves the target lock usable, so only the
+    ledger's own lock and file can meet the problem.
+    """
+    state = tmp_path / "state"
+    if unusable == "state-is-a-file":
+        state.write_text("not a directory")
+        blocker = state
+    else:
+        state.mkdir()
+        blocker = state / "ledgers"
+        blocker.write_text("not a directory")
+    spec = _write_ledger_spec(repo)
+    flags = ["--budget", "60"] if mode == "--budget" else ["--report"]
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "teeth_check.py"), *flags, str(spec)],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+        env={**os.environ, "TEETH_CHECK_STATE_DIR": str(state)},
+        timeout=180,
+    )
+
+    output = result.stdout + result.stderr
+    assert "Traceback" not in output, output
+    assert result.returncode == 2, output
+    assert any(
+        line.startswith("refusing to run:") and str(state) in line
+        for line in output.splitlines()
+    ), output
+    assert blocker.read_text() == "not a directory"
+    assert (repo / "mod.py").read_text() == "LIMIT = 25\nGUARD = True\nOTHER = 1\n"

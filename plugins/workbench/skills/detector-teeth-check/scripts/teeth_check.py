@@ -52,6 +52,15 @@ or ``$TEETH_CHECK_STATE_DIR``): the next run on that target, or ``--recover``,
 puts the original back, but only if the file still holds the exact mutant the
 dead run wrote. A restore likewise never overwrites a file someone edited while
 the mutant was on disk; it saves the original beside the journal and refuses.
+
+A long spec runs in resumable slices with one honest tally: ``--budget SECONDS``
+runs pending rows into a ledger until the next would overrun, then exits 3
+(re-run the same command), and ``--report`` prints the ledger and runs nothing.
+The ledger is keyed by a fingerprint of the working tree (tracked plus
+untracked, non-ignored files, minus the spec) and the spec's settings, so
+verdicts from different trees never mix, and the never-killed list is computed
+only once every row is recorded. A hand-cut slice spec cannot do this: it prints
+a never-killed list that is false for the whole spec.
 """
 
 from __future__ import annotations
@@ -64,9 +73,11 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -812,12 +823,26 @@ def _score_mutants(
 ) -> Report:
     """Baseline, then score each mutant; the caller holds every target's lock."""
     runner_spec = RUNNERS[spec.runner]
+    collected = _collect_tests(spec, run, runner_spec)
+    _check_baseline(spec, run, runner_spec)
+    results = [_score_one(spec, mutant, run, runner_spec, locks) for mutant in spec.mutants]
+    return Report(
+        mutants=results, never_killed=_never_killed(collected, results, runner_spec)
+    )
 
-    collected: list[str] | None = None
-    if spec.collect_command is not None:
-        _, out = run(spec.collect_command)
-        collected = parse_collected_tests(out, runner_spec)
 
+def _collect_tests(
+    spec: Spec, run: Runner, runner_spec: RunnerSpec
+) -> list[str] | None:
+    """Run the collect command; ``None`` when the spec has none."""
+    if spec.collect_command is None:
+        return None
+    _, out = run(spec.collect_command)
+    return parse_collected_tests(out, runner_spec)
+
+
+def _check_baseline(spec: Spec, run: Runner, runner_spec: RunnerSpec) -> None:
+    """Refuse (``BaselineNotGreen``) unless the suite is green before any mutant."""
     # A cache left from an earlier aborted run can carry mutated bytecode into
     # the baseline, where it passes unnoticed and every row after it is scored
     # against code that is not on disk.
@@ -831,138 +856,106 @@ def _score_mutants(
             + "\n".join(sorted(parse_failed_tests(out, runner_spec)))
         )
 
-    results: list[MutantResult] = []
-    killers: set[str] = set()
 
-    for mutant in spec.mutants:
-        try:
-            original, text = _read_source(mutant.path)
-        except TargetUnreadable as exc:
-            results.append(
-                MutantResult(
-                    mutant.label,
-                    "not-applied",
-                    detail=str(exc),
-                    oracle=mutant.oracle,
-                    expect=mutant.expect,
-                    why=mutant.why,
-                )
-            )
-            continue
-        try:
-            mutated = apply_mutation(text, mutant.find, mutant.replace)
-        except ValueError as exc:
-            results.append(
-                MutantResult(
-                    mutant.label,
-                    "not-applied",
-                    detail=str(exc),
-                    oracle=mutant.oracle,
-                    expect=mutant.expect,
-                    why=mutant.why,
-                )
-            )
-            continue
+def _never_killed(
+    collected: list[str] | None, results: list[MutantResult], runner_spec: RunnerSpec
+) -> list[str] | None:
+    """Collected tests no row's ``killed_by`` names; ``None`` if not collected.
 
-        # A mutant that cannot compile reds the suite by breaking the import,
-        # not by tripping an assertion. Catch it here rather than letting the
-        # run report a kill nothing actually earned.
-        if mutant.path.suffix == ".py":
-            try:
-                compile(mutated, str(mutant.path), "exec")
-            except SyntaxError as exc:
-                results.append(
-                    MutantResult(
-                        mutant.label,
-                        "unscored",
-                        detail=f"mutant does not compile: {exc}",
-                        oracle=mutant.oracle,
-                        expect=mutant.expect,
-                        why=mutant.why,
-                    )
-                )
-                continue
+    Computed from the rows' own ``killed_by`` so a full run and a ledger of
+    recorded rows are the same arithmetic.
+    """
+    if collected is None:
+        return None
+    killers = {runner_spec.normalize(t) for r in results for t in r.killed_by}
+    return [t for t in collected if runner_spec.normalize(t) not in killers]
 
-        mutated_bytes = mutated.encode("utf-8")
-        journal = locks[mutant.path.resolve()]
-        # The original is on disk in the journal before the mutant is, so a
-        # run killed past any `finally` still leaves the way back.
-        journal.begin(original, mutated_bytes)
-        try:
-            with _signals_deferred():
-                mutant.path.write_bytes(mutated_bytes)
-            _purge_cached_bytecode(mutant.path)
-            code, out = run(spec.test_command)
-        finally:
-            # Restore before anything else can fail. A crash here would leave
-            # deliberately-broken code in the working tree.
-            edit = _restore(mutant.path, original, mutated_bytes, journal)
-            if edit is not None:
-                raise edit
 
-        if code == 0:
-            # A control that stays green held, as its author predicted; an
-            # ordinary mutant that stays green survived. Same run outcome,
-            # opposite meaning — only the control declared it in advance.
-            status = "control-held" if mutant.expect == "survived" else "survived"
-            results.append(
-                MutantResult(
-                    mutant.label,
-                    status,
-                    oracle=mutant.oracle,
-                    expect=mutant.expect,
-                    why=mutant.why,
-                )
-            )
-            continue
+def _score_one(
+    spec: Spec,
+    mutant: Mutation,
+    run: Runner,
+    runner_spec: RunnerSpec,
+    locks: dict[Path, _TargetLock],
+) -> MutantResult:
+    """Apply one mutant, run the suite against it, restore, and return its verdict.
 
-        failed = sorted(parse_failed_tests(out, runner_spec))
-        if not failed:
-            # Non-zero with nothing named: the command aborted before it could
-            # collect (an unrecognised flag, a missing plugin, an import
-            # error) — or the configured runner is simply reading the wrong
-            # output shape. Scoring this as a kill would credit teeth to a
-            # run that never evaluated an assertion, so check whether another
-            # registered runner's shape would have matched before giving up.
-            detail = (
-                f"run exited {code} naming no failing test under runner "
-                f"{spec.runner!r}"
-            )
-            detail += _runner_mismatch_advice(out, spec.runner)
-            results.append(
-                MutantResult(
-                    mutant.label,
-                    "unscored",
-                    detail=detail,
-                    oracle=mutant.oracle,
-                    expect=mutant.expect,
-                    why=mutant.why,
-                )
-            )
-            continue
+    The one per-mutant body: a whole run and a ledger run both call it, so a
+    row means the same thing in either. The caller holds *mutant*'s lock.
+    """
 
-        killers.update(runner_spec.normalize(t) for t in failed)
-        # A control that goes red broke: something caught a mutation its
-        # author argued was inert. An ordinary mutant that goes red killed,
-        # as before.
-        status = "control-broken" if mutant.expect == "survived" else "killed"
-        results.append(
-            MutantResult(
-                mutant.label,
-                status,
-                killed_by=failed,
-                oracle=mutant.oracle,
-                expect=mutant.expect,
-                why=mutant.why,
-            )
+    def verdict(status: str, **extra: object) -> MutantResult:
+        return MutantResult(
+            mutant.label,
+            status,
+            oracle=mutant.oracle,
+            expect=mutant.expect,
+            why=mutant.why,
+            **extra,  # type: ignore[arg-type]
         )
 
-    never_killed = (
-        None
-        if collected is None
-        else [t for t in collected if runner_spec.normalize(t) not in killers]
+    try:
+        original, text = _read_source(mutant.path)
+    except TargetUnreadable as exc:
+        return verdict("not-applied", detail=str(exc))
+    try:
+        mutated = apply_mutation(text, mutant.find, mutant.replace)
+    except ValueError as exc:
+        return verdict("not-applied", detail=str(exc))
+
+    # A mutant that cannot compile reds the suite by breaking the import,
+    # not by tripping an assertion. Catch it here rather than letting the
+    # run report a kill nothing actually earned.
+    if mutant.path.suffix == ".py":
+        try:
+            compile(mutated, str(mutant.path), "exec")
+        except SyntaxError as exc:
+            return verdict("unscored", detail=f"mutant does not compile: {exc}")
+
+    mutated_bytes = mutated.encode("utf-8")
+    journal = locks[mutant.path.resolve()]
+    # The original is on disk in the journal before the mutant is, so a
+    # run killed past any `finally` still leaves the way back.
+    journal.begin(original, mutated_bytes)
+    try:
+        with _signals_deferred():
+            mutant.path.write_bytes(mutated_bytes)
+        _purge_cached_bytecode(mutant.path)
+        code, out = run(spec.test_command)
+    finally:
+        # Restore before anything else can fail. A crash here would leave
+        # deliberately-broken code in the working tree.
+        edit = _restore(mutant.path, original, mutated_bytes, journal)
+        if edit is not None:
+            raise edit
+
+    if code == 0:
+        # A control that stays green held, as its author predicted; an
+        # ordinary mutant that stays green survived. Same run outcome,
+        # opposite meaning — only the control declared it in advance.
+        return verdict("control-held" if mutant.expect == "survived" else "survived")
+
+    failed = sorted(parse_failed_tests(out, runner_spec))
+    if not failed:
+        # Non-zero with nothing named: the command aborted before it could
+        # collect (an unrecognised flag, a missing plugin, an import
+        # error) — or the configured runner is simply reading the wrong
+        # output shape. Scoring this as a kill would credit teeth to a
+        # run that never evaluated an assertion, so check whether another
+        # registered runner's shape would have matched before giving up.
+        detail = (
+            f"run exited {code} naming no failing test under runner "
+            f"{spec.runner!r}"
+        )
+        detail += _runner_mismatch_advice(out, spec.runner)
+        return verdict("unscored", detail=detail)
+
+    # A control that goes red broke: something caught a mutation its
+    # author argued was inert. An ordinary mutant that goes red killed,
+    # as before.
+    return verdict(
+        "control-broken" if mutant.expect == "survived" else "killed", killed_by=failed
     )
-    return Report(mutants=results, never_killed=never_killed)
 
 
 def check_anchors(spec: Spec) -> list[tuple[str, str | None]]:
@@ -1300,6 +1293,360 @@ def select_changed_rows(spec_path: Path, spec: Spec, rev: str) -> Spec:
     return dataclasses.replace(spec, mutants=keep)
 
 
+class LedgerRefused(Exception):
+    """Raised when a ledger cannot be keyed: not in a git worktree, or a path outside it."""
+
+
+class LedgerLocked(Exception):
+    """Raised when another live run holds this ledger's lock."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(f"another teeth_check run holds ledger {path}")
+        self.path = path
+
+
+class TreeChanged(Exception):
+    """Raised when the working tree moved while a row ran; the row is not recorded."""
+
+
+class _LedgerLock(_TargetLock):
+    """The OS lock on one ledger, ``<ledger path>.lock``; same flock as a target's."""
+
+    def __init__(self, ledger: Path) -> None:
+        super().__init__(ledger)
+        self.lockfile = Path(f"{ledger}.lock")
+
+    def acquire(self) -> None:
+        try:
+            super().acquire()
+        except TargetLocked:
+            raise LedgerLocked(self.path) from None
+
+
+@dataclass(frozen=True)
+class _Fingerprint:
+    """Where a spec sits in its git worktree, and what its ledger is keyed on."""
+
+    top: Path
+    spec_rel: str
+    cwd_rel: str
+    settings: str
+
+
+def _git_env(index: Path | None = None) -> dict[str, str]:
+    """The environment for a git call: the real index, or the one named."""
+    env = {k: v for k, v in os.environ.items() if k != "GIT_INDEX_FILE"}
+    if index is not None:
+        env["GIT_INDEX_FILE"] = str(index)
+    return env
+
+
+def _git_text(args: list[str], cwd: Path, *, index: Path | None = None) -> str:
+    try:
+        proc = subprocess.run(
+            ["git", "--literal-pathspecs", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=_git_env(index),
+        )
+    except OSError as exc:
+        raise LedgerRefused(f"cannot run git: {exc}") from None
+    if proc.returncode != 0:
+        raise LedgerRefused(f"git {args[0]} failed: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def _locate_spec(spec_path: Path, spec: Spec) -> _Fingerprint:
+    """Place *spec* in its git worktree and hash the settings its verdicts depend on.
+
+    Refuses when the spec is not in a worktree, when any mutation target lies
+    outside it, or when the working directory does: the tree fingerprint could
+    not vouch for a file it does not cover.
+    """
+    spec_file = spec_path.resolve()
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=spec_file.parent,
+            capture_output=True,
+            text=True,
+            env=_git_env(),
+        )
+    except OSError as exc:
+        raise LedgerRefused(f"cannot run git: {exc}") from None
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise LedgerRefused(f"{spec_file} is not in a git worktree")
+    top = Path(proc.stdout.strip()).resolve()
+    cwd = Path.cwd().resolve()
+    if not spec_file.is_relative_to(top):
+        raise LedgerRefused(f"{spec_file} is outside the worktree {top}")
+    if not cwd.is_relative_to(top):
+        raise LedgerRefused(
+            f"the working directory {cwd} is outside the worktree {top}"
+        )
+    for mutant in spec.mutants:
+        if not mutant.path.resolve().is_relative_to(top):
+            raise LedgerRefused(
+                f"mutation target {mutant.path} is outside the worktree {top}"
+            )
+    spec_rel = spec_file.relative_to(top).as_posix()
+    cwd_rel = cwd.relative_to(top).as_posix()
+    settings = hashlib.sha256(
+        json.dumps(
+            {
+                "schema": 1,
+                "test_command": spec.test_command,
+                "collect_command": spec.collect_command,
+                "runner": spec.runner,
+                "cwd": cwd_rel,
+                "spec": spec_rel,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return _Fingerprint(top, spec_rel, cwd_rel, settings)
+
+
+def _tree_fingerprint(where: _Fingerprint) -> str:
+    """The git tree of tracked plus untracked, non-ignored files, minus the spec.
+
+    Built in a throwaway copy of the worktree's index, so the real one is never
+    written. The spec is left out so that editing one row does not void the
+    verdicts of the others.
+    """
+    index_path = Path(
+        _git_text(["rev-parse", "--git-path", "index"], where.top).strip()
+    )
+    if not index_path.is_absolute():
+        index_path = where.top / index_path
+    scratch = Path(tempfile.mkdtemp(prefix="teeth-index-"))
+    try:
+        temp_index = scratch / "index"
+        if index_path.exists():
+            shutil.copyfile(index_path, temp_index)
+        _git_text(["add", "-A", "--", "."], where.top, index=temp_index)
+        _git_text(
+            ["rm", "--cached", "-q", "--ignore-unmatch", "--", where.spec_rel],
+            where.top,
+            index=temp_index,
+        )
+        return _git_text(["write-tree"], where.top, index=temp_index).strip()
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _ledger_path(tree: str, where: _Fingerprint) -> Path:
+    return _state_dir() / "ledgers" / f"{tree}-{where.settings[:16]}.jsonl"
+
+
+def _row_keys(spec_path: Path) -> list[str]:
+    """One key per spec row: the hash of its JSON, plus how many identical rows precede it."""
+    rows = json.loads(spec_path.read_text(encoding="utf-8"))["mutants"]
+    seen: dict[str, int] = {}
+    keys = []
+    for row in rows:
+        digest = hashlib.sha256(
+            json.dumps(row, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        keys.append(f"{digest}:{seen.get(digest, 0)}")
+        seen[digest] = seen.get(digest, 0) + 1
+    return keys
+
+
+@dataclass
+class _Ledger:
+    """What a ledger file holds that applies to the current spec."""
+
+    has_collect: bool = False
+    collected: list[str] | None = None
+    rows: dict[str, dict] = field(default_factory=dict)
+
+
+def _read_ledger(path: Path, keys: list[str]) -> _Ledger:
+    """Read *path*, ignoring unknown kinds, rows not in *keys* and unreadable lines.
+
+    A line cut short by a crash mid-write does not parse; it is skipped rather
+    than refused, and the row it would have recorded simply runs again.
+    """
+    ledger = _Ledger()
+    wanted = set(keys)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ledger
+    except OSError as exc:  # e.g. the state dir, or ledgers/, is not a directory
+        raise StateDirUnusable(_state_dir(), exc) from exc
+    for line in text.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("kind") == "collect" and not ledger.has_collect:
+            ledger.has_collect = True
+            collected = entry.get("collected")
+            ledger.collected = collected if isinstance(collected, list) else None
+        elif (
+            entry.get("kind") == "row"
+            and entry.get("key") in wanted
+            and isinstance(entry.get("result"), dict)
+        ):
+            ledger.rows.setdefault(entry["key"], entry)
+    return ledger
+
+
+def _append_ledger(path: Path, entry: dict) -> None:
+    """Append one ledger line; an unusable state dir is a refusal, not a crash."""
+    try:
+        _write_ledger_line(path, entry)
+    except OSError as exc:
+        raise StateDirUnusable(_state_dir(), exc) from exc
+
+
+def _write_ledger_line(path: Path, entry: dict) -> None:
+    """Append one JSON line, flushed and fsynced before this returns."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, sort_keys=True) + "\n"
+    try:
+        with path.open("rb") as existing:
+            existing.seek(-1, os.SEEK_END)
+            partial = existing.read(1) != b"\n"
+    except OSError:  # absent or empty
+        partial = False
+    with path.open("ab") as handle:
+        if partial:
+            handle.write(b"\n")  # a crash left a partial line: do not extend it
+        handle.write(line.encode("utf-8"))
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _tree_changed_message(
+    where: _Fingerprint, old: str, new: str, recorded: int
+) -> str:
+    try:
+        names = _git_text(["diff-tree", "-r", "--name-only", old, new], where.top)
+    except LedgerRefused:
+        names = ""
+    paths = [name for name in names.splitlines() if name]
+    changed = ", ".join(paths[:10]) if paths else "unknown"
+    return (
+        f"refusing to continue: the tree changed during the run (was {old[:12]}, "
+        f"now {new[:12]}; changed: {changed}); {recorded} rows stay recorded "
+        f"under {old[:12]}, and this row was not recorded"
+    )
+
+
+def _ledger_report(
+    spec: Spec,
+    keys: list[str],
+    ledger: _Ledger,
+    tree: str,
+    path: Path,
+    *,
+    as_json: bool,
+) -> int:
+    """Print the ledger's state; exit 3 while any row is missing, else the tally's code."""
+    runner_spec = RUNNERS[spec.runner]
+    total = len(keys)
+    recorded = [ledger.rows[k] for k in keys if k in ledger.rows]
+    results = [MutantResult(**row["result"]) for row in recorded]
+    complete = len(recorded) == total
+    report = Report(
+        mutants=results,
+        never_killed=_never_killed(ledger.collected, results, runner_spec)
+        if complete
+        else None,
+    )
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "mutants": [vars(m) for m in results],
+                    "never_killed": report.never_killed,
+                    "ledger": {
+                        "tree": tree,
+                        "recorded": len(recorded),
+                        "of": total,
+                        "path": str(path),
+                    },
+                },
+                indent=2,
+            )
+        )
+    elif complete:
+        print(f"LEDGER: {total} of {total} rows for tree {tree[:12]} ({path})\n")
+        print(render(report))
+    else:
+        print(
+            f"INCOMPLETE: {len(recorded)} of {total} rows recorded for tree "
+            f"{tree[:12]} — re-run the same command; not the tally\n"
+        )
+        print(render(report, never_killed_unknown="incomplete ledger"))
+    return _exit_code(report) if complete else 3
+
+
+def _run_budgeted(
+    spec: Spec,
+    keys: list[str],
+    where: _Fingerprint,
+    tree: str,
+    path: Path,
+    locks: dict[Path, _TargetLock],
+    run: Runner,
+    *,
+    budget: float,
+    started: float,
+) -> _Ledger:
+    """Run pending rows into the ledger until the next would overrun *budget*.
+
+    The caller holds every target's lock and the ledger's, and computed *tree*
+    after taking them. Always runs one row if any is pending, so a budget
+    smaller than a row still makes progress.
+    """
+    runner_spec = RUNNERS[spec.runner]
+    ledger = _read_ledger(path, keys)
+    pending = [i for i, key in enumerate(keys) if key not in ledger.rows]
+    if not pending:
+        return ledger
+    if not ledger.has_collect:
+        ledger.collected = _collect_tests(spec, run, runner_spec)
+        ledger.has_collect = True
+        _append_ledger(path, {"kind": "collect", "collected": ledger.collected})
+    # The environment (a .venv) is not in the fingerprint, so check it every time.
+    baseline_started = time.monotonic()
+    _check_baseline(spec, run, runner_spec)
+    estimate = max(
+        [time.monotonic() - baseline_started]
+        + [row["seconds"] for row in ledger.rows.values()]
+    )
+    for ran, index in enumerate(pending):
+        if ran and (time.monotonic() - started) + estimate > budget:
+            break
+        row_started = time.monotonic()
+        result = _score_one(spec, spec.mutants[index], run, runner_spec, locks)
+        seconds = time.monotonic() - row_started
+        now = _tree_fingerprint(where)
+        if now != tree:
+            raise TreeChanged(
+                _tree_changed_message(where, tree, now, len(ledger.rows))
+            )
+        entry = {
+            "kind": "row",
+            "key": keys[index],
+            "label": spec.mutants[index].label,
+            "result": vars(result),
+            "seconds": seconds,
+        }
+        _append_ledger(path, entry)
+        ledger.rows[keys[index]] = entry
+        estimate = max(estimate, seconds)
+    return ledger
+
+
 def _recover_targets(spec: Spec) -> list[tuple[Path, str, str]]:
     """Lock, repair and release each distinct target; one outcome per target.
 
@@ -1318,6 +1665,38 @@ def _recover_targets(spec: Spec) -> list[tuple[Path, str, str]]:
         except (TargetLocked, RecoveryRefused, StateDirUnusable) as exc:
             outcomes.append((path, "refused", f"refusing to run: {exc}"))
     return outcomes
+
+
+def _budgeted_main(
+    spec_path: Path, spec: Spec, budget: float, started: float, *, as_json: bool
+) -> int:
+    """``--budget``: lock, fingerprint, run what is pending, report the ledger."""
+    where = _locate_spec(spec_path, spec)
+    keys = _row_keys(spec_path)
+    run = _default_runner
+    with _held_targets(_target_paths(spec)) as (locks, recovered):
+        for path, dead_pid in recovered:
+            print(_recovered_line(path, dead_pid), file=sys.stderr)
+        # After the locks: recovering a killed run can rewrite a target.
+        tree = _tree_fingerprint(where)
+        ledger_path = _ledger_path(tree, where)
+        ledger_lock = _LedgerLock(ledger_path)
+        ledger_lock.acquire()
+        try:
+            ledger = _run_budgeted(
+                spec,
+                keys,
+                where,
+                tree,
+                ledger_path,
+                locks,
+                run,
+                budget=budget,
+                started=started,
+            )
+        finally:
+            ledger_lock.release()
+    return _ledger_report(spec, keys, ledger, tree, ledger_path, as_json=as_json)
 
 
 def _raise_interrupted(signum: int, frame: object) -> None:
@@ -1353,7 +1732,21 @@ def main(argv: list[str] | None = None) -> int:
             signal.signal(signum, handler)
 
 
+def _positive_seconds(text: str) -> float:
+    """Parse ``--budget``: a number of seconds greater than 0."""
+    try:
+        seconds = float(text)
+    except ValueError:
+        seconds = float("nan")
+    if not seconds > 0:  # also false for NaN
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a number of seconds greater than 0"
+        )
+    return seconds
+
+
 def _main(argv: list[str] | None) -> int:
+    started = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("spec", type=Path, help="JSON spec file")
     parser.add_argument(
@@ -1386,6 +1779,24 @@ def _main(argv: list[str] | None) -> int:
             "exit — no baseline, no test command"
         ),
     )
+    mode.add_argument(
+        "--budget",
+        type=_positive_seconds,
+        metavar="SECONDS",
+        help=(
+            "run pending rows into a ledger until the next would overrun "
+            "SECONDS, then exit 3 (re-run the same command); at least one row "
+            "runs each time, and the tally prints once every row is recorded"
+        ),
+    )
+    mode.add_argument(
+        "--report",
+        action="store_true",
+        help=(
+            "print the ledger for the current tree and exit (3 while rows "
+            "are missing) — no lock, no baseline, no test command"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -1413,6 +1824,18 @@ def _main(argv: list[str] | None) -> int:
         for path, status, detail in outcomes:
             print(detail if status == "refused" else f"{path}: {status}")
         return 2 if any(status == "refused" for _, status, _ in outcomes) else 0
+
+    if args.report:
+        try:
+            where = _locate_spec(args.spec, spec)
+            tree = _tree_fingerprint(where)
+            path = _ledger_path(tree, where)
+            keys = _row_keys(args.spec)
+            ledger = _read_ledger(path, keys)
+        except (LedgerRefused, StateDirUnusable) as exc:
+            print(f"refusing to run: {exc}", file=sys.stderr)
+            return 2
+        return _ledger_report(spec, keys, ledger, tree, path, as_json=args.json)
 
     # A mutant a killed run left on disk has already broken its own anchor, so
     # it must be undone before the anchor preflight can mistake it for drift.
@@ -1442,6 +1865,26 @@ def _main(argv: list[str] | None) -> int:
         for label, error in stale:
             print(f"  {label}: {error}", file=sys.stderr)
         return 2
+
+    if args.budget is not None:
+        try:
+            return _budgeted_main(
+                args.spec, spec, args.budget, started, as_json=args.json
+            )
+        except (
+            BaselineNotGreen,
+            TargetLocked,
+            RecoveryRefused,
+            ConcurrentEdit,
+            LedgerLocked,
+            LedgerRefused,
+            StateDirUnusable,
+        ) as exc:
+            print(f"refusing to run: {exc}", file=sys.stderr)
+            return 2
+        except TreeChanged as exc:
+            print(exc, file=sys.stderr)
+            return 2
 
     total = len(spec.mutants)
     if args.changed_since is not None:

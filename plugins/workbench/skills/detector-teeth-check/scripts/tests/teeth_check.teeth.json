@@ -91,8 +91,8 @@
       "label": "the run lets an unreadable target escape as a traceback",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "            original, text = _read_source(mutant.path)\n        except TargetUnreadable as exc:",
-      "replace": "            original, text = _read_source(mutant.path)\n        except SpecError as exc:"
+      "find": "        original, text = _read_source(mutant.path)\n    except TargetUnreadable as exc:",
+      "replace": "        original, text = _read_source(mutant.path)\n    except SpecError as exc:"
     },
     {
       "label": "only a missing target is caught, so a directory target still crashes",
@@ -105,8 +105,8 @@
       "label": "a missing target scores as a survivor, not a spec error",
       "file": "../teeth_check.py",
       "oracle": "real",
-      "find": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"not-applied\",",
-      "replace": "        except TargetUnreadable as exc:\n            results.append(\n                MutantResult(\n                    mutant.label,\n                    \"survived\","
+      "find": "    except TargetUnreadable as exc:\n        return verdict(\"not-applied\", detail=str(exc))",
+      "replace": "    except TargetUnreadable as exc:\n        return verdict(\"survived\", detail=str(exc))"
     },
     {
       "label": "a target that is not UTF-8 escapes as a traceback (the 8.15.5 defect)",
@@ -328,6 +328,155 @@
       "oracle": "real",
       "find": "        if isinstance(encoded, str):\n            try:\n",
       "replace": "        if True:\n            try:\n"
+    },
+    {
+      "label": "R1199-1: untracked files are in the fingerprint",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        _git_text([\"add\", \"-A\", \"--\", \".\"], where.top, index=temp_index)\n",
+      "replace": "        _git_text([\"add\", \"-u\", \"--\", \".\"], where.top, index=temp_index)\n"
+    },
+    {
+      "label": "R1199-2: the spec file is excluded from the fingerprint",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        _git_text(\n            [\"rm\", \"--cached\", \"-q\", \"--ignore-unmatch\", \"--\", where.spec_rel],\n            where.top,\n            index=temp_index,\n        )\n",
+      "replace": "        _git_text([\"write-tree\"], where.top, index=temp_index)\n"
+    },
+    {
+      "label": "R1199-3: a tree change during a row refuses and records nothing",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if now != tree:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-4: the budget stops a ledger run before the next row",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-5: at least one row runs per invocation",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if (time.monotonic() - started) + estimate > budget:\n"
+    },
+    {
+      "label": "R1199-6: never_killed is computed over the full ledger",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        never_killed=_never_killed(ledger.collected, results, runner_spec)\n",
+      "replace": "        never_killed=_never_killed(ledger.collected, results[-1:], runner_spec)\n"
+    },
+    {
+      "label": "R1199-7: test_command is part of the settings hash",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "                \"test_command\": spec.test_command,\n",
+      "replace": "                \"test_command\": None,\n"
+    },
+    {
+      "label": "R1199-8: an incomplete ledger exits 3 whatever the rows say",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    return _exit_code(report) if complete else 3\n",
+      "replace": "    return _exit_code(report)\n"
+    },
+    {
+      "label": "R1199-9: --report runs no command",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            path = _ledger_path(tree, where)\n            keys = _row_keys(args.spec)\n",
+      "replace": "            path = _ledger_path(tree, where)\n            keys = _row_keys(args.spec)\n            _default_runner(spec.test_command)\n"
+    },
+    {
+      "label": "R1199-10: the ledger lock refuses a concurrent ledger run",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        ledger_lock.acquire()\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "R1199-11: [control] ledger line key order",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Each ledger line is read back only through json.loads in _read_ledger, which is order-blind, and no hash, key or comparison is ever taken over the line text, so key order in the written line changes nothing observable; it would stop being inert if anything compared or hashed ledger lines as text.",
+      "find": "    line = json.dumps(entry, sort_keys=True) + \"\\n\"\n",
+      "replace": "    line = json.dumps(entry, sort_keys=False) + \"\\n\"\n"
+    },
+    {
+      "label": "R1199-X14: the budget compares elapsed time plus the estimate",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if ran and (time.monotonic() - started) + estimate > budget:\n",
+      "replace": "        if ran and estimate > budget:\n"
+    },
+    {
+      "label": "R1199-X4: each row run raises the estimate",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        estimate = max(estimate, seconds)\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X3: the estimate includes the recorded rows' seconds",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        + [row[\"seconds\"] for row in ledger.rows.values()]\n",
+      "replace": "        + []\n"
+    },
+    {
+      "label": "R1199-X13: identical rows are keyed apart by occurrence",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        seen[digest] = seen.get(digest, 0) + 1\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X12: an append after a partial line starts a new line",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        if partial:\n",
+      "replace": "        if False:\n"
+    },
+    {
+      "label": "R1199-X2: collect runs once per ledger",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    if not ledger.has_collect:\n",
+      "replace": "    if True:\n"
+    },
+    {
+      "label": "R1199-X5: the tree-change message lists up to ten paths",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    changed = \", \".join(paths[:10]) if paths else \"unknown\"\n",
+      "replace": "    changed = \", \".join(paths[:1]) if paths else \"unknown\"\n"
+    },
+    {
+      "label": "R1199-X1: every ledger line is fsynced",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "        os.fsync(handle.fileno())\n",
+      "replace": ""
+    },
+    {
+      "label": "R1199-X10: GIT_INDEX_FILE is stripped from git's environment",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "    env = {k: v for k, v in os.environ.items() if k != \"GIT_INDEX_FILE\"}\n",
+      "replace": "    env = dict(os.environ)\n"
+    },
+    {
+      "label": "R1199-X11: git pathspecs are literal",
+      "file": "../teeth_check.py",
+      "oracle": "real",
+      "find": "            [\"git\", \"--literal-pathspecs\", *args],\n",
+      "replace": "            [\"git\", *args],\n"
     }
   ]
 }
