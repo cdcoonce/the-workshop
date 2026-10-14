@@ -470,6 +470,13 @@ def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, messag
         "The regex under review:\n\n```python\n"
         "    r\"implementation is complete|committed the (?:fix|change)|\"\n"
         "```\n\nIt has no first-person anchor.",
+        "Regex under review:\n\n```\nimplementation is complete\n```\n\nIt has no anchor.",
+        "Regex under review:\n\n~~~\nimplementation is complete\n~~~\n\nIt has no anchor.",
+        "```\nUse when implementation is complete\n````\n\nThat is the description.",
+        # CommonMark: neither line can close the fence, so the claim is inside it.
+        "```\nfoo\n```bash\nI've fixed the bug.\n```",
+        "```\nfoo\n~~~\nI've fixed the bug.\n```",
+        "- Quoting the file:\n  > Use when implementation is complete\n",
     ],
     ids=[
         "incident-sweep",
@@ -479,6 +486,12 @@ def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, messag
         "table-cell",
         "blockquote",
         "fenced-code",
+        "bare-fence",
+        "tilde-fence",
+        "longer-closer",
+        "info-string-line-inside-fence",
+        "other-marker-inside-fence",
+        "indented-blockquote",
     ],
 )
 def test_quoted_completion_phrase_is_not_a_claim(tmp_path: Path, message: str) -> None:
@@ -498,13 +511,39 @@ def test_quoted_completion_phrase_is_not_a_claim(tmp_path: Path, message: str) -
 @pytest.mark.parametrize(
     "message",
     [
-        "Per the \"parser\" spec, I've fixed the bug.",
+        "Per the \"parser\" spec, I've fixed the bug, see \"notes\".",
         "I've implemented the change in `hooks/foo.py`.",
+        "Edited `a.py`, I've fixed the bug, and touched `b.py`.",
+        "The `\"` token is escaped. I've fixed the bug, see \"notes\".",
+        "I've fixed the bug; it isn't flaky.",
+        "I've fixed the retry loop (3 -> 1 attempts).",
+        "The panel is 5\" wide.\nI've fixed the bug.\nSee the \"readme\".",
+        "A stray “ opens here.\nI've fixed the bug.\nSee “readme”.",
+        "Opened a stray ` here.\nI've fixed the bug.\nUses `foo` later.",
         "```diff\n- old\n+ new\n```\n\nI've applied the diff above.",
+        "```diff\n- old\n+ new\n\nI've applied the diff above.",
+        "```\na\n```\n\nI've fixed the bug.\n\n```\nb\n```",
+        "```make test``` passes now.\nI've fixed the bug in the parser.\n\n```\nfoo\n```",
         "> Use when implementation is complete\n\nThe implementation is complete.",
         "| file | status |\n|---|---|\n| a.py | edited |\n\nAll done.",
     ],
-    ids=["quote-earlier-in-line", "code-span-object", "after-fence", "after-blockquote", "after-table"],
+    ids=[
+        "between-quotes",
+        "code-span-object",
+        "between-code-spans",
+        "quote-inside-code-span",
+        "apostrophes",
+        "arrow",
+        "stray-quote-line",
+        "stray-curly-quote-line",
+        "stray-backtick-line",
+        "after-fence",
+        "unterminated-fence",
+        "between-fences",
+        "inline-triple-backticks",
+        "after-blockquote",
+        "after-table",
+    ],
 )
 def test_unquoted_claim_beside_quoted_material_is_still_a_claim(
     tmp_path: Path, message: str
@@ -560,6 +599,7 @@ def test_block_reason_asks_for_the_report_to_be_restated(tmp_path: Path) -> None
     )
 
     reason = json.loads(result.stdout)["reason"]
+    assert "not meant to change anything, say so" in reason
     assert "restate your full report" in reason
     assert "only your final message" in reason
 

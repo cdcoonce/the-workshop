@@ -56,10 +56,15 @@ COMPLETION_CLAIM = re.compile(
 
 # A report that quotes a skill description, a grep hit, or the regex above is
 # not claiming anything itself (2026-10-12: an audit quoting finish-branch's
-# description was blocked on the quoted phrase). Applied in order: a fence can
-# hold backticks, quotes and pipes; a code span can hold a double quote.
+# description was blocked on the quoted phrase). Spans never cross a line, so
+# a stray quote cannot swallow a later claim. Code spans run before double
+# quotes: a span can hold a `"` that would otherwise pair with a later quote.
 QUOTED_MATERIAL = (
-    re.compile(r"^[ \t]*(`{3,}|~{3,})[^\n]*\n.*?^[ \t]*\1[ \t]*$", re.MULTILINE | re.DOTALL),
+    # A fence per CommonMark: no backtick in the opener's info string, and the
+    # closer is the same character, at least as long, with nothing after it.
+    re.compile(
+        r"^[ \t]*(([`~])\2{2,})[^`\n]*\n.*?^[ \t]*\1\2*[ \t]*$", re.MULTILINE | re.DOTALL
+    ),
     re.compile(r"^[ \t]*[>|].*$", re.MULTILINE),
     re.compile(r"`[^`\n]+`"),
     re.compile(r"\"[^\"\n]*\"|“[^”\n]*”"),
@@ -68,7 +73,7 @@ QUOTED_MATERIAL = (
 QUOTED_PLACEHOLDER = "[quoted]"
 
 
-def own_words(text: str) -> str:
+def _own_words(text: str) -> str:
     """Return ``text`` with each quoted span replaced by a placeholder."""
     for pattern in QUOTED_MATERIAL:
         text = pattern.sub(QUOTED_PLACEHOLDER, text)
@@ -108,7 +113,7 @@ try:
 except OSError:
     pass
 
-if not message or not COMPLETION_CLAIM.search(own_words(message)):
+if not message or not COMPLETION_CLAIM.search(_own_words(message)):
     sys.exit(0)
 
 # Normalized to match what the start hook serialized (None -> "").
