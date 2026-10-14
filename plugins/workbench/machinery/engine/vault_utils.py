@@ -55,6 +55,154 @@ def code_spans(text: str) -> list[tuple[int, int]]:
 
 # Fallback used only when the scaffold-owned config predates ``BATCH_MODEL``
 # (a vault rendered before #431 has no such attribute); see read_batch_model.
+# Dated entries in the accumulating hub files, read with the vault-sync entry
+# replay's grammar (skills/vault-sync/scripts/entry_replay.py: _fence_scan,
+# parse_entry_start, _anchor_spans and _parse_chunks). The engine is vendored
+# into the vault and runs standalone there, so it carries its own copy; the
+# vault-sync suite's test_entry_grammar_parity.py holds the two to the same
+# entries.
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+_BULLET_ENTRY_RE = re.compile(r"^-\s+\*\*(\d{4}-\d{2}-\d{2})\b")
+_LEAD_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\b")
+# ``(YYYY-MM-DD)`` or ``(YYYY-MM-DD<comma or space>qualifier)`` ending a
+# Gotchas heading; the entry's date is the first one.
+_TRAIL_DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})(?:[ ,][^()]*)?\)$")
+
+
+def fence_flags(lines: list[str]) -> list[bool]:
+    """Per-line "inside or delimiting a CommonMark code fence" flags.
+
+    A fence closes only on the same character, at least as long as its
+    opener, with nothing after it, so a four-backtick fence is not ended by
+    an inner three-backtick line.
+    """
+    flags: list[bool] = []
+    fence_char = ""
+    fence_len = 0
+    for line in lines:
+        m = _FENCE_RE.match(line)
+        if fence_char:
+            flags.append(True)
+            if (
+                m
+                and m.group(1)[0] == fence_char
+                and len(m.group(1)) >= fence_len
+                and not m.group(2).strip()
+            ):
+                fence_char = ""
+                fence_len = 0
+            continue
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence_char = m.group(1)[0]
+            fence_len = len(m.group(1))
+            flags.append(True)
+            continue
+        flags.append(False)
+    return flags
+
+
+def _valid_date(value: str) -> bool:
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def entry_start(line: str) -> tuple[str, str] | None:
+    """``(kind, date)`` when ``line`` starts a dated entry, else None.
+
+    A top-level ``- **YYYY-MM-DD`` bullet (Brag Doc), or a heading of level
+    3 or deeper with a leading date (Key Decisions) or a trailing
+    parenthesized one (Gotchas). Level-2 headings are anchors, never entries.
+    """
+    bm = _BULLET_ENTRY_RE.match(line)
+    if bm and _valid_date(bm.group(1)):
+        return ("bullet", bm.group(1))
+    hm = _HEADING_RE.match(line)
+    if hm is None or len(hm.group(1)) < 3:
+        return None
+    text = hm.group(2)
+    lead = _LEAD_DATE_RE.match(text)
+    if lead and _valid_date(lead.group(1)):
+        return ("heading", lead.group(1))
+    trail = _TRAIL_DATE_RE.search(text)
+    if trail and _valid_date(trail.group(1)):
+        return ("heading", trail.group(1))
+    return None
+
+
+def entry_runs(lines: list[str]) -> list[tuple[int | None, list[tuple[int, str]]]]:
+    """Split a hub file into the runs of entries that each read newest-first.
+
+    A run is one anchor block as the entry replay draws it -- an innermost
+    non-entry heading of level 2 or deeper, running to the next heading no
+    deeper than itself, so ``### Wins`` and ``### Growth`` are separate runs
+    -- or, for lines in no anchor block, the stretch between two non-entry
+    headings. Inside a run that holds any dated heading, a dated bullet is
+    body text, not an entry.
+
+    Parameters
+    ----------
+    lines : list of str
+        The file's lines.
+
+    Returns
+    -------
+    list of (int or None, list of (int, str))
+        Per run, its anchor's line index (None outside any anchor block) and
+        its entries as ``(line index, YYYY-MM-DD)``, both 0-based.
+    """
+    flags = fence_flags(lines)
+    starts: dict[int, tuple[str, str]] = {}
+    headings: list[tuple[int, int]] = []
+    for idx, line in enumerate(lines):
+        if flags[idx]:
+            continue
+        started = entry_start(line)
+        if started is not None:
+            starts[idx] = started
+        m = _HEADING_RE.match(line)
+        if m:
+            headings.append((idx, len(m.group(1))))
+
+    owner: list[int | None] = [None] * len(lines)
+    runs: list[tuple[int | None, list[int]]] = []
+    for pos, (idx, lvl) in enumerate(headings):
+        if lvl < 2 or idx in starts or owner[idx] is not None:
+            continue
+        if pos + 1 < len(headings):
+            nidx, nlvl = headings[pos + 1]
+            if nlvl > lvl and nidx not in starts:
+                continue  # a deeper non-entry heading follows: not innermost
+        end = next((j for j, jlvl in headings if j > idx and jlvl <= lvl), len(lines))
+        for j in range(idx + 1, end):
+            owner[j] = len(runs)
+        runs.append((idx, []))
+
+    heading_lines = {idx for idx, _lvl in headings}
+    current: int | None = None
+    for idx in range(len(lines)):
+        if owner[idx] is not None:
+            current = None
+            continue
+        if current is None or (idx in heading_lines and idx not in starts):
+            current = len(runs)
+            runs.append((None, []))
+        owner[idx] = current
+
+    for idx in sorted(starts):
+        runs[owner[idx]][1].append(idx)  # type: ignore[index]
+
+    out: list[tuple[int | None, list[tuple[int, str]]]] = []
+    for anchor, indices in runs:
+        if any(starts[idx][0] == "heading" for idx in indices):
+            indices = [idx for idx in indices if starts[idx][0] == "heading"]
+        out.append((anchor, [(idx, starts[idx][1]) for idx in indices]))
+    return out
+
+
 DEFAULT_BATCH_MODEL = "claude-haiku-4-5"
 
 

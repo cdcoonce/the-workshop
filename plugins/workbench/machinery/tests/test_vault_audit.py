@@ -4,6 +4,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -409,6 +411,273 @@ def test_audit_ignores_a_hub_file_with_no_dated_entries(tmp_path: Path) -> None:
     report = audit(tmp_path)
 
     assert report["issues"]["entry_order"] == []
+
+
+# --- the entry grammar is the vault-sync entry replay's (entry_replay.py) ---
+
+
+def _gotchas(body: str) -> str:
+    return _note("Gotchas", tags="index", body=body)
+
+
+def _order_details(tmp_path: Path, rel: str, body: str) -> list[str]:
+    _write(tmp_path, "CLAUDE.md", "# Vault")
+    _write(tmp_path, rel, _note(Path(rel).stem, tags="index", body=body))
+    return [issue["detail"] for issue in audit(tmp_path)["issues"]["entry_order"]]
+
+
+def test_audit_reads_a_gotchas_heading_dated_at_its_end(tmp_path: Path) -> None:
+    """Gotchas date an entry in a trailing ``(YYYY-MM-DD)``, not a leading one."""
+    details = _order_details(
+        tmp_path,
+        "brain/Gotchas.md",
+        "## Technical\n\n"
+        "### A trap found first (2026-08-01)\n\nBody.\n\n"
+        "### A trap appended below it (2026-09-01)\n\nBody.\n",
+    )
+
+    assert len(details) == 1
+    assert "2026-09-01" in details[0] and "2026-08-01" in details[0]
+
+
+def test_audit_reads_a_qualified_gotchas_date_by_its_first_date(tmp_path: Path) -> None:
+    """``(DATE, qualifier)`` and ``(DATE onward, qualifier)`` date the entry by DATE."""
+    details = _order_details(
+        tmp_path,
+        "brain/Gotchas.md",
+        "## Technical\n\n"
+        "### Older, with a project (2026-08-01, [[apipulse]])\n\nBody.\n\n"
+        "### Newer, with a span (2026-09-01 onward, [[skywatch]])\n\nBody.\n\n"
+        "### Corrected later (2026-07-01, corrected 2026-10-01)\n\nBody.\n",
+    )
+
+    assert len(details) == 1
+    assert "2026-09-01" in details[0] and "2026-08-01" in details[0]
+
+
+def test_audit_does_not_read_a_dated_bullet_in_a_heading_entry_body(tmp_path: Path) -> None:
+    """A heading entry quoting a dated bullet is one entry, not two."""
+    details = _order_details(
+        tmp_path,
+        "brain/Key Decisions.md",
+        "## Recent\n\n"
+        "### 2026-09-02 — newest\n\n"
+        "- **2026-09-30 — a bullet the decision quotes**\n\n"
+        "### 2026-09-01 — older\n\nBody.\n",
+    )
+
+    assert details == []
+
+
+def test_audit_still_reads_dated_bullets_in_a_block_without_dated_headings(
+    tmp_path: Path,
+) -> None:
+    details = _order_details(
+        tmp_path,
+        "perf/Brag Doc.md",
+        "## Q3 2026\n\n### Wins\n\n"
+        "- **2026-08-01 — a win**\n\n"
+        "- **2026-09-01 — appended below it**\n",
+    )
+
+    assert len(details) == 1
+
+
+def test_audit_ignores_dated_lines_inside_a_code_fence(tmp_path: Path) -> None:
+    """A fenced example is not an entry, even a four-backtick fence holding a three-backtick line."""
+    details = _order_details(
+        tmp_path,
+        "brain/Gotchas.md",
+        "## Technical\n\n"
+        "### A trap with an example (2026-09-02)\n\n"
+        "````markdown\n"
+        "```\n"
+        "### Quoted heading (2026-09-30)\n"
+        "- **2026-09-30 — quoted bullet**\n"
+        "````\n\n"
+        "### An older trap (2026-09-01)\n\nBody.\n",
+    )
+
+    assert details == []
+
+
+def test_audit_treats_a_dated_level_two_heading_as_an_anchor_not_an_entry(
+    tmp_path: Path,
+) -> None:
+    details = _order_details(
+        tmp_path,
+        "brain/Key Decisions.md",
+        "## 2026-01-01 archive\n\n"
+        "### 2026-09-02 — newest\n\nBody.\n\n"
+        "### 2026-09-01 — older\n\nBody.\n",
+    )
+
+    assert details == []
+
+
+def test_audit_reads_dated_headings_below_level_four(tmp_path: Path) -> None:
+    details = _order_details(
+        tmp_path,
+        "brain/Key Decisions.md",
+        "## Recent\n\n"
+        "##### 2026-08-01 — oldest\n\nBody.\n\n"
+        "##### 2026-09-01 — appended\n\nBody.\n",
+    )
+
+    assert len(details) == 1
+
+
+@pytest.mark.parametrize(
+    ("rel", "body"),
+    [
+        (
+            "perf/Brag Doc.md",
+            "## Q3 2026\n\n### Wins\n\n"
+            "- **2026-09-01 — real**\n\n"
+            "- **2026-13-45 — not a date**\n\n"
+            "- **2026-08-01 — older**\n",
+        ),
+        (
+            "brain/Key Decisions.md",
+            "## Recent\n\n"
+            "### 2026-09-01 — real\n\n"
+            "#### 2026-13-45 — not a date\n\n"
+            "### 2026-08-01 — older\n",
+        ),
+        (
+            "brain/Gotchas.md",
+            "## Technical\n\n"
+            "### Real (2026-09-01)\n\n"
+            "#### Not a date (2026-13-45)\n\n"
+            "### Older (2026-08-01)\n",
+        ),
+    ],
+    ids=["bullet", "leading", "trailing"],
+)
+def test_audit_skips_a_date_that_is_not_a_calendar_date(
+    tmp_path: Path, rel: str, body: str
+) -> None:
+    assert _order_details(tmp_path, rel, body) == []
+
+
+def test_audit_compares_entries_only_within_one_anchor_block(tmp_path: Path) -> None:
+    """Wins and Growth are separate newest-first runs; the boundary is not an inversion."""
+    details = _order_details(
+        tmp_path,
+        "perf/Brag Doc.md",
+        "## Q3 2026\n\n"
+        "### Wins\n\n"
+        "- **2026-09-02 — newest win**\n\n"
+        "- **2026-07-01 — oldest win**\n\n"
+        "### Growth\n\n"
+        "- **2026-08-12 — newest growth**\n\n"
+        "- **2026-07-02 — oldest growth**\n\n"
+        "- **2026-07-30 — appended growth**\n",
+    )
+
+    assert len(details) == 1
+    assert "2026-07-30" in details[0] and "2026-07-02" in details[0]
+
+
+def test_audit_reads_entries_outside_any_anchor_block_as_their_own_run(
+    tmp_path: Path,
+) -> None:
+    """Dated bullets straight under the title still form a run and still invert."""
+    details = _order_details(
+        tmp_path,
+        "perf/Brag Doc.md",
+        "- **2026-08-01 — a win**\n\n"
+        "- **2026-09-01 — appended below it**\n\n"
+        "## Q3 2026\n\n### Wins\n\n"
+        "- **2026-07-01 — inside the block, older than the run above**\n",
+    )
+
+    assert len(details) == 1
+    assert "2026-09-01" in details[0] and "2026-08-01" in details[0]
+
+
+def test_audit_reads_dated_headings_outside_any_anchor_block_as_one_run(
+    tmp_path: Path,
+) -> None:
+    details = _order_details(
+        tmp_path,
+        "brain/Key Decisions.md",
+        "### 2026-08-01 — straight under the title\n\nBody.\n\n"
+        "### 2026-09-01 — appended below it\n\nBody.\n",
+    )
+
+    assert len(details) == 1
+
+
+def test_audit_splits_unanchored_entries_at_a_non_entry_heading(tmp_path: Path) -> None:
+    """``## Q3 2026`` holds ``### Wins``, so it is no anchor, but it still ends the run above."""
+    details = _order_details(
+        tmp_path,
+        "perf/Brag Doc.md",
+        "- **2026-09-01 — under the title**\n\n"
+        "## Q3 2026\n\n"
+        "- **2026-10-01 — in the quarter's preamble**\n\n"
+        "### Wins\n\n- **2026-08-01 — a win**\n",
+    )
+
+    assert details == []
+
+
+def test_audit_does_not_read_dated_bullets_under_an_entrys_subheading(
+    tmp_path: Path,
+) -> None:
+    details = _order_details(
+        tmp_path,
+        "brain/Key Decisions.md",
+        "## Recent\n\n"
+        "### 2026-09-02 — newest\n\n"
+        "#### Timeline\n\n"
+        "- **2026-08-01 — first step**\n\n"
+        "- **2026-08-15 — second step**\n\n"
+        "### 2026-09-01 — older\n\nBody.\n",
+    )
+
+    assert details == []
+
+
+def test_audit_reports_inversions_in_file_order(tmp_path: Path) -> None:
+    details = _order_details(
+        tmp_path,
+        "perf/Brag Doc.md",
+        "- **2026-08-01 — under the title**\n\n"
+        "- **2026-09-01 — appended**\n\n"
+        "## Q3 2026\n\n### Wins\n\n"
+        "- **2026-07-01 — a win**\n\n"
+        "- **2026-07-30 — appended**\n",
+    )
+
+    assert [detail.split(" ", 1)[0] for detail in details] == ["2026-09-01", "2026-07-30"]
+
+
+def test_audit_reports_the_inverted_entry_at_its_file_line(tmp_path: Path) -> None:
+    details = _order_details(
+        tmp_path,
+        "brain/Gotchas.md",
+        "## Technical\n\n"
+        "### First (2026-08-01)\n\nBody.\n\n"
+        "### Second (2026-09-01)\n\nBody.\n",
+    )
+    text = (tmp_path / "brain/Gotchas.md").read_text(encoding="utf-8").splitlines()
+    first = text.index("### First (2026-08-01)") + 1
+    second = text.index("### Second (2026-09-01)") + 1
+
+    assert details == [
+        f"2026-09-01 (line {second}) follows the older 2026-08-01 (line {first})"
+        " — entries run newest-first"
+    ]
+
+
+def test_entry_order_reads_entries_through_the_shared_vault_utils_grammar() -> None:
+    """The grammar the vault-sync parity test pins is the one the detector runs."""
+    import vault_audit
+    import vault_utils
+
+    assert vault_audit.entry_runs is vault_utils.entry_runs
 
 
 # --- #1077: no module-level name shadows the shared vault_utils pattern ---
