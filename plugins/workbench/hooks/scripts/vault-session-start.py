@@ -10,6 +10,8 @@ Nothing here runs outside a vault: ``run-vault-hook.sh`` checks for
 ``.vault/vault.json`` and exits before starting an interpreter (#667).
 """
 
+from __future__ import annotations
+
 WORKSHOP_HOOK = {"event": "SessionStart", "runner": "vault"}
 
 import io  # noqa: E402
@@ -42,11 +44,12 @@ def _platform_for(root: Path) -> str:
     return "other"
 
 
-def _session_marker() -> str:
-    """Identify this session: the harness session id, else a UTC timestamp.
+def _read_payload() -> dict | None:
+    """The hook payload from stdin as a dict, or ``None`` when there is none.
 
-    Reads the hook payload from stdin and puts it back so the engine, which
-    parses the same stream, still sees it.
+    Reads stdin once and puts it back so the engine, which parses the same
+    stream, still sees it. Anything that is not a JSON object -- empty stdin
+    (Codex sends no payload), malformed text, a list -- counts as no payload.
     """
     raw = ""
     if sys.stdin is not None and not sys.stdin.isatty():
@@ -55,11 +58,53 @@ def _session_marker() -> str:
     try:
         payload = json.loads(raw)
     except ValueError:
-        payload = None
-    session_id = payload.get("session_id") if isinstance(payload, dict) else None
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _session_marker(payload: dict | None) -> str:
+    """Identify this session: the harness session id, else a UTC timestamp."""
+    session_id = payload.get("session_id") if payload else None
     if isinstance(session_id, str) and session_id:
         return session_id
     return datetime.now(timezone.utc).isoformat()
+
+
+def _vault_root_containing(path: Path) -> Path | None:
+    """The nearest directory at or above ``path`` holding ``.vault/vault.json``.
+
+    The same marker ``run-vault-hook.sh`` and ``vault_utils.find_vault_root``
+    walk up for, so all three agree on what counts as a vault.
+    """
+    for candidate in (path, *path.parents):
+        if (candidate / ".vault" / "vault.json").is_file():
+            return candidate
+    return None
+
+
+def _breadcrumb_roots(payload: dict | None) -> list[Path]:
+    """Every vault root this session leaves a breadcrumb in.
+
+    ``CLAUDE_PROJECT_DIR`` is the project the session was launched in, and for
+    an ordinary checkout it is the only root. In a linked worktree session it
+    names the MAIN checkout, not the worktree the session runs in -- so the
+    worktree's own gitignored breadcrumb was never refreshed, kept naming a
+    plugin root long since pruned from the cache, and the vault's local gate
+    (``tests/test_vault_gate.py``, which resolves its root from its own file)
+    failed from inside the worktree while the main checkout's copy was fresh.
+    The payload's ``cwd`` is where the session actually runs; the vault
+    enclosing it gets a breadcrumb too when it is a different directory. The
+    main checkout keeps its breadcrumb as well: ``check-plugin.sh`` reads it
+    through ``CLAUDE_PROJECT_DIR`` for every session, worktree or not.
+    """
+    project_root = Path(os.environ["CLAUDE_PROJECT_DIR"])
+    roots = [project_root]
+    cwd = payload.get("cwd") if payload else None
+    if isinstance(cwd, str) and cwd:
+        session_root = _vault_root_containing(Path(cwd))
+        if session_root is not None and session_root.resolve() != project_root.resolve():
+            roots.append(session_root)
+    return roots
 
 
 def _write_breadcrumb() -> None:
@@ -76,23 +121,25 @@ def _write_breadcrumb() -> None:
     executed (the datum a reader's supersession check consumes), and ``session``
     changes every session so a reader can tell "ran and confirmed" from "did not
     run". Every session rewrites the files; they are gitignored machine-local
-    state that never syncs.
+    state that never syncs. A linked worktree session writes them into the
+    worktree as well as the main checkout (see ``_breadcrumb_roots``).
     """
-    vault_root = Path(os.environ["CLAUDE_PROJECT_DIR"])
+    payload = _read_payload()
     root = Path(__file__).resolve().parents[2]
     manifest = root / ".claude-plugin" / "plugin.json"
     platform = _platform_for(root)
-    payload = {
+    record = {
         "root": str(root),
         "version": json.loads(manifest.read_text())["version"],
         "platform": platform,
-        "session": _session_marker(),
+        "session": _session_marker(payload),
     }
-    rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    state_dir = vault_root / ".vault"
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / f"plugin-state.{platform}.json").write_text(rendered)
-    (state_dir / "plugin-state.json").write_text(rendered)
+    rendered = json.dumps(record, indent=2, sort_keys=True) + "\n"
+    for vault_root in _breadcrumb_roots(payload):
+        state_dir = vault_root / ".vault"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        (state_dir / f"plugin-state.{platform}.json").write_text(rendered)
+        (state_dir / "plugin-state.json").write_text(rendered)
 
 
 run_engine_script("session-start.py", before=_write_breadcrumb)

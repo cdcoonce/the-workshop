@@ -244,3 +244,61 @@ def test_closed_stdin_still_runs_the_engine(home: Path, vault: Path) -> None:
     assert result.returncode == 0
     assert "Traceback" not in result.stderr
     assert (vault / "engine-stdin.txt").exists()
+
+
+def test_worktree_session_refreshes_the_worktree_breadcrumb(home: Path, vault: Path) -> None:
+    """A session running in a linked worktree writes its breadcrumb there too.
+
+    For a worktree session Claude Code's ``CLAUDE_PROJECT_DIR`` names the main
+    checkout, so the worktree's own gitignored breadcrumb was never refreshed.
+    It kept naming a plugin root long since pruned from the cache, and the
+    vault's local gate (``tests/test_vault_gate.py``) failed on it from inside
+    the worktree while the main checkout's copy was fresh. The hook payload's
+    ``cwd`` is where the session actually runs; sessions routinely start in a
+    subdirectory, so the breadcrumb goes to the vault root enclosing it.
+    """
+    root = _fake_plugin(home, ROOTS["claude-code"])
+    worktree = vault / ".claude" / "worktrees" / "nifty"
+    (worktree / ".vault").mkdir(parents=True)
+    (worktree / ".vault" / "vault.json").write_text("{}\n")  # tracked: every worktree has it
+    stale = {"platform": "claude-code", "root": str(home / "pruned" / "8.15.6"), "version": "8.15.6"}
+    (worktree / ".vault" / "plugin-state.json").write_text(json.dumps(stale))
+    (worktree / "notes").mkdir()
+
+    result = _run(
+        root, home, vault, stdin=json.dumps({"session_id": "wt", "cwd": str(worktree / "notes")})
+    )
+
+    assert result.returncode == 0, result.stderr
+    for name in ("plugin-state.json", "plugin-state.claude-code.json"):
+        record = _payload(worktree / ".vault" / name)
+        assert record["root"] == str(root.resolve()), name
+        assert record["version"] == "9.9.9", name
+        assert record["session"] == "wt", name
+    assert _payload(vault / ".vault" / "plugin-state.json")["root"] == str(root.resolve())
+
+
+def test_cwd_outside_any_vault_leaves_only_the_project_breadcrumb(home: Path, vault: Path) -> None:
+    """A cwd that is in no vault (``~`` on /clear) must not sprout a ``.vault/``."""
+    root = _fake_plugin(home, ROOTS["claude-code"])
+    elsewhere = home / "elsewhere"
+    elsewhere.mkdir()
+
+    result = _run(root, home, vault, stdin=json.dumps({"cwd": str(elsewhere)}))
+
+    assert result.returncode == 0, result.stderr
+    assert _payload(vault / ".vault" / "plugin-state.json")["version"] == "9.9.9"
+    assert not (elsewhere / ".vault").exists()
+    assert not (home / ".vault").exists()
+
+
+def test_ordinary_checkout_cwd_writes_nowhere_new(home: Path, vault: Path) -> None:
+    """In a plain checkout the cwd's vault IS the project dir: one root, as before."""
+    root = _fake_plugin(home, ROOTS["claude-code"])
+    (vault / ".vault" / "vault.json").write_text("{}\n")
+    (vault / "notes").mkdir()
+
+    _run(root, home, vault, stdin=json.dumps({"session_id": "plain", "cwd": str(vault / "notes")}))
+
+    assert _payload(vault / ".vault" / "plugin-state.json")["session"] == "plain"
+    assert not (vault / "notes" / ".vault").exists()
