@@ -70,6 +70,28 @@ def _transcript(tmp_path: Path, *lines: str, name: str = "t.jsonl") -> Path:
     return path
 
 
+def _checkpoint(used_k: int, limit_k: int) -> str:
+    """The one notice text the hook may print, for a given reading and threshold."""
+    return (
+        f"Context checkpoint: this session's context is ~{used_k}k tokens "
+        f"(threshold {limit_k}k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it)."
+    )
+
+
+def _notice(result) -> str:
+    """The user-facing notice, asserting it is the hook's ONLY output.
+
+    stdout must parse as exactly one JSON object whose only key is the top-level
+    ``systemMessage`` (shown to the user, never added to the model's context).
+    """
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+    assert isinstance(out, dict)
+    assert set(out) == {"systemMessage"}
+    assert isinstance(out["systemMessage"], str)
+    return out["systemMessage"]
+
+
 @pytest.fixture
 def markers(tmp_path: Path) -> Path:
     d = tmp_path / "markers"
@@ -125,20 +147,45 @@ class TestThreshold:
         assert result.returncode == 0
         assert result.stdout == ""
 
-    def test_at_or_above_threshold_suggests_wrap_up(
+    def test_at_or_above_threshold_emits_a_user_only_system_message(
         self, tmp_path: Path, markers: Path
     ) -> None:
         transcript = _transcript(tmp_path, _assistant_line(2, 305_000, 2_000))
         result = run(
             {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
         )
+        assert _notice(result) == _checkpoint(307, 300)
+
+    @pytest.mark.parametrize(
+        ("threshold", "tokens", "expected"),
+        [
+            pytest.param(None, 300_000, _checkpoint(300, 300), id="default-threshold"),
+            pytest.param(
+                "200000", 200_000, _checkpoint(200, 200), id="env-override-threshold"
+            ),
+        ],
+    )
+    def test_reading_exactly_at_the_threshold_fires(
+        self, tmp_path: Path, markers: Path, threshold, tokens: int, expected: str
+    ) -> None:
+        # "Crosses a threshold" is inclusive: a reading equal to the threshold fires.
+        transcript = _transcript(tmp_path, _assistant_line(0, tokens, 0))
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)},
+            tmpdir=markers,
+            threshold=threshold,
+        )
+        assert _notice(result) == expected
+
+    def test_reading_one_below_the_threshold_is_silent(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        transcript = _transcript(tmp_path, _assistant_line(0, 299_999, 0))
+        result = run(
+            {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
+        )
         assert result.returncode == 0
-        out = json.loads(result.stdout)
-        hso = out["hookSpecificOutput"]
-        assert hso["hookEventName"] == "UserPromptSubmit"
-        assert "/wrap-up" in hso["additionalContext"]
-        assert "/handoff" not in hso["additionalContext"]
-        assert "do not run" in hso["additionalContext"].lower()
+        assert result.stdout == ""
 
     def test_uses_last_assistant_usage_not_earlier(
         self, tmp_path: Path, markers: Path
@@ -162,8 +209,92 @@ class TestThreshold:
             tmpdir=markers,
             threshold="40000",
         )
+        assert _notice(result) == _checkpoint(50, 40)
+
+
+class TestUserOnlyNotice:
+    """The checkpoint is for the human: top-level ``systemMessage``, no instruction.
+
+    ``additionalContext`` and plain stdout reach the model as a system-reminder it
+    treats as the user's voice, and the user never sees them. The session lifecycle
+    is the user's call, so the hook reports the reading to the user and tells the
+    agent nothing.
+    """
+
+    FORBIDDEN = ("/wrap-up", "/handoff", "Tell the user")
+
+    def _fire(self, tmp_path: Path, markers: Path, *, tokens: int, threshold=None):
+        transcript = _transcript(tmp_path, _assistant_line(0, tokens, 0))
+        return run(
+            {"session_id": "s1", "transcript_path": str(transcript)},
+            tmpdir=markers,
+            threshold=threshold,
+        )
+
+    def test_only_key_is_system_message(self, tmp_path: Path, markers: Path) -> None:
+        result = self._fire(tmp_path, markers, tokens=305_000)
         out = json.loads(result.stdout)
-        assert "/wrap-up" in out["hookSpecificOutput"]["additionalContext"]
+        assert set(out) == {"systemMessage"}
+        assert "hookSpecificOutput" not in result.stdout
+        assert "additionalContext" not in result.stdout
+
+    def test_stdout_is_exactly_one_json_object(
+        self, tmp_path: Path, markers: Path
+    ) -> None:
+        result = self._fire(tmp_path, markers, tokens=305_000)
+        # Any stray stdout around the object would turn the whole output into
+        # plain-text model context, so the full stream must parse as one object.
+        assert isinstance(json.loads(result.stdout), dict)
+        assert len(result.stdout.strip().splitlines()) == 1
+
+    @pytest.mark.parametrize(
+        ("tokens", "threshold", "expected"),
+        [
+            pytest.param(
+                305_000,
+                None,
+                "Context checkpoint: this session's context is ~305k tokens "
+                "(threshold 300k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
+                id="default-threshold",
+            ),
+            pytest.param(
+                250_000,
+                "200000",
+                "Context checkpoint: this session's context is ~250k tokens "
+                "(threshold 200k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
+                id="env-override-shows-the-threshold-in-force",
+            ),
+            pytest.param(
+                304_600,
+                None,
+                "Context checkpoint: this session's context is ~305k tokens "
+                "(threshold 300k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
+                id="rounds-rather-than-floors",
+            ),
+            pytest.param(
+                250_000,
+                "200600",
+                "Context checkpoint: this session's context is ~250k tokens "
+                "(threshold 201k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it).",
+                id="threshold-rounds-rather-than-floors",
+            ),
+        ],
+    )
+    def test_message_text_is_exact(
+        self, tmp_path: Path, markers: Path, tokens: int, threshold, expected: str
+    ) -> None:
+        result = self._fire(tmp_path, markers, tokens=tokens, threshold=threshold)
+        assert _notice(result) == expected
+
+    @pytest.mark.parametrize("threshold", [None, "200000"])
+    def test_message_carries_no_instruction(
+        self, tmp_path: Path, markers: Path, threshold
+    ) -> None:
+        message = _notice(
+            self._fire(tmp_path, markers, tokens=305_000, threshold=threshold)
+        )
+        for forbidden in self.FORBIDDEN:
+            assert forbidden not in message
 
 
 class TestOncePerSession:
@@ -220,10 +351,7 @@ class TestSidechainSkipped:
         result = run(
             {"session_id": "s1", "transcript_path": str(transcript)}, tmpdir=markers
         )
-        assert result.returncode == 0
-        assert "/wrap-up" in json.loads(result.stdout)["hookSpecificOutput"][
-            "additionalContext"
-        ]
+        assert _notice(result) == _checkpoint(305, 300)
 
     def test_trailing_huge_sidechain_turn_does_not_trigger(
         self, tmp_path: Path, markers: Path
@@ -263,10 +391,7 @@ class TestRearmOnContextCollapse:
         assert self._fire(tmp_path, markers, 10_000, "b.jsonl").stdout == ""
         # Regrows past the threshold: second warning.
         again = self._fire(tmp_path, markers, 305_000, "c.jsonl")
-        assert again.returncode == 0
-        assert "/wrap-up" in json.loads(again.stdout)["hookSpecificOutput"][
-            "additionalContext"
-        ]
+        assert _notice(again) == _checkpoint(305, 300)
 
     def test_still_high_context_stays_suppressed_without_a_drop(
         self, tmp_path: Path, markers: Path

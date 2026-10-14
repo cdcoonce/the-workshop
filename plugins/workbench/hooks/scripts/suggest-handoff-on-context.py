@@ -2,18 +2,24 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""UserPromptSubmit hook: suggest /wrap-up once the session's context grows large.
+"""UserPromptSubmit hook: tell the user (not the agent) once the session's context grows large.
 
 Claude Code exposes no context-window size to hooks, so this derives it from the
 transcript. The most recent assistant message's usage
 (``input_tokens + cache_read_input_tokens + cache_creation_input_tokens``) is the
 token count sent on that request — i.e. the live context size. When it crosses a
 threshold (default 300k, override with ``WORKSHOP_HANDOFF_CONTEXT_TOKENS``) the hook
-emits UserPromptSubmit ``additionalContext`` telling Claude to suggest the user run
-``/wrap-up`` — the vault wrap-up (session audit, handoff refresh, git sync), which
-subsumes the bare handoff refresh this hook used to point at. It suggests, never
-invokes. The script name, env var, and marker dir keep their historical "handoff"
-spelling so installed configs and overrides keep working.
+prints one top-level ``systemMessage`` reporting the reading, and nothing else.
+
+The audience is the point. ``additionalContext`` and plain stdout reach the model as
+a system-reminder the agent treats as the user's voice, and the user never sees
+them. The session lifecycle is the user's call — the vault forbids agents suggesting
+``/wrap-up`` or a fresh session — so this hook cannot steer it from that channel.
+``systemMessage`` is shown to the user and is not added to the model's context. The
+owner kept the 300k instrument (#518, 2026-07-26), so only the audience changed.
+stdout must be exactly one JSON object: any stray output turns the whole of it into
+plain-text context for the agent. The script name, env var, and marker dir keep
+their historical "handoff" spelling so installed configs and overrides keep working.
 
 Fires at most once per large-context episode: a marker file keyed on ``session_id``
 (or, when a host omits one, a hash of the transcript path) is written on first trigger,
@@ -146,11 +152,8 @@ def _message(context_tokens: int, threshold: int) -> str:
     used_k = round(context_tokens / 1000)
     limit_k = round(threshold / 1000)
     return (
-        f"[context checkpoint] This session has used ~{used_k}k tokens of context "
-        f"(threshold {limit_k}k). Tell the user it's a good moment to run `/wrap-up` "
-        "to audit the session, refresh the rolling orchestrator handoff, and sync, "
-        "so work can continue cleanly in a fresh session. Mention it once, then carry "
-        "on with their request — do not run `/wrap-up` automatically."
+        f"Context checkpoint: this session's context is ~{used_k}k tokens "
+        f"(threshold {limit_k}k; set WORKSHOP_HANDOFF_CONTEXT_TOKENS to change it)."
     )
 
 
@@ -181,16 +184,7 @@ def main() -> int:
         return 0
 
     _arm(marker, context_tokens)
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": _message(context_tokens, _threshold()),
-                }
-            }
-        )
-    )
+    print(json.dumps({"systemMessage": _message(context_tokens, threshold)}))
     return 0
 
 
@@ -198,5 +192,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception:
-        # Never let the handoff-suggestion hook break a prompt.
+        # Never let the context-checkpoint hook break a prompt.
         sys.exit(0)

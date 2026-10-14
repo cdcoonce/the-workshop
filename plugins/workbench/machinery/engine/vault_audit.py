@@ -32,7 +32,7 @@ from vault_scope_resolved import (  # noqa: E402
     iter_graph_markdown_notes,
     rel_posix,
 )
-from vault_utils import code_spans as _code_spans, find_vault_root  # noqa: E402
+from vault_utils import code_spans as _code_spans, entry_runs, find_vault_root  # noqa: E402
 
 WIKILINK_WITH_EMBED_RE = re.compile(r"(!?)\[\[([^\]\n]+)\]\]")
 OBSIDIAN_BASE_RECOMMENDATIONS = (
@@ -280,18 +280,14 @@ ACCUMULATING_HUB_FILES = frozenset({
     "perf/Brag Doc.md",
 })
 
-# Two entry shapes accumulate in these files: dated "###" headings (the
-# decisions log) and dated "- **" bullets (the brag doc). Both are one entry
-# per line-start, so one pattern covers them.
-_ENTRY_DATE_RE = re.compile(r"^(?:#{2,4}\s+|-\s+\*\*)(\d{4}-\d{2}-\d{2})")
-
-
 def _entry_order_issues(vault_root: Path) -> list[Issue]:
     """Report dated entries that run older-to-newer in a newest-first log.
 
     These files are appended to by many unrelated sessions, so a single entry
     added at the wrong end is invisible until someone reads the file end to
-    end. Equal dates are legal: several sessions can close on one day.
+    end. Equal dates are legal: several sessions can close on one day. Order
+    is compared within one run (see ``vault_utils.entry_runs``), never across the
+    boundary between two runs.
 
     Parameters
     ----------
@@ -308,21 +304,19 @@ def _entry_order_issues(vault_root: Path) -> list[Issue]:
         path = vault_root / rel
         if not path.is_file():
             continue
-        previous: tuple[int, str] | None = None
-        for lineno, line in enumerate(_read(path).splitlines(), 1):
-            matched = _ENTRY_DATE_RE.match(line)
-            if not matched:
-                continue
-            current = (lineno, matched.group(1))
-            if previous is not None and current[1] > previous[1]:
-                issues.append(
-                    Issue(
-                        rel,
-                        f"{current[1]} (line {lineno}) follows the older "
-                        f"{previous[1]} (line {previous[0]}) — entries run newest-first",
-                    )
+        inverted: list[tuple[int, str, int, str]] = []
+        for _anchor, entries in entry_runs(_read(path).splitlines()):
+            for (prev_idx, prev_day), (idx, day) in zip(entries, entries[1:]):
+                if day > prev_day:
+                    inverted.append((idx, day, prev_idx, prev_day))
+        for idx, day, prev_idx, prev_day in sorted(inverted):
+            issues.append(
+                Issue(
+                    rel,
+                    f"{day} (line {idx + 1}) follows the older "
+                    f"{prev_day} (line {prev_idx + 1}) — entries run newest-first",
                 )
-            previous = current
+            )
     return issues
 
 
