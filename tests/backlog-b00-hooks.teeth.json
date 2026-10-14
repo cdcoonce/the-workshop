@@ -215,7 +215,7 @@
       "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
       "oracle": "real",
       "find": "(state_dir / f\"plugin-state.{platform}.json\").write_text(rendered)",
-      "replace": "target = state_dir / f\"plugin-state.{platform}.json\"\n    if target.exists() and target.read_text() == rendered:\n        return\n    target.write_text(rendered)"
+      "replace": "target = state_dir / f\"plugin-state.{platform}.json\"\n        if target.exists() and target.read_text() == rendered:\n            continue\n        target.write_text(rendered)"
     },
     {
       "label": "#894: hook payload consumed and not handed to the engine [predicted: test_engine_still_receives_the_hook_payload]",
