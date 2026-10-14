@@ -435,6 +435,8 @@ def test_non_string_final_message_fails_open(tmp_path: Path, message: object) ->
         "Task not all done.",
         "It isn't all done.",
         "The tests aren\u2019t all done.",
+        "The migration is not\nall done.",
+        "It isn't\nall done.",
     ],
 )
 def test_negated_done_ending_is_not_a_completion_claim(tmp_path: Path, message: str) -> None:
@@ -459,6 +461,8 @@ def test_negated_done_ending_is_not_a_completion_claim(tmp_path: Path, message: 
         "Reviewed everything. I am done",
         "I\u2019m done.",
         "It\u2019s done.",
+        "It's done.",
+        "It is done.",
         "Committed and pushed. We're all done.",
     ],
 )

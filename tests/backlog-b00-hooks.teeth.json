@@ -155,6 +155,34 @@
       "replace": "(?<!\\w\\s)all"
     },
     {
+      "label": "straight apostrophe dropped from it's [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|it['\\u2019]s|",
+      "replace": "|it[\\u2019]s|"
+    },
+    {
+      "label": "it is subject dropped [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|it is) done",
+      "replace": ") done"
+    },
+    {
+      "label": "not guard takes only a literal space [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?<!\\bnot\\s|",
+      "replace": "(?<!\\bnot |"
+    },
+    {
+      "label": "n't guard takes only a literal space [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "n['\\u2019]t\\s)all",
+      "replace": "n['\\u2019]t )all"
+    },
+    {
       "label": "#739: _run_git ignores a non-zero exit [predicted: test_run_git_returns_stripped_stdout_and_none_on_failure]",
       "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
       "oracle": "real",
