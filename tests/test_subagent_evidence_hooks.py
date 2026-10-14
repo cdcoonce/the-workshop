@@ -473,9 +473,13 @@ def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, messag
         "Regex under review:\n\n```\nimplementation is complete\n```\n\nIt has no anchor.",
         "Regex under review:\n\n~~~\nimplementation is complete\n~~~\n\nIt has no anchor.",
         "```\nUse when implementation is complete\n````\n\nThat is the description.",
-        # CommonMark: neither line can close the fence, so the claim is inside it.
+        "````\nUse when implementation is complete\n````\n",
+        "```\nUse when implementation is complete\n```   \n\nThat is the description.",
+        "- Found:\n  ```\n  Use when implementation is complete\n  ```\n",
+        # CommonMark: none of these lines can close the fence, so the claim is inside it.
         "```\nfoo\n```bash\nI've fixed the bug.\n```",
         "```\nfoo\n~~~\nI've fixed the bug.\n```",
+        "````\nfoo\n```\nI've fixed the bug.\n````",
         "- Quoting the file:\n  > Use when implementation is complete\n",
     ],
     ids=[
@@ -489,8 +493,12 @@ def test_positive_done_ending_is_still_a_completion_claim(tmp_path: Path, messag
         "bare-fence",
         "tilde-fence",
         "longer-closer",
+        "four-backtick-fence",
+        "closer-trailing-space",
+        "indented-fence",
         "info-string-line-inside-fence",
         "other-marker-inside-fence",
+        "shorter-closer-inside-fence",
         "indented-blockquote",
     ],
 )

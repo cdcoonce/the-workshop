@@ -60,8 +60,9 @@ COMPLETION_CLAIM = re.compile(
 # a stray quote cannot swallow a later claim. Code spans run before double
 # quotes: a span can hold a `"` that would otherwise pair with a later quote.
 QUOTED_MATERIAL = (
-    # A fence per CommonMark: no backtick in the opener's info string, and the
-    # closer is the same character, at least as long, with nothing after it.
+    # A fence: no backtick in the opener's info string (CommonMark's rule for
+    # backtick fences, applied to tilde ones too), and the closer is the
+    # opener's character, at least as long, with only spaces or tabs after it.
     re.compile(
         r"^[ \t]*(([`~])\2{2,})[^`\n]*\n.*?^[ \t]*\1\2*[ \t]*$", re.MULTILINE | re.DOTALL
     ),
