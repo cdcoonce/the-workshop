@@ -24,10 +24,11 @@ HITS = 1
 SETUP_ERROR = 2
 
 
-def git(repo: Path, *args: str) -> str:
+def git(repo: Path, *args: str, stdin: str | None = None) -> str:
     result = subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
         cwd=repo,
+        input=stdin,
         capture_output=True,
         text=True,
         check=True,
@@ -1142,13 +1143,40 @@ def test_a_config_that_changed_nothing_says_nothing(repo: Path) -> None:
     assert "suppressed" not in result.stdout
 
 
-def test_an_unreadable_config_blob_is_a_setup_error_not_no_ignores(repo: Path) -> None:
+def forget_blob(repo: Path, base: str, name: str) -> str:
+    """Rewrite ``base`` and the HEAD on top of it so both trees name ``name``
+    by a hash the object store never held: a partial clone that never fetched
+    the blob. Nothing on disk is touched, so it holds however git stores the
+    real blob. Both commits carry the same entry, so a diff between them never
+    reads it. Returns the rewritten base."""
+    missing = git(repo, "hash-object", "--stdin", stdin=f"{name}: never fetched\n")
+
+    def dangle(rev: str) -> str:
+        rows = []
+        for row in git(repo, "ls-tree", rev).splitlines():
+            _meta, entry = row.split("\t", 1)
+            rows.append(f"100644 blob {missing}\t{entry}" if entry == name else row)
+        return git(repo, "mktree", "--missing", stdin="\n".join(rows) + "\n")
+
+    base = git(repo, "commit-tree", dangle(base), "-m", "initial")
+    head = git(repo, "commit-tree", dangle("HEAD"), "-p", base, "-m", "rename both")
+    git(repo, "update-ref", "HEAD", head)
+    return base
+
+
+@pytest.mark.parametrize("storage", ["loose", "packed"])
+def test_an_unreadable_config_blob_is_a_setup_error_not_no_ignores(
+    repo: Path, storage: str
+) -> None:
     """The tree lists the file but its blob is gone, as in a partial clone that
-    never fetched it; that is not the same as having no ignore list."""
+    never fetched it; that is not the same as having no ignore list. The blob
+    is dropped from history, not from disk, so the case holds whether git keeps
+    the real blob loose or packed; both forms run here."""
     configure(repo, 'ignore_paths = ["**"]\n')
     base = two_renames(repo)
-    blob = git(repo, "rev-parse", "HEAD:.mr-preflight.toml")
-    (repo / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+    if storage == "packed":
+        git(repo, "repack", "-a", "-d", "-q")
+    base = forget_blob(repo, base, ".mr-preflight.toml")
 
     result = sweep(repo, base)
 
