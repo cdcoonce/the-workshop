@@ -118,13 +118,13 @@ check-teeth-changed:
 # the index's model identity and refuses an index built under another; the pin
 # equals machinery/pyproject.toml's and each engine script's inline one, and
 # moves only together with an index rebuild and the runtime snapshot.
-MACHINERY_TEST_PYTHON ?= uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' --with 'ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl' --with 'fastembed==0.8.0' python
+MACHINERY_TEST_PYTHON ?= uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.11,<0.12' --with 'ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl' --with 'fastembed==0.8.0' python
 .PHONY: test-machinery
 test-machinery:
 	cd plugins/workbench/machinery && $(MACHINERY_TEST_PYTHON) -m pytest -q tests
 
 # graphmark parity targets: the rest of the machinery suite runs under the
-# machinery env's own pin (pyproject.toml, graphmark>=0.10,<0.11), the same
+# machinery env's own pin (pyproject.toml, graphmark>=0.11,<0.12), the same
 # range command.md and the vault's ci/vault_health.py gate use. The wrap-up
 # collector's `gate` check (plugins/workbench/machinery/engine/wrap_up_audit.py)
 # reads graphmark.config.CheckPolicy and graphmark.check. This target runs only
@@ -139,7 +139,7 @@ test-machinery:
 # pin; if they ever diverge again, run from the root.
 .PHONY: test-wrap-up-gate-parity
 test-wrap-up-gate-parity:
-	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.11,<0.12' python -m pytest -q plugins/workbench/machinery/tests/test_wrap_up_audit.py
 
 # Same graphmark parity target, for the cold-read evidence resolver's wikilink
 # resolution (plugins/workbench/machinery/engine/cold_read_evidence.py, via
@@ -148,7 +148,7 @@ test-wrap-up-gate-parity:
 # `cd plugins/workbench/machinery` first.
 .PHONY: test-cold-read-evidence-wikilink-parity
 test-cold-read-evidence-wikilink-parity:
-	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.10,<0.11' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
+	uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.11,<0.12' python -m pytest -q plugins/workbench/machinery/tests/test_cold_read_evidence.py
 
 # Eval harness gate (#991): the harness's own tests, plus every fixture
 # case's case_tests/ directory (owned by the fixture children, #998-#1002),

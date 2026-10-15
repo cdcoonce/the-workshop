@@ -16,7 +16,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pyyaml>=6.0",
     "numpy>=1.26",
-    "graphmark>=0.10,<0.11",
+    "graphmark>=0.11,<0.12",
     "ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl",
     # Exact, deliberately: ragmark records fastembed.__version__ in the index's
     # model identity and refuses an index built under a different one, while
