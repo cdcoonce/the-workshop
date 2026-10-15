@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -555,14 +555,14 @@ wheels = [
 
 [[package]]
 name = "graphmark"
-version = "0.10.1"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "networkx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a0/2e/45e45f2b8f241f816d7dfdc61f7591beadd2e4afa3d6b7c0f74d182aed8b/graphmark-0.10.1.tar.gz", hash = "sha256:abb1f71211d35bee217fb45c5644a39bed7ed57f36d48f84125a283e7190c584", size = 220347, upload-time = "2026-10-04T03:33:17.986Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/bd/4f8de498776da4ccfbf398640c3082a8bc99d60c0ecf52753b570f7e9984/graphmark-0.11.0.tar.gz", hash = "sha256:20d91fd8b5977c4c350eb3c920b89d2af496f28fb0f64ff9ca610e7d02bd5dd5", size = 236011, upload-time = "2026-10-15T19:24:35.418Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/8a/4eae6076417bf345691882312ee0ba45fb6cf9fd155828eaab2a84ffde84/graphmark-0.10.1-py3-none-any.whl", hash = "sha256:d1cba4dd903eb251c0fcfcd50dbd39ed8a7c3f4d9730829c30de092ad4087ada", size = 50315, upload-time = "2026-10-04T03:33:16.788Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/51/cfc3a93091da62834fffd66ca0413ccf1eec1384ad4bb35637f51584fde1/graphmark-0.11.0-py3-none-any.whl", hash = "sha256:1856929a0fb66f42ed46f34385f88adbb1c5e4dc68aa668f4f041c5b83ab0d97", size = 53041, upload-time = "2026-10-15T19:24:34.248Z" },
 ]
 
 [[package]]
@@ -2398,7 +2398,7 @@ requires-dist = [
     { name = "fastembed", specifier = "==0.8.0" },
     { name = "fastembed", marker = "extra == 'embeddings'", specifier = ">=0.3" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.0" },
-    { name = "graphmark", specifier = ">=0.10,<0.11" },
+    { name = "graphmark", specifier = ">=0.11,<0.12" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ragmark", url = "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl" },
