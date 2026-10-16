@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MACHINERY = ROOT / "plugins" / "workbench" / "machinery"
-GRAPHMARK_REQUIREMENT = "graphmark>=0.10,<0.11"
+GRAPHMARK_REQUIREMENT = "graphmark>=0.11,<0.12"
 # ragmark is not on PyPI: every surface resolves the v0.3.0 release wheel by URL.
 RAGMARK_WHEEL = (
     "https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/"
@@ -117,7 +117,7 @@ def test_machinery_lock_resolves_graphmark_in_the_declared_range() -> None:
         package for package in lock["package"] if package["name"] == "graphmark"
     )
     version = tuple(int(part) for part in graphmark["version"].split(".")[:2])
-    assert (0, 10) <= version < (0, 11)
+    assert (0, 11) <= version < (0, 12)
     project = next(
         package
         for package in lock["package"]
@@ -128,7 +128,7 @@ def test_machinery_lock_resolves_graphmark_in_the_declared_range() -> None:
         for item in project["metadata"]["requires-dist"]
         if item["name"] == "graphmark"
     )
-    assert requirement["specifier"] == ">=0.10,<0.11"
+    assert requirement["specifier"] == ">=0.11,<0.12"
 
 
 def test_engine_scripts_that_declare_ragmark_pin_the_index_fastembed() -> None:
@@ -241,7 +241,7 @@ def test_teeth_commands_that_resolve_ragmark_pin_the_index_fastembed(
 )
 def test_owner_ci_parity_leg_stays_separate(target: str) -> None:
     recipe = _recipe(target)
-    assert "'graphmark>=0.10,<0.11'" in recipe
+    assert "'graphmark>=0.11,<0.12'" in recipe
     assert "cd plugins/workbench/machinery" not in recipe
     assert f"$(MAKE) {target}" in _recipe("test")
 
