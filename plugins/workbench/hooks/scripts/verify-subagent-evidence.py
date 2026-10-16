@@ -43,12 +43,15 @@ if not agent_id:
 
 # Conservative on purpose: only fire on a strong first-person completion
 # claim, not any mention of these words in passing (e.g. "no fix needed").
+# Every apostrophe also takes U+2019, which editors and models emit for it.
+# A negator right before "all" ("not all done", "isn't all done") denies the
+# claim instead of making it.
 COMPLETION_CLAIM = re.compile(
-    r"\bI(?:'ve| have)\s+(?:implemented|fixed|added|updated|created|removed|"
+    r"\bI(?:['\u2019]ve| have)\s+(?:implemented|fixed|added|updated|created|removed|"
     r"deleted|refactored|committed|resolved|written|wrote|applied)\b"
     r"|\b(?:changes? (?:are|is) complete|fix is (?:in place|complete|done)|"
     r"implementation is complete|committed the (?:fix|change)|"
-    r"(?:I'm|I am|all|it's|it is) done\.?\s*$)",
+    r"(?:I['\u2019]m|I am|(?<!\bnot\s|n['\u2019]t\s)all|it['\u2019]s|it is) done\.?\s*$)",
     re.IGNORECASE,
 )
 
