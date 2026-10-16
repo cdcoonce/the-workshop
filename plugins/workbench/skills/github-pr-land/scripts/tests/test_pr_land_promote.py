@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 import pr_land
-from conftest import CompositeRunner, FakeClock, FakeGh, json_result
+from conftest import CompositeRunner, FakeClock, FakeGh, http_error, json_result
 from pr_land import GREEN, INDETERMINATE, RED, Result, promote_pr
 
 REPO = "acme/widget"
@@ -329,3 +329,60 @@ def test_malformed_head_repo_payload_is_refused_not_a_crash(world, capsys, head_
     assert "head repository" in captured.out + captured.err
     assert [argv for argv, _ in runner.calls if argv[:2] in (["git", "fetch"], ["git", "push"])] == []
     assert hub.main() == hub.initial_main
+
+
+def unprotect(hub: Hub) -> None:
+    """Make the release branch read as unprotected, as graphmark's ``main`` does."""
+    hub.fake._scripts[tuple(PROTECTION)] = [http_error(404, "Branch not protected")]
+
+
+def test_unprotected_release_without_require_refuses_and_never_pushes(world, capsys) -> None:
+    """Guards against an unprotected release passing vacuously: no required checks is not green."""
+    hub, runner, origin = world
+    unprotect(hub)
+    code = promote(runner, FakeClock())
+    assert code == INDETERMINATE
+    assert "--require" in capsys.readouterr().err
+    assert pushes(runner) == []
+    assert hub.main() == hub.initial_main
+
+
+def test_unprotected_release_with_require_watches_the_named_checks_and_promotes(world, capsys) -> None:
+    """Guards against promote dropping ``require``, which refuses every repo whose release is unprotected."""
+    hub, runner, origin = world
+    unprotect(hub)
+    code = promote(runner, FakeClock(), require=["test"])
+    assert code == GREEN
+    assert hub.main() == hub.head_sha
+    assert f"promoted pr={PR} sha={hub.head_sha}" in capsys.readouterr().out
+
+
+def test_unprotected_release_with_a_red_required_check_never_pushes(world) -> None:
+    """Guards against a ``--require`` name being listed but not judged."""
+    hub, runner, origin = world
+    unprotect(hub)
+    hub.conclusion = "failure"
+    assert promote(runner, FakeClock(), require=["test"]) == RED
+    assert pushes(runner) == []
+    assert hub.main() == hub.initial_main
+
+
+def test_require_adds_to_the_release_protection_instead_of_replacing_it(world, capsys) -> None:
+    """Guards against ``--require`` overriding protection, or being ignored: a required check nobody ran blocks the push."""
+    hub, runner, origin = world
+    clock = FakeClock()
+    code = promote(runner, clock, require=["lint"], timeout=60, interval=15)
+    assert code == INDETERMINATE
+    assert "lint no check runs or statuses yet" in capsys.readouterr().out
+    assert pushes(runner) == []
+    assert hub.main() == hub.initial_main
+
+
+def test_cli_promote_threads_repeatable_require(world, capsys) -> None:
+    """Guards against the ``promote`` subcommand lacking ``--require`` or not passing it through."""
+    hub, runner, origin = world
+    unprotect(hub)
+    clock = FakeClock()
+    code = pr_land.main(["promote", str(PR), "--require", "test", "--require", "test"], runner=runner, clock=clock.clock, sleep=clock.sleep)
+    assert code == GREEN
+    assert hub.main() == hub.head_sha

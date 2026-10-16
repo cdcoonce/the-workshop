@@ -96,4 +96,13 @@ Success prints exactly one ledger line and exits 0:
 
 ## `promote`
 
-`python3 "<skill base dir>/scripts/pr_land.py" promote <pr> [--trunk dev] [--release main] [--timeout 2700] [--interval 15]`, with Bash `run_in_background: true`, for a `dev`→`main` PR: it refuses a PR whose head lives in another repository (a fork), refuses a non-fast-forward, watches the head SHA, pushes that literal SHA to `main` (never forced), and waits for the branch and a merged PR before printing `promoted pr=<n> sha=<sha>`. Exit 2 with `Bypassed rule violations` means the SHA landed but protection was bypassed, not satisfied — report it to Charles.
+`python3 "<skill base dir>/scripts/pr_land.py" promote <pr> [--trunk dev] [--release main] [--require NAME ...] [--timeout 2700] [--interval 15]`, with Bash `run_in_background: true`, for a `dev`→`main` PR: it refuses a PR whose head lives in another repository (a fork), refuses a non-fast-forward, watches the head SHA, pushes that literal SHA to `main` (never forced), and waits for the branch and a merged PR before printing `promoted pr=<n> sha=<sha>`. Exit 2 with `Bypassed rule violations` means the SHA landed but protection was bypassed, not satisfied — report it to Charles.
+
+The watch takes its required names from `main`'s protection, unioned with
+`--require` exactly as in `watch`. When `main` is unprotected (graphmark),
+protection supplies none, so pass every gate job by name with `--require`;
+without it `promote` exits 2 before pushing, the same as `watch`. Name the
+checks the trunk's CI runs on the head SHA, not a guess: a name that never
+reports holds the watch to its timeout. A red from a flake (a runner DNS
+failure, say) needs the job re-run and `promote` run again; the watch reads
+each name's latest run.

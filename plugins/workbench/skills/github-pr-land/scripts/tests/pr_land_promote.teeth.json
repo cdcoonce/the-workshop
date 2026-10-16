@@ -49,7 +49,7 @@
       "label": "the watch is skipped (test_red_watch_returns_1_and_never_pushes)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "    watched = watch_sha(runner, repo, sha, branch=release, timeout=timeout, interval=interval, clock=clock, sleep=sleep)\n",
+      "find": "    watched = watch_sha(\n        runner, repo, sha, branch=release, require=require, timeout=timeout, interval=interval, clock=clock, sleep=sleep\n    )\n",
       "replace": "    watched = WatchResult(GREEN)\n"
     },
     {
@@ -98,8 +98,22 @@
       "label": "promote drops --interval (test_cli_promote_resolves_repo_and_threads_its_flags)",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "            release=args.release,\n            timeout=args.timeout,\n            interval=args.interval,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha(",
-      "replace": "            release=args.release,\n            timeout=args.timeout,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha("
+      "find": "            release=args.release,\n            require=args.require,\n            timeout=args.timeout,\n            interval=args.interval,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha(",
+      "replace": "            release=args.release,\n            require=args.require,\n            timeout=args.timeout,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha("
+    },
+    {
+      "label": "promote does not pass require to the watch (test_unprotected_release_with_require_watches_the_named_checks_and_promotes)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    watched = watch_sha(\n        runner, repo, sha, branch=release, require=require, timeout=timeout, interval=interval, clock=clock, sleep=sleep\n    )\n",
+      "replace": "    watched = watch_sha(\n        runner, repo, sha, branch=release, timeout=timeout, interval=interval, clock=clock, sleep=sleep\n    )\n"
+    },
+    {
+      "label": "the CLI drops promote's --require (test_cli_promote_threads_repeatable_require)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            release=args.release,\n            require=args.require,\n            timeout=args.timeout,\n            interval=args.interval,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha(",
+      "replace": "            release=args.release,\n            timeout=args.timeout,\n            interval=args.interval,\n            clock=clock,\n            sleep=sleep,\n        )\n    result = watch_sha("
     }
   ]
 }

@@ -1003,6 +1003,7 @@ def promote_pr(
     *,
     trunk: str = "dev",
     release: str = "main",
+    require: Sequence[str] = (),
     timeout: float = 2700,
     interval: float = 15,
     clock: Callable[[], float] = time.monotonic,
@@ -1024,6 +1025,9 @@ def promote_pr(
         The promotion pull request number.
     trunk, release : str
         The PR's required head and base branches.
+    require : Sequence[str]
+        Extra required check names, unioned with *release*'s protection; the
+        only source of names when *release* is unprotected.
     timeout : float
         Seconds for the watch, and separately for the post-push poll.
     interval : float
@@ -1073,7 +1077,9 @@ def promote_pr(
         print(f"refused: {release} at {tip} is not an ancestor of {sha}; not a fast-forward", file=sys.stderr)
         return INDETERMINATE
 
-    watched = watch_sha(runner, repo, sha, branch=release, timeout=timeout, interval=interval, clock=clock, sleep=sleep)
+    watched = watch_sha(
+        runner, repo, sha, branch=release, require=require, timeout=timeout, interval=interval, clock=clock, sleep=sleep
+    )
     if watched.code != 0:
         return watched.code
 
@@ -1136,6 +1142,7 @@ def _parser() -> argparse.ArgumentParser:
     promote.add_argument("pr", type=int)
     promote.add_argument("--trunk", default="dev")
     promote.add_argument("--release", default="main")
+    promote.add_argument("--require", action="append", default=[], metavar="NAME", help="extra required check (repeatable)")
     promote.add_argument("--timeout", type=float, default=2700)
     promote.add_argument("--interval", type=float, default=15)
     return parser
@@ -1196,6 +1203,7 @@ def main(
             args.pr,
             trunk=args.trunk,
             release=args.release,
+            require=args.require,
             timeout=args.timeout,
             interval=args.interval,
             clock=clock,
