@@ -1,0 +1,308 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_subagent_evidence_hooks.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_subagent_evidence_hooks.py"
+  ],
+  "mutants": [
+    {
+      "label": "quoted-material: fence rule removed [predicted: test_quoted_completion_phrase_is_not_a_claim[bare-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"^[ \\t]*(([`~])\\2{2,})[^`\\n]*\\n.*?^[ \\t]*\\1\\2*[ \\t]*$\", re.MULTILINE | re.DOTALL",
+      "replace": "r\"(?!x)x\""
+    },
+    {
+      "label": "quoted-material: unterminated fence swallows the rest of the message [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[unterminated-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": ".*?^[ \\t]*\\1\\2*[ \\t]*$\", re.MULTILINE | re.DOTALL",
+      "replace": ".*?(?:^[ \\t]*\\1\\2*[ \\t]*$|\\Z)\", re.MULTILINE | re.DOTALL"
+    },
+    {
+      "label": "quoted-material: fence body greedy, last closer wins [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[between-fences]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "[^`\\n]*\\n.*?^[ \\t]*\\1",
+      "replace": "[^`\\n]*\\n.*^[ \\t]*\\1"
+    },
+    {
+      "label": "quoted-material: fence closer line may carry trailing text [predicted: test_quoted_completion_phrase_is_not_a_claim[info-string-line-inside-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\1\\2*[ \\t]*$\"",
+      "replace": "\\1\\2*\""
+    },
+    {
+      "label": "quoted-material: fence closer may be any marker of 3 or more [predicted: test_quoted_completion_phrase_is_not_a_claim[other-marker-inside-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\1\\2*[ \\t]*$\"",
+      "replace": "[`~]{3,}[ \\t]*$\""
+    },
+    {
+      "label": "quoted-material: fence opener requires an info string (bare ``` fence not stripped) [predicted: test_quoted_completion_phrase_is_not_a_claim[bare-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "[^`\\n]*\\n.*?^",
+      "replace": "[^`\\n]+\\n.*?^"
+    },
+    {
+      "label": "quoted-material: tilde fences not stripped [predicted: test_quoted_completion_phrase_is_not_a_claim[tilde-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(([`~])\\2{2,})",
+      "replace": "((`)\\2{2,})"
+    },
+    {
+      "label": "quoted-material: fence info string may contain a backtick again (inline ```span``` opens a fence) [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[inline-triple-backticks]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "[^`\\n]*\\n.*?^",
+      "replace": "[^\\n]*\\n.*?^"
+    },
+    {
+      "label": "quoted-material: fence closer must be exactly the opener's length (longer closer rejected) [predicted: test_quoted_completion_phrase_is_not_a_claim[longer-closer]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\1\\2*[ \\t]*$\"",
+      "replace": "\\1[ \\t]*$\""
+    },
+    {
+      "label": "quoted-material: fence closer may be shorter than the opener [predicted: test_quoted_completion_phrase_is_not_a_claim[shorter-closer-inside-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\1\\2*[ \\t]*$\"",
+      "replace": "\\2{3,}[ \\t]*$\""
+    },
+    {
+      "label": "quoted-material: fence opener is exactly 3 characters (a 4-character opener is not recognised) [predicted: test_quoted_completion_phrase_is_not_a_claim[four-backtick-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\2{2,})",
+      "replace": "\\2{2})"
+    },
+    {
+      "label": "quoted-material: fence closer may not carry trailing whitespace [predicted: test_quoted_completion_phrase_is_not_a_claim[closer-trailing-space]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\1\\2*[ \\t]*$\"",
+      "replace": "\\1\\2*$\""
+    },
+    {
+      "label": "quoted-material: fence opener may not be indented [predicted: test_quoted_completion_phrase_is_not_a_claim[indented-fence]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "^[ \\t]*(([`~])",
+      "replace": "^(([`~])"
+    },
+    {
+      "label": "quoted-material: blockquote and table line rule removed [predicted: test_quoted_completion_phrase_is_not_a_claim[table-cell]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"^[ \\t]*[>|].*$\", re.MULTILINE",
+      "replace": "r\"(?!x)x\""
+    },
+    {
+      "label": "quoted-material: table-row marker | dropped from the line rule [predicted: test_quoted_completion_phrase_is_not_a_claim[table-cell]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "^[ \\t]*[>|].*$",
+      "replace": "^[ \\t]*[>].*$"
+    },
+    {
+      "label": "quoted-material: blockquote marker > dropped from the line rule [predicted: test_quoted_completion_phrase_is_not_a_claim[blockquote]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "^[ \\t]*[>|].*$",
+      "replace": "^[ \\t]*[|].*$"
+    },
+    {
+      "label": "quoted-material: line rule requires the marker in column 0 (indented quote/table not stripped) [predicted: test_quoted_completion_phrase_is_not_a_claim[indented-blockquote]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "^[ \\t]*[>|].*$",
+      "replace": "^[>|].*$"
+    },
+    {
+      "label": "quoted-material: line rule strips any line containing > or | (claim line with an arrow or pipe) [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[arrow]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "^[ \\t]*[>|].*$",
+      "replace": "^.*[>|].*$"
+    },
+    {
+      "label": "quoted-material: line rule runs in DOTALL, a > line swallows the rest of the message [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[after-blockquote]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"^[ \\t]*[>|].*$\", re.MULTILINE)",
+      "replace": "r\"^[ \\t]*[>|].*$\", re.MULTILINE | re.DOTALL)"
+    },
+    {
+      "label": "quoted-material: code-span rule removed [predicted: test_quoted_completion_phrase_is_not_a_claim[backticks]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"`[^`\\n]+`\"",
+      "replace": "r\"(?!x)x\""
+    },
+    {
+      "label": "quoted-material: code span may cross newlines [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[stray-backtick-line]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"`[^`\\n]+`\"",
+      "replace": "r\"`[^`]+`\""
+    },
+    {
+      "label": "quoted-material: code span greedy within the line (claim between two spans swallowed) [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[between-code-spans]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"`[^`\\n]+`\"",
+      "replace": "r\"`.+`\""
+    },
+    {
+      "label": "quoted-material: double-quote rule removed (straight and curly) [predicted: test_quoted_completion_phrase_is_not_a_claim[incident-sweep]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"",
+      "replace": "r\"(?!x)x\""
+    },
+    {
+      "label": "quoted-material: straight-quote alternative removed [predicted: test_quoted_completion_phrase_is_not_a_claim[incident-sweep]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"",
+      "replace": "r\"“[^”\\n]*”\""
+    },
+    {
+      "label": "quoted-material: curly-quote alternative removed [predicted: test_quoted_completion_phrase_is_not_a_claim[curly-quotes]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"",
+      "replace": "r\"\\\"[^\\\"\\n]*\\\"\""
+    },
+    {
+      "label": "quoted-material: straight quote span may cross newlines [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[stray-quote-line]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\\"[^\\\"\\n]*\\\"|“",
+      "replace": "\\\"[^\\\"]*\\\"|“"
+    },
+    {
+      "label": "quoted-material: curly quote span may cross newlines [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[stray-curly-quote-line]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "“[^”\\n]*”",
+      "replace": "“[^”]*”"
+    },
+    {
+      "label": "quoted-material: straight quote span greedy within the line (claim between two quotes swallowed) [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[between-quotes]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\\\"[^\\\"\\n]*\\\"|“",
+      "replace": "\\\".*\\\"|“"
+    },
+    {
+      "label": "quoted-material: single-quote spans stripped too (apostrophes pair up and swallow a claim) [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[apostrophes]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"",
+      "replace": "r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”|\\'[^\\'\\n]*\\'\""
+    },
+    {
+      "label": "quoted-material: double quotes run before code spans [predicted: test_unquoted_claim_beside_quoted_material_is_still_a_claim[quote-inside-code-span]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "    re.compile(r\"`[^`\\n]+`\"),\n    re.compile(r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"),\n",
+      "replace": "    re.compile(r\"\\\"[^\\\"\\n]*\\\"|“[^”\\n]*”\"),\n    re.compile(r\"`[^`\\n]+`\"),\n"
+    },
+    {
+      "label": "quoted-material: placeholder is empty (trailing quote leaves 'All done.' as the ending) [predicted: test_removing_quoted_material_does_not_make_done_the_ending]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "QUOTED_PLACEHOLDER = \"[quoted]\"",
+      "replace": "QUOTED_PLACEHOLDER = \"\""
+    },
+    {
+      "label": "quoted-material: _own_words bypassed at the call site [predicted: test_quoted_completion_phrase_is_not_a_claim[incident-sweep]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "COMPLETION_CLAIM.search(_own_words(message))",
+      "replace": "COMPLETION_CLAIM.search(message)"
+    },
+    {
+      "label": "quoted-material: block reason loses the whole new sentence [predicted: test_block_reason_asks_for_the_report_to_be_restated]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\"re-check the tool result, don't just report success. If \"\n                \"this task was not meant to change anything, say so and \"\n                \"restate your full report in the same reply: your caller \"\n                \"receives only your final message.\"",
+      "replace": "\"re-check the tool result, don't just report success.\""
+    },
+    {
+      "label": "quoted-material: block reason loses 'restate your full report' [predicted: test_block_reason_asks_for_the_report_to_be_restated]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\"restate your full report in the same reply: your caller \"",
+      "replace": "\"report in the same reply: your caller \""
+    },
+    {
+      "label": "quoted-material: block reason loses 'receives only your final message' [predicted: test_block_reason_asks_for_the_report_to_be_restated]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\"receives only your final message.\"",
+      "replace": "\"hears nothing else.\""
+    },
+    {
+      "label": "quoted-material: block reason loses 'say so' for a no-change task [predicted: test_block_reason_asks_for_the_report_to_be_restated]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "\"this task was not meant to change anything, say so and \"",
+      "replace": "\"this task was not meant to change anything, \""
+    },
+    {
+      "label": "quoted-material: [control] placeholder text renamed",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The placeholder only ever reaches COMPLETION_CLAIM.search. Both texts open with '[' and close with ']' (identical \\b, \\s and $ context on either side) and no claim alternative starts with a letter inside 'quoted' or 'elided' at a word boundary, so no input matches under one and not the other. Holds for any message; it would stop holding only if a test imported _own_words and compared its text.",
+      "find": "QUOTED_PLACEHOLDER = \"[quoted]\"",
+      "replace": "QUOTED_PLACEHOLDER = \"[elided]\""
+    },
+    {
+      "label": "quoted-material: [control] line rule's trailing $ dropped",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "The pattern has MULTILINE but not DOTALL, so a greedy .* stops at the line's end and $ is already true there; dropping it removes a redundant assertion on every input.",
+      "find": "r\"^[ \\t]*[>|].*$\", re.MULTILINE)",
+      "replace": "r\"^[ \\t]*[>|].*\", re.MULTILINE)"
+    },
+    {
+      "label": "quoted-material: [control] line rule runs before the fence rule",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "A line the line rule replaces starts with > or |, so it can be neither a fence opener nor a closer (the CommonMark opener and the closer both start with a backtick or tilde run at the line start). The new info-string rule reads only an opener line, and the closer rule only a closer line, so a replaced line is never read by either. The fence rule replaces every body line wholesale. So the two orders produce the same text for any message. The line rule's replacement, [quoted], starts with neither a backtick nor a tilde.",
+      "find": "    re.compile(\n        r\"^[ \\t]*(([`~])\\2{2,})[^`\\n]*\\n.*?^[ \\t]*\\1\\2*[ \\t]*$\", re.MULTILINE | re.DOTALL\n    ),\n    re.compile(r\"^[ \\t]*[>|].*$\", re.MULTILINE),\n",
+      "replace": "    re.compile(r\"^[ \\t]*[>|].*$\", re.MULTILINE),\n    re.compile(\n        r\"^[ \\t]*(([`~])\\2{2,})[^`\\n]*\\n.*?^[ \\t]*\\1\\2*[ \\t]*$\", re.MULTILINE | re.DOTALL\n    ),\n"
+    }
+  ]
+}

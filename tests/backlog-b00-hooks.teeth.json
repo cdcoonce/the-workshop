@@ -95,15 +95,92 @@
       "label": "#628: bare done ending is a claim again [predicted: test_negated_done_ending_is_not_a_completion_claim]",
       "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
       "oracle": "real",
-      "find": "r\"(?:I'm|I am|all|it's|it is) done\\.?\\s*$)\",",
+      "find": "r\"(?:I['\\u2019]m|I am|(?<!\\bnot\\s|n['\\u2019]t\\s)all|it['\\u2019]s|it is) done\\.?\\s*$)\",",
       "replace": "r\"done\\.?\\s*$)\","
     },
     {
       "label": "#628: done alternative dropped entirely [predicted: test_positive_done_ending_is_still_a_completion_claim]",
       "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
       "oracle": "real",
-      "find": "r\"(?:I'm|I am|all|it's|it is) done\\.?\\s*$)\",",
+      "find": "r\"(?:I['\\u2019]m|I am|(?<!\\bnot\\s|n['\\u2019]t\\s)all|it['\\u2019]s|it is) done\\.?\\s*$)\",",
       "replace": "r\"(?!x)x)\","
+    },
+    {
+      "label": "typographic apostrophe dropped from I've [predicted: test_claim_with_no_git_change_is_blocked]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "r\"\\bI(?:['\\u2019]ve| have)",
+      "replace": "r\"\\bI(?:'ve| have)"
+    },
+    {
+      "label": "typographic apostrophe dropped from I'm [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?:I['\\u2019]m|I am|",
+      "replace": "(?:I'm|I am|"
+    },
+    {
+      "label": "typographic apostrophe dropped from it's [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|it['\\u2019]s|it is) done",
+      "replace": "|it's|it is) done"
+    },
+    {
+      "label": "negator guard before all loses not [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?<!\\bnot\\s|n['\\u2019]t\\s)all",
+      "replace": "(?<!n['\\u2019]t\\s)all"
+    },
+    {
+      "label": "negator guard before all loses n't [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?<!\\bnot\\s|n['\\u2019]t\\s)all",
+      "replace": "(?<!\\bnot\\s)all"
+    },
+    {
+      "label": "typographic apostrophe dropped from n't [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|n['\\u2019]t\\s)all",
+      "replace": "|n't\\s)all"
+    },
+    {
+      "label": "negator guard widened to any preceding word [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?<!\\bnot\\s|n['\\u2019]t\\s)all",
+      "replace": "(?<!\\w\\s)all"
+    },
+    {
+      "label": "straight apostrophe dropped from it's [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|it['\\u2019]s|",
+      "replace": "|it[\\u2019]s|"
+    },
+    {
+      "label": "it is subject dropped [predicted: test_positive_done_ending_is_still_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "|it is) done",
+      "replace": ") done"
+    },
+    {
+      "label": "not guard takes only a literal space [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "(?<!\\bnot\\s|",
+      "replace": "(?<!\\bnot |"
+    },
+    {
+      "label": "n't guard takes only a literal space [predicted: test_negated_done_ending_is_not_a_completion_claim]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "n['\\u2019]t\\s)all",
+      "replace": "n['\\u2019]t )all"
     },
     {
       "label": "#739: _run_git ignores a non-zero exit [predicted: test_run_git_returns_stripped_stdout_and_none_on_failure]",
