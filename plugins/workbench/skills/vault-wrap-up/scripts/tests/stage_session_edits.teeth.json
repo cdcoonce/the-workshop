@@ -1,0 +1,118 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_edit_blocks.py",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_stage_session_edits.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_edit_blocks.py",
+    "plugins/workbench/skills/vault-wrap-up/scripts/tests/test_stage_session_edits.py"
+  ],
+  "mutants": [
+    {
+      "label": "a heading-bearing insertion no longer splits at headings",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "            return bool(_HEADING_RE.match(line))\n        after_blank",
+      "replace": "            return False\n        after_blank",
+      "why": "test_adjacent_entries_under_one_anchor_split_into_one_block_each: two Key Decisions entries become one block"
+    },
+    {
+      "label": "adjacent list items no longer split",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "        return after_blank or bool(_LIST_ITEM_RE.match(line))",
+      "replace": "        return after_blank",
+      "why": "test_adjacent_bullets_split_per_list_item"
+    },
+    {
+      "label": "insertions are not slid past a leading blank",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "            while j1 < j2 and _is_blank(new[j1])",
+      "replace": "            while False and j1 < j2 and _is_blank(new[j1])",
+      "why": "test_staging_only_own_block_excludes_the_foreign_entry: the own entry is staged without its blank separator"
+    },
+    {
+      "label": "apply_blocks applies every block regardless of selection",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "        if block.id in chosen:",
+      "replace": "        if True:",
+      "why": "test_staging_only_own_block_excludes_the_foreign_entry"
+    },
+    {
+      "label": "an unknown block id is silently ignored",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "    if unknown:\n        raise ValueError",
+      "replace": "    if False:\n        raise ValueError",
+      "why": "test_unknown_id_is_rejected / test_refuses_an_unknown_block_id_without_staging"
+    },
+    {
+      "label": "an equal-length replacement stays one block",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "        elif i2 - i1 == j2 - j1:",
+      "replace": "        elif False:",
+      "why": "test_equal_length_replacement_splits_per_line"
+    },
+    {
+      "label": "block ids no longer hash their content",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "    for part in (kind, anchor, *old_lines, \"\\0\", *new_lines):",
+      "replace": "    for part in (kind,):",
+      "why": "test_ids_are_content_derived_and_survive_an_unrelated_edit: ids become ordinal"
+    },
+    {
+      "label": "identical blocks share one id",
+      "file": "../edit_blocks.py",
+      "oracle": "real",
+      "find": "    return base if count == 0 else f\"{base}-{count + 1}\"",
+      "replace": "    return base",
+      "why": "test_identical_blocks_get_distinct_ids"
+    },
+    {
+      "label": "staging overwrites a path that already has staged changes",
+      "file": "../stage_session_edits.py",
+      "oracle": "real",
+      "find": "    if _index_differs_from_head(vault, path):",
+      "replace": "    if False:",
+      "why": "test_refuses_when_the_path_already_has_staged_changes"
+    },
+    {
+      "label": "staging writes the working tree and git-adds the path",
+      "file": "../stage_session_edits.py",
+      "oracle": "real",
+      "find": "    _git_ok(vault, \"update-index\", \"--add\", \"--cacheinfo\", f\"{mode},{sha},{path}\")",
+      "replace": "    (vault / path).write_bytes(content)\n    _git_ok(vault, \"add\", \"--\", path)",
+      "why": "test_working_tree_is_untouched_and_foreign_entry_stays_unstaged"
+    },
+    {
+      "label": "staging drops the file mode",
+      "file": "../stage_session_edits.py",
+      "oracle": "real",
+      "find": "f\"{mode},{sha},{path}\"",
+      "replace": "f\"100644,{sha},{path}\"",
+      "why": "test_executable_mode_is_kept"
+    }
+  ]
+}

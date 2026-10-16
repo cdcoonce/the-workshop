@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import importlib.metadata
+import json
 import os
 import subprocess
 import sys
@@ -1913,3 +1914,113 @@ def test_gate_import_error_on_check_submodule_is_gate_only_not_graphmark_unavail
     assert "brain/A.md" in unresolved_files
     assert not any(nr["check"] == "unresolved_links" for nr in report["not_run"])
     assert not any(nr["check"] == "orphans" for nr in report["not_run"])
+
+
+# ---------------------------------------------------------------------------
+# claimed_hunks — a claimed file that also holds another session's edits
+# ---------------------------------------------------------------------------
+
+KD_BASE = _note("Key Decisions", body="See [[A]].\n\n## Recent\n\n### 2026-10-15 — older\n\nold.")
+KD_OWN = "### 2026-10-16 — own entry\n\nmine.\n\n"
+KD_FOREIGN = "### 2026-10-16 — foreign entry\n\ntheirs.\n\n"
+
+
+def _shared_key_decisions(tmp_path: Path) -> None:
+    """Key Decisions where this session and another both inserted under ``## Recent``."""
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[Key Decisions]]."))
+    _write(tmp_path, "brain/Key Decisions.md", KD_BASE)
+    _git_commit_all(tmp_path, "init")
+    _write(
+        tmp_path,
+        "brain/Key Decisions.md",
+        KD_BASE.replace("## Recent\n\n", "## Recent\n\n" + KD_FOREIGN + KD_OWN),
+    )
+
+
+def test_claimed_hunks_lists_each_entry_under_a_shared_anchor(tmp_path: Path) -> None:
+    _shared_key_decisions(tmp_path)
+
+    report = collect(tmp_path, files=["brain/Key Decisions.md"], base="HEAD")
+
+    hunks = report["checks"]["claimed_hunks"]
+    assert hunks["not_run"] is None
+    (entry,) = hunks["files"]
+    assert entry["file"] == "brain/Key Decisions.md"
+    assert [(b["section"], b["first_line"]) for b in entry["blocks"]] == [
+        ("Recent", "### 2026-10-16 — foreign entry"),
+        ("Recent", "### 2026-10-16 — own entry"),
+    ]
+    assert hunks["multi_block_files"] == ["brain/Key Decisions.md"]
+
+
+def test_claimed_hunks_is_informational_and_keeps_the_verdict(tmp_path: Path) -> None:
+    _shared_key_decisions(tmp_path)
+
+    report = collect(tmp_path, files=["brain/Key Decisions.md"], base="HEAD")
+
+    assert report["verdict"] == "CLEAN"
+
+
+def test_claimed_hunks_diffs_against_head_even_with_an_older_base(tmp_path: Path) -> None:
+    """Blocks describe what staging the file would commit, so HEAD, not --base."""
+    _shared_key_decisions(tmp_path)
+    base_sha = _git_rev_parse(tmp_path, "HEAD")
+    _git_commit_all(tmp_path, "both entries committed")
+    _write(tmp_path, "brain/Key Decisions.md", (tmp_path / "brain/Key Decisions.md").read_text() + "\nlater.\n")
+
+    report = collect(tmp_path, files=["brain/Key Decisions.md"], base=base_sha)
+
+    (entry,) = report["checks"]["claimed_hunks"]["files"]
+    assert [b["first_line"] for b in entry["blocks"]] == ["later."]
+
+
+def test_claimed_hunks_covers_the_handoff(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A"))
+    _write(tmp_path, ".brain/handoff-personal.md", _handoff_text())
+    _git_commit_all(tmp_path, "init")
+    _write(
+        tmp_path,
+        ".brain/handoff-personal.md",
+        _handoff_text().replace("Old open threads text.\n", "Old open threads text.\n- mine\n- theirs\n"),
+    )
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    files = {f["file"]: f for f in report["checks"]["claimed_hunks"]["files"]}
+    assert [b["first_line"] for b in files[".brain/handoff-personal.md"]["blocks"]] == ["- mine", "- theirs"]
+
+
+def test_claimed_hunks_omits_clean_claimed_files(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    _write(tmp_path, "brain/A.md", _note("A", body="See [[B]]."))
+    _write(tmp_path, "brain/B.md", _note("B"))
+    _git_commit_all(tmp_path, "init")
+
+    report = collect(tmp_path, files=["brain/A.md"], base="HEAD")
+
+    assert report["checks"]["claimed_hunks"]["files"] == []
+    assert report["checks"]["claimed_hunks"]["multi_block_files"] == []
+
+
+def test_claimed_hunks_ids_match_the_staging_script(tmp_path: Path) -> None:
+    """The audit's ids are the ones stage_session_edits.py accepts."""
+    _shared_key_decisions(tmp_path)
+    report = collect(tmp_path, files=["brain/Key Decisions.md"], base="HEAD")
+    audit_ids = [b["id"] for b in report["checks"]["claimed_hunks"]["files"][0]["blocks"]]
+
+    script = WRAP_UP_SKILL_DIR / "stage_session_edits.py"
+    listed = subprocess.run(
+        [sys.executable, str(script), "--vault", str(tmp_path), "--path", "brain/Key Decisions.md", "--list", "--json"],
+        check=True, capture_output=True, text=True,
+    )
+    assert audit_ids == [b["id"] for b in json.loads(listed.stdout)["blocks"]]
+
+
+WRAP_UP_SKILL_DIR = SCRIPTS_DIR.parent.parent / "skills" / "vault-wrap-up" / "scripts"
+
+
+def test_edit_blocks_engine_copy_matches_the_skill_copy() -> None:
+    """edit_blocks ships twice; the two copies must stay byte-identical."""
+    assert (SCRIPTS_DIR / "edit_blocks.py").read_bytes() == (WRAP_UP_SKILL_DIR / "edit_blocks.py").read_bytes()

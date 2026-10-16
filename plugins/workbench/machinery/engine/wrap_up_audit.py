@@ -42,6 +42,7 @@ from typing import Any, Callable
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+from edit_blocks import block_section, split_blocks  # noqa: E402
 from vault_utils import find_vault_root, read_vault_context  # noqa: E402
 
 HEADING_RE = re.compile(r"^## (.+?)\s*$")
@@ -917,6 +918,51 @@ def _handoff_sections(vault_root: Path, base: str) -> dict[str, Any]:
     return result
 
 
+def _claimed_hunks(
+    vault_root: Path, claimed: list[str], handoff_rel: str | None, git_ok: bool
+) -> dict[str, Any]:
+    """Change blocks, against HEAD, of each claimed note and the handoff.
+
+    Ownership is otherwise per file: a claimed path counts as wholly this
+    session's, so another session's uncommitted edits in the same file ride
+    along with ``git add`` (the-vault 857eba8d, 2026-10-16). This lists every
+    block (``edit_blocks``: one per entry, paragraph, list item or replaced
+    line) so the session can see whether each is its own. The engine cannot
+    know who wrote a block, so this is informational and never moves the
+    verdict; step 10 stages a file with a foreign block through
+    ``stage_session_edits.py``, whose ids these are. Diffed against HEAD,
+    not ``--base``: the question is what staging the file now would commit.
+    """
+    if not git_ok:
+        return {"not_run": "git evidence unavailable", "files": [], "multi_block_files": []}
+    paths = list(claimed)
+    if handoff_rel and handoff_rel not in paths and (vault_root / handoff_rel).is_file():
+        paths.append(handoff_rel)
+    files: list[dict[str, Any]] = []
+    for rel in paths:
+        full = vault_root / rel
+        if not full.is_file():
+            continue
+        head = _git_bytes(vault_root, ["show", f"HEAD:{rel}"])
+        old = (head or b"").decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        new = full.read_bytes().decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        blocks = split_blocks(old, new)
+        if not blocks:
+            continue
+        files.append({
+            "file": rel,
+            "blocks": [
+                {"id": b.id, "kind": b.kind, "section": block_section(b, old, new), "first_line": b.first_line}
+                for b in blocks
+            ],
+        })
+    return {
+        "not_run": None,
+        "files": files,
+        "multi_block_files": [f["file"] for f in files if len(f["blocks"]) > 1],
+    }
+
+
 # ---------------------------------------------------------------------------
 # orchestration
 # ---------------------------------------------------------------------------
@@ -981,6 +1027,8 @@ def _collect_inner(
     handoff = _handoff_sections(vault_root, base)
     if handoff.get("not_run"):
         not_run.append({"check": "handoff_sections", "reason": handoff["not_run"]})
+
+    claimed_hunks = _claimed_hunks(vault_root, scope.claimed, handoff.get("file"), scope.git_ok)
 
     frontmatter_findings, frontmatter_elided = _cap(scoped["frontmatter"], limit)
     no_wikilinks_findings, no_wikilinks_elided = _cap(scoped["no_wikilinks"], limit)
@@ -1062,6 +1110,7 @@ def _collect_inner(
             },
             "gate": gate,
             "handoff_sections": handoff,
+            "claimed_hunks": claimed_hunks,
         },
         "not_run": not_run,
         "limit": limit,
@@ -1154,6 +1203,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     else:
         lines.append(f"- present: {', '.join(handoff['present']) or '(none)'}")
         lines.append(f"- touched: {', '.join(handoff['touched']) or '(none)'}")
+    lines.append("")
+
+    hunks = checks["claimed_hunks"]
+    lines.append("### Claimed Hunks (against HEAD; confirm each block is this session's)")
+    if hunks.get("not_run"):
+        lines.append(f"- not run: {hunks['not_run']}")
+    elif not hunks["files"]:
+        lines.append("- (no claimed file differs from HEAD)")
+    for f in hunks["files"]:
+        lines.append(f"- `{f['file']}` ({len(f['blocks'])} block{'s' if len(f['blocks']) != 1 else ''}):")
+        for b in f["blocks"]:
+            lines.append(f"  - `{b['id']}` {b['kind']} [{b['section'] or PREAMBLE}] {b['first_line'][:100]}")
     lines.append("")
 
     lines.append("### Not Run")

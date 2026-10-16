@@ -1,0 +1,72 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_wrap_up_audit.py",
+    "-k",
+    "claimed_hunks"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_wrap_up_audit.py",
+    "-k",
+    "claimed_hunks"
+  ],
+  "mutants": [
+    {
+      "label": "the handoff is left out of claimed_hunks",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "    if handoff_rel and handoff_rel not in paths",
+      "replace": "    if False and handoff_rel not in paths",
+      "why": "test_claimed_hunks_covers_the_handoff"
+    },
+    {
+      "label": "multi-block claimed files count as verdict findings",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "        + (1 if gate_breach else 0)\n    )",
+      "replace": "        + (1 if gate_breach else 0)\n        + len(claimed_hunks[\"multi_block_files\"])\n    )",
+      "why": "test_claimed_hunks_is_informational_and_keeps_the_verdict"
+    },
+    {
+      "label": "claimed files with no change are listed",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "        if not blocks:\n            continue",
+      "replace": "        if False:\n            continue",
+      "why": "test_claimed_hunks_omits_clean_claimed_files"
+    },
+    {
+      "label": "claimed_hunks diffs the working tree against itself",
+      "file": "../engine/wrap_up_audit.py",
+      "oracle": "real",
+      "find": "        head = _git_bytes(vault_root, [\"show\", f\"HEAD:{rel}\"])",
+      "replace": "        head = full.read_bytes()",
+      "why": "test_claimed_hunks_lists_each_entry_under_a_shared_anchor"
+    }
+  ]
+}
