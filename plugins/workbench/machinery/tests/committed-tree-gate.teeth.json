@@ -1,0 +1,76 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_committed_tree_gate.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_committed_tree_gate.py"
+  ],
+  "mutants": [
+    {
+      "label": "gates the working tree, not the staged extract",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "script = tmp_dir / GATE",
+      "replace": "script = args.vault / GATE",
+      "why": "test_fails_when_staged_note_links_to_an_untracked_note: the working tree holds the untracked note, so it passes"
+    },
+    {
+      "label": "archives HEAD instead of the staged tree",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "\"archive\", tree_id",
+      "replace": "\"archive\", \"HEAD\"",
+      "why": "test_fails_when_staged_note_links_to_an_untracked_note: HEAD lacks the staged note"
+    },
+    {
+      "label": "write-tree on the real index",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "env={**os.environ, \"GIT_INDEX_FILE\": str(copy)}",
+      "replace": "env=None",
+      "why": "test_leaves_index_and_worktree_untouched: write-tree stores a cache-tree into the live index"
+    },
+    {
+      "label": "gate failure masked as pass",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "return 0 if result.returncode == 0 else 1",
+      "replace": "return 0",
+      "why": "test_fails_when_staged_note_links_to_an_untracked_note"
+    },
+    {
+      "label": "absent gate script fails instead of passing",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "nothing to gate\")\n            return 0",
+      "replace": "nothing to gate\")\n            return 1",
+      "why": "test_vault_without_a_gate_script_passes"
+    },
+    {
+      "label": "unreadable staged tree passes open",
+      "file": "../engine/committed_tree_gate.py",
+      "oracle": "real",
+      "find": "print(f\"cannot read the staged tree: {tree.stderr.decode().strip()}\", file=sys.stderr)\n            return 2",
+      "replace": "print(f\"cannot read the staged tree: {tree.stderr.decode().strip()}\", file=sys.stderr)\n            return 0",
+      "why": "test_not_a_git_repo_fails_closed"
+    }
+  ]
+}

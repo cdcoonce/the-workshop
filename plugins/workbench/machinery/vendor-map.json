@@ -18,6 +18,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/committed_tree_gate.py",
+      "target": ".claude/scripts/committed_tree_gate.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/content_classifier.py",
       "target": ".claude/scripts/content_classifier.py"
     },

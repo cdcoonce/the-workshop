@@ -284,7 +284,7 @@
       "label": "#894: session field dropped [predicted: test_successive_sessions_with_unchanged_root_and_version_are_distinguishable]",
       "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
       "oracle": "real",
-      "find": "        \"session\": _session_marker(),\n",
+      "find": "        \"session\": _session_marker(payload),\n",
       "replace": ""
     },
     {
@@ -292,7 +292,7 @@
       "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
       "oracle": "real",
       "find": "(state_dir / f\"plugin-state.{platform}.json\").write_text(rendered)",
-      "replace": "target = state_dir / f\"plugin-state.{platform}.json\"\n    if target.exists() and target.read_text() == rendered:\n        return\n    target.write_text(rendered)"
+      "replace": "target = state_dir / f\"plugin-state.{platform}.json\"\n        if target.exists() and target.read_text() == rendered:\n            continue\n        target.write_text(rendered)"
     },
     {
       "label": "#894: hook payload consumed and not handed to the engine [predicted: test_engine_still_receives_the_hook_payload]",

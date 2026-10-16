@@ -9,7 +9,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 2. **Validate each note**: Run the collector first —
 
    ```bash
-   uv run --with 'graphmark>=0.10,<0.11' --with pyyaml python "<engine>/wrap_up_audit.py" --files "<note one>" "<note two>" --json
+   uv run --with 'graphmark>=0.11,<0.12' --with pyyaml python "<engine>/wrap_up_audit.py" --files "<note one>" "<note two>" --json
    ```
 
    Quote each path (a name with a space, split unquoted, resolves to nothing
@@ -62,7 +62,13 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. Decide which sections by judgment, then edit; `handoff_sections.touched` measures the git diff of the handoff text itself, so it can only confirm a completed edit, not select one in advance. After refreshing, re-run the collector (add `--base <commit before this session's first commit>` if the session already committed handoff edits) and confirm `touched` lists exactly the sections you meant to replace and nothing else. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
 
-10. **Validate, commit & push** (`/sync`): immediately before staging, run `uv run --script ci/vault_health.py`. The gate must pass before any audited fixes, harvested decisions/wins, or refreshed handoff are committed. If it fails, times out, or cannot run, leave edits uncommitted, repair the graph, and retry; do not pull or push an unverified tree. Forward references are allowed while editing, but must resolve at this durability boundary. Then commit and push so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
+10. **Validate, commit & push** (`/sync`): stage this session's reviewed paths, then, immediately before committing, gate exactly what is staged:
+
+    ```bash
+    python3 "<engine>/committed_tree_gate.py" --vault .
+    ```
+
+    It runs the staged tree's own `ci/vault_health.py` on a throwaway extract of the index, so a staged note that links to an unstaged or untracked one fails here even though the working tree passes (2026-10-15: a Key Decisions entry linked to a note that was never staged). Running `ci/vault_health.py` directly gates the working tree, which is not what wrap-up commits; it is fine for diagnosis, never as this gate. The gate must pass before any audited fixes, harvested decisions/wins, or refreshed handoff are committed. If it exits non-zero, do not commit: repair the graph (stage the missing note, or fix the link), restage, and rerun; do not pull or push an unverified tree. Forward references are allowed while editing, but must resolve at this durability boundary. Then commit and push so the handoff and today's work reach the other machine. Without this, the refreshed handoff never leaves this machine and the next session (here or elsewhere) resumes from stale state. A failed or uncertain sync blocks every session offer below: resolve it in this session and confirm a successful retry first.
 
     **Sync-boundary squash:** immediately after the wrap-up commit is created and before `/sync`'s `git pull --rebase`, collapse this session's unpushed commits into that single wrap-up commit:
 

@@ -584,6 +584,63 @@
       "why": "Killed by test_skill_documents_fixture_preparation (the --check exit-code pin).",
       "find": ", and 2 on any error",
       "replace": ","
+    },
+    {
+      "label": "skip guard fails open (a stale install blames the skill text)",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "    if reason is not None:\n        pytest.skip(reason)\n",
+      "replace": "    if False:\n        pytest.skip(reason)\n",
+      "why": "Killed by test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text: with the guard gone the check asserts on the planted interpreter and fails on the outside probe instead of skipping."
+    },
+    {
+      "label": "skip message omits the fix",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "Run `{_STALE_INSTALL_FIX}` in that environment and re-run.\"",
+      "replace": "Fix that environment and re-run.\"",
+      "why": "Killed by test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text: the skip reason no longer names `uv pip uninstall the-workshop`."
+    },
+    {
+      "label": "an install the repo intends is excused too (pyproject never read)",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "    if uv_settings.get(\"package\", True):\n        return None\n",
+      "replace": "    if False:\n        return None\n",
+      "why": "Killed by test_an_install_the_repo_intends_is_judged_not_excused: a pyproject declaring package = true no longer turns the detector off, so the skip would outlive the repo becoming a package."
+    },
+    {
+      "label": "detector looks up the wrong distribution",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "metadata.distribution('the-workshop')",
+      "replace": "metadata.distribution('the-workbench')",
+      "why": "Killed by test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text and test_an_install_the_repo_intends_is_judged_not_excused: the planted the-workshop distribution is never found, so the check asserts instead of skipping and the detector reports nothing."
+    },
+    {
+      "label": "outside probe leaks the checkout through PYTHONPATH",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "[str(python), str(script)], cwd=scratch, env=environment, capture_output=True, text=True",
+      "replace": "[str(python), str(script)], cwd=scratch, env={**environment, \"PYTHONPATH\": str(_REPO_ROOT)}, capture_output=True, text=True",
+      "why": "Killed by test_the_skill_says_how_to_run_a_conductor_script_and_that_it_is_true and test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text: the outside script now imports evals on a clean interpreter, so the claim reads false where it is true."
+    },
+    {
+      "label": "planted .pth points nowhere (fixture stops reproducing the leak)",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "find": "write_text(f\"{_REPO_ROOT}\\n\", encoding=\"utf-8\")",
+      "replace": "write_text(\"\\n\", encoding=\"utf-8\")",
+      "why": "Killed by test_the_run_mode_check_blames_a_stale_editable_install_not_the_skill_text: the fixture no longer puts the checkout on sys.path, so the outside probe fails and the reproduction assertion goes red."
+    },
+    {
+      "label": "[control] plant the dist-info before the .pth",
+      "file": "test_eval_suite_skill.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Two writes to distinct new entries of one site-packages directory; neither reads the other, and only a later interpreter process reads either, so the order is inert on every path the suite reaches. It is not inert if the directory became unwritable between them, which no test drives.",
+      "find": "    (site_packages / \"_editable_impl_the_workshop.pth\").write_text(f\"{_REPO_ROOT}\\n\", encoding=\"utf-8\")\n    dist_info = site_packages / \"the_workshop-0.1.0.dist-info\"\n    dist_info.mkdir()\n",
+      "replace": "    dist_info = site_packages / \"the_workshop-0.1.0.dist-info\"\n    dist_info.mkdir()\n    (site_packages / \"_editable_impl_the_workshop.pth\").write_text(f\"{_REPO_ROOT}\\n\", encoding=\"utf-8\")\n"
     }
   ]
 }

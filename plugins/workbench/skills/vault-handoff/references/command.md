@@ -2,12 +2,9 @@
 
 Rewrite the machine-scoped handoff digest (`.brain/handoff-<context>.md`) so the next session — or the same session post-compaction — resumes cleanly. The handoff is the **single deterministic resume point**: `session-start.py` injects it at every session start, so the next session always reads it without anyone having to remember to.
 
-## When to run
+## When it runs
 
-- **Session end** — invoked by `/wrap-up`.
-- **Before context compaction** — the PreCompact hook reminds you; refresh so post-compaction context resumes cleanly.
-- **Switching machines mid-thread** — so the other machine picks up accurately.
-- Any time current state has drifted materially from what the handoff says.
+Only when Charles asks for it: `/handoff` directly, or as part of `/wrap-up`. Never proactively and never as a suggestion; the vault's `AGENTS.md` (Constraints) forbids proposing it. He typically asks at session end, before a compaction (the PreCompact hook shows *him* a reminder; the agent does not see it), when switching machines mid-thread, or when the handoff has drifted from what is true.
 
 ## Procedure
 
