@@ -1,0 +1,373 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_cold_read_dispatch.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_cold_read_dispatch.py"
+  ],
+  "mutants": [
+    {
+      "label": "row 1: replace the _roundtrip_sentinel call with the value it was given, so the sentinel is never written [test_a_failed_sentinel_round_trip_is_scratch_unwritable]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "read_back = _roundtrip_sentinel(scratch, value)",
+      "replace": "read_back = value"
+    },
+    {
+      "label": "row 2: skip the git check [test_git_that_cannot_run_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if git is None:\n        return _failed(\"git-missing\")\n",
+      "replace": ""
+    },
+    {
+      "label": "row 3: skip the uv check [test_uv_that_cannot_run_is_uv_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if uv is None:\n        return _failed(\"uv-missing\")\n",
+      "replace": ""
+    },
+    {
+      "label": "row 4: report uv-missing before git-missing [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n",
+      "replace": "    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n"
+    },
+    {
+      "label": "row 5: remove the directory instead of the sentinel [test_the_directory_holds_exactly_what_it_held_before]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        __import__(\"shutil\").rmtree(directory)\n"
+    },
+    {
+      "label": "row 6: leave the sentinel in place [test_the_directory_holds_exactly_what_it_held_before]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        pass\n"
+    },
+    {
+      "label": "row 7: treat a value read back that differs from the one written as ok [test_a_failed_sentinel_round_trip_is_scratch_unwritable]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if read_back != value:",
+      "replace": "if False:"
+    },
+    {
+      "label": "row 8: let _run_tool raise when the program cannot be started [test_run_tool_returns_none_for_a_program_that_does_not_exist]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "except (OSError, subprocess.TimeoutExpired):",
+      "replace": "except subprocess.TimeoutExpired:"
+    },
+    {
+      "label": "row 9: drop the timeout argument from _run_tool's call [test_run_tool_returns_none_for_a_program_that_outlives_the_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": ""
+    },
+    {
+      "label": "row 10: replace the whole body of _roundtrip_sentinel with `return value` [test_real_round_trip_raises_oserror_for_a_missing_directory]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n            handle.write(value)\n        with open(path, encoding=\"utf-8\", errors=\"replace\", newline=\"\") as handle:\n            return handle.read()\n    finally:\n        os.unlink(path)\n",
+      "replace": "    return value\n"
+    },
+    {
+      "label": "row 11: let main catch the SystemExit of argument parsing and return 2 [test_missing_scratch_option_raises_systemexit_2_with_a_usage_message]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    args = parser.parse_args(argv)\n    return _preflight(args.scratch)\n",
+      "replace": "    try:\n        args = parser.parse_args(argv)\n    except SystemExit:\n        return 2\n    return _preflight(args.scratch)\n"
+    },
+    {
+      "label": "MK1 (i): print the whole stripped --version stdout, not its first line [test_each_version_is_the_first_line_of_the_program_output]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "return _first_line(result[1])",
+      "replace": "return result[1].strip()"
+    },
+    {
+      "label": "MK1 (ii): print the raw --version stdout, newline and second line included [test_each_version_is_the_first_line_of_the_program_output]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "return _first_line(result[1])",
+      "replace": "return result[1]"
+    },
+    {
+      "label": "MK2: run the git and uv checks ahead of the sentinel round trip, after the scratch-missing check [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n",
+      "replace": "    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n"
+    },
+    {
+      "label": "MK2 (git only): run the git check ahead of the sentinel round trip [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n",
+      "replace": "    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n"
+    },
+    {
+      "label": "MK2 (uv only): run the uv check ahead of the sentinel round trip [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n",
+      "replace": "    uv = _tool_version([\"uv\", \"--version\"])\n    if uv is None:\n        return _failed(\"uv-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n"
+    },
+    {
+      "label": "MK3: a fixed sentinel name opened for a truncating write, overwriting a pre-existing entry [test_the_sentinel_never_overwrites_an_existing_entry]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n",
+      "replace": "    path = os.path.join(directory, SENTINEL_PREFIX + \"fixed\")\n    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"
+    },
+    {
+      "label": "MK4: write to stderr on the ok path [test_writable_directory_prints_the_exact_ok_line]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    print(f\"PREFLIGHT ok scratch={scratch} git={git} uv={uv}\")\n    return 0\n",
+      "replace": "    print(f\"PREFLIGHT ok scratch={scratch} git={git} uv={uv}\")\n    print(\"warning\", file=__import__(\"sys\").stderr)\n    return 0\n"
+    },
+    {
+      "label": "MK5 (git): `git -V` instead of `git --version` [test_tools_run_as_version_calls_with_the_default_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "_tool_version([\"git\", \"--version\"])",
+      "replace": "_tool_version([\"git\", \"-V\"])"
+    },
+    {
+      "label": "MK5 (uv): `uv -V` instead of `uv --version` [test_tools_run_as_version_calls_with_the_default_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "_tool_version([\"uv\", \"--version\"])",
+      "replace": "_tool_version([\"uv\", \"-V\"])"
+    },
+    {
+      "label": "MK6 (None): _run_tool's default timeout is None [test_run_tool_signature_is_argv_and_a_thirty_second_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "timeout: float = 30",
+      "replace": "timeout: float | None = None"
+    },
+    {
+      "label": "MK6 (1): _run_tool's default timeout is 1 second [test_run_tool_signature_is_argv_and_a_thirty_second_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "timeout: float = 30",
+      "replace": "timeout: float = 1"
+    },
+    {
+      "label": "MK6 (call site): the tool calls pass their own 1-second timeout [test_tools_run_as_version_calls_with_the_default_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    result = _run_tool(argv)\n",
+      "replace": "    result = _run_tool(argv, timeout=1)\n"
+    },
+    {
+      "label": "MK8 (i): write the value, remove the sentinel and return the value without reading it back [test_the_round_trip_returns_what_the_sentinel_file_holds]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        with open(path, encoding=\"utf-8\", errors=\"replace\", newline=\"\") as handle:\n            return handle.read()\n",
+      "replace": "        return value\n"
+    },
+    {
+      "label": "MK8 (ii): an os.access check stands in for the round trip [test_the_round_trip_returns_what_the_sentinel_file_holds]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n            handle.write(value)\n        with open(path, encoding=\"utf-8\", errors=\"replace\", newline=\"\") as handle:\n            return handle.read()\n    finally:\n        os.unlink(path)\n",
+      "replace": "    if not os.access(directory, os.W_OK):\n        raise OSError(\"not writable\")\n    return value\n"
+    },
+    {
+      "label": "X1: skip the scratch-missing check [test_missing_directory_is_scratch_missing_and_is_not_created]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if not os.path.isdir(scratch):\n        return _failed(\"scratch-missing\")\n",
+      "replace": ""
+    },
+    {
+      "label": "X2: report git-missing ahead of scratch-missing [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if not os.path.isdir(scratch):\n        return _failed(\"scratch-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n",
+      "replace": "    git = _tool_version([\"git\", \"--version\"])\n    if git is None:\n        return _failed(\"git-missing\")\n    if not os.path.isdir(scratch):\n        return _failed(\"scratch-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n"
+    },
+    {
+      "label": "X3: report scratch-unwritable ahead of scratch-missing [test_the_first_failing_cause_in_the_documented_order_is_reported]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if not os.path.isdir(scratch):\n        return _failed(\"scratch-missing\")\n    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n",
+      "replace": "    value = os.urandom(8).hex()\n    try:\n        read_back = _roundtrip_sentinel(scratch, value)\n    except OSError:\n        return _failed(\"scratch-unwritable\")\n    if read_back != value:\n        return _failed(\"scratch-unwritable\")\n    if not os.path.isdir(scratch):\n        return _failed(\"scratch-missing\")\n"
+    },
+    {
+      "label": "X4: a tool that exits non-zero counts as present [test_git_that_cannot_run_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if result is None or result[0] != 0:\n",
+      "replace": "    if result is None:\n"
+    },
+    {
+      "label": "X5: _run_tool reports exit code 0 whatever the program returned [test_run_tool_returns_exit_code_stdout_and_stderr]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    return result.returncode, result.stdout, result.stderr\n",
+      "replace": "    return 0, result.stdout, result.stderr\n"
+    },
+    {
+      "label": "X6: a lazy third-party import inside the preflight [test_every_import_in_the_script_is_standard_library]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    value = os.urandom(8).hex()\n",
+      "replace": "    import yaml  # noqa: F401\n    value = os.urandom(8).hex()\n"
+    },
+    {
+      "label": "X7: _run_tool decodes the tool output strictly [test_run_tool_decodes_output_that_is_not_utf8_instead_of_raising]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            errors=\"replace\",\n",
+      "replace": ""
+    },
+    {
+      "label": "X8: the sentinel is read back strictly [test_a_sentinel_that_reads_back_as_undecodable_bytes_is_a_differing_value]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "with open(path, encoding=\"utf-8\", errors=\"replace\", newline=\"\") as handle:",
+      "replace": "with open(path, encoding=\"utf-8\", newline=\"\") as handle:"
+    },
+    {
+      "label": "X9: a tool that times out raises instead of counting as missing [test_run_tool_returns_none_for_a_program_that_outlives_the_timeout]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "except (OSError, subprocess.TimeoutExpired):",
+      "replace": "except OSError:"
+    },
+    {
+      "label": "X10: the sentinel is removed only when the read-back succeeds [test_a_failed_read_back_still_removes_the_sentinel]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            return handle.read()\n    finally:\n        os.unlink(path)\n",
+      "replace": "            text = handle.read()\n    except BaseException:\n        raise\n    os.unlink(path)\n    return text\n"
+    },
+    {
+      "label": "MK6-f: the subprocess.run timeout is the constant 1 [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=1,\n"
+    },
+    {
+      "label": "MK6-g: the subprocess.run timeout is min(timeout, 1) [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=min(timeout, 1),\n"
+    },
+    {
+      "label": "MK6-h: the subprocess.run timeout is a tenth of the one given [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=timeout / 10,\n"
+    },
+    {
+      "label": "C32: the sentinel is named from the pid and opened for a truncating write [test_a_file_planted_where_any_create_is_about_to_happen_survives]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n",
+      "replace": "    path = os.path.join(directory, f\"{SENTINEL_PREFIX}{os.getpid()}\")\n    try:\n        with open(path, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n"
+    },
+    {
+      "label": "C33: the sentinel is named from the directory's basename and opened for a truncating write [test_a_file_planted_where_any_create_is_about_to_happen_survives]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n",
+      "replace": "    path = os.path.join(directory, f\"{SENTINEL_PREFIX}{os.path.basename(os.path.abspath(directory))}\")\n    try:\n        with open(path, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n"
+    },
+    {
+      "label": "C75: the __main__ block calls main() and drops its exit code [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": "if __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "label": "C76: the __main__ block is deleted [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": ""
+    },
+    {
+      "label": "C77: the __main__ block calls main() and always exits 0 [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": "if __name__ == \"__main__\":\n    main()\n    raise SystemExit(0)\n"
+    },
+    {
+      "label": "C52: only a positive exit code counts as missing [test_git_exiting_with_any_other_non_zero_code_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if result is None or result[0] != 0:\n",
+      "replace": "    if result is None or result[0] > 0:\n"
+    },
+    {
+      "label": "C70: only exit codes 1 and 2 count as missing [test_git_exiting_with_any_other_non_zero_code_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if result is None or result[0] != 0:\n",
+      "replace": "    if result is None or result[0] in (1, 2):\n"
+    },
+    {
+      "label": "C63: empty subdirectories of the scratch directory are removed after the sentinel [test_empty_entries_are_left_exactly_as_found]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        os.unlink(path)\n        for name in os.listdir(directory):\n            full = os.path.join(directory, name)\n            if os.path.isdir(full) and not os.listdir(full):\n                os.rmdir(full)\n"
+    },
+    {
+      "label": "C64: zero-byte regular files of the scratch directory are removed after the sentinel [test_empty_entries_are_left_exactly_as_found]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        os.unlink(path)\n        for name in os.listdir(directory):\n            full = os.path.join(directory, name)\n            if os.path.isfile(full) and os.path.getsize(full) == 0:\n                os.unlink(full)\n"
+    }
+  ]
+}

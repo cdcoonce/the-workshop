@@ -972,6 +972,7 @@ CONTRACT_LEAD_INS = (
     "Checkouts.",
     "What the reader is given.",
     "What the reader returns.",
+    "Preflight.",
 )
 READER_GIVEN = (
     "The cold constraint",
@@ -1229,6 +1230,31 @@ def test_reader_contract_what_the_reader_returns_bullet() -> None:
             "the verdict it would give: `BUILD` (no blocking finding), "
             "`REWRITE` (blocking findings fixable by editing the body) or "
             "`NOT-DISPATCH-READY` (not executor-implementable as scoped).",
+        ),
+    )
+
+
+def test_reader_contract_ends_with_the_preflight_bullet() -> None:
+    """A read whose environment cannot probe spent 174,751 tokens and about nine
+    minutes (2026-10-10) and said so only in its report. The reader's first
+    command is the supplied preflight command; when its output does not begin
+    `PREFLIGHT ok` the read stops there and is not counted. The rule is the
+    contract's last bullet: a bullet deleted, moved ahead of the others, or
+    followed by more text goes red."""
+    last = _h2(CONTRACT).rstrip().splitlines()[-1]
+    assert last.startswith("- **Preflight.**"), last
+    assert _flat(last) == _bullet("Preflight."), "the last line is not the whole bullet"
+    _assert_has(
+        "Preflight.",
+        _bullet("Preflight."),
+        (
+            "PREFLIGHT ok",
+            "first command",
+            "no other call",
+            "verbatim",
+            "not a read",
+            "no verdict comment",
+            "nothing is counted",
         ),
     )
 
