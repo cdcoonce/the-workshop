@@ -139,7 +139,7 @@ def test_tools_run_as_version_calls_with_the_default_timeout(
     passes its own short timeout is invisible to a fake that ignores that too."""
     calls = fake_tools(monkeypatch)
     run_preflight(capsys, tmp_path)
-    assert calls == [(["git", "--version"], 30), (["uv", "--version"], 30)]
+    assert sorted(calls) == [(["git", "--version"], 30), (["uv", "--version"], 30)]
 
 
 def test_run_tool_signature_is_argv_and_a_thirty_second_timeout():
@@ -335,7 +335,9 @@ PROBE = textwrap.dedent(
     import cold_read_dispatch as mod
 
     directory = os.path.realpath(sys.argv[2])
-    tamper = sys.argv[3] == "tamper"
+    tamper = sys.argv[3] in ("tamper", "tamper-bytes")
+    fail_read = sys.argv[3] == "fail-read"
+    payload = b"\\xff\\xfe\\xfa" if sys.argv[3] == "tamper-bytes" else b"tampered-by-the-test"
     removed, busy = [], []
 
 
@@ -344,6 +346,14 @@ PROBE = textwrap.dedent(
             return
         if event == "os.remove":
             removed.append(os.path.basename(os.fsdecode(args[0])))
+        elif fail_read and event == "open":
+            path, _mode, flags = args
+            if (
+                isinstance(path, str)
+                and flags & os.O_ACCMODE == os.O_RDONLY
+                and os.path.dirname(os.path.realpath(path)) == directory
+            ):
+                raise PermissionError(13, "the test made the read-back fail")
         elif tamper and event == "open":
             path, _mode, flags = args
             if (
@@ -354,15 +364,27 @@ PROBE = textwrap.dedent(
             ):
                 busy.append(True)
                 try:
-                    with open(path, "w", encoding="utf-8") as handle:
-                        handle.write("tampered-by-the-test")
+                    with open(path, "wb") as handle:
+                        handle.write(payload)
                 finally:
                     busy.pop()
 
 
     sys.addaudithook(hook)
-    returned = mod._roundtrip_sentinel(directory, "written-by-the-test")
-    print(json.dumps({"returned": returned, "removed": removed}))
+    try:
+        returned, raised = mod._roundtrip_sentinel(directory, "written-by-the-test"), None
+    except OSError as error:
+        returned, raised = None, type(error).__name__
+    print(
+        json.dumps(
+            {
+                "returned": returned,
+                "raised": raised,
+                "removed": removed,
+                "left": sorted(os.listdir(directory)),
+            }
+        )
+    )
     """
 )
 
@@ -370,8 +392,11 @@ PROBE = textwrap.dedent(
 def probe_round_trip(directory: Path, mode: str) -> dict:
     """Run the real ``_roundtrip_sentinel`` in a child under an audit hook.
 
-    The hook records every path removed and, in ``"tamper"`` mode, rewrites the
-    sentinel the moment anything reopens it for reading. It lives in a child
+    The hook records every path removed and, in ``"tamper"`` mode (or
+    ``"tamper-bytes"``, which writes bytes that are not UTF-8), rewrites the
+    sentinel the moment anything reopens it for reading; in ``"fail-read"``
+    mode it makes that reopen raise ``PermissionError`` instead. The result
+    also carries what was left in *directory*. It lives in a child
     process because an audit hook cannot be uninstalled. Nothing here depends
     on how the module names, writes or removes its sentinel.
     """
@@ -419,6 +444,29 @@ def test_the_round_trip_returns_what_the_sentinel_file_holds(tmp_path):
     assert not any(scratch.iterdir())
 
 
+def test_a_failed_read_back_still_removes_the_sentinel(tmp_path):
+    """A failure after the sentinel was written must not leave it behind:
+    "no sentinel remains" holds for every run, so the removal cannot be a step
+    that only the success path reaches."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    outcome = probe_round_trip(scratch, "fail-read")
+    assert outcome["raised"] == "PermissionError"
+    assert outcome["left"] == []
+
+
+def test_a_sentinel_that_reads_back_as_undecodable_bytes_is_a_differing_value(tmp_path):
+    """The sentinel is read back with ``errors="replace"``. A file another
+    process corrupted is then a value that differs (``scratch-unwritable``),
+    not a ``UnicodeDecodeError`` that escapes as a traceback with no PREFLIGHT
+    line."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    returned = probe_round_trip(scratch, "tamper-bytes")["returned"]
+    assert returned != "written-by-the-test"
+    assert "\ufffd" in returned
+
+
 # --------------------------------------------------------------------------- #
 # the real tool runner
 # --------------------------------------------------------------------------- #
@@ -452,6 +500,15 @@ def test_run_tool_returns_exit_code_stdout_and_stderr():
     assert mod._run_tool([sys.executable, "-c", program]) == (3, "out", "err")
     result = mod._run_tool([sys.executable, "-c", "pass"])
     assert isinstance(result, tuple) and result[0] == 0
+
+
+def test_run_tool_decodes_output_that_is_not_utf8_instead_of_raising():
+    """A tool's output is another process's data: undecodable bytes become
+    replacement characters, so ``main`` still prints its one line."""
+    program = "import sys; sys.stdout.buffer.write(b'\\xff\\xfe ok')"
+    result = mod._run_tool([sys.executable, "-c", program])
+    assert result is not None and result[0] == 0
+    assert "ok" in result[1] and "\ufffd" in result[1]
 
 
 def test_main_with_an_empty_path_reports_git_missing(tmp_path, monkeypatch, capsys):

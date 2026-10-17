@@ -564,6 +564,20 @@
       "oracle": "real",
       "find": "## Size flag\n",
       "replace": "## \n\n## Size flag\n"
+    },
+    {
+      "label": "K1: delete the Preflight. bullet [test_reader_contract_ends_with_the_preflight_bullet]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Preflight.** The reader's first command is the supplied preflight command. If its output does not begin `PREFLIGHT ok`, the reader makes no other call and returns that output verbatim as its whole report. A read that returns it is not a read: no verdict comment is posted, nothing is counted, and the conductor fixes the cause before dispatching again.\n",
+      "replace": ""
+    },
+    {
+      "label": "K2: move the Preflight. bullet ahead of the What the reader returns. bullet, its text unchanged [test_reader_contract_ends_with_the_preflight_bullet]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **What the reader returns.** One final message: the issue number and the body hash it was given; the archived SHA the dispatch names; whether the read was truly cold and probe builds ran, or what prevented them; one record per detector, each `ran`, `found N`, `found none` or `skipped` with the reason (for detectors 5 and 10 it is `found N` or `found none` read from the supplied output, and `skipped` only when nothing was supplied); findings, each with its default and its MEASURED, REASONED or REACHABLE tag; the probe-build record; the anti-rubber-stamp lines; and the verdict it would give: `BUILD` (no blocking finding), `REWRITE` (blocking findings fixable by editing the body) or `NOT-DISPATCH-READY` (not executor-implementable as scoped).\n- **Preflight.** The reader's first command is the supplied preflight command. If its output does not begin `PREFLIGHT ok`, the reader makes no other call and returns that output verbatim as its whole report. A read that returns it is not a read: no verdict comment is posted, nothing is counted, and the conductor fixes the cause before dispatching again.\n",
+      "replace": "- **Preflight.** The reader's first command is the supplied preflight command. If its output does not begin `PREFLIGHT ok`, the reader makes no other call and returns that output verbatim as its whole report. A read that returns it is not a read: no verdict comment is posted, nothing is counted, and the conductor fixes the cause before dispatching again.\n- **What the reader returns.** One final message: the issue number and the body hash it was given; the archived SHA the dispatch names; whether the read was truly cold and probe builds ran, or what prevented them; one record per detector, each `ran`, `found N`, `found none` or `skipped` with the reason (for detectors 5 and 10 it is `found N` or `found none` read from the supplied output, and `skipped` only when nothing was supplied); findings, each with its default and its MEASURED, REASONED or REACHABLE tag; the probe-build record; the anti-rubber-stamp lines; and the verdict it would give: `BUILD` (no blocking finding), `REWRITE` (blocking findings fixable by editing the body) or `NOT-DISPATCH-READY` (not executor-implementable as scoped).\n"
     }
   ],
   "collect_command": [
