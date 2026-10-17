@@ -203,6 +203,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/edit_blocks.py",
+      "target": ".claude/scripts/edit_blocks.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/cold_read_evidence.py",
       "target": ".claude/scripts/cold_read_evidence.py"
     },

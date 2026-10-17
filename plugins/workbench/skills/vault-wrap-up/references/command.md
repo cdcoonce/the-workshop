@@ -4,7 +4,7 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 ## Process
 
-1. **Identify session changes**: Build the session scope from the current conversation and its tool results, including work committed earlier in this session. Use `git diff --name-only`, `git status`, and relevant commits as supporting evidence. Do not claim unrelated pre-existing edits merely because they are dirty now. In a desktop-app worktree, also run `git rev-list --count HEAD..origin/<target>` after a fresh `git fetch origin <target>` (target from `sync_target.py`) before editing any note: a nonzero count means the on-disk hub files are stale, and `git diff --name-only HEAD origin/<target> -- .claude .mcp.json` naming a protected path means the sync will be refused (see the protected-path refusal below).
+1. **Identify session changes**: Build the session scope from the current conversation and its tool results, including work committed earlier in this session. Use `git diff --name-only`, `git status`, and relevant commits as supporting evidence. Do not claim unrelated pre-existing edits merely because they are dirty now. In a desktop-app worktree, also run `git rev-list --count HEAD..origin/<target>` after a fresh `git fetch origin <target>` (target from `sync_target.py`) before editing any note: a nonzero count means the on-disk hub files are stale, and `git diff --name-only HEAD origin/<target> -- .claude .mcp.json` naming a protected path means the sync will be refused (see the protected-path refusal below). Claiming is per file, but ownership is per edit: a file this session edited can also hold another session's uncommitted edits, so a claimed path is not proof that all of its diff is yours (step 10).
 
 2. **Validate each note**: Run the collector first —
 
@@ -60,9 +60,22 @@ Audit all notes created or modified during this session. Validate quality, fix m
 
 8.5. **Refresh per-project status sections**: For every note carrying a `status:` frontmatter field (any status value, any of `work/`, `personal/`, `perf/`) that this session touched — edited directly, or discussed/decided-on even without a file diff — rewrite its `## Current Status` section with 1–3 sentences of prose describing where the project was left: what happened this session, what's blocking, what's next. Link (`[[wikilink]]`) to the session's key notes. Replace the section wholesale each time; it reflects current state, not a running log — history lives in git blame. If the note doesn't have a `## Current Status` section yet, create one (placed after the intro/context, before other content sections). This is distinct from the handoff below: the handoff is a short-lived cross-project digest refreshed section-by-section each run, while `## Current Status` is the durable, per-project memory that outlives any one session. Do this silently, same as step 8.
 
-9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. Decide which sections by judgment, then edit; `handoff_sections.touched` measures the git diff of the handoff text itself, so it can only confirm a completed edit, not select one in advance. After refreshing, re-run the collector (add `--base <commit before this session's first commit>` if the session already committed handoff edits) and confirm `touched` lists exactly the sections you meant to replace and nothing else. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
+9. **Refresh the rolling handoff** (`/handoff`): update `.brain/handoff-<context>.md` (pick the file via `.vault-context`) — but only the section(s) this session actually touched (e.g. _resume-from-here_, _what's running_, _open threads_), not the whole file. Decide which sections by judgment, then edit; `handoff_sections.touched` measures the git diff of the handoff text itself, so it can only confirm a completed edit, not select one in advance. After refreshing, re-run the collector (add `--base <commit before this session's first commit>` if the session already committed handoff edits) and confirm `touched` lists exactly the sections you meant to replace and nothing else. A section another session also edited shows up in `touched` too; the collector's `claimed_hunks` entry for the handoff tells the two apart block by block. This is the connective tissue that makes the next `/standup` correct: `session-start.py` injects this file at every session start. Fold in the open threads and next steps surfaced by the audit above. See `/handoff` for the full procedure.
 
-10. **Validate, commit & push** (`/sync`): stage this session's reviewed paths, then, immediately before committing, gate exactly what is staged:
+10. **Validate, commit & push** (`/sync`): stage this session's reviewed edits, then, immediately before committing, gate exactly what is staged.
+
+    Re-run the collector first and read `checks.claimed_hunks`. It lists every change block, against HEAD, of each claimed note and the handoff: one per entry, paragraph, list item or replaced line, each with an id, its `##` section and its first line. Check each block against what this session wrote. The engine cannot tell who wrote a block, so this is your call, and it is not a verdict finding. Then stage:
+
+    - a file whose blocks are all this session's: `git add -- "<path>"`;
+    - a file holding any block that isn't: never `git add` it, which would commit the other session's work under this wrap-up. Stage only your blocks:
+
+      ```bash
+      python3 "<skill>/scripts/stage_session_edits.py" --path "<path>" --blocks <id>,<id> --json
+      ```
+
+      It writes HEAD's content plus only those blocks into the index entry for that path, never touches the working tree or any other path, and refuses without changing anything when an id is not a current block or the path already has staged changes (possibly another session's). On a refusal, re-list (`--list`) and retry; never fall back to `git add` or a hand-rolled `hash-object`/`update-index` script. Another session's block stays dirty in the working tree for its own wrap-up.
+
+    Then gate exactly what is staged:
 
     ```bash
     python3 "<engine>/committed_tree_gate.py" --vault .
