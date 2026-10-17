@@ -284,6 +284,90 @@
       "oracle": "real",
       "find": "            return handle.read()\n    finally:\n        os.unlink(path)\n",
       "replace": "            text = handle.read()\n    except BaseException:\n        raise\n    os.unlink(path)\n    return text\n"
+    },
+    {
+      "label": "MK6-f: the subprocess.run timeout is the constant 1 [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=1,\n"
+    },
+    {
+      "label": "MK6-g: the subprocess.run timeout is min(timeout, 1) [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=min(timeout, 1),\n"
+    },
+    {
+      "label": "MK6-h: the subprocess.run timeout is a tenth of the one given [test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            timeout=timeout,\n",
+      "replace": "            timeout=timeout / 10,\n"
+    },
+    {
+      "label": "C32: the sentinel is named from the pid and opened for a truncating write [test_a_file_planted_where_any_create_is_about_to_happen_survives]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n",
+      "replace": "    path = os.path.join(directory, f\"{SENTINEL_PREFIX}{os.getpid()}\")\n    try:\n        with open(path, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n"
+    },
+    {
+      "label": "C33: the sentinel is named from the directory's basename and opened for a truncating write [test_a_file_planted_where_any_create_is_about_to_happen_survives]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    descriptor, path = tempfile.mkstemp(prefix=SENTINEL_PREFIX, dir=directory)\n    try:\n        with os.fdopen(descriptor, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n",
+      "replace": "    path = os.path.join(directory, f\"{SENTINEL_PREFIX}{os.path.basename(os.path.abspath(directory))}\")\n    try:\n        with open(path, \"w\", encoding=\"utf-8\", newline=\"\") as handle:\n"
+    },
+    {
+      "label": "C75: the __main__ block calls main() and drops its exit code [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": "if __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "label": "C76: the __main__ block is deleted [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": ""
+    },
+    {
+      "label": "C77: the __main__ block calls main() and always exits 0 [test_running_the_script_as_a_process_exits_with_the_line_it_printed]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+      "replace": "if __name__ == \"__main__\":\n    main()\n    raise SystemExit(0)\n"
+    },
+    {
+      "label": "C52: only a positive exit code counts as missing [test_git_exiting_with_any_other_non_zero_code_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if result is None or result[0] != 0:\n",
+      "replace": "    if result is None or result[0] > 0:\n"
+    },
+    {
+      "label": "C70: only exit codes 1 and 2 count as missing [test_git_exiting_with_any_other_non_zero_code_is_git_missing]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if result is None or result[0] != 0:\n",
+      "replace": "    if result is None or result[0] in (1, 2):\n"
+    },
+    {
+      "label": "C63: empty subdirectories of the scratch directory are removed after the sentinel [test_empty_entries_are_left_exactly_as_found]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        os.unlink(path)\n        for name in os.listdir(directory):\n            full = os.path.join(directory, name)\n            if os.path.isdir(full) and not os.listdir(full):\n                os.rmdir(full)\n"
+    },
+    {
+      "label": "C64: zero-byte regular files of the scratch directory are removed after the sentinel [test_empty_entries_are_left_exactly_as_found]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        os.unlink(path)\n",
+      "replace": "        os.unlink(path)\n        for name in os.listdir(directory):\n            full = os.path.join(directory, name)\n            if os.path.isfile(full) and os.path.getsize(full) == 0:\n                os.unlink(full)\n"
     }
   ]
 }
