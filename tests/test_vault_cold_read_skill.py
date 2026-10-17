@@ -1015,8 +1015,8 @@ def _text() -> str:
 
 
 def _headings(text: str) -> list[str]:
-    """Every line-initial `## ` heading, in file order."""
-    return re.findall(r"^## (.+?)[ \t]*$", text, flags=re.MULTILINE)
+    """Every line-initial `## ` heading, in file order, a bare `## ` included."""
+    return re.findall(r"^##(?:[ \t]+(.*?))?[ \t]*$", text, flags=re.MULTILINE)
 
 
 def _h2(name: str) -> str:
@@ -1192,7 +1192,7 @@ def test_reader_contract_tools_bullet() -> None:
 def test_reader_contract_checkouts_bullet() -> None:
     """A probe build that edits, resets or stashes a real checkout destroys
     shared work; the reader works only in the archived tree in its scratch
-    directory."""
+    directory. Nothing is appended that lets it work in a real checkout."""
     bullet = _bullet("Checkouts.")
     _assert_has(
         "Checkouts.",
@@ -1203,6 +1203,10 @@ def test_reader_contract_checkouts_bullet() -> None:
         ),
     )
     assert "own checkout" not in bullet, bullet
+    assert bullet == (
+        "- **Checkouts.** No checkout is edited, checked out, reset, stashed or "
+        "committed in. The reader works in the archived tree in its scratch directory."
+    ), bullet
 
 
 def test_reader_contract_what_the_reader_returns_bullet() -> None:

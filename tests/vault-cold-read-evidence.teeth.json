@@ -543,6 +543,27 @@
       "oracle": "real",
       "find": "No checkout is edited, checked out, reset, stashed or committed in. ",
       "replace": ""
+    },
+    {
+      "label": "J1: append a sentence to the Checkouts. bullet that lets the reader work in the local checkout [test_reader_contract_checkouts_bullet]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "The reader works in the archived tree in its scratch directory.",
+      "replace": "The reader works in the archived tree in its scratch directory. It may instead work in the repo's local checkout, not the archived tree."
+    },
+    {
+      "label": "J2: append \"Where the archive fails it edits the local checkout.\" to the Checkouts. bullet [test_reader_contract_checkouts_bullet]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "The reader works in the archived tree in its scratch directory.",
+      "replace": "The reader works in the archived tree in its scratch directory. Where the archive fails it edits the local checkout."
+    },
+    {
+      "label": "J3: insert a bare \"## \" heading before \"## Size flag\" [test_reader_contract_sits_between_the_ledger_line_and_the_procedure]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "## Size flag\n",
+      "replace": "## \n\n## Size flag\n"
     }
   ],
   "collect_command": [
