@@ -559,3 +559,228 @@ def test_every_import_in_the_script_is_standard_library():
     assert imported, "the script imports nothing, so this test would pass vacuously"
     outside = sorted({n for n in imported if n.split(".")[0] not in sys.stdlib_module_names})
     assert outside == []
+
+
+# --------------------------------------------------------------------------- #
+# survivors the independent teeth pass found (the-workshop#1223 follow-up)
+# --------------------------------------------------------------------------- #
+
+
+def test_run_tool_hands_subprocess_run_exactly_the_timeout_it_was_given(monkeypatch):
+    """The timeout that reaches ``subprocess.run`` is the seam's contract: 30
+    seconds by default and the caller's value otherwise. A build that passes a
+    constant, ``min(timeout, 1)`` or a tenth of it still passes every test that
+    only observes whether a long sleep is cut short, because nothing else sees
+    the number. The tuple it returns is still ``(returncode, stdout, stderr)``."""
+    recorded: list[dict] = []
+
+    def recorder(argv, **kwargs):
+        recorded.append(dict(kwargs, argv=list(argv)))
+        return subprocess.CompletedProcess(argv, 7, stdout="out text", stderr="err text")
+
+    monkeypatch.setattr(mod.subprocess, "run", recorder)
+    assert mod._run_tool(["x"]) == (7, "out text", "err text")
+    assert mod._run_tool(["x"], timeout=5) == (7, "out text", "err text")
+    assert [call["argv"] for call in recorded] == [["x"], ["x"]]
+    assert [call["timeout"] for call in recorded] == [30, 5]
+
+
+PLANTED = b"planted before the open proceeds\n"
+PLANT_PROBE = textwrap.dedent(
+    """
+    import contextlib, io, json, os, sys
+
+    sys.path.insert(0, sys.argv[1])
+    import cold_read_dispatch as mod
+
+    directory = os.path.realpath(sys.argv[2])
+    mode = sys.argv[3]
+    planted, busy = [], []
+    content = open(sys.argv[4], "rb").read()
+
+
+    def hook(event, args):
+        if busy or event != "open":
+            return
+        path, _mode, flags = args
+        if not (isinstance(path, str) and flags & os.O_CREAT):
+            return
+        if os.path.dirname(os.path.realpath(path)) != directory:
+            return
+        if os.path.exists(path) or len(planted) >= 3:
+            return
+        busy.append(True)
+        try:
+            with open(path, "wb") as handle:
+                handle.write(content)
+        finally:
+            busy.pop()
+        planted.append(os.path.basename(path))
+
+
+    def fake_run_tool(argv, timeout=30):
+        return {"git": (0, "git version 2.44.0\\n", ""), "uv": (0, "uv 0.4.0\\n", "")}[argv[0]]
+
+
+    mod._run_tool = fake_run_tool
+    sys.addaudithook(hook)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        if mode == "preflight":
+            code = mod.main(["preflight", "--scratch", directory])
+        else:
+            code = mod._roundtrip_sentinel(directory, "seam value")
+    print(
+        json.dumps(
+            {
+                "code": code,
+                "out": out.getvalue(),
+                "planted": sorted(planted),
+                "left": sorted(os.listdir(directory)),
+            }
+        )
+    )
+    """
+)
+
+
+@pytest.mark.parametrize("mode", ["preflight", "seam"])
+def test_a_file_planted_where_any_create_is_about_to_happen_survives(tmp_path, mode):
+    """Naming-independent form of "deletes nothing but its own sentinel". A
+    child under an audit hook plants a file, with known bytes, at the exact
+    path of every create-open inside the directory that does not exist yet (at
+    most three), before that open proceeds; then it runs the real preflight (or
+    the real seam). A build whose sentinel name is exclusive retries a new name
+    and leaves each planted file alone; a build whose name is fixed, or derived
+    from the pid or the directory, opens it for a truncating write and empties
+    it. The ok line is unchanged and no sentinel remains."""
+    scratch = (tmp_path / "scratch").resolve()
+    scratch.mkdir()
+    content = tmp_path / "planted.bin"
+    content.write_bytes(PLANTED)
+    proc = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", PLANT_PROBE, str(SCRIPTS_DIR), str(scratch), mode, str(content)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    outcome = json.loads(proc.stdout)
+    assert outcome["planted"], "the module created nothing, so there was nothing to plant under"
+    for name in outcome["planted"]:
+        assert (scratch / name).exists(), f"{name} was removed"
+        assert (scratch / name).read_bytes() == PLANTED, f"{name} was overwritten"
+    assert outcome["left"] == outcome["planted"], "an entry other than the planted files remains"
+    if mode == "preflight":
+        assert outcome["code"] == 0
+        assert outcome["out"] == (
+            f"PREFLIGHT ok scratch={scratch} git=git version 2.44.0 uv=uv 0.4.0\n"
+        )
+    else:
+        assert outcome["code"] == "seam value"
+
+
+def run_script(*args: str) -> subprocess.CompletedProcess:
+    """Run the script file as a process, isolated, the way a reader would."""
+    return subprocess.run(
+        [sys.executable, "-I", str(SCRIPT), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+def test_running_the_script_as_a_process_exits_with_the_line_it_printed(tmp_path):
+    """The reader runs ``python3 cold_read_dispatch.py preflight ...``, not an
+    import. A script whose ``__main__`` block does not hand ``main``'s result to
+    ``SystemExit`` (it calls ``main()`` and drops the code, ends with exit 0, or
+    is missing) exits 0 on a failed environment. The scratch check precedes git
+    and uv, so this needs neither tool nor network."""
+    proc = run_script("preflight", "--scratch", str(tmp_path / "absent"))
+    assert proc.returncode == 1
+    assert proc.stdout == "PREFLIGHT failed cause=scratch-missing\n"
+    assert proc.stderr == ""
+
+
+def test_running_the_script_without_scratch_exits_2_with_usage_on_stderr():
+    """A usage error in a real process: exit 2, nothing on stdout, a usage
+    message naming ``--scratch`` on stderr."""
+    proc = run_script("preflight")
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+    assert "--scratch" in proc.stderr
+
+
+@pytest.mark.parametrize("code", [3, 127, -1])
+def test_git_exiting_with_any_other_non_zero_code_is_git_missing(
+    tmp_path, monkeypatch, capsys, code
+):
+    """Every non-zero exit, not only 1 and 2, counts as missing: 127 is the
+    shell's "not found" and a negative code is a signal. A build that tests
+    ``> 0`` or ``in (1, 2)`` treats these as a working ``git``."""
+    fake_tools(monkeypatch, git=(code, "git version 2.44.0\n", ""))
+    exit_code, out, err = run_preflight(capsys, tmp_path)
+    assert out == "PREFLIGHT failed cause=git-missing\n"
+    assert (exit_code, err) == (1, "")
+
+
+@pytest.mark.parametrize("code", [3, 127, -1])
+def test_uv_exiting_with_any_other_non_zero_code_is_uv_missing(
+    tmp_path, monkeypatch, capsys, code
+):
+    """The same for ``uv``."""
+    fake_tools(monkeypatch, uv=(code, "uv 0.4.0\n", ""))
+    exit_code, out, err = run_preflight(capsys, tmp_path)
+    assert out == "PREFLIGHT failed cause=uv-missing\n"
+    assert (exit_code, err) == (1, "")
+
+
+def scratch_with_empty_entries(tmp_path: Path) -> Path:
+    """``populated_scratch`` plus an empty subdirectory and a zero-byte file."""
+    scratch = populated_scratch(tmp_path)
+    (scratch / "empty-dir").mkdir()
+    (scratch / "empty.txt").write_bytes(b"")
+    return scratch
+
+
+def entries_with_kinds(root: Path) -> dict[str, tuple[str, bytes | None]]:
+    """Every entry under *root* by relative path: ``(kind, bytes)``, with
+    ``None`` bytes for anything that is not a regular file."""
+    entries: dict[str, tuple[str, bytes | None]] = {}
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            entries[relative] = ("symlink", None)
+        elif path.is_dir():
+            entries[relative] = ("dir", None)
+        else:
+            entries[relative] = ("file", path.read_bytes())
+    return entries
+
+
+@pytest.mark.parametrize(
+    ("git", "uv", "cause"),
+    [
+        pytest.param(OK_GIT, OK_UV, None, id="ok"),
+        pytest.param(None, OK_UV, "git-missing", id="git-missing"),
+        pytest.param(OK_GIT, None, "uv-missing", id="uv-missing"),
+    ],
+)
+def test_empty_entries_are_left_exactly_as_found(
+    tmp_path, monkeypatch, capsys, git, uv, cause
+):
+    """An empty subdirectory and a zero-byte file look like debris, so a build
+    that tidies the directory after its sentinel is gone removes them. The
+    directory must hold the same entry names, kinds and bytes after an ok run
+    and after a failure run."""
+    fake_tools(monkeypatch, git=git, uv=uv)
+    scratch = scratch_with_empty_entries(tmp_path)
+    before = entries_with_kinds(scratch)
+    assert before["empty-dir"] == ("dir", None)
+    assert before["empty.txt"] == ("file", b"")
+    code, out, err = run_preflight(capsys, scratch)
+    assert (code, err) == (0 if cause is None else 1, "")
+    assert out.startswith("PREFLIGHT ok " if cause is None else "PREFLIGHT failed ")
+    assert entries_with_kinds(scratch) == before
