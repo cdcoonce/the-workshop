@@ -760,6 +760,34 @@
       "oracle": "real",
       "find": "- **Void reads.** A read is void when its transcript audit shows `probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`). A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe. The audit's tokens are evidence: the conductor confirms the flagged commands from its `--details` lines before voiding. The conductor posts a comment titled `## Cold read — VOID` ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`, applies none of its findings and none of its body edit, and dispatches the same body to a fresh reader once. A `VOID` line carries the `read=` its replacement will carry. A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.\n- **Degraded reads.** A read whose audit shows `denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed` is not void if it meets neither void condition above. A read that is not void counts, its ledger line records the tokens in `degraded`, and its digest says which. A read that counts and whose audit shows none of those five tokens records `degraded=none` on its ledger line. A reader command denied by the permission classifier is run by the conductor and its result quoted before the verdict is posted.\n",
       "replace": "- **Degraded reads.** A read whose audit shows `denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed` is not void if it meets neither void condition above. A read that is not void counts, its ledger line records the tokens in `degraded`, and its digest says which. A read that counts and whose audit shows none of those five tokens records `degraded=none` on its ledger line. A reader command denied by the permission classifier is run by the conductor and its result quoted before the verdict is posted.\n- **Void reads.** A read is void when its transcript audit shows `probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`). A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe. The audit's tokens are evidence: the conductor confirms the flagged commands from its `--details` lines before voiding. The conductor posts a comment titled `## Cold read — VOID` ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`, applies none of its findings and none of its body edit, and dispatches the same body to a fresh reader once. A `VOID` line carries the `read=` its replacement will carry. A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.\n"
+    },
+    {
+      "label": "M25: group 9 drop `blocking=0` and the `void_cause` from the comment sentence of the Void reads. bullet [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "`verdict=VOID`, `blocking=0` and the `void_cause`,",
+      "replace": "`verdict=VOID`,"
+    },
+    {
+      "label": "M26: group 10 the flagged commands are confirmed from `--summary` lines, not `--details` lines [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "from its `--details` lines",
+      "replace": "from its `--summary` lines"
+    },
+    {
+      "label": "M27: group 11 invert `none of those five tokens` to `any of those five tokens` in the Degraded reads. bullet [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "whose audit shows none of those five tokens records `degraded=none`",
+      "replace": "whose audit shows any of those five tokens records `degraded=none`"
+    },
+    {
+      "label": "M28: group 12 delete `and its digest says which` from the Degraded reads. bullet [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": ", and its digest says which",
+      "replace": ""
     }
   ],
   "collect_command": [

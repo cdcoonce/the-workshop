@@ -242,6 +242,69 @@
       "oracle": "real",
       "find": "    unknown = [t for t in tokens if t != DEGRADED_NONE and t not in DEGRADED_TOKENS]\n",
       "replace": "    unknown = [t for t in tokens if t and t != DEGRADED_NONE and t not in DEGRADED_TOKENS]\n"
+    },
+    {
+      "label": "MK3f: validate degraded on a VOID line only under void_cause=comments-read [test_degraded_on_a_void_line_is_kept_and_ignored_whatever_its_value]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    problem = None\n    if pairs[\"verdict\"] == VOID:\n        problem = _void_problem(pairs, record[\"blocking\"])\n    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n",
+      "replace": "    problem = None\n    if pairs[\"verdict\"] == VOID:\n        problem = _void_problem(pairs, record[\"blocking\"])\n        if problem is None and pairs[\"void_cause\"] == \"comments-read\" and \"degraded\" in pairs:\n            problem = _degraded_problem(pairs[\"degraded\"])\n    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n"
+    },
+    {
+      "label": "group 1: match degraded tokens by prefix, so deniedX is accepted [test_degraded_outside_its_vocabulary_is_an_error_record]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    unknown = [t for t in tokens if t != DEGRADED_NONE and t not in DEGRADED_TOKENS]\n",
+      "replace": "    unknown = [t for t in tokens if t != DEGRADED_NONE and not any(t.startswith(k) for k in DEGRADED_TOKENS)]\n"
+    },
+    {
+      "label": "group 2: an empty degraded= value is accepted and kept as written [test_degraded_outside_its_vocabulary_is_an_error_record]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens = value.split(\",\")\n",
+      "replace": "    tokens = value.split(\",\") if value else []\n"
+    },
+    {
+      "label": "group 3: blocking other than 0 is tolerated on a VOID line under void_cause=comments-read [test_a_void_line_needs_a_known_cause_and_blocking_zero]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if blocking != 0:\n",
+      "replace": "    if blocking != 0 and cause != \"comments-read\":\n"
+    },
+    {
+      "label": "group 4: an empty void_cause= on a non-VOID line is an error record [test_a_void_cause_on_a_non_void_line_is_accepted_and_kept_as_written]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n",
+      "replace": "    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n    if problem is None and pairs.get(\"void_cause\") == \"\":\n        problem = \"void_cause is empty\"\n"
+    },
+    {
+      "label": "group 5: voided counts distinct causes instead of reads [test_several_void_reads_are_counted_per_read_and_every_cost_is_summed]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        \"voided\": len(void_causes),\n",
+      "replace": "        \"voided\": len(set(void_causes)),\n"
+    },
+    {
+      "label": "group 6: a void read that carries degraded=none is added to clean [test_a_void_reads_degraded_value_never_reaches_clean_or_the_degraded_sums]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    clean = sum(1 for d in degraded if d == DEGRADED_NONE)\n",
+      "replace": "    clean = sum(1 for d in degraded if d == DEGRADED_NONE) + sum(\n        1 for c in comments\n        if \"verdict=VOID\" in (c.get(\"body\") or \"\") and \"degraded=none\" in (c.get(\"body\") or \"\")\n    )\n"
+    },
+    {
+      "label": "group 7: void tokens count in tokens_total only when the issue also has a counted read [test_an_issue_with_only_void_reads_still_reports_their_cost_and_prints_each_line]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_total, tokens_na = _total(per_read[\"tokens\"] + void_tokens)\n",
+      "replace": "    tokens_total, tokens_na = _total(per_read[\"tokens\"] + (void_tokens if reads else []))\n"
+    },
+    {
+      "label": "group 8: every extra line is tagged with the first --issue [test_each_extra_line_carries_the_number_of_its_own_issue]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        extra.extend((issue, note) for note in notes)\n",
+      "replace": "        extra.extend((args.issue[0], note) for note in notes)\n"
     }
   ]
 }
