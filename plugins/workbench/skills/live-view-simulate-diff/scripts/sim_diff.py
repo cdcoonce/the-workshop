@@ -26,6 +26,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
 
@@ -206,7 +207,7 @@ class DiffResult:
 
 
 def _is_number(v: Any) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return isinstance(v, (int, float, Decimal)) and not isinstance(v, bool)
 
 
 def _compare(a: Any, b: Any, rel_tol: float, abs_tol: float) -> str:
@@ -218,6 +219,8 @@ def _compare(a: Any, b: Any, rel_tol: float, abs_tol: float) -> str:
     if _is_number(a) and _is_number(b):
         if a == b:
             return "exact"
+        # Decimal * float raises TypeError; do the tolerance arithmetic in float.
+        a, b = float(a), float(b)
         diff = abs(a - b)
         if diff <= max(rel_tol * max(abs(a), abs(b)), abs_tol):
             return "noise"
@@ -227,6 +230,7 @@ def _compare(a: Any, b: Any, rel_tol: float, abs_tol: float) -> str:
 
 def _rel(a: Any, b: Any) -> float:
     if _is_number(a) and _is_number(b):
+        a, b = float(a), float(b)
         denom = max(abs(a), abs(b))
         return abs(a - b) / denom if denom else 0.0
     return math.inf
