@@ -698,7 +698,7 @@ LEDGER_SCRIPT = (
 )
 READ_LEDGER_LINE = (
     "<!-- cold-read-ledger: v=1 read=<int> "
-    "verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt> body=<12 hex> "
+    "verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt|VOID> body=<12 hex> "
     "blocking=<int> rule_born=<int|na> advisory=<int> mutants=<int|na> "
     "survivors=<int|na> tokens=<int|na> seconds=<int|na> -->"
 )
@@ -1496,3 +1496,155 @@ def test_step_1_names_the_dispatch_script_and_what_its_manifest_names() -> None:
         assert phrase in step, f"step 1 lacks {phrase!r}"
     assert DISPATCH_SENTENCE in step, "step 1 does not carry the dispatch sentence whole"
     assert step.count("cold_read_dispatch.py") == 1
+
+
+# --- The void and degraded rules (the-workshop#1180) --------------------------
+# Precedent: on 2026-10-10 the ledger reported reads=3 unledgered=0 for both
+# cold-read issues and summed 389,948 tokens of reads that could not count
+# toward auto-promote; degradation lived in prose, in three wordings, and two of
+# the three degraded reads carried fully numeric ledger lines. The audit
+# (`cold_read_audit.py`) fixes the tokens; these rules say what they do to the
+# count. They are conductor-only: the reader's prompt carries the nine sections
+# of `What the reader is given` verbatim, and none of them may name a void or a
+# degraded value. Each test pins one clause AND the wording that would undo it.
+
+
+def _bullets_of(heading: str) -> dict[str, str]:
+    """Every top-level bullet of the exact `## heading` section, flattened, keyed
+    by the text of its bold lead-in (`Void reads.`, `Required keys` and so on)."""
+    bullets: dict[str, str] = {}
+    for raw in _h2(heading).splitlines():
+        match = re.match(r"- \*\*(.+?)\*\*", raw)
+        if match:
+            assert match.group(1) not in bullets, f"two {match.group(1)!r} bullets"
+            bullets[match.group(1)] = _flat(raw)
+    return bullets
+
+
+def _ledger_bullets() -> dict[str, str]:
+    return _bullets_of("The ledger line")
+
+
+def test_the_void_and_degraded_bullets_are_the_last_two_of_the_ledger_section() -> None:
+    """The two bullets go after `**Landed record.**` in `## The ledger line`,
+    in this order; left in `## Reader contract` they would reach the reader."""
+    leads = list(_ledger_bullets())
+    assert leads[-3:] == ["Landed record.", "Void reads.", "Degraded reads."], leads
+    contract = _bullets_of(CONTRACT)
+    assert "Void reads." not in contract and "Degraded reads." not in contract
+
+
+def test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule() -> None:
+    """A read is void on `probe_build=none` on a repo with a runnable gate or on
+    `comments_seen=1`, each with its own cause. The conductor confirms the
+    flagged commands before voiding, posts the VOID comment, applies none of
+    its findings or body edit, re-dispatches the same body to a fresh reader
+    once, and stops the run at a second VOID with the same `read=`. A failed
+    preflight is not void and posts no comment."""
+    bullet = _ledger_bullets()["Void reads."]
+    _assert_has(
+        "Void reads.",
+        bullet,
+        (
+            "`probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`)",
+            "`comments_seen=1` (`void_cause=comments-read`)",
+            "confirms the flagged commands",
+            "ending in a ledger line with `verdict=VOID`",
+            "applies none of its findings and none of its body edit",
+            "fresh reader once",
+            "A read that stopped at a failed preflight is not void and posts no comment",
+            "A second `VOID` line with the same `read=` stops the run",
+        ),
+    )
+
+
+def test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens() -> None:
+    """A read that is degraded but meets neither void condition counts, and its
+    ledger line records the tokens; an audited read with none of the five
+    records `degraded=none`; a denied command is run by the conductor."""
+    bullet = _ledger_bullets()["Degraded reads."]
+    _assert_has(
+        "Degraded reads.",
+        bullet,
+        (
+            "is not void if it meets neither void condition above",
+            "A read that is not void counts",
+            "records the tokens in `degraded`",
+            "records `degraded=none` on its ledger line",
+            "run by the conductor and its result quoted before the verdict is posted",
+        ),
+    )
+    assert "`denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed`" in bullet
+
+
+def test_the_fields_bullet_names_the_degraded_and_void_cause_keys() -> None:
+    """The grammar line shows only the required and the numeric keys; the two
+    optional keys that follow `tier` are named here, with their value sets."""
+    fields = _ledger_bullets()["Fields."]
+    _assert_has(
+        "Fields.",
+        fields,
+        (
+            "`degraded=<none|token[,token]...>`",
+            "`void_cause=<no-probe-build|comments-read>`",
+            "A `VOID` read is not a read: it adds nothing to the count.",
+        ),
+    )
+    assert fields.index("`tier=<hand-built|afk-built>`") < fields.index("`degraded=<none|token[,token]...>`")
+
+
+def test_step_8_says_a_void_read_adds_nothing_to_the_count_right_after_the_size_flag() -> None:
+    """The sentence sits immediately after the size-flag sentence, so the cap
+    sentences existing mutants anchor on stay as they were, and it does not
+    use the words `reset` or `restart`."""
+    step8 = _step(8)
+    size_flag = "Raise the [size flag](#size-flag) as well."
+    void = "A read whose ledger line says `verdict=VOID` is not a read and adds nothing to the count."
+    assert f"{size_flag} {void}" in step8
+    sentences = _sentences(step8)
+    hits = [s for s in sentences if "verdict=VOID" in s]
+    assert hits == [void], hits
+    assert sentences.index(void) == sentences.index(size_flag) + 1
+    assert not re.search(r"\b(reset|restart)s?\b", hits[0])
+
+
+def test_step_9_counts_a_degraded_ledger_value_as_a_degraded_read() -> None:
+    """The digest says whether the read was truly cold or degraded; a read
+    whose ledger line carries a `degraded` value other than `none` is degraded."""
+    step9 = _step(9)
+    clause = "or a read whose ledger line carries a `degraded` value other than `none`"
+    assert clause in step9
+    start = step9.index("(a non-subagent read")
+    parenthetical = step9[start : step9.index("[Probe builds](#probe-builds))", start)]
+    assert clause in parenthetical
+    assert "a BUILD whose detector-3, 9 or 11 criteria were only reasoned" in parenthetical
+
+
+def test_the_gate_contract_blocks_auto_promote_for_a_degraded_ledger_value() -> None:
+    """A degraded BUILD blocks auto-promote whichever way it is degraded, and a
+    read whose ledger line carries a `degraded` value other than `none` is one
+    way. The bold phrase the existing pins anchor on stays."""
+    bullets = [
+        _flat(line)
+        for line in _section(COLD_READ.read_text(), GATE_HEADING).splitlines()
+        if line.startswith("- **A degraded BUILD blocks auto-promote.**")
+    ]
+    assert len(bullets) == 1, bullets
+    bullet = bullets[0]
+    assert (
+        "whichever way it is degraded: a read whose ledger line carries a "
+        "`degraded` value other than `none`,"
+    ) in bullet
+    assert "a non-subagent read, or a reasoned-only BUILD under [Probe builds](#probe-builds)" in bullet
+
+
+def test_sections_the_reader_is_given_name_no_void_or_degraded_value() -> None:
+    """The reader's prompt carries the nine listed sections verbatim, so a
+    void rule, a `void_cause` or a `degraded=` value in any of them tells the
+    reader how the conductor will grade it."""
+    names = re.findall(r"`([^`]+)`", _bullet("What the reader is given."))
+    assert sorted(names) == sorted(READER_GIVEN), names
+    given = "\n".join(_h2(name) for name in names)
+    assert len(names) == 9 and given.strip()
+    for needle in ("VOID", "void_cause", "degraded="):
+        assert needle not in given, f"a reader-visible section says {needle!r}"
