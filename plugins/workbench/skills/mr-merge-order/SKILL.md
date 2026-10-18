@@ -58,6 +58,9 @@ flagged as arbitrary — say so rather than implying the order was derived.
   independent stack rooted at the target itself is kept.
 - **Stacked MRs** (B targets A's source branch) are a **hard dependency**, reported as a chain
   and excluded from cost ranking. Order there is structural, not economic.
+  Each chain is still checked against the independent MRs as **one unit**: its tip branch (which
+  carries every MR below it) is simulated pairwise, and a chain-vs-independent conflict orders the
+  whole chain before or after that MR.
 - **Out:** local unpushed branches, CI status, and anything requiring a merge to observe.
 
 ## Reporting rules

@@ -214,6 +214,17 @@ def detect_chains(mrs: list[MergeRequest]) -> list[list[str]]:
     return chains
 
 
+def conflict_units(independent: list[str], chains: list[list[str]]) -> list[str]:
+    """Branches to simulate pairwise: each independent MR, and each chain's tip.
+
+    A chain merges as one unit, and its tip branch already carries every
+    earlier MR in the stack, so the tip stands for the whole chain. A fork
+    yields one unit per tip.
+    """
+    tips = sorted({chain[-1] for chain in chains})
+    return [*independent, *(t for t in tips if t not in independent)]
+
+
 def list_merge_requests(
     platform: str, target: str | None, repo: Path | str = "."
 ) -> list[MergeRequest]:
@@ -340,6 +351,19 @@ def recommend_order(
     rationale: list[str] = []
     contested = False
 
+    def members(unit: str) -> list[str]:
+        """Branches a conflict unit stands for: a chain tip stands for its chain."""
+        for chain in chains:
+            if chain[-1] == unit:
+                return chain
+        return [unit]
+
+    def precede(first: str, second: str) -> None:
+        for x in members(first):
+            for y in members(second):
+                if x != y:
+                    must_precede.add((x, y))
+
     for (a, b), files in sorted(real_conflicts.items()):
         if (a, b) in must_precede or (b, a) in must_precede:
             continue
@@ -347,13 +371,13 @@ def recommend_order(
         size_b = max((sizes.get((b, f), 0) for f in files), default=0)
         shown = ", ".join(files)
         if size_a > size_b:
-            must_precede.add((a, b))
+            precede(a, b)
             rationale.append(
                 f"{a} before {b}: {a} changes {shown} more ({size_a} vs {size_b} lines), "
                 f"so {b} does the cheaper rebase."
             )
         elif size_b > size_a:
-            must_precede.add((b, a))
+            precede(b, a)
             rationale.append(
                 f"{b} before {a}: {b} changes {shown} more ({size_b} vs {size_a} lines), "
                 f"so {a} does the cheaper rebase."
@@ -361,7 +385,7 @@ def recommend_order(
         else:
             contested = True
             first, second = (b, a) if a in drafts and b not in drafts else (a, b)
-            must_precede.add((first, second))
+            precede(first, second)
             rationale.append(
                 f"{first} before {second}: equal contested size on {shown}; "
                 f"broke the tie toward the non-draft. This order is arbitrary — "
@@ -519,7 +543,8 @@ def main(argv: list[str] | None = None) -> int:
     branches = [mr.source for mr in mrs]
     independent = [b for b in branches if b not in chained]
 
-    conflicts = pairwise_conflicts(repo, target_ref, independent) if len(independent) > 1 else {}
+    units = conflict_units(independent, chains)
+    conflicts = pairwise_conflicts(repo, target_ref, units) if len(units) > 1 else {}
     sizes: dict[tuple[str, str], int] = {}
     for (a, b), files in conflicts.items():
         for f in files:
