@@ -1471,3 +1471,28 @@ def test_fork_point_list_orders_the_trunk_branch_bullet_and_the_conductor_archiv
         ),
     )
     assert "Fetch the local checkout" not in section
+
+
+# --- The dispatch generator (the-workshop#1178) -------------------------------
+# Precedent: on 2026-10-10 the reader prompts were assembled by a one-off script
+# that disagreed with the stamp on the body hash, hardcoded paths and left
+# detector 10 to the reader. Step 1 describes that assembly, so it names the
+# script that now performs it; a later edit that drops the sentence leaves the
+# step describing by hand what `cold_read_dispatch.py build` does.
+
+DISPATCH_SENTENCE = (
+    '`python3 "<engine>/cold_read_dispatch.py" build ...` performs this expansion '
+    "and writes the dispatch; its manifest names the agent type and the model."
+)
+
+
+def test_step_1_names_the_dispatch_script_and_what_its_manifest_names() -> None:
+    """The conductor reads step 1 to build the dispatch: it must find the
+    script that does it and know the manifest carries the agent type and the
+    model, which the `Reader contract` makes the conductor's choice to get
+    right (an `Explore` reader never created its scratch directory)."""
+    step = _step(1)
+    for phrase in ("cold_read_dispatch.py", "build", "manifest", "agent type", "model"):
+        assert phrase in step, f"step 1 lacks {phrase!r}"
+    assert DISPATCH_SENTENCE in step, "step 1 does not carry the dispatch sentence whole"
+    assert step.count("cold_read_dispatch.py") == 1
