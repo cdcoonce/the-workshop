@@ -335,13 +335,20 @@ def _usable_ref(name: str) -> bool:
     return BRANCH_RE.fullmatch(name) is not None and ".." not in name
 
 
+def _git_stdout(args: list[str], checkout: str, failure: str) -> str:
+    """The stdout of ``git <args>`` run in the checkout; exit 4 with *failure* when it fails."""
+    result = _run_git(args, checkout, GIT_TIMEOUT)
+    if not result or result[0]:
+        raise _Fail(4, failure)
+    return result[1]
+
+
 def _resolve_sha(checkout: str, branch: str) -> str:
     """The remote's SHA for *branch*, from ``git ls-remote`` and never a tracking ref."""
     ref = f"refs/heads/{branch}"
-    result = _run_git(["ls-remote", "origin", ref], checkout, GIT_TIMEOUT)
-    if result is None or result[0] != 0:
-        raise _Fail(4, f"git ls-remote origin {ref} failed; the fork SHA could not be resolved")
-    for line in result[1].splitlines():
+    failure = f"git ls-remote origin {ref} failed; the fork SHA could not be resolved"
+    listing = _git_stdout(["ls-remote", "origin", ref], checkout, failure)
+    for line in listing.splitlines():
         parts = line.split()
         if len(parts) == 2 and parts[1] == ref and SHA_RE.fullmatch(parts[0]):
             return parts[0]
@@ -350,13 +357,10 @@ def _resolve_sha(checkout: str, branch: str) -> str:
 
 def _archive_fork(checkout: str, branch: str, sha: str, scratch_dir: str, tree_dir: str) -> None:
     """Fetch *branch* into the checkout, then archive *sha* and extract it into *tree_dir*."""
-    fetched = _run_git(["fetch", "origin", branch], checkout, GIT_TIMEOUT)
-    if fetched is None or fetched[0] != 0:
-        raise _Fail(4, f"git fetch origin {branch} failed in {checkout}")
+    _git_stdout(["fetch", "origin", branch], checkout, f"git fetch origin {branch} failed in {checkout}")
     tar_path = os.path.join(scratch_dir, "fork.tar")
-    archived = _run_git(["archive", "--format=tar", "-o", tar_path, sha], checkout, GIT_TIMEOUT)
-    if archived is None or archived[0] != 0:
-        raise _Fail(4, f"git archive of {sha} failed in {checkout}")
+    failure = f"git archive of {sha} failed in {checkout}"
+    _git_stdout(["archive", "--format=tar", "-o", tar_path, sha], checkout, failure)
     try:
         with tarfile.open(tar_path, "r:") as archive:
             archive.extractall(tree_dir, **_TAR_FILTER)

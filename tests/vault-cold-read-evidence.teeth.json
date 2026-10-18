@@ -578,6 +578,20 @@
       "oracle": "real",
       "find": "- **What the reader returns.** One final message: the issue number and the body hash it was given; the archived SHA the dispatch names; whether the read was truly cold and probe builds ran, or what prevented them; one record per detector, each `ran`, `found N`, `found none` or `skipped` with the reason (for detectors 5 and 10 it is `found N` or `found none` read from the supplied output, and `skipped` only when nothing was supplied); findings, each with its default and its MEASURED, REASONED or REACHABLE tag; the probe-build record; the anti-rubber-stamp lines; and the verdict it would give: `BUILD` (no blocking finding), `REWRITE` (blocking findings fixable by editing the body) or `NOT-DISPATCH-READY` (not executor-implementable as scoped).\n- **Preflight.** The reader's first command is the supplied preflight command. If its output does not begin `PREFLIGHT ok`, the reader makes no other call and returns that output verbatim as its whole report. A read that returns it is not a read: no verdict comment is posted, nothing is counted, and the conductor fixes the cause before dispatching again.\n",
       "replace": "- **Preflight.** The reader's first command is the supplied preflight command. If its output does not begin `PREFLIGHT ok`, the reader makes no other call and returns that output verbatim as its whole report. A read that returns it is not a read: no verdict comment is posted, nothing is counted, and the conductor fixes the cause before dispatching again.\n- **What the reader returns.** One final message: the issue number and the body hash it was given; the archived SHA the dispatch names; whether the read was truly cold and probe builds ran, or what prevented them; one record per detector, each `ran`, `found N`, `found none` or `skipped` with the reason (for detectors 5 and 10 it is `found N` or `found none` read from the supplied output, and `skipped` only when nothing was supplied); findings, each with its default and its MEASURED, REASONED or REACHABLE tag; the probe-build record; the anti-rubber-stamp lines; and the verdict it would give: `BUILD` (no blocking finding), `REWRITE` (blocking findings fixable by editing the body) or `NOT-DISPATCH-READY` (not executor-implementable as scoped).\n"
+    },
+    {
+      "label": "L1: delete the step-1 sentence naming cold_read_dispatch.py [test_step_1_names_the_dispatch_script_and_what_its_manifest_names]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " `python3 \"<engine>/cold_read_dispatch.py\" build ...` performs this expansion and writes the dispatch; its manifest names the agent type and the model.",
+      "replace": ""
+    },
+    {
+      "label": "L2: delete the clause `; its manifest names the agent type and the model` from that sentence [test_step_1_names_the_dispatch_script_and_what_its_manifest_names]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "; its manifest names the agent type and the model",
+      "replace": ""
     }
   ],
   "collect_command": [

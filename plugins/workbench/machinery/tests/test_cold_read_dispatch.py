@@ -2232,3 +2232,117 @@ def test_an_explicit_teeth_check_path_is_used_as_given(env, tmp_path):
     assert str(teeth) in dispatch_block(result.reader)
     missing = env.build("--teeth-check", str(tmp_path / "absent" / "teeth_check.py"))
     assert missing.code == 4 and "--teeth-check" in missing.err
+
+
+# --------------------------------------------------------------------------- #
+# further guards found while reading the tests against the issue's rules
+# --------------------------------------------------------------------------- #
+
+
+def test_reader_md_blocks_follow_the_documented_order(env):
+    """The reader's prompt is, in order: a title, the dispatch block, one block
+    per detector, the comments, the body and then the spec sections. A build
+    that reorders them hands the reader the same text in a shape the procedure
+    does not describe."""
+    result = env.build()
+    assert result.code == 0, result.err
+    reader = result.reader
+    markers = [
+        "# Cold read of ",
+        "## This dispatch",
+        "## Detector 5 command and output",
+        "## Detector 10 command and output",
+        "## Comments",
+        "## Issue body",
+        "## Probe builds",
+        "## Detectors\n",
+        "## Reader contract",
+    ]
+    positions = [reader.index(marker) for marker in markers]
+    assert positions[0] == 0 and positions == sorted(positions) and len(set(positions)) == len(markers)
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--fork-branch", "--upload-pack=touch-a-file"),
+        ("--fork-branch", "-x"),
+        ("--fork-branch", "a..b"),
+        ("--detector5-ref", "--json"),
+    ],
+)
+def test_a_ref_that_could_be_read_as_an_option_is_a_usage_error_before_any_git_call(env, option, value):
+    """A branch name goes to ``git fetch`` and a ref to the detector's command
+    line; one that starts with ``-`` would be read as an option (``--upload-pack``
+    runs a program). Exit 2 before anything runs."""
+    calls = spy_git(env.monkeypatch)
+    result = env.build(f"{option}={value}")
+    assert result.code == 2
+    assert calls == [] and env.detector_calls == []
+
+
+def test_a_settings_branch_that_could_be_read_as_an_option_exits_4_before_any_git_call(env, tmp_path):
+    """The same guard for a branch that came from the checkout's settings."""
+    env.checkout = clone_of(env.world, tmp_path / "checkout-with-settings", 'integration_target = "--upload-pack=x"\n')
+    calls = spy_git(env.monkeypatch)
+    result = env.build()
+    assert result.code == 4
+    assert calls == [] and env.detector_calls == []
+
+
+@pytest.mark.parametrize(
+    ("verb", "failure"),
+    [
+        ("ls-remote", (128, "", "fatal: unable to access")),
+        ("ls-remote", None),
+        ("fetch", (1, "", "fatal: couldn't find remote ref")),
+        ("fetch", None),
+        ("archive", (1, "", "fatal: not a valid object")),
+        ("archive", None),
+    ],
+    ids=["ls-remote-fails", "ls-remote-cannot-run", "fetch-fails", "fetch-cannot-run", "archive-fails", "archive-cannot-run"],
+)
+def test_a_git_command_that_fails_exits_4_and_the_build_goes_no_further(env, verb, failure):
+    """Each of the three git commands is a value the build cannot do without
+    (fork SHA, fetched branch, archive): a non-zero exit or a program that cannot
+    run is exit 4 naming the command, and the detectors are never run."""
+    real = mod._run_git
+    seen: list[str] = []
+
+    def fake(args, cwd=None, timeout=30):
+        seen.append(args[0])
+        return failure if args[0] == verb else real(args, cwd, timeout)
+
+    env.monkeypatch.setattr(mod, "_run_git", fake)
+    result = env.build()
+    assert result.code == 4
+    assert verb in result.err and "Traceback" not in result.err
+    order = ["ls-remote", "fetch", "archive"]
+    assert seen == order[: order.index(verb) + 1]
+    assert env.detector_calls == []
+
+
+def test_a_spec_with_crlf_line_endings_yields_the_same_sections(env):
+    """The spec is a file another tool may have checked out with CRLF endings;
+    its code fences must still close and its headings still split sections."""
+    env.spec.write_bytes(spec_text().replace("\n", "\r\n").encode("utf-8"))
+    result = env.build()
+    assert result.code == 0, result.err
+    assert result.manifest["spec_sections"] == list(DEFAULT_GIVEN)
+    assert "\r" not in result.reader
+    assert "Text after the fence belongs to the same section." in result.reader
+
+
+def test_a_checkout_reached_through_a_symlink_is_hidden_under_both_spellings(env, tmp_path):
+    """A detector may echo the path the checkout really lives at, not the one
+    the conductor passed; the prompt must hide both."""
+    link = tmp_path / "checkout-link"
+    link.symlink_to(env.world.checkout, target_is_directory=True)
+    env.checkout = link
+    real = str(env.world.checkout.resolve())
+    env.fake_detectors(five=(0, json.dumps({"real": real, "link": str(link)}) + "\n", ""))
+    result = env.build()
+    assert result.code == 0, result.err
+    written = (env.out / "detector5.json").read_text(encoding="utf-8")
+    assert real not in written and str(link) not in written
+    assert real not in without_body(result.reader) and str(link) not in without_body(result.reader)
