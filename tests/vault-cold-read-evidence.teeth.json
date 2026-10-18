@@ -592,6 +592,174 @@
       "oracle": "real",
       "find": "; its manifest names the agent type and the model",
       "replace": ""
+    },
+    {
+      "label": "M1: row 14 delete the Void reads. bullet of ## The ledger line [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Void reads.** A read is void when its transcript audit shows `probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`). A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe. The audit's tokens are evidence: the conductor confirms the flagged commands from its `--details` lines before voiding. The conductor posts a comment titled `## Cold read — VOID` ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`, applies none of its findings and none of its body edit, and dispatches the same body to a fresh reader once. A `VOID` line carries the `read=` its replacement will carry. A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.\n",
+      "replace": ""
+    },
+    {
+      "label": "M2: row 15 change `once` to `until one lands` in the Void reads. bullet [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "dispatches the same body to a fresh reader once.",
+      "replace": "dispatches the same body to a fresh reader until one lands."
+    },
+    {
+      "label": "M3: row 16 delete the second-void sentence [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.",
+      "replace": ""
+    },
+    {
+      "label": "M4: row 17 invert `applies none of its findings` [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "applies none of its findings and none of its body edit",
+      "replace": "applies its findings and its body edit"
+    },
+    {
+      "label": "M5: row 18 delete the failed-preflight sentence from the Void reads. bullet [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe.",
+      "replace": ""
+    },
+    {
+      "label": "M6: row 19 change `is not void` to `is void` in the Degraded reads. bullet [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "is not void if it meets neither void condition above",
+      "replace": "is void if it meets neither void condition above"
+    },
+    {
+      "label": "M7: row 20 delete the denied-command sentence [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A reader command denied by the permission classifier is run by the conductor and its result quoted before the verdict is posted.",
+      "replace": ""
+    },
+    {
+      "label": "M8: row 21 delete the degraded=none sentence from the Degraded reads. bullet [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A read that counts and whose audit shows none of those five tokens records `degraded=none` on its ledger line.",
+      "replace": ""
+    },
+    {
+      "label": "M9: row 22 delete the step-8 VOID sentence [test_step_8_says_a_void_read_adds_nothing_to_the_count_right_after_the_size_flag]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A read whose ledger line says `verdict=VOID` is not a read and adds nothing to the count.",
+      "replace": ""
+    },
+    {
+      "label": "M10: row 23 delete the step-9 clause [test_step_9_counts_a_degraded_ledger_value_as_a_degraded_read]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": ", or a read whose ledger line carries a `degraded` value other than `none`; [Probe builds]",
+      "replace": "; [Probe builds]"
+    },
+    {
+      "label": "M11: row 24 delete the gate-contract clause [test_the_gate_contract_blocks_auto_promote_for_a_degraded_ledger_value]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " a read whose ledger line carries a `degraded` value other than `none`, a non-subagent read,",
+      "replace": " a non-subagent read,"
+    },
+    {
+      "label": "M12: row 25 put VOID into a section the reader is given (Constraints) [test_sections_the_reader_is_given_name_no_void_or_degraded_value]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **One issue per run.** Cold-reading a batch means skimming.",
+      "replace": "- **One issue per run.** A VOID read is not counted. Cold-reading a batch means skimming."
+    },
+    {
+      "label": "M13: row 26 put void_cause into a section the reader is given (Constraints) [test_sections_the_reader_is_given_name_no_void_or_degraded_value]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **One issue per run.** Cold-reading a batch means skimming.",
+      "replace": "- **One issue per run.** The void_cause is recorded. Cold-reading a batch means skimming."
+    },
+    {
+      "label": "M14: row 27 put degraded= into a section the reader is given (Constraints) [test_sections_the_reader_is_given_name_no_void_or_degraded_value]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **One issue per run.** Cold-reading a batch means skimming.",
+      "replace": "- **One issue per run.** Record degraded=none. Cold-reading a batch means skimming."
+    },
+    {
+      "label": "M15: MK17 move the step-8 VOID sentence ahead of the size-flag sentence [test_step_8_says_a_void_read_adds_nothing_to_the_count_right_after_the_size_flag]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "Raise the [size flag](#size-flag) as well. A read whose ledger line says `verdict=VOID` is not a read and adds nothing to the count.",
+      "replace": "A read whose ledger line says `verdict=VOID` is not a read and adds nothing to the count. Raise the [size flag](#size-flag) as well."
+    },
+    {
+      "label": "M16: MK21 drop `and none of its body edit` from the Void reads. bullet [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "applies none of its findings and none of its body edit",
+      "replace": "applies none of its findings"
+    },
+    {
+      "label": "M17: MK24 drop the runnable-gate qualifier from the no-probe-build condition [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " on a repo with a runnable gate",
+      "replace": ""
+    },
+    {
+      "label": "M18: MK25 swap the two causes in the Void reads. bullet [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "`probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`)",
+      "replace": "`probe_build=none` on a repo with a runnable gate (`void_cause=comments-read`) or `comments_seen=1` (`void_cause=no-probe-build`)"
+    },
+    {
+      "label": "M19: MK26 delete the sentence that records the tokens in degraded [test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "A read that is not void counts, its ledger line records the tokens in `degraded`, and its digest says which.",
+      "replace": "A read that is not void counts."
+    },
+    {
+      "label": "M20: MK27 delete the VOID ledger-line requirement from the comment sentence [test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`,",
+      "replace": ","
+    },
+    {
+      "label": "M21: MK28 change the degraded grammar form in the Fields. bullet [test_the_fields_bullet_names_the_degraded_and_void_cause_keys]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "`degraded=<none|token[,token]...>`, recorded by a writer",
+      "replace": "`degraded=<none|token>`, recorded by a writer"
+    },
+    {
+      "label": "M22: MK28 change the void_cause grammar form in the Fields. bullet [test_the_fields_bullet_names_the_degraded_and_void_cause_keys]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "`void_cause=<no-probe-build|comments-read>`, required when `verdict=VOID`.",
+      "replace": "`void_cause=<cause>`, required when `verdict=VOID`."
+    },
+    {
+      "label": "M23: delete `A VOID read is not a read` from the Fields. bullet [test_the_fields_bullet_names_the_degraded_and_void_cause_keys]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " A `VOID` read is not a read: it adds nothing to the count.",
+      "replace": ""
+    },
+    {
+      "label": "M24: swap the order of the two ledger bullets (Degraded reads. before Void reads.) [test_the_void_and_degraded_bullets_are_the_last_two_of_the_ledger_section]",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "- **Void reads.** A read is void when its transcript audit shows `probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`). A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe. The audit's tokens are evidence: the conductor confirms the flagged commands from its `--details` lines before voiding. The conductor posts a comment titled `## Cold read — VOID` ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`, applies none of its findings and none of its body edit, and dispatches the same body to a fresh reader once. A `VOID` line carries the `read=` its replacement will carry. A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.\n- **Degraded reads.** A read whose audit shows `denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed` is not void if it meets neither void condition above. A read that is not void counts, its ledger line records the tokens in `degraded`, and its digest says which. A read that counts and whose audit shows none of those five tokens records `degraded=none` on its ledger line. A reader command denied by the permission classifier is run by the conductor and its result quoted before the verdict is posted.\n",
+      "replace": "- **Degraded reads.** A read whose audit shows `denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed` is not void if it meets neither void condition above. A read that is not void counts, its ledger line records the tokens in `degraded`, and its digest says which. A read that counts and whose audit shows none of those five tokens records `degraded=none` on its ledger line. A reader command denied by the permission classifier is run by the conductor and its result quoted before the verdict is posted.\n- **Void reads.** A read is void when its transcript audit shows `probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`) or `comments_seen=1` (`void_cause=comments-read`). A read that stopped at a failed preflight is not void and posts no comment: the `**Preflight.**` bullet of `## Reader contract` governs it, and `preflight-failed` applies only to a read that went on to probe. The audit's tokens are evidence: the conductor confirms the flagged commands from its `--details` lines before voiding. The conductor posts a comment titled `## Cold read — VOID` ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`, applies none of its findings and none of its body edit, and dispatches the same body to a fresh reader once. A `VOID` line carries the `read=` its replacement will carry. A second `VOID` line with the same `read=` stops the run and goes to the maintainer; no further reader is dispatched.\n"
     }
   ],
   "collect_command": [
