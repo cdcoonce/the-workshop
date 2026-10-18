@@ -1,0 +1,816 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_cold_read_audit.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_cold_read_audit.py"
+  ],
+  "mutants": [
+    {
+      "label": "row 1: match results by adjacency instead of tool_use_id [test_parallel_calls_are_matched_by_tool_use_id]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    for use in uses:\n        if isinstance(use.id, str):\n            use.result = results.get(use.id)\n",
+      "replace": "    ordered = list(results.values())\n    for index, use in enumerate(uses):\n        use.result = ordered[index] if index < len(ordered) else None\n"
+    },
+    {
+      "label": "row 2: treat is_error true as denied regardless of text [test_exit_code_is_not_a_denial]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return is_error and text.startswith(DENIAL_PREFIX)",
+      "replace": "    return is_error"
+    },
+    {
+      "label": "row 3: ignore toolDenialKind [test_tool_denial_kind_is_a_denial_whatever_the_text]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if kind and kind != \"interrupted\":\n        return True",
+      "replace": "    if False:\n        return True"
+    },
+    {
+      "label": "row 4: count scratch=ok without checking the result [test_unanswered_tool_use_is_not_scratch_use_or_a_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None or use.result.is_error:\n            continue",
+      "replace": "        if use.preflight:\n            continue"
+    },
+    {
+      "label": "row 5: drop the head -c fallback regex [test_truncated_comments_result_is_seen]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if COMMENTS_LIST_PATTERN.search(text):\n        return True\n",
+      "replace": ""
+    },
+    {
+      "label": "row 6: skip flattening list content [test_result_content_that_is_a_list_of_text_blocks_is_flattened]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if isinstance(content, list):\n        parts = []",
+      "replace": "    if False:\n        parts = []"
+    },
+    {
+      "label": "row 7: exit 0 on an incomplete transcript [test_incomplete_transcript_exits_3_after_printing_the_report]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        return 3\n",
+      "replace": "        return 0\n"
+    },
+    {
+      "label": "row 8: treat a missing SubagentHandback as complete [test_partial_transcript_cut_at_sixty_percent_is_incomplete]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    complete = last_stop == \"end_turn\" or any(use.name == HANDBACK_TOOL for use in uses)",
+      "replace": "    complete = last_stop == \"end_turn\" or not any(use.name == HANDBACK_TOOL for use in uses)"
+    },
+    {
+      "label": "row 9: compare the issue number as a substring [test_standalone_issue_number_decides_comments_fetch]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if not re.search(rf\"(?<!\\w){re.escape(str(issue))}(?!\\w)\", segment):\n        return False",
+      "replace": "    if str(issue) not in segment:\n        return False"
+    },
+    {
+      "label": "row 10: report scratch=none for the fidelity role [test_fidelity_role_reports_na_for_scratch_and_probe_build]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if role != \"cold\":\n        return \"na\"\n    pattern = _scratch_dir_pattern",
+      "replace": "    pattern = _scratch_dir_pattern"
+    },
+    {
+      "label": "row 11: count a preflight command as scratch use [test_preflight_only_run_is_neither_scratch_nor_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None or use.result.is_error:",
+      "replace": "        if use.result is None or use.result.is_error:"
+    },
+    {
+      "label": "row 12: report probe_build=ran for any scratch command [test_preflight_plus_ls_of_scratch_dir_is_scratch_without_a_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    probe_build = _probe_build(role, bash_uses)",
+      "replace": "    probe_build = \"ran\" if scratch == \"ok\" else \"none\""
+    },
+    {
+      "label": "row 13: apply the gh pattern to heredoc bodies [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    body = _strip_heredocs(command)\n    segments = []",
+      "replace": "    body = command\n    segments = []"
+    },
+    {
+      "label": "row 14: match pytest anywhere in a word or path [test_probe_pattern_matches_a_probe_and_not_a_lookalike]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PROBE_PATTERN = re.compile(r\"(?<![\\w./-])pytest(?![\\w/-])|teeth_check\\.py|(?<![\\w./-])make\\s+\\S\")",
+      "replace": "PROBE_PATTERN = re.compile(r\"pytest|teeth_check\\.py|(?<![\\w./-])make\\s+\\S\")"
+    },
+    {
+      "label": "row 15: test -c against the whole command instead of the gh segment [test_gh_segment_ends_at_the_next_separator]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEGMENT_END = re.compile(r\"[;&|\\n]\")",
+      "replace": "SEGMENT_END = re.compile(r\"\\Z\")"
+    },
+    {
+      "label": "row 16: leave newline out of the command positions [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "COMMAND_POSITION = rf\"(?:^|{SEPARATORS}|{KEYWORDS}|{BANG})\"",
+      "replace": "COMMAND_POSITION = rf\"(?:\\A|{SEPARATORS}|{KEYWORDS}|{BANG})\""
+    },
+    {
+      "label": "row 17: match only the issue, api and pr subcommands [test_gh_subcommand_and_flags_do_not_matter]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./=-])\"",
+      "replace": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?=\\s+(?:issue|api|pr)\\b)\""
+    },
+    {
+      "label": "row 18: split lines with splitlines() [test_u2028_inside_a_json_string_does_not_split_the_record]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    for line in data.decode(\"utf-8\", errors=\"replace\").split(\"\\n\"):",
+      "replace": "    for line in data.decode(\"utf-8\", errors=\"replace\").splitlines():"
+    },
+    {
+      "label": "row 19: count blank lines in bad_lines [test_blank_lines_are_skipped_and_not_counted]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if not line.strip():\n            continue\n        try:",
+      "replace": "        try:"
+    },
+    {
+      "label": "row 20: count toolDenialKind interrupted as denied [test_denied_vocabulary_is_exact]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if kind and kind != \"interrupted\":",
+      "replace": "    if kind:"
+    },
+    {
+      "label": "row 21: match the denial clause on any text containing Permission denied [test_denied_vocabulary_is_exact]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return is_error and text.startswith(DENIAL_PREFIX)",
+      "replace": "    return is_error and (text.startswith(DENIAL_PREFIX) or \"Permission denied\" in text)"
+    },
+    {
+      "label": "row 22: key preflight on the command text instead of the result [test_preflight_token_comes_from_the_result_not_the_command]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            use.preflight = _preflight_kind(use.result.text)",
+      "replace": "            use.preflight = _preflight_kind(use.command)"
+    },
+    {
+      "label": "row 23: require SubagentHandback for complete [test_end_turn_without_a_hand_back_is_complete]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    complete = last_stop == \"end_turn\" or any(use.name == HANDBACK_TOOL for use in uses)",
+      "replace": "    complete = any(use.name == HANDBACK_TOOL for use in uses)"
+    },
+    {
+      "label": "row 24: count only a second Bash call for preflight-failed [test_preflight_failed_flag_needs_another_tool_use_after_it]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        use is not preflight_uses[0] and use.name != HANDBACK_TOOL for use in uses",
+      "replace": "        use is not preflight_uses[0] and use.name != HANDBACK_TOOL for use in bash_uses"
+    },
+    {
+      "label": "must-kill MK2: a heredoc ends at the first line that starts with the word [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            if (line.lstrip(\"\\t\") if dashed else line) == word:",
+      "replace": "            if (line.lstrip(\"\\t\") if dashed else line).startswith(word):"
+    },
+    {
+      "label": "must-kill MK3: a heredoc terminator is matched after stripping any whitespace [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            if (line.lstrip(\"\\t\") if dashed else line) == word:",
+      "replace": "            if line.strip() == word:"
+    },
+    {
+      "label": "must-kill MK4: tabs are stripped from the terminator without the dash [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            if (line.lstrip(\"\\t\") if dashed else line) == word:",
+      "replace": "            if line.lstrip(\"\\t\") == word:"
+    },
+    {
+      "label": "must-kill: the dash form no longer strips a tab before the terminator [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            if (line.lstrip(\"\\t\") if dashed else line) == word:",
+      "replace": "            if line == word:"
+    },
+    {
+      "label": "must-kill: here-strings are heredocs (the < guards dropped) [test_heredoc_bodies_are_removed_before_the_gh_pattern]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "HEREDOC_PATTERN = re.compile(r\"(?<!<)<<(?!<)(-?)",
+      "replace": "HEREDOC_PATTERN = re.compile(r\"<<(-?)"
+    },
+    {
+      "label": "[control] MK5: drop --comments from the comments-fetch argument rule",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "`--comments` contains the text `comments`, which the earlier `\"comments\" in segment` test already accepts when the issue number is standalone; the argument rule is reached only after that test fails, so with `-c` kept the `--comments` spelling can never differ. Inert for every segment the suite or the transcript format can produce; it is not inert if the text rule is ever narrowed to a word or path.",
+      "find": "COMMENTS_ARGUMENT = re.compile(r\"(?<!\\S)(?:-c|--comments)(?!\\S)\")",
+      "replace": "COMMENTS_ARGUMENT = re.compile(r\"(?<!\\S)(?:-c)(?!\\S)\")"
+    },
+    {
+      "label": "must-kill MK6: pr view dropped from the comments-fetch argument rule [test_standalone_issue_number_decides_comments_fetch]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "VIEW_PATTERN = re.compile(r\"(?<![\\w-])(?:issue|pr)\\s+view(?![\\w-])\")",
+      "replace": "VIEW_PATTERN = re.compile(r\"(?<![\\w-])(?:issue)\\s+view(?![\\w-])\")"
+    },
+    {
+      "label": "must-kill MK7: the singular comment is accepted [test_standalone_issue_number_decides_comments_fetch]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if \"comments\" in segment:",
+      "replace": "    if \"comment\" in segment:"
+    },
+    {
+      "label": "must-kill MK8: -c is accepted without issue view or pr view [test_standalone_issue_number_decides_comments_fetch]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return bool(COMMENTS_ARGUMENT.search(segment) and VIEW_PATTERN.search(segment))",
+      "replace": "    return bool(COMMENTS_ARGUMENT.search(segment))"
+    },
+    {
+      "label": "must-kill MK9: ; removed from the gh command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEPARATORS = r\"[;&|(`]\"",
+      "replace": "SEPARATORS = r\"[&|(`]\""
+    },
+    {
+      "label": "must-kill MK10: & and && removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEPARATORS = r\"[;&|(`]\"",
+      "replace": "SEPARATORS = r\"[;|(`]\""
+    },
+    {
+      "label": "must-kill MK11: | and || removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEPARATORS = r\"[;&|(`]\"",
+      "replace": "SEPARATORS = r\"[;&(`]\""
+    },
+    {
+      "label": "must-kill MK12: ( and $( removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEPARATORS = r\"[;&|(`]\"",
+      "replace": "SEPARATORS = r\"[;&|`]\""
+    },
+    {
+      "label": "must-kill MK13: backtick removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEPARATORS = r\"[;&|(`]\"",
+      "replace": "SEPARATORS = r\"[;&|(]\""
+    },
+    {
+      "label": "must-kill: do removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if|xargs)(?![\\w./-])\"",
+      "replace": "KEYWORDS = r\"(?<![\\w./-])(?:then|else|if|xargs)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK14: then removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if|xargs)(?![\\w./-])\"",
+      "replace": "KEYWORDS = r\"(?<![\\w./-])(?:do|else|if|xargs)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK15: else removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if|xargs)(?![\\w./-])\"",
+      "replace": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|if|xargs)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK16: if removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if|xargs)(?![\\w./-])\"",
+      "replace": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|xargs)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK17: xargs removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if|xargs)(?![\\w./-])\"",
+      "replace": "KEYWORDS = r\"(?<![\\w./-])(?:do|then|else|if)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK18: ! removed from the command positions [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "COMMAND_POSITION = rf\"(?:^|{SEPARATORS}|{KEYWORDS}|{BANG})\"",
+      "replace": "COMMAND_POSITION = rf\"(?:^|{SEPARATORS}|{KEYWORDS})\""
+    },
+    {
+      "label": "must-kill MK19: leading NAME=value assignments are not skipped [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "GH_PATTERN = re.compile(COMMAND_POSITION + r\"\\s*\" + ASSIGNMENT + PROGRAM, re.MULTILINE)",
+      "replace": "GH_PATTERN = re.compile(COMMAND_POSITION + r\"\\s*\" + PROGRAM, re.MULTILINE)"
+    },
+    {
+      "label": "must-kill MK20: a path ending /gh is not accepted [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./=-])\"",
+      "replace": "PROGRAM = r\"(?P<program>gh)(?![\\w./=-])\""
+    },
+    {
+      "label": "must-kill MK21: gh matched anywhere, not only at a command position [test_gh_word_that_is_not_a_program_does_not_count]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "COMMAND_POSITION = rf\"(?:^|{SEPARATORS}|{KEYWORDS}|{BANG})\"",
+      "replace": "COMMAND_POSITION = rf\"(?:\\b)\""
+    },
+    {
+      "label": "must-kill: gh followed by = is still a program [test_gh_word_that_is_not_a_program_does_not_count]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./=-])\"",
+      "replace": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./-])\""
+    },
+    {
+      "label": "must-kill MK22: gh_calls counted per invocation [test_gh_calls_counts_commands_not_invocations]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        use.gh = bool(segments)",
+      "replace": "        use.gh = len(segments)"
+    },
+    {
+      "label": "must-kill MK23: comments_fetch counted per invocation [test_gh_calls_counts_commands_not_invocations]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        use.fetch = any(_fetches_comments(segment, issue) for segment in segments)",
+      "replace": "        use.fetch = sum(_fetches_comments(segment, issue) for segment in segments)"
+    },
+    {
+      "label": "must-kill MK24: the AUDIT keys are printed in another order [test_audit_line_has_the_keys_in_the_stated_order]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    \"scratch\",\n    \"probe_build\",\n    \"gh_calls\",\n    \"comments_fetch\",\n    \"comments_seen\",\n    \"denied\",\n    \"preflight\",\n    \"flags\",\n)",
+      "replace": "    \"probe_build\",\n    \"scratch\",\n    \"gh_calls\",\n    \"comments_fetch\",\n    \"comments_seen\",\n    \"denied\",\n    \"preflight\",\n    \"flags\",\n)"
+    },
+    {
+      "label": "must-kill MK24: the AUDIT line has another prefix [test_audit_line_has_the_keys_in_the_stated_order]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    lines = [\"AUDIT \" + \" \".join(",
+      "replace": "    lines = [\"audit \" + \" \".join("
+    },
+    {
+      "label": "must-kill MK25: --json counts are strings [test_json_object_has_integer_counts_and_one_string_of_flags]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"bad_lines\": bad_lines,",
+      "replace": "        \"bad_lines\": str(bad_lines),"
+    },
+    {
+      "label": "must-kill MK25: --json flags is a list [test_json_object_has_integer_counts_and_one_string_of_flags]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"flags\": \",\".join(flags) or \"none\",",
+      "replace": "        \"flags\": flags or [\"none\"],"
+    },
+    {
+      "label": "must-kill MK25: --json omits a token [test_json_object_has_integer_counts_and_one_string_of_flags]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"denied\": denied,\n",
+      "replace": ""
+    },
+    {
+      "label": "must-kill MK26: model is never read [test_model_is_the_sorted_distinct_set]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if isinstance(model, str) and _token(model) and _token(model) not in models:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "must-kill MK27: model reports only the first value [test_model_is_the_sorted_distinct_set]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"model\": \",\".join(sorted(models)) or UNKNOWN,",
+      "replace": "        \"model\": models[0] if models else UNKNOWN,"
+    },
+    {
+      "label": "must-kill MK27: model is not sorted [test_model_is_the_sorted_distinct_set]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"model\": \",\".join(sorted(models)) or UNKNOWN,",
+      "replace": "        \"model\": \",\".join(models) or UNKNOWN,"
+    },
+    {
+      "label": "must-kill MK27: model repeats a value [test_model_is_the_sorted_distinct_set]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if isinstance(model, str) and _token(model) and _token(model) not in models:",
+      "replace": "        if isinstance(model, str) and _token(model):"
+    },
+    {
+      "label": "must-kill MK28: bash_calls counted per record, not per tool_use id [test_a_repeated_tool_use_id_counts_once_and_other_tools_not_at_all]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "                    if use.id in use_ids:\n                        continue\n",
+      "replace": ""
+    },
+    {
+      "label": "must-kill MK29: bash_calls counts every tool use [test_a_repeated_tool_use_id_counts_once_and_other_tools_not_at_all]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        \"bash_calls\": len(bash_uses),",
+      "replace": "        \"bash_calls\": len(uses),"
+    },
+    {
+      "label": "must-kill MK30: permissionDecision reject is ignored [test_structured_denial_through_permission_decision_reject]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if isinstance(decision, dict) and decision.get(\"decision\") == \"reject\":\n        return True",
+      "replace": "    if False:\n        return True"
+    },
+    {
+      "label": "must-kill MK31: a red pytest run does not count as a probe [test_a_red_pytest_run_still_counts_as_a_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None:\n            continue",
+      "replace": "        if use.preflight or use.result is None or use.result.is_error:\n            continue"
+    },
+    {
+      "label": "must-kill MK32: version is taken from a later record [test_version_is_the_first_one_a_record_carries]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if version == UNKNOWN and isinstance(recorded, str) and _token(recorded):",
+      "replace": "        if isinstance(recorded, str) and _token(recorded):"
+    },
+    {
+      "label": "must-kill MK33: preflight is taken from a later result [test_preflight_token_is_the_first_preflight_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    preflight = preflight_uses[0].preflight if preflight_uses else \"none\"",
+      "replace": "    preflight = preflight_uses[-1].preflight if preflight_uses else \"none\""
+    },
+    {
+      "label": "must-kill MK34: a JSON line that is not an object is not counted [test_a_line_that_is_not_a_json_object_is_a_bad_line]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        except (ValueError, RecursionError):\n            record = None\n        if isinstance(record, dict):\n            records.append(record)\n        else:\n            bad_lines += 1",
+      "replace": "        except (ValueError, RecursionError):\n            bad_lines += 1\n            continue\n        if isinstance(record, dict):\n            records.append(record)"
+    },
+    {
+      "label": "must-kill MK35: complete is taken from any assistant record [test_complete_comes_from_the_last_assistant_record]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "            last_stop = message.get(\"stop_reason\")",
+      "replace": "            last_stop = last_stop if last_stop == \"end_turn\" else message.get(\"stop_reason\")"
+    },
+    {
+      "label": "must-kill MK36: --meta is ignored [test_meta_option_overrides_the_sibling_file]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    meta = Path(args.meta) if args.meta else _sibling_meta(transcript)",
+      "replace": "    meta = _sibling_meta(transcript)"
+    },
+    {
+      "label": "must-kill MK37: comments_seen is read from a result that is not a comments fetch [test_comments_seen_needs_a_fetch_result_that_is_present]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        use.seen = use.fetch and use.result is not None and _comments_seen(use.result.text)",
+      "replace": "        use.seen = use.result is not None and _comments_seen(use.result.text)"
+    },
+    {
+      "label": "must-kill MK38: --issue is text, so --issue abc exits 0 [test_usage_errors_exit_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\"--issue\", required=True, type=int, metavar",
+      "replace": "\"--issue\", required=True, metavar"
+    },
+    {
+      "label": "must-kill MK39: tempfile dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")"
+    },
+    {
+      "label": "must-kill MK40: git clone dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|worktree\\s+add)\\b\")"
+    },
+    {
+      "label": "must-kill MK41: git worktree add dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone)\\b\")"
+    },
+    {
+      "label": "must-kill: mktemp dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")"
+    },
+    {
+      "label": "must-kill: mkdir dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")"
+    },
+    {
+      "label": "must-kill: git archive dropped from the scratch pattern [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(clone|worktree\\s+add)\\b\")"
+    },
+    {
+      "label": "must-kill: the scratch pattern loses its word boundaries [test_scratch_pattern_without_a_scratch_dir]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SCRATCH_PATTERN = re.compile(r\"\\bmktemp\\b|\\bmkdir\\b|\\btempfile\\b|\\bgit\\s+(archive|clone|worktree\\s+add)\\b\")",
+      "replace": "SCRATCH_PATTERN = re.compile(r\"mktemp|mkdir|tempfile|git\\s+(archive|clone|worktree\\s+add)\")"
+    },
+    {
+      "label": "must-kill MK42: --role defaults to fidelity [test_role_defaults_to_cold]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "default=\"cold\", help=\"the reader's role\"",
+      "replace": "default=\"fidelity\", help=\"the reader's role\""
+    },
+    {
+      "label": "must-kill MK43: agent-type is flagged when the types match [test_agent_type_that_matches_is_not_flagged]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    mismatch = expect_agent_type is not None and agent_type != UNKNOWN and agent_type != _token(expect_agent_type)",
+      "replace": "    mismatch = expect_agent_type is not None and agent_type != UNKNOWN"
+    },
+    {
+      "label": "must-kill: agent-type is flagged for an unknown agent type [test_missing_or_malformed_meta_gives_unknown_and_no_flag]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    mismatch = expect_agent_type is not None and agent_type != UNKNOWN and agent_type != _token(expect_agent_type)",
+      "replace": "    mismatch = expect_agent_type is not None and agent_type != _token(expect_agent_type)"
+    },
+    {
+      "label": "must-kill MK44: an unanswered pytest counts as ran [test_unanswered_tool_use_is_not_scratch_use_or_a_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None:\n            continue",
+      "replace": "        if use.preflight:\n            continue"
+    },
+    {
+      "label": "must-kill MK45: a plain-string content is iterated as blocks [test_plain_string_message_content_carries_no_blocks]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if not isinstance(content, list):\n        return []\n    return [block for block in content if isinstance(block, dict)]",
+      "replace": "    return content"
+    },
+    {
+      "label": "must-kill MK46: a failed command holding the scratch path is scratch use [test_failed_command_holding_the_scratch_path_is_not_scratch_use]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None or use.result.is_error:",
+      "replace": "        if use.preflight or use.result is None:"
+    },
+    {
+      "label": "must-kill MK47: heredoc bodies are removed before the scratch pattern [test_scratch_pattern_reads_a_heredoc_body]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if pattern.search(use.command):\n            return \"ok\"",
+      "replace": "        if pattern.search(_strip_heredocs(use.command)):\n            return \"ok\""
+    },
+    {
+      "label": "must-kill MK48: heredoc bodies are removed before the probe_build pattern [test_probe_run_in_a_heredoc_driver_counts]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if PROBE_PATTERN.search(use.command):\n            return \"ran\"",
+      "replace": "        if PROBE_PATTERN.search(_strip_heredocs(use.command)):\n            return \"ran\""
+    },
+    {
+      "label": "AC scratch-dir: the path may be the prefix of a longer name [test_scratch_dir_matches_as_a_whole_path]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return re.compile(re.escape(path) + r\"(?![\\w-])\")",
+      "replace": "    return re.compile(re.escape(path))"
+    },
+    {
+      "label": "AC scratch-dir: a path followed by a hyphen counts as the path [test_scratch_dir_matches_as_a_whole_path]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return re.compile(re.escape(path) + r\"(?![\\w-])\")",
+      "replace": "    return re.compile(re.escape(path) + r\"(?!\\w)\")"
+    },
+    {
+      "label": "AC scratch-dir: a path followed by an underscore or digit counts as the path [test_scratch_dir_matches_as_a_whole_path]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return re.compile(re.escape(path) + r\"(?![\\w-])\")",
+      "replace": "    return re.compile(re.escape(path) + r\"(?![A-Za-z-])\")"
+    },
+    {
+      "label": "AC scratch-dir: the no-flag pattern is consulted when a scratch directory is given [test_scratch_dir_matches_as_a_whole_path]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    pattern = _scratch_dir_pattern(scratch_dir) if scratch_dir else SCRATCH_PATTERN\n    for use in bash_uses:\n        if use.preflight or use.result is None or use.result.is_error:\n            continue\n        if pattern.search(use.command):",
+      "replace": "    pattern = _scratch_dir_pattern(scratch_dir) if scratch_dir else SCRATCH_PATTERN\n    for use in bash_uses:\n        if use.preflight or use.result is None or use.result.is_error:\n            continue\n        if pattern.search(use.command) or SCRATCH_PATTERN.search(use.command):"
+    },
+    {
+      "label": "AC comments_seen: the parsed comments list is not read [test_comments_seen_by_the_cold_read_marker_or_a_parsed_list]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    try:\n        payload = json.loads(text)\n    except (ValueError, RecursionError):\n        return False\n    comments = payload.get(\"comments\") if isinstance(payload, dict) else None\n    return isinstance(comments, list) and bool(comments)",
+      "replace": "    return False"
+    },
+    {
+      "label": "AC comments_seen: the cold-read marker is not read [test_comments_seen_by_the_cold_read_marker_or_a_parsed_list]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if COLD_READ_MARKER in text:\n        return True\n",
+      "replace": ""
+    },
+    {
+      "label": "AC denied: a refusal without is_error true counts [test_denied_vocabulary_is_exact]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return is_error and text.startswith(DENIAL_PREFIX)",
+      "replace": "    return text.startswith(DENIAL_PREFIX)"
+    },
+    {
+      "label": "AC denied: a null or empty toolDenialKind counts [test_denied_vocabulary_is_exact]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if kind and kind != \"interrupted\":",
+      "replace": "    if kind != \"interrupted\":"
+    },
+    {
+      "label": "AC details: the command is cut at 171 characters [test_details_lists_flagged_commands_truncated]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "COMMAND_LIMIT = 170",
+      "replace": "COMMAND_LIMIT = 171"
+    },
+    {
+      "label": "AC details: the result is cut at 121 characters [test_details_lists_flagged_commands_truncated]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "RESULT_LIMIT = 120",
+      "replace": "RESULT_LIMIT = 121"
+    },
+    {
+      "label": "AC details: unflagged commands are listed [test_details_lists_flagged_commands_truncated]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if not carried:\n            continue\n",
+      "replace": ""
+    },
+    {
+      "label": "AC details: an unanswered command gets an empty result instead of null [test_details_lists_flagged_commands_truncated]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\"result\": None if use.result is None else use.result.text[:RESULT_LIMIT],",
+      "replace": "\"result\": \"\" if use.result is None else use.result.text[:RESULT_LIMIT],"
+    },
+    {
+      "label": "AC exit codes: a missing transcript exits 1 [test_missing_transcript_path_exits_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        return 2\n    meta =",
+      "replace": "        return 1\n    meta ="
+    },
+    {
+      "label": "AC read-only: the transcript is opened for writing [test_meta_run_is_read_only]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        data = transcript.read_bytes()",
+      "replace": "        data = open(transcript, \"r+b\").read()"
+    },
+    {
+      "label": "AC read-only: the meta file is opened for writing [test_meta_run_is_read_only]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        payload = json.loads(path.read_bytes().decode(\"utf-8\", errors=\"replace\"))",
+      "replace": "        payload = json.loads(open(path, \"r+b\").read().decode(\"utf-8\", errors=\"replace\"))"
+    },
+    {
+      "label": "AC read-only: a file is written beside the transcript [test_meta_run_is_read_only]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        data = transcript.read_bytes()\n",
+      "replace": "        data = transcript.read_bytes()\n        transcript.with_name(\"audit.out\").write_text(\"x\")\n"
+    },
+    {
+      "label": "AC stdlib: subprocess is imported [test_imports_are_standard_library_only_and_never_reach_the_network]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "import re\nimport sys\nfrom dataclasses",
+      "replace": "import re\nimport subprocess\nimport sys\nfrom dataclasses"
+    },
+    {
+      "label": "AC stdlib: a function-level third-party import [test_imports_are_standard_library_only_and_never_reach_the_network]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return \"_\".join(value.split())",
+      "replace": "    import yaml  # noqa: F401\n\n    return \"_\".join(value.split())"
+    },
+    {
+      "label": "AC stdlib: a function-level urllib import [test_imports_are_standard_library_only_and_never_reach_the_network]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return \"_\".join(value.split())",
+      "replace": "    from urllib import request  # noqa: F401\n\n    return \"_\".join(value.split())"
+    },
+    {
+      "label": "AC stdlib: an evals import [test_imports_are_standard_library_only_and_never_reach_the_network]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return \"_\".join(value.split())",
+      "replace": "    from evals._harness import transcript  # noqa: F401\n\n    return \"_\".join(value.split())"
+    },
+    {
+      "label": "AC preamble: the script has no main guard [test_script_is_a_runnable_stdlib_program]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())",
+      "replace": "if __name__ == \"__main__\":\n    main()"
+    },
+    {
+      "label": "AC untrusted: a whitespace-bearing value is printed as it is [test_spaces_in_an_untrusted_value_do_not_break_the_line]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return \"_\".join(value.split())",
+      "replace": "    return value"
+    },
+    {
+      "label": "AC flags: gh-used is listed before comments-read [test_flags_are_listed_in_the_stated_order]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if comments_seen:\n        flags.append(\"comments-read\")\n    if gh_calls:\n        flags.append(\"gh-used\")",
+      "replace": "    if gh_calls:\n        flags.append(\"gh-used\")\n    if comments_seen:\n        flags.append(\"comments-read\")"
+    },
+    {
+      "label": "AC flags: agent-type is listed after preflight-none [test_flags_are_listed_in_the_stated_order]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if mismatch:\n        flags.append(\"agent-type\")\n    if preflight == \"none\":\n        flags.append(\"preflight-none\")",
+      "replace": "    if preflight == \"none\":\n        flags.append(\"preflight-none\")\n    if mismatch:\n        flags.append(\"agent-type\")"
+    },
+    {
+      "label": "AC flags: the cold flags are reported for the fidelity role too [test_fidelity_role_reports_na_for_scratch_and_probe_build]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if role == \"cold\" and scratch == \"none\":\n        flags.append(\"scratch-none\")\n    if role == \"cold\" and probe_build == \"none\":\n        flags.append(\"no-probe-build\")",
+      "replace": "    if scratch in (\"none\", \"na\"):\n        flags.append(\"scratch-none\")\n    if probe_build in (\"none\", \"na\"):\n        flags.append(\"no-probe-build\")"
+    }
+  ]
+}
