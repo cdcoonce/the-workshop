@@ -822,7 +822,7 @@
       "file": "engine/cold_read_dispatch.py",
       "oracle": "real",
       "expect": "survived",
-      "why": "Inert on every path the suite reaches: both callers (the trunk_branch and the integration_target rules) test the value for truthiness, so the empty string and None take the same path. It stops being inert if a caller compares with `is not None`, which build extra 7 mutates.",
+      "why": "Inert on every path the suite reaches: both callers (the trunk_branch and the integration_target rules) test the value for truthiness, so the empty string and None take the same path. A defect there needs this guard and a caller's truthiness test to change together, which one find/replace cannot do; the non-string half of the guard is mutated by build extra 7.",
       "find": "    return value if isinstance(value, str) and value else None\n",
       "replace": "    return value if isinstance(value, str) else None\n"
     },
@@ -841,11 +841,11 @@
       "replace": "    for flag, directory in ((\"--scratch-root\", scratch_root),):\n"
     },
     {
-      "label": "build extra 7: an empty integration_target is used as the branch [test_fork_branch_precedence]",
+      "label": "build extra 7: a non-string setting value is used as the branch [test_fork_branch_precedence]",
       "file": "engine/cold_read_dispatch.py",
       "oracle": "real",
-      "find": "    integration = _setting(settings, \"integration_target\")\n    if integration:\n",
-      "replace": "    integration = _setting(settings, \"integration_target\")\n    if integration is not None:\n"
+      "find": "    value = settings.get(key)\n    return value if isinstance(value, str) and value else None\n",
+      "replace": "    return settings.get(key)\n"
     }
   ]
 }
