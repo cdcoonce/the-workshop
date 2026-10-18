@@ -38,6 +38,10 @@ GREEN = 0
 RED = 1
 INDETERMINATE = 2
 
+# The ledger's gate field when the head already contains the live base: the gate only tests a
+# refreshed merge, and a contained head is the tree its own CI checks run on.
+CONTAINED_GATE_NOTE = "not run (head contained base; CI on the tested head is the evidence)"
+
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 PAGE_SIZE = 100
 
@@ -693,7 +697,7 @@ def refresh_and_gate(
         return _refused(info, f"git fetch failed: {fetched.stderr.strip()}")
     contained, detail = _is_ancestor(runner, base_sha, head_sha)
     if contained:
-        return RefreshResult(head_sha, False, "not run (head contained base)", GREEN, "")
+        return RefreshResult(head_sha, False, CONTAINED_GATE_NOTE, GREEN, "")
     if contained is None:
         return _refused(info, detail)
     fork_point = runner.run(["git", "merge-base", base_sha, head_sha])

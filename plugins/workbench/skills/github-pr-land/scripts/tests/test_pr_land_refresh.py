@@ -151,7 +151,7 @@ def test_head_containing_base_skips_refresh_and_gate(world: World) -> None:
     base = world.origin_ref("main")
     marker = world.tmp / "gate-ran"
     result = run(world, head, base, gate=f"touch {marker}")
-    assert result == RefreshResult(head, False, "not run (head contained base)", 0, result.message)
+    assert result == RefreshResult(head, False, "not run (head contained base; CI on the tested head is the evidence)", 0, result.message)
     assert not marker.exists()
     assert world.origin_ref("feat/x") == head
 
