@@ -111,14 +111,20 @@ blind mutation reviewer, RED-confirm fixer, pinned landing.
 **4. Land and tear down.**
 
 ```bash
-cd <worktree> && <repo gate command> \
-  && cd <main checkout> && python3 "<github-pr-land base dir>/scripts/pr_land.py" land <PR> --method squash --gate "<repo gate command>" --require <repo's required check> \
+cd <main checkout> && python3 "<github-pr-land base dir>/scripts/pr_land.py" land <PR> --method squash --gate "<repo gate command>" --require <repo's required check> \
   && gh issue view <N> --json state --jq .state \
   && git worktree remove <worktree> && git branch -D <branch> \
   && git fetch origin && git log --oneline -1 origin/<integration-branch>
 ```
 
 Invoking drain-queue on a named batch is Charles's explicit ask to merge those PRs with `pr_land.py land`.
+
+The by-hand gate run is step 3's, in the worker's worktree; re-run it before landing only if the
+worktree changed since. `land` runs `--gate` itself only when the head is behind the base. A head
+that already contains the base lands with `gate=not run (head contained base; CI on the tested
+head is the evidence)`, and the `checks=` run ids in that line, green on the exact tested SHA, are
+the evidence: report it as designed, not as a skipped gate. That holds when the repo's required
+check runs the same gate as `--gate`; confirm it once per repo.
 
 If `pr_land.py land` exits 2 on `merging <base> conflicts`, read github-pr-land's stacked-prs reference before hand-merging: `land` already retries a PR stacked on a squash-merged base, so a stop that remains is a real conflict for Charles.
 

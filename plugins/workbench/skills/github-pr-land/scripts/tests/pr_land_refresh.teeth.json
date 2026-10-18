@@ -226,6 +226,13 @@
       "oracle": "real",
       "find": "            runner.run([\"git\", \"merge\", \"--abort\"], cwd=scratch)\n",
       "replace": ""
+    },
+    {
+      "label": "the contained-head gate note loses its CI-is-the-evidence reason (test_head_containing_base_skips_refresh_and_gate)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "CONTAINED_GATE_NOTE = \"not run (head contained base; CI on the tested head is the evidence)\"\n",
+      "replace": "CONTAINED_GATE_NOTE = \"not run (head contained base)\"\n"
     }
   ]
 }
