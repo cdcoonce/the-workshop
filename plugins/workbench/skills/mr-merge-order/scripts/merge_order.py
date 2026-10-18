@@ -272,9 +272,30 @@ def list_merge_requests(
             )
 
     if target:
-        chain_targets = {mr.source for mr in mrs}
-        mrs = [mr for mr in mrs if mr.target == target or mr.target in chain_targets]
+        mrs = filter_to_target(mrs, target)
     return mrs
+
+
+def filter_to_target(mrs: list[MergeRequest], target: str) -> list[MergeRequest]:
+    """Keep MRs targeting `target`, plus their transitive stacked descendants.
+
+    `--target` means the target branch's own MR chain: an MR is kept only when
+    it targets `target`, or targets the source branch of a kept MR. A stack
+    rooted at some other branch is excluded, even if its branches stack on each
+    other. Every stack rooted at `target` itself is kept (several independent
+    stacks off `dev` are all analysed for `--target dev`).
+    """
+    kept: set[int] = set()
+    reached = {target}
+    grew = True
+    while grew:
+        grew = False
+        for i, mr in enumerate(mrs):
+            if i not in kept and mr.target in reached:
+                kept.add(i)
+                reached.add(mr.source)
+                grew = True
+    return [mr for i, mr in enumerate(mrs) if i in kept]
 
 
 # --------------------------------------------------------------------------
