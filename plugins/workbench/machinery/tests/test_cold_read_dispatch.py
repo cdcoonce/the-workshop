@@ -16,13 +16,19 @@ docstring names the defect it guards.
 from __future__ import annotations
 
 import ast
+import hashlib
+import importlib.util
 import inspect
 import json
 import os
+import re
+import shlex
+import shutil
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -30,6 +36,8 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import cold_read_dispatch as mod  # noqa: E402
+import cold_read_ledger  # noqa: E402
+import cold_read_stamp  # noqa: E402
 
 SCRIPT = SCRIPTS_DIR / "cold_read_dispatch.py"
 OK_GIT = (0, "git version 2.44.0\n", "")
@@ -544,23 +552,6 @@ def test_missing_scratch_option_raises_systemexit_2_with_a_usage_message(capsys)
     assert captured.out == ""
 
 
-def test_every_import_in_the_script_is_standard_library():
-    """Stdlib only, at any depth: a lazy ``import yaml`` inside a function
-    would break the preflight on exactly the machine where the environment is
-    the problem."""
-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    imported: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.extend(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            assert node.level == 0 and node.module, ast.dump(node)
-            imported.append(node.module)
-    assert imported, "the script imports nothing, so this test would pass vacuously"
-    outside = sorted({n for n in imported if n.split(".")[0] not in sys.stdlib_module_names})
-    assert outside == []
-
-
 # --------------------------------------------------------------------------- #
 # survivors the independent teeth pass found (the-workshop#1223 follow-up)
 # --------------------------------------------------------------------------- #
@@ -784,3 +775,1460 @@ def test_empty_entries_are_left_exactly_as_found(
     assert (code, err) == (0 if cause is None else 1, "")
     assert out.startswith("PREFLIGHT ok " if cause is None else "PREFLIGHT failed ")
     assert entries_with_kinds(scratch) == before
+
+
+# --------------------------------------------------------------------------- #
+# build: the generator procedure step 1 describes (the-workshop#1178)
+#
+# On 2026-10-10 the reader prompts for this gate were assembled by a one-off
+# script that hashed the body differently from `cold_read_stamp.py`, hardcoded
+# plugin-cache paths, a user id and a fork branch, and left detector 10 to the
+# reader. Every test below fakes `gh` and the detectors only through the module
+# seams `_run_gh` and `_run_detector`; `_run_git` runs real `git` against real
+# repositories (an `origin` and a clone) under `tmp_path`, and the tests that
+# watch it wrap the real seam.
+# --------------------------------------------------------------------------- #
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+COMMAND_MD = (
+    REPO_ROOT / "plugins" / "workbench" / "skills" / "vault-cold-read" / "references" / "command.md"
+)
+VECTOR = Path(__file__).resolve().parent / "fixtures" / "cold_read_stamp_vector.json"
+HAND_BUILT = "Build path: hand-built under the `drain-queue` skill"
+TRUNK_AND_INTEGRATION = 'trunk_branch = "dev"\nintegration_target = "afk/staging"\n'
+BRANCHES = ("dev", "afk/staging", "afk/epic-7", "override-branch")
+SIBLING_MODULES = frozenset({"cold_read_stamp", "cold_read_ledger"})
+READER_GIVEN = (
+    "The cold constraint",
+    "Probe builds",
+    "Detectors",
+    "Survivors and reachability",
+    "Evidence rule",
+    "Every finding carries a default",
+    "Anti-rubber-stamp",
+    "Constraints",
+    "Reader contract",
+)
+GIT_ENV = {
+    "GIT_AUTHOR_NAME": "Fixture",
+    "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+    "GIT_COMMITTER_NAME": "Fixture",
+    "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+REAL_RUN_DETECTOR = getattr(mod, "_run_detector", None)
+FIVE_STDOUT = '{"rows": [], "verdict": "ok"}\n'
+TEN_STDOUT = '{"matched": false}\n'
+UNSET = object()
+
+
+def git_in(cwd, *args: str) -> str:
+    """Run real ``git`` in *cwd* with a fixed identity and no user config."""
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env={**os.environ, **GIT_ENV},
+    )
+    assert proc.returncode == 0, f"git {' '.join(args)} failed: {proc.stderr}"
+    return proc.stdout.strip()
+
+
+def commit_file(repo, relative: str, text: str, message: str = "change") -> str:
+    """Write *text* to *relative* in *repo*, commit it and return the new SHA."""
+    target = Path(repo) / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    git_in(repo, "add", relative)
+    git_in(repo, "commit", "-q", "-m", message)
+    return git_in(repo, "rev-parse", "HEAD")
+
+
+class World:
+    """A bare ``origin``, the ``seed`` repository that pushes to it and a clone.
+
+    ``main`` and each of ``BRANCHES`` hold a ``marker.txt`` naming the branch,
+    so a tree archived from the wrong branch is visible in its files.
+    """
+
+    def __init__(self, root: Path) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        self.root = root
+        self.origin = root / "origin.git"
+        self.seed = root / "seed"
+        self.checkout = root / "checkout"
+        git_in(root, "init", "-q", "--bare", "-b", "main", str(self.origin))
+        git_in(root, "init", "-q", "-b", "main", str(self.seed))
+        git_in(self.seed, "remote", "add", "origin", str(self.origin))
+        self.tips: dict[str, str] = {}
+        commit_file(self.seed, "marker.txt", "main\n", "main")
+        self.tips["main"] = commit_file(self.seed, "src/app.py", "print('app')\n", "app")
+        git_in(self.seed, "push", "-q", "origin", "main")
+        for branch in BRANCHES:
+            git_in(self.seed, "checkout", "-q", "-b", branch, "main")
+            self.tips[branch] = commit_file(self.seed, "marker.txt", f"{branch}\n", branch)
+            git_in(self.seed, "push", "-q", "origin", branch)
+        git_in(self.seed, "checkout", "-q", "main")
+        git_in(root, "clone", "-q", str(self.origin), str(self.checkout))
+
+
+def clone_of(world: World, destination: Path, config: str | None = None) -> Path:
+    """A fresh clone of the world's origin, with ``.afk/config.toml`` when *config* is given."""
+    git_in(destination.parent, "clone", "-q", str(world.origin), str(destination))
+    if config is not None:
+        (destination / ".afk").mkdir()
+        (destination / ".afk" / "config.toml").write_text(config, encoding="utf-8")
+    return destination
+
+
+PLACEHOLDER_LINES = (
+    "ENGINE=<engine>\n"
+    "AFK=<path-to-afk-agent-system>\n"
+    "TREE=<local checkout>\n"
+    "REF=<fork point SHA>\n"
+    "VAULT=<absolute vault path>\n"
+)
+PROBE_TEXT = (
+    "Probe builds text, with the ref <fork point SHA>.\n\n"
+    "```text\n## Not a heading: it sits inside a code fence\n```\n\n"
+    "Text after the fence belongs to the same section.\n"
+)
+SPEC_INTRO = (
+    "# A spec copy for the tests\n\n"
+    "Intro, never given to the reader. Step 2 fetches comments with --comments; read-only.\n\n"
+)
+SPEC_PROCEDURE = "1. Conductor only: step 2 fetches them with --comments. This is read-only.\n"
+DEFAULT_GIVEN = ("Probe builds", "Detectors", "Reader contract")
+
+
+def spec_text(
+    *,
+    given=DEFAULT_GIVEN,
+    omit=(),
+    bullet=True,
+    detectors_extra="",
+    probe_text=PROBE_TEXT,
+) -> str:
+    """A small spec: three sections the reader is given and two it is not.
+
+    *omit* leaves named sections out of the file while the bullet still names
+    them; *bullet* ``False`` drops the ``What the reader is given.`` bullet.
+    """
+    contract = "- **Agent.** The cold reader runs as a `general-purpose` subagent.\n"
+    if bullet:
+        names = ", ".join(f"`{name}`" for name in given)
+        contract += (
+            "- **What the reader is given.** The reader's prompt carries these "
+            f"sections of this file verbatim and no others: {names}.\n"
+        )
+    bodies = {
+        "Probe builds": probe_text,
+        "Detectors": PLACEHOLDER_LINES + detectors_extra,
+        "Reader contract": contract,
+    }
+    parts = [SPEC_INTRO]
+    for name, text in bodies.items():
+        if name not in omit:
+            parts.append(f"## {name}\n\n{text}\n")
+    parts.append(f"## Procedure\n\n{SPEC_PROCEDURE}")
+    return "".join(parts)
+
+
+class Result:
+    """What one ``main(["build", ...])`` call returned and wrote."""
+
+    def __init__(self, code: int, out: str, err: str, out_dir: Path) -> None:
+        self.code, self.out, self.err, self.out_dir = code, out, err, out_dir
+
+    @property
+    def manifest(self):
+        path = self.out_dir / "manifest.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+    @property
+    def reader(self):
+        path = self.out_dir / "reader.md"
+        return path.read_bytes().decode("utf-8") if path.exists() else None
+
+
+class BuildEnv:
+    """Everything one ``build`` run needs, with ``gh`` and the detectors faked."""
+
+    repo = "octo/repo"
+    issue = 42
+
+    def __init__(self, tmp_path: Path, world: World, monkeypatch, capsys) -> None:
+        self.tmp_path, self.world = tmp_path, world
+        self.monkeypatch, self.capsys = monkeypatch, capsys
+        self.module = mod
+        self.checkout = world.checkout
+        self.scratch_root = tmp_path / "scratch-root"
+        self.scratch_root.mkdir()
+        self.out = tmp_path / "out"
+        self.afk = tmp_path / "afk-project"
+        self.afk.mkdir()
+        self.spec = tmp_path / "spec.md"
+        self.spec.write_text(spec_text(), encoding="utf-8")
+        self.comments_json = tmp_path / "comments.json"
+        self.write_comments([])
+        self.gh_calls: list = []
+        self.detector_calls: list = []
+        self.set_body("Plain body.\n")
+        self.fake_detectors()
+
+    def write_comments(self, comments) -> None:
+        self.comments_json.write_text(json.dumps({"comments": comments}), encoding="utf-8")
+
+    def set_body(self, body, *, response=UNSET) -> None:
+        """Fake ``gh`` to return *body* (or *response*, which may be ``None``)."""
+        calls = self.gh_calls = []
+
+        def fake(args, timeout=30):
+            calls.append((list(args), timeout))
+            if response is not UNSET:
+                return response
+            payload = {"number": self.issue, "state": "open", "body": body}
+            return 0, json.dumps(payload), ""
+
+        self.monkeypatch.setattr(self.module, "_run_gh", fake)
+
+    def fake_detectors(self, *, five=(0, FIVE_STDOUT, ""), ten=(0, TEN_STDOUT, "")) -> None:
+        """Fake the detector seam; each result is a tuple, a callable on argv or an exception."""
+        calls = self.detector_calls = []
+
+        def fake(argv, cwd, timeout):
+            calls.append({"argv": list(argv), "cwd": cwd, "timeout": timeout})
+            result = ten if "afk-driver" in argv else five
+            if isinstance(result, BaseException):
+                raise result
+            return result(argv) if callable(result) else result
+
+        self.monkeypatch.setattr(self.module, "_run_detector", fake)
+
+    def argv(self, *extra: str, omit=()) -> list[str]:
+        pairs = [
+            ("--repo", self.repo),
+            ("--issue", str(self.issue)),
+            ("--checkout", str(self.checkout)),
+            ("--scratch-root", str(self.scratch_root)),
+            ("--out", str(self.out)),
+            ("--spec", str(self.spec)),
+            ("--afk-project", str(self.afk)),
+            ("--comments-json", str(self.comments_json)),
+        ]
+        flat = ["build"]
+        for flag, value in pairs:
+            if flag not in omit:
+                flat += [flag, value]
+        return flat + list(extra)
+
+    def build(self, *extra: str, omit=()) -> Result:
+        code = self.module.main(self.argv(*extra, omit=omit))
+        captured = self.capsys.readouterr()
+        return Result(code, captured.out, captured.err, self.out)
+
+
+@pytest.fixture(scope="module")
+def shared_world(tmp_path_factory):
+    return World(tmp_path_factory.mktemp("shared-world"))
+
+
+@pytest.fixture
+def git_env(monkeypatch):
+    for key, value in GIT_ENV.items():
+        monkeypatch.setenv(key, value)
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch, capsys, shared_world, git_env):
+    return BuildEnv(tmp_path, shared_world, monkeypatch, capsys)
+
+
+def spy_git(monkeypatch) -> list:
+    """Wrap the real ``_run_git`` seam; return its ``(args, cwd, timeout)`` calls."""
+    real = mod._run_git
+    calls: list = []
+
+    def spy(args, cwd=None, timeout=30):
+        calls.append((list(args), cwd, timeout))
+        return real(args, cwd, timeout)
+
+    monkeypatch.setattr(mod, "_run_git", spy)
+    return calls
+
+
+FENCE_LINE = re.compile(r"^(`{3,})$", re.MULTILINE)
+
+
+class Block:
+    """A labelled fenced block of ``reader.md``: its head, content and fence."""
+
+    def __init__(self, reader: str, label: str) -> None:
+        start = reader.index(label)
+        opening = FENCE_LINE.search(reader, start)
+        assert opening, f"no fence after {label!r}"
+        self.fence = opening.group(1)
+        self.head = reader[start : opening.start()]
+        body_start = opening.end() + 1
+        close = reader.index("\n" + self.fence, body_start)
+        self.content = reader[body_start:close]
+        self.start = start
+        self.end = close + 1 + len(self.fence)
+
+
+def without_body(reader: str) -> str:
+    block = Block(reader, "## Issue body")
+    return reader[: block.start] + reader[block.end :]
+
+
+def dispatch_block(reader: str) -> str:
+    start = reader.index("## This dispatch")
+    return reader[start : reader.index("\n## ", start + 1)]
+
+
+def outside_code_fences(text: str) -> str:
+    """*text* without any fenced code block (the ``` or longer fence lines included)."""
+    kept: list[str] = []
+    fence = None
+    for line in text.split("\n"):
+        if fence is None:
+            opening = re.match(r"^(`{3,})", line)
+            if opening:
+                fence = opening.group(1)
+            else:
+                kept.append(line)
+        elif line.startswith(fence) and not line.strip("`\r"):
+            fence = None
+    return "\n".join(kept)
+
+
+def has_word(text: str, words=("gh", "curl")) -> bool:
+    """Whether a whole word of *words* occurs in *text*; a word inside a path does not count."""
+    pattern = r"(?<![\w/.\-])(?:" + "|".join(words) + r")(?![\w/.\-])"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
+
+# --------------------------------------------------------------------------- #
+# module shape and the three seams
+# --------------------------------------------------------------------------- #
+
+
+def test_every_import_is_standard_library_or_a_sibling_engine_module():
+    """Stdlib only, at any depth, plus the two engine modules the issue names:
+    a lazy ``import yaml`` would break the script on the machine whose
+    environment is the problem, and a hashing or verdict classifier of its own
+    would drift from ``cold_read_stamp`` and ``cold_read_ledger``. This
+    replaces #1181's all-stdlib test, which no faithful ``build`` can satisfy."""
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    imported: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            assert node.level == 0 and node.module, ast.dump(node)
+            imported.append(node.module)
+    assert imported, "the script imports nothing, so this test would pass vacuously"
+    roots = {name.split(".")[0] for name in imported}
+    assert sorted(roots - set(sys.stdlib_module_names) - SIBLING_MODULES) == []
+    assert SIBLING_MODULES <= roots, "the script must import both sibling modules"
+
+
+def test_the_module_takes_the_hasher_and_the_verdict_title_from_the_siblings():
+    """The body hash and the verdict predicate belong to ``cold_read_stamp`` and
+    ``cold_read_ledger``; a local copy drifts (the one-off script's hash differed
+    from the stamp's for a body ending in three newlines)."""
+    assert mod.body_hash is cold_read_stamp.body_hash
+    assert mod.VERDICT_TITLE == cold_read_ledger.VERDICT_TITLE
+
+
+def test_the_three_seams_have_the_documented_signatures():
+    """Tests (and the teeth spec) fake ``_run_gh``, ``_run_git`` and
+    ``_run_detector`` by name and arity; ``_run_gh`` keeps the call shape of
+    ``cold_read_stamp.py`` with its 30-second default."""
+    gh = inspect.signature(mod._run_gh).parameters
+    assert list(gh) == ["args", "timeout"] and gh["timeout"].default == 30
+    assert list(inspect.signature(mod._run_git).parameters) == ["args", "cwd", "timeout"]
+    assert list(inspect.signature(mod._run_detector).parameters) == ["argv", "cwd", "timeout"]
+
+
+def test_run_detector_returns_exit_stdout_and_stderr_in_the_given_directory(tmp_path):
+    """A non-zero exit is data, so the real runner reports it instead of raising,
+    in the working directory it was given and decoding undecodable output."""
+    program = "import os, sys; print(os.getcwd()); sys.stderr.write('err'); sys.exit(3)"
+    code, out, err = mod._run_detector([sys.executable, "-c", program], str(tmp_path), 30)
+    assert code == 3 and err == "err"
+    assert Path(out.strip()).resolve() == tmp_path.resolve()
+    raw = "import sys; sys.stdout.buffer.write(b'\\xff ok')"
+    code, out, _ = mod._run_detector([sys.executable, "-c", raw], str(tmp_path), 30)
+    assert code == 0 and "ok" in out and "�" in out
+
+
+def test_run_detector_raises_for_a_program_that_cannot_start_or_outlives_its_timeout(tmp_path):
+    """``build`` turns both into exit 4; the seam must raise them rather than
+    return a made-up result, or a missing ``uv`` would read as a detector verdict."""
+    with pytest.raises(OSError):
+        mod._run_detector(["cold-read-dispatch-no-such-program-xyz"], str(tmp_path), 30)
+    sleeper = [sys.executable, "-c", "import time; time.sleep(30)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        mod._run_detector(sleeper, str(tmp_path), 0.3)
+
+
+def test_run_gh_and_run_git_report_a_program_that_cannot_run_as_none(tmp_path, monkeypatch):
+    """The two seams that mirror ``cold_read_stamp.py`` return ``None`` for a
+    program that cannot start (an absent ``gh``, an absent working directory)
+    and a ``(code, stdout, stderr)`` tuple otherwise."""
+    original_path = os.environ["PATH"]
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir()
+    stub = stub_dir / "gh"
+    stub.write_text('#!/bin/sh\necho "$@"\nexit 3\n')
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(empty))
+    assert mod._run_gh(["api", "x"]) is None
+    monkeypatch.setenv("PATH", str(stub_dir))
+    assert mod._run_gh(["api", "x"]) == (3, "api x\n", "")
+    monkeypatch.setenv("PATH", original_path)
+    assert mod._run_git(["--version"], str(tmp_path / "absent")) is None
+    code, out, _ = mod._run_git(["--version"], str(tmp_path))
+    assert code == 0 and out.startswith("git version")
+
+
+# --------------------------------------------------------------------------- #
+# the body, its hash and --expect-body
+# --------------------------------------------------------------------------- #
+
+
+def test_the_body_hash_of_a_body_ending_in_three_newlines_is_the_stamp_hash(env):
+    """The one-off assembler hashed the newline-normalised text, which differs
+    from the canonical stamp hash of a body that ends in three newlines; the
+    manifest carries the first 12 hex of ``cold_read_stamp.body_hash``."""
+    body = "# Slice\n\nText.\n\n\n"
+    env.set_body(body)
+    result = env.build()
+    assert result.code == 0, result.err
+    expected = cold_read_stamp.body_hash(body)[:12]
+    assert result.manifest["body_hash"] == expected
+    normalised = hashlib.sha256((body.rstrip("\n") + "\n").encode("utf-8")).hexdigest()[:12]
+    assert expected != normalised
+    assert re.fullmatch(r"[0-9a-f]{12}", expected)
+
+
+def test_the_shared_stamp_vector_gives_the_same_hash_through_the_script(env):
+    """The vector carries CRLF, a lone CR, U+2028 and stamp lines, the cases on
+    which two hashers disagree; the script must agree with the vector."""
+    vector = json.loads(VECTOR.read_text(encoding="utf-8"))
+    env.set_body(vector["body"])
+    result = env.build()
+    assert result.code == 0, result.err
+    assert result.manifest["body_hash"] == vector["hash"][:12]
+
+
+def test_expect_body_mismatch_exits_3_prints_both_values_and_creates_nothing(env):
+    """A body that changed since the conductor recorded its hash must stop the
+    build before anything is written, fetched or run; a build that skips the
+    comparison dispatches a reader on a body nobody stamped."""
+    env.set_body("The body as it is now.\n")
+    actual = cold_read_stamp.body_hash("The body as it is now.\n")[:12]
+    wrong = "0" * 12
+    result = env.build("--expect-body", wrong)
+    assert result.code == 3
+    shown = result.out + result.err
+    assert wrong in shown and actual in shown
+    assert not env.out.exists(), "exit 3 created the output directory"
+    assert list(env.scratch_root.iterdir()) == []
+    assert env.detector_calls == []
+
+
+def test_expect_body_with_the_equal_value_builds(env):
+    """The comparison is equality: the recorded value lets the build through."""
+    env.set_body("The body as it is now.\n")
+    actual = cold_read_stamp.body_hash("The body as it is now.\n")[:12]
+    result = env.build("--expect-body", actual)
+    assert result.code == 0, result.err
+    assert result.manifest["body_hash"] == actual
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Plain body.\n",
+        "Line one\r\nLine two\r\n\r\n```\r\ncode\r\n```\r\n",
+        "no trailing newline",
+        "",
+        "a\n\n\n",
+    ],
+    ids=["lf", "crlf", "no-newline", "empty", "trailing-blank-lines"],
+)
+def test_body_md_is_the_fetched_body_byte_for_byte(env, body):
+    """Line endings are part of the body the reader reads and the detector
+    hashes; a build that normalises CRLF, strips trailing newlines or writes in
+    text mode changes it."""
+    env.set_body(body)
+    result = env.build()
+    assert result.code == 0, result.err
+    assert (env.out / "body.md").read_bytes() == body.encode("utf-8")
+
+
+def test_gh_is_called_once_through_api_without_jq(env):
+    """The body fetch has the call shape ``cold_read_stamp.py`` uses: ``gh api``
+    on the issue and nothing else (no ``--jq``, which would hide the field)."""
+    result = env.build()
+    assert result.code == 0, result.err
+    assert [args for args, _ in env.gh_calls] == [["api", f"repos/{env.repo}/issues/{env.issue}"]]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [(1, "", "HTTP 404"), None, (0, "not json", ""), (0, '{"title": "no body"}', "")],
+    ids=["non-zero", "cannot-run", "invalid-json", "no-body-field"],
+)
+def test_a_gh_failure_exits_4_and_names_the_call(env, response):
+    """A fetch that fails, cannot run or returns no ``body`` field must stop the
+    build with exit 4 and no traceback, never build on an empty body."""
+    env.set_body("ignored", response=response)
+    result = env.build()
+    assert result.code == 4
+    assert "repos/octo/repo/issues/42" in result.err
+    assert env.detector_calls == []
+
+
+# --------------------------------------------------------------------------- #
+# the fork point
+# --------------------------------------------------------------------------- #
+
+FORK_CASES = [
+    pytest.param("Target: afk/epic-7\nText.\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-beats-every-setting"),
+    pytest.param(f"{HAND_BUILT}\nTarget: afk/epic-7\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-beats-the-hand-built-trunk"),
+    pytest.param("Target:afk/epic-7\r\nText.\r\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-without-a-space-with-crlf"),
+    pytest.param(f"{HAND_BUILT}\n\nText.\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="hand-built-uses-trunk-branch"),
+    pytest.param(f"\n \n{HAND_BUILT}\nText.\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="blank-lines-may-precede-the-hand-built-line"),
+    pytest.param(f"{HAND_BUILT}\r\n\r\nText.\r\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="crlf-hand-built-line"),
+    pytest.param("Text.\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="no-hand-built-line-uses-integration-target"),
+    pytest.param(f"Intro first.\n{HAND_BUILT}\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="the-hand-built-line-must-be-first"),
+    pytest.param(f"{HAND_BUILT} \nText.\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="a-trailing-space-is-not-exactly-the-line"),
+    pytest.param(f"{HAND_BUILT}\nText.\n", 'integration_target = "afk/staging"\n', (), "afk/staging", "integration_target", id="hand-built-without-trunk-branch-falls-through"),
+    pytest.param(f"{HAND_BUILT}\nText.\n", 'trunk_branch = 5\nintegration_target = "afk/staging"\n', (), "afk/staging", "integration_target", id="a-non-string-trunk-branch-is-ignored"),
+    pytest.param("see Target: afk/epic-7\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="a-mid-line-target-is-prose"),
+    pytest.param("Target: afk/epic-7 and more\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="trailing-text-is-not-a-target-line"),
+    pytest.param("Text.\n", None, (), "main", "default", id="no-settings-file-is-main"),
+    pytest.param("Text.\n", TRUNK_AND_INTEGRATION, ("--fork-branch", "override-branch"), "override-branch", "override", id="fork-branch-wins"),
+    pytest.param("Target: afk/epic-7\n", TRUNK_AND_INTEGRATION, ("--fork-branch", "override-branch"), "override-branch", "override", id="fork-branch-beats-the-target-line"),
+]
+
+
+@pytest.mark.parametrize(("body", "config", "extra", "branch", "source"), FORK_CASES)
+def test_fork_branch_precedence(env, tmp_path, body, config, extra, branch, source):
+    """The fork branch is the first rule that applies: ``--fork-branch``, a
+    ``Target:`` line, ``trunk_branch`` for a body that opens with the hand-built
+    line, ``integration_target``, then ``main``. Swapping ``trunk_branch`` and
+    ``integration_target``, matching the hand-built line anywhere or with its
+    ``\\r`` still on, or matching ``Target:`` mid-line, each resolves a branch
+    this table does not expect."""
+    env.checkout = clone_of(env.world, tmp_path / "checkout-with-settings", config)
+    env.set_body(body)
+    result = env.build(*extra)
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert (manifest["fork_branch"], manifest["fork_source"]) == (branch, source)
+    assert manifest["fork_sha"] == env.world.tips[branch]
+
+
+@pytest.mark.parametrize("with_config", [False, True], ids=["other-toml-only", "other-toml-beside-config"])
+def test_settings_come_from_config_toml_and_no_other_file(env, tmp_path, with_config):
+    """The settings file is ``.afk/config.toml``; the same keys in another file
+    of that directory are ignored. A build that reads the first ``*.toml`` it
+    finds resolves ``dev`` here instead of ``main`` or ``afk/staging``."""
+    checkout = clone_of(env.world, tmp_path / "checkout-with-settings", None)
+    (checkout / ".afk").mkdir()
+    (checkout / ".afk" / "aaa-other.toml").write_text('integration_target = "dev"\n', encoding="utf-8")
+    if with_config:
+        (checkout / ".afk" / "config.toml").write_text('integration_target = "afk/staging"\n', encoding="utf-8")
+    env.checkout = checkout
+    result = env.build()
+    assert result.code == 0, result.err
+    expected = ("afk/staging", "integration_target") if with_config else ("main", "default")
+    assert (result.manifest["fork_branch"], result.manifest["fork_source"]) == expected
+
+
+def test_a_malformed_settings_file_exits_2_instead_of_guessing_a_branch(env, tmp_path):
+    """Unreadable input is exit 2: a settings file that does not parse must not
+    silently fall through to ``main`` and archive the wrong tree."""
+    env.checkout = clone_of(env.world, tmp_path / "checkout-with-settings", "this is = = not toml\n")
+    result = env.build()
+    assert result.code == 2
+    assert "config.toml" in result.err
+
+
+def test_the_fork_sha_is_the_remotes_not_the_stale_tracking_ref(tmp_path, monkeypatch, capsys, git_env):
+    """With a clone whose ``origin/dev`` is two commits stale, the SHA is the
+    remote's tip and ``tree/`` holds the tip's files. A build that reads the
+    remote-tracking ref archives the stale tree."""
+    world = World(tmp_path / "private-world")
+    stale = git_in(world.checkout, "rev-parse", "origin/dev")
+    git_in(world.seed, "checkout", "-q", "dev")
+    commit_file(world.seed, "newer.txt", "one\n", "newer one")
+    tip = commit_file(world.seed, "newer.txt", "two\n", "newer two")
+    git_in(world.seed, "push", "-q", "origin", "dev")
+    assert git_in(world.checkout, "rev-parse", "origin/dev") == stale != tip
+    build_env = BuildEnv(tmp_path, world, monkeypatch, capsys)
+    result = build_env.build("--fork-branch", "dev")
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert manifest["fork_sha"] == tip
+    assert (Path(manifest["tree_dir"]) / "newer.txt").read_text(encoding="utf-8") == "two\n"
+    assert (Path(manifest["tree_dir"]) / "marker.txt").read_text(encoding="utf-8") == "dev\n"
+
+
+def test_the_git_calls_are_ls_remote_then_fetch_then_archive_in_the_checkout(env):
+    """The SHA comes from ``git ls-remote origin refs/heads/<branch>``, then the
+    checkout fetches that branch, then ``git archive`` writes ``fork.tar`` in the
+    scratch directory; all three run in the checkout, in this order."""
+    calls = spy_git(env.monkeypatch)
+    result = env.build("--fork-branch", "dev")
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert [args for args, _, _ in calls] == [
+        ["ls-remote", "origin", "refs/heads/dev"],
+        ["fetch", "origin", "dev"],
+        ["archive", "--format=tar", "-o", f"{manifest['scratch_dir']}/fork.tar", manifest["fork_sha"]],
+    ]
+    assert {str(cwd) for _, cwd, _ in calls} == {str(env.checkout)}
+
+
+def test_the_archived_tree_holds_the_forks_files(env):
+    """``tree/`` is the extracted archive of the fork SHA, not of the checkout's
+    own branch (the checkout is on ``main``)."""
+    result = env.build("--fork-branch", "override-branch")
+    assert result.code == 0, result.err
+    tree = Path(result.manifest["tree_dir"])
+    assert (tree / "marker.txt").read_text(encoding="utf-8") == "override-branch\n"
+    assert (tree / "src" / "app.py").read_text(encoding="utf-8") == "print('app')\n"
+    assert not (tree / ".git").exists(), "an archive has no .git"
+
+
+def test_a_branch_that_is_not_on_origin_exits_4_before_any_fetch(env):
+    """Empty ``ls-remote`` output is exit 4 and stops there. A build that goes on
+    to ``git fetch`` and ``git archive`` with an empty SHA exits by accident (or
+    with a traceback), and leaves a scratch directory behind."""
+    calls = spy_git(env.monkeypatch)
+    result = env.build("--fork-branch", "no-such-branch")
+    assert result.code == 4
+    assert "no-such-branch" in result.err
+    assert [args[0] for args, _, _ in calls] == ["ls-remote"]
+    assert list(env.scratch_root.iterdir()) == []
+    assert env.detector_calls == []
+
+
+def test_an_empty_origin_exits_4_without_a_traceback(env, tmp_path):
+    """A repository with no commits has no fork point: exit 4, not an uncaught
+    ``IndexError`` from a build that indexes the first ``ls-remote`` word."""
+    empty_origin = tmp_path / "empty-origin.git"
+    git_in(tmp_path, "init", "-q", "--bare", "-b", "main", str(empty_origin))
+    empty_clone = tmp_path / "empty-clone"
+    git_in(tmp_path, "clone", "-q", str(empty_origin), str(empty_clone))
+    env.checkout = empty_clone
+    result = env.build()
+    assert result.code == 4
+    assert "Traceback" not in result.err
+
+
+def test_a_fork_whose_tree_is_empty_exits_4_without_a_traceback(tmp_path, monkeypatch, capsys, git_env):
+    """A commit with the empty tree archives to a tar that ``tarfile`` rejects;
+    the exit codes list no other outcome than 4 for an archive that cannot be
+    used, so the build must not end in a traceback (exit 1)."""
+    origin = tmp_path / "empty-tree-origin.git"
+    seed = tmp_path / "empty-tree-seed"
+    git_in(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    git_in(tmp_path, "init", "-q", "-b", "main", str(seed))
+    git_in(seed, "remote", "add", "origin", str(origin))
+    git_in(seed, "commit", "-q", "--allow-empty", "-m", "empty tree")
+    git_in(seed, "push", "-q", "origin", "main")
+    clone = tmp_path / "empty-tree-clone"
+    git_in(tmp_path, "clone", "-q", str(origin), str(clone))
+    build_env = BuildEnv(tmp_path, SimpleNamespace(checkout=clone, tips={}), monkeypatch, capsys)
+    result = build_env.build()
+    assert result.code == 4
+    assert "archive" in result.err and "Traceback" not in result.err
+
+
+def test_the_checkout_is_byte_identical_after_a_build(env, tmp_path):
+    """The build may fetch into the checkout and nothing else: ``HEAD``, the
+    index and every working-tree file are the same afterwards and
+    ``git status --porcelain`` is empty."""
+    checkout = clone_of(env.world, tmp_path / "watched-checkout")
+    env.checkout = checkout
+
+    def state():
+        files = {
+            path.relative_to(checkout).as_posix(): path.read_bytes()
+            for path in sorted(checkout.rglob("*"))
+            if path.is_file() and ".git" not in path.relative_to(checkout).parts
+        }
+        return {
+            "head": git_in(checkout, "rev-parse", "HEAD"),
+            "index": git_in(checkout, "ls-files", "-s"),
+            "status": git_in(checkout, "status", "--porcelain"),
+            "files": files,
+        }
+
+    before = state()
+    assert before["status"] == ""
+    result = env.build("--fork-branch", "dev")
+    assert result.code == 0, result.err
+    assert state() == before
+
+
+def test_two_builds_with_the_same_arguments_get_two_scratch_directories(env):
+    """A fixed scratch name made parallel readers collide and one ``rm -rf`` the
+    other's tree; each build makes a new directory under ``--scratch-root``, with
+    ``tree/`` inside it."""
+    first = env.build().manifest
+    second = env.build().manifest
+    assert first["scratch_dir"] != second["scratch_dir"]
+    for manifest in (first, second):
+        scratch = Path(manifest["scratch_dir"])
+        assert scratch.parent == env.scratch_root and scratch.name.startswith("cold-read-42-")
+        assert Path(manifest["tree_dir"]) == scratch / "tree" and (scratch / "tree").is_dir()
+
+
+def test_a_missing_scratch_root_exits_2_and_is_not_created(env, tmp_path):
+    """The scratch root is the conductor's to provide: creating it, or letting
+    ``mkdtemp`` raise, would hide a misconfigured path (exit 1 with a traceback)."""
+    env.scratch_root = tmp_path / "no-such-root"
+    result = env.build()
+    assert result.code == 2
+    assert "scratch-root" in result.err
+    assert not env.scratch_root.exists()
+
+
+def test_an_unreadable_spec_or_comments_file_is_a_usage_error(env, tmp_path):
+    """Unreadable input is exit 2 with no traceback: a spec file or comments file
+    that is not there, and a comments file that is not the ``gh`` JSON shape."""
+    env.spec = tmp_path / "no-such-spec.md"
+    assert env.build().code == 2
+    env.spec = tmp_path / "spec.md"
+    env.comments_json = tmp_path / "no-such-comments.json"
+    assert env.build().code == 2
+    env.comments_json.write_text("not json", encoding="utf-8")
+    assert env.build().code == 2
+    env.comments_json.write_text('{"title": "no comments key"}', encoding="utf-8")
+    assert env.build().code == 2
+
+
+def test_a_missing_required_option_raises_systemexit_2_naming_it(capsys):
+    """Argument parsing keeps the preflight's behaviour: a missing required
+    option is the parser's ``SystemExit(2)`` with the option named on stderr."""
+    with pytest.raises(SystemExit) as raised:
+        mod.main(["build", "--repo", "octo/repo"])
+    assert raised.value.code == 2
+    assert "--issue" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------- #
+# comments
+# --------------------------------------------------------------------------- #
+
+VERDICT_COMMENTS = [
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T10:00:00Z", "body": "## Cold read — REWRITE\nfinding one"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T11:00:00Z", "body": "## Cold read — REWRITE\nfinding two"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T12:00:00Z", "body": "  \n\t## Cold read — BUILD\nleading whitespace verdict"},
+]
+HUMAN_COMMENTS = [
+    {"author": {"login": "charles"}, "createdAt": "2026-10-11T09:30:00Z", "body": "A human decision: keep the table.\nSecond line."},
+    {"author": {"login": "dana"}, "createdAt": "2026-10-11T10:00:00Z", "body": "Mentions ## Cold read only mid-sentence."},
+]
+
+
+def test_verdict_comments_are_dropped_and_the_rest_keep_their_attribution(env):
+    """The reader must never see earlier verdicts (one fetched them and saw 6,000
+    characters of read 1). The filter agrees with the ledger's own predicate on
+    every comment, leading whitespace included."""
+    comments = VERDICT_COMMENTS[:2] + [HUMAN_COMMENTS[0]] + VERDICT_COMMENTS[2:] + [HUMAN_COMMENTS[1]]
+    env.write_comments(comments)
+    result = env.build()
+    assert result.code == 0, result.err
+    text = (env.out / "comments.md").read_text(encoding="utf-8")
+    for comment in comments:
+        kept = comment["body"] in text
+        assert kept == (not cold_read_ledger._is_verdict_comment(comment["body"])), comment
+    assert "### Comment by charles at 2026-10-11T09:30:00Z\n" in text
+    assert "### Comment by dana at 2026-10-11T10:00:00Z\n" in text
+    assert "finding one" not in text and "leading whitespace verdict" not in text
+
+
+def test_only_verdict_comments_leave_the_no_comments_line(env):
+    """With nothing but verdicts, the file says so instead of being empty."""
+    env.write_comments(VERDICT_COMMENTS)
+    result = env.build()
+    assert result.code == 0, result.err
+    assert (env.out / "comments.md").read_text(encoding="utf-8") == (
+        "No comments other than cold-read verdicts.\n"
+    )
+
+
+def test_the_verdict_prefix_is_the_modules_verdict_title(env, monkeypatch):
+    """The filter reads ``VERDICT_TITLE`` rather than a literal ``## Cold read``:
+    with another prefix set, that prefix is dropped and ``## Cold read`` kept."""
+    monkeypatch.setattr(mod, "VERDICT_TITLE", "## Review note")
+    env.write_comments(
+        [
+            {"author": {"login": "a"}, "createdAt": "t1", "body": "## Review note\ndropped"},
+            {"author": {"login": "b"}, "createdAt": "t2", "body": "## Cold read — BUILD\nkept"},
+        ]
+    )
+    result = env.build()
+    assert result.code == 0, result.err
+    text = (env.out / "comments.md").read_text(encoding="utf-8")
+    assert "dropped" not in text and "kept" in text
+
+
+def test_malformed_comment_entries_do_not_crash_the_build(env):
+    """A comments file is another tool's output: entries that are not objects, a
+    body that is not a string and a missing author must not raise."""
+    env.write_comments([None, "text", {"body": 5}, {"body": "ok", "author": "no-login"}, {"body": "fine"}])
+    result = env.build()
+    assert result.code == 0, result.err
+    text = (env.out / "comments.md").read_text(encoding="utf-8")
+    assert "ok" in text and "fine" in text and "unknown" in text
+
+
+# --------------------------------------------------------------------------- #
+# the detectors
+# --------------------------------------------------------------------------- #
+
+
+def test_detector_5_argv_and_detector_10_call_follow_the_issue(env):
+    """Detector 5 passes the body file, the real checkout path and the pinned
+    graphmark range, and ends ``--json --ref <fork sha>``; detector 10 runs in the
+    afk project. Both run once each, 600 seconds each. A command that drops
+    ``--body-file``, passes the display ``<checkout>`` as ``--repo-dir``, or runs
+    detector 10 without its working directory is wrong here."""
+    result = env.build()
+    assert result.code == 0, result.err
+    five, ten = env.detector_calls
+    sha = result.manifest["fork_sha"]
+    argv = five["argv"]
+    engine = str(mod.SCRIPTS_DIR)
+    assert argv[:8] == [
+        "uv", "run", "--with", "graphmark>=0.11,<0.12", "--with", "pyyaml", "python",
+        f"{engine}/cold_read_evidence.py",
+    ]
+    assert argv[argv.index("--repo") + 1] == env.repo
+    assert argv[argv.index("--repo-dir") + 1] == str(env.checkout)
+    assert argv[argv.index("--body-file") + 1] == str(env.out / "body.md")
+    assert argv[-3:] == ["--json", "--ref", sha]
+    assert "--vault-root" not in argv
+    assert ten["argv"] == [
+        "uv", "run", "afk-driver", "--project", str(env.afk), "--repo", env.repo,
+        "--deny-surface-check", str(env.issue), "--json",
+    ]
+    assert str(ten["cwd"]) == str(env.afk)
+    assert five["timeout"] == 600 and ten["timeout"] == 600
+
+
+def test_detector_5_ref_override_replaces_the_fork_sha_in_its_argv(env):
+    """``--detector5-ref`` is the ref detector 5 runs against; the archive is
+    still the fork SHA's."""
+    result = env.build("--detector5-ref", "abc1234")
+    assert result.code == 0, result.err
+    assert env.detector_calls[0]["argv"][-3:] == ["--json", "--ref", "abc1234"]
+    assert result.manifest["fork_sha"] == env.world.tips["main"]
+
+
+def test_a_non_zero_detector_exit_is_recorded_as_data(env):
+    """Detector 5 exits 1 when it finds CHECK rows and detector 10 exits 1 on a
+    match; both are findings for the reader, not build failures."""
+    env.fake_detectors(five=(1, '{"rows": [1]}\n', "warn"), ten=(2, "", ""))
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert (manifest["detector5"]["exit"], manifest["detector10"]["exit"]) == (1, 2)
+    assert (env.out / "detector5.json").read_text(encoding="utf-8") == '{"rows": [1]}\n'
+    assert (env.out / "detector10.json").read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.parametrize(
+    ("which", "failure", "needle"),
+    [
+        ("five", OSError("uv: not found"), "cold_read_evidence.py"),
+        ("ten", OSError("uv: not found"), "afk-driver"),
+        ("five", subprocess.TimeoutExpired("uv", 600), "cold_read_evidence.py"),
+        ("ten", subprocess.TimeoutExpired("uv", 600), "afk-driver"),
+    ],
+    ids=["five-cannot-start", "ten-cannot-start", "five-times-out", "ten-times-out"],
+)
+def test_a_detector_that_cannot_start_or_times_out_exits_4_naming_its_command(env, which, failure, needle):
+    """A detector that cannot run is not a verdict: exit 4, and the stderr line
+    names the command so the conductor can run it by hand."""
+    env.fake_detectors(**{which: failure})
+    result = env.build()
+    assert result.code == 4
+    assert needle in result.err and "Traceback" not in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+def test_the_real_runner_times_out_at_the_modules_detector_timeout(env, tmp_path, monkeypatch):
+    """End to end through the real ``_run_detector``: a stub ``uv`` that outlives
+    the timeout ends the build with exit 4 naming the command."""
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir()
+    stub = stub_dir / "uv"
+    stub.write_text("#!/bin/sh\nexec sleep 30\n")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(stub_dir) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setattr(mod, "_run_detector", REAL_RUN_DETECTOR)
+    monkeypatch.setattr(mod, "DETECTOR_TIMEOUT", 1)
+    result = env.build()
+    assert result.code == 4
+    assert "cold_read_evidence.py" in result.err
+
+
+def test_build_runs_exactly_two_detectors_and_never_the_preflight(env, monkeypatch):
+    """The preflight is the reader's first command, not the build's: no seam call
+    mentions it, and neither ``_run_tool`` nor ``_roundtrip_sentinel`` (the
+    preflight's seams) is called. Detector 5 runs before detector 10, and
+    only those two run."""
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("build called a preflight seam")
+
+    monkeypatch.setattr(mod, "_run_tool", forbidden)
+    monkeypatch.setattr(mod, "_roundtrip_sentinel", forbidden)
+    git_calls = spy_git(monkeypatch)
+    result = env.build()
+    assert result.code == 0, result.err
+    assert len(env.detector_calls) == 2
+    assert "cold_read_evidence.py" in " ".join(env.detector_calls[0]["argv"])
+    assert "afk-driver" in env.detector_calls[1]["argv"]
+    seen = [call["argv"] for call in env.detector_calls] + [args for args, _, _ in git_calls]
+    seen += [args for args, _ in env.gh_calls]
+    assert not any("preflight" in word for argv in seen for word in argv)
+
+
+def test_detector_stdout_with_the_checkout_path_is_rewritten_everywhere(env):
+    """The reader's prompt never names the live checkout: a detector that echoes
+    the ``--repo-dir`` it ran with leaves ``<checkout>`` in
+    ``detector5.json`` and in ``reader.md``, with the recorded exit unchanged."""
+    env.fake_detectors(
+        five=lambda argv: (1, json.dumps({"repo_dir": argv[argv.index("--repo-dir") + 1]}) + "\n", "")
+    )
+    result = env.build()
+    assert result.code == 0, result.err
+    live = str(env.checkout)
+    written = (env.out / "detector5.json").read_text(encoding="utf-8")
+    assert live not in written and written == '{"repo_dir": "<checkout>"}\n'
+    assert live not in result.reader
+    assert result.manifest["detector5"]["exit"] == 1
+
+
+def test_a_checkout_path_with_a_trailing_slash_is_still_hidden(env):
+    """The evidence script echoes ``str(Path(repo_dir))``, which drops a trailing
+    slash; replacing only the argument exactly as given leaves the live path in
+    the output."""
+    env.checkout = str(env.checkout) + "/"
+    env.fake_detectors(five=lambda argv: (0, json.dumps({"seen": str(env.world.checkout)}) + "\n", ""))
+    result = env.build()
+    assert result.code == 0, result.err
+    live = str(env.world.checkout)
+    assert live not in (env.out / "detector5.json").read_text(encoding="utf-8")
+    assert live not in without_body(result.reader)
+
+
+# --------------------------------------------------------------------------- #
+# reader.md
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Plain body.\n",
+        "Line\n`````\nfive backticks above\n",
+        "CRLF one\r\n````\r\nfour above\r\n",
+        "no trailing newline",
+        "",
+    ],
+    ids=["plain", "five-backticks", "crlf-four-backticks", "no-newline", "empty"],
+)
+def test_the_body_sits_byte_for_byte_inside_a_fence_one_backtick_longer(env, body):
+    """A body quoting a code fence must not close the prompt's own: the fence is
+    one backtick longer than the longest run in the body (four at least), and
+    the body inside it is unmodified, line endings included."""
+    env.set_body(body)
+    result = env.build()
+    assert result.code == 0, result.err
+    block = Block(result.reader, "## Issue body")
+    longest = max((len(run) for run in re.findall(r"`+", body)), default=0)
+    assert len(block.fence) == max(4, longest + 1)
+    assert block.content == body
+    assert f"Body hash: {result.manifest['body_hash']}" in block.head
+
+
+def test_reader_md_has_the_nine_sections_of_the_repository_spec_in_file_order(env, tmp_path):
+    """Built from this repository's own ``command.md`` (once #1177 has landed it
+    carries the ``What the reader is given.`` bullet): exit 0, the contract check
+    passes, the nine sections appear verbatim in file order after the expansion,
+    and no placeholder survives outside a code fence except
+    ``<absolute vault path>`` when no ``--vault-root`` was given."""
+    spec = COMMAND_MD.read_text(encoding="utf-8")
+    env.spec = COMMAND_MD
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    tokens = {
+        "<engine>": str(mod.SCRIPTS_DIR),
+        "<path-to-afk-agent-system>": str(env.afk),
+        "<local checkout>": manifest["tree_dir"],
+        "<fork point SHA>": manifest["fork_sha"],
+    }
+    headings = [(m.start(), m.group(1)) for m in re.finditer(r"^## (.*?)[ \t]*$", spec, flags=re.MULTILINE)]
+    in_file_order = [name for _, name in headings if name in READER_GIVEN]
+    assert sorted(in_file_order) == sorted(READER_GIVEN)
+    assert manifest["spec_sections"] == in_file_order
+    reader = result.reader
+    last = -1
+    for index, (start, name) in enumerate(headings):
+        if name not in READER_GIVEN:
+            continue
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(spec)
+        expected = spec[start:end].rstrip("\n")
+        for token, value in tokens.items():
+            expected = expected.replace(token, value)
+        position = reader.find(expected)
+        assert position > last, f"section {name!r} is missing or out of file order"
+        last = position
+    outside = outside_code_fences(reader)
+    for token in tokens:
+        assert token not in outside, f"{token} survives in reader.md"
+    assert "<absolute vault path>" in outside
+
+
+def test_reader_md_built_from_the_repository_spec_expands_the_vault_path_when_given(env, tmp_path):
+    """``<absolute vault path>`` becomes ``--vault-root`` when that flag is given
+    and is otherwise left as written; a build that never expands it, or that
+    expands it for everything, leaves the wrong text in the prompt."""
+    vault = tmp_path / "the-vault"
+    vault.mkdir()
+    env.spec = COMMAND_MD
+    result = env.build("--vault-root", str(vault))
+    assert result.code == 0, result.err
+    outside = outside_code_fences(result.reader)
+    assert "<absolute vault path>" not in outside
+    assert f"--vault-root {vault}" in outside
+
+
+def test_placeholders_in_the_spec_text_expand_to_their_values(env, tmp_path):
+    """Each placeholder becomes the value the issue names, not just something
+    other than itself: ``<engine>`` this script's directory,
+    ``<path-to-afk-agent-system>`` ``--afk-project``, ``<local checkout>`` the
+    tree directory (never the live checkout), ``<fork point SHA>`` the ref detector
+    5 ran against, ``<absolute vault path>`` ``--vault-root`` when given."""
+    result = env.build()
+    assert result.code == 0, result.err
+    lines = result.reader.split("\n")
+    manifest = result.manifest
+    for line in (
+        f"ENGINE={mod.SCRIPTS_DIR}",
+        f"AFK={env.afk}",
+        f"TREE={manifest['tree_dir']}",
+        f"REF={manifest['fork_sha']}",
+        "VAULT=<absolute vault path>",
+    ):
+        assert line in lines, line
+    assert f"Probe builds text, with the ref {manifest['fork_sha']}." in result.reader
+    assert str(env.checkout) not in without_body(result.reader)
+    vault = tmp_path / "the-vault"
+    vault.mkdir()
+    again = env.build("--vault-root", str(vault), "--detector5-ref", "abc1234")
+    assert again.code == 0, again.err
+    lines = again.reader.split("\n")
+    assert f"VAULT={vault}" in lines and "REF=abc1234" in lines
+    assert f"AFK={env.afk}" in lines
+
+
+def test_a_code_fenced_heading_does_not_end_a_section(env):
+    """A ``## `` line inside a code fence is text, not a heading: the section
+    keeps everything up to the next real heading."""
+    result = env.build()
+    assert result.code == 0, result.err
+    assert (
+        "```text\n## Not a heading: it sits inside a code fence\n```\n\n"
+        "Text after the fence belongs to the same section."
+    ) in result.reader
+    assert result.manifest["spec_sections"] == list(DEFAULT_GIVEN)
+
+
+def test_spec_sections_are_the_names_the_bullet_lists_in_file_order(env):
+    """The section list is parsed from the ``What the reader is given.`` bullet,
+    never hardcoded, and the sections follow the file's order, not the bullet's.
+    A build that carries the repository's nine names fails on a two-name spec."""
+    env.spec.write_text(spec_text(given=("Detectors", "Probe builds")), encoding="utf-8")
+    result = env.build()
+    assert result.code == 0, result.err
+    assert result.manifest["spec_sections"] == ["Probe builds", "Detectors"]
+    reader = result.reader
+    assert reader.index("## Probe builds") < reader.index("## Detectors")
+    assert "## Reader contract" not in reader and "## Procedure" not in reader
+    assert "Intro, never given" not in reader
+
+
+def test_a_named_section_missing_from_the_spec_exits_4_naming_it(env):
+    """A missing section would hand the reader a prompt with no procedure; it is
+    exit 4 and the message names the section."""
+    env.spec.write_text(spec_text(omit=("Detectors",)), encoding="utf-8")
+    result = env.build()
+    assert result.code == 4
+    assert "Detectors" in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [spec_text(bullet=False), spec_text(given=())],
+    ids=["no-bullet", "bullet-without-backticked-names"],
+)
+def test_a_spec_with_no_what_the_reader_is_given_names_exits_4_naming_the_bullet(env, text):
+    """A spec that names no section to carry is not an empty prompt: exit 4,
+    naming the bullet."""
+    env.spec.write_text(text, encoding="utf-8")
+    result = env.build()
+    assert result.code == 4
+    assert "What the reader is given." in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+def test_the_dispatch_block_names_every_path_and_the_preflight_command(env):
+    """The reader's prompt carries the scratch and tree directories, this
+    script's directory, the ``teeth_check.py`` path, the comments file, the
+    fork SHA, the ``TEETH_CHECK_STATE_DIR`` line and the preflight command
+    (equal to the manifest's, with ``<engine>`` and ``<scratch_dir>``
+    expanded). Each omission leaves the reader a path it must invent."""
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest, reader = result.manifest, result.reader
+    lines = reader.split("\n")
+    assert lines[0] == f"# Cold read of {env.repo}#{env.issue}" and lines[2] == "## This dispatch"
+    block = dispatch_block(reader)
+    engine = str(mod.SCRIPTS_DIR)
+    teeth = os.path.normpath(
+        os.path.join(engine, "..", "..", "skills", "detector-teeth-check", "scripts", "teeth_check.py")
+    )
+    for expected in (
+        manifest["scratch_dir"],
+        manifest["tree_dir"],
+        engine,
+        teeth,
+        manifest["comments_file"],
+        manifest["fork_sha"],
+    ):
+        assert expected in block, expected
+    assert manifest["preflight_command"] == (
+        f'python3 "{engine}/cold_read_dispatch.py" preflight --scratch {manifest["scratch_dir"]}'
+    )
+    assert manifest["preflight_command"] in block
+    assert f"TEETH_CHECK_STATE_DIR={manifest['scratch_dir']}/teeth-state" in block.split("\n")
+
+
+def test_each_detector_block_repeats_its_command_exit_and_stdout(env):
+    """One labelled block per detector: its command (the manifest's, with the
+    checkout path written ``<checkout>``), its recorded exit code and its
+    stdout, byte-equal to ``detector5.json`` or ``detector10.json``. The command
+    the build ran keeps the real path."""
+    env.fake_detectors(five=(1, '{"rows": ["a", "b"]}\n```\nfence in output\n', ""), ten=(0, "", ""))
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    for number in (5, 10):
+        block = Block(result.reader, f"## Detector {number} command and output")
+        entry = manifest[f"detector{number}"]
+        assert re.search(r"^Command: (.*)$", block.head, re.MULTILINE).group(1) == entry["command"]
+        assert re.search(r"^Exit code: (\d+)$", block.head, re.MULTILINE).group(1) == str(entry["exit"])
+        written = Path(entry["file"]).read_text(encoding="utf-8")
+        assert block.content == written
+        assert Path(entry["file"]) == env.out / f"detector{number}.json"
+    real = shlex.join(env.detector_calls[0]["argv"])
+    assert manifest["detector5"]["command"] == real.replace(str(env.checkout), "<checkout>")
+    assert "<checkout>" in manifest["detector5"]["command"]
+    assert str(env.checkout) in real and str(env.checkout) not in manifest["detector5"]["command"]
+
+
+def test_the_comments_block_equals_comments_md(env):
+    """The reader sees the comments file's content in a labelled block, byte for
+    byte."""
+    env.write_comments(HUMAN_COMMENTS)
+    result = env.build()
+    assert result.code == 0, result.err
+    block = Block(result.reader, "## Comments")
+    assert block.content == (env.out / "comments.md").read_text(encoding="utf-8")
+    assert result.manifest["comments_file"] == str(env.out / "comments.md")
+
+
+def test_the_title_and_dispatch_block_name_neither_gh_nor_curl(env):
+    """The reader is told not to run ``gh`` by the spec's ``Reader contract``;
+    the dispatch must not hand it a ``gh`` command of its own (a
+    ``gh api .../comments`` line in the block) or a ``curl`` fallback."""
+    result = env.build()
+    assert result.code == 0, result.err
+    reader = result.reader
+    assert not has_word(reader.split("\n", 1)[0])
+    assert not has_word(dispatch_block(reader))
+
+
+def test_the_build_writes_no_contract_prose_of_its_own(env):
+    """The ``gh`` ban, the tool fence, the preflight instruction and the ``CHECK``
+    handling live in the spec's sections; the build writes none of them. A spec
+    without them yields a prompt with none of their vocabulary outside the
+    fenced blocks."""
+    result = env.build()
+    assert result.code == 0, result.err
+    outside = outside_code_fences(result.reader)
+    for word in ("gh", "curl", "Monitor", "CHECK", "network"):
+        assert not has_word(outside, (word,)), word
+
+
+# --------------------------------------------------------------------------- #
+# the contract check
+# --------------------------------------------------------------------------- #
+
+CONTRACT_CASES = [
+    ("--comments", "--comments"),
+    ("--COMMENTS", "--comments"),
+    ("step 2 fetches them", "step 2"),
+    ("Step 2 fetches them", "step 2"),
+    ("STEP 2", "step 2"),
+    ("read-only", "read-only"),
+    ("Read-only", "read-only"),
+    ("READ-ONLY", "read-only"),
+]
+
+
+@pytest.mark.parametrize(("planted", "needle"), CONTRACT_CASES, ids=[c[0] for c in CONTRACT_CASES])
+def test_a_conductor_only_string_in_a_given_section_exits_5_naming_it(env, planted, needle):
+    """A leftover ``step 2 fetches them`` hands the reader a command it must not
+    run. Each of the three strings is checked, in any case, and the build writes
+    no ``reader.md``. A check that tests only one needle, or only the lowercase
+    spelling, passes the others."""
+    env.spec.write_text(spec_text(detectors_extra=f"\n{planted}\n"), encoding="utf-8")
+    result = env.build()
+    assert result.code == 5
+    assert needle in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+@pytest.mark.parametrize("needle", ["--comments", "step 2", "read-only"])
+def test_a_conductor_only_string_in_the_dispatch_block_exits_5(env, tmp_path, needle):
+    """The check covers the dispatch block as well as the spec text: a path the
+    block prints (here the comments file under ``--out``) that holds the string
+    is as much a leak as the spec's own."""
+    env.out = tmp_path / needle / "out"
+    result = env.build()
+    assert result.code == 5
+    assert needle in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+def test_the_same_strings_in_the_body_the_detectors_and_the_comments_do_not_fail_the_check(env):
+    """Only the spec-derived text and the dispatch block are scanned. The issue
+    body may quote ``step 2 fetches them`` (it is the data under read), and
+    detector output and human comments are data too."""
+    text = "see (step 2 fetches them), --comments and read-only"
+    env.set_body(f"Body quoting {text}\n")
+    env.fake_detectors(five=(0, f'{{"note": "{text}"}}\n', ""))
+    env.write_comments([{"author": {"login": "x"}, "createdAt": "t", "body": text}])
+    result = env.build()
+    assert result.code == 0, result.err
+    assert text in result.reader and "Traceback" not in result.err
+
+
+def test_a_failed_build_leaves_no_reader_or_manifest_from_an_earlier_one(env):
+    """Step 1 removes any ``reader.md`` and ``manifest.json`` already in ``--out``
+    before anything can fail, so a build that exits 5 (or 4) never leaves the
+    previous build's prompt looking current."""
+    first = env.build()
+    assert first.code == 0, first.err
+    assert (env.out / "reader.md").exists() and (env.out / "manifest.json").exists()
+    env.spec.write_text(spec_text(detectors_extra="\nstep 2 fetches them\n"), encoding="utf-8")
+    assert env.build().code == 5
+    assert not (env.out / "reader.md").exists() and not (env.out / "manifest.json").exists()
+    assert (env.out / "body.md").exists()
+    env.spec.write_text(spec_text(), encoding="utf-8")
+    assert env.build().code == 0
+    assert (env.out / "reader.md").exists() and (env.out / "manifest.json").exists()
+    env.spec.write_text(spec_text(omit=("Detectors",)), encoding="utf-8")
+    assert env.build().code == 4
+    assert not (env.out / "reader.md").exists() and not (env.out / "manifest.json").exists()
+
+
+# --------------------------------------------------------------------------- #
+# the manifest and what is printed
+# --------------------------------------------------------------------------- #
+
+MANIFEST_KEYS = {
+    "subagent_type", "model", "prompt_file", "body_hash", "fork_branch", "fork_source",
+    "fork_sha", "scratch_dir", "tree_dir", "detector5", "detector10", "comments_file",
+    "preflight_command", "spec_sections",
+}
+
+
+def test_the_manifest_has_exactly_the_documented_keys_and_an_existing_prompt(env):
+    """A key more or fewer is a contract the dispatch tooling does not know;
+    ``prompt_file`` names the ``reader.md`` that was written."""
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert set(manifest) == MANIFEST_KEYS
+    assert Path(manifest["prompt_file"]) == env.out / "reader.md" and Path(manifest["prompt_file"]).is_file()
+    for number in (5, 10):
+        assert set(manifest[f"detector{number}"]) == {"command", "exit", "file"}
+        assert isinstance(manifest[f"detector{number}"]["exit"], int)
+    assert re.fullmatch(r"[0-9a-f]{40}", manifest["fork_sha"])
+    assert manifest["fork_sha"] == env.world.tips["main"]
+    assert (manifest["fork_branch"], manifest["fork_source"]) == ("main", "default")
+
+
+def test_the_manifest_agent_type_and_model_are_the_ones_the_spec_names(env):
+    """``Explore``'s role prompt forbids creating files, and one of six readers
+    obeyed it. The manifest carries the type and the model the spec's ``Agent.``
+    bullet names (``general-purpose`` and ``sonnet``), read from the spec rather
+    than copied here, and never names ``Explore``."""
+    spec = COMMAND_MD.read_text(encoding="utf-8")
+    agent = next(line for line in spec.splitlines() if line.startswith("- **Agent.**"))
+    agent_type = re.search(r"runs as a `([^`]+)` subagent", agent).group(1)
+    model = re.search(r"\(`([^`]+)` or stronger\)", agent).group(1)
+    assert (agent_type, model) == ("general-purpose", "sonnet")
+    result = env.build()
+    assert result.code == 0, result.err
+    assert result.manifest["subagent_type"] == agent_type
+    assert result.manifest["model"] == model
+    assert "Explore" not in json.dumps(result.manifest)
+
+
+def test_without_json_three_lines_are_printed(env):
+    """The conductor reads three lines: the dispatch summary, the scratch
+    directory and the prompt path. The hash and SHA are abbreviated to 12
+    characters; a build that prints the full hash, the tree directory or a fourth
+    line breaks the reader of this output."""
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest = result.manifest
+    assert result.out == (
+        f"DISPATCH issue={env.issue} body={manifest['body_hash']} "
+        f"fork=main@{manifest['fork_sha'][:12]}\n"
+        f"SCRATCH {manifest['scratch_dir']}\n"
+        f"PROMPT {manifest['prompt_file']}\n"
+    )
+    assert len(manifest["body_hash"]) == 12
+
+
+def test_with_json_the_manifest_is_printed(env):
+    """``--json`` prints the manifest that was written, and only it."""
+    result = env.build("--json")
+    assert result.code == 0, result.err
+    assert json.loads(result.out) == result.manifest
+
+
+# --------------------------------------------------------------------------- #
+# --vault-root
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("body", "give_flag", "expect_flag"),
+    [
+        ("See [[Some Note]] for context.\n", True, True),
+        ("See [[Some Note]] for context.\n", False, False),
+        ("No wikilinks here.\n", True, False),
+    ],
+    ids=["flag-and-wikilinks", "wikilinks-without-flag", "flag-without-wikilinks"],
+)
+def test_vault_root_reaches_detector_5_only_with_the_flag_and_a_wikilink(env, tmp_path, body, give_flag, expect_flag):
+    """Wikilink resolution needs a vault; the evidence script reports a bad
+    ``--vault-root`` as ``not_run``, so the flag is passed exactly when it was
+    given and the body has ``[[``, before ``--json``. A build that ignores the
+    flag leaves every wikilink unresolved."""
+    vault = tmp_path / "the-vault"
+    vault.mkdir()
+    env.set_body(body)
+    result = env.build(*(["--vault-root", str(vault)] if give_flag else []))
+    assert result.code == 0, result.err
+    argv = env.detector_calls[0]["argv"]
+    if expect_flag:
+        at = argv.index("--vault-root")
+        assert argv[at + 1] == str(vault) and at < argv.index("--json")
+    else:
+        assert "--vault-root" not in argv
+
+
+# --------------------------------------------------------------------------- #
+# own location: no plugin cache, no user id
+# --------------------------------------------------------------------------- #
+
+
+def install_copy(base: Path) -> Path:
+    """Copy the script and its two sibling modules to ``<base>/machinery/engine``."""
+    engine = base / "machinery" / "engine"
+    engine.mkdir(parents=True)
+    for name in ("cold_read_dispatch.py", "cold_read_stamp.py", "cold_read_ledger.py"):
+        shutil.copy2(SCRIPTS_DIR / name, engine / name)
+    return engine
+
+
+def load_copy(engine: Path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    spec = importlib.util.spec_from_file_location("cold_read_dispatch_copy", engine / "cold_read_dispatch.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_path_derives_from_the_arguments_or_the_scripts_own_location(env, tmp_path, monkeypatch):
+    """With the script copied to another directory and ``HOME`` and ``USER`` set
+    to a fixture value, the prompt, the manifest and the printed output name the
+    copy's directory and contain neither a plugin-cache path nor the user id; the
+    ``teeth_check.py`` path is derived from the copy, and an absent file exits 4
+    asking for ``--teeth-check``."""
+    base = tmp_path / "other-install"
+    engine = install_copy(base)
+    teeth = base / "skills" / "detector-teeth-check" / "scripts" / "teeth_check.py"
+    monkeypatch.setenv("HOME", "/home/fixture-user-9x7")
+    monkeypatch.setenv("USER", "fixture-user-9x7")
+    copy = load_copy(engine, monkeypatch)
+    env.module = copy
+    env.set_body("Plain body.\n")
+    env.fake_detectors()
+    absent = env.build()
+    assert absent.code == 4 and "--teeth-check" in absent.err
+    teeth.parent.mkdir(parents=True)
+    teeth.write_text("# stand-in\n", encoding="utf-8")
+    result = env.build()
+    assert result.code == 0, result.err
+    manifest, reader = result.manifest, result.reader
+    where = str(engine.resolve())
+    assert manifest["preflight_command"] == (
+        f'python3 "{where}/cold_read_dispatch.py" preflight --scratch {manifest["scratch_dir"]}'
+    )
+    assert f"ENGINE={where}" in reader.split("\n")
+    assert str(teeth.resolve()) in dispatch_block(reader)
+    assert env.detector_calls[0]["argv"][7] == f"{where}/cold_read_evidence.py"
+    everything = reader + json.dumps(manifest) + result.out + result.err
+    for forbidden in ("/plugins/cache/", "fixture-user-9x7"):
+        assert forbidden not in everything, forbidden
+
+
+def test_an_explicit_teeth_check_path_is_used_as_given(env, tmp_path):
+    """``--teeth-check`` overrides the derived path; an explicit path that is not
+    a file exits 4 like the derived one."""
+    teeth = tmp_path / "somewhere" / "teeth_check.py"
+    teeth.parent.mkdir()
+    teeth.write_text("# stand-in\n", encoding="utf-8")
+    result = env.build("--teeth-check", str(teeth))
+    assert result.code == 0, result.err
+    assert str(teeth) in dispatch_block(result.reader)
+    missing = env.build("--teeth-check", str(tmp_path / "absent" / "teeth_check.py"))
+    assert missing.code == 4 and "--teeth-check" in missing.err
