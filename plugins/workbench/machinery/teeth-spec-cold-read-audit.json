@@ -1114,18 +1114,18 @@
       "replace": "    content = message.get(\"content\")\n    return [block for block in content if isinstance(block, dict)]"
     },
     {
-      "label": "teeth pass V6: entry written with four-space indentation [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
+      "label": "teeth pass V6: the entry's opening lines are written in a shallower indentation [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
       "file": "vendor-map.json",
       "oracle": "real",
-      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n",
-      "replace": "  {\n    \"kind\": \"file\",\n    \"source\": \"engine/cold_read_audit.py\",\n    \"target\": \".claude/scripts/cold_read_audit.py\"\n  },\n"
+      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n",
+      "replace": "  {\n    \"kind\": \"file\",\n    \"source\": \"engine/cold_read_audit.py\",\n"
     },
     {
-      "label": "teeth pass V7: audit entry placed before the dispatch entry (not appended) [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
+      "label": "teeth pass V7: audit entry placed before the dispatch entry (not appended) (the target paths are written with JSON \\/ escapes: the stale-engine scan of the flat-layout test reads this file as text) [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
       "file": "vendor-map.json",
       "oracle": "real",
-      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude/scripts/cold_read_dispatch.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n",
-      "replace": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude/scripts/cold_read_dispatch.py\"\n    },\n"
+      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude\/scripts\/cold_read_dispatch.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude\/scripts\/cold_read_audit.py\"\n    },\n",
+      "replace": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude\/scripts\/cold_read_audit.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude\/scripts\/cold_read_dispatch.py\"\n    },\n"
     },
     {
       "label": "teeth pass: the unreadable-transcript message is reworded [test_unreadable_transcript_path_exits_2]",
