@@ -1263,3 +1263,109 @@ def test_orphans_cover_notes_the_model_prompt_cap_would_drop(
     note = repo / "personal" / "bare.md"
     note.write_text("no links here at all. " * 30, encoding="utf-8")
     assert _orphan_notes(gg.run_lane_b([note], repo)) == ["personal/bare.md"]
+
+
+# --- #714: missing-links review sees head + tail inside the budget, and skips hubs on a path list ---
+
+
+def test_window_note_returns_short_notes_whole() -> None:
+    assert gg.window_note("short body") == "short body"
+    exact = "x" * gg.NOTE_WINDOW_CHARS
+    assert gg.window_note(exact) == exact
+
+
+def test_window_note_keeps_head_and_tail_within_the_budget() -> None:
+    body = "HEADMARK " + "m" * 50_000 + " TAILMARK"
+    window = gg.window_note(body)
+    assert len(window) <= gg.NOTE_WINDOW_CHARS
+    assert window.startswith("HEADMARK")
+    assert window.endswith("TAILMARK")
+    assert gg.WINDOW_MARKER in window
+
+
+def test_prompt_shows_a_proper_noun_that_sits_only_in_the_tail() -> None:
+    body = "intro prose. " * 400 + "\n## Related\nTalked with Jane Doe about Orbit Wars."
+    assert len(body) > gg.NOTE_WINDOW_CHARS
+    prompt = gg.build_lane_b_prompt([("personal/long.md", body)])
+    assert "Jane Doe" in prompt
+    assert "Orbit Wars" in prompt
+
+
+def test_prompt_budget_is_bounded_by_notes_times_window() -> None:
+    notes = [(f"personal/n{i}.md", "z" * 500_000) for i in range(gg.MAX_NOTES_LANE_B)]
+    static = len(gg.build_lane_b_prompt([]))
+    per_note_overhead = len("\n\n### personal/n00.md\n")
+    prompt = gg.build_lane_b_prompt(notes)
+    assert len(prompt) <= static + gg.MAX_NOTES_LANE_B * (gg.NOTE_WINDOW_CHARS + per_note_overhead)
+
+
+def test_hub_notes_are_excluded_from_the_review_and_logged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Key Decisions.md"
+    hub.write_text("decision log. " * 5000, encoding="utf-8")
+    plain = repo / "personal" / "plain.md"
+    plain.write_text("plain note with [[a link]]", encoding="utf-8")
+    seen: list[str] = []
+
+    def model(prompt: str, _model: str) -> dict:
+        seen.append(prompt)
+        return {"missing_links": [], "orphans": []}
+
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", model)
+    result = gg.run_lane_b([hub, plain], repo)
+    assert "### brain/Key Decisions.md" not in seen[0]
+    assert "### personal/plain.md" in seen[0]
+    assert result["coverage"]["excluded"] == ["brain/Key Decisions.md"]
+    # Excluded from the model's review, not from Python orphan detection.
+    assert _orphan_notes(result) == ["brain/Key Decisions.md"]
+
+
+def test_only_hub_notes_skip_the_model_call_entirely(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Gotchas.md"
+    hub.write_text("[[x]] " * 10, encoding="utf-8")
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: pytest.fail("model called"))
+    result = gg.run_lane_b([hub], repo)
+    assert result["missing_links"] == []
+    assert result["coverage"]["excluded"] == ["brain/Gotchas.md"]
+
+
+def test_windowed_notes_are_reported_as_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    long_note = repo / "personal" / "long.md"
+    long_note.write_text("prose [[x]] " * 500, encoding="utf-8")
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+    assert gg.run_lane_b([long_note], repo)["coverage"]["windowed"] == ["personal/long.md"]
+
+
+def test_excluded_paths_cover_the_audit_accumulating_hubs() -> None:
+    import vault_audit
+
+    assert vault_audit.ACCUMULATING_HUB_FILES <= gg.LANE_B_EXCLUDED_PATHS
+
+
+def test_gardener_log_reports_the_missing_link_coverage_it_gave_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Gotchas.md"
+    hub.write_text("[[x]] " * 10, encoding="utf-8")
+    note.write_text("long [[x]] prose " * 300, encoding="utf-8")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+
+    assert gg.run_gardener("s", repo, notes_override=[note, hub], check_debounce=False) == 0
+
+    log_text = (repo / gg.GARDENER_LOG_REL).read_text()
+    assert "lane_b coverage: 1 hub note(s) not reviewed for missing links, 1 reviewed head+tail only" in log_text
