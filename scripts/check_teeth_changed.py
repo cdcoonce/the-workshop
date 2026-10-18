@@ -299,12 +299,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         specs = find_specs(repo)
-        if not specs:
-            print(
-                "no teeth specs found — discovery is broken, since this gate checked nothing",
-                file=sys.stderr,
-            )
-            return 1
+    except GitError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if not specs:
+        print(
+            "no teeth specs found — discovery is broken, since this gate checked nothing",
+            file=sys.stderr,
+        )
+        return 1
+    try:
         selected = select_specs(repo, args.base)
     except GitError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
