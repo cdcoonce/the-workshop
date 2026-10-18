@@ -206,3 +206,30 @@ def test_discovers_this_repos_specs_under_both_naming_conventions() -> None:
         "plugins/workbench/skills/detector-teeth-check/scripts/tests/teeth_check.teeth.json"
         in specs
     )
+
+
+def _assert_clean_error(capsys: pytest.CaptureFixture[str], code: int) -> None:
+    err = capsys.readouterr().err
+    assert code == 1
+    assert err.startswith("ERROR:")
+    assert "Traceback" not in err
+
+
+def test_git_missing_is_a_clean_error_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def no_git(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(subprocess, "run", no_git)
+
+    _assert_clean_error(capsys, main([str(tmp_path)]))
+
+
+def test_a_nonzero_git_exit_in_find_specs_is_a_clean_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """git refusing the directory (not a repository) must read the same as git missing."""
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+
+    _assert_clean_error(capsys, main([str(tmp_path)]))
