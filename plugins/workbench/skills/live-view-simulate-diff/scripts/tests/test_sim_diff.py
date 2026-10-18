@@ -6,7 +6,9 @@ Run from the scripts/ directory:
 
 import hashlib
 import json
+import math
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,7 @@ from sim_diff import (  # noqa: E402
     main,
     mask_noncode,
     new_duplicate_keys,
+    _rel,
     rewrite_refs,
 )
 
@@ -413,3 +416,28 @@ def test_shadow_table_patch_reaches_the_simulation_query(tmp_path):
     run_main(tmp_path, raw, wh)
     sim = [q for q in wh.queries if "/*sim_diff:simulated*/" in q.lower()]
     assert sim and "keep = 1" in sim[0]
+
+
+def test_decimal_pair_within_rel_tol_is_noise():
+    base = [("a", Decimal("1658655.740000"))]
+    prop = [("a", Decimal("1658655.740001"))]  # ~6e-13 relative
+    d = _diff(base, prop, rel_tol=1e-9)
+    assert d.changed == []
+    assert d.noise_count == 1
+
+
+def test_decimal_real_regression_is_changed_with_finite_rel():
+    base = [("a", Decimal("100.00"))]
+    prop = [("a", Decimal("137.00"))]
+    d = _diff(base, prop)
+    assert len(d.changed) == 1
+    assert d.worst is not None and math.isfinite(d.worst.rel)
+    assert math.isfinite(_rel(Decimal("100.00"), Decimal("137.00")))
+
+
+def test_mixed_decimal_and_float_pair_does_not_raise():
+    near = _diff([("a", Decimal("1658655.74"))], [("a", 1_658_655.74 * (1 + 1e-14))])
+    assert near.changed == [] and near.noise_count == 1
+    far = _diff([("a", Decimal("100.00"))], [("a", 137.0)])
+    assert len(far.changed) == 1
+    assert math.isfinite(_rel(137.0, Decimal("100.00")))
