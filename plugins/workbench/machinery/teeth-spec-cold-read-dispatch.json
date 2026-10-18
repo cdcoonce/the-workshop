@@ -795,6 +795,48 @@
       "oracle": "real",
       "find": "    if not os.path.isfile(path):\n        raise _Fail(4, f\"teeth_check.py is not at {path}; pass --teeth-check FILE\")\n",
       "replace": ""
+    },
+    {
+      "label": "build extra 1: _run_git lets a timeout escape [test_run_gh_and_run_git_report_a_program_that_outlives_its_timeout_as_none]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        return _execute([\"git\", *args], cwd, timeout)\n    except (subprocess.TimeoutExpired, OSError):\n",
+      "replace": "        return _execute([\"git\", *args], cwd, timeout)\n    except OSError:\n"
+    },
+    {
+      "label": "build extra 2: the Body hash line carries the full 64-hex hash [test_the_body_sits_byte_for_byte_inside_a_fence_one_backtick_longer]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            f\"Body hash: {digest}\",\n",
+      "replace": "            f\"Body hash: {body_hash(body)}\",\n"
+    },
+    {
+      "label": "build extra 3: the sections are joined without a separator [test_reader_md_has_the_nine_sections_of_the_repository_spec_in_file_order]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    spec_text = \"\\n\\n\".join(_expand(text, values) for _, text in sections) + \"\\n\"\n",
+      "replace": "    spec_text = \"\".join(_expand(text, values) for _, text in sections) + \"\\n\"\n"
+    },
+    {
+      "label": "build extra 4: an empty string counts as a set setting [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    return value if isinstance(value, str) and value else None\n",
+      "replace": "    return value if isinstance(value, str) else None\n"
+    },
+    {
+      "label": "build extra 5: the gh call passes its own one-second timeout [test_gh_is_called_once_through_api_without_jq]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    result = _run_gh([\"api\", f\"repos/{repo}/issues/{issue}\"])\n",
+      "replace": "    result = _run_gh([\"api\", f\"repos/{repo}/issues/{issue}\"], 1)\n"
+    },
+    {
+      "label": "build extra 6: --checkout is not checked to be a directory [test_a_checkout_that_is_not_a_directory_is_a_usage_error]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    for flag, directory in ((\"--scratch-root\", scratch_root), (\"--checkout\", checkout)):\n",
+      "replace": "    for flag, directory in ((\"--scratch-root\", scratch_root),):\n"
     }
   ]
 }

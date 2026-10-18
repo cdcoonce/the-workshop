@@ -1202,6 +1202,21 @@ def test_run_gh_and_run_git_report_a_program_that_cannot_run_as_none(tmp_path, m
     assert code == 0 and out.startswith("git version")
 
 
+def test_run_gh_and_run_git_report_a_program_that_outlives_its_timeout_as_none(tmp_path, monkeypatch):
+    """A ``gh`` or ``git`` that hangs is the same as one that cannot run: the
+    seams return ``None`` (``build`` exits 4) rather than raising
+    ``subprocess.TimeoutExpired`` or waiting the hang out."""
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir()
+    for name in ("gh", "git"):
+        stub = stub_dir / name
+        stub.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(30)\n")
+        stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(stub_dir))
+    assert mod._run_gh(["api", "x"], 0.3) is None
+    assert mod._run_git(["status"], str(tmp_path), 0.3) is None
+
+
 # --------------------------------------------------------------------------- #
 # the body, its hash and --expect-body
 # --------------------------------------------------------------------------- #
@@ -1285,6 +1300,7 @@ def test_gh_is_called_once_through_api_without_jq(env):
     result = env.build()
     assert result.code == 0, result.err
     assert [args for args, _ in env.gh_calls] == [["api", f"repos/{env.repo}/issues/{env.issue}"]]
+    assert [timeout for _, timeout in env.gh_calls] == [30]
 
 
 @pytest.mark.parametrize(
@@ -1321,6 +1337,7 @@ FORK_CASES = [
     pytest.param("see Target: afk/epic-7\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="a-mid-line-target-is-prose"),
     pytest.param("Target: afk/epic-7 and more\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="trailing-text-is-not-a-target-line"),
     pytest.param("Text.\n", None, (), "main", "default", id="no-settings-file-is-main"),
+    pytest.param("Text.\n", 'integration_target = ""\n', (), "main", "default", id="an-empty-setting-is-unset"),
     pytest.param("Text.\n", TRUNK_AND_INTEGRATION, ("--fork-branch", "override-branch"), "override-branch", "override", id="fork-branch-wins"),
     pytest.param("Target: afk/epic-7\n", TRUNK_AND_INTEGRATION, ("--fork-branch", "override-branch"), "override-branch", "override", id="fork-branch-beats-the-target-line"),
 ]
@@ -1773,7 +1790,7 @@ def test_the_body_sits_byte_for_byte_inside_a_fence_one_backtick_longer(env, bod
     longest = max((len(run) for run in re.findall(r"`+", body)), default=0)
     assert len(block.fence) == max(4, longest + 1)
     assert block.content == body
-    assert f"Body hash: {result.manifest['body_hash']}" in block.head
+    assert re.search(r"^Body hash: ([0-9a-f]+)$", block.head, re.MULTILINE).group(1) == result.manifest["body_hash"]
 
 
 def test_reader_md_has_the_nine_sections_of_the_repository_spec_in_file_order(env, tmp_path):
@@ -1808,6 +1825,7 @@ def test_reader_md_has_the_nine_sections_of_the_repository_spec_in_file_order(en
             expected = expected.replace(token, value)
         position = reader.find(expected)
         assert position > last, f"section {name!r} is missing or out of file order"
+        assert f"\n## {name}\n" in reader, f"the heading of {name!r} does not start a line"
         last = position
     outside = outside_code_fences(reader)
     for token in tokens:
