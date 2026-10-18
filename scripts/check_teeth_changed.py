@@ -30,10 +30,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.check_teeth_anchors import find_specs
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_TEETH_CHECK = _REPO_ROOT / "plugins/workbench/skills/detector-teeth-check/scripts/teeth_check.py"
+from scripts.check_teeth_anchors import _REPO_ROOT, _TEETH_CHECK, GitError, find_specs
 
 
 class BaseUnresolvable(Exception):
@@ -41,9 +38,13 @@ class BaseUnresolvable(Exception):
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
-    )
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=str(repo), capture_output=True, text=True, check=False
+        )
+    except OSError as error:
+        # git missing from PATH (or not executable) never reaches a returncode.
+        raise GitError(f"could not run git: {error}") from error
 
 
 def changed_paths(repo: Path, base: str) -> set[str]:
@@ -285,8 +286,9 @@ def main(argv: list[str] | None = None) -> int:
     int
         0 when every selected spec ran clean or none was selected; 1 when a
         selected spec failed (a survivor, an unapplied or unscored row, a
-        broken control, a refused run) or no spec was found at all; 2 when
-        the base ref cannot be resolved.
+        broken control, a refused run), no spec was found at all, or git
+        could not be run (``ERROR:`` on stderr); 2 when the base ref cannot
+        be resolved.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", required=True, help="git revision to diff the working tree against")
@@ -295,15 +297,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     repo = args.repo.resolve()
 
-    specs = find_specs(repo)
-    if not specs:
-        print(
-            "no teeth specs found — discovery is broken, since this gate checked nothing",
-            file=sys.stderr,
-        )
-        return 1
     try:
+        specs = find_specs(repo)
+        if not specs:
+            print(
+                "no teeth specs found — discovery is broken, since this gate checked nothing",
+                file=sys.stderr,
+            )
+            return 1
         selected = select_specs(repo, args.base)
+    except GitError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     except BaseUnresolvable as exc:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
