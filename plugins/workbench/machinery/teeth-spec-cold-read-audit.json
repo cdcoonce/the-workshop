@@ -778,7 +778,7 @@
       "replace": "    from evals._harness import transcript  # noqa: F401\n\n    return \"_\".join(value.split())"
     },
     {
-      "label": "AC preamble: the script has no main guard [test_script_is_a_runnable_stdlib_program]",
+      "label": "AC preamble: the main guard calls main() without SystemExit, so the exit status is lost [test_script_run_as_a_program_on_a_partial_transcript_prints_then_exits_3]",
       "file": "engine/cold_read_audit.py",
       "oracle": "real",
       "find": "if __name__ == \"__main__\":\n    raise SystemExit(main())",
@@ -832,6 +832,321 @@
       "oracle": "real",
       "find": "\"--role\", choices=(\"cold\", \"fidelity\"), default=\"cold\"",
       "replace": "\"--role\", default=\"cold\""
+    },
+    {
+      "label": "teeth pass D48: main guard compares __name__ with a misspelt string (CLI does nothing) [test_script_run_as_a_program_prints_one_audit_line_and_exits_0]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if __name__ == \"__main__\":",
+      "replace": "if __name__ == \"__main_\":"
+    },
+    {
+      "label": "teeth pass D49: main guard body commented out (CLI does nothing) [test_script_run_as_a_program_prints_one_audit_line_and_exits_0]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    raise SystemExit(main())",
+      "replace": "    pass  # raise SystemExit(main())"
+    },
+    {
+      "label": "teeth pass D50: future import commented out [test_script_preamble_is_code_not_text]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "from __future__ import annotations\n",
+      "replace": "# from __future__ import annotations\n"
+    },
+    {
+      "label": "teeth pass C38: heredoc: the opener's own line is dropped with the body [test_heredoc_opener_line_still_counts]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        kept.append(line)\n        for match in HEREDOC_PATTERN.finditer(line):\n            word = next(group for group in match.group(2, 3, 4) if group is not None)\n            waiting.append((word, match.group(1) == \"-\"))",
+      "replace": "        opened = False\n        for match in HEREDOC_PATTERN.finditer(line):\n            word = next(group for group in match.group(2, 3, 4) if group is not None)\n            waiting.append((word, match.group(1) == \"-\"))\n            opened = True\n        if not opened:\n            kept.append(line)"
+    },
+    {
+      "label": "teeth pass C41: segment does not end at ; [test_standalone_issue_number_decides_comments_fetch]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "SEGMENT_END = re.compile(r\"[;&|\\n]\")",
+      "replace": "SEGMENT_END = re.compile(r\"[&|\\n]\")"
+    },
+    {
+      "label": "teeth pass C29: path forms: only an absolute path before gh accepted [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PROGRAM = r\"(?P<program>(?:[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./=-])\"",
+      "replace": "PROGRAM = r\"(?P<program>(?:/[^\\s;&|()`\\x22\\x27]*/)?gh)(?![\\w./=-])\""
+    },
+    {
+      "label": "teeth pass C30: assignment values: single-quoted value not skipped [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "(?:[A-Za-z_]\\w*=(?:\\x22[^\\x22]*\\x22|\\x27[^\\x27]*\\x27|\\S*)\\s+)*\"",
+      "replace": "(?:[A-Za-z_]\\w*=(?:\\x22[^\\x22]*\\x22|\\S*)\\s+)*\""
+    },
+    {
+      "label": "teeth pass C31: assignment values: an empty value not skipped [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\\x27[^\\x27]*\\x27|\\S*)\\s+)*\"",
+      "replace": "\\x27[^\\x27]*\\x27|\\S+)\\s+)*\""
+    },
+    {
+      "label": "teeth pass C32: assignment names: lower-case names not skipped [test_gh_invocation_counts_at_each_command_position]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "(?:[A-Za-z_]\\w*=(?:\\x22",
+      "replace": "(?:[A-Z_]\\w*=(?:\\x22"
+    },
+    {
+      "label": "teeth pass C57: flattened content keeps only the first text block [test_every_text_block_of_a_list_result_is_read]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "return \"\\n\".join(parts)",
+      "replace": "return \"\".join(parts[:1])"
+    },
+    {
+      "label": "teeth pass C35: any tool whose input carries a command is treated as Bash [test_only_bash_tool_uses_are_commands]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "bash_uses = [use for use in uses if use.name == BASH_TOOL]",
+      "replace": "bash_uses = [use for use in uses if use.name == BASH_TOOL or use.command]"
+    },
+    {
+      "label": "teeth pass C09: scratch-dir path not regex-escaped [test_scratch_dir_is_matched_literally]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "re.compile(re.escape(path) + ",
+      "replace": "re.compile(path + "
+    },
+    {
+      "label": "teeth pass C17: probe_build does not exempt the preflight command [test_a_preflight_command_that_names_a_probe_is_still_not_a_probe]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    for use in bash_uses:\n        if use.preflight or use.result is None:\n            continue\n        if PROBE_PATTERN.search(use.command):",
+      "replace": "    for use in bash_uses:\n        if use.result is None:\n            continue\n        if PROBE_PATTERN.search(use.command):"
+    },
+    {
+      "label": "teeth pass E15: scratch also searches the result text [test_patterns_read_the_command_never_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if pattern.search(use.command):",
+      "replace": "        if pattern.search(use.command + \"\\n\" + use.result.text):"
+    },
+    {
+      "label": "teeth pass E15b: scratch also searches the result text (NUL-separated) [test_patterns_read_the_command_never_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if pattern.search(use.command):",
+      "replace": "        if pattern.search(use.command + \"\\x00\" + use.result.text):"
+    },
+    {
+      "label": "teeth pass E16b: probe_build also searches the result text (NUL-separated, no accidental whitespace match) [test_patterns_read_the_command_never_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if PROBE_PATTERN.search(use.command):",
+      "replace": "        if PROBE_PATTERN.search(use.command + \"\\x00\" + use.result.text):"
+    },
+    {
+      "label": "teeth pass C10: is_error read as presence of the key [test_is_error_false_is_not_an_error]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "is_error = block.get(\"is_error\") is True",
+      "replace": "is_error = \"is_error\" in block"
+    },
+    {
+      "label": "teeth pass D01: denial prefix matched anywhere in an error result [test_denial_prefix_must_begin_an_error_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "return is_error and text.startswith(DENIAL_PREFIX)",
+      "replace": "return is_error and DENIAL_PREFIX in text"
+    },
+    {
+      "label": "teeth pass E19: denial prefix lengthened to 'Permission for this action has been denied' [test_denial_prefix_must_begin_an_error_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "DENIAL_PREFIX = \"Permission for this action\"",
+      "replace": "DENIAL_PREFIX = \"Permission for this action has been denied\""
+    },
+    {
+      "label": "teeth pass D02: any permissionDecision other than allow is a denial [test_only_a_permission_decision_of_reject_is_a_denial]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "decision.get(\"decision\") == \"reject\"",
+      "replace": "decision.get(\"decision\") != \"allow\""
+    },
+    {
+      "label": "teeth pass D06: complete: hand-back must have a result [test_hand_back_without_a_result_record_still_completes]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "complete = last_stop == \"end_turn\" or any(use.name == HANDBACK_TOOL for use in uses)",
+      "replace": "complete = last_stop == \"end_turn\" or any(use.name == HANDBACK_TOOL and use.result is not None for use in uses)"
+    },
+    {
+      "label": "teeth pass D07: complete: the hand-back must be the last tool use [test_hand_back_need_not_be_the_last_call]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "complete = last_stop == \"end_turn\" or any(use.name == HANDBACK_TOOL for use in uses)",
+      "replace": "complete = last_stop == \"end_turn\" or bool(uses and uses[-1].name == HANDBACK_TOOL)"
+    },
+    {
+      "label": "teeth pass D05: complete: a None stop_reason keeps the previous stop_reason [test_earlier_end_turn_then_a_null_stop_reason_is_incomplete]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "last_stop = message.get(\"stop_reason\")",
+      "replace": "last_stop = message.get(\"stop_reason\") or last_stop"
+    },
+    {
+      "label": "teeth pass D08: complete: max_tokens and stop_sequence count as finished [test_only_end_turn_is_a_finished_turn]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "complete = last_stop == \"end_turn\" or",
+      "replace": "complete = last_stop in (\"end_turn\", \"max_tokens\", \"stop_sequence\") or"
+    },
+    {
+      "label": "teeth pass C51: comments_seen looks at the first comments fetch only [test_comments_seen_reads_every_comments_fetch_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "comments_seen = int(any(use.seen for use in bash_uses))",
+      "replace": "comments_seen = int(any(use.seen for use in [u for u in bash_uses if u.fetch][:1]))"
+    },
+    {
+      "label": "teeth pass C52: comments_seen looks at the last comments fetch only [test_comments_seen_reads_every_comments_fetch_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "comments_seen = int(any(use.seen for use in bash_uses))",
+      "replace": "comments_seen = int(any(use.seen for use in [u for u in bash_uses if u.fetch][-1:]))"
+    },
+    {
+      "label": "teeth pass C19: PREFLIGHT ok matched anywhere in the result, not at its start [test_preflight_words_must_begin_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if text.startswith(PREFLIGHT_OK):",
+      "replace": "if PREFLIGHT_OK in text:"
+    },
+    {
+      "label": "teeth pass C20: PREFLIGHT failed matched anywhere in the result [test_preflight_words_must_begin_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if text.startswith(PREFLIGHT_FAILED):",
+      "replace": "if PREFLIGHT_FAILED in text:"
+    },
+    {
+      "label": "teeth pass E20: PREFLIGHT ok prefix lengthened to 'PREFLIGHT ok scratch=' [test_preflight_words_must_begin_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PREFLIGHT_OK = \"PREFLIGHT ok\"",
+      "replace": "PREFLIGHT_OK = \"PREFLIGHT ok scratch=\""
+    },
+    {
+      "label": "teeth pass E21: PREFLIGHT failed prefix lengthened to 'PREFLIGHT failed cause=' [test_preflight_words_must_begin_the_result]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "PREFLIGHT_FAILED = \"PREFLIGHT failed\"",
+      "replace": "PREFLIGHT_FAILED = \"PREFLIGHT failed cause=\""
+    },
+    {
+      "label": "teeth pass C21: preflight read from the result of any tool, not only Bash [test_preflight_is_read_from_bash_results_only]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "preflight_uses = [use for use in bash_uses if use.preflight]",
+      "replace": "preflight_uses = [use for use in uses if use.name != HANDBACK_TOOL and use.result is not None and _preflight_kind(use.result.text) and not setattr(use, \"preflight\", _preflight_kind(use.result.text))]"
+    },
+    {
+      "label": "teeth pass C22: preflight-failed counts only tool uses after the preflight command [test_preflight_failed_fires_for_a_tool_use_before_the_preflight]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    failed_then_went_on = preflight == \"failed\" and any(\n        use is not preflight_uses[0] and use.name != HANDBACK_TOOL for use in uses\n    )",
+      "replace": "    failed_then_went_on = preflight == \"failed\" and any(\n        use.name != HANDBACK_TOOL for use in uses[uses.index(preflight_uses[0]) + 1 :]\n    )"
+    },
+    {
+      "label": "teeth pass E22: cold-read marker lengthened to '## Cold read -' [test_cold_read_marker_is_enough_without_its_continuation]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "COLD_READ_MARKER = \"## Cold read\"",
+      "replace": "COLD_READ_MARKER = \"## Cold read -\""
+    },
+    {
+      "label": "teeth pass E01: flattening: a non-string text field is joined unchecked [test_list_result_with_untrusted_members_is_read_from_its_text_blocks]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": " and isinstance(block.get(\"text\"), str):",
+      "replace": ":"
+    },
+    {
+      "label": "teeth pass E02: flattening: non-object list members are not skipped [test_list_result_with_untrusted_members_is_read_from_its_text_blocks]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if isinstance(block, dict) and block.get(\"type\") == \"text\"",
+      "replace": "if block.get(\"type\") == \"text\""
+    },
+    {
+      "label": "teeth pass E06: tool_use id used as a set member without the str check [test_unhashable_ids_do_not_crash_and_do_not_hide_the_valid_commands]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "                if isinstance(use.id, str):\n                    if use.id in use_ids:",
+      "replace": "                if True:\n                    if use.id in use_ids:"
+    },
+    {
+      "label": "teeth pass E08b: permissionDecision used without the dict check (None still tolerated) [test_denial_fields_of_the_wrong_type_on_a_real_result_are_read_safely]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "if isinstance(decision, dict) and decision.get(\"decision\") == \"reject\":",
+      "replace": "if decision is not None and decision.get(\"decision\") == \"reject\":"
+    },
+    {
+      "label": "teeth pass C56: RecursionError not caught parsing a fetch result [test_deeply_nested_fetch_result_is_not_a_crash]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    except (ValueError, RecursionError):\n        return False",
+      "replace": "    except ValueError:\n        return False"
+    },
+    {
+      "label": "teeth pass D21: RecursionError not caught reading the meta file [test_deeply_nested_meta_file_is_unknown_not_a_crash]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "except (OSError, ValueError, RecursionError):",
+      "replace": "except (OSError, ValueError):"
+    },
+    {
+      "label": "teeth pass B-MK45a: message.content list-guard dropped (str content falls through the comprehension) [test_malformed_record_fields_are_untrusted]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    content = message.get(\"content\")\n    if not isinstance(content, list):\n        return []\n    return [block for block in content if isinstance(block, dict)]",
+      "replace": "    content = message.get(\"content\")\n    return [block for block in content if isinstance(block, dict)]"
+    },
+    {
+      "label": "teeth pass V6: entry written with four-space indentation [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
+      "file": "vendor-map.json",
+      "oracle": "real",
+      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n",
+      "replace": "  {\n    \"kind\": \"file\",\n    \"source\": \"engine/cold_read_audit.py\",\n    \"target\": \".claude/scripts/cold_read_audit.py\"\n  },\n"
+    },
+    {
+      "label": "teeth pass V7: audit entry placed before the dispatch entry (not appended) [test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation]",
+      "file": "vendor-map.json",
+      "oracle": "real",
+      "find": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude/scripts/cold_read_dispatch.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n",
+      "replace": "    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_audit.py\",\n      \"target\": \".claude/scripts/cold_read_audit.py\"\n    },\n    {\n      \"kind\": \"file\",\n      \"source\": \"engine/cold_read_dispatch.py\",\n      \"target\": \".claude/scripts/cold_read_dispatch.py\"\n    },\n"
+    },
+    {
+      "label": "teeth pass: the unreadable-transcript message is reworded [test_unreadable_transcript_path_exits_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "cold_read_audit: cannot read transcript {transcript}:",
+      "replace": "cold_read_audit: cannot read {transcript}:"
+    },
+    {
+      "label": "teeth pass: whitespace in an untrusted value becomes a hyphen instead of an underscore [test_spaces_in_an_untrusted_value_do_not_break_the_line]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    return \"_\".join(value.split())",
+      "replace": "    return \"-\".join(value.split())"
+    },
+    {
+      "label": "teeth pass: the missing-transcript exit prints nothing [test_missing_transcript_path_exits_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        print(f\"cold_read_audit: cannot read transcript {transcript}: {error.strerror or error}\", file=sys.stderr)\n",
+      "replace": ""
     }
   ]
 }
