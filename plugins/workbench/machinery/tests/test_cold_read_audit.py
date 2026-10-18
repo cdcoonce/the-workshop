@@ -787,6 +787,7 @@ HEREDOC_CASES = [
     pytest.param("cat <<EOF\nbody\nEOF\ngh label list", "1", id="exact-terminator-ends-the-body"),
     pytest.param("cat <<EOF\ngh label list", "0", id="unterminated-hides-the-rest"),
     pytest.param("cat <<< EOF\ngh label list", "1", id="here-string-is-no-heredoc"),
+    pytest.param("cat <<<EOF\ngh label list", "1", id="here-string-without-a-space-is-no-heredoc"),
     pytest.param("cat <<EOF\nEOFX\ngh label list\nEOF", "0", id="longer-line-is-not-the-terminator"),
     pytest.param("cat <<EOF\nEOF extra\ngh label list\nEOF", "0", id="terminator-plus-text-is-not-the-terminator"),
     pytest.param("cat <<-EOF\n  EOF\ngh label list\nEOF", "0", id="spaces-do-not-end-a-dash-body"),
