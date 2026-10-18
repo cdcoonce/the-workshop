@@ -1007,6 +1007,13 @@
       "oracle": "real",
       "find": "    if blocking or malformed:\n        return HITS",
       "replace": "    if blocking or malformed or stray:\n        return HITS"
+    },
+    {
+      "label": "a backticked waiver path may swallow a backtick, so a space-and-backtick name is read as waivable (#979)",
+      "file": "../description_blocks.py",
+      "oracle": "real",
+      "find": "(?P<path>`[^`]+`|\\S+): (?P<reason>\\S.*)$",
+      "replace": "(?P<path>`.+?`|\\S+): (?P<reason>\\S.*)$"
     }
   ]
 }

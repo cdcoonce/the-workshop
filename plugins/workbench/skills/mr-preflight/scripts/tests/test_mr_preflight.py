@@ -1341,3 +1341,22 @@ def test_a_stray_waiver_alone_does_not_block_a_clean_sweep(repo: Path) -> None:
 
     assert result.returncode == CLEAN, result.stdout
     assert f"waiver outside sweep block: {stray}" in result.stdout.splitlines()
+
+
+def test_a_path_holding_a_space_and_a_backtick_cannot_be_waived(repo: Path) -> None:
+    """Unsupported by design (#979): such a name is reported as a surviving
+    reference and its waiver line is `malformed waiver:`, so the MR blocks
+    instead of the hit being silently waived."""
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA\n")
+    write(repo, "docs/weird file`name.md", "LEGACY_SCHEMA\n")
+    base = commit(repo, "initial")
+    write(repo, "dbt_project.yml", "schema: LEGACY_SCHEMA_RAW\n")
+    commit(repo, "rename")
+    line = "- waive LEGACY_SCHEMA `docs/weird file`name.md`: x"
+    description = describe(repo, f"{line}\n")
+
+    result = sweep(repo, base, "--description", str(description))
+
+    assert result.returncode == HITS, result.stdout
+    assert f"malformed waiver: {line}" in result.stdout.splitlines()
+    assert not any(ln.startswith("waived:") for ln in result.stdout.splitlines())
