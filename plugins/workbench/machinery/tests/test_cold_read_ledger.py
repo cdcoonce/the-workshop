@@ -828,15 +828,20 @@ def test_a_void_line_with_a_known_cause_and_blocking_zero_is_a_valid_record(caus
         ({"void_cause": None}, "void_cause"),
         ({"void_cause": "other"}, "void_cause"),
         ({"void_cause": "NO-PROBE-BUILD"}, "void_cause"),
+        ({"void_cause": ""}, "void_cause"),
         ({"blocking": 3}, "blocking"),
         ({"blocking": 1}, "blocking"),
+        ({"void_cause": "comments-read", "blocking": 3}, "blocking"),
+        ({"void_cause": "comments-read", "blocking": 1}, "blocking"),
     ],
-    ids=["no-cause", "unknown-cause", "cause-case", "blocking-3", "blocking-1"],
+    ids=["no-cause", "unknown-cause", "cause-case", "empty-cause", "blocking-3", "blocking-1",
+         "blocking-3-comments-read", "blocking-1-comments-read"],
 )
 def test_a_void_line_needs_a_known_cause_and_blocking_zero(over, word):
-    """Guards a VOID line accepted without a cause, with a cause outside its
-    set, or with blocking findings: such a line is an error record, so the
-    comment still counts as a read and shows as unledgered."""
+    """Guards a VOID line accepted without a cause, with an empty cause or one
+    outside its set, or with blocking findings under either cause: such a line
+    is an error record, so the comment still counts as a read and shows as
+    unledgered."""
     (rec,) = parse_ledger_lines(void_line(**over))
     assert word in rec["error"]
     s = summarize([verdict_comment(T1, "VOID", void_line(**over))])
@@ -854,7 +859,11 @@ def test_a_lowercase_void_verdict_is_an_error_record():
 @pytest.mark.parametrize(
     "verdict", ["BUILD", "REWRITE", "NOT-DISPATCH-READY", "BUILD-exempt"]
 )
-@pytest.mark.parametrize("cause", ["no-probe-build", "comments-read", "other", "NO-PROBE-BUILD"])
+@pytest.mark.parametrize(
+    "cause",
+    ["no-probe-build", "comments-read", "other", "NO-PROBE-BUILD", ""],
+    ids=["no-probe-build", "comments-read", "other", "upper-case", "empty"],
+)
 def test_a_void_cause_on_a_non_void_line_is_accepted_and_kept_as_written(verdict, cause):
     """Guards the cause check leaking past a VOID line: only a VOID line has a
     closed set of causes, any other verdict keeps the value as written."""
@@ -884,11 +893,14 @@ def test_degraded_in_its_vocabulary_is_kept_verbatim(value):
 @pytest.mark.parametrize(
     "value",
     ["bogus", "denied,", ",denied", "none,denied", "denied,none", "DENIED", "gh_used",
-     "denied,bogus"],
+     "denied,bogus", "preflight", "deniedX", "xdenied", "my-denied-x", "denied-ish",
+     "none,gh-used", "agent-type,none,denied", "", "denied,,gh-used"],
 )
 def test_degraded_outside_its_vocabulary_is_an_error_record(value):
-    """Guards an unknown token, a stray comma or `none` combined with another
-    token being accepted: the comment must count as a read and show as
+    """Guards an unknown token, a token that only starts with or contains a
+    known one (`deniedX`, `xdenied`), the bare `preflight`, an empty value, an
+    empty item (`denied,,gh-used`, a stray comma) or `none` combined with
+    another token being accepted: the comment must count as a read and show as
     unledgered, never as an audited read."""
     (rec,) = parse_ledger_lines(read_line(degraded=value))
     assert "degraded" in rec["error"]
@@ -898,15 +910,16 @@ def test_degraded_outside_its_vocabulary_is_an_error_record(value):
     assert s["tokens_clean"] is None and s["tokens_degraded"] is None
 
 
+@pytest.mark.parametrize("cause", ["no-probe-build", "comments-read"])
 @pytest.mark.parametrize("value", ["denied", "none", "bogus", "none,denied", "denied,", ""])
-def test_degraded_on_a_void_line_is_kept_and_ignored_whatever_its_value(value):
-    """Guards the degraded check running on a VOID line (a void read with a
-    mangled degraded value would become a counted, unledgered read) and the
-    parser dropping the key from the VOID record it returns."""
-    (rec,) = parse_ledger_lines(void_line(degraded=value))
+def test_degraded_on_a_void_line_is_kept_and_ignored_whatever_its_value(cause, value):
+    """Guards the degraded check running on a VOID line, under either cause (a
+    void read with a mangled degraded value would become a counted, unledgered
+    read), and the parser dropping the key from the VOID record it returns."""
+    (rec,) = parse_ledger_lines(void_line(void_cause=cause, degraded=value))
     assert "error" not in rec
     assert rec["degraded"] == value
-    s = summarize([verdict_comment(T1, "VOID", void_line(degraded=value))])
+    s = summarize([verdict_comment(T1, "VOID", void_line(void_cause=cause, degraded=value))])
     assert (s["reads"], s["unledgered"], s["voided"]) == (0, 0, 1)
     assert s["degraded"] == []
 
@@ -1231,3 +1244,127 @@ def test_the_text_output_carries_no_clean_or_voided_count(tmp_path, capsys):
     lines = _run_text(tmp_path, capsys, _four_read_fixture())
     assert lines[3:] == ["  #7 read 2 degraded denied", "  #7 read 4 VOID no-probe-build"]
     assert "clean" not in "\n".join(lines) and "voided" not in "\n".join(lines)
+
+
+# -- closing the survivors of the independent teeth pass (PR #1227) ----------- #
+
+@pytest.mark.parametrize(
+    "over, word",
+    [
+        ({"tokens": "lots"}, "tokens"),
+        ({"seconds": "x"}, "seconds"),
+        ({"mutants": "many"}, "mutants"),
+        ({"advisory": "x"}, "advisory"),
+        ({"read": "x"}, "read"),
+        ({"body": "nothex"}, "body"),
+        ({"body": "0123456789a"}, "body"),
+    ],
+    ids=["tokens", "seconds", "mutants", "advisory", "read", "body-not-hex", "body-short"],
+)
+@pytest.mark.parametrize("cause", ["no-probe-build", "comments-read"])
+def test_a_void_line_is_validated_like_any_other_line(cause, over, word):
+    """Guards the integer fields and the 12-hex body hash being skipped for a
+    VOID line: a void line with `tokens=lots` or a bad body hash is an error
+    record, so the comment counts as a read and shows as unledgered."""
+    (rec,) = parse_ledger_lines(void_line(void_cause=cause, **over))
+    assert word in rec["error"]
+    s = summarize([verdict_comment(T1, "VOID", void_line(void_cause=cause, **over))])
+    assert (s["reads"], s["unledgered"], s["voided"]) == (1, 1, 0)
+
+
+def test_several_void_reads_are_counted_per_read_and_every_cost_is_summed():
+    """Guards `voided` counting distinct causes instead of reads, `void_causes`
+    being de-duplicated, `tokens_void` being the first or the largest void read
+    or the reads of one cause only, and one cause's seconds missing from
+    `seconds_total`."""
+    s = summarize([
+        verdict_comment(T1, "VOID", void_line(read=1, tokens=30, seconds=3)),
+        verdict_comment(T2, "VOID", void_line(read=2, tokens=40, seconds=4)),
+        verdict_comment(T3, "VOID", void_line(read=3, void_cause="comments-read",
+                                              tokens=500, seconds=5)),
+        verdict_comment(T4, "BUILD", read_line(read=3, verdict="BUILD", blocking=0,
+                                               tokens=7000, seconds=60)),
+    ])
+    assert s["reads"] == 1
+    assert s["voided"] == 3
+    assert s["void_causes"] == ["no-probe-build", "no-probe-build", "comments-read"]
+    assert s["tokens_void"] == 30 + 40 + 500
+    assert s["tokens_total"] == 30 + 40 + 500 + 7000
+    assert s["seconds_total"] == 3 + 4 + 5 + 60
+
+
+def test_tokens_degraded_sums_every_degraded_read():
+    """Guards `tokens_degraded` being the first degraded read's tokens or the
+    largest, instead of the sum over every read with a degraded value."""
+    s = summarize([
+        verdict_comment(T1, "REWRITE", read_line(read=1, degraded="denied", tokens=100)),
+        verdict_comment(T2, "REWRITE", read_line(read=2, degraded="gh-used", tokens=200)),
+        verdict_comment(T3, "REWRITE", read_line(read=3, degraded="agent-type,preflight-none",
+                                                 tokens=400)),
+        verdict_comment(T4, "REWRITE", read_line(read=4, degraded="denied", tokens="na")),
+    ])
+    assert s["tokens_degraded"] == 100 + 200 + 400
+    assert (s["clean"], s["tokens_clean"]) == (0, None)
+
+
+def test_a_void_reads_degraded_value_never_reaches_clean_or_the_degraded_sums():
+    """Guards a void read that carries `degraded=none` being added to `clean` and
+    `tokens_clean`, and one that carries `degraded=denied` being added to
+    `tokens_degraded`: its `degraded` value is kept and ignored."""
+    s = summarize([
+        verdict_comment(T1, "REWRITE", read_line(read=1, degraded="none", tokens=100)),
+        verdict_comment(T2, "VOID", void_line(read=2, degraded="none", tokens=500)),
+        verdict_comment(T3, "REWRITE", read_line(read=2, degraded="denied", tokens=20)),
+        verdict_comment(T4, "VOID", void_line(read=3, void_cause="comments-read",
+                                              degraded="denied", tokens=900)),
+    ])
+    assert s["degraded"] == ["none", "denied"]
+    assert s["clean"] == 1
+    assert s["tokens_clean"] == 100
+    assert s["tokens_degraded"] == 20
+    assert (s["voided"], s["tokens_void"]) == (2, 1400)
+
+
+def test_an_issue_with_only_void_reads_still_reports_their_cost_and_prints_each_line(
+    tmp_path, capsys
+):
+    """Guards the cost of a void read vanishing from the totals when the issue
+    has no counted read (reads is 0), a second VOID line in one issue not being
+    printed, and a VOID line printing the first void read's cause."""
+    comments = [
+        verdict_comment(T1, "VOID", void_line(read=1, tokens=700, seconds=40)),
+        verdict_comment(T2, "VOID", void_line(read=2, void_cause="comments-read",
+                                              tokens=300, seconds=20)),
+    ]
+    s = summarize(comments)
+    assert (s["reads"], s["unledgered"], s["voided"]) == (0, 0, 2)
+    assert (s["tokens_total"], s["seconds_total"], s["tokens_void"]) == (1000, 60, 1000)
+    lines = _run_text(tmp_path, capsys, comments)
+    assert lines[1].split() == ["#7", "0", "0", "-", "-", "1000", "-"]
+    assert lines[2] == "Totals: issues=1 reads=0 unledgered=0 tokens=1000 (na=0)"
+    assert lines[3:] == ["  #7 read 1 VOID no-probe-build", "  #7 read 2 VOID comments-read"]
+
+
+def test_each_extra_line_carries_the_number_of_its_own_issue(monkeypatch, capsys):
+    """Guards every extra line being tagged with the first `--issue`: a line
+    from the second or third issue names that issue."""
+    per_issue = {
+        7: [verdict_comment(T1, "BUILD", read_line(read=1, verdict="BUILD", blocking=0))],
+        9: [verdict_comment(T1, "REWRITE", read_line(read=4, degraded="denied"))],
+        11: [verdict_comment(T1, "VOID", void_line(read=2, void_cause="comments-read"))],
+    }
+    monkeypatch.setattr(ledger_mod, "_fetch_comments", lambda repo, issue: per_issue[issue])
+    assert main(["--repo", "o/r", "--issue", "7", "--issue", "9", "--issue", "11"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1 + 3 + 1 + 2
+    assert lines[-2:] == ["  #9 read 4 degraded denied", "  #11 read 2 VOID comments-read"]
+
+
+def test_a_degraded_line_carries_the_degraded_value_only(tmp_path, capsys):
+    """Guards the degraded line being suffixed with a `void_cause`: a counted
+    read that carries a `void_cause` key (kept as written) is not a void read,
+    and its line is `degraded <value>` and nothing else."""
+    comments = [verdict_comment(T1, "REWRITE", read_line(
+        read=4, degraded="denied", void_cause="comments-read"))]
+    assert summarize(comments)["voided"] == 0
+    assert _run_text(tmp_path, capsys, comments)[3:] == ["  #7 read 4 degraded denied"]

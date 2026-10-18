@@ -1548,14 +1548,17 @@ def test_void_reads_bullet_names_both_causes_the_confirmation_and_the_stop_rule(
         (
             "`probe_build=none` on a repo with a runnable gate (`void_cause=no-probe-build`)",
             "`comments_seen=1` (`void_cause=comments-read`)",
-            "confirms the flagged commands",
-            "ending in a ledger line with `verdict=VOID`",
+            "the conductor confirms the flagged commands from its `--details` lines before voiding",
+            "ending in a ledger line with `verdict=VOID`, `blocking=0` and the `void_cause`",
             "applies none of its findings and none of its body edit",
             "fresh reader once",
             "A read that stopped at a failed preflight is not void and posts no comment",
             "A second `VOID` line with the same `read=` stops the run",
         ),
     )
+    assert bullet.index("confirms the flagged commands") < bullet.index(
+        "The conductor posts a comment titled `## Cold read — VOID`"
+    ), "the conductor must confirm the flagged commands before it voids"
 
 
 def test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens() -> None:
@@ -1569,9 +1572,10 @@ def test_degraded_reads_bullet_counts_a_degraded_read_and_records_its_tokens() -
         (
             "is not void if it meets neither void condition above",
             "A read that is not void counts",
-            "records the tokens in `degraded`",
-            "records `degraded=none` on its ledger line",
-            "run by the conductor and its result quoted before the verdict is posted",
+            "records the tokens in `degraded`, and its digest says which",
+            "whose audit shows none of those five tokens records `degraded=none` on its ledger line",
+            "A reader command denied by the permission classifier is run by the conductor "
+            "and its result quoted before the verdict is posted",
         ),
     )
     assert "`denied`, `gh-used`, `agent-type`, `preflight-none` or `preflight-failed`" in bullet
@@ -1585,8 +1589,8 @@ def test_the_fields_bullet_names_the_degraded_and_void_cause_keys() -> None:
         "Fields.",
         fields,
         (
-            "`degraded=<none|token[,token]...>`",
-            "`void_cause=<no-probe-build|comments-read>`",
+            "`degraded=<none|token[,token]...>`, recorded by a writer that has audited the read,",
+            "`void_cause=<no-probe-build|comments-read>`, required when `verdict=VOID`.",
             "A `VOID` read is not a read: it adds nothing to the count.",
         ),
     )
