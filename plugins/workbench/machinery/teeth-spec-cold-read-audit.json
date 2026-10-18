@@ -811,6 +811,27 @@
       "oracle": "real",
       "find": "    if role == \"cold\" and scratch == \"none\":\n        flags.append(\"scratch-none\")\n    if role == \"cold\" and probe_build == \"none\":\n        flags.append(\"no-probe-build\")",
       "replace": "    if scratch in (\"none\", \"na\"):\n        flags.append(\"scratch-none\")\n    if probe_build in (\"none\", \"na\"):\n        flags.append(\"no-probe-build\")"
+    },
+    {
+      "label": "AC usage: --issue is optional [test_usage_errors_exit_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\"--issue\", required=True, type=int, metavar=\"N\"",
+      "replace": "\"--issue\", type=int, default=0, metavar=\"N\""
+    },
+    {
+      "label": "AC usage: --transcript is optional [test_transcript_option_is_required]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\"--transcript\", required=True, metavar=\"FILE\"",
+      "replace": "\"--transcript\", default=\"\", metavar=\"FILE\""
+    },
+    {
+      "label": "AC usage: --role accepts any text [test_usage_errors_exit_2]",
+      "file": "engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "\"--role\", choices=(\"cold\", \"fidelity\"), default=\"cold\"",
+      "replace": "\"--role\", default=\"cold\""
     }
   ]
 }
