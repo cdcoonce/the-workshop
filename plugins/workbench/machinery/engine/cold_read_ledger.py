@@ -11,7 +11,7 @@ HTML-comment ledger line, and this script is the one parser and aggregator.
 Ledger line (a verdict comment, ``## Cold read — <verdict>``, ends with
 exactly one)::
 
-    <!-- cold-read-ledger: v=1 read=<int> verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt> body=<12 hex> blocking=<int> rule_born=<int|na> advisory=<int> mutants=<int|na> survivors=<int|na> tokens=<int|na> seconds=<int|na> -->
+    <!-- cold-read-ledger: v=1 read=<int> verdict=<BUILD|REWRITE|NOT-DISPATCH-READY|BUILD-exempt|VOID> body=<12 hex> blocking=<int> rule_born=<int|na> advisory=<int> mutants=<int|na> survivors=<int|na> tokens=<int|na> seconds=<int|na> -->
 
 Tokens are ``key=value`` separated by single spaces; a value never contains a
 space. Required keys: ``v`` (must be ``1``), ``read``, ``verdict``, ``body``
@@ -20,6 +20,17 @@ other key is optional on read, and an unknown extra key is kept and ignored.
 ``tokens`` and ``seconds`` come from the reader subagent's Agent-tool result
 (its token count and duration); a writer records ``na`` when unavailable and
 never omits the key. ``na`` parses to ``None``.
+
+Two more optional keys may follow ``tier``. ``degraded`` is ``none`` or a
+comma-separated list of ``denied``, ``gh-used``, ``agent-type``,
+``preflight-none`` and ``preflight-failed``, recorded by a writer that has
+audited the read; ``none`` cannot be combined with another token, and the value
+is kept verbatim as written. ``void_cause`` is ``no-probe-build`` or
+``comments-read``. A ``verdict=VOID`` line is a read that did not happen as the
+gate defines it: it needs a valid ``void_cause`` and ``blocking=0``, it keeps
+and ignores any ``degraded`` value, and it is not counted as a read (its tokens
+and seconds stay in the totals, the cost was real). A ``void_cause`` on any
+other verdict is kept as written.
 
 Post-merge record (one comment, written when the slice's PR merges)::
 
@@ -35,7 +46,9 @@ Parsing rules: a ledger line is a whole line (``<!--`` form only, nothing
 else on the line) outside fenced code blocks, so a comment that quotes the
 format in a fence does not ledger itself. A malformed line (missing required
 key, non-integer where an integer is required, unknown ``v``, bad verdict,
-bad body hash, a token with no ``=``, a repeated key, an unknown ``event``)
+bad body hash, a token with no ``=``, a repeated key, an unknown ``event``, a
+``VOID`` line without a valid ``void_cause`` or with ``blocking`` other than 0,
+a ``degraded`` value outside its set on a line that is not ``VOID``)
 is returned as a record with an ``error`` key and never raises. The key name
 ``error`` is therefore reserved and may not appear in a ledger line.
 
@@ -49,7 +62,10 @@ Without ``--comments-json`` each issue's comments are fetched with
 one issue's comments (either ``gh``'s ``{"comments": [...]}`` object or a bare
 list) and exactly one ``--issue`` is allowed. The default output is a compact
 per-issue table plus a totals footer; ``--json`` prints one JSON document
-instead.
+instead. A void read, and a read whose ``degraded`` value is not ``none``, each
+add one line after the footer, in comment order: ``  #<issue> read <k> VOID
+<void_cause>`` or ``  #<issue> read <k> degraded <degraded>``, ``<k>`` being that
+line's own ``read=``. The counts ``clean`` and ``voided`` are ``--json`` only.
 
 Exit codes: 0 success, 2 usage / fetch / unreadable-input error. A malformed
 ledger line is data, not an error: it is counted and reported, and the exit
@@ -66,7 +82,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERDICTS = frozenset({"BUILD", "REWRITE", "NOT-DISPATCH-READY", "BUILD-exempt"})
+VERDICTS = frozenset({"BUILD", "REWRITE", "NOT-DISPATCH-READY", "BUILD-exempt", "VOID"})
+VOID = "VOID"
+# Why a read is void: the audit showed no probe build on a repo with a runnable
+# gate, or showed earlier verdict comments in the reader's context.
+VOID_CAUSES = frozenset({"no-probe-build", "comments-read"})
+# What a writer that audited a read records in `degraded`; `none` stands alone.
+DEGRADED_TOKENS = frozenset(
+    {"denied", "gh-used", "agent-type", "preflight-none", "preflight-failed"}
+)
+DEGRADED_NONE = "none"
 SUPPORTED_VERSION = 1
 
 # Required on a verdict (read) line; every other known key is optional.
@@ -123,6 +148,36 @@ def _int_or_na(pairs: dict[str, str], key: str, allow_na: bool) -> tuple[int | N
     return value, None
 
 
+def _void_problem(pairs: dict[str, str], blocking: int) -> str | None:
+    """Why a ``verdict=VOID`` line is invalid, or ``None``.
+
+    A void read has no findings, so ``blocking`` is 0, and ``void_cause`` names
+    why it is void; a missing cause or one outside its set makes the line an
+    error record, so the comment still counts as a read.
+    """
+    cause = pairs.get("void_cause")
+    if not isinstance(cause, str) or cause not in VOID_CAUSES:
+        return f"a VOID line needs void_cause to be one of {sorted(VOID_CAUSES)}, got {cause!r}"
+    if blocking != 0:
+        return f"a VOID line needs blocking=0, got {blocking}"
+    return None
+
+
+def _degraded_problem(value: str) -> str | None:
+    """Why a ``degraded`` value is invalid, or ``None``.
+
+    The value is ``none`` or a comma-separated list of the five audit tokens;
+    an empty item (a trailing comma) is outside the set.
+    """
+    tokens = value.split(",")
+    unknown = [t for t in tokens if t != DEGRADED_NONE and t not in DEGRADED_TOKENS]
+    if unknown:
+        return f"degraded: {unknown[0]!r} is not one of {sorted(DEGRADED_TOKENS)} or 'none'"
+    if DEGRADED_NONE in tokens and len(tokens) > 1:
+        return "degraded: 'none' cannot be combined with another token"
+    return None
+
+
 def _parse_one(raw: str, fields: str) -> dict:
     """Turn one ledger line's field text into a record (or an ``error`` record)."""
     pairs = _parse_fields(fields)
@@ -154,6 +209,13 @@ def _parse_one(raw: str, fields: str) -> dict:
             if problem:
                 return _error(raw, problem)
             record[key] = value
+    problem = None
+    if pairs["verdict"] == VOID:
+        problem = _void_problem(pairs, record["blocking"])
+    elif "degraded" in pairs:
+        problem = _degraded_problem(pairs["degraded"])
+    if problem:
+        return _error(raw, problem)
     return record
 
 
@@ -188,7 +250,8 @@ def parse_ledger_lines(text: str) -> list[dict]:
         ``v``, ``read``, ``verdict``, ``body``, ``blocking``, ``advisory``,
         ``rule_born``, ``mutants``, ``survivors``, ``tokens`` and ``seconds``
         (``None`` for ``na`` or an absent optional key) plus any unknown extra
-        keys as strings. A valid ``event=landed`` line carries ``event`` and
+        keys as strings; ``degraded`` and ``void_cause`` are kept verbatim as
+        written when present. A valid ``event=landed`` line carries ``event`` and
         its five integer fields. A malformed line is ``{"error": ..., "raw":
         ...}``. Never raises.
     """
@@ -236,25 +299,48 @@ def summarize(comments: list[dict]) -> dict:
     -------
     dict
         ``reads`` (verdict comments, i.e. those whose first line starts with
-        ``## Cold read``); ``unledgered`` (verdict comments with no valid
-        ledger line, so a census can see its own blind spot); parallel
-        per-read lists ``verdicts``, ``bodies``, ``blocking``, ``rule_born``,
-        ``advisory``, ``mutants``, ``survivors``, ``tokens``, ``seconds``
-        (``None`` for an ``na`` or for an unledgered read); ``tokens_total``
-        and ``seconds_total`` (``None`` when every value is na) with
-        ``tokens_na`` and ``seconds_na`` (an unledgered read counts as na);
-        ``multi_ledger`` (verdict comments carrying more than one valid line,
-        of which the first is used); ``errors`` (one entry per malformed
-        ledger line in a verdict comment); and ``landed`` (the latest
-        ``event=landed`` record from any comment, else ``None``).
+        ``## Cold read``, except a valid ``verdict=VOID`` one, which is not a
+        read); ``unledgered`` (verdict comments with no valid ledger line, so a
+        census can see its own blind spot); parallel per-read lists
+        ``verdicts``, ``bodies``, ``blocking``, ``rule_born``, ``advisory``,
+        ``mutants``, ``survivors``, ``tokens``, ``seconds`` and ``degraded``
+        (``None`` for an ``na``, for an absent ``degraded`` key or for an
+        unledgered read), each of length ``reads``; ``tokens_total`` and
+        ``seconds_total`` (``None`` when every value is na; a void read's cost
+        stays in them) with ``tokens_na`` and ``seconds_na`` (an unledgered read
+        counts as na); ``voided`` (the count of void reads) and ``void_causes``
+        (their causes, in comment order); ``tokens_void`` (their tokens);
+        ``clean`` (reads whose ``degraded`` is ``none``) with ``tokens_clean``
+        and ``tokens_degraded`` (token sums over the clean reads and over the
+        reads with another ``degraded`` value; ``None`` when none is known, and
+        a read with no ``degraded`` key is in neither); ``multi_ledger``
+        (verdict comments carrying more than one valid line, of which the
+        first is used); ``errors`` (one entry per malformed ledger line in a
+        verdict comment); and ``landed`` (the latest ``event=landed`` record
+        from any comment, else ``None``).
+    """
+    return _summarize(comments)[0]
+
+
+def _summarize(comments: list[dict]) -> tuple[dict, list[str]]:
+    """``summarize`` plus the lines the text output prints after its footer.
+
+    The second member holds one ``read <k> VOID <void_cause>`` or ``read <k>
+    degraded <degraded>`` string per void read or per read whose ``degraded``
+    value is not ``none``, in comment order, ``<k>`` being the line's own
+    ``read=``. A void read gets only its ``VOID`` string.
     """
     ordered = sorted(comments, key=lambda c: c.get("createdAt") or "")
     per_read: dict[str, list] = {
         k: [] for k in ("verdicts", "bodies", "blocking", "rule_born", "advisory",
-                        "mutants", "survivors", "tokens", "seconds")
+                        "mutants", "survivors", "tokens", "seconds", "degraded")
     }
     field_for = {"verdicts": "verdict", "bodies": "body"}
     errors: list[dict] = []
+    notes: list[str] = []
+    void_causes: list[str] = []
+    void_tokens: list[int | None] = []
+    void_seconds: list[int | None] = []
     unledgered = 0
     multi_ledger = 0
     landed: dict | None = None
@@ -267,19 +353,37 @@ def summarize(comments: list[dict]) -> dict:
                 landed = rec
         if not _is_verdict_comment(body):
             continue
-        reads += 1
-        errors.extend({"read_index": reads, **r} for r in records if "error" in r)
         valid = [r for r in records if "error" not in r and "event" not in r]
+        chosen = valid[0] if valid else None
+        is_void = chosen is not None and chosen.get("verdict") == VOID
+        if not is_void:
+            reads += 1
+        errors.extend({"read_index": reads, **r} for r in records if "error" in r)
         if len(valid) > 1:
             multi_ledger += 1
-        chosen = valid[0] if valid else None
+        if is_void:
+            void_causes.append(chosen["void_cause"])
+            void_tokens.append(chosen.get("tokens"))
+            void_seconds.append(chosen.get("seconds"))
+            notes.append(f"read {chosen['read']} VOID {chosen['void_cause']}")
+            continue
         if chosen is None:
             unledgered += 1
         for key, values in per_read.items():
             values.append(chosen.get(field_for.get(key, key)) if chosen else None)
-    tokens_total, tokens_na = _total(per_read["tokens"])
-    seconds_total, seconds_na = _total(per_read["seconds"])
-    return {
+        degraded = per_read["degraded"][-1]
+        if degraded is not None and degraded != DEGRADED_NONE:
+            notes.append(f"read {chosen['read']} degraded {degraded}")
+    tokens_total, tokens_na = _total(per_read["tokens"] + void_tokens)
+    seconds_total, seconds_na = _total(per_read["seconds"] + void_seconds)
+    tokens, degraded = per_read["tokens"], per_read["degraded"]
+    clean = sum(1 for d in degraded if d == DEGRADED_NONE)
+    tokens_void = _total(void_tokens)[0]
+    tokens_clean = _total([t for t, d in zip(tokens, degraded) if d == DEGRADED_NONE])[0]
+    tokens_degraded = _total(
+        [t for t, d in zip(tokens, degraded) if d not in (None, DEGRADED_NONE)]
+    )[0]
+    summary = {
         "reads": reads,
         "unledgered": unledgered,
         **per_read,
@@ -290,7 +394,14 @@ def summarize(comments: list[dict]) -> dict:
         "multi_ledger": multi_ledger,
         "errors": errors,
         "landed": landed,
+        "voided": len(void_causes),
+        "void_causes": void_causes,
+        "tokens_void": tokens_void,
+        "clean": clean,
+        "tokens_clean": tokens_clean,
+        "tokens_degraded": tokens_degraded,
     }
+    return summary, notes
 
 
 def _fetch_comments(repo: str, issue: int) -> list[dict]:
@@ -328,8 +439,15 @@ def _cell(values: list, sep: str = ",") -> str:
     return sep.join("-" if v is None else str(v) for v in values) or "-"
 
 
-def format_table(rows: list[tuple[int, dict]], totals: dict) -> list[str]:
-    """Render the compact per-issue table and the totals footer."""
+def format_table(
+    rows: list[tuple[int, dict]], totals: dict, extra: list[tuple[int, str]] | None = None
+) -> list[str]:
+    """Render the compact per-issue table and the totals footer.
+
+    ``extra`` holds ``(issue, note)`` pairs, one per void read or per read with
+    a ``degraded`` value other than ``none``; each prints as ``  #<issue>
+    <note>`` after the footer. With none, the output is the table and footer.
+    """
     header = ("issue", "reads", "unledgered", "verdicts", "blocking", "tokens", "landed")
     body = []
     for issue, s in rows:
@@ -344,6 +462,7 @@ def format_table(rows: list[tuple[int, dict]], totals: dict) -> list[str]:
         f"Totals: issues={totals['issues']} reads={totals['reads']} "
         f"unledgered={totals['unledgered']} tokens={tokens} (na={totals['tokens_na']})"
     )
+    lines.extend(f"  #{issue} {note}" for issue, note in extra or [])
     return lines
 
 
@@ -363,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
         print("cold_read_ledger: --comments-json needs exactly one --issue", file=sys.stderr)
         return 2
     rows: list[tuple[int, dict]] = []
+    extra: list[tuple[int, str]] = []
     for issue in args.issue:
         try:
             if args.comments_json:
@@ -372,21 +492,23 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError, ValueError, FetchError) as e:
             print(f"cold_read_ledger: cannot read input for #{issue}: {e}", file=sys.stderr)
             return 2
-        rows.append((issue, summarize(comments)))
-    tokens_total, tokens_na = _total([v for _, s in rows for v in s["tokens"]])
+        summary, notes = _summarize(comments)
+        rows.append((issue, summary))
+        extra.extend((issue, note) for note in notes)
+    tokens_total, _ = _total([s["tokens_total"] for _, s in rows])
     totals = {
         "issues": len(rows),
         "reads": sum(s["reads"] for _, s in rows),
         "unledgered": sum(s["unledgered"] for _, s in rows),
         "tokens_total": tokens_total,
-        "tokens_na": tokens_na,
+        "tokens_na": sum(s["tokens_na"] for _, s in rows),
     }
     if args.json:
         print(json.dumps({"repo": args.repo,
                           "issues": [{"issue": i, **s} for i, s in rows],
                           "totals": totals}))
     else:
-        for out in format_table(rows, totals):
+        for out in format_table(rows, totals, extra):
             print(out)
     return 0
 

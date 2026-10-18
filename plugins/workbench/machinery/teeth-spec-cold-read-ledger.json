@@ -1,0 +1,247 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_cold_read_ledger.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_cold_read_ledger.py"
+  ],
+  "mutants": [
+    {
+      "label": "row 1: count a VOID line in reads [test_a_void_read_is_excluded_from_reads_and_from_every_per_read_list]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        if not is_void:\n            reads += 1\n",
+      "replace": "        if True:\n            reads += 1\n"
+    },
+    {
+      "label": "row 2: keep a VOID line in the parallel lists [test_every_per_read_list_keeps_length_reads_when_a_void_read_is_present]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "            notes.append(f\"read {chosen['read']} VOID {chosen['void_cause']}\")\n            continue\n",
+      "replace": "            notes.append(f\"read {chosen['read']} VOID {chosen['void_cause']}\")\n"
+    },
+    {
+      "label": "row 3: drop void tokens from tokens_total [test_a_void_reads_tokens_and_seconds_stay_in_tokens_total_and_seconds_total]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_total, tokens_na = _total(per_read[\"tokens\"] + void_tokens)\n",
+      "replace": "    tokens_total, tokens_na = _total(per_read[\"tokens\"])\n"
+    },
+    {
+      "label": "row 4: drop void seconds from seconds_total [test_a_void_reads_tokens_and_seconds_stay_in_tokens_total_and_seconds_total]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    seconds_total, seconds_na = _total(per_read[\"seconds\"] + void_seconds)\n",
+      "replace": "    seconds_total, seconds_na = _total(per_read[\"seconds\"])\n"
+    },
+    {
+      "label": "row 5: accept a VOID line without void_cause [test_a_void_line_needs_a_known_cause_and_blocking_zero]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if not isinstance(cause, str) or cause not in VOID_CAUSES:\n",
+      "replace": "    if cause is not None and (not isinstance(cause, str) or cause not in VOID_CAUSES):\n"
+    },
+    {
+      "label": "row 6: accept a VOID line with blocking=3 [test_a_void_line_needs_a_known_cause_and_blocking_zero]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if blocking != 0:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "row 7: accept an unknown degraded token [test_degraded_outside_its_vocabulary_is_an_error_record]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if unknown:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "row 8: accept none combined with another token [test_degraded_outside_its_vocabulary_is_an_error_record]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if DEGRADED_NONE in tokens and len(tokens) > 1:\n",
+      "replace": "    if False:\n"
+    },
+    {
+      "label": "row 9: print the extra lines when none apply (an unaudited read prints a degraded line) [test_text_output_is_byte_identical_when_no_read_is_void_or_degraded]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        if degraded is not None and degraded != DEGRADED_NONE:\n",
+      "replace": "        if chosen is not None and degraded != DEGRADED_NONE:\n"
+    },
+    {
+      "label": "row 10: print the extra lines for degraded=none [test_reads_marked_degraded_none_print_what_the_same_reads_without_the_key_print]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        if degraded is not None and degraded != DEGRADED_NONE:\n",
+      "replace": "        if degraded is not None:\n"
+    },
+    {
+      "label": "row 11: count clean over every read that is not void [test_the_four_read_fixture_separates_clean_degraded_unaudited_and_void]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    clean = sum(1 for d in degraded if d == DEGRADED_NONE)\n",
+      "replace": "    clean = reads\n"
+    },
+    {
+      "label": "row 12: count a read whose degraded is null as clean in clean [test_the_four_read_fixture_separates_clean_degraded_unaudited_and_void]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    clean = sum(1 for d in degraded if d == DEGRADED_NONE)\n",
+      "replace": "    clean = sum(1 for d in degraded if d in (None, DEGRADED_NONE))\n"
+    },
+    {
+      "label": "row 13: count a read whose degraded is null as clean in tokens_clean [test_the_four_read_fixture_separates_clean_degraded_unaudited_and_void]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_clean = _total([t for t, d in zip(tokens, degraded) if d == DEGRADED_NONE])[0]\n",
+      "replace": "    tokens_clean = _total([t for t, d in zip(tokens, degraded) if d in (None, DEGRADED_NONE)])[0]\n"
+    },
+    {
+      "label": "MK1: add an eighth key (seconds_void) to the per-issue object [test_the_per_issue_json_object_gains_exactly_the_seven_keys]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        \"tokens_degraded\": tokens_degraded,\n    }\n    return summary, notes\n",
+      "replace": "        \"tokens_degraded\": tokens_degraded,\n        \"seconds_void\": _total(void_seconds)[0],\n    }\n    return summary, notes\n"
+    },
+    {
+      "label": "MK2: a void read that carries degraded=denied also prints a degraded line [test_the_extra_lines_follow_the_totals_line_in_comment_order]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "            notes.append(f\"read {chosen['read']} VOID {chosen['void_cause']}\")\n",
+      "replace": "            notes.append(f\"read {chosen['read']} VOID {chosen['void_cause']}\")\n            if chosen.get(\"degraded\") not in (None, DEGRADED_NONE):\n                notes.append(f\"read {chosen['read']} degraded {chosen['degraded']}\")\n"
+    },
+    {
+      "label": "MK3: validate degraded on a VOID line too [test_degraded_on_a_void_line_is_kept_and_ignored_whatever_its_value]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n",
+      "replace": "    if \"degraded\" in pairs and problem is None:\n        problem = _degraded_problem(pairs[\"degraded\"])\n"
+    },
+    {
+      "label": "MK4: validate void_cause against its set on a non-VOID line [test_a_void_cause_on_a_non_void_line_is_accepted_and_kept_as_written]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n",
+      "replace": "    elif \"degraded\" in pairs:\n        problem = _degraded_problem(pairs[\"degraded\"])\n    if problem is None and \"void_cause\" in pairs and pairs[\"void_cause\"] not in VOID_CAUSES:\n        problem = \"void_cause is not one of its set\"\n"
+    },
+    {
+      "label": "MK5: drop degraded from the VOID record the parser returns [test_degraded_on_a_void_line_is_kept_and_ignored_whatever_its_value]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    if problem:\n        return _error(raw, problem)\n    return record\n",
+      "replace": "    if problem:\n        return _error(raw, problem)\n    if record[\"verdict\"] == VOID:\n        record.pop(\"degraded\", None)\n    return record\n"
+    },
+    {
+      "label": "MK6: tokens_void is 0, not null, when no void read has a known count [test_tokens_void_is_null_without_a_void_read_or_a_known_void_count]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_void = _total(void_tokens)[0]\n",
+      "replace": "    tokens_void = sum(v for v in void_tokens if v is not None)\n"
+    },
+    {
+      "label": "MK7: tokens_clean is 0, not null, when no clean read has a known count [test_each_sum_is_null_when_no_read_of_its_kind_has_a_known_token_count]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_clean = _total([t for t, d in zip(tokens, degraded) if d == DEGRADED_NONE])[0]\n",
+      "replace": "    tokens_clean = sum(t for t, d in zip(tokens, degraded) if d == DEGRADED_NONE and t is not None)\n"
+    },
+    {
+      "label": "MK8: tokens_degraded is 0, not null, when no degraded read has a known count [test_each_sum_is_null_when_no_read_of_its_kind_has_a_known_token_count]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_degraded = _total(\n        [t for t, d in zip(tokens, degraded) if d not in (None, DEGRADED_NONE)]\n    )[0]\n",
+      "replace": "    tokens_degraded = sum(\n        t for t, d in zip(tokens, degraded) if d not in (None, DEGRADED_NONE) and t is not None\n    )\n"
+    },
+    {
+      "label": "MK9: order the comments, and so the extra lines, by input position instead of createdAt [test_the_extra_lines_follow_created_at_not_input_position]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    ordered = sorted(comments, key=lambda c: c.get(\"createdAt\") or \"\")\n",
+      "replace": "    ordered = list(comments)\n"
+    },
+    {
+      "label": "MK10a: print every VOID line before every degraded line [test_the_extra_lines_follow_the_totals_line_in_comment_order]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    return summary, notes\n",
+      "replace": "    return summary, sorted(notes, key=lambda n: \" degraded \" in n)\n"
+    },
+    {
+      "label": "MK10b: print every degraded line before every VOID line [test_the_extra_lines_follow_the_totals_line_in_comment_order]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    return summary, notes\n",
+      "replace": "    return summary, sorted(notes, key=lambda n: \" VOID \" in n)\n"
+    },
+    {
+      "label": "MK11a: <k> of a degraded line is the read's position, not its read= [test_the_extra_lines_follow_the_totals_line_in_comment_order]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "            notes.append(f\"read {chosen['read']} degraded {degraded}\")\n",
+      "replace": "            notes.append(f\"read {reads} degraded {degraded}\")\n"
+    },
+    {
+      "label": "MK11b: <k> of a VOID line is the void's position, not its read= [test_the_extra_lines_follow_the_totals_line_in_comment_order]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "            notes.append(f\"read {chosen['read']} VOID {chosen['void_cause']}\")\n",
+      "replace": "            notes.append(f\"read {len(void_causes)} VOID {chosen['void_cause']}\")\n"
+    },
+    {
+      "label": "MK12: the footer sums the parallel tokens lists, which leave a void read out [test_the_totals_object_keeps_its_five_keys_and_sums_the_issues_values]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    tokens_total, _ = _total([s[\"tokens_total\"] for _, s in rows])\n",
+      "replace": "    tokens_total, _ = _total([v for _, s in rows for v in s[\"tokens\"]])\n"
+    },
+    {
+      "label": "MK13: add a key to the printed totals object [test_the_totals_object_keeps_its_five_keys_and_sums_the_issues_values]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "        \"tokens_na\": sum(s[\"tokens_na\"] for _, s in rows),\n",
+      "replace": "        \"tokens_na\": sum(s[\"tokens_na\"] for _, s in rows),\n        \"voided\": sum(s[\"voided\"] for _, s in rows),\n"
+    },
+    {
+      "label": "extra: a trailing comma in degraded is read as an empty item that is ignored [test_degraded_outside_its_vocabulary_is_an_error_record]",
+      "file": "engine/cold_read_ledger.py",
+      "oracle": "real",
+      "find": "    unknown = [t for t in tokens if t != DEGRADED_NONE and t not in DEGRADED_TOKENS]\n",
+      "replace": "    unknown = [t for t in tokens if t and t != DEGRADED_NONE and t not in DEGRADED_TOKENS]\n"
+    }
+  ]
+}
