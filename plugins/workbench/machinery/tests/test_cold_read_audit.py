@@ -16,9 +16,11 @@ from ``capsys``. Each docstring names the defect it guards.
 from __future__ import annotations
 
 import ast
+import errno
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -230,6 +232,9 @@ def gh_counts(capsys, directory: Path, command: str, issue: str = "1151") -> tup
 # --------------------------------------------------------------------------- #
 
 PREFLIGHT_COMMAND = f'python3 "$ENGINE/cold_read_dispatch.py" preflight --scratch {SCRATCH}'
+# A preflight command whose own text holds every probe word and the scratch path: it must still be
+# neither a probe nor scratch use, because its result begins PREFLIGHT ok.
+NOISY_PREFLIGHT_COMMAND = PREFLIGHT_COMMAND + " && uv run pytest --version && make -n test && ls teeth_check.py"
 PREFLIGHT_OK = f"PREFLIGHT ok scratch={SCRATCH} git=git version 2.50.0 uv=uv 0.9.0"
 COMMENT_RESULT = '{"comments":[{"id":"c1","body":"## Cold read - REWRITE\\nfindings"}]}'
 EMPTY_COMMENTS = '{"comments":[]}'
@@ -438,7 +443,7 @@ def test_role_defaults_to_cold(tmp_path, capsys):
 
 def preflight_transcript(*commands: str, result: str = PREFLIGHT_OK) -> Transcript:
     t = Transcript()
-    t.bash(PREFLIGHT_COMMAND, result)
+    t.bash(NOISY_PREFLIGHT_COMMAND, result)
     for command in commands:
         t.bash(command, "ok")
     t.end_turn()
@@ -706,6 +711,11 @@ COMMAND_POSITIONS = [
     pytest.param('GH_HOST="a b" GH_TOKEN=t gh x', id="after-two-assignments"),
     pytest.param("/usr/local/bin/gh x", id="path-ending-in-gh"),
     pytest.param("gh -R x/y issue view 5", id="flag-before-the-subcommand"),
+    pytest.param("./gh label list", id="relative-path-to-gh"),
+    pytest.param("~/bin/gh label list", id="home-path-to-gh"),
+    pytest.param("GH_HOST='a b' gh x", id="single-quoted-assignment-value"),
+    pytest.param("GH_TOKEN= gh x", id="empty-assignment-value"),
+    pytest.param("token=t gh x", id="lower-case-assignment-name"),
 ]
 
 
@@ -834,6 +844,7 @@ STANDALONE_NUMBER_CASES = [
     pytest.param("gh issue view 1151 --json body | python3 -c 'print(1)'", "0", id="dash-c-after-a-pipe"),
     pytest.param("gh issue view 1151 --json body && python3 -c 'print(1)'", "0", id="dash-c-after-and-and"),
     pytest.param("gh issue view 1151 --json body\npython3 -c 'print(1)'", "0", id="dash-c-after-a-newline"),
+    pytest.param("gh issue view 1151 --json body; python3 -c 'print(1)'", "0", id="dash-c-after-a-semicolon"),
     pytest.param("gh issue comment 1151 --body x", "0", id="singular-comment"),
     pytest.param("gh label list 1151 -c", "0", id="dash-c-without-issue-view"),
     pytest.param("gh pr list 1151 -c", "0", id="dash-c-without-pr-view"),
@@ -1243,10 +1254,20 @@ def test_plain_string_message_content_carries_no_blocks(tmp_path, capsys):
     "record",
     [
         pytest.param({"type": "assistant", "message": "text only"}, id="message-is-text"),
+        pytest.param({"type": "assistant"}, id="no-message-at-all"),
+        pytest.param({"type": "assistant", "message": {"model": "m", "stop_reason": "tool_use"}}, id="assistant-message-without-content"),
+        pytest.param({"type": "user", "message": {"role": "user"}}, id="user-message-without-content"),
         pytest.param({"type": "assistant", "message": {"content": [None, 3, "x", ["y"]]}}, id="blocks-are-not-objects"),
         pytest.param(
-            {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": 7, "name": ["Bash"], "input": 3}]}},
-            id="tool-use-fields-of-the-wrong-type",
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": ["x"], "name": ["Bash"], "input": 3}]}},
+            id="tool-use-id-and-name-are-lists",
+        ),
+        pytest.param(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "tool_use", "id": {"a": 1}, "name": "Bash", "input": {"command": "mkdir /tmp/w"}}]},
+            },
+            id="tool-use-id-is-an-object",
         ),
         pytest.param(
             {
@@ -1260,13 +1281,23 @@ def test_plain_string_message_content_carries_no_blocks(tmp_path, capsys):
             id="result-id-is-a-list",
         ),
         pytest.param(
-            {"type": "user", "toolDenialKind": {"a": 1}, "permissionDecision": "reject", "message": None},
-            id="denial-fields-of-the-wrong-type",
+            {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": {"a": 1}, "content": 5}]}},
+            id="result-id-is-an-object",
         ),
         pytest.param(
-            {"type": ["assistant"], "version": 5, "message": {"model": ["m"], "stop_reason": ["end_turn"]}},
-            id="type-version-model-stop-of-the-wrong-type",
+            {
+                "type": "user",
+                "toolDenialKind": {"a": 1},
+                "permissionDecision": "reject",
+                "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_x", "content": "no", "is_error": "yes"}]},
+            },
+            id="denial-fields-of-the-wrong-type-on-a-result",
         ),
+        pytest.param(
+            {"type": "assistant", "version": 5, "message": {"model": ["m"], "stop_reason": ["end_turn"], "content": []}},
+            id="version-model-and-stop-reason-of-the-wrong-type",
+        ),
+        pytest.param({"type": ["assistant"], "message": {"content": []}}, id="type-is-a-list"),
     ],
 )
 def test_malformed_record_fields_are_untrusted(record, tmp_path, capsys):
@@ -1556,7 +1587,17 @@ def test_spaces_in_an_untrusted_value_do_not_break_the_line(tmp_path, capsys):
     write_meta(tmp_path / "agent-abc.meta.json", json.dumps({"agentType": "two words"}))
     result = run(capsys, path, "--issue", "1179")
     assert result.out.count("\n") == 1
-    assert set(result.tokens) == set(TOKEN_ORDER)
+    assert list(result.tokens) == TOKEN_ORDER
+    assert result.tokens["version"] == "2.1.293_beta_x"
+    assert result.tokens["agent_type"] == "two_words"
+    assert result.tokens["model"] == "my_model"
+    payload = json.loads(run(capsys, path, "--issue", "1179", "--json").out)
+    assert list(payload) == TOKEN_ORDER
+    for key in INT_TOKENS:
+        assert type(payload[key]) is int, key
+    for key in set(TOKEN_ORDER) - set(INT_TOKENS):
+        assert type(payload[key]) is str, key
+    assert (payload["version"], payload["agent_type"], payload["model"]) == ("2.1.293_beta_x", "two_words", "my_model")
 
 
 # --------------------------------------------------------------------------- #
@@ -1628,16 +1669,18 @@ def test_details_object_under_json_has_the_same_fields(tmp_path, capsys):
 
 def test_missing_transcript_path_exits_2(tmp_path, capsys):
     """Guards a build that raises (or exits 1) on a transcript path that does not exist."""
-    result = run(capsys, tmp_path / "absent.jsonl", "--issue", "1179")
+    missing = tmp_path / "absent.jsonl"
+    result = run(capsys, missing, "--issue", "1179")
     assert result.rc == 2
     assert result.out == ""
-    assert "absent.jsonl" in result.err
+    assert result.err == f"cold_read_audit: cannot read transcript {missing}: {os.strerror(errno.ENOENT)}\n"
 
 
 def test_unreadable_transcript_path_exits_2(tmp_path, capsys):
     """Guards a build that raises on a transcript path that cannot be read (here, a directory)."""
     result = run(capsys, tmp_path, "--issue", "1179")
     assert (result.rc, result.out) == (2, "")
+    assert result.err == f"cold_read_audit: cannot read transcript {tmp_path}: {os.strerror(errno.EISDIR)}\n"
 
 
 @pytest.mark.parametrize(
@@ -1690,10 +1733,458 @@ def test_imports_are_standard_library_only_and_never_reach_the_network(capsys):
     assert not names & {"subprocess", "socket", "urllib", "http"}
 
 
-def test_script_is_a_runnable_stdlib_program():
-    """Guards a build that drops the script preamble: shebang, future import, ``main`` and its guard."""
+def test_script_preamble_is_code_not_text():
+    """Guards a build that drops or neuters the script preamble, or fakes it in a comment.
+
+    The shebang is the first line; the future import, the ``main`` signature
+    and the ``__main__`` guard are read from the syntax tree, so a commented-out
+    line or a misspelt guard does not satisfy them.
+    """
     source = SCRIPT.read_text(encoding="utf-8")
     assert source.startswith("#!/usr/bin/env python3\n")
-    assert "from __future__ import annotations" in source
-    assert "def main(argv: list[str] | None = None) -> int:" in source
-    assert source.rstrip().endswith("raise SystemExit(main())")
+    tree = ast.parse(source)
+    futures = [name.name for node in tree.body if isinstance(node, ast.ImportFrom) and node.module == "__future__" for name in node.names]
+    assert futures == ["annotations"]
+    mains = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"]
+    assert len(mains) == 1
+    wanted = ast.parse("def main(argv: list[str] | None = None) -> int: ...").body[0]
+    assert ast.dump(mains[0].args) == ast.dump(wanted.args)
+    assert ast.dump(mains[0].returns) == ast.dump(wanted.returns)
+    guard = tree.body[-1]
+    assert isinstance(guard, ast.If)
+    assert ast.dump(guard.test) == ast.dump(ast.parse('__name__ == "__main__"', mode="eval").body)
+    assert [ast.dump(node) for node in guard.body] == [ast.dump(node) for node in ast.parse("raise SystemExit(main())").body]
+    assert guard.orelse == []
+
+
+def run_script(*args: str) -> subprocess.CompletedProcess:
+    """Run the script as a program, isolated from the environment, the way the conductor does."""
+    return subprocess.run(
+        [sys.executable, "-I", str(SCRIPT), *args], capture_output=True, text=True, timeout=120, check=False
+    )
+
+
+def test_script_run_as_a_program_prints_one_audit_line_and_exits_0(tmp_path):
+    """Guards a build whose ``__main__`` guard is misspelt, commented out or never reached.
+
+    Run as a process, a complete transcript prints exactly one ``AUDIT`` line
+    on stdout, nothing on stderr, and exits 0; importing the module in the
+    suite cannot show that the entry point works.
+    """
+    path = one_command(tmp_path, "ls")
+    done = run_script("--transcript", str(path), "--issue", "1179")
+    assert done.returncode == 0
+    assert done.stderr == ""
+    lines = done.stdout.split("\n")
+    assert len(lines) == 2 and lines[1] == ""
+    report = Run(done.returncode, done.stdout, done.stderr)
+    assert list(report.tokens) == TOKEN_ORDER
+    assert report.tokens["bash_calls"] == "1"
+
+
+def test_script_run_as_a_program_on_a_partial_transcript_prints_then_exits_3(tmp_path):
+    """Guards a build whose process exit status is not ``main``'s return value (``main()`` without ``SystemExit``).
+
+    An incomplete transcript prints its report, says why on stderr, and the
+    process exits 3.
+    """
+    t = Transcript()
+    t.bash("ls", "ok")
+    t.call("Read", {"file_path": "a"})
+    done = run_script("--transcript", str(t.write(tmp_path)), "--issue", "1179")
+    assert done.returncode == 3
+    assert Run(3, done.stdout, "").tokens["complete"] == "0"
+    assert "incomplete" in done.stderr
+    allowed = run_script("--transcript", str(tmp_path / "agent-aaa.jsonl"), "--issue", "1179", "--allow-partial")
+    assert allowed.returncode == 0
+
+
+def test_script_run_as_a_program_on_a_missing_path_exits_2(tmp_path):
+    """Guards a build whose process exits 0 or 1, or prints a traceback, on a transcript path that is missing."""
+    missing = tmp_path / "absent.jsonl"
+    done = run_script("--transcript", str(missing), "--issue", "1179")
+    assert done.returncode == 2
+    assert done.stdout == ""
+    assert done.stderr == f"cold_read_audit: cannot read transcript {missing}: {os.strerror(errno.ENOENT)}\n"
+    usage = run_script("--transcript", str(missing), "--issue", "abc")
+    assert usage.returncode == 2
+    assert usage.stdout == ""
+
+
+# --------------------------------------------------------------------------- #
+# strengthened by the independent teeth pass (PR #1225)
+# --------------------------------------------------------------------------- #
+
+
+def test_heredoc_opener_line_still_counts(tmp_path, capsys):
+    """Guards a build that drops the opener's own line together with the heredoc body.
+
+    Only the body is removed: ``gh api x --input - <<EOF`` is a ``gh`` call, a
+    comments fetch written with a heredoc is still a fetch, and so is a ``gh``
+    after a pipe on the opener line.
+    """
+    assert gh_counts(capsys, tmp_path / "a", "gh api x --input - <<EOF\n{}\nEOF") == ("1", "0")
+    assert gh_counts(capsys, tmp_path / "b", "gh issue view 1151 --json comments <<'EOF'\nhi\nEOF") == ("1", "1")
+    assert gh_counts(capsys, tmp_path / "c", "cat <<EOF | gh label list\nbody\nEOF") == ("1", "0")
+
+
+def test_every_text_block_of_a_list_result_is_read(tmp_path, capsys):
+    """Guards a build that keeps only the first text block of a list ``content``.
+
+    A comments marker in the second, or the last, of several text blocks is
+    seen; so is one after non-text blocks.
+    """
+    for name, blocks in {
+        "second": [{"type": "text", "text": "a"}, {"type": "text", "text": "## Cold read - BUILD"}],
+        "last-of-three": [
+            {"type": "text", "text": "a"},
+            {"type": "image", "source": "x"},
+            {"type": "text", "text": "b"},
+            {"type": "text", "text": "## Cold read - BUILD"},
+        ],
+    }.items():
+        assert seen(capsys, tmp_path / name, blocks) == "1", name
+
+
+def test_list_result_with_untrusted_members_is_read_from_its_text_blocks(tmp_path, capsys):
+    """Guards a build that joins a non-string ``text`` or calls ``.get`` on a non-object list member.
+
+    A list holding a number, a string, a list, ``None``, a text block whose
+    ``text`` is a number, and then a real text block is read from the real one.
+    """
+    blocks = [5, "x", ["y"], None, {"type": "text", "text": 5}, {"type": "text", "text": "## Cold read - BUILD"}]
+    assert seen(capsys, tmp_path, blocks) == "1"
+
+
+def test_only_bash_tool_uses_are_commands(tmp_path, capsys):
+    """Guards a build that treats any tool whose input has a ``command`` field as ``Bash``.
+
+    A ``Monitor`` use carrying a ``gh`` comments fetch, a ``mkdir`` and a
+    ``pytest`` counts in no ``Bash`` token: ``bash_calls``, ``gh_calls``,
+    ``comments_fetch``, ``comments_seen``, ``scratch`` and ``probe_build``.
+    """
+    t = Transcript()
+    tid = t.call("Monitor", {"command": "gh issue view 1151 -c; mkdir /tmp/m; pytest -q"})
+    t.result(tid, "## Cold read - BUILD")
+    t.bash("ls", "ok")
+    t.end_turn()
+    tokens = run(capsys, t.write(tmp_path), "--issue", "1151").tokens
+    assert tokens["bash_calls"] == "1"
+    assert (tokens["gh_calls"], tokens["comments_fetch"], tokens["comments_seen"]) == ("0", "0", "0")
+    assert (tokens["scratch"], tokens["probe_build"]) == ("none", "none")
+
+
+def test_scratch_dir_is_matched_literally(tmp_path, capsys):
+    """Guards a build that leaves the scratch path unescaped in its regular expression.
+
+    ``/tmp/a+b`` and ``/tmp/(x)`` match themselves; ``/tmp/t.mp`` does not
+    match ``/tmp/tXmp``.
+    """
+    for index, (path, command, expected) in enumerate(
+        [
+            ("/tmp/a+b", "ls /tmp/a+b", "ok"),
+            ("/tmp/a+b", "ls /tmp/aab", "none"),
+            ("/tmp/(x)", "ls /tmp/(x)", "ok"),
+            ("/tmp/t.mp", "ls /tmp/t.mp", "ok"),
+            ("/tmp/t.mp", "ls /tmp/tXmp", "none"),
+        ]
+    ):
+        tokens = tokens_of(capsys, tmp_path / str(index), command, "--issue", "1179", "--scratch-dir", path)
+        assert tokens["scratch"] == expected, (path, command)
+
+
+def test_a_preflight_command_that_names_a_probe_is_still_not_a_probe(tmp_path, capsys):
+    """Guards a build that exempts a preflight command from ``scratch`` but not from ``probe_build``.
+
+    The preflight command here holds ``pytest``, ``make test`` and
+    ``teeth_check.py``, and names the scratch directory: its result begins
+    ``PREFLIGHT ok``, so it is neither a probe nor scratch use.
+    """
+    t = Transcript()
+    t.bash(NOISY_PREFLIGHT_COMMAND, PREFLIGHT_OK)
+    t.end_turn()
+    tokens = run(capsys, t.write(tmp_path), "--issue", "1179", "--scratch-dir", SCRATCH).tokens
+    assert (tokens["scratch"], tokens["probe_build"], tokens["preflight"]) == ("none", "none", "ok")
+    plain = Transcript()
+    plain.bash(NOISY_PREFLIGHT_COMMAND, PREFLIGHT_OK)
+    plain.end_turn()
+    tokens = run(capsys, plain.write(tmp_path / "b"), "--issue", "1179").tokens
+    assert (tokens["scratch"], tokens["probe_build"]) == ("none", "none")
+
+
+def test_patterns_read_the_command_never_the_result(tmp_path, capsys):
+    """Guards a build that searches the result text for the scratch or probe patterns.
+
+    A command that merely prints ``mkdir``, ``git clone``, ``pytest`` or the
+    scratch path is not scratch use or a probe, with and without
+    ``--scratch-dir``.
+    """
+    t = Transcript()
+    t.bash("pwd", "mkdir -p /tmp/w && git clone x y")
+    t.bash("ls", "collected via pytest, then make test, then teeth_check.py")
+    t.end_turn()
+    tokens = run(capsys, t.write(tmp_path / "a"), "--issue", "1179").tokens
+    assert (tokens["scratch"], tokens["probe_build"]) == ("none", "none")
+    named = Transcript()
+    named.bash("pwd", SCRATCH + "\n")
+    named.end_turn()
+    tokens = run(capsys, named.write(tmp_path / "b"), "--issue", "1179", "--scratch-dir", SCRATCH).tokens
+    assert tokens["scratch"] == "none"
+
+
+def test_is_error_false_is_not_an_error(tmp_path, capsys):
+    """Guards a build that reads ``is_error`` as the presence of the key.
+
+    A result with ``is_error`` false is a success: ``mkdir`` is scratch use,
+    and denial text without the error flag is not a denial.
+    """
+    assert tokens_of(capsys, tmp_path / "a", "mkdir /tmp/w", "--issue", "1179", is_error=False)["scratch"] == "ok"
+    assert denied(capsys, tmp_path / "b", DENIAL, is_error=False) == "0"
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        pytest.param("Permission for this action", "1", id="the-prefix-alone"),
+        pytest.param("Permission for this action was denied", "1", id="a-shorter-sentence"),
+        pytest.param("Permission for this action has been denied. Reason: x", "1", id="the-long-sentence"),
+        pytest.param("Exit code 1\nPermission for this action has been denied", "0", id="later-in-the-text"),
+        pytest.param("blocked: Permission for this action", "0", id="after-other-words"),
+    ],
+)
+def test_denial_prefix_must_begin_an_error_result(output, expected, tmp_path, capsys):
+    """Guards a build that finds ``Permission for this action`` anywhere in the text, or needs its longer sentence.
+
+    The text must begin with the prefix, whatever follows it; the same words
+    later in the text, or after other words, are not a denial.
+    """
+    assert denied(capsys, tmp_path, output, is_error=True) == expected
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        pytest.param({"decision": "reject"}, "1", id="reject"),
+        pytest.param({"decision": "ask"}, "0", id="ask"),
+        pytest.param({"decision": "deny"}, "0", id="deny"),
+        pytest.param({"decision": "allow"}, "0", id="allow"),
+        pytest.param({}, "0", id="no-decision"),
+        pytest.param({"decision": None}, "0", id="null-decision"),
+        pytest.param("reject", "0", id="a-string-instead-of-an-object"),
+        pytest.param(["reject"], "0", id="a-list-instead-of-an-object"),
+    ],
+)
+def test_only_a_permission_decision_of_reject_is_a_denial(decision, expected, tmp_path, capsys):
+    """Guards a build that reads any ``permissionDecision`` other than ``allow`` as ``reject``, or crashes on a non-object.
+
+    Only ``permissionDecision.decision`` equal to ``reject`` counts; ``ask``,
+    ``deny``, a missing or null decision, and a ``permissionDecision`` that is not
+    an object do not, and none of them raises.
+    """
+    assert denied(capsys, tmp_path, "fine", permissionDecision=decision) == expected
+
+
+def test_hand_back_without_a_result_record_still_completes(tmp_path, capsys):
+    """Guards a build that needs the hand-back call to have a result.
+
+    The hand-back is the reader's last act, so its result record may be absent
+    from the file.
+    """
+    t = Transcript()
+    t.bash("ls", "ok")
+    t.call("SubagentHandback", {"report": "r"})
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["complete"]) == (0, "1")
+
+
+def test_hand_back_need_not_be_the_last_call(tmp_path, capsys):
+    """Guards a build that accepts the hand-back only as the last ``tool_use``."""
+    t = Transcript()
+    t.bash("ls", "ok")
+    t.hand_back()
+    t.tool("Read", "x", file_path="a")
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["complete"]) == (0, "1")
+
+
+def test_earlier_end_turn_then_a_null_stop_reason_is_incomplete(tmp_path, capsys):
+    """Guards a build that lets a null ``stop_reason`` keep an earlier ``end_turn``.
+
+    The last assistant record decides: here it has no stop reason at all.
+    """
+    t = Transcript()
+    t.end_turn("early")
+    t.call("Read", {"file_path": "a"}, stop=None)
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["complete"]) == (3, "0")
+
+
+@pytest.mark.parametrize("stop", ["max_tokens", "stop_sequence", "tool_use", "pause_turn", ""])
+def test_only_end_turn_is_a_finished_turn(stop, tmp_path, capsys):
+    """Guards a build that counts ``max_tokens`` or ``stop_sequence`` (a cut-off reply) as complete."""
+    t = Transcript()
+    t.bash("ls", "ok")
+    t.call("Read", {"file_path": "a"}, stop=stop)
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["complete"]) == (3, "0")
+
+
+def test_comments_seen_reads_every_comments_fetch_result(tmp_path, capsys):
+    """Guards a build that reads only the first, or only the last, comments-fetch result.
+
+    ``comments_seen`` is 1 when some fetch returned comments, wherever it
+    falls among the fetches; with every fetch empty it is 0.
+    """
+    fetch = "gh issue view 1151 --json comments"
+    cases = {
+        "empty-then-full": ([EMPTY_COMMENTS, COMMENT_RESULT], "1"),
+        "full-then-empty": ([COMMENT_RESULT, EMPTY_COMMENTS], "1"),
+        "full-in-the-middle": ([EMPTY_COMMENTS, COMMENT_RESULT, EMPTY_COMMENTS], "1"),
+        "all-empty": ([EMPTY_COMMENTS, EMPTY_COMMENTS], "0"),
+    }
+    for name, (results, expected) in cases.items():
+        t = Transcript()
+        for output in results:
+            t.bash(fetch, output)
+        t.end_turn()
+        assert run(capsys, t.write(tmp_path / name), "--issue", "1151").tokens["comments_seen"] == expected, name
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        pytest.param("PREFLIGHT ok", "ok", id="bare-ok"),
+        pytest.param("PREFLIGHT failed", "failed", id="bare-failed"),
+        pytest.param("note: PREFLIGHT ok follows", "none", id="ok-inside-the-text"),
+        pytest.param("see PREFLIGHT failed later", "none", id="failed-inside-the-text"),
+    ],
+)
+def test_preflight_words_must_begin_the_result(output, expected, tmp_path, capsys):
+    """Guards a build that finds ``PREFLIGHT ok`` or ``PREFLIGHT failed`` anywhere in the result, or needs more than the prefix.
+
+    The result must begin with the words; a result that is exactly them is
+    enough, and the same words later in the text are not a preflight.
+    """
+    assert tokens_of(capsys, tmp_path, "echo setup", "--issue", "1179", output=output)["preflight"] == expected
+
+
+def test_preflight_is_read_from_bash_results_only(tmp_path, capsys):
+    """Guards a build that reads ``preflight`` from the result of any tool.
+
+    A ``Read`` result that begins ``PREFLIGHT ok`` is not a preflight; and the
+    first ``Bash`` result decides even when a ``Read`` result before it says
+    otherwise.
+    """
+    only_read = Transcript()
+    only_read.tool("Read", PREFLIGHT_OK, file_path="a")
+    only_read.end_turn()
+    assert run(capsys, only_read.write(tmp_path / "a"), "--issue", "1179").tokens["preflight"] == "none"
+    mixed = Transcript()
+    mixed.tool("Read", "PREFLIGHT failed cause=x", file_path="a")
+    mixed.bash("echo setup", PREFLIGHT_OK)
+    mixed.end_turn()
+    assert run(capsys, mixed.write(tmp_path / "b"), "--issue", "1179").tokens["preflight"] == "ok"
+
+
+def test_preflight_failed_fires_for_a_tool_use_before_the_preflight(tmp_path, capsys):
+    """Guards a build that counts only tool uses after the preflight command for ``preflight-failed``.
+
+    The body says the transcript holds a ``tool_use`` other than the ``Bash``
+    command that set ``preflight``: before it counts as much as after it.
+    """
+    t = Transcript()
+    t.tool("Read", "text", file_path="a")
+    t.bash("echo setup", "PREFLIGHT failed cause=x")
+    t.end_turn()
+    flags = run(capsys, t.write(tmp_path), "--issue", "1179").tokens["flags"]
+    assert flags == "scratch-none,no-probe-build,preflight-failed"
+
+
+def test_cold_read_marker_is_enough_without_its_continuation(tmp_path, capsys):
+    """Guards a build that needs more than ``## Cold read`` (a dash, a verdict) to see a comment."""
+    assert seen(capsys, tmp_path, "## Cold read") == "1"
+
+
+def test_deeply_nested_fetch_result_is_not_a_crash(tmp_path, capsys):
+    """Guards a build that lets a recursion error escape when a fetch result is parsed as JSON."""
+    path = one_command(tmp_path, "gh issue view 1151 --json comments", "[" * 200000)
+    result = run(capsys, path, "--issue", "1151")
+    assert (result.rc, result.tokens["comments_seen"]) == (0, "0")
+
+
+def test_deeply_nested_meta_file_is_unknown_not_a_crash(tmp_path, capsys):
+    """Guards a build that lets a recursion error escape when the meta file is parsed."""
+    path = one_command(tmp_path, "ls")
+    write_meta(tmp_path / "agent-aaa.meta.json", "[" * 200000)
+    result = run(capsys, path, "--issue", "1179", "--expect-agent-type", "general-purpose")
+    assert (result.rc, result.tokens["agent_type"]) == (0, "unknown")
+    assert "agent-type" not in result.tokens["flags"]
+
+
+def test_unhashable_ids_do_not_crash_and_do_not_hide_the_valid_commands(tmp_path, capsys):
+    """Guards a build that uses a ``tool_use`` or ``tool_use_id`` as a set member or key unchecked.
+
+    A list or an object where an id belongs must not raise, and the valid
+    commands around it still count.
+    """
+    t = Transcript()
+    t.call("Bash", {"command": "mkdir /tmp/lost"}, tid=["x"])
+    t.call("Bash", {"command": "echo"}, tid={"a": 1})
+    t.result(["x"], "ok")
+    t.result({"a": 1}, "ok")
+    t.bash("mkdir /tmp/w", "ok")
+    t.end_turn()
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["scratch"], result.tokens["bad_lines"]) == (0, "ok", "0")
+
+
+def test_denial_fields_of_the_wrong_type_on_a_real_result_are_read_safely(tmp_path, capsys):
+    """Guards a build that calls ``.get`` on a string ``permissionDecision`` or breaks on an odd ``toolDenialKind``.
+
+    The record reaches the denial test (it holds a ``tool_result``): a string
+    ``permissionDecision`` is not a reject, and the result counts at most once.
+    """
+    t = Transcript()
+    tid = t.call("Bash", {"command": "ls"})
+    t.result(tid, "ok", permissionDecision="reject")
+    t.end_turn()
+    result = run(capsys, t.write(tmp_path), "--issue", "1179")
+    assert (result.rc, result.tokens["denied"]) == (0, "0")
+    odd = Transcript()
+    tid = odd.call("Bash", {"command": "ls"})
+    odd.result(tid, "ok", toolDenialKind={"a": 1}, permissionDecision=["reject"])
+    odd.end_turn()
+    result = run(capsys, odd.write(tmp_path / "b"), "--issue", "1179")
+    assert result.rc == 0
+    assert result.tokens["denied"] in {"0", "1"}
+
+
+VENDOR_MAP = Path(__file__).resolve().parent.parent / "vendor-map.json"
+
+
+def vendor_entry(name: str) -> re.Pattern[str]:
+    return re.compile(
+        rf'^( +)\{{\n\1  "kind": "file",\n\1  "source": "engine/{re.escape(name)}",\n\1  "target": "\.claude/scripts/{re.escape(name)}"\n\1\}},?\n',
+        re.MULTILINE,
+    )
+
+
+def test_vendor_map_entry_is_appended_after_the_dispatch_entry_in_the_existing_indentation():
+    """Guards an entry written in another indentation, or placed before the dispatch entry instead of appended.
+
+    The audit entry is one ``kind: file`` entry in the indentation of the other
+    ``cold_read_*`` entries, and it comes after the dispatch entry.
+    """
+    text = VENDOR_MAP.read_text(encoding="utf-8")
+    json.loads(text)
+    siblings = [vendor_entry(name).search(text) for name in (
+        "cold_read_evidence.py", "cold_read_stamp.py", "cold_read_edit_lint.py", "cold_read_ledger.py", "cold_read_dispatch.py"
+    )]
+    assert all(siblings)
+    audit = vendor_entry("cold_read_audit.py").findall(text)
+    assert len(audit) == 1
+    indent = siblings[0].group(1)
+    assert len(indent) % 2 == 0 and indent
+    assert {match.group(1) for match in siblings} == {indent}
+    assert audit[0] == indent
+    assert vendor_entry("cold_read_audit.py").search(text).start() > siblings[-1].start()
