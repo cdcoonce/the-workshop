@@ -604,6 +604,20 @@ def test_ledger_line_names_tested_head_checks_and_merge(world: World, capsys: py
     assert " checks=4101,4102 " in lines[0]
 
 
+def test_contained_head_ledger_says_ci_is_the_evidence(
+    world: World, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Guards against a ledger that reports a skipped gate with no reason, reading as an omitted control."""
+    world.branch(HEAD_REF)
+    head = world.commit(HEAD_REF, "a.txt", "a\n", "feat: a")
+    marker = tmp_path / "gate-ran"
+    assert land(world, gate=f"touch {marker}") == GREEN
+    lines = ledger_lines(capsys.readouterr().out)
+    assert len(lines) == 1 and LEDGER.fullmatch(lines[0])
+    assert f"tested={head} gate=not run (head contained base; CI on the tested head is the evidence) checks=4101,4102 " in lines[0]
+    assert not marker.exists()
+
+
 def test_failed_merge_that_landed_a_different_tree_exits_2(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Guards against the failed-but-landed path printing the ledger without comparing the landed tree to the tested tree."""
     behind(world)

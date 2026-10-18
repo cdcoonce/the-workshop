@@ -78,10 +78,21 @@ python3 "<skill base dir>/scripts/pr_land.py" land <pr> --method squash --gate "
 `--method {merge,squash,rebase}` and `--gate CMD` are required. Optional:
 `--gate-evidence REGEX`, `--require NAME`, `--accept-delta-change`,
 `--max-rounds 3`, `--trunk dev`, `--release main`, `--timeout 2700`,
-`--interval 15`. Each round merges the live base into the head, runs the gate,
-pushes, waits for `pulls/<pr>` to show that head, watches it, re-reads the base
-from `git/ref/heads/<base>`, and merges with `--match-head-commit <tested>`
-(never `--admin` or `--auto`). A base that moved starts another round.
+`--interval 15`. Each round, when the head is behind the live base, merges the
+base into the head, runs the gate, and pushes; a head that already contains the
+base skips all three (see below). Either way it then waits for `pulls/<pr>` to
+show that head, watches it, re-reads the base from `git/ref/heads/<base>`, and
+merges with `--match-head-commit <tested>` (never `--admin` or `--auto`). A base
+that moved starts another round.
+
+**The gate is conditional.** `--gate` tests the refreshed merge of head and a
+moved base, a tree no CI has seen, and fails it before the push. When the head
+already contains the base there is no such tree: the head is what its own CI
+runs on, so the gate is not run and the watch of that exact SHA is the evidence.
+That is the common case under a `strict` protection on a quiet base, and it is
+not a skipped control. `--gate` is still required because a behind head needs it.
+The skip assumes the required check covers what `--gate` runs; `land` does not
+compare them, so check that once per repo.
 
 It stops without merging — exit 2 unless noted — on: a fork or `dev`→`main` PR, a conflict
 (resolve by hand; stacked PRs: `references/stacked-prs.md`), a changed patch-id, a red gate
@@ -93,6 +104,9 @@ DIFFERS FROM TESTED TREE` (both ids printed) — check by hand.
 
 Success prints exactly one ledger line and exits 0:
 `landed pr=<n> tested=<sha> gate=<note> checks=<run ids>[,status:<status ids>] merge=<oid>`.
+`<note>` is `exit 0` (plus the evidence match) when the gate ran, or `not run (head contained
+base; CI on the tested head is the evidence)` when it did not; the `checks=` ids are that
+evidence.
 
 ## `promote`
 

@@ -359,6 +359,13 @@
       "oracle": "double",
       "find": "                for _ in range(3):\n",
       "replace": "                for _ in range(max_rounds):\n"
+    },
+    {
+      "label": "the ledger's gate note for a contained head loses its CI-is-the-evidence reason (test_contained_head_ledger_says_ci_is_the_evidence)",
+      "file": "../pr_land.py",
+      "oracle": "real",
+      "find": "CONTAINED_GATE_NOTE = \"not run (head contained base; CI on the tested head is the evidence)\"\n",
+      "replace": "CONTAINED_GATE_NOTE = \"not run (head contained base)\"\n"
     }
   ]
 }
