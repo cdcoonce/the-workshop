@@ -19,7 +19,8 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
    `uv run python "<engine>/graph_gardener.py" --acquire-lock`. Proceed only if it exits **0**.
    Acquisition shares the producer's mutex: an active producer, existing fresh apply lease,
    or unavailable lock returns **1**. Stop and retry later in that case; **do not release a
-   lease you failed to acquire**. Successful acquisition writes `.brain/.garden-lock`
+   lease you failed to acquire**. A refusal caused by another apply lease names its holder (session
+   id and how long it has held it). Successful acquisition writes `.brain/.garden-lock`
    so the gardener's detached Stop-hook workers **bail instead of regenerating the queue** while you
    apply — without it, a worker can overwrite `.brain/gardener-<context>.md` mid-pass (the
    producer/consumer race; see `thinking/2026-06-27-gardener-apply-lock-race-fix-design.md`). The lock
@@ -55,6 +56,14 @@ don't come back. Closes the produce → review → apply loop. Design: `thinking
      reverse; the Memory & Self-Sufficiency rule). No-op if `### Auto-memory drift` is absent. Per item:
      - **Promote** → read the auto-memory file, draft a vault note in the right folder (by content) with
        enforced frontmatter + ≥1 `[[wikilink]]` + the appropriate index entry; **review before writing**.
+       **Check at the moment of writing, not at draft time** — review can take minutes, and a session
+       that never ran `/garden` may have changed the vault meanwhile (the lock cannot see it). Right
+       before the `Write`, run
+       `uv run python "<engine>/graph_gardener.py" --check-write --new-note "<note stem>" [--new-note "<alias>" ...]`.
+       Exit **0** → write. Exit **1** → a `STALE:` line says why (HEAD moved since the lease was
+       acquired, with the changed files, or a note already owns that stem/alias): **do not write** —
+       re-read the changed targets, update the existing note instead of duplicating it where one
+       exists, re-present the draft, and run `--rebaseline` once you have re-read, then check again.
        Optionally trim the auto-memory entry to a pointer into the new note (one-way dependency).
      - **Unlink** → strip the brackets where the concept isn't worth its own node.
      - **Dismiss** → append the verbatim `memdrift|<slug>` gsig token (read off the line) to
@@ -133,6 +142,8 @@ show both notes' context (snippets / `graph_cli.py --neighborhood`) and offer:
 - **Release only an acquired lock** — after successful acquisition (step 1), release it on
   **every** exit path (step 7), including "nothing pending" and any error. If acquisition fails,
   stop without releasing. A held lock blocks the gardener until the 30-min TTL.
+- **Stale-write guard** — a promotion is written only after `--check-write` exits 0 at that moment
+  (step 3, Auto-memory drift); a moved HEAD or an existing stem/alias owner means re-read and re-present.
 - **Every edit confirmed** — `/garden` proposes; Charles disposes. Nothing auto-applies.
 - **Reuse, don't rebuild** — link targets for orphans come from `/find`'s `semantic_index.py`; the
   proposals come from the gardener queue. No new analysis engine.
