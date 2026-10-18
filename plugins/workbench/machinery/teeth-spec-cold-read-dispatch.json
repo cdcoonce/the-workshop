@@ -846,6 +846,160 @@
       "oracle": "real",
       "find": "    value = settings.get(key)\n    return value if isinstance(value, str) and value else None\n",
       "replace": "    return settings.get(key)\n"
+    },
+    {
+      "label": "build pass B-MK1c: only the spec text is lowered; the dispatch block is searched as written [test_a_conductor_only_string_in_the_dispatch_block_exits_5]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    lowered = (dispatch + \"\\n\" + spec_text).lower()",
+      "replace": "    lowered = (dispatch + \"\\n\" + spec_text.lower())"
+    },
+    {
+      "label": "build pass B-MK4c: --scratch-root is optional on the command line (omitted flag, reading 2 of 'missing') [test_each_required_option_omitted_is_the_parsers_exit_2_naming_only_it]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        build.add_argument(flag, required=True, metavar=metavar, help=help_text)",
+      "replace": "        build.add_argument(flag, required=(flag != \"--scratch-root\"), metavar=metavar, help=help_text)"
+    },
+    {
+      "label": "build pass C123: --issue is optional on the command line [test_each_required_option_omitted_is_the_parsers_exit_2_naming_only_it]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    build.add_argument(\"--issue\", required=True, type=int, metavar=\"N\", help=\"the issue number\")",
+      "replace": "    build.add_argument(\"--issue\", required=False, type=int, metavar=\"N\", help=\"the issue number\")"
+    },
+    {
+      "label": "build pass C124: --out is optional on the command line [test_each_required_option_omitted_is_the_parsers_exit_2_naming_only_it]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        build.add_argument(flag, required=True, metavar=metavar, help=help_text)",
+      "replace": "        build.add_argument(flag, required=(flag != \"--out\"), metavar=metavar, help=help_text)"
+    },
+    {
+      "label": "build pass C41: only the first occurrence of the checkout path is hidden [test_every_occurrence_of_the_checkout_path_is_hidden_not_only_the_first]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        text = text.replace(form, CHECKOUT_PLACEHOLDER)",
+      "replace": "        text = text.replace(form, CHECKOUT_PLACEHOLDER, 1)"
+    },
+    {
+      "label": "build pass C79: Target: accepts only one digit [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(afk/epic-\\d+)\\s*$\")",
+      "replace": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(afk/epic-\\d)\\s*$\")"
+    },
+    {
+      "label": "build pass C80: Target: accepts any word after afk/epic- [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(afk/epic-\\d+)\\s*$\")",
+      "replace": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(afk/epic-\\w+)\\s*$\")"
+    },
+    {
+      "label": "build pass C81: Target: accepts any non-space value [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(afk/epic-\\d+)\\s*$\")",
+      "replace": "TARGET_LINE_RE = re.compile(r\"^Target:\\s*(\\S+)\\s*$\")"
+    },
+    {
+      "label": "build pass C87: gh exit code is ignored when stdout holds JSON with a body [test_a_gh_failure_exits_4_and_says_which_failure_it_was]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if code != 0:\n        raise _Fail(4, f\"{call} failed (exit {code}): {stderr.strip()}\")",
+      "replace": "    pass"
+    },
+    {
+      "label": "build pass C68: the contract check skips the first given section [test_a_conductor_only_string_in_any_given_section_exits_5]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    lowered = (dispatch + \"\\n\" + spec_text).lower()",
+      "replace": "    lowered = (dispatch + \"\\n\" + \"\\n\\n\".join(_expand(text, values) for _, text in sections[1:])).lower()"
+    },
+    {
+      "label": "build pass C69: the contract check skips the last given section [test_a_conductor_only_string_in_any_given_section_exits_5]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    lowered = (dispatch + \"\\n\" + spec_text).lower()",
+      "replace": "    lowered = (dispatch + \"\\n\" + \"\\n\\n\".join(_expand(text, values) for _, text in sections[:-1])).lower()"
+    },
+    {
+      "label": "build pass C04: --expect-body accepts any prefix of the hash [test_expect_body_that_is_a_prefix_an_empty_value_or_longer_is_a_mismatch]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if args.expect_body is not None and args.expect_body != digest:",
+      "replace": "    if args.expect_body is not None and not digest.startswith(args.expect_body):"
+    },
+    {
+      "label": "build pass C05: an empty --expect-body is treated as not given [test_expect_body_that_is_a_prefix_an_empty_value_or_longer_is_a_mismatch]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    if args.expect_body is not None and args.expect_body != digest:",
+      "replace": "    if args.expect_body and args.expect_body != digest:"
+    },
+    {
+      "label": "build pass C16: the settings file is the first config*.toml of .afk/ (a sibling config.local.toml would be read) [test_settings_come_from_config_toml_and_no_other_file]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    path = Path(checkout) / \".afk\" / \"config.toml\"\n    if not path.is_file():\n        return {}",
+      "replace": "    matches = sorted((Path(checkout) / \".afk\").glob(\"config*.toml\"))\n    if not matches:\n        return {}\n    path = matches[0]"
+    },
+    {
+      "label": "build pass C26: verdict filter strips only ASCII whitespace characters ' \\t\\r\\n' before the prefix test [test_verdict_comments_are_dropped_and_the_rest_keep_their_attribution]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        if body.lstrip().startswith(VERDICT_TITLE):",
+      "replace": "        if body.lstrip(\" \\t\\r\\n\").startswith(VERDICT_TITLE):"
+    },
+    {
+      "label": "build pass C77: leading whitespace is allowed before the hand-built line [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            return text == HAND_BUILT_LINE",
+      "replace": "            return text.lstrip() == HAND_BUILT_LINE"
+    },
+    {
+      "label": "build pass C76: a trailing run of \\r is stripped from the hand-built line (all, not one) [test_fork_branch_precedence]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        text = line[:-1] if line.endswith(\"\\r\") else line",
+      "replace": "        text = line.rstrip(\"\\r\")"
+    },
+    {
+      "label": "build pass C48: the fence counts only backtick runs at the start of a line [test_the_body_sits_byte_for_byte_inside_a_fence_one_backtick_longer]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "    longest = max((len(run) for run in re.findall(r\"`+\", text)), default=0)",
+      "replace": "    longest = max((len(run) for run in re.findall(r\"^`+\", text, re.M)), default=0)"
+    },
+    {
+      "label": "build pass C51: the dispatch block has no Scratch directory line [test_the_dispatch_block_names_every_path_and_the_preflight_command]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            f\"- Scratch directory: {scratch_dir}\",\n",
+      "replace": ""
+    },
+    {
+      "label": "build pass C52: the dispatch block has no Engine directory line [test_the_dispatch_block_names_every_path_and_the_preflight_command]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "            f\"- Engine directory: {engine}\",\n",
+      "replace": ""
+    },
+    {
+      "label": "build pass C88: a regular file is accepted as --scratch-root (exists instead of isdir) [test_a_regular_file_where_a_directory_is_expected_is_a_usage_error]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        if not os.path.isdir(directory):",
+      "replace": "        if not os.path.exists(directory):"
+    },
+    {
+      "label": "build pass archive: a tar extraction failure reports the git archive failure message [test_a_fork_whose_tree_is_empty_exits_4_without_a_traceback]",
+      "file": "engine/cold_read_dispatch.py",
+      "oracle": "real",
+      "find": "        raise _Fail(4, f\"cannot extract the archive of {sha}: {error}\") from error\n",
+      "replace": "        raise _Fail(4, f\"git archive of {sha} failed in {checkout}\") from error\n"
     }
   ]
 }
