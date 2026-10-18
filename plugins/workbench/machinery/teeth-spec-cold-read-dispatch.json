@@ -251,7 +251,7 @@
       "replace": "    return 0, result.stdout, result.stderr\n"
     },
     {
-      "label": "X6: a lazy third-party import inside the preflight [test_every_import_in_the_script_is_standard_library]",
+      "label": "X6: a lazy third-party import inside the preflight [test_every_import_is_standard_library_or_a_sibling_engine_module]",
       "file": "engine/cold_read_dispatch.py",
       "oracle": "real",
       "find": "    value = os.urandom(8).hex()\n",

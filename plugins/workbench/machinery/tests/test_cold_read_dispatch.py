@@ -1001,7 +1001,10 @@ class BuildEnv:
         calls = self.detector_calls = []
 
         def fake(argv, cwd, timeout):
-            calls.append({"argv": list(argv), "cwd": cwd, "timeout": timeout})
+            body_file = argv[argv.index("--body-file") + 1] if "--body-file" in argv else None
+            exists = body_file is not None and Path(body_file).exists()
+            snapshot = Path(body_file).read_bytes() if exists else None
+            calls.append({"argv": list(argv), "cwd": cwd, "timeout": timeout, "body": snapshot})
             result = ten if "afk-driver" in argv else five
             if isinstance(result, BaseException):
                 raise result
@@ -1262,8 +1265,9 @@ def test_expect_body_with_the_equal_value_builds(env):
         "no trailing newline",
         "",
         "a\n\n\n",
+        "Caf\u00e9 \u2014 na\u00efve \u4e2d\u6587 \u2713\n",
     ],
-    ids=["lf", "crlf", "no-newline", "empty", "trailing-blank-lines"],
+    ids=["lf", "crlf", "no-newline", "empty", "trailing-blank-lines", "unicode"],
 )
 def test_body_md_is_the_fetched_body_byte_for_byte(env, body):
     """Line endings are part of the body the reader reads and the detector
@@ -1630,6 +1634,7 @@ def test_detector_5_argv_and_detector_10_call_follow_the_issue(env):
     ]
     assert str(ten["cwd"]) == str(env.afk)
     assert five["timeout"] == 600 and ten["timeout"] == 600
+    assert five["body"] == b"Plain body.\n", "body.md was not written before detector 5 ran"
 
 
 def test_detector_5_ref_override_replaces_the_fork_sha_in_its_argv(env):
@@ -1639,6 +1644,7 @@ def test_detector_5_ref_override_replaces_the_fork_sha_in_its_argv(env):
     assert result.code == 0, result.err
     assert env.detector_calls[0]["argv"][-3:] == ["--json", "--ref", "abc1234"]
     assert result.manifest["fork_sha"] == env.world.tips["main"]
+    assert env.world.tips["main"] in dispatch_block(result.reader)
 
 
 def test_a_non_zero_detector_exit_is_recorded_as_data(env):
@@ -2346,3 +2352,46 @@ def test_a_checkout_reached_through_a_symlink_is_hidden_under_both_spellings(env
     written = (env.out / "detector5.json").read_text(encoding="utf-8")
     assert real not in written and str(link) not in written
     assert real not in without_body(result.reader) and str(link) not in without_body(result.reader)
+
+
+def test_a_checkout_that_is_not_a_directory_is_a_usage_error(env, tmp_path):
+    """Unreadable input is exit 2, decided before any ``git`` call: a build
+    pointed at a path that is not a directory would otherwise exit 4 with a
+    message about ``ls-remote`` that hides the real mistake."""
+    env.checkout = tmp_path / "no-such-checkout"
+    calls = spy_git(env.monkeypatch)
+    result = env.build()
+    assert result.code == 2 and "--checkout" in result.err
+    assert calls == []
+
+
+def test_undecodable_bytes_in_the_spec_or_the_comments_file_do_not_stop_the_build(env):
+    """Every file another tool wrote is decoded with replacement characters:
+    a stray byte in a comment or in the spec's intro must not raise a
+    ``UnicodeDecodeError``."""
+    env.spec.write_bytes(spec_text().replace("Intro,", "Intro \u00e9,").encode("latin-1", errors="replace") + b"\xff\n")
+    env.comments_json.write_bytes(
+        b'{"comments": [{"body": "caf\xe9 note", "author": {"login": "a"}, "createdAt": "t"}]}'
+    )
+    result = env.build()
+    assert result.code == 0, result.err
+    assert "caf\ufffd note" in (env.out / "comments.md").read_text(encoding="utf-8")
+
+
+def test_a_wrapped_what_the_reader_is_given_bullet_is_read_whole_and_no_further(env):
+    """The bullet may wrap onto continuation lines, and the next bullet's own
+    backticked words are not section names; a parser that stops at the first
+    line misses names, one that runs on takes the next bullet's."""
+    spec = spec_text(bullet=False).replace(
+        "## Procedure",
+        "- **What the reader is given.** The reader's prompt carries these sections\n"
+        "  of this file verbatim and no others: `Probe builds`,\n"
+        "  `Detectors` and `Reader contract`.\n"
+        "- **Another bullet.** It mentions `Unrelated section` in passing.\n\n"
+        "## Procedure",
+    )
+    env.spec.write_text(spec, encoding="utf-8")
+    result = env.build()
+    assert result.code == 0, result.err
+    assert result.manifest["spec_sections"] == list(DEFAULT_GIVEN)
+

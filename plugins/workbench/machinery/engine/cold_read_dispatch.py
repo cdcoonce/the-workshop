@@ -11,11 +11,10 @@ conductor in the dispatch; ``build`` generates that dispatch.
 Usage::
 
     python3 "<engine>/cold_read_dispatch.py" preflight --scratch DIR
-    python3 "<engine>/cold_read_dispatch.py" build --repo OWNER/NAME --issue N \
-        --checkout DIR --scratch-root DIR --out DIR --spec FILE \
-        --afk-project DIR --comments-json FILE [--expect-body HEX12] \
-        [--fork-branch BRANCH] [--detector5-ref REF] [--vault-root DIR] \
-        [--teeth-check FILE] [--json]
+    python3 "<engine>/cold_read_dispatch.py" build --repo OWNER/NAME --issue N
+        --checkout DIR --scratch-root DIR --out DIR --spec FILE --afk-project DIR
+        --comments-json FILE [--expect-body HEX12] [--fork-branch BRANCH]
+        [--detector5-ref REF] [--vault-root DIR] [--teeth-check FILE] [--json]
 
 ``preflight`` creates a uniquely named sentinel file in DIR, writes a value to
 it, reads the value back and removes the sentinel, then runs ``git --version``
