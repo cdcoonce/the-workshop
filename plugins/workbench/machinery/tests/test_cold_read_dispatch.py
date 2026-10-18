@@ -796,7 +796,7 @@ COMMAND_MD = (
 VECTOR = Path(__file__).resolve().parent / "fixtures" / "cold_read_stamp_vector.json"
 HAND_BUILT = "Build path: hand-built under the `drain-queue` skill"
 TRUNK_AND_INTEGRATION = 'trunk_branch = "dev"\nintegration_target = "afk/staging"\n'
-BRANCHES = ("dev", "afk/staging", "afk/epic-7", "override-branch")
+BRANCHES = ("dev", "afk/staging", "afk/epic-7", "afk/epic-12", "override-branch")
 SIBLING_MODULES = frozenset({"cold_read_stamp", "cold_read_ledger"})
 READER_GIVEN = (
     "The cold constraint",
@@ -912,6 +912,7 @@ def spec_text(
     bullet=True,
     detectors_extra="",
     probe_text=PROBE_TEXT,
+    contract_extra="",
 ) -> str:
     """A small spec: three sections the reader is given and two it is not.
 
@@ -928,7 +929,7 @@ def spec_text(
     bodies = {
         "Probe builds": probe_text,
         "Detectors": PLACEHOLDER_LINES + detectors_extra,
-        "Reader contract": contract,
+        "Reader contract": contract + contract_extra,
     }
     parts = [SPEC_INTRO]
     for name, text in bodies.items():
@@ -1263,6 +1264,21 @@ def test_expect_body_mismatch_exits_3_prints_both_values_and_creates_nothing(env
     assert env.detector_calls == []
 
 
+@pytest.mark.parametrize("kind", ["prefix", "empty", "longer"])
+def test_expect_body_that_is_a_prefix_an_empty_value_or_longer_is_a_mismatch(env, kind):
+    """The comparison is equality of the 12-hex values: a proper prefix of the
+    real hash, an empty value and the hash with extra characters all exit 3.
+    A build that tests ``startswith`` or treats an empty value as not given
+    dispatches on a body nobody verified."""
+    env.set_body("The body as it is now.\n")
+    actual = cold_read_stamp.body_hash("The body as it is now.\n")[:12]
+    given = {"prefix": actual[:6], "empty": "", "longer": actual + "0"}[kind]
+    result = env.build("--expect-body", given)
+    assert result.code == 3
+    assert actual in result.out + result.err
+    assert not env.out.exists() and env.detector_calls == []
+
+
 def test_expect_body_with_the_equal_value_builds(env):
     """The comparison is equality: the recorded value lets the build through."""
     env.set_body("The body as it is now.\n")
@@ -1304,18 +1320,31 @@ def test_gh_is_called_once_through_api_without_jq(env):
 
 
 @pytest.mark.parametrize(
-    "response",
-    [(1, "", "HTTP 404"), None, (0, "not json", ""), (0, '{"title": "no body"}', "")],
-    ids=["non-zero", "cannot-run", "invalid-json", "no-body-field"],
+    ("response", "message"),
+    [
+        ((1, "", "HTTP 404"), "failed (exit 1)"),
+        ((1, json.dumps({"body": "A body that would build."}), "HTTP 500"), "failed (exit 1)"),
+        (None, "could not be run"),
+        ((0, "not json", ""), "returned invalid JSON"),
+        ((0, '{"title": "no body"}', ""), "returned no 'body' field"),
+    ],
+    ids=["non-zero", "non-zero-with-valid-json", "cannot-run", "invalid-json", "no-body-field"],
 )
-def test_a_gh_failure_exits_4_and_names_the_call(env, response):
+def test_a_gh_failure_exits_4_and_says_which_failure_it_was(env, response, message):
     """A fetch that fails, cannot run or returns no ``body`` field must stop the
-    build with exit 4 and no traceback, never build on an empty body."""
+    build with exit 4 and no traceback, never build on an empty body. Each cause
+    has its own message: a non-zero exit whose stdout happens to be valid JSON
+    with a ``body`` is still a failed fetch (a build that ignores the exit code
+    builds on it), and the exit-code message cannot be mistaken for the
+    invalid-JSON one."""
     env.set_body("ignored", response=response)
     result = env.build()
     assert result.code == 4
-    assert "repos/octo/repo/issues/42" in result.err
+    assert "gh api repos/octo/repo/issues/42" in result.err and message in result.err
+    if message == "failed (exit 1)":
+        assert "invalid JSON" not in result.err
     assert env.detector_calls == []
+    assert not (env.out / "reader.md").exists()
 
 
 # --------------------------------------------------------------------------- #
@@ -1326,6 +1355,11 @@ FORK_CASES = [
     pytest.param("Target: afk/epic-7\nText.\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-beats-every-setting"),
     pytest.param(f"{HAND_BUILT}\nTarget: afk/epic-7\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-beats-the-hand-built-trunk"),
     pytest.param("Target:afk/epic-7\r\nText.\r\n", TRUNK_AND_INTEGRATION, (), "afk/epic-7", "target-line", id="target-line-without-a-space-with-crlf"),
+    pytest.param("Target: afk/epic-12\n", TRUNK_AND_INTEGRATION, (), "afk/epic-12", "target-line", id="target-line-with-two-digits"),
+    pytest.param("Target: afk/epic-7x\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="a-non-numeric-epic-suffix-is-prose"),
+    pytest.param("Target: dev\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="a-target-line-must-name-an-epic-branch"),
+    pytest.param(f"  {HAND_BUILT}\nText.\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="leading-spaces-before-the-hand-built-line-do-not-count"),
+    pytest.param(f"{HAND_BUILT}\r\r\nText.\n", TRUNK_AND_INTEGRATION, (), "afk/staging", "integration_target", id="two-trailing-carriage-returns-are-not-one"),
     pytest.param(f"{HAND_BUILT}\n\nText.\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="hand-built-uses-trunk-branch"),
     pytest.param(f"\n \n{HAND_BUILT}\nText.\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="blank-lines-may-precede-the-hand-built-line"),
     pytest.param(f"{HAND_BUILT}\r\n\r\nText.\r\n", TRUNK_AND_INTEGRATION, (), "dev", "trunk_branch", id="crlf-hand-built-line"),
@@ -1363,11 +1397,14 @@ def test_fork_branch_precedence(env, tmp_path, body, config, extra, branch, sour
 @pytest.mark.parametrize("with_config", [False, True], ids=["other-toml-only", "other-toml-beside-config"])
 def test_settings_come_from_config_toml_and_no_other_file(env, tmp_path, with_config):
     """The settings file is ``.afk/config.toml``; the same keys in another file
-    of that directory are ignored. A build that reads the first ``*.toml`` it
-    finds resolves ``dev`` here instead of ``main`` or ``afk/staging``."""
+    of that directory are ignored, including siblings whose names start with
+    ``config`` and sort before it. A build that reads the first ``*.toml`` or
+    the first ``config*.toml`` resolves ``dev`` here instead of ``main`` or
+    ``afk/staging``."""
     checkout = clone_of(env.world, tmp_path / "checkout-with-settings", None)
     (checkout / ".afk").mkdir()
-    (checkout / ".afk" / "aaa-other.toml").write_text('integration_target = "dev"\n', encoding="utf-8")
+    for sibling in ("aaa-other.toml", "config-a.toml", "config.local.toml"):
+        (checkout / ".afk" / sibling).write_text('integration_target = "dev"\n', encoding="utf-8")
     if with_config:
         (checkout / ".afk" / "config.toml").write_text('integration_target = "afk/staging"\n', encoding="utf-8")
     env.checkout = checkout
@@ -1475,7 +1512,8 @@ def test_a_fork_whose_tree_is_empty_exits_4_without_a_traceback(tmp_path, monkey
     build_env = BuildEnv(tmp_path, SimpleNamespace(checkout=clone, tips={}), monkeypatch, capsys)
     result = build_env.build()
     assert result.code == 4
-    assert "archive" in result.err and "Traceback" not in result.err
+    assert "cannot extract the archive of" in result.err
+    assert "git archive of" not in result.err and "Traceback" not in result.err
 
 
 def test_the_checkout_is_byte_identical_after_a_build(env, tmp_path):
@@ -1542,13 +1580,44 @@ def test_an_unreadable_spec_or_comments_file_is_a_usage_error(env, tmp_path):
     assert env.build().code == 2
 
 
-def test_a_missing_required_option_raises_systemexit_2_naming_it(capsys):
-    """Argument parsing keeps the preflight's behaviour: a missing required
-    option is the parser's ``SystemExit(2)`` with the option named on stderr."""
+@pytest.mark.parametrize("flag", ["--scratch-root", "--checkout"])
+def test_a_regular_file_where_a_directory_is_expected_is_a_usage_error(env, tmp_path, flag):
+    """``exists`` is not ``isdir``: a path that is a file passes an existence
+    check and then ends in a ``NotADirectoryError`` traceback (exit 1) instead of
+    exit 2 naming the option."""
+    plain = tmp_path / "plain-file"
+    plain.write_text("not a directory\n", encoding="utf-8")
+    if flag == "--scratch-root":
+        env.scratch_root = plain
+    else:
+        env.checkout = plain
+    calls = spy_git(env.monkeypatch)
+    result = env.build()
+    assert result.code == 2 and flag in result.err
+    assert calls == [] and env.detector_calls == []
+
+
+REQUIRED_OPTIONS = (
+    "--repo", "--issue", "--checkout", "--scratch-root", "--out", "--spec", "--afk-project", "--comments-json",
+)
+
+
+@pytest.mark.parametrize("flag", REQUIRED_OPTIONS)
+def test_each_required_option_omitted_is_the_parsers_exit_2_naming_only_it(env, flag):
+    """Every option of ``build`` but the optional ones is required: omitting one
+    is the parser's ``SystemExit(2)`` with nothing on stdout and a "required"
+    line that names that option and no other. The usage synopsis lists every
+    flag, so a bare "flag in stderr" check cannot tell a required option from an
+    optional one; an option made optional dies later with a ``TypeError`` (exit
+    1) or is accepted."""
     with pytest.raises(SystemExit) as raised:
-        mod.main(["build", "--repo", "octo/repo"])
+        env.module.main(env.argv(omit=(flag,)))
     assert raised.value.code == 2
-    assert "--issue" in capsys.readouterr().err
+    captured = env.capsys.readouterr()
+    assert captured.out == ""
+    required = re.search(r"the following arguments are required: (.+)", captured.err)
+    assert required and required.group(1).strip() == flag
+    assert env.gh_calls == [] and env.detector_calls == []
 
 
 # --------------------------------------------------------------------------- #
@@ -1559,6 +1628,10 @@ VERDICT_COMMENTS = [
     {"author": {"login": "bot"}, "createdAt": "2026-10-10T10:00:00Z", "body": "## Cold read — REWRITE\nfinding one"},
     {"author": {"login": "bot"}, "createdAt": "2026-10-10T11:00:00Z", "body": "## Cold read — REWRITE\nfinding two"},
     {"author": {"login": "bot"}, "createdAt": "2026-10-10T12:00:00Z", "body": "  \n\t## Cold read — BUILD\nleading whitespace verdict"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T13:00:00Z", "body": "\u00a0## Cold read — REWRITE\nno-break space verdict"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T14:00:00Z", "body": "\u2003## Cold read — BUILD\nem space verdict"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T15:00:00Z", "body": "\x0b## Cold read — REWRITE\nvertical tab verdict"},
+    {"author": {"login": "bot"}, "createdAt": "2026-10-10T16:00:00Z", "body": "\x0c## Cold read — REWRITE\nform feed verdict"},
 ]
 HUMAN_COMMENTS = [
     {"author": {"login": "charles"}, "createdAt": "2026-10-11T09:30:00Z", "body": "A human decision: keep the table.\nSecond line."},
@@ -1581,6 +1654,9 @@ def test_verdict_comments_are_dropped_and_the_rest_keep_their_attribution(env):
     assert "### Comment by charles at 2026-10-11T09:30:00Z\n" in text
     assert "### Comment by dana at 2026-10-11T10:00:00Z\n" in text
     assert "finding one" not in text and "leading whitespace verdict" not in text
+    assert all(cold_read_ledger._is_verdict_comment(c["body"]) for c in VERDICT_COMMENTS)
+    for token in ("no-break space verdict", "em space verdict", "vertical tab verdict", "form feed verdict"):
+        assert token not in text, token
 
 
 def test_only_verdict_comments_leave_the_no_comments_line(env):
@@ -1750,6 +1826,32 @@ def test_detector_stdout_with_the_checkout_path_is_rewritten_everywhere(env):
     assert result.manifest["detector5"]["exit"] == 1
 
 
+def test_every_occurrence_of_the_checkout_path_is_hidden_not_only_the_first(env, tmp_path):
+    """The command and the detector's stdout can each hold the path several
+    times (``--repo-dir``, ``--vault-root`` and ``--body-file`` under it; three
+    echoes in the output); a build that replaces only the first occurrence
+    leaves the rest in the manifest, the evidence file and the prompt."""
+    clone = clone_of(env.world, tmp_path / "multi-checkout")
+    vault = clone / "vault"
+    vault.mkdir()
+    env.checkout = clone
+    env.out = clone / "dispatch-out"
+    env.set_body("See [[Some Note]].\n")
+    live = str(clone)
+    env.fake_detectors(
+        five=(0, json.dumps({"a": live, "b": live + "/x", "c": live + "/y"}) + "\n", "")
+    )
+    result = env.build("--vault-root", str(vault))
+    assert result.code == 0, result.err
+    command = result.manifest["detector5"]["command"]
+    assert live not in command and command.count("<checkout>") == 3
+    written = (env.out / "detector5.json").read_text(encoding="utf-8")
+    assert live not in written and written.count("<checkout>") == 3
+    shown = Block(result.reader, "## Detector 5 command and output")
+    assert live not in shown.head and live not in shown.content
+    assert shown.head.count("<checkout>") == 3 and shown.content.count("<checkout>") == 3
+
+
 def test_a_checkout_path_with_a_trailing_slash_is_still_hidden(env):
     """The evidence script echoes ``str(Path(repo_dir))``, which drops a trailing
     slash; replacing only the argument exactly as given leaves the live path in
@@ -1776,8 +1878,9 @@ def test_a_checkout_path_with_a_trailing_slash_is_still_hidden(env):
         "CRLF one\r\n````\r\nfour above\r\n",
         "no trailing newline",
         "",
+        "``` three at a line start\nand a mid-line run `````` of six\n",
     ],
-    ids=["plain", "five-backticks", "crlf-four-backticks", "no-newline", "empty"],
+    ids=["plain", "five-backticks", "crlf-four-backticks", "no-newline", "empty", "mid-line-run-of-six"],
 )
 def test_the_body_sits_byte_for_byte_inside_a_fence_one_backtick_longer(env, body):
     """A body quoting a code fence must not close the prompt's own: the fence is
@@ -1956,7 +2059,20 @@ def test_the_dispatch_block_names_every_path_and_the_preflight_command(env):
         f'python3 "{engine}/cold_read_dispatch.py" preflight --scratch {manifest["scratch_dir"]}'
     )
     assert manifest["preflight_command"] in block
-    assert f"TEETH_CHECK_STATE_DIR={manifest['scratch_dir']}/teeth-state" in block.split("\n")
+    block_lines = block.split("\n")
+    assert f"TEETH_CHECK_STATE_DIR={manifest['scratch_dir']}/teeth-state" in block_lines
+    for line in (
+        f"- Repository: {env.repo}",
+        f"- Issue: #{env.issue}",
+        f"- Fork point: {manifest['fork_branch']} at {manifest['fork_sha']}",
+        f"- Scratch directory: {manifest['scratch_dir']}",
+        f"- Tree directory: {manifest['tree_dir']}",
+        f"- Engine directory: {engine}",
+        f"- teeth_check.py: {teeth}",
+        f"- Comments file: {manifest['comments_file']}",
+        f"- Preflight command: {manifest['preflight_command']}",
+    ):
+        assert line in block_lines, line
 
 
 def test_each_detector_block_repeats_its_command_exit_and_stdout(env):
@@ -2045,15 +2161,44 @@ def test_a_conductor_only_string_in_a_given_section_exits_5_naming_it(env, plant
     assert not (env.out / "reader.md").exists()
 
 
-@pytest.mark.parametrize("needle", ["--comments", "step 2", "read-only"])
-def test_a_conductor_only_string_in_the_dispatch_block_exits_5(env, tmp_path, needle):
-    """The check covers the dispatch block as well as the spec text: a path the
-    block prints (here the comments file under ``--out``) that holds the string
-    is as much a leak as the spec's own."""
-    env.out = tmp_path / needle / "out"
+DISPATCH_CASES = [
+    ("--comments", "--comments"),
+    ("--COMMENTS", "--comments"),
+    ("step 2", "step 2"),
+    ("Step 2", "step 2"),
+    ("read-only", "read-only"),
+    ("READ-ONLY", "read-only"),
+]
+
+
+@pytest.mark.parametrize(("planted", "needle"), DISPATCH_CASES, ids=[c[0] for c in DISPATCH_CASES])
+def test_a_conductor_only_string_in_the_dispatch_block_exits_5(env, tmp_path, planted, needle):
+    """The check covers the dispatch block as well as the spec text, in any case:
+    a path the block prints (here the comments file under ``--out``) that holds
+    the string is as much a leak as the spec's own. A check that lowers only the
+    spec text passes the mixed-case paths."""
+    env.out = tmp_path / planted / "out"
     result = env.build()
     assert result.code == 5
     assert needle in result.err
+    assert not (env.out / "reader.md").exists()
+
+
+@pytest.mark.parametrize("section", list(DEFAULT_GIVEN))
+def test_a_conductor_only_string_in_any_given_section_exits_5(env, section):
+    """The scan covers every section the reader is given, not the middle one: a
+    scan that skips the first or the last given section passes a needle planted
+    there."""
+    planted = "\nstep 2 fetches them\n"
+    changed = {
+        "Probe builds": {"probe_text": PROBE_TEXT + planted},
+        "Detectors": {"detectors_extra": planted},
+        "Reader contract": {"contract_extra": planted},
+    }[section]
+    env.spec.write_text(spec_text(**changed), encoding="utf-8")
+    result = env.build()
+    assert result.code == 5
+    assert "step 2" in result.err
     assert not (env.out / "reader.md").exists()
 
 
@@ -2340,7 +2485,13 @@ def test_a_git_command_that_fails_exits_4_and_the_build_goes_no_further(env, ver
     env.monkeypatch.setattr(mod, "_run_git", fake)
     result = env.build()
     assert result.code == 4
-    assert verb in result.err and "Traceback" not in result.err
+    said = {
+        "ls-remote": "git ls-remote origin refs/heads/main failed",
+        "fetch": "git fetch origin main failed",
+        "archive": "git archive of",
+    }[verb]
+    assert said in result.err and "Traceback" not in result.err
+    assert "cannot extract" not in result.err
     order = ["ls-remote", "fetch", "archive"]
     assert seen == order[: order.index(verb) + 1]
     assert env.detector_calls == []
