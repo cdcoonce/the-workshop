@@ -995,6 +995,7 @@ EXPECTED_HEADINGS = (
     "Survivors and reachability",
     "Evidence rule",
     "Size flag",
+    "Data slices",
     "Subtract first",
     "Hand-built slices",
     "Every finding carries a default",
