@@ -344,6 +344,26 @@ def test_a_duplicate_slug_across_plugins_is_a_loud_failure(flat_repo: Path, make
     assert "plugins/other/skills/demo-skill" in message
 
 
+def test_a_duplicate_agent_name_across_plugins_is_a_loud_failure(
+    flat_repo: Path, make_plugin
+):
+    """One plugin per agent name, globally.
+
+    The agents reference and the subagent roster key on the frontmatter name;
+    two plugins shipping the same name leaves a roster that cannot say which
+    copy a dispatch resolves to.
+    """
+    make_plugin(flat_repo, "other", agents=["demo-agent"])
+
+    with pytest.raises(stamp.StampError) as excinfo:
+        stamp.stamp(flat_repo)
+
+    message = str(excinfo.value)
+    assert "Agent name 'demo-agent'" in message
+    assert "'demo'" in message
+    assert "'other'" in message
+
+
 def test_two_directories_claiming_one_plugin_name_is_a_loud_failure(
     flat_repo: Path, make_plugin
 ):
