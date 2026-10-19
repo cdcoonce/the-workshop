@@ -227,6 +227,21 @@ class TestRouterBodyDeduplication:
 
         assert "Route skills before responding." in capsys.readouterr().out
 
+    def test_session_ids_that_sanitize_alike_do_not_share_a_claim(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+        self._setup(monkeypatch, tmp_path / "p", "Inventory before reorganizing")
+
+        assert main(session_id="a/b") == 0
+        capsys.readouterr()
+        assert main(session_id="a_b") == 0
+
+        assert "Route skills before responding." in capsys.readouterr().out
+
     def test_without_a_session_id_the_body_is_always_emitted(
         self,
         monkeypatch: pytest.MonkeyPatch,

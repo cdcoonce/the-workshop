@@ -73,17 +73,21 @@ def _claim_router_body(session_id: str | None, source: str | None = None) -> boo
         base = os.environ.get("TMPDIR") or tempfile.gettempdir()
         marker_dir = Path(base, "the-workshop-skill-router")
         marker_dir.mkdir(parents=True, exist_ok=True)
-        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        # Normally importable because the hook runs as a script; pin the
+        # directory so an importlib-style load resolves the sibling too.
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _git_baseline import state_key
+
         os.close(
             os.open(
-                marker_dir / f"{safe_id}.claim",
+                marker_dir / f"{state_key(session_id)}.claim",
                 os.O_CREAT | os.O_EXCL | os.O_WRONLY,
                 0o600,
             )
         )
     except FileExistsError:
         return False
-    except OSError:
+    except (ImportError, OSError):
         return True
     return True
 
