@@ -99,8 +99,15 @@
       "label": "model-id derivation globs the wrong file extension",
       "file": "../ledger.py",
       "oracle": "real",
-      "find": "        for jsonl_path in sorted(source.glob(\"*.jsonl\")):",
-      "replace": "        for jsonl_path in sorted(source.glob(\"*.txt\")):"
+      "find": "        for jsonl_path in sorted(source.rglob(\"*.jsonl\")):",
+      "replace": "        for jsonl_path in sorted(source.rglob(\"*.txt\")):"
+    },
+    {
+      "label": "model-id derivation stops recursing into nested subagent transcripts",
+      "file": "../ledger.py",
+      "oracle": "real",
+      "find": "        for jsonl_path in sorted(source.rglob(\"*.jsonl\")):",
+      "replace": "        for jsonl_path in sorted(source.glob(\"*.jsonl\")):"
     },
     {
       "label": "written run file carries the repo's HEAD commit SHA in a field",

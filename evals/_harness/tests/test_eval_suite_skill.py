@@ -296,9 +296,9 @@ def test_skill_maps_each_attempt_field_to_its_source():
 
 def test_skill_states_the_raw_directory_layout():
     section = _section("6")
-    assert re.search(r"transcripts?.{0,60}`\*\.jsonl`.{0,80}root", section)
+    assert re.search(r"transcripts?.{0,60}`\*\.jsonl`", section)
     assert re.search(r"beside .{0,30}`end_state/`", section)
-    assert re.search(r"`ledger.write_run` globs `\*\.jsonl` at that root to compute `model_ids`", section)
+    assert re.search(r"`ledger.write_run` globs `\*\*/\*\.jsonl` under that root to compute `model_ids`", section)
 
 
 def test_skill_tells_the_inline_conductor_to_hand_lens_agents_the_built_prompt():
@@ -656,8 +656,8 @@ def test_write_run_refuses_to_overwrite_an_existing_run_file_as_the_skill_says(t
         ledger_write_run(runs_dir, copy.deepcopy(run), _raw_sources_for(run, tmp_path / "raw2"), now=_FIXED_NOW)
 
 
-def test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_never_seen_as_the_skill_says(tmp_path):
-    assert re.search(r"a transcript placed in a subdirectory is never seen", _section("6"))
+def test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_seen_as_the_skill_says(tmp_path):
+    assert re.search(r"including nested subagent transcripts in subdirectories", _section("6"))
     run = _documented_run()
     sources = _raw_sources_for(run, tmp_path / "raw")
     for source in sources.values():
@@ -666,7 +666,7 @@ def test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_never_seen_as_th
 
     run_file = _harness_function("ledger", "write_run")(tmp_path / "runs", copy.deepcopy(run), sources, now=_FIXED_NOW)
 
-    assert json.loads(run_file.read_text(encoding="utf-8"))["cases"][0]["model_ids"] == []
+    assert json.loads(run_file.read_text(encoding="utf-8"))["cases"][0]["model_ids"] == ["claude-test"]
 
 
 def test_the_documented_fingerprint_keys_are_what_compute_fingerprint_returns():
