@@ -11,6 +11,11 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:
+    from scripts._frontmatter import extract_block
+except ModuleNotFoundError:  # run as `python scripts/dev_cycle_validate.py`
+    from _frontmatter import extract_block
+
 VALID_PHASES = (
     "brainstorm", "plan", "ceo_review", "issues",
     "implement", "code_review", "pr",
@@ -19,16 +24,12 @@ VALID_STATUSES = ("not_started", "in_progress", "completed", "abandoned")
 VALID_ARTIFACT_STATUSES = ("pending", "in_progress", "completed", "blocked")
 CURRENT_SCHEMA_VERSION = 1
 
-# The closing delimiter must sit on its own line (optionally followed by
-# trailing whitespace, then a newline or end-of-string). Without that anchor,
-# a frontmatter value containing a literal `\n---` line closes the match
-# early — the same failure mode as smoke_test._parse_frontmatter's str.find.
-_FRONTMATTER_RE = re.compile(r"\A---\n(.+?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 # A trailing `# comment` counts only when whitespace precedes the `#`. With
 # `\s*` the optional comment group matches at the first `#` anywhere in the
 # value — the lazy `(.+?)` stops there — so `branch: fix/issue-#123` parsed as
 # `fix/issue-`, silently dropping the issue number. Matches the `\s+#` rule
-# smoke_test._parse_frontmatter already uses.
+# smoke_test._parse_frontmatter already uses (the closing-delimiter rule lives
+# in scripts/_frontmatter.py).
 _FIELD_RE = re.compile(r"^(\w+):\s*(.+?)(?:\s+#.*)?$", re.MULTILINE)
 _ARTIFACT_ROW_RE = re.compile(
     r"^\|\s*(\w+)\s*\|\s*(\w+)\s*\|\s*(.+?)\s*\|$", re.MULTILINE
@@ -155,12 +156,12 @@ def parse_state_file(path: Path) -> StateFile:
         a non-integer schema_version.
     """
     text = path.read_text()
-    match = _FRONTMATTER_RE.search(text)
-    if not match:
+    block = extract_block(text, strict_open=True)
+    if block is None:
         raise ValueError(f"No YAML frontmatter found in {path.name}")
 
     raw_fields: dict[str, str] = {}
-    for field_match in _FIELD_RE.finditer(match.group(1)):
+    for field_match in _FIELD_RE.finditer(block):
         raw_fields[field_match.group(1)] = field_match.group(2).strip()
 
     for req in REQUIRED_FIELDS:
