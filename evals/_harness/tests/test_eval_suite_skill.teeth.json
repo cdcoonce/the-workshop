@@ -229,7 +229,7 @@
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
       "why": "Killed by test_skill_states_the_raw_directory_layout.",
-      "find": "its transcripts as `*.jsonl`\nfiles at that directory's root, beside the `end_state/` snapshot directory\nfrom step 4. `ledger.write_run` globs `*.jsonl` at that root to compute\n`model_ids`, so a transcript placed in a subdirectory is never seen.",
+      "find": "its transcripts as `*.jsonl`\nfiles, beside the `end_state/` snapshot directory from step 4.\n`ledger.write_run` globs `**/*.jsonl` under that root to compute `model_ids`,\nincluding nested subagent transcripts in subdirectories.",
       "replace": "its transcripts in a\n`transcripts/` subdirectory, beside the `end_state/` snapshot directory\nfrom step 4."
     },
     {
@@ -388,9 +388,9 @@
       "label": "[SK24] transcripts said to be found in subdirectories",
       "file": "../../../.claude/skills/eval-suite/SKILL.md",
       "oracle": "real",
-      "why": "Killed by test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_never_seen_as_the_skill_says and test_skill_states_the_raw_directory_layout.",
-      "find": "`ledger.write_run` globs `*.jsonl` at that root to compute\n`model_ids`, so a transcript placed in a subdirectory is never seen.",
-      "replace": "`ledger.write_run` globs `**/*.jsonl` to compute\n`model_ids`, so a transcript placed in a subdirectory is also seen."
+      "why": "Killed by test_a_transcript_in_a_subdirectory_of_the_raw_directory_is_seen_as_the_skill_says and test_skill_states_the_raw_directory_layout.",
+      "find": "`ledger.write_run` globs `**/*.jsonl` under that root to compute `model_ids`,\nincluding nested subagent transcripts in subdirectories.",
+      "replace": "`ledger.write_run` globs `*.jsonl` at that root to compute `model_ids`,\nso a transcript placed in a subdirectory is never seen."
     },
     {
       "label": "[SK25] snapshot dest said to be mergeable",
