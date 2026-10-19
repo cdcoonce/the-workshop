@@ -221,3 +221,19 @@ def test_a_waiver_inside_the_block_is_not_stray() -> None:
 )
 def test_quoted_examples_and_prose_are_not_stray_waivers(text: str) -> None:
     assert stray_waivers(text, "sweep") == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- waive LEGACY_SCHEMA `docs/weird file`name.md`: x",
+        "- waive LEGACY_SCHEMA ``docs/weird file`name.md``: x",
+    ],
+)
+def test_a_path_holding_a_space_and_a_backtick_is_malformed_not_waived(line: str) -> None:
+    """Unsupported by design (#979): backticks cannot delimit a path that holds
+    one, and no C-string quoting is accepted. The line must fail loudly."""
+    waivers, malformed = parse_waivers(f"{line}\n")
+
+    assert waivers == []
+    assert malformed == [line]
