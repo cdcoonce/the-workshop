@@ -31,6 +31,7 @@ A concise description of this vertical slice. Describe the end-to-end behavior, 
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Criterion 3
+- [ ] (oracle slices) Population per class: <source>, <counts>; seeded defects named if the scarce class is below the bar
 
 <!-- Repeat the "## Phase N" block above (separated by a `---` rule) for each phase -->
 </plan-template>
