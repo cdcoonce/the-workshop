@@ -140,6 +140,22 @@ def test_write_run_fills_model_ids_from_transcript_only_discarding_self_reported
     assert "forged-model-9000" not in json.dumps(written)
 
 
+def test_write_run_collects_model_ids_from_nested_subagent_transcripts(tmp_path):
+    runs_dir = tmp_path / "evals" / "example-skill" / "runs"
+    source = _build_raw_source(tmp_path, "attempt-1", ["claude-sonnet-5"])
+    _write_transcript(
+        source / "subagents" / "nested" / "agent-1.jsonl", ["claude-haiku-5"]
+    )
+
+    run_file = write_run(runs_dir, _base_run(), {"case-a/attempt-1/": source})
+
+    written = json.loads(run_file.read_text(encoding="utf-8"))
+    assert sorted(written["cases"][0]["model_ids"]) == [
+        "claude-haiku-5",
+        "claude-sonnet-5",
+    ]
+
+
 def test_write_run_scrubs_home_paths_from_run_file_and_raw_copy(tmp_path):
     home = str(Path.home())
     runs_dir = tmp_path / "evals" / "example-skill" / "runs"
