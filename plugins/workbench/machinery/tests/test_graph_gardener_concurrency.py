@@ -55,7 +55,7 @@ def _vault(tmp_path: Path) -> Path:
     (tmp_path / "personal").mkdir()
     (tmp_path / ".vault-context").write_text("personal")
     for sid in ("first", "second"):
-        (tmp_path / "personal" / f"{sid}.md").write_text(f"note {sid}\n")
+        (tmp_path / "personal" / f"{sid}.md").write_text(f"note {sid}: " + "link-free prose. " * 30 + "\n")
     return tmp_path
 
 
