@@ -1694,7 +1694,9 @@ def test_premise_pass_asks_the_four_questions() -> None:
     assert "claim | query | measured | holds" in section
     for label in ("**Population**", "**Mutability**", "**State definitions**", "**Seed membership**"):
         assert label in section, f"premise question {label} is missing"
-    assert "tie rule" in section
+    mutability = section[section.index("**Mutability**") :].split("\n", 1)[0]
+    assert "anchored version unique" in mutability
+    assert "tie rule" in mutability
     assert "by current label or by event" in section
     assert "not cold" in section
 
