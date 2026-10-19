@@ -148,6 +148,44 @@ def test_changed_source_is_reported_against_a_real_git_baseline(repo: Path) -> N
     assert ("module-map.md", "changed-source") in _kinds(_check(repo))
 
 
+def _mutual_repo(repo: Path) -> tuple[Path, Path]:
+    """Two stamped docs that cover each other (#734): root README and reference README."""
+    _git(repo, "init", "-q")
+    _write(repo / "README.md", "# Root\n")
+    _write(repo / "docs" / "reference" / "README.md", "# Ref\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "baseline")
+    return repo / "README.md", repo / "docs" / "reference" / "README.md"
+
+
+def test_footer_only_change_to_a_covered_doc_is_not_a_finding(repo: Path) -> None:
+    """Repointing doc B's baseline must not make doc A (which covers B) go stale (#734)."""
+    root, ref = _mutual_repo(repo)
+    base = _git(repo, "rev-parse", "HEAD")
+    _write(root, "# Root\n", NEW.format(mode="landing", baseline=base, covers="docs/reference/README.md"))
+    _write(ref, "# Ref\n", NEW.format(mode="reference", baseline=base, covers="README.md"))
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "stamp both")
+    stamped = _git(repo, "rev-parse", "HEAD")
+    # Final repoint: only the footer line of the reference README changes.
+    _write(ref, "# Ref\n", NEW.format(mode="reference", baseline=stamped, covers="README.md"))
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "repoint ref")
+    _write(root, "# Root\n", NEW.format(mode="landing", baseline=stamped, covers="docs/reference/README.md"))
+    assert [f for f in _check(repo) if f.kind == "changed-source"] == []
+
+
+def test_body_change_to_a_covered_doc_is_still_a_finding(repo: Path) -> None:
+    root, ref = _mutual_repo(repo)
+    base = _git(repo, "rev-parse", "HEAD")
+    _write(root, "# Root\n", NEW.format(mode="landing", baseline=base, covers="docs/reference/README.md"))
+    _write(ref, "# Ref changed\n", NEW.format(mode="reference", baseline=base, covers="README.md"))
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "body + footer")
+    findings = [f for f in _check(repo) if f.kind == "changed-source"]
+    assert ("README.md", "changed-source") in _kinds(findings)
+
+
 # --------------------------------------------------------------------------
 # Relative link integrity
 # --------------------------------------------------------------------------
