@@ -2024,3 +2024,66 @@ WRAP_UP_SKILL_DIR = SCRIPTS_DIR.parent.parent / "skills" / "vault-wrap-up" / "sc
 def test_edit_blocks_engine_copy_matches_the_skill_copy() -> None:
     """edit_blocks ships twice; the two copies must stay byte-identical."""
     assert (SCRIPTS_DIR / "edit_blocks.py").read_bytes() == (WRAP_UP_SKILL_DIR / "edit_blocks.py").read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# handoff_date_line (#982): the `_Updated`/`_Refreshed` line is date-only
+# ---------------------------------------------------------------------------
+
+
+def _date_line_vault(tmp_path: Path, files: dict[str, str]) -> dict:
+    _git_init(tmp_path)
+    _write(tmp_path, ".vault-context", "personal")
+    _write(tmp_path, "brain/Anchor.md", _note("Anchor", body="See [[Other]]."))
+    _write(tmp_path, "brain/Other.md", _note("Other"))
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    _git_commit_all(tmp_path, "init")
+    return collect(tmp_path, files=["brain/Anchor.md"], base="HEAD")
+
+
+def test_handoff_date_only_lines_are_clean(tmp_path: Path) -> None:
+    report = _date_line_vault(
+        tmp_path,
+        {
+            ".brain/handoff-personal.md": "# H\n\n_Updated 2026-10-18_\n\n" + _handoff_text(),
+            ".brain/handoff-work.md": "# H\n\n_Refreshed 2026-10-18._\n\n" + _handoff_text(),
+        },
+    )
+    node = report["checks"]["handoff_date_line"]
+    assert node["count"] == 0
+    assert report["verdict"] == "CLEAN"
+
+
+def test_handoff_date_line_with_trailing_clause_fails(tmp_path: Path) -> None:
+    report = _date_line_vault(
+        tmp_path,
+        {
+            ".brain/handoff-work.md": "# H\n\n_Updated 2026-10-18 from Vault evidence. More prose._\n\n"
+            + _handoff_text(),
+        },
+    )
+    node = report["checks"]["handoff_date_line"]
+    assert node["count"] == 1
+    finding = node["findings"][0]
+    assert finding["file"] == ".brain/handoff-work.md"
+    assert finding["line"] == 3
+    assert report["verdict"] == "FINDINGS"
+
+
+def test_handoff_date_line_check_skips_prev_backups(tmp_path: Path) -> None:
+    report = _date_line_vault(
+        tmp_path,
+        {
+            ".brain/handoff-personal.prev.md": "# H\n\n_Updated 2026-08-29 (old changelog clause)_\n",
+            ".brain/handoff-personal.md": "# H\n\n_Updated 2026-10-18_\n\n" + _handoff_text(),
+        },
+    )
+    assert report["checks"]["handoff_date_line"]["count"] == 0
+    assert report["verdict"] == "CLEAN"
+
+
+def test_handoff_date_line_ignores_fenced_examples(tmp_path: Path) -> None:
+    fenced = "# H\n\n```\n_Updated 2026-10-18 (example changelog)_\n```\n\n"
+    report = _date_line_vault(tmp_path, {".brain/handoff-work.md": fenced + _handoff_text()})
+    assert report["checks"]["handoff_date_line"]["count"] == 0
