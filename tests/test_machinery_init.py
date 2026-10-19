@@ -1164,6 +1164,7 @@ class TestScaffoldedVaultIsUsable:
         for path in (
             ".vault/plugin-state.json",
             ".vault/.plugin-miss-count",
+            ".vault/.plugin-session-track",
             ".claude/data/*",
             ".claude/worktrees/",
             ".claude/settings.local.json",
