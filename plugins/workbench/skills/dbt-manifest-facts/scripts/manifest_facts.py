@@ -279,6 +279,10 @@ def lineage(manifest: dict, node_name: str) -> dict:
     ]
     if not matches:
         raise ManifestError(f"no node named {node_name!r} in the manifest")
+    if len(matches) > 1:
+        raise ManifestError(
+            f"{node_name!r} is ambiguous; candidates: {', '.join(sorted(matches))}"
+        )
     uid = matches[0]
     entry = {**_nodes(manifest), **manifest.get("sources", {})}[uid]
 

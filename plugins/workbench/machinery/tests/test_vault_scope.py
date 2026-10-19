@@ -72,6 +72,30 @@ def test_task_ledgers_are_governed_but_not_graph_notes(tmp_path: Path) -> None:
     assert is_graph_markdown_note(archived_work, tmp_path) is False
 
 
+def test_archive_transience_is_year_agnostic(tmp_path: Path) -> None:
+    archived_next_year = _write(tmp_path, "work/archive/2027/tasks/2027-W01-tasks.md")
+
+    assert is_transient_note(archived_next_year, tmp_path) is True
+    assert is_graph_markdown_note(archived_next_year, tmp_path) is False
+
+
+def test_scaffold_template_transient_prefixes_match_defaults() -> None:
+    import ast
+    import re
+
+    import vault_scope_defaults
+
+    tmpl = (Path(__file__).resolve().parents[1] / "scaffold" / "vault_scope.py.tmpl").read_text()
+    tree = ast.parse(re.sub(r"\$\{\w+\}", "", tmpl))
+    values = [
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(getattr(t, "id", None) == "TRANSIENT_PREFIXES" for t in node.targets)
+    ]
+    assert values == [vault_scope_defaults.TRANSIENT_PREFIXES]
+
+
 def test_iterators_are_sorted_and_profile_specific(tmp_path: Path) -> None:
     _write(tmp_path, "personal/b.md")
     _write(tmp_path, "personal/a.md")

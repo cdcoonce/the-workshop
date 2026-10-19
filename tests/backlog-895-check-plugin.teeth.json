@@ -1,0 +1,114 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_check_plugin.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--collect-only",
+    "-q",
+    "tests/test_check_plugin.py"
+  ],
+  "mutants": [
+    {
+      "label": "#895: stale-session counter never increments [predicted: test_an_unchanged_session_marker_warns_with_version_and_count]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "unchanged=$(( unchanged + 1 ))",
+      "replace": "unchanged=0"
+    },
+    {
+      "label": "#895: stale-session tracker never persisted [predicted: test_a_removed_plugin_leaves_a_stale_breadcrumb_that_warns_within_n_sessions]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "  printf '%s\\n%s\\n' \"$signature\" \"$unchanged\" > \"$TRACK\" 2>/dev/null\n",
+      "replace": "  :\n"
+    },
+    {
+      "label": "#895: changed marker does not reset the count [predicted: test_a_resumed_plugin_resets_the_stale_count]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "  else\n    unchanged=0\n  fi",
+      "replace": "  fi"
+    },
+    {
+      "label": "#895: grace session removed [predicted: test_the_missing_breadcrumb_branch_still_warns_after_the_grace_session]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ \"$misses\" -le 1 ] && exit 0",
+      "replace": "[ \"$misses\" -le 0 ] && exit 0"
+    },
+    {
+      "label": "#895: orphan test dropped [predicted: test_a_recorded_root_carrying_orphaned_at_warns_to_restart]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ -n \"$root\" ] && [ -f \"$root/.orphaned_at\" ] || continue",
+      "replace": "continue"
+    },
+    {
+      "label": "#895: marker check warns on absence [predicted: test_a_recorded_root_without_the_marker_convention_is_silent]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ -n \"$root\" ] && [ -f \"$root/.orphaned_at\" ] || continue",
+      "replace": "[ -n \"$root\" ] && [ ! -f \"$root/.orphaned_at\" ] || continue"
+    },
+    {
+      "label": "#895: remedy tells the owner to update instead of restart [predicted: test_a_recorded_root_carrying_orphaned_at_warns_to_restart]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "Restart the session to pick up the current copy; updating the plugin again changes nothing.",
+      "replace": "Run: claude plugin update workbench@the-workshop"
+    },
+    {
+      "label": "#895: cross-platform comparison dropped [predicted: test_platforms_recording_different_versions_warn_naming_both]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "elif [ \"$pversion\" != \"$first_version\" ]; then",
+      "replace": "elif false; then"
+    },
+    {
+      "label": "#895: disagreement fires on equal versions [predicted: test_platforms_recording_the_same_version_do_not_disagree]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "elif [ \"$pversion\" != \"$first_version\" ]; then",
+      "replace": "elif [ -n \"$pversion\" ]; then"
+    },
+    {
+      "label": "#895: markerless legacy breadcrumb is judged [predicted: test_a_legacy_only_breadcrumb_without_a_session_behaves_as_before]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "if [ \"$signature\" != \"$(printf '|%.0s' \"${crumbs[@]}\")\" ]; then",
+      "replace": "if true; then"
+    },
+    {
+      "label": "#895: positive control: a warning path exits 1 [predicted: test_every_warning_path_exits_zero]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "    break\n  fi\ndone\n",
+      "replace": "    exit 1\n  fi\ndone\n"
+    },
+    {
+      "label": "#895: gitignore drops the session tracker [predicted: test_the_scaffolded_gitignore_covers_the_session_tracker]",
+      "file": "../plugins/workbench/machinery/scaffold/gitignore.tmpl",
+      "oracle": "real",
+      "find": ".vault/.plugin-session-track\n",
+      "replace": ""
+    }
+  ]
+}

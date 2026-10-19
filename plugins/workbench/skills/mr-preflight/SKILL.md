@@ -50,6 +50,10 @@ description, inside its sweep block:
   is required. A path holding a newline, tab, other control character, `"`,
   `\` or a byte that is not UTF-8 is reported quoted the way git quotes it
   (`"docs/new\nline.md"`); waive it in that quoted form, exactly as reported.
+  A path holding both a space and a backtick **cannot be waived**: backticks cannot
+  delimit a name that holds one, and no other quoting is accepted. Its waiver line is
+  reported as `malformed waiver:` and the hit keeps blocking, so rename the file or fix
+  the reference.
 - **Scope:** a waiver covers every hit of `TOKEN` in that one `path`, whatever
   line it is on, so editing the file above the hit never invalidates it. The
   same name in any other file, even one with the same basename, still blocks.

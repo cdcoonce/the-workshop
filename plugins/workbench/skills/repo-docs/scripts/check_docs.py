@@ -138,8 +138,42 @@ def _relative_targets(text: str) -> list[str]:
     return targets
 
 
+def _is_footer_line(line: str) -> bool:
+    """A diff body line that is nothing but a provenance footer (``+``/``-`` stripped)."""
+    return _PROVENANCE.fullmatch(line.strip()) is not None
+
+
+def _footer_only(baseline: str, path: str, repo_root: Path) -> bool:
+    """True when every changed line of ``path`` since ``baseline`` is a provenance footer.
+
+    Mutually-covering stamped docs can never both be current otherwise: the commit
+    that repoints one doc's baseline is itself a change the other doc covers.
+    Binary files and any git failure count as real changes.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "diff", "-U0", "--no-color", f"{baseline}..HEAD", "--", path],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return False
+    if result.returncode != 0 or "\nBinary files " in "\n" + result.stdout:
+        return False
+    body = [
+        line
+        for line in result.stdout.splitlines()
+        if line[:1] in "+-" and not line.startswith(("+++", "---"))
+    ]
+    return bool(body) and all(_is_footer_line(line[1:]) for line in body)
+
+
 def _changed_since(baseline: str, paths: tuple[str, ...], repo_root: Path) -> list[str]:
-    """Covered paths with commits after ``baseline``; empty on any git failure."""
+    """Covered paths with commits after ``baseline``; empty on any git failure.
+
+    A path whose only change is its provenance footer line is not reported.
+    """
     try:
         result = subprocess.run(
             ["git", "-C", str(repo_root), "diff", "--name-only", f"{baseline}..HEAD", "--", *paths],
@@ -151,7 +185,11 @@ def _changed_since(baseline: str, paths: tuple[str, ...], repo_root: Path) -> li
         return []
     if result.returncode != 0:
         return []
-    return [line for line in result.stdout.splitlines() if line.strip()]
+    return [
+        line
+        for line in result.stdout.splitlines()
+        if line.strip() and not _footer_only(baseline, line, repo_root)
+    ]
 
 
 def _mode_finding(doc: Path, mode: str | None, *, label: str, docs_root: Path) -> Finding | None:

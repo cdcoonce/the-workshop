@@ -1043,3 +1043,87 @@ def test_note_and_base_sharing_a_stem_make_a_bare_link_ambiguous(tmp_path: Path)
     assert "brain/Foo.md" in ambiguous[0]
     assert "bases/Foo.base" in ambiguous[0]
 
+
+
+# ---------------------------------------------------------------------------
+# docs_vs_disk (#753): AGENTS.md Folder Structure block vs top-two-level dirs
+# ---------------------------------------------------------------------------
+
+TREE = """# Vault
+
+## Folder Structure
+
+```
+the-vault/
+├── brain/              # Durable knowledge
+│   ├── North Star.md       # a file, never a dir
+│   └── (Glossary, …)       # pseudo entry
+├── work/               # Work
+│   ├── active/             # Current
+│   │                       #   continuation comment
+│   └── archive/            # Done
+│       └── 2026/               # depth 3, not audited
+├── ci/ · tests/ · docs/  # grouped tooling line
+└── .brain/             # Session state
+```
+
+## Next Section
+"""
+
+
+def _tree_vault(tmp_path: Path, dirs: list[str], agents: str = TREE) -> Path:
+    _write(tmp_path, "AGENTS.md", agents)
+    for d in dirs:
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+
+DOC_DIRS = ["brain", "work/active", "work/archive", "ci", "tests", "docs", ".brain"]
+
+
+def _docs_vs_disk(root: Path) -> list[dict[str, str]]:
+    return audit(root)["issues"]["docs_vs_disk"]
+
+
+def test_docs_vs_disk_clean_when_tree_matches_disk(tmp_path: Path) -> None:
+    _tree_vault(tmp_path, DOC_DIRS + ["work/archive/2026", ".git/objects", ".obsidian/plugins"])
+    assert _docs_vs_disk(tmp_path) == []
+
+
+def test_docs_vs_disk_flags_undocumented_dirs_at_both_levels(tmp_path: Path) -> None:
+    _tree_vault(tmp_path, DOC_DIRS + ["school/courses", "work/incidents"])
+    details = " | ".join(i["detail"] for i in _docs_vs_disk(tmp_path))
+    assert "`school/`" in details
+    assert "`school/courses/`" not in details  # parent undocumented: report once
+    assert "`work/incidents/`" in details
+
+
+def test_docs_vs_disk_flags_documented_but_missing_dirs(tmp_path: Path) -> None:
+    _tree_vault(tmp_path, [d for d in DOC_DIRS if d not in ("work/active", "ci")])
+    details = " | ".join(i["detail"] for i in _docs_vs_disk(tmp_path))
+    assert "`work/active/`" in details and "missing on disk" in details
+    assert "`ci/`" in details
+
+
+def test_docs_vs_disk_without_agents_md_is_silent(tmp_path: Path) -> None:
+    (tmp_path / "anything").mkdir()
+    assert _docs_vs_disk(tmp_path) == []
+
+
+def test_docs_vs_disk_missing_block_is_a_finding(tmp_path: Path) -> None:
+    _write(tmp_path, "AGENTS.md", "# Vault\n\nno tree here\n")
+    issues = _docs_vs_disk(tmp_path)
+    assert len(issues) == 1 and "Folder Structure" in issues[0]["detail"]
+
+
+def test_docs_vs_disk_skips_gitignored_dirs_and_tolerates_ignored_documented_dir(tmp_path: Path) -> None:
+    import subprocess
+
+    _tree_vault(tmp_path, [d for d in DOC_DIRS if d != "tests"] + [".venv/lib", "scratch/x"])
+    _write(tmp_path, ".gitignore", ".venv/\nscratch/\ntests/\n")
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
+    for d in DOC_DIRS + [".venv/lib", "scratch/x"]:
+        if (tmp_path / d).is_dir():
+            _write(tmp_path, f"{d}/keep.md", "x")
+    # tests/ is documented and gitignored but absent here: not drift.
+    assert _docs_vs_disk(tmp_path) == []

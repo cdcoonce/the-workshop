@@ -23,6 +23,15 @@ START_HOOK = (
 )
 
 
+def _state_key(raw: str) -> str:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_git_baseline", START_HOOK.parent / "_git_baseline.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.state_key(raw)
+
+
 def _run(payload: dict) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(START_HOOK)],
@@ -52,7 +61,7 @@ def test_normal_run_writes_baseline_head_and_signature_lines(tmp_path: Path) -> 
     result = _run({"cwd": str(tmp_path), "agent_id": "a1"})
 
     assert result.returncode == 0
-    state = git_dir / "the-workshop-subagent-gate" / "a1.txt"
+    state = git_dir / "the-workshop-subagent-gate" / f"{_state_key('a1')}.txt"
     lines = state.read_text().split("\n")
     # No commits yet: HEAD is unresolvable and must be normalized to "", never
     # the literal "None". The signature line is a non-empty hex digest.

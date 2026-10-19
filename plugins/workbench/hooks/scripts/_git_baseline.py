@@ -50,6 +50,19 @@ def _run_git(args: list[str], cwd: Path, timeout: int = 10) -> str | None:
     return result.stdout.strip()
 
 
+def state_key(raw: str) -> str:
+    """A single safe path component naming `raw`, distinct for distinct `raw`.
+
+    Hook payload ids are untrusted: the sanitized text keeps the name readable
+    and free of separators, and the short hash of the *raw* id keeps ids that
+    sanitize alike ("a/b" and "a_b") from sharing one state file.
+    """
+    text = str(raw)
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in text)
+    digest = hashlib.sha1(text.encode("utf-8", "surrogatepass")).hexdigest()[:8]
+    return f"{safe}-{digest}"
+
+
 def git_dir(project_dir: Path) -> Path | None:
     """Absolute .git directory for `project_dir`, or None outside a repo."""
     out = _run_git(["rev-parse", "--absolute-git-dir"], project_dir)

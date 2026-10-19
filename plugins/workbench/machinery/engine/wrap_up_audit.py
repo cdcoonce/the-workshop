@@ -49,6 +49,9 @@ HEADING_RE = re.compile(r"^## (.+?)\s*$")
 FENCE_RE = re.compile(r"^(```|~~~)")
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 PREAMBLE = "(preamble)"
+# The handoff's freshness line is date-only (#982): history lives in git log.
+DATE_LINE_START_RE = re.compile(r"^_(?:Updated|Refreshed)\b")
+DATE_LINE_RE = re.compile(r"^_(?:Updated|Refreshed) \d{4}-\d{2}-\d{2}\.?_$")
 
 VERDICT_EXIT_CODES = {"CLEAN": 0, "FINDINGS": 1, "INCOMPLETE": 2}
 
@@ -846,6 +849,47 @@ def _parse_diff_hunks(diff_text: str) -> tuple[list[int], list[int]]:
     return new_lines, old_lines
 
 
+def _handoff_date_line(vault_root: Path) -> list[dict[str, Any]]:
+    """Findings for any ``.brain/handoff-*.md`` whose ``_Updated``/``_Refreshed`` line is not date-only.
+
+    ``*.prev.md`` backups are skipped: a stale backup is never rewritten, so
+    checking it would stay red forever. Lines inside code fences are examples.
+    """
+    findings: list[dict[str, Any]] = []
+    brain = vault_root / ".brain"
+    if not brain.is_dir():
+        return findings
+    for path in sorted(brain.glob("handoff-*.md")):
+        if path.name.endswith(".prev.md"):
+            continue
+        in_fence = False
+        fence_marker = ""
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for i, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            m = FENCE_RE.match(stripped)
+            if m:
+                if not in_fence:
+                    in_fence, fence_marker = True, m.group(1)
+                elif stripped.startswith(fence_marker):
+                    in_fence, fence_marker = False, ""
+                continue
+            if in_fence or not DATE_LINE_START_RE.match(line):
+                continue
+            if not DATE_LINE_RE.match(line.rstrip()):
+                findings.append(
+                    {
+                        "file": path.relative_to(vault_root).as_posix(),
+                        "line": i,
+                        "detail": (
+                            f"line {i} must be exactly `_Updated YYYY-MM-DD_` "
+                            f"(history belongs in the commit message): {line[:80]}"
+                        ),
+                    }
+                )
+    return findings
+
+
 def _handoff_sections(vault_root: Path, base: str) -> dict[str, Any]:
     ctx = read_vault_context(vault_root)
     if ctx == "unknown":
@@ -1028,6 +1072,9 @@ def _collect_inner(
     if handoff.get("not_run"):
         not_run.append({"check": "handoff_sections", "reason": handoff["not_run"]})
 
+    date_line_findings = _handoff_date_line(vault_root)
+    date_line_capped, date_line_elided = _cap(date_line_findings, limit)
+
     claimed_hunks = _claimed_hunks(vault_root, scope.claimed, handoff.get("file"), scope.git_ok)
 
     frontmatter_findings, frontmatter_elided = _cap(scoped["frontmatter"], limit)
@@ -1046,6 +1093,7 @@ def _collect_inner(
         + len(orphan_findings)
         + len(scoped["index_membership"])
         + len(new_orphans_findings)
+        + len(date_line_findings)
         + (1 if gate_breach else 0)
     )
 
@@ -1110,6 +1158,11 @@ def _collect_inner(
             },
             "gate": gate,
             "handoff_sections": handoff,
+            "handoff_date_line": {
+                "count": len(date_line_findings),
+                "findings": date_line_capped,
+                "elided": date_line_elided,
+            },
             "claimed_hunks": claimed_hunks,
         },
         "not_run": not_run,
@@ -1180,6 +1233,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     _render_check(lines, orphans_title, orphans_node)
     _render_check(lines, "New Orphans (since --base)", checks["new_orphans"])
     _render_check(lines, "Index Membership", checks["index_membership"])
+    _render_check(lines, "Handoff Date Line", checks["handoff_date_line"])
 
     gate = checks["gate"]
     if gate.get("not_run"):

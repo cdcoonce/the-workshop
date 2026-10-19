@@ -53,8 +53,14 @@ flagged as arbitrary — say so rather than implying the order was derived.
 
 - **In:** open MRs targeting the same branch. Drafts are included and flagged — a draft still
   conflicts and still constrains order.
+  `--target` selects the MRs that target that branch plus their transitive stacked descendants
+  (MRs targeting a kept MR's source branch). A stack rooted at any other branch is left out; every
+  independent stack rooted at the target itself is kept.
 - **Stacked MRs** (B targets A's source branch) are a **hard dependency**, reported as a chain
   and excluded from cost ranking. Order there is structural, not economic.
+  Each chain is still checked against the independent MRs as **one unit**: its tip branch (which
+  carries every MR below it) is simulated pairwise, and a chain-vs-independent conflict orders the
+  whole chain before or after that MR.
 - **Out:** local unpushed branches, CI status, and anything requiring a merge to observe.
 
 ## Reporting rules

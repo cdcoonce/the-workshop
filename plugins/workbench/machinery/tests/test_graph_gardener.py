@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess as _sp
 from pathlib import Path
 
@@ -1263,3 +1264,216 @@ def test_orphans_cover_notes_the_model_prompt_cap_would_drop(
     note = repo / "personal" / "bare.md"
     note.write_text("no links here at all. " * 30, encoding="utf-8")
     assert _orphan_notes(gg.run_lane_b([note], repo)) == ["personal/bare.md"]
+
+
+# --- #714: missing-links review sees head + tail inside the budget, and skips hubs on a path list ---
+
+
+def test_window_note_returns_short_notes_whole() -> None:
+    assert gg.window_note("short body") == "short body"
+    exact = "x" * gg.NOTE_WINDOW_CHARS
+    assert gg.window_note(exact) == exact
+
+
+def test_window_note_keeps_head_and_tail_within_the_budget() -> None:
+    body = "HEADMARK " + "m" * 50_000 + " TAILMARK"
+    window = gg.window_note(body)
+    assert len(window) <= gg.NOTE_WINDOW_CHARS
+    assert window.startswith("HEADMARK")
+    assert window.endswith("TAILMARK")
+    assert gg.WINDOW_MARKER in window
+
+
+def test_prompt_shows_a_proper_noun_that_sits_only_in_the_tail() -> None:
+    body = "intro prose. " * 400 + "\n## Related\nTalked with Jane Doe about Orbit Wars."
+    assert len(body) > gg.NOTE_WINDOW_CHARS
+    prompt = gg.build_lane_b_prompt([("personal/long.md", body)])
+    assert "Jane Doe" in prompt
+    assert "Orbit Wars" in prompt
+
+
+def test_prompt_budget_is_bounded_by_notes_times_window() -> None:
+    notes = [(f"personal/n{i}.md", "z" * 500_000) for i in range(gg.MAX_NOTES_LANE_B)]
+    static = len(gg.build_lane_b_prompt([]))
+    per_note_overhead = len("\n\n### personal/n00.md\n")
+    prompt = gg.build_lane_b_prompt(notes)
+    assert len(prompt) <= static + gg.MAX_NOTES_LANE_B * (gg.NOTE_WINDOW_CHARS + per_note_overhead)
+
+
+def test_hub_notes_are_excluded_from_the_review_and_logged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Key Decisions.md"
+    hub.write_text("decision log. " * 5000, encoding="utf-8")
+    plain = repo / "personal" / "plain.md"
+    plain.write_text("plain note with [[a link]]", encoding="utf-8")
+    seen: list[str] = []
+
+    def model(prompt: str, _model: str) -> dict:
+        seen.append(prompt)
+        return {"missing_links": [], "orphans": []}
+
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", model)
+    result = gg.run_lane_b([hub, plain], repo)
+    assert "### brain/Key Decisions.md" not in seen[0]
+    assert "### personal/plain.md" in seen[0]
+    assert result["coverage"]["excluded"] == ["brain/Key Decisions.md"]
+    # Excluded from the model's review, not from Python orphan detection.
+    assert _orphan_notes(result) == ["brain/Key Decisions.md"]
+
+
+def test_only_hub_notes_skip_the_model_call_entirely(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Gotchas.md"
+    hub.write_text("[[x]] " * 10, encoding="utf-8")
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: pytest.fail("model called"))
+    result = gg.run_lane_b([hub], repo)
+    assert result["missing_links"] == []
+    assert result["coverage"]["excluded"] == ["brain/Gotchas.md"]
+
+
+def test_windowed_notes_are_reported_as_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    long_note = repo / "personal" / "long.md"
+    long_note.write_text("prose [[x]] " * 500, encoding="utf-8")
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+    assert gg.run_lane_b([long_note], repo)["coverage"]["windowed"] == ["personal/long.md"]
+
+
+def test_excluded_paths_cover_the_audit_accumulating_hubs() -> None:
+    import vault_audit
+
+    assert vault_audit.ACCUMULATING_HUB_FILES <= gg.LANE_B_EXCLUDED_PATHS
+
+
+def test_gardener_log_reports_the_missing_link_coverage_it_gave_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, note = _isolated_gardener(tmp_path, monkeypatch)
+    (repo / "brain").mkdir()
+    hub = repo / "brain" / "Gotchas.md"
+    hub.write_text("[[x]] " * 10, encoding="utf-8")
+    note.write_text("long [[x]] prose " * 300, encoding="utf-8")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+
+    assert gg.run_gardener("s", repo, notes_override=[note, hub], check_debounce=False) == 0
+
+    log_text = (repo / gg.GARDENER_LOG_REL).read_text()
+    assert "lane_b coverage: 1 hub note(s) not reviewed for missing links, 1 reviewed head+tail only" in log_text
+
+
+# --- #465: /garden checks the vault is unchanged at the moment it writes a promotion ---
+
+
+def _commit_all(repo, message="c"):
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", message)
+
+
+def _cli(monkeypatch, repo, *flags):
+    monkeypatch.setattr(gg.sys, "argv", ["gg", *flags, "--vault-root", str(repo)])
+    return gg.main_cli()
+
+
+def _garden_vault(tmp_path):
+    repo = _init_repo(tmp_path)
+    (repo / "personal" / "seed.md").write_text("seed\n", encoding="utf-8")
+    _commit_all(repo, "seed")
+    return repo
+
+
+def test_acquire_records_the_head_the_pass_started_from(tmp_path):
+    repo = _garden_vault(tmp_path)
+    assert gg.acquire_apply_lock(repo, "apply") is True
+    assert json.loads((repo / gg.APPLY_LOCK_REL).read_text())["head"] == gg.head_commit(repo)
+
+
+def test_write_check_passes_while_head_is_unchanged(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    assert gg.check_write_fresh(repo, ["Brand New Note"]) == []
+
+
+def test_write_check_flags_a_head_that_moved_and_names_the_changed_files(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "other-session.md").write_text("elsewhere\n", encoding="utf-8")
+    _commit_all(repo, "another session commits")
+    problems = gg.check_write_fresh(repo, [])
+    assert len(problems) == 1
+    assert "HEAD moved" in problems[0]
+    assert "personal/other-session.md" in problems[0]
+
+
+def test_rebaseline_after_a_re_read_clears_the_head_check(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "other-session.md").write_text("elsewhere\n", encoding="utf-8")
+    _commit_all(repo, "another session commits")
+    assert gg.check_write_fresh(repo, [])
+    assert gg.rebaseline_apply_lock(repo) is True
+    assert gg.check_write_fresh(repo, []) == []
+
+
+def test_write_check_flags_a_stem_duplicate_created_during_review(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    # Uncommitted: HEAD has not moved, the duplicate appeared in the working tree.
+    (repo / "reference").mkdir()
+    (repo / "reference" / "Rebrand Plan.md").write_text("---\ndate: 2026-01-01\n---\nx\n", encoding="utf-8")
+    problems = gg.check_write_fresh(repo, ["rebrand-plan"])
+    assert len(problems) == 1
+    assert "reference/Rebrand Plan.md" in problems[0]
+
+
+def test_write_check_flags_an_alias_duplicate(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "Delegation Conventions.md").write_text(
+        "---\naliases:\n  - Delegation Rules\n---\nx\n", encoding="utf-8",
+    )
+    problems = gg.check_write_fresh(repo, ["Delegation Rules"])
+    assert len(problems) == 1
+    assert "personal/Delegation Conventions.md" in problems[0]
+
+
+def test_write_check_without_the_lock_refuses(tmp_path):
+    repo = _garden_vault(tmp_path)
+    assert "no apply lock" in gg.check_write_fresh(repo, [])[0]
+
+
+def test_cli_check_write_exit_codes_and_rebaseline(tmp_path, monkeypatch, capsys):
+    repo = _garden_vault(tmp_path)
+    assert _cli(monkeypatch, repo, "--acquire-lock", "--session", "apply") == 0
+    assert _cli(monkeypatch, repo, "--check-write", "--new-note", "Fresh Name") == 0
+    (repo / "personal" / "Fresh Name.md").write_text("dup\n", encoding="utf-8")
+    assert _cli(monkeypatch, repo, "--check-write", "--new-note", "Fresh Name") == 1
+    assert "personal/Fresh Name.md" in capsys.readouterr().err
+    assert _cli(monkeypatch, repo, "--rebaseline") == 0
+
+
+def test_lock_refusal_reports_the_holder_session_and_age(tmp_path, monkeypatch, capsys):
+    repo = _garden_vault(tmp_path)
+    assert gg.acquire_apply_lock(repo, "holder-session") is True
+    assert _cli(monkeypatch, repo, "--acquire-lock", "--session", "second") == 1
+    err = capsys.readouterr().err
+    assert "holder-session" in err
+    assert "held for" in err
+
+
+def test_garden_command_gates_promotion_writes_on_the_check():
+    command = (
+        Path(__file__).resolve().parents[2] / "skills" / "vault-garden" / "references" / "command.md"
+    ).read_text(encoding="utf-8")
+    assert "--check-write" in command
+    assert "--rebaseline" in command

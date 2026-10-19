@@ -76,6 +76,26 @@ SWEEP_BATCH = 8              # old backlog notes gardened per run (trickle sweep
 BROKEN_BATCH = 8             # notes with known broken links gardened per run (targeted)
 MAX_NOTES_LANE_B = 20        # cap: don't send 200 notes in one prompt
 
+NOTE_WINDOW_CHARS = 2000     # per-note prompt budget; longer notes send head + tail within it
+WINDOW_MARKER = "\n…[middle omitted]…\n"
+
+# Hub / append-log notes are skipped by the missing-links review (#714). They grow
+# by appending to hundreds of thousands of chars, so no 2000-char window covers
+# them; skipping is a deliberate, logged gap rather than a silent one. Orphan
+# detection still sees them (it reads the whole body in Python).
+LANE_B_EXCLUDED_PATHS = frozenset({
+    "brain/Memories.md",
+    "brain/North Star.md",
+    "brain/Key Decisions.md",
+    "brain/Patterns.md",
+    "brain/Gotchas.md",
+    "brain/Capabilities.md",
+    "work/Index.md",
+    "personal/Index.md",
+    "org/People & Context.md",
+    "perf/Brag Doc.md",
+})
+
 ORPHAN_MIN_CHARS = 300       # notes this long with no [[link]] → orphan flag
 
 SCOPED_DIRS = GRAPH_NOTE_DIRS
@@ -266,11 +286,91 @@ def acquire_apply_lock(vault_root: Path, session_id: str) -> bool:
         try:
             _atomic_write(
                 vault_root / APPLY_LOCK_REL,
-                json.dumps({"started": datetime.now().isoformat(), "session": session_id}),
+                json.dumps({
+                    "started": datetime.now().isoformat(),
+                    "session": session_id,
+                    "head": head_commit(vault_root),
+                }),
             )
             return True
         except OSError:
             return False
+
+
+def lock_holder_report(vault_root: Path) -> str | None:
+    """Name the session holding a fresh apply lease and how long it has held it.
+
+    The lock only keeps /garden and the producer apart; reporting the holder at
+    refusal turns an invisible second writer into a visible conflict (#465).
+    """
+    try:
+        data = json.loads((vault_root / APPLY_LOCK_REL).read_text(encoding="utf-8"))
+        age = int((datetime.now() - datetime.fromisoformat(data["started"])).total_seconds())
+    except Exception:
+        return None
+    return f"apply lease held by session {data.get('session') or '?'}, held for {age // 60}m{age % 60:02d}s"
+
+
+def _read_fresh_lock(vault_root: Path) -> dict | None:
+    try:
+        data = json.loads((vault_root / APPLY_LOCK_REL).read_text(encoding="utf-8"))
+        datetime.fromisoformat(data["started"])
+    except Exception:
+        return None
+    return data
+
+
+def rebaseline_apply_lock(vault_root: Path) -> bool:
+    """Reset the lease's HEAD baseline after /garden re-reads a moved vault."""
+    with _gardener_mutex(vault_root) as acquired:
+        data = _read_fresh_lock(vault_root) if acquired else None
+        if data is None:
+            return False
+        data["head"] = head_commit(vault_root)
+        try:
+            _atomic_write(vault_root / APPLY_LOCK_REL, json.dumps(data))
+            return True
+        except OSError:
+            return False
+
+
+def check_write_fresh(vault_root: Path, new_notes: list[str]) -> list[str]:
+    """Problems that make a /garden write stale; empty means safe to write.
+
+    Run at the moment of writing a promotion, not at draft time: /garden spends
+    minutes in review while sessions that never ran /garden keep editing the
+    vault, and no lock scoped to /garden can see them (#465). Two checks:
+    HEAD still equals the one recorded when the lease was acquired, and no note
+    already owns any of *new_notes* by stem, alias or name.
+    """
+    lock = _read_fresh_lock(vault_root)
+    if lock is None:
+        return ["no apply lock held; acquire it with --acquire-lock before writing"]
+    problems: list[str] = []
+    baseline, now = lock.get("head"), head_commit(vault_root)
+    if baseline and now and baseline != now:
+        try:
+            changed = subprocess.run(
+                ["git", "diff", "--name-only", f"{baseline}..{now}"],
+                cwd=vault_root, capture_output=True, text=True, timeout=15,
+            ).stdout.split()
+        except Exception:
+            changed = []
+        shown = ", ".join(changed[:10]) + (f" (+{len(changed) - 10} more)" if len(changed) > 10 else "")
+        problems.append(
+            f"HEAD moved since the queue was loaded ({baseline[:8]}..{now[:8]}); "
+            f"changed: {shown or 'unknown'}. Re-read the targets, re-present, then --rebaseline."
+        )
+    if new_notes:
+        import vault_audit  # noqa: PLC0415 — heavy; only the write-time check needs it
+
+        catalog = vault_audit._catalog(vault_root)
+        for name in new_notes:
+            owners = catalog.normalized.get(vault_audit._norm_title(name), [])
+            for owner in owners:
+                rel = owner.relative_to(vault_root).as_posix()
+                problems.append(f"a note already owns the name {name!r}: {rel}; update it instead of creating a duplicate")
+    return problems
 
 
 def release_apply_lock(vault_root: Path, *, mark_applied: bool = False) -> bool:
@@ -1127,6 +1227,22 @@ def run_lane_a(
 # Lane B — headless cheap-model propose pass (follows notebook-distill.py)
 # ---------------------------------------------------------------------------
 
+def window_note(content: str, budget: int = NOTE_WINDOW_CHARS) -> str:
+    """Return *content* if it fits *budget*, else its head and tail within *budget*.
+
+    Appended-to notes put new prose at the end and close with a ``## Related``
+    block, so the tail is where the unlinked mentions are; the head carries the
+    title and framing. A marker names the omitted middle, and the whole
+    window (marker included) never exceeds *budget*.
+    """
+    if len(content) <= budget:
+        return content
+    keep = budget - len(WINDOW_MARKER)
+    head = keep // 2
+    tail = keep - head
+    return content[:head] + WINDOW_MARKER + content[len(content) - tail:]
+
+
 def build_lane_b_prompt(notes_content: list[tuple[str, str]]) -> str:
     """Build the prompt for the headless cross-linker pass.
 
@@ -1135,11 +1251,7 @@ def build_lane_b_prompt(notes_content: list[tuple[str, str]]) -> str:
     """
     notes_block = ""
     for rel, content in notes_content:
-        # Cap per note to avoid blowing the prompt budget
-        snippet = content[:2000]
-        if len(content) > 2000:
-            snippet += "\n…[truncated]"
-        notes_block += f"\n\n### {rel}\n{snippet}"
+        notes_block += f"\n\n### {rel}\n{window_note(content)}"
 
     return f"""\
 You are a vault graph reviewer. Review these recently-changed notes and suggest:
@@ -1266,10 +1378,18 @@ def run_lane_b(
     if not notes_content:
         return empty
 
-    prompt = build_lane_b_prompt(notes_content)
-    data = run_lane_b_headless(prompt, read_batch_model())
-    if data is None:
-        return None
+    reviewed = [(rel, c) for rel, c in notes_content if rel not in LANE_B_EXCLUDED_PATHS]
+    coverage = {
+        "excluded": [rel for rel, _ in notes_content if rel in LANE_B_EXCLUDED_PATHS],
+        "windowed": [rel for rel, c in reviewed if len(c) > NOTE_WINDOW_CHARS],
+    }
+    if reviewed:
+        data = run_lane_b_headless(build_lane_b_prompt(reviewed), read_batch_model())
+        if data is None:
+            return None
+    else:
+        data = {"missing_links": [], "orphans": []}
+    data["coverage"] = coverage
     # The model reviews a truncated excerpt; orphan-ness is a fact about the whole body.
     data["orphans"] = detect_orphans(notes_content)
     return data
@@ -1686,6 +1806,14 @@ def _run_gardener_locked(
         )
         return 0
 
+    coverage = lane_b.get("coverage") or {}
+    if coverage.get("excluded") or coverage.get("windowed"):
+        log(
+            vault_root,
+            f"lane_b coverage: {len(coverage.get('excluded', []))} hub note(s) not reviewed for "
+            f"missing links, {len(coverage.get('windowed', []))} reviewed head+tail only",
+        )
+
     # --- Stranded-branch detection (git boundary) ---
     stranded = detect_stranded_branches(vault_root)
 
@@ -1819,7 +1947,7 @@ def run_worker(session_id: str, vault_root: Path) -> int:
 # CLI entry (dry-run / testing and --worker dispatch)
 # ---------------------------------------------------------------------------
 
-_CLI_FLAGS = {"--dry-run", "--notes", "--skip-lane-b", "--vault-root", "--worker", "--session", "--acquire-lock", "--release-lock", "--queue-summary", "--help", "-h"}
+_CLI_FLAGS = {"--dry-run", "--notes", "--skip-lane-b", "--vault-root", "--worker", "--session", "--acquire-lock", "--release-lock", "--check-write", "--rebaseline", "--new-note", "--queue-summary", "--help", "-h"}
 
 
 def main_cli() -> int:
@@ -1875,6 +2003,23 @@ def main_cli() -> int:
         help="Release the /garden apply-lock (and stamp last-gardened), then exit.",
     )
     parser.add_argument(
+        "--check-write",
+        action="store_true",
+        help="Before writing a promotion: fail if HEAD moved or a note already owns a --new-note name.",
+    )
+    parser.add_argument(
+        "--new-note",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Stem or alias of a note about to be created (repeatable; with --check-write).",
+    )
+    parser.add_argument(
+        "--rebaseline",
+        action="store_true",
+        help="Record the current HEAD as the apply lease's baseline, then exit.",
+    )
+    parser.add_argument(
         "--queue-summary",
         action="store_true",
         help="Print the gardener queue nudge (or 'nothing pending'), then exit.",
@@ -1895,7 +2040,22 @@ def main_cli() -> int:
     if args.acquire_lock:
         if acquire_apply_lock(vault_root, args.session):
             return 0
-        print("Gardener/apply operation busy or lock unavailable; apply lease not acquired.", file=sys.stderr)
+        holder = lock_holder_report(vault_root)
+        print(
+            "Gardener/apply operation busy or lock unavailable; apply lease not acquired."
+            + (f" {holder}." if holder else ""),
+            file=sys.stderr,
+        )
+        return 1
+    if args.check_write:
+        problems = check_write_fresh(vault_root, args.new_note)
+        for problem in problems:
+            print(f"STALE: {problem}", file=sys.stderr)
+        return 1 if problems else 0
+    if args.rebaseline:
+        if rebaseline_apply_lock(vault_root):
+            return 0
+        print("No fresh apply lease to rebaseline.", file=sys.stderr)
         return 1
     if args.release_lock:
         if release_apply_lock(vault_root, mark_applied=True):
