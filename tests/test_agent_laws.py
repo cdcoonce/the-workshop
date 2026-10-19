@@ -96,9 +96,9 @@ def _pointer_line(plugin: str) -> str:
     )
 
 
-def _agent_body_with_pointer(plugin: str) -> str:
+def _agent_body_with_pointer(plugin: str, name: str) -> str:
     return (
-        "---\nname: demo-agent\ndescription: Test agent.\nrole: builder\n---\n\n"
+        f"---\nname: {name}\ndescription: Test agent.\nrole: builder\n---\n\n"
         "# Demo Agent\n\nDoes a thing.\n\n" + _pointer_line(plugin)
     )
 
@@ -110,18 +110,18 @@ def _wire_agent_laws_fixture(root: Path, make_plugin) -> tuple[Path, Path]:
     this fixture represents the post-fix, green state — individual tests
     mutate it to force red.
     """
-    workbench = make_plugin(root, "workbench", agents=["demo-agent"])
+    workbench = make_plugin(root, "workbench", agents=["workbench-agent"])
     (workbench / "docs").mkdir(parents=True, exist_ok=True)
     (workbench / "docs" / "agent-laws.md").write_text(
         "# Agent Laws\n\n- Write the failing test first.\n"
     )
-    (workbench / "agents" / "demo-agent" / "AGENT.md").write_text(
-        _agent_body_with_pointer("workbench")
+    (workbench / "agents" / "workbench-agent" / "AGENT.md").write_text(
+        _agent_body_with_pointer("workbench", "workbench-agent")
     )
 
     maintainer = make_plugin(root, "workshop-maintainer", agents=["other-agent"])
     (maintainer / "agents" / "other-agent" / "AGENT.md").write_text(
-        _agent_body_with_pointer("workshop-maintainer")
+        _agent_body_with_pointer("workshop-maintainer", "other-agent")
     )
     return workbench, maintainer
 
@@ -152,13 +152,13 @@ def test_the_source_plugins_own_copy_is_never_owned_by_the_stamper(
 
 def test_a_missing_pointer_fails_the_stamp_naming_the_file(flat_repo: Path, make_plugin):
     workbench, _ = _wire_agent_laws_fixture(flat_repo, make_plugin)
-    agent_md = workbench / "agents" / "demo-agent" / "AGENT.md"
+    agent_md = workbench / "agents" / "workbench-agent" / "AGENT.md"
     agent_md.write_text(agent_md.read_text().replace(_pointer_line("workbench"), ""))
 
     with pytest.raises(stamp.StampError) as excinfo:
         stamp.stamp(flat_repo)
 
-    assert "demo-agent/AGENT.md" in str(excinfo.value)
+    assert "workbench-agent/AGENT.md" in str(excinfo.value)
 
 
 def test_a_drifted_copy_is_named_by_check(flat_repo: Path, make_plugin, capsys):
@@ -197,7 +197,7 @@ def test_missing_canonical_is_a_loud_failure_when_a_copy_is_needed(
     """
     maintainer = make_plugin(flat_repo, "workshop-maintainer", agents=["other-agent"])
     (maintainer / "agents" / "other-agent" / "AGENT.md").write_text(
-        _agent_body_with_pointer("workshop-maintainer")
+        _agent_body_with_pointer("workshop-maintainer", "other-agent")
     )
 
     with pytest.raises(stamp.StampError) as excinfo:
