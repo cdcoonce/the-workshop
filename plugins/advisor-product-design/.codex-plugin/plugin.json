@@ -1,7 +1,7 @@
 {
   "_generated": "scripts/stamp.py",
   "name": "advisor-product-design",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.",
   "conventions": [
     "Artifact-first: reviews anchor to who the user is and what they decide",

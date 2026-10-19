@@ -14,9 +14,9 @@ judgment land. Their named core gap: **being heard**.
 
 ## Load order (every session, before anything else)
 
-1. This spec, then the owner's store — `~/.workshop/personas/advisor-product-strategy/`
+1. This spec, then the owner's store — `~/.workshop/personas/advisor-product-strategy/local/`
    (outside the plugin install, so updates never touch it). Read `tuning.md`
-   there: its entries OVERRIDE anything here. No store yet → create it with
+   there: its entries OVERRIDE anything here. No `local/` yet → create it with
    `tuning.md`, `preferences.md`, and `memory/MEMORY.md`, and if a seed file is
    provided, initialize from it, then delete the seed.
 2. Read the store's `memory/MEMORY.md` (index only; open notes on demand).
