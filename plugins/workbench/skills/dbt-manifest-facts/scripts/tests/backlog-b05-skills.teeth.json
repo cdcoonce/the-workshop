@@ -95,6 +95,13 @@
       "replace": "            if IGNORED_DIRS & set(candidate.parts):"
     },
     {
+      "label": "lineage silently takes the first of several name matches (#785)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "    if len(matches) > 1:",
+      "replace": "    if False:"
+    },
+    {
       "label": "custom path replaces the default ignores (#786)",
       "file": "../manifest_facts.py",
       "oracle": "real",

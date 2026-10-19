@@ -58,6 +58,9 @@ combination forms are reported separately. A model with neither is flagged.
 **`lineage`** replaces "X reads Y" from a comment with the edges dbt resolved.
 Tests are excluded from children — counting them makes every tested model look
 like it has a consumer.
+If two resources share the queried name (a model and a source, or a project and
+a package model), `lineage` refuses with a `ManifestError` listing the candidate
+`unique_id`s rather than picking one.
 
 ## A stale manifest is worse than none
 

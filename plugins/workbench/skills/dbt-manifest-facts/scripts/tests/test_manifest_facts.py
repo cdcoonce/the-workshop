@@ -213,6 +213,20 @@ def test_lineage_surfaces_materialization(manifest):
     assert mf.lineage(manifest, "mart_history")["materialized"] == "incremental"
 
 
+def test_lineage_raises_listing_candidates_on_a_name_collision(manifest):
+    """A model and a source sharing a name must not silently resolve to one."""
+    manifest["sources"]["source.proj.raw.int_thing"] = {
+        "unique_id": "source.proj.raw.int_thing",
+        "name": "int_thing",
+        "resource_type": "source",
+    }
+    with pytest.raises(mf.ManifestError) as exc:
+        mf.lineage(manifest, "int_thing")
+    message = str(exc.value)
+    assert "source.proj.raw.int_thing" in message
+    assert "model.proj.int_thing" in message
+
+
 def test_lineage_raises_on_unknown_node(manifest):
     with pytest.raises(mf.ManifestError):
         mf.lineage(manifest, "nope")
