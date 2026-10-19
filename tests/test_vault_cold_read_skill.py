@@ -1705,7 +1705,8 @@ def test_failing_premise_row_blocks_read_1_with_a_seeded_defect_default() -> Non
     section = _data_slices()
     assert "blocks dispatch of read 1" in section
     assert "measured value as the default fix" in section
-    assert "seeded defects" in section
+    failing = section[section.index("**Failing rows.**") :].split("(Precedent", 1)[0]
+    assert "the default offered is seeded defects" in failing
     assert "re-runs on every body change" in section
 
 
