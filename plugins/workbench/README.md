@@ -120,6 +120,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | Hook | Event | Summary |
 | --- | --- | --- |
 | `audit-config-change.py` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. |
+| `branch-policy.py` | `PreToolUse` | PreToolUse hook (Bash): enforce the branch policy at the moment of action. |
 | `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. |
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |

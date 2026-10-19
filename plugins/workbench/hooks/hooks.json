@@ -48,6 +48,15 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Bash|bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh branch-policy.py"
+          }
+        ]
+      },
+      {
         "matcher": "edit|write|multi_edit|Edit|Write|MultiEdit",
         "hooks": [
           {
