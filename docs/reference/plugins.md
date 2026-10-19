@@ -9,8 +9,8 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 
 | Plugin | Version | Skills | Agents | Hooks | Description |
 | --- | --- | --- | --- | --- | --- |
-| **`advisor-product-design`** | `0.2.2` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
-| **`advisor-product-strategy`** | `0.2.2` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
+| **`advisor-product-design`** | `0.2.3` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
+| **`advisor-product-strategy`** | `0.2.3` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
 | **`persona-pair-programmer`** | `1.1.1` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
 | **`persona-ship-it`** | `1.1.1` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
@@ -23,7 +23,7 @@ Every plugin the marketplace serves, with the skills, agents, hooks, and convent
 
 ### `advisor-product-design`
 
-*v0.2.2 · `plugins/advisor-product-design`*
+*v0.2.3 · `plugins/advisor-product-design`*
 
 Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder.
 
@@ -37,7 +37,7 @@ Product-design/UI-UX advisor persona — artifact-first design reviews with seve
 
 ### `advisor-product-strategy`
 
-*v0.2.2 · `plugins/advisor-product-strategy`*
+*v0.2.3 · `plugins/advisor-product-strategy`*
 
 Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder.
 
