@@ -59,7 +59,7 @@ def _model_ids_for_case(case: dict, raw_sources: dict[str, Path]) -> list[str]:
     ordered: list[str] = []
     for attempt in case["attempts"]:
         source = raw_sources[attempt["raw"]]
-        for jsonl_path in sorted(source.glob("*.jsonl")):
+        for jsonl_path in sorted(source.rglob("*.jsonl")):
             transcript = parse_transcript(jsonl_path)
             for model_id in transcript.model_ids:
                 if model_id not in seen:
