@@ -100,8 +100,8 @@
       "label": "#895: positive control: a warning path exits 1 [predicted: test_every_warning_path_exits_zero]",
       "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
       "oracle": "real",
-      "find": "    break\n  fi\ndone\nexit 0",
-      "replace": "    exit 1\n  fi\ndone\nexit 0"
+      "find": "    break\n  fi\ndone\n",
+      "replace": "    exit 1\n  fi\ndone\n"
     },
     {
       "label": "#895: gitignore drops the session tracker [predicted: test_the_scaffolded_gitignore_covers_the_session_tracker]",
