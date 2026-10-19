@@ -497,6 +497,15 @@ def test_step_8_cap_carries_both_proposals_and_numbers_the_cap() -> None:
         assert phrase in step, f"step 8 lacks {phrase!r}"
 
 
+def test_cap_with_empty_subtract_carries_grow_and_an_outside_contract_question() -> None:
+    marker = "When Subtract is empty"
+    question = "should the finding instead become an outside-this-contract line"
+    for where in (_cold_section("## Subtract first"), _step(8)):
+        assert marker in where
+        tail = where[where.index(marker) :]
+        assert "Grow" in tail and question in tail
+
+
 def test_step_8_requires_a_code_fact_search_and_the_edit_lint() -> None:
     step = _step(8)
     for phrase in (
@@ -911,7 +920,8 @@ def test_step_6_lists_must_kill_mutants_in_the_verdict_comment() -> None:
 def test_step_8_cap_counts_every_fresh_read_and_restarts_only_on_a_charles_ruling() -> None:
     step8 = _step(8)
     for phrase in (
-        "When a fresh read finds a blocking defect and the count, including that read, has reached 3, the verdict is NOT-DISPATCH-READY",
+        "When a fresh read finds a blocking defect and the count, including that read, has reached 3 or more, the verdict is NOT-DISPATCH-READY",
+        "A slice that arrives already past 3 fires the cap on its next blocking read, and reads made before this rule count",
         "A cap ruling from Charles (Grow, or his by-name acceptance of the applied Subtract) counts as approving that body and restarts the count at 0; silence does not",
         "count every fresh read on the slice; only the cap count restarts",
     ):
