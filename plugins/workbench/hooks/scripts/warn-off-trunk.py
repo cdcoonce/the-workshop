@@ -59,7 +59,7 @@ cwd = Path(data.get("cwd") or ".").resolve()
 # file directly; pin its directory so a runpy-style launch resolves it too.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
-    from _git_baseline import _run_git
+    from _git_baseline import _run_git, git_common_dir, git_dir
 except ImportError:
     # Fail open: the helper module ships alongside every hook, but a stale or
     # partial install must no-op rather than crash session end.
@@ -92,11 +92,11 @@ try:
     if branch is None or branch == "HEAD":
         sys.exit(0)  # detached HEAD
 
-    git_dir = _run_git(["rev-parse", "--git-dir"], cwd)
-    common_dir = _run_git(["rev-parse", "--git-common-dir"], cwd)
-    if git_dir is None or common_dir is None:
+    this_git_dir = git_dir(cwd)
+    common_dir = git_common_dir(cwd)
+    if this_git_dir is None or common_dir is None:
         sys.exit(0)
-    if (cwd / git_dir).resolve() != (cwd / common_dir).resolve():
+    if this_git_dir.resolve() != common_dir.resolve():
         sys.exit(0)  # linked worktree — not the checkout the nightly resets
 
     trunk = config.get("trunk_branch")

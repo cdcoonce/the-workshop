@@ -404,3 +404,53 @@ def test_this_repos_bash_classifier_specs_are_selected_by_their_shared_target() 
     }
     assert "evals/_harness/tests/test_bash_allowlist.teeth.json" in firing
     assert len(firing) >= 5
+
+
+def _fail_git_except_ls_files(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let spec discovery through, so the failure lands in this module's own git calls."""
+    real_run = subprocess.run
+
+    def run(cmd: list[str], *args: object, **kwargs: object):
+        if cmd[:2] == ["git", "ls-files"]:
+            return real_run(cmd, *args, **kwargs)
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+def test_git_missing_in_the_diff_step_is_a_clean_error_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _tool_repo(tmp_path, anchor=_READY_ANCHOR)
+    _commit(repo, "base")
+    _fail_git_except_ls_files(monkeypatch)
+
+    code = main(["--base", "HEAD", "--repo", str(repo)])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert err.startswith("ERROR:")
+    assert "Traceback" not in err
+
+
+def test_git_missing_everywhere_is_a_clean_error_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def no_git(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(subprocess, "run", no_git)
+
+    code = main(["--base", "HEAD", "--repo", str(tmp_path)])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert err.startswith("ERROR:")
+    assert "Traceback" not in err
+
+
+def test_the_repo_root_and_runner_path_are_the_anchor_gates_not_a_copy() -> None:
+    from scripts import check_teeth_changed
+
+    assert check_teeth_changed._REPO_ROOT is check_teeth_anchors._REPO_ROOT
+    assert check_teeth_changed._TEETH_CHECK is check_teeth_anchors._TEETH_CHECK

@@ -132,9 +132,9 @@ def stale_sources(manifest_path: Path, project_dir: Path) -> list[Path]:
     newer: list[Path] = []
     for pattern in SOURCE_GLOBS:
         for candidate in project_dir.glob(pattern):
-            if IGNORED_DIRS & set(candidate.parts):
-                continue
             relative = candidate.relative_to(project_dir).parts
+            if IGNORED_DIRS & set(relative):
+                continue
             if any(relative[: len(prefix)] == prefix for prefix in custom):
                 continue
             if candidate.is_file() and candidate.stat().st_mtime > cutoff:
