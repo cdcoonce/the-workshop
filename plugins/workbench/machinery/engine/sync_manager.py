@@ -238,6 +238,55 @@ def _changed_paths(cwd: Path) -> list[str]:
     return list(dict.fromkeys(paths))
 
 
+# Artifact guard (#754). The auto-commit stages every change, so a binary export
+# or a data dump nobody thought to ignore would reach durable history and the
+# remote. Allowed without question: Markdown anywhere, plus files under the
+# documented attachment homes. Everything else that has never been tracked is
+# refused, and so is anything over the size cap, tracked or not.
+ARTIFACT_MAX_BYTES = 1024 * 1024
+_ARTIFACT_OK_DIRS = ("assets/", ".brain/")
+
+
+def _artifact_refusals(cwd: Path, paths: Sequence[str]) -> dict[str, str]:
+    """Map each changed path the guard refuses to its reason. Deletions pass.
+
+    Git is only asked which candidates are untracked when a non-``.md`` path
+    outside the allowed directories exists, so an all-notes sync costs nothing.
+    """
+    refused: dict[str, str] = {}
+    suspects: list[str] = []
+    for path in paths:
+        full = cwd / path
+        try:
+            size = full.stat().st_size if full.is_file() else None
+        except OSError:
+            size = None
+        if size is None:
+            continue
+        if size > ARTIFACT_MAX_BYTES:
+            refused[path] = f"{size / (1024 * 1024):.1f}MB, over the 1MB cap"
+        elif not path.lower().endswith(".md") and not path.startswith(_ARTIFACT_OK_DIRS):
+            suspects.append(path)
+    if suspects:
+        result = _run_git(
+            ["--literal-pathspecs", "ls-files", "--others", "--exclude-standard", "-z", "--", *suspects],
+            cwd,
+        )
+        if result.returncode != 0:
+            raise GitCommandError("ls-files", result.stderr)
+        for path in filter(None, result.stdout.split("\0")):
+            refused[path] = "never tracked, not .md and outside assets/ and .brain/"
+    return refused
+
+
+def _artifact_notice(refused: dict[str, str]) -> str:
+    listing = "; ".join(f"{path} ({reason})" for path, reason in refused.items())
+    return (
+        f"⚠️ Artifact guard skipped {len(refused)} file(s), left uncommitted: {listing}. "
+        "Move them out of the vault, add them to .gitignore, or commit them by hand."
+    )
+
+
 def _parse_conflict_files(output: str) -> list[str]:
     """Extract conflicting file paths from git output — only when a path can be isolated confidently.
 
@@ -468,6 +517,8 @@ def push(
                     ),
                 )
             changed_paths = [path for path in changed_paths if path in intended_paths]
+        refused = _artifact_refusals(cwd, changed_paths)
+        changed_paths = [path for path in changed_paths if path not in refused]
     except GitCommandError as e:
         return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")
     except subprocess.TimeoutExpired:
@@ -475,6 +526,11 @@ def push(
     except FileNotFoundError:
         return SyncResult(success=False, message="Git is not installed or not on PATH.")
     if not changed_paths:
+        if refused:
+            return SyncResult(
+                success=True,
+                message="No changes to commit.\n" + _artifact_notice(refused),
+            )
         return SyncResult(success=True, message="No changes to commit.")
 
     # Validate the complete working tree before it becomes durable history. A
@@ -552,7 +608,10 @@ def push(
                 message=f"Git push failed: {result.stderr.strip()}\nTry pulling first.",
             )
 
-        return SyncResult(success=True, message="Changes committed and pushed.")
+        message_out = "Changes committed and pushed."
+        if refused:
+            message_out += "\n" + _artifact_notice(refused)
+        return SyncResult(success=True, message=message_out)
 
     except GitCommandError as e:
         return SyncResult(success=False, message=f"Git {e.cmd} failed: {e.stderr}")

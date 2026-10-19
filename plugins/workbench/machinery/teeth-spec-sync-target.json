@@ -76,6 +76,34 @@
       "why": "Two read-only `git config --get` calls on independent keys inside _sync_target; neither reads the other's result and neither writes, so their order is inert wherever the resolver runs for real. The mocked pull/push tests pin _sync_target itself, so they never see the order either.",
       "find": "        up_remote = _run_git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()\n        up_merge = _run_git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()",
       "replace": "        up_merge = _run_git([\"config\", \"--get\", f\"branch.{branch}.merge\"], cwd).stdout.strip()\n        up_remote = _run_git([\"config\", \"--get\", f\"branch.{branch}.remote\"], cwd).stdout.strip()"
+    },
+    {
+      "label": "#754: size cap removed (>1MB files commit)",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "if size > ARTIFACT_MAX_BYTES:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#754: never-tracked rule removed (untracked binaries commit)",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "        if result.returncode != 0:\n            raise GitCommandError(\"ls-files\", result.stderr)\n        for path in filter(None, result.stdout.split(\"\\0\")):",
+      "replace": "        if result.returncode != 0:\n            raise GitCommandError(\"ls-files\", result.stderr)\n        for path in []:"
+    },
+    {
+      "label": "#754: assets/ and .brain/ no longer allowed",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "_ARTIFACT_OK_DIRS = (\"assets/\", \".brain/\")",
+      "replace": "_ARTIFACT_OK_DIRS = ()"
+    },
+    {
+      "label": "#754: refusal is silent (notice dropped from the result)",
+      "file": "engine/sync_manager.py",
+      "oracle": "real",
+      "find": "            message_out += \"\\n\" + _artifact_notice(refused)",
+      "replace": "            pass"
     }
   ]
 }

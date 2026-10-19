@@ -876,3 +876,101 @@ def test_parse_conflict_unparseable_type_is_dropped():
 
 def test_parse_conflict_ignores_non_conflict_lines():
     assert sm._parse_conflict_files("Auto-merging brain/A.md\nunrelated: line") == []
+
+
+# ---------------------------------------------------------------------------
+# Artifact guard (#754): never-tracked non-.md files and >1MB files stay out
+# ---------------------------------------------------------------------------
+
+_MB = 1024 * 1024
+
+
+def _committed_files(repo: Path) -> set[str]:
+    out = subprocess.check_output(
+        ["git", "show", "--name-only", "--pretty=format:", "HEAD"], cwd=repo, text=True
+    )
+    return {line for line in out.splitlines() if line}
+
+
+def test_guard_refuses_untracked_non_md_outside_assets_and_brain(tmp_path: Path) -> None:
+    a, b = _setup(tmp_path)
+    (a / "note.md").write_text("a normal note edit\n")
+    (a / "outputs" / "run1").mkdir(parents=True)
+    (a / "outputs" / "run1" / "Tracker.xlsx").write_bytes(b"PK\x03\x04binary")
+
+    result = push(a)
+
+    assert result.success, result.message
+    assert _committed_files(a) == {"note.md"}
+    assert "outputs/run1/Tracker.xlsx" in result.message
+    assert (a / "outputs" / "run1" / "Tracker.xlsx").exists()
+    _git(b, "pull", "--rebase", "origin", "main")
+    assert not (b / "outputs").exists()
+
+
+def test_guard_refuses_anything_over_one_megabyte_even_under_assets(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "note.md").write_text("note\n")
+    (a / "assets").mkdir()
+    (a / "assets" / "huge.png").write_bytes(b"x" * (2 * _MB))
+    (a / "big.md").write_text("y" * (2 * _MB))
+
+    result = push(a)
+
+    assert result.success, result.message
+    assert _committed_files(a) == {"note.md"}
+    assert "assets/huge.png" in result.message and "big.md" in result.message
+
+
+def test_guard_allows_md_anywhere_and_small_files_under_assets_and_brain(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "deep" / "er").mkdir(parents=True)
+    (a / "deep" / "er" / "n.md").write_text("n\n")
+    (a / "assets").mkdir()
+    (a / "assets" / "pic.png").write_bytes(b"png")
+    (a / ".brain").mkdir()
+    (a / ".brain" / "handoff-work.json").write_text("{}\n")
+
+    result = push(a)
+
+    assert result.success, result.message
+    assert _committed_files(a) == {"deep/er/n.md", "assets/pic.png", ".brain/handoff-work.json"}
+    assert "Artifact guard" not in result.message
+
+
+def test_guard_does_not_refuse_a_small_edit_to_an_already_tracked_non_md(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "config.json").write_text("{}\n")
+    _git(a, "add", "config.json")
+    _git(a, "commit", "-m", "track config")
+    _git(a, "push", "origin", "main")
+    (a / "config.json").write_text('{"k": 1}\n')
+
+    result = push(a)
+
+    assert result.success, result.message
+    assert _committed_files(a) == {"config.json"}
+
+
+def test_guard_with_only_refused_files_commits_nothing_and_says_so(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a, text=True)
+    (a / "dump.ndjson").write_bytes(b"x" * (2 * _MB))
+
+    result = push(a)
+
+    assert result.success, result.message
+    assert "Artifact guard" in result.message and "dump.ndjson" in result.message
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=a, text=True) == before
+
+
+def test_guard_applies_to_a_scoped_push_too(tmp_path: Path) -> None:
+    a, _b = _setup(tmp_path)
+    (a / "ok.md").write_text("ok\n")
+    (a / "blob.bin").write_bytes(b"bin")
+
+    result = push(a, intended_paths=["ok.md", "blob.bin"])
+
+    assert result.success, result.message
+    assert _committed_files(a) == {"ok.md"}
+    assert "blob.bin" in result.message
