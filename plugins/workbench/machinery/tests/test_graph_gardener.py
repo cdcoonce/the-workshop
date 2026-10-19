@@ -1216,3 +1216,50 @@ def test_done_log_does_not_count_an_auto_applied_repair_as_a_proposal(
     assert re.search(r"1 auto-repair\(s\), 0 proposal\(s\)", text)
     assert "1 auto-repair" in gg.queue_summary(repo, "personal")
     assert "graph suggestion" not in gg.queue_summary(repo, "personal")
+
+
+# --- #713: orphans are decided in Python over the full body, not by the model's 2000-char view ---
+
+
+def _orphan_notes(result: dict) -> list[str]:
+    return sorted(item["note"] for item in result["orphans"])
+
+
+def test_orphan_flag_is_decided_in_python_over_the_full_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    bare = repo / "personal" / "bare.md"
+    bare.write_text("plain prose with no links. " * 40, encoding="utf-8")
+    # The only link sits past the 2000-char cut the model is shown.
+    late = repo / "personal" / "late.md"
+    late.write_text("filler prose. " * 300 + "see [[Somewhere]]", encoding="utf-8")
+    short = repo / "personal" / "short.md"
+    short.write_text("tiny", encoding="utf-8")
+    coded = repo / "personal" / "coded.md"
+    coded.write_text("filler prose. " * 40 + "`[[only in code]]`", encoding="utf-8")
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(
+        gg, "run_lane_b_headless",
+        lambda *a: {
+            "missing_links": [],
+            # The model's verdict on a truncated view: wrong both ways.
+            "orphans": [
+                {"note": "personal/late.md", "rationale": "model saw no link"},
+                {"note": "personal/short.md", "rationale": "model guess"},
+            ],
+        },
+    )
+    result = gg.run_lane_b([bare, late, short, coded], repo)
+    assert _orphan_notes(result) == ["personal/bare.md", "personal/coded.md"]
+
+
+def test_orphans_cover_notes_the_model_prompt_cap_would_drop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(gg, "read_batch_model", lambda: "test-model")
+    monkeypatch.setattr(gg, "run_lane_b_headless", lambda *a: {"missing_links": [], "orphans": []})
+    note = repo / "personal" / "bare.md"
+    note.write_text("no links here at all. " * 30, encoding="utf-8")
+    assert _orphan_notes(gg.run_lane_b([note], repo)) == ["personal/bare.md"]

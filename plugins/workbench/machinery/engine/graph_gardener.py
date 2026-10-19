@@ -1149,8 +1149,8 @@ You are a vault graph reviewer. Review these recently-changed notes and suggest:
    have a vault note (people, projects, tools, brain concepts). Do NOT flag common
    English words.
 
-2. ORPHAN FLAGS — notes longer than {ORPHAN_MIN_CHARS} chars that have NO [[wikilinks]]
-   at all. List the note path and a one-line reason it needs linking.
+2. ORPHAN FLAGS — decided elsewhere from the full note bodies, not from the excerpts
+   shown here. Always return an empty "orphans" list.
 
 OUTPUT FORMAT — respond with valid JSON only, no preamble, no code fences:
 {{
@@ -1159,8 +1159,6 @@ OUTPUT FORMAT — respond with valid JSON only, no preamble, no code fences:
     ...
   ],
   "orphans": [
-    {{"note": "<rel_path>", "rationale": "one line"}},
-    ...
   ]
 }}
 
@@ -1169,6 +1167,26 @@ Keep rationales brief (under 20 words each).
 
 === NOTES TO REVIEW ==={notes_block}
 """
+
+
+def detect_orphans(notes_content: list[tuple[str, str]]) -> list[dict]:
+    """Notes longer than ORPHAN_MIN_CHARS whose full body holds no real [[wikilink]].
+
+    Decided over the whole body, not the truncated excerpt the model sees: a link
+    past the prompt cap still counts, and links inside code spans do not.
+    """
+    orphans = []
+    for rel, content in notes_content:
+        if len(content) <= ORPHAN_MIN_CHARS:
+            continue
+        spans = _code_spans(content)
+        if any(
+            not any(start <= m.start() < end for start, end in spans)
+            for m in WIKILINK_CAPTURE_RE.finditer(content)
+        ):
+            continue
+        orphans.append({"note": rel, "rationale": f"{len(content)} chars, no [[wikilinks]]"})
+    return orphans
 
 
 def run_lane_b_headless(prompt: str, model: str) -> dict | None:
@@ -1249,7 +1267,12 @@ def run_lane_b(
         return empty
 
     prompt = build_lane_b_prompt(notes_content)
-    return run_lane_b_headless(prompt, read_batch_model())
+    data = run_lane_b_headless(prompt, read_batch_model())
+    if data is None:
+        return None
+    # The model reviews a truncated excerpt; orphan-ness is a fact about the whole body.
+    data["orphans"] = detect_orphans(notes_content)
+    return data
 
 
 # ---------------------------------------------------------------------------

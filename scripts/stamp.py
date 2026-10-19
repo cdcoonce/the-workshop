@@ -655,6 +655,26 @@ def _check_plugin_name_uniqueness(root: Path, plugins: list[PluginDoc]) -> None:
         seen[plugin.name] = relative
 
 
+def _check_agent_name_uniqueness(plugins: list[PluginDoc]) -> None:
+    """Fail if two plugins ship an agent with the same frontmatter name.
+
+    The agents reference and the subagent roster key on the frontmatter
+    ``name``; the same name under two plugins leaves a roster that cannot say
+    which copy a dispatch resolves to, so it is a build failure naming both.
+    """
+    seen: dict[str, str] = {}
+    for plugin in plugins:
+        for agent in plugin.agents:
+            previous = seen.get(agent.name)
+            if previous is not None:
+                raise StampError(
+                    f"Agent name '{agent.name}' is shipped by two plugins: "
+                    f"'{previous}' and '{plugin.name}'. One plugin per agent "
+                    "name — the roster cannot tell the copies apart."
+                )
+            seen[agent.name] = plugin.name
+
+
 def _persona_plumbing(root: Path) -> dict[str, str]:
     """The canonical persona artefacts workbench owns and every persona copies.
 
@@ -773,6 +793,7 @@ def build_model(root: Path) -> StampModel:
         model.plugins.append(_build_plugin(root, plugin_dir, model.persona_plumbing))
 
     _check_plugin_name_uniqueness(root, model.plugins)
+    _check_agent_name_uniqueness(model.plugins)
 
     for plugin in model.plugins:
         model.skills.extend(plugin.skills)
