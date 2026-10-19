@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess as _sp
 from pathlib import Path
 
@@ -1369,3 +1370,110 @@ def test_gardener_log_reports_the_missing_link_coverage_it_gave_up(
 
     log_text = (repo / gg.GARDENER_LOG_REL).read_text()
     assert "lane_b coverage: 1 hub note(s) not reviewed for missing links, 1 reviewed head+tail only" in log_text
+
+
+# --- #465: /garden checks the vault is unchanged at the moment it writes a promotion ---
+
+
+def _commit_all(repo, message="c"):
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", message)
+
+
+def _cli(monkeypatch, repo, *flags):
+    monkeypatch.setattr(gg.sys, "argv", ["gg", *flags, "--vault-root", str(repo)])
+    return gg.main_cli()
+
+
+def _garden_vault(tmp_path):
+    repo = _init_repo(tmp_path)
+    (repo / "personal" / "seed.md").write_text("seed\n", encoding="utf-8")
+    _commit_all(repo, "seed")
+    return repo
+
+
+def test_acquire_records_the_head_the_pass_started_from(tmp_path):
+    repo = _garden_vault(tmp_path)
+    assert gg.acquire_apply_lock(repo, "apply") is True
+    assert json.loads((repo / gg.APPLY_LOCK_REL).read_text())["head"] == gg.head_commit(repo)
+
+
+def test_write_check_passes_while_head_is_unchanged(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    assert gg.check_write_fresh(repo, ["Brand New Note"]) == []
+
+
+def test_write_check_flags_a_head_that_moved_and_names_the_changed_files(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "other-session.md").write_text("elsewhere\n", encoding="utf-8")
+    _commit_all(repo, "another session commits")
+    problems = gg.check_write_fresh(repo, [])
+    assert len(problems) == 1
+    assert "HEAD moved" in problems[0]
+    assert "personal/other-session.md" in problems[0]
+
+
+def test_rebaseline_after_a_re_read_clears_the_head_check(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "other-session.md").write_text("elsewhere\n", encoding="utf-8")
+    _commit_all(repo, "another session commits")
+    assert gg.check_write_fresh(repo, [])
+    assert gg.rebaseline_apply_lock(repo) is True
+    assert gg.check_write_fresh(repo, []) == []
+
+
+def test_write_check_flags_a_stem_duplicate_created_during_review(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    # Uncommitted: HEAD has not moved, the duplicate appeared in the working tree.
+    (repo / "reference").mkdir()
+    (repo / "reference" / "Rebrand Plan.md").write_text("---\ndate: 2026-01-01\n---\nx\n", encoding="utf-8")
+    problems = gg.check_write_fresh(repo, ["rebrand-plan"])
+    assert len(problems) == 1
+    assert "reference/Rebrand Plan.md" in problems[0]
+
+
+def test_write_check_flags_an_alias_duplicate(tmp_path):
+    repo = _garden_vault(tmp_path)
+    gg.acquire_apply_lock(repo, "apply")
+    (repo / "personal" / "Delegation Conventions.md").write_text(
+        "---\naliases:\n  - Delegation Rules\n---\nx\n", encoding="utf-8",
+    )
+    problems = gg.check_write_fresh(repo, ["Delegation Rules"])
+    assert len(problems) == 1
+    assert "personal/Delegation Conventions.md" in problems[0]
+
+
+def test_write_check_without_the_lock_refuses(tmp_path):
+    repo = _garden_vault(tmp_path)
+    assert "no apply lock" in gg.check_write_fresh(repo, [])[0]
+
+
+def test_cli_check_write_exit_codes_and_rebaseline(tmp_path, monkeypatch, capsys):
+    repo = _garden_vault(tmp_path)
+    assert _cli(monkeypatch, repo, "--acquire-lock", "--session", "apply") == 0
+    assert _cli(monkeypatch, repo, "--check-write", "--new-note", "Fresh Name") == 0
+    (repo / "personal" / "Fresh Name.md").write_text("dup\n", encoding="utf-8")
+    assert _cli(monkeypatch, repo, "--check-write", "--new-note", "Fresh Name") == 1
+    assert "personal/Fresh Name.md" in capsys.readouterr().err
+    assert _cli(monkeypatch, repo, "--rebaseline") == 0
+
+
+def test_lock_refusal_reports_the_holder_session_and_age(tmp_path, monkeypatch, capsys):
+    repo = _garden_vault(tmp_path)
+    assert gg.acquire_apply_lock(repo, "holder-session") is True
+    assert _cli(monkeypatch, repo, "--acquire-lock", "--session", "second") == 1
+    err = capsys.readouterr().err
+    assert "holder-session" in err
+    assert "held for" in err
+
+
+def test_garden_command_gates_promotion_writes_on_the_check():
+    command = (
+        Path(__file__).resolve().parents[2] / "skills" / "vault-garden" / "references" / "command.md"
+    ).read_text(encoding="utf-8")
+    assert "--check-write" in command
+    assert "--rebaseline" in command
