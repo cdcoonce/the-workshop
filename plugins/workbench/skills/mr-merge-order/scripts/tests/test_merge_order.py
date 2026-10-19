@@ -370,3 +370,85 @@ def test_list_merge_requests_applies_the_target_chain_filter(monkeypatch, tmp_pa
     monkeypatch.setattr(merge_order.subprocess, "run", lambda *a, **k: R())
     mrs = merge_order.list_merge_requests("github", "dev", tmp_path)
     assert [mr.source for mr in mrs] == ["feat/a1"]
+
+
+# --- chains as one unit (#776) ---------------------------------------------
+
+
+def test_conflict_units_are_independents_plus_one_tip_per_chain() -> None:
+    units = merge_order.conflict_units(
+        independent=["solo"], chains=[["a1", "a2", "a3"], ["b1", "b2"]]
+    )
+    assert units == ["solo", "a3", "b2"]
+
+
+def test_conflict_units_give_a_fork_one_unit_per_tip() -> None:
+    units = merge_order.conflict_units(independent=[], chains=[["a1", "a2"], ["a1", "a3"]])
+    assert units == ["a2", "a3"]
+
+
+def test_chain_tip_conflict_with_an_independent_is_detected(repo: Path) -> None:
+    """The conflict lives in the chain's SECOND MR; only the tip carries it."""
+    branch_from(repo, "feat-a")
+    write(repo, "unrelated.md", "a-only\n")
+    commit_all(repo, "a")
+    branch_from(repo, "feat-b", "feat-a")
+    write(repo, "docs/operations.md", "line1\n" + "".join(f"b{i}\n" for i in range(30)) + "line3\n")
+    commit_all(repo, "b")
+    branch_from(repo, "solo", "dev")
+    write(repo, "docs/operations.md", "line1\nsolo-edit\nline3\n")
+    commit_all(repo, "solo")
+
+    units = merge_order.conflict_units(["solo"], [["feat-a", "feat-b"]])
+    conflicts = merge_order.pairwise_conflicts(repo, "dev", units)
+    assert conflicts[("feat-b", "solo")] == ["docs/operations.md"]
+    # the independent-only view the old main() used cannot see it
+    assert merge_order.pairwise_conflicts(repo, "dev", ["solo"]) == {}
+
+
+def test_larger_chain_merges_every_member_before_the_independent() -> None:
+    order = merge_order.recommend_order(
+        branches=["aaa-solo", "feat-a", "feat-b"],
+        conflicts={("feat-b", "aaa-solo"): ["f.md"]},
+        sizes={("feat-b", "f.md"): 40, ("aaa-solo", "f.md"): 2},
+        drafts=set(),
+        chains=[["feat-a", "feat-b"]],
+    )
+    assert order.sequence == ["feat-a", "feat-b", "aaa-solo"]
+
+
+def test_larger_independent_merges_before_the_whole_chain() -> None:
+    order = merge_order.recommend_order(
+        branches=["solo", "feat-a", "feat-b"],
+        conflicts={("feat-b", "solo"): ["f.md"]},
+        sizes={("feat-b", "f.md"): 2, ("solo", "f.md"): 40},
+        drafts=set(),
+        chains=[["feat-a", "feat-b"]],
+    )
+    assert order.sequence == ["solo", "feat-a", "feat-b"]
+
+
+def test_main_checks_a_chain_tip_against_independents(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    branch_from(repo, "feat-a")
+    write(repo, "unrelated.md", "a-only\n")
+    commit_all(repo, "a")
+    branch_from(repo, "feat-b", "feat-a")
+    write(repo, "docs/operations.md", "line1\n" + "".join(f"b{i}\n" for i in range(30)) + "line3\n")
+    commit_all(repo, "b")
+    branch_from(repo, "solo", "dev")
+    write(repo, "docs/operations.md", "line1\nsolo-edit\nline3\n")
+    commit_all(repo, "solo")
+
+    mrs = [
+        merge_order.MergeRequest(ident="1", source="feat-a", target="dev"),
+        merge_order.MergeRequest(ident="2", source="feat-b", target="feat-a"),
+        merge_order.MergeRequest(ident="3", source="solo", target="dev"),
+    ]
+    monkeypatch.setattr(merge_order, "list_merge_requests", lambda *a, **k: mrs)
+    rc = merge_order.main(["--repo", str(repo), "--target", "dev", "--no-write"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "| `feat-b` | `solo` | `docs/operations.md` |" in out
+    assert out.index("`feat-a`") < out.index("`feat-b`") < out.rindex("`solo`")
