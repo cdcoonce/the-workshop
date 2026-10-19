@@ -11,6 +11,7 @@
     "-q",
     "-x",
     "tests/test_subagent_evidence_hooks.py",
+    "tests/test_inject_skill_router.py",
     "tests/test_hooks_fail_open.py",
     "tests/test_warn_off_trunk_hook.py",
     "tests/test_audit_config_change_hook.py",
@@ -28,6 +29,7 @@
     "--collect-only",
     "-q",
     "tests/test_subagent_evidence_hooks.py",
+    "tests/test_inject_skill_router.py",
     "tests/test_hooks_fail_open.py",
     "tests/test_warn_off_trunk_hook.py",
     "tests/test_audit_config_change_hook.py",
@@ -74,15 +76,29 @@
       "label": "#620: start hook uses the raw agent_id in the path [predicted: test_start_hook_keeps_the_state_file_inside_the_gate_directory]",
       "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
       "oracle": "real",
-      "find": "/ f\"{safe_id}.txt\"",
+      "find": "/ f\"{state_key(agent_id)}.txt\"",
       "replace": "/ f\"{agent_id}.txt\""
     },
     {
       "label": "#620: stop hook uses the raw agent_id in the path [predicted: test_stop_hook_does_not_delete_files_outside_the_gate_directory]",
       "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
       "oracle": "real",
-      "find": "/ f\"{safe_id}.txt\"",
+      "find": "/ f\"{state_key(agent_id)}.txt\"",
       "replace": "/ f\"{agent_id}.txt\""
+    },
+    {
+      "label": "#1215: state key drops the raw-id hash [predicted: test_colliding_agent_ids_get_separate_baselines_and_each_stop_reads_its_own]",
+      "file": "../plugins/workbench/hooks/scripts/_git_baseline.py",
+      "oracle": "real",
+      "find": "return f\"{safe}-{digest}\"",
+      "replace": "return safe"
+    },
+    {
+      "label": "#1215: router marker uses the bare session id [predicted: test_session_ids_that_sanitize_alike_do_not_share_a_claim]",
+      "file": "../plugins/workbench/hooks/scripts/inject-skill-router.py",
+      "oracle": "real",
+      "find": "f\"{state_key(session_id)}.claim\"",
+      "replace": "f\"{session_id.replace('/', '_')}.claim\""
     },
     {
       "label": "#1062: non-string message passed through [predicted: test_non_string_final_message_fails_open]",

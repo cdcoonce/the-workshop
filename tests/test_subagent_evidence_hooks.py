@@ -24,6 +24,7 @@ _spec = importlib.util.spec_from_file_location("_git_baseline", GIT_BASELINE)
 _git_baseline = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_git_baseline)
 working_tree_signature = _git_baseline.working_tree_signature
+state_key = _git_baseline.state_key
 
 
 def run(hook_path: Path, payload) -> subprocess.CompletedProcess[str]:
@@ -173,7 +174,7 @@ def test_state_file_is_consumed_after_stop_check(tmp_path: Path) -> None:
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
 
     start(tmp_path, "agent-4")
-    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-4.txt"
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / f"{state_key('agent-4')}.txt"
     assert state_file.exists()
 
     run(
@@ -220,7 +221,7 @@ def test_snapshot_serializes_empty_strings_not_none(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     start(tmp_path, "agent-none")
 
-    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-none.txt"
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / f"{state_key('agent-none')}.txt"
     assert "None" not in state_file.read_text()
 
 
@@ -321,7 +322,7 @@ def test_state_file_is_removed_when_the_message_is_not_a_completion_claim(
     _commit_readme(tmp_path)
 
     start(tmp_path, "agent-leak")
-    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-leak.txt"
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / f"{state_key('agent-leak')}.txt"
     assert state_file.exists()
 
     result = run(
@@ -339,7 +340,7 @@ def test_state_file_is_removed_when_the_final_message_is_empty(tmp_path: Path) -
     _commit_readme(tmp_path)
 
     start(tmp_path, "agent-empty")
-    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / "agent-empty.txt"
+    state_file = tmp_path / ".git" / "the-workshop-subagent-gate" / f"{state_key('agent-empty')}.txt"
 
     result = run(STOP_HOOK, {"cwd": str(tmp_path), "agent_id": "agent-empty"})
 
@@ -862,3 +863,52 @@ def test_done_mid_sentence_is_not_a_completion_claim(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_state_key_keeps_ids_that_sanitize_alike_apart() -> None:
+    assert state_key("a/b") != state_key("a_b")
+    assert state_key("a/b") == state_key("a/b")
+
+
+@pytest.mark.parametrize("raw", ["../../escape", "a/b", "..", "x\\..\\y", "", "caf\u00e9"])
+def test_state_key_is_a_single_safe_path_component(raw: str) -> None:
+    key = state_key(raw)
+    assert key and key.replace("-", "").replace("_", "").isalnum()
+    assert "/" not in key and "\\" not in key and "." not in key
+
+
+def test_colliding_agent_ids_get_separate_baselines_and_each_stop_reads_its_own(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    _commit_readme(tmp_path)
+    gate_dir = tmp_path / ".git" / "the-workshop-subagent-gate"
+
+    start(tmp_path, "a/b")
+    start(tmp_path, "a_b")
+    assert len(list(gate_dir.iterdir())) == 2
+
+    # The first agent edits after the second agent's baseline was taken: if the
+    # second SubagentStart had overwritten the first baseline, a/b's stop would
+    # compare against a snapshot taken after its own work and wrongly block.
+    (tmp_path / "README.md").write_text("changed by a/b\n")
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "a/b", "last_assistant_message": "I've fixed the bug."},
+    )
+    assert result.stdout == ""
+    assert len(list(gate_dir.iterdir())) == 1
+
+    result = run(
+        STOP_HOOK,
+        {"cwd": str(tmp_path), "agent_id": "a_b", "last_assistant_message": "I've fixed the bug."},
+    )
+    assert result.stdout == ""
+    assert list(gate_dir.iterdir()) == []
+
+
+def test_the_id_sanitizer_is_defined_only_in_git_baseline() -> None:
+    scripts = GIT_BASELINE.parent
+    needle = 'c if c.isalnum() or c in "-_" else "_"'
+    holders = sorted(p.name for p in scripts.glob("*.py") if needle in p.read_text())
+    assert holders == ["_git_baseline.py"]
