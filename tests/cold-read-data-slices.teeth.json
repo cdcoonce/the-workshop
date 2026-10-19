@@ -1,0 +1,135 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_vault_cold_read_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_vault_cold_read_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 section placement: rename heading to Data tier",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "## Data slices\n\nThe cheap",
+      "replace": "## Data tier\n\nThe cheap"
+    },
+    {
+      "label": "2 trigger literal: Data from <source>",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "``Deliverable: data from <source>``",
+      "replace": "``Data from <source>``"
+    },
+    {
+      "label": "3 trigger provenance: drop conductor-edit sentence",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "A conductor edit that adds it does not count. ",
+      "replace": ""
+    },
+    {
+      "label": "4 four questions: delete Mutability question",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "  - **Mutability**: Is the source edited after the event that marks the output finished? Which version does the body read, which event anchors it, and is the anchored version unique (a tie rule)?\n",
+      "replace": ""
+    },
+    {
+      "label": "5 four questions: delete uniqueness/tie clause in Mutability",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": ", and is the anchored version unique (a tie rule)?",
+      "replace": "?"
+    },
+    {
+      "label": "6 failing row blocks: becomes advisory",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "A failing row blocks dispatch of read 1.",
+      "replace": "A failing row is advisory."
+    },
+    {
+      "label": "7 seeded default: delete first 'seeded defects' site",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "the default offered is seeded defects: real",
+      "replace": "the default offered is: real"
+    },
+    {
+      "label": "8 shipped extraction: unshipped selection rule advisory",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "A selection rule that lives only in prose blocks, as an unshipped selection rule.",
+      "replace": "A selection rule that lives only in prose is advisory, as an unshipped selection rule."
+    },
+    {
+      "label": "9 premise miss: delete premise misses: N token",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "The conductor adds the row, measured, and the digest reports `premise misses: N`. ",
+      "replace": "The conductor adds the row, measured. "
+    },
+    {
+      "label": "10 size flag: delete data-slice trigger",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": ", or, on a [data slice](#data-slices), a reader marks a criterion on the real output REASONED because the output is the slice's own",
+      "replace": ""
+    },
+    {
+      "label": "11 step 1: delete clause (g)",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": " (g) On a [data slice](#data-slices), record the `### Data premises` table in the issue, with no failing row, before the reader is dispatched.",
+      "replace": ""
+    },
+    {
+      "label": "12 digest: delete deliverable: data line",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": ", on a [data slice](#data-slices) the line `deliverable: data (premises: <rows> rows, <fails> failing; premise misses: <n>)`",
+      "replace": ""
+    },
+    {
+      "label": "13 ledger key: delete deliverable=data sentence",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "A data slice also carries the optional key `deliverable=data`. ",
+      "replace": ""
+    },
+    {
+      "label": "14 section-scoped: move deliverable=data sentence ahead of the Fields bullet",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "```\n\n- **Fields.** Tokens are `key=value` separated by single spaces, and a value never contains a space. `read` is the conductor's count of fresh reads on the slice. `body` is the 12-hex hash step 1 recorded. `rule_born` is the N of the digest's `rule-born: N of M blocking`, `na` when that line does not apply. `mutants` and `survivors` are the `teeth_check.py` counts from [Probe builds](#probe-builds), `na` when no probe build ran. `tokens` and `seconds` come from the reader subagent's Agent-tool result (its token count and duration), `na` when that result does not carry them, and the key is never omitted. An optional `tier=<hand-built|afk-built>` key may follow the documented keys; the parser keeps unknown keys, so it needs no script change. A data slice also carries the optional key `deliverable=data`. ",
+      "replace": "```\n\nA data slice also carries the optional key `deliverable=data`.\n\n- **Fields.** Tokens are `key=value` separated by single spaces, and a value never contains a space. `read` is the conductor's count of fresh reads on the slice. `body` is the 12-hex hash step 1 recorded. `rule_born` is the N of the digest's `rule-born: N of M blocking`, `na` when that line does not apply. `mutants` and `survivors` are the `teeth_check.py` counts from [Probe builds](#probe-builds), `na` when no probe build ran. `tokens` and `seconds` come from the reader subagent's Agent-tool result (its token count and duration), `na` when that result does not carry them, and the key is never omitted. An optional `tier=<hand-built|afk-built>` key may follow the documented keys; the parser keeps unknown keys, so it needs no script change. "
+    },
+    {
+      "label": "15 control: reword 5 -> 6 fresh reads in precedent",
+      "file": "../plugins/workbench/skills/vault-cold-read/references/command.md",
+      "oracle": "real",
+      "find": "took 5 fresh reads",
+      "replace": "took 6 fresh reads",
+      "expect": "survived",
+      "why": "No test pins the precedent parenthetical's prose, so rewording one number in it must stay green."
+    }
+  ]
+}
