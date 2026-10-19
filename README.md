@@ -180,14 +180,14 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 <!-- BEGIN GENERATED: plugins-table -->
 | Plugin | Version | Skills | Agents | Hooks | Description |
 | --- | --- | --- | --- | --- | --- |
-| **`advisor-product-design`** | `0.2.2` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
-| **`advisor-product-strategy`** | `0.2.2` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
+| **`advisor-product-design`** | `0.2.3` | 1 | 0 | 0 | Product-design/UI-UX advisor persona — artifact-first design reviews with severity-tagged findings, named principles, and a stance contract that holds positions against pushback. Built by persona-builder. |
+| **`advisor-product-strategy`** | `0.2.3` | 1 | 0 | 0 | Product-strategy sounding board and coach persona for a design+PM hybrid at an early-stage startup — decision stress-testing with a steelman duty, influence-case building, prioritization on thin evidence, and verdict-first design critique. Built by persona-builder. |
 | **`persona-pair-programmer`** | `1.1.1` | 0 | 0 | 1 | Collaborative pair-programmer voice — brief think-aloud, checks in at decision points. |
 | **`persona-ship-it`** | `1.1.1` | 0 | 0 | 1 | Momentum-first voice — blunt, bias-to-action, picks a sensible default and moves. |
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.43.3` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workbench`** | `8.43.5` | 79 | 13 | 17 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
 | **`workshop-maintainer`** | `3.0.4` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
@@ -353,6 +353,16 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `verify-tests-before-stop.py` | `workbench` | `Stop` | Stop hook: verify the project's test suite is green before Claude stops. |
 | `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
 <!-- END GENERATED: hooks-table -->
+
+### Tuning the context warning
+
+The `UserPromptSubmit` hook `suggest-handoff-on-context.py` tells you, once per large-context episode, how big the live context has grown. It fires at **300k tokens** by default. Plugin-only consumers on a smaller window can lower it with the `WORKSHOP_HANDOFF_CONTEXT_TOKENS` environment variable, which takes a positive integer token count; an unset, non-numeric or non-positive value falls back to the 300k default. For example, to warn at 150k tokens, export it in the shell that launches the agent, or set it under `env` in your Claude Code `settings.json`:
+
+```bash
+export WORKSHOP_HANDOFF_CONTEXT_TOKENS=150000
+```
+
+After `/clear` or compaction drops the context below half the threshold, the warning re-arms. The hook has no other settings, and the generated table above shows only the first docstring line of each hook, which is why this lives here.
 
 See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference](docs/reference/build-and-wiring.md) for details.
 
