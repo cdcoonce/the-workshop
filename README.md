@@ -354,6 +354,16 @@ Hooks are scripts wired to Claude Code lifecycle events. The base set ships with
 | `warn-off-trunk.py` | `workbench` | `SessionEnd` | SessionEnd hook: warn when a session ends with HEAD off the repo's trunk branch. |
 <!-- END GENERATED: hooks-table -->
 
+### Tuning the context warning
+
+The `UserPromptSubmit` hook `suggest-handoff-on-context.py` tells you, once per large-context episode, how big the live context has grown. It fires at **300k tokens** by default. Plugin-only consumers on a smaller window can lower it with the `WORKSHOP_HANDOFF_CONTEXT_TOKENS` environment variable, which takes a positive integer token count; an unset, non-numeric or non-positive value falls back to the 300k default. For example, to warn at 150k tokens, export it in the shell that launches the agent, or set it under `env` in your Claude Code `settings.json`:
+
+```bash
+export WORKSHOP_HANDOFF_CONTEXT_TOKENS=150000
+```
+
+After `/clear` or compaction drops the context below half the threshold, the warning re-arms. The hook has no other settings, and the generated table above shows only the first docstring line of each hook, which is why this lives here.
+
 See the [hooks reference](docs/reference/hooks.md) and [build & wiring reference](docs/reference/build-and-wiring.md) for details.
 
 ---
