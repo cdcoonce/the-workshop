@@ -30,6 +30,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from scripts._frontmatter import extract_block
+
 # Valid agent roles, matching the documented vocabulary in CLAUDE.md.
 VALID_ROLES = (
     "implementer",
@@ -225,13 +227,10 @@ def _parse_frontmatter(text: str) -> dict | None:
     dict | None
         Parsed key-value pairs, or None if no valid frontmatter found.
     """
-    if not text.startswith("---"):
+    block = extract_block(text)
+    if block is None:
         return None
-    closing = re.search(r"\n---[ \t]*(?:\n|\Z)", text[3:])
-    if closing is None:
-        return None
-    end = 3 + closing.start()
-    frontmatter_text = text[3:end].strip()
+    frontmatter_text = block.strip()
     if not frontmatter_text:
         return None
     result: dict = {}
