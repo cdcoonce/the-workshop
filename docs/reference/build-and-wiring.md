@@ -35,6 +35,7 @@ the repair is to run that tool directly.
 <!-- BEGIN GENERATED: scripts-table -->
 | Script | Purpose |
 | --- | --- |
+| `scripts/_frontmatter.py` | Shared raw frontmatter extraction for the repo's two frontmatter readers. |
 | `scripts/bump_version.py` | Bump a plugin's version in the one hand-written file, then stamp the rest. |
 | `scripts/check_teeth_anchors.py` | Resolve every committed detector-teeth-check spec's anchors, without running mutants. |
 | `scripts/check_teeth_changed.py` | Run every committed detector-teeth-check spec whose inputs changed since a base ref. |

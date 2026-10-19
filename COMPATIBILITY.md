@@ -77,6 +77,34 @@ Constraints that shape the hooks above, and would break them if they changed:
   what changed.
 - **`PostToolUse` cannot prevent execution**; it only reacts to completion.
 
+#### Matcher semantics
+
+Do matchers anchor, or search? **Claude Code: it depends on the characters in
+the matcher.** Source: the official hooks documentation,
+<https://code.claude.com/docs/en/hooks> (read 2026-10-18; documentation
+only, not a controlled probe).
+
+- `"*"`, empty or omitted matches every occurrence of the event.
+- A matcher of only letters, digits, `_`, `-`, spaces, `,` and `|` is an
+  **exact** string, or an exact list split on `|` or `,`. `Edit|Write` matches
+  either tool exactly and nothing containing them.
+- Any other character makes it a JavaScript regular expression, **unanchored**:
+  the docs say it is tested "on a match anywhere in the value". `Edit.*`
+  therefore also matches `NotebookEdit`; write `^Edit$` for a whole-string
+  match.
+- `FileChanged` and `StopFailure` use a narrower exact set (letters, digits,
+  `_`, `|`), so `-`, space or `,` there switches to regex.
+- MCP tools match like any tool name, but `mcp__server` alone is an exact
+  string that matches no tool; use `mcp__server__.*`.
+
+This repo's matchers (`Edit|Write` and similar) are plain exact lists, so they
+do not depend on search semantics. A matcher that contains a regex
+metacharacter must be anchored deliberately.
+
+**Cortex Code: unverified.** Whether Cortex anchors or searches hook matchers
+has not been checked against its bundled reference or by a probe; do not assume
+it matches Claude Code. Verify before relying on a regex matcher there.
+
 ### Skills
 
 - `skills/*/SKILL.md` auto-discovery within plugin

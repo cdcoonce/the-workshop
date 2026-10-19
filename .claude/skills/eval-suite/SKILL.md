@@ -306,9 +306,9 @@ indeterminate attempt, replaced from the reserve, then one counted attempt;
 ```
 
 Collect each attempt's raws in one directory: its transcripts as `*.jsonl`
-files at that directory's root, beside the `end_state/` snapshot directory
-from step 4. `ledger.write_run` globs `*.jsonl` at that root to compute
-`model_ids`, so a transcript placed in a subdirectory is never seen.
+files, beside the `end_state/` snapshot directory from step 4.
+`ledger.write_run` globs `**/*.jsonl` under that root to compute `model_ids`,
+including nested subagent transcripts in subdirectories.
 
 Then write the run file, plus every attempt's raws (including its
 `end_state/` snapshot), with
