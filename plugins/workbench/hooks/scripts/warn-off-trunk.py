@@ -52,7 +52,9 @@ else:
         # Fail open: a payload that isn't a JSON object isn't ours to act on.
         sys.exit(0)
 
-cwd = Path(data.get("cwd") or ".").resolve()
+raw_cwd = data.get("cwd")
+# Fail open: Path() raises TypeError on a non-string, before any try/except.
+cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else ".").resolve()
 
 
 # The sibling module is normally importable because run-hook.sh executes this

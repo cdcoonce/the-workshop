@@ -38,7 +38,9 @@ if not isinstance(message, str):
     # Fail open on a malformed payload: only a string can carry a claim.
     message = ""
 agent_id = data.get("agent_id")
-cwd = Path(data.get("cwd") or ".").resolve()
+raw_cwd = data.get("cwd")
+# Fail open: Path() raises TypeError on a non-string, before any try/except.
+cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else ".").resolve()
 
 if not agent_id:
     sys.exit(0)
