@@ -1,0 +1,64 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_hooks_non_string_cwd.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_hooks_non_string_cwd.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1063: audit-config-change drops the non-string cwd guard [predicted: test_non_string_cwd_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/audit-config-change.py",
+      "oracle": "real",
+      "find": "cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else \".\").resolve()",
+      "replace": "cwd = Path(raw_cwd or \".\").resolve()"
+    },
+    {
+      "label": "#1063: snapshot-subagent-start drops the non-string cwd guard [predicted: test_non_string_cwd_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/snapshot-subagent-start.py",
+      "oracle": "real",
+      "find": "cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else \".\").resolve()",
+      "replace": "cwd = Path(raw_cwd or \".\").resolve()"
+    },
+    {
+      "label": "#1063: verify-subagent-evidence drops the non-string cwd guard [predicted: test_non_string_cwd_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/verify-subagent-evidence.py",
+      "oracle": "real",
+      "find": "cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else \".\").resolve()",
+      "replace": "cwd = Path(raw_cwd or \".\").resolve()"
+    },
+    {
+      "label": "#1063: verify-tests-before-stop drops the non-string cwd guard [predicted: test_non_string_cwd_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else \".\").resolve()",
+      "replace": "cwd = Path(raw_cwd or \".\").resolve()"
+    },
+    {
+      "label": "#1063: warn-off-trunk drops the non-string cwd guard [predicted: test_non_string_cwd_fails_open]",
+      "file": "../plugins/workbench/hooks/scripts/warn-off-trunk.py",
+      "oracle": "real",
+      "find": "cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else \".\").resolve()",
+      "replace": "cwd = Path(raw_cwd or \".\").resolve()"
+    }
+  ]
+}

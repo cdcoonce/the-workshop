@@ -50,7 +50,9 @@ else:
 if data.get("stop_hook_active"):
     sys.exit(0)
 
-cwd = Path(data.get("cwd") or ".").resolve()
+raw_cwd = data.get("cwd")
+# Fail open: Path() raises TypeError on a non-string, before any try/except.
+cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else ".").resolve()
 
 
 def detect_test_command(project_dir: Path):

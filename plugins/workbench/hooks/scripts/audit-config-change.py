@@ -37,7 +37,9 @@ if not isinstance(data, dict):
 
 config_source = data.get("config_source", "unknown")
 file_path = data.get("file_path", "")
-cwd = Path(data.get("cwd") or ".").resolve()
+raw_cwd = data.get("cwd")
+# Fail open: Path() raises TypeError on a non-string, before any try/except.
+cwd = Path(raw_cwd if isinstance(raw_cwd, str) and raw_cwd else ".").resolve()
 
 if not file_path:
     sys.exit(0)
