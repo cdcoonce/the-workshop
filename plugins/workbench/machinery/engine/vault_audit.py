@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
@@ -320,6 +321,115 @@ def _entry_order_issues(vault_root: Path) -> list[Issue]:
     return issues
 
 
+# Folder Structure tree (root AGENTS.md): a connector (├── / └──) at column 4*depth.
+_TREE_ENTRY_RE = re.compile(r"^((?:[│ ]   )*)[├└]── (.+)$")
+_FOLDER_HEADING_RE = re.compile(r"^##\s+Folder Structure\s*$")
+_FENCE_LINE_RE = re.compile(r"^\s*(```|~~~)")
+# Never part of the documented tree, whether or not git is available.
+_DISK_NOISE_DIRS = frozenset({".git", ".obsidian", "node_modules", "__pycache__"})
+
+
+def _documented_dirs(agents_text: str) -> set[str] | None:
+    """Directories (depth 1-2, ``a/`` or ``a/b/``) named in the Folder Structure fence.
+
+    None when there is no such heading+fence. Entries are indent-parsed: depth is the
+    connector's column over four; a name counts as a directory when it ends in ``/``
+    (before any ``#`` comment). A ``a/ · b/`` line documents several siblings.
+    """
+    lines = agents_text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _FOLDER_HEADING_RE.match(ln)), None)
+    if start is None:
+        return None
+    fence_open = next((i for i in range(start + 1, len(lines)) if _FENCE_LINE_RE.match(lines[i])), None)
+    if fence_open is None:
+        return None
+    dirs: set[str] = set()
+    parents: dict[int, str] = {}
+    for line in lines[fence_open + 1 :]:
+        if _FENCE_LINE_RE.match(line):
+            return dirs
+        m = _TREE_ENTRY_RE.match(line)
+        if not m:
+            continue
+        depth = len(m.group(1)) // 4
+        names = re.split(r"\s+#", m.group(2), maxsplit=1)[0].strip()
+        for name in (n.strip() for n in names.split("·")):
+            if not name.endswith("/") or depth > 1:
+                continue
+            path = name if depth == 0 else f"{parents.get(0, '')}{name}"
+            if depth == 0:
+                parents[0] = name
+            dirs.add(path)
+    return None  # unterminated fence
+
+
+def _disk_dirs(vault_root: Path) -> set[str]:
+    """Directories at depth 1-2 holding content git would not ignore (all, outside git)."""
+    found: set[str] = set()
+
+    def add(parts: tuple[str, ...]) -> None:
+        if any(p in _DISK_NOISE_DIRS for p in parts):
+            return
+        for n in (1, 2):
+            if len(parts) >= n:
+                found.add("/".join(parts[:n]) + "/")
+
+    listed = None
+    if (vault_root / ".git").exists():
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(vault_root), "ls-files", "-z", "-co", "--exclude-standard"],
+                capture_output=True, text=True, check=False,
+            )
+            if out.returncode == 0:
+                listed = [p for p in out.stdout.split("\0") if p]
+        except OSError:
+            listed = None
+    if listed is not None:
+        for rel in listed:
+            add(tuple(Path(rel).parts[:-1]))
+    else:
+        for top in sorted(p for p in vault_root.iterdir() if p.is_dir()):
+            add((top.name,))
+            for sub in sorted(p for p in top.iterdir() if p.is_dir()) if top.name not in _DISK_NOISE_DIRS else []:
+                add((top.name, sub.name))
+    return found
+
+
+def _is_git_ignored(vault_root: Path, rel_dir: str) -> bool:
+    if not (vault_root / ".git").exists():
+        return False
+    try:
+        return subprocess.run(
+            ["git", "-C", str(vault_root), "check-ignore", "-q", "--", rel_dir],
+            capture_output=True, check=False,
+        ).returncode == 0
+    except OSError:
+        return False
+
+
+def _docs_vs_disk_issues(vault_root: Path) -> list[Issue]:
+    """Root AGENTS.md Folder Structure block vs the real top-two-level directories (#753)."""
+    agents = vault_root / "AGENTS.md"
+    if not agents.is_file():
+        return []
+    documented = _documented_dirs(_read(agents))
+    if documented is None:
+        return [Issue("AGENTS.md", "no parseable fenced block under '## Folder Structure'")]
+    on_disk = _disk_dirs(vault_root)
+    issues: list[Issue] = []
+    for d in sorted(on_disk - documented):
+        parent = d.split("/")[0] + "/"
+        if d != parent and parent not in documented:
+            continue  # the undocumented parent is reported once; its children follow it
+        issues.append(Issue("AGENTS.md", f"`{d}` is on disk but not in the Folder Structure tree"))
+    for d in sorted(documented - on_disk):
+        if (vault_root / d).is_dir() or _is_git_ignored(vault_root, d):
+            continue
+        issues.append(Issue("AGENTS.md", f"`{d}` is documented in the Folder Structure tree but missing on disk"))
+    return issues
+
+
 def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     governed = iter_governed_markdown_notes(vault_root)
@@ -439,6 +549,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
         "stale_active": stale_active,
         "duplicate_descriptions": duplicate_descriptions,
         "entry_order": _entry_order_issues(vault_root),
+        "docs_vs_disk": _docs_vs_disk_issues(vault_root),
     }
 
     return {
@@ -484,6 +595,7 @@ def render_markdown(report: dict[str, Any], limit: int = 20) -> str:
         "personal_index": "Personal Index Drift",
         "stale_active": "Stale Active",
         "duplicate_descriptions": "Duplicate Descriptions",
+        "docs_vs_disk": "Docs vs Disk (Folder Structure)",
     }
     for key, label in labels.items():
         _section(lines, label, report["issues"][key], limit)
