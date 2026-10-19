@@ -70,6 +70,7 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 | Hook | Plugin | Event | Summary |
 | --- | --- | --- | --- |
 | `audit-config-change.py` | `workbench` | `ConfigChange` | ConfigChange hook: audit-log and surface mid-session config file changes. |
+| `branch-policy.py` | `workbench` | `PreToolUse` | PreToolUse hook (Bash): enforce the branch policy at the moment of action. |
 | `inject-skill-router.py` | `workbench` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. |
 | `inject_persona.py` | `persona-pair-programmer` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
 | `inject_persona.py` | `persona-ship-it` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |

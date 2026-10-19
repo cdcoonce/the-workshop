@@ -56,6 +56,7 @@ Every event this repo ships a hook for, with the mechanism it depends on:
 | Event              | Hook                                          | Depends on                                                                        |
 | ------------------ | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                                                               |
+| `PreToolUse`       | `branch-policy.py`                            | exit code 2 to deny; `Bash` tool matcher                                          |
 | `PostToolUse`      | `post-edit-lint.py`                           | side effect only                                                                  |
 | `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `systemMessage`                                                                   |
 | `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block                                                              |
@@ -415,6 +416,7 @@ What that means for the hooks this repo ships:
 | Hook                                                         | On Cortex                                                                                                                              |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `protect-files.py` (PreToolUse, exit 2)                      | works                                                                                                                                  |
+| `branch-policy.py` (PreToolUse on Bash, exit 2)              | exit 2 works; the `Bash` tool-name match on Cortex is unconfirmed                                                                      |
 | `post-edit-lint.py` (PostToolUse)                            | works                                                                                                                                  |
 | `suggest-handoff-on-context.py` (UserPromptSubmit)           | event exists; `systemMessage` support unconfirmed                                                                                      |
 | `verify-tests-before-stop.py` (Stop, exit 2)                 | works                                                                                                                                  |

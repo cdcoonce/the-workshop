@@ -1,0 +1,92 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_branch_policy_hook.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_branch_policy_hook.py"
+  ],
+  "mutants": [
+    {
+      "label": "#542: bare checkout -b allowed (start point never required)",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "    return not (positionals and positionals[0].startswith(\"origin/\"))",
+      "replace": "    return False"
+    },
+    {
+      "label": "#542: any start point accepted, not just origin/",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "positionals[0].startswith(\"origin/\")",
+      "replace": "bool(positionals)"
+    },
+    {
+      "label": "#542: --base main no longer blocked",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "        if _flag_value(args, _BASE_FLAGS) == PROMOTION_BRANCH:",
+      "replace": "        if False:"
+    },
+    {
+      "label": "#542: promotion PR from the integration branch blocked too",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "            if head != integration:",
+      "replace": "            if True:"
+    },
+    {
+      "label": "#542: integration branch hardcoded instead of read from config",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "        integration = tomllib.load(f).get(\"trunk_branch\")",
+      "replace": "        integration = tomllib.load(f).get(\"trunk_branch\") and \"dev\""
+    },
+    {
+      "label": "#542: repo whose trunk is main is enforced anyway",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "or integration == PROMOTION_BRANCH:",
+      "replace": "or False:"
+    },
+    {
+      "label": "#542: chained command only first segment checked",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "    for words in segments:",
+      "replace": "    for words in segments[:1]:"
+    },
+    {
+      "label": "#542: switch -c not recognised",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "    \"switch\": {\"-c\", \"-C\", \"--create\", \"--force-create\"},",
+      "replace": "    \"switch\": set(),"
+    },
+    {
+      "label": "#542: --base=main form not recognised",
+      "file": "../plugins/workbench/hooks/scripts/branch-policy.py",
+      "oracle": "real",
+      "find": "            if flag.startswith(\"--\") and arg.startswith(flag + \"=\"):",
+      "replace": "            if False:"
+    }
+  ]
+}
