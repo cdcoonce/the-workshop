@@ -1652,3 +1652,104 @@ def test_sections_the_reader_is_given_name_no_void_or_degraded_value() -> None:
     assert len(names) == 9 and given.strip()
     for needle in ("VOID", "void_cause", "degraded="):
         assert needle not in given, f"a reader-visible section says {needle!r}"
+
+
+# --- Data-slice tier (#1252) -------------------------------------------------
+# Precedent: afk#1685 (the epic-calibration corpus) took five fresh reads and hit
+# cap #1. Five of its ten blocking findings were premises about the real data and
+# three were selection definitions; only two were code-gradable. Each test pins
+# one clause of the tier inside the section or step it belongs to.
+
+DATA_HEADING = "## Data slices"
+DATA_TRIGGER = "Deliverable: data from <source>"
+
+
+def _data_slices() -> str:
+    return _cold_section(DATA_HEADING)
+
+
+def test_data_slices_section_sits_between_size_flag_and_subtract_first() -> None:
+    text = COLD_READ.read_text()
+    assert DATA_HEADING in text, "command.md has no data-slices section"
+    assert text.index("## Size flag") < text.index(DATA_HEADING)
+    assert text.index(DATA_HEADING) < text.index("## Subtract first")
+    between = text[text.index("## Size flag") + len("## Size flag") : text.index(DATA_HEADING)]
+    assert "\n## " not in between
+
+
+def test_data_slice_trigger_is_the_deliverable_line_seen_by_read_1() -> None:
+    section = _data_slices()
+    assert f"`{DATA_TRIGGER}`" in section
+    assert "written by Charles or `/dispatch`" in section
+    assert "in the body read 1 saw" in section
+    assert "a conductor edit that adds it does not count" in section.lower()
+    assert "orthogonal to the executor tier" in section
+    assert "`Build path:`" in section
+
+
+def test_premise_pass_asks_the_four_questions() -> None:
+    section = _data_slices()
+    assert "### Data premises" in section
+    assert "claim | query | measured | holds" in section
+    for label in ("**Population**", "**Mutability**", "**State definitions**", "**Seed membership**"):
+        assert label in section, f"premise question {label} is missing"
+    assert "tie rule" in section
+    assert "by current label or by event" in section
+    assert "not cold" in section
+
+
+def test_failing_premise_row_blocks_read_1_with_a_seeded_defect_default() -> None:
+    section = _data_slices()
+    assert "blocks dispatch of read 1" in section
+    assert "measured value as the default fix" in section
+    assert "seeded defects" in section
+    assert "re-runs on every body change" in section
+
+
+def test_unshipped_selection_rule_blocks() -> None:
+    section = _data_slices()
+    assert "unshipped selection rule" in section
+    assert "shipped function" in section
+    assert "recorded source fixtures" in section
+    assert "No new step 8 exemption" in section
+
+
+def test_premise_miss_is_counted_in_the_digest() -> None:
+    section = _data_slices()
+    assert "premise miss" in section
+    assert "`premise misses: N`" in section
+    assert "read 2 or later" in section
+    assert "the finding still blocks" in section.lower()
+
+
+def test_size_flag_names_the_data_slice_trigger() -> None:
+    section = _cold_section("## Size flag")
+    assert "data slice" in section
+    assert "REASONED because the output is the slice's own" in section
+    assert "split extraction from curation" in section
+    assert "#data-slices" in section
+
+
+def test_step_1_requires_the_premise_table_before_dispatch() -> None:
+    step = _step(1)
+    assert "(g)" in step
+    assert "data slice" in step
+    assert "`### Data premises`" in step
+    assert "no failing row" in step
+    assert "before the reader is dispatched" in step
+
+
+def test_digest_carries_the_deliverable_data_line() -> None:
+    procedure = _section(COLD_READ.read_text(), "## Procedure")
+    step = _flat(procedure[procedure.index("\n9. ") : procedure.index("\n10. ")])
+    assert (
+        "`deliverable: data (premises: <rows> rows, <fails> failing; premise misses: <n>)`"
+        in step
+    )
+
+
+def test_ledger_fields_name_the_optional_deliverable_key() -> None:
+    section = _cold_section("## The ledger line")
+    fields = section[section.index("**Fields.**") :]
+    assert "`deliverable=data`" in fields
+    assert "optional" in fields
