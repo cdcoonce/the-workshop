@@ -237,6 +237,26 @@ def test_hook_uses_the_shared_git_helper_not_a_private_copy() -> None:
     assert "_run_git" in imported
 
 
+def test_hook_uses_shared_git_dir_helpers_for_the_worktree_check() -> None:
+    import ast
+
+    tree = ast.parse(HOOK_PATH.read_text())
+    imported = {
+        alias.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module == "_git_baseline"
+        for alias in n.names
+    }
+    literals = {
+        n.value
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
+    assert {"git_dir", "git_common_dir"} <= imported
+    assert "--git-dir" not in literals
+    assert "--git-common-dir" not in literals
+
+
 def test_hook_fails_open_when_the_shared_helper_is_missing(tmp_path: Path) -> None:
     import shutil
 
