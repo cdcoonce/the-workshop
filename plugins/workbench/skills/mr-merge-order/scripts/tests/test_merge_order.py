@@ -8,6 +8,7 @@ conflicting), and a mock would just re-assert our own assumptions.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -311,3 +312,61 @@ def test_resolve_target_falls_back_to_local_when_no_remote(repo: Path) -> None:
     ref, note = merge_order.resolve_target(repo, "dev")
     assert ref == "dev"
     assert note is not None and "no `origin/dev`" in note
+
+
+def _mr(ident: str, source: str, target: str) -> "merge_order.MergeRequest":
+    return merge_order.MergeRequest(ident=ident, source=source, target=target)
+
+
+def test_target_filter_excludes_a_stack_rooted_elsewhere() -> None:
+    """`--target dev` must not pull in a stack rooted at `release`, even though
+    its inner MR targets another open MR's source."""
+    mrs = [
+        _mr("1", "feat/a1", "dev"),
+        _mr("2", "feat/a2", "feat/a1"),
+        _mr("3", "feat/b1", "release"),
+        _mr("4", "feat/b2", "feat/b1"),
+    ]
+    kept = merge_order.filter_to_target(mrs, "dev")
+    assert [mr.source for mr in kept] == ["feat/a1", "feat/a2"]
+
+
+def test_target_filter_keeps_every_stack_rooted_at_the_target() -> None:
+    """Two independent stacks that both root at `dev` are both chained to it."""
+    mrs = [
+        _mr("1", "feat/a1", "dev"),
+        _mr("2", "feat/a2", "feat/a1"),
+        _mr("3", "feat/b1", "dev"),
+        _mr("4", "feat/b2", "feat/b1"),
+    ]
+    kept = merge_order.filter_to_target(mrs, "dev")
+    assert [mr.source for mr in kept] == ["feat/a1", "feat/a2", "feat/b1", "feat/b2"]
+
+
+def test_target_filter_on_a_stack_branch_keeps_only_its_descendants() -> None:
+    mrs = [
+        _mr("1", "feat/a1", "dev"),
+        _mr("2", "feat/a2", "feat/a1"),
+        _mr("3", "feat/a3", "feat/a2"),
+        _mr("4", "feat/b1", "dev"),
+    ]
+    kept = merge_order.filter_to_target(mrs, "feat/a1")
+    assert [mr.source for mr in kept] == ["feat/a2", "feat/a3"]
+
+
+def test_list_merge_requests_applies_the_target_chain_filter(monkeypatch, tmp_path: Path) -> None:
+    payload = json.dumps(
+        [
+            {"number": 1, "headRefName": "feat/a1", "baseRefName": "dev", "isDraft": False, "title": "a1"},
+            {"number": 3, "headRefName": "feat/b1", "baseRefName": "release", "isDraft": False, "title": "b1"},
+            {"number": 4, "headRefName": "feat/b2", "baseRefName": "feat/b1", "isDraft": False, "title": "b2"},
+        ]
+    )
+
+    class R:
+        returncode = 0
+        stdout = payload
+
+    monkeypatch.setattr(merge_order.subprocess, "run", lambda *a, **k: R())
+    mrs = merge_order.list_merge_requests("github", "dev", tmp_path)
+    assert [mr.source for mr in mrs] == ["feat/a1"]
