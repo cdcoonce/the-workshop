@@ -41,6 +41,7 @@ Before slicing, identify high-level decisions unlikely to change through impleme
 - Default: slices may be HITL (needs human interaction — an architectural decision, a design review) or AFK (implementable and mergeable without one); prefer AFK where possible. An AFK slice is one concern with clear acceptance criteria; if it needs a new module or spans multiple concerns, mark it HITL or split it.
 - `--plan`: do NOT name specific files or functions likely to change as later phases land. DO pin durable decisions — route paths, schema shapes, data model names.
 - When an issue body must shrink, cut implementation narrative from Proposed behavior — never acceptance criteria, the test criterion, or named interface contracts. Tests and interfaces are the executor's signal; implementation prose is the cheapest section to lose.
+- Oracle slices: when a slice's deliverable is an oracle drawn from history (a calibration set, labelled positives and negatives, golden cases mined from past issues or runs), count the real items in each class before choosing the oracle's shape, and name the source and the count in the body. If the scarce class (usually known-bad) is below the bar the slice will set, default to seeded defects: real known-good items with one named mechanical defect each, and keep any real negatives as cited cases. A curated-only oracle whose scarce class is below its bar is the owner's call, so mark it HITL. (Precedent: afk-agent-system#1685 specified a curated known-bad pool, and only after 4 cold reads found 1 real known-bad plan, #744.)
 </vertical-slice-rules>
 
 ### 5. Quiz the user
@@ -77,6 +78,7 @@ Concrete enough to build cold: exact commands, messages, flags, or UI states whe
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Tests cover the new behavior (every slice MUST include a test criterion)
+- [ ] (oracle slices) Population per class: <source>, <counts>; seeded defects named if the scarce class is below the bar
 
 ## Budget
 

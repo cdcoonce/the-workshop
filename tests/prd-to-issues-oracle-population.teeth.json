@@ -1,0 +1,101 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_prd_to_issues_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_prd_to_issues_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1255 count before shape: phrase deleted [predicted: test_vertical_slice_rules_carry_the_oracle_population_bullet]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "count the real items in each class before choosing the oracle's shape, and name",
+      "replace": "name"
+    },
+    {
+      "label": "#1255 bullet inside rules block: closing tag moved above the bullet [predicted: test_vertical_slice_rules_carry_the_oracle_population_bullet]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "\n- Oracle slices:",
+      "replace": "\n</vertical-slice-rules>\n- Oracle slices:"
+    },
+    {
+      "label": "#1255 source and count: phrase deleted [predicted: test_oracle_bullet_requires_source_and_count_in_the_body]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": ", and name the source and the count in the body",
+      "replace": ""
+    },
+    {
+      "label": "#1255 seeded default softened [predicted: test_oracle_bullet_defaults_to_seeded_defects_below_the_bar]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "default to seeded defects",
+      "replace": "consider seeded defects"
+    },
+    {
+      "label": "#1255 one defect each: phrase deleted [predicted: test_oracle_bullet_defaults_to_seeded_defects_below_the_bar]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "real known-good items with one named mechanical defect each, and",
+      "replace": "and"
+    },
+    {
+      "label": "#1255 real negatives kept: clause deleted [predicted: test_oracle_bullet_defaults_to_seeded_defects_below_the_bar]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": ", and keep any real negatives as cited cases",
+      "replace": ""
+    },
+    {
+      "label": "#1255 HITL flipped to AFK [predicted: test_curated_only_oracle_below_the_bar_is_hitl]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "owner's call, so mark it HITL",
+      "replace": "owner's call, so mark it AFK"
+    },
+    {
+      "label": "#1255 issue-template hint moved below the Acceptance criteria block [predicted: test_issue_template_acceptance_criteria_carry_the_population_hint]",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "\n- [ ] (oracle slices) Population per class: <source>, <counts>; seeded defects named if the scarce class is below the bar\n\n## Budget",
+      "replace": "\n\n## Budget\n\n- [ ] (oracle slices) Population per class: <source>, <counts>; seeded defects named if the scarce class is below the bar"
+    },
+    {
+      "label": "#1255 plan-template hint deleted [predicted: test_plan_template_acceptance_criteria_carry_the_population_hint]",
+      "file": "../plugins/workbench/skills/prd-to-issues/references/plan-template.md",
+      "oracle": "real",
+      "find": "\n- [ ] (oracle slices) Population per class: <source>, <counts>; seeded defects named if the scarce class is below the bar",
+      "replace": ""
+    },
+    {
+      "label": "#1255 control: precedent prose reworded",
+      "file": "../plugins/workbench/skills/prd-to-issues/SKILL.md",
+      "oracle": "real",
+      "find": "after 4 cold reads",
+      "replace": "after four cold reads",
+      "expect": "survived",
+      "why": "The precedent parenthetical is illustrative prose no test pins; rewording one token changes no contract."
+    }
+  ]
+}
