@@ -1712,7 +1712,7 @@ def test_failing_premise_row_blocks_read_1_with_a_seeded_defect_default() -> Non
 
 def test_unshipped_selection_rule_blocks() -> None:
     section = _data_slices()
-    assert "unshipped selection rule" in section
+    assert "lives only in prose blocks, as an unshipped selection rule" in section
     assert "shipped function" in section
     assert "recorded source fixtures" in section
     assert "No new step 8 exemption" in section
