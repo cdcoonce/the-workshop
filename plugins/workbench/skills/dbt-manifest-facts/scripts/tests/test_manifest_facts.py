@@ -250,6 +250,25 @@ def test_stale_sources_detects_a_model_edited_after_the_parse(tmp_path):
     assert model in mf.stale_sources(manifest_path, tmp_path)
 
 
+def test_stale_sources_detects_a_model_when_the_project_sits_under_an_ignored_dir_name(
+    tmp_path,
+):
+    """An ancestor directory named `target`/`logs` must not hide the whole project."""
+    import os
+
+    project = tmp_path / "target" / "proj"
+    (project / "target").mkdir(parents=True)
+    manifest_path = project / "target" / "manifest.json"
+    manifest_path.write_text("{}")
+    model = project / "models" / "later.sql"
+    model.parent.mkdir()
+    model.write_text("select 1")
+    stamp = manifest_path.stat().st_mtime + 10
+    os.utime(model, (stamp, stamp))
+
+    assert model in mf.stale_sources(manifest_path, project)
+
+
 def test_stale_sources_ignores_build_output_and_vendored_packages(tmp_path):
     """`target/` and `dbt_packages/` churn on every build and are not source."""
     target = tmp_path / "target"

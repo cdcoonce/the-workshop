@@ -25,6 +25,10 @@ _TEETH_CHECK = _REPO_ROOT / "plugins/workbench/skills/detector-teeth-check/scrip
 _SPEC_PATHSPECS = (":(glob)**/*.teeth.json", ":(glob)**/teeth-spec-*.json")
 
 
+class GitError(Exception):
+    """git could not answer; the gate must fail rather than guess."""
+
+
 def find_specs(repo_root: Path) -> list[Path]:
     """Return every tracked teeth spec under *repo_root*.
 
@@ -41,14 +45,27 @@ def find_specs(repo_root: Path) -> list[Path]:
     -------
     list[Path]
         Absolute paths of every tracked spec, sorted.
+
+    Raises
+    ------
+    GitError
+        When git cannot be run or refuses the directory.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "-z", "--", *_SPEC_PATHSPECS],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--", *_SPEC_PATHSPECS],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except OSError as error:
+        # git missing from PATH (or not executable) never reaches a returncode.
+        raise GitError(f"could not run git: {error}") from error
+    except subprocess.CalledProcessError as error:
+        raise GitError(
+            f"git ls-files failed (exit {error.returncode}): {error.stderr.strip()}"
+        ) from error
     return sorted(repo_root / rel for rel in listed.split("\0") if rel)
 
 
@@ -102,11 +119,15 @@ def main(argv: list[str] | None = None) -> int:
     Returns
     -------
     int
-        0 when every anchor of every spec resolves; 1 when any does not, or
-        when no spec was found at all.
+        0 when every anchor of every spec resolves; 1 when any does not,
+        when no spec was found at all, or when git could not list the specs.
     """
     repo_root = Path(argv[0]) if argv else _REPO_ROOT
-    specs = find_specs(repo_root)
+    try:
+        specs = find_specs(repo_root)
+    except GitError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
     if not specs:
         # This repo always commits specs, so none found means discovery broke —
         # and a gate that passed on that would check nothing, forever.

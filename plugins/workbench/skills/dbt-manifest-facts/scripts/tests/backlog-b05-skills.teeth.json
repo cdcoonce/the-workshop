@@ -88,11 +88,18 @@
       "replace": "relative[0] == prefix[0]"
     },
     {
+      "label": "ignored dirs tested against the absolute path (#1213)",
+      "file": "../manifest_facts.py",
+      "oracle": "real",
+      "find": "            if IGNORED_DIRS & set(relative):",
+      "replace": "            if IGNORED_DIRS & set(candidate.parts):"
+    },
+    {
       "label": "custom path replaces the default ignores (#786)",
       "file": "../manifest_facts.py",
       "oracle": "real",
-      "find": "            if IGNORED_DIRS & set(candidate.parts):",
-      "replace": "            if not custom and IGNORED_DIRS & set(candidate.parts):"
+      "find": "            if IGNORED_DIRS & set(relative):",
+      "replace": "            if not custom and IGNORED_DIRS & set(relative):"
     },
     {
       "label": "dot target-path guard removed (#786)",
