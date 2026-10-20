@@ -18,30 +18,54 @@ PLUGINS := $(notdir $(wildcard plugins/*))
 lint:
 	uv run --with ruff ruff check scripts tests plugins evals
 
-# Delivery gate: a plugin whose shipped content changed must also declare a new
-# version, or `claude plugin update` offers nothing and the change reaches
-# nobody who has it installed. Defaults to the release branch, which is what a
-# push to dev or main wants. CI overrides it with the PR's target branch on pull
-# requests (#568), so a PR into dev must out-version dev itself: run
-# `VERSION_BASE=origin/dev make test` before opening one.
+# Delivery gate. A plugin whose shipped content changed must declare a new
+# version before it reaches `main`, or `claude plugin update` offers nothing and
+# the change reaches nobody who has it installed. The version exists for that
+# delivery, and installs come only from `main`, so the bump is a release-time
+# act, not a per-PR one (sibling PRs into dev would otherwise fight over one
+# counter, each landing invalidating every open sibling's bump).
+#
+#   VERSION_MODE=integration (default)  PRs into dev and pushes: fail only on a
+#       version that went DOWN or is not semver. Same-version content changes pass.
+#   VERSION_MODE=release                PRs into main: the full gate (missing
+#       bump, regression, malformed, bump level). CI picks it for base `main`.
+#
+# VERSION_BASE is the ref the diff is taken against (CI: origin/<PR base>). It
+# also feeds check-teeth-changed and test-evals as their changed-files base, so
+# its default stays origin/main.
 .PHONY: verify-versions
 verify-versions:
-	uv run python -m scripts.check_version_bumps --base $(VERSION_BASE)
+	uv run python -m scripts.check_version_bumps --base $(VERSION_BASE) --mode $(VERSION_MODE)
 
-# Release a plugin change: `make bump PLUGIN=workbench [LEVEL=patch|minor|major]`.
+# The release gate on its own, always against RELEASE_BASE (never VERSION_BASE,
+# so a stray override cannot weaken it): what the promotion PR into main faces.
+.PHONY: release-check
+release-check:
+	uv run python -m scripts.check_version_bumps --base $(RELEASE_BASE) --mode release
+
+# Cut the release: bump every plugin whose shipped content differs from
+# RELEASE_BASE, at the level the whole dev..main delta demands, then stamp.
+# Run it in a `chore(release)` PR into dev right before the ff-promotion;
+# `make release-check` then passes. Idempotent: a second run changes nothing.
+.PHONY: release
+release:
+	uv run python -m scripts.bump_version --all --base "$(RELEASE_BASE)"
+
+# Bump one plugin: `make bump PLUGIN=workbench [LEVEL=patch|minor|major]`.
 # Edits only the hand-written plugins/<name>/.claude-plugin/plugin.json and runs
 # the stamper, which regenerates the five other places a version appears
 # (codex/cortex manifests, marketplace.json, README, docs/reference/plugins.md).
 # The new version is computed from the version released at VERSION_BASE, so a
-# second run is a no-op; LEVEL defaults to what verify-versions would demand.
-# Pass the same VERSION_BASE the PR will be gated against (origin/dev for a PR
-# into dev).
+# second run is a no-op; LEVEL defaults to what the release gate would demand.
+# Ordinary dev PRs do not need it; `make release` does this for every plugin.
 .PHONY: bump
 bump:
 	@test -n "$(PLUGIN)" || { echo "usage: make bump PLUGIN=<name> [LEVEL=patch|minor|major]" >&2; exit 2; }
 	uv run python -m scripts.bump_version "$(PLUGIN)" --base "$(VERSION_BASE)" $(if $(LEVEL),--level "$(LEVEL)")
 
 VERSION_BASE ?= origin/main
+VERSION_MODE ?= integration
+RELEASE_BASE ?= origin/main
 
 # afk's gate (`.afk/config.toml` test_command). The full `make test`, graded
 # against the branch the slice lands on: afk exports that branch as

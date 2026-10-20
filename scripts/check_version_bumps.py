@@ -42,6 +42,17 @@ from scripts.stamp import StampError, owned_paths
 
 DEFAULT_BASE = "origin/main"
 
+# `release` is the delivery gate proper: changed content must carry a version
+# above the base's, by at least the level the component inventory demands.
+# `integration` is for PRs into the integration branch (dev), which are
+# version-neutral by design: the bump happens once per promotion (`make
+# release`), so the only things worth failing a dev PR for are a version that
+# went DOWN and one that is not valid semver. The script default is `release`
+# (fail closed): a caller that forgets the flag gets the strict gate, never the
+# lenient one. The Makefile and CI always pass the mode explicitly.
+MODES = ("release", "integration")
+DEFAULT_MODE = "release"
+
 
 class GitError(Exception):
     """git could not answer; the gate must fail rather than guess."""
@@ -391,6 +402,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
     parser.add_argument("--base", default=DEFAULT_BASE)
+    parser.add_argument(
+        "--mode",
+        choices=MODES,
+        default=DEFAULT_MODE,
+        help="release: demand a bump (default, fail closed); integration: "
+        "fail only on a regressed or malformed version.",
+    )
     args = parser.parse_args(argv)
 
     repo = Path(args.repo)
@@ -400,6 +418,9 @@ def main(argv: list[str] | None = None) -> int:
         levels = find_level_violations(repo, args.base, context)
         regressions = find_version_regressions(repo, args.base, context)
         malformed = find_malformed_versions(repo, args.base, context)
+        if args.mode == "integration":
+            # Bumping is deferred to the release step; see MODES.
+            missing, levels = [], []
     except LookupError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
@@ -411,8 +432,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if not (missing or levels or regressions or malformed):
-        print(f"version-bump gate: no unbumped plugins against {args.base}.")
+        if args.mode == "integration":
+            print(
+                f"version-bump gate (integration mode): no regressed or malformed "
+                f"versions against {args.base}; the bump is deferred to `make release`."
+            )
+        else:
+            print(
+                f"version-bump gate (release mode): no unbumped plugins against {args.base}."
+            )
         return 0
+
+    print(f"version-bump gate ({args.mode} mode) against {args.base}:", file=sys.stderr)
 
     sections = 0
 
