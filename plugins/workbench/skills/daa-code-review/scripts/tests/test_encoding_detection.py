@@ -6,6 +6,7 @@ where characters appear corrupted (e.g., Ã— instead of ×).
 
 from markdown_analyzer import analyze_markdown
 from models import Severity
+from tests.mojibake import mojibake
 
 
 class TestEncodingCorruptionDetection:
@@ -13,7 +14,7 @@ class TestEncodingCorruptionDetection:
 
     def test_detect_multiplication_sign_corruption(self):
         """Test detection of corrupted multiplication sign (Ã— → ×)."""
-        content = "# Formula\n\nGeneration \xc3\x97 Contract Price"
+        content = "# Formula\n\nGeneration " + mojibake("×") + " Contract Price"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -91,7 +92,7 @@ class TestEncodingCorruptionDetection:
 
     def test_suggested_fix_provided(self):
         """Test that encoding issues have suggested fixes."""
-        content = "# Formula\n\nValue \xc3\x97 10"
+        content = "# Formula\n\nValue " + mojibake("×") + " 10"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -102,11 +103,12 @@ class TestEncodingCorruptionDetection:
         assert encoding_issues[0].suggested_fix is not None
         # The fix should contain the proper character (×)
         assert "×" in encoding_issues[0].suggested_fix.fixed_code
+        assert "Value × 10" in encoding_issues[0].suggested_fix.fixed_code
 
     def test_multiple_corruptions_same_line(self):
         """Test detection of multiple corruptions on same line."""
         # A × B → C (multiplication and arrow)
-        content = "# Math\n\nA \xc3\x97 B \xe2\x86\x92 C"
+        content = "# Math\n\nA " + mojibake("×") + " B \xe2\x86\x92 C"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -115,14 +117,16 @@ class TestEncodingCorruptionDetection:
         ]
         # Should find corruptions (at least one per line)
         assert len(encoding_issues) >= 1
+        assert "×" in encoding_issues[0].suggested_fix.fixed_code
 
     def test_corruption_in_table(self):
         """Test detection of corruption in markdown tables."""
-        content = """# Revenue
+        mul = mojibake("×")
+        content = f"""# Revenue
 
 | Component | Formula |
 |-----------|---------|
-| Revenue | Generation \xc3\x97 Price |
+| Revenue | Generation {mul} Price |
 | Cost | Hub \xe2\x80\x94 Node |
 """
         result = analyze_markdown(content)
@@ -152,28 +156,28 @@ class TestEncodingCorruptionPatterns:
 
     def test_multiplication_pattern(self):
         """Test multiplication sign corruption."""
-        content = "# Test\n\nText with \xc3\x97 symbol"  # Ã—
+        content = "# Test\n\nText with " + mojibake("×") + " symbol"
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
         assert len(encoding_issues) >= 1
 
     def test_division_pattern(self):
         """Test division sign corruption."""
-        content = "# Test\n\nText with \xc3\xb7 symbol"  # Ã·
+        content = "# Test\n\nText with " + mojibake("÷") + " symbol"
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
         assert len(encoding_issues) >= 1
 
     def test_copyright_pattern(self):
         """Test copyright sign corruption."""
-        content = "# Test\n\nText with \xc2\xa9 symbol"  # Â©
+        content = "# Test\n\nText with " + mojibake("©") + " symbol"
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
         assert len(encoding_issues) >= 1
 
     def test_registered_pattern(self):
         """Test registered sign corruption."""
-        content = "# Test\n\nText with \xc2\xae symbol"  # Â®
+        content = "# Test\n\nText with " + mojibake("®") + " symbol"
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
         assert len(encoding_issues) >= 1
@@ -196,7 +200,7 @@ class TestEncodingFixApplication:
 
     def test_fix_replaces_corruption(self):
         """Test that the fix correctly replaces corrupted text."""
-        content = "# Formula\n\nGeneration \xc3\x97 Contract Price"
+        content = "# Formula\n\nGeneration " + mojibake("×") + " Contract Price"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -210,11 +214,12 @@ class TestEncodingFixApplication:
         # The fixed code should contain the proper multiplication sign
         assert "×" in fix.fixed_code
         # And not contain the corrupted sequence
-        assert "\xc3\x97" not in fix.fixed_code
+        assert mojibake("×") not in fix.fixed_code
 
     def test_context_shows_corrupted_line(self):
         """Test that issue context shows the corrupted line."""
-        content = "# Test\n\nBad line with \xc3\x97 here"
+        corrupted = mojibake("×")
+        content = f"# Test\n\nBad line with {corrupted} here"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -224,7 +229,7 @@ class TestEncodingFixApplication:
         assert len(encoding_issues) >= 1
         assert encoding_issues[0].context is not None
         # Context should contain the original corrupted text
-        assert "\xc3\x97" in encoding_issues[0].context
+        assert corrupted in encoding_issues[0].context
 
 
 class TestRealWorldCorruption:
@@ -232,13 +237,14 @@ class TestRealWorldCorruption:
 
     def test_table_with_multiplication(self):
         """Test table with corrupted multiplication signs (from user example)."""
-        content = """# Revenue Components
+        mul = mojibake("×")
+        content = f"""# Revenue Components
 
 | Revenue Component | Formula | When It Applies |
 |-------------------|---------|-----------------|
-| Contract Revenue | Generation \xc3\x97 Contract Price | Fixed-price PPAs |
-| Merchant Revenue | Generation \xc3\x97 Spot Price | Uncontracted energy |
-| Basis Cost | (Hub Price - Node Price) \xc3\x97 Generation | VPPAs |
+| Contract Revenue | Generation {mul} Contract Price | Fixed-price PPAs |
+| Merchant Revenue | Generation {mul} Spot Price | Uncontracted energy |
+| Basis Cost | (Hub Price - Node Price) {mul} Generation | VPPAs |
 """
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
@@ -248,10 +254,11 @@ class TestRealWorldCorruption:
 
     def test_formula_calculation(self):
         """Test corrupted formula calculation (from user example)."""
-        content = """# Example Calculation
+        mul = mojibake("×")
+        content = f"""# Example Calculation
 
-Swap Settlement = (Fixed \xe2\x80\x94 Index) \xc3\x97 Volume
-               = ($45 \xe2\x80\x94 $38) \xc3\x97 10,000
+Swap Settlement = (Fixed \xe2\x80\x94 Index) {mul} Volume
+               = ($45 \xe2\x80\x94 $38) {mul} 10,000
                = $70,000
 """
         result = analyze_markdown(content)

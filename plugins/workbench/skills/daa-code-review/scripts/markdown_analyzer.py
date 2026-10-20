@@ -49,7 +49,7 @@ MULTIPLE_BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 # These occur when UTF-8 bytes are misinterpreted as Latin-1/Windows-1252
 ENCODING_CORRUPTION_MAP: dict[str, str] = {
     # Mathematical symbols
-    "\xc3\x97": "×",  # multiplication sign
+    "\u00c3\u2014": "×",  # multiplication sign
     "\xc3\xb7": "÷",  # division sign
     "\xc2\xb1": "±",  # plus-minus
     "\xc2\xb0": "°",  # degree
@@ -895,7 +895,7 @@ class MarkdownAnalyzer:
                 fixed_line = fixed_line.replace(corr, fix)
 
             # Describe what was found
-            if corrupted in ("\xc3\x97",):
+            if corrupted in ("\u00c3\u2014",):
                 char_desc = "multiplication sign (×)"
             elif corrupted in ("\xc3\xb7",):
                 char_desc = "division sign (÷)"
