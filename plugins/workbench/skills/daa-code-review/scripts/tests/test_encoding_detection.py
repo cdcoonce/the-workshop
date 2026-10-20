@@ -38,7 +38,7 @@ class TestEncodingCorruptionDetection:
 
     def test_detect_box_drawing_corruption(self):
         """Test detection of corrupted box-drawing characters."""
-        content = "# Diagram\n\n```\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90\n\xe2\x94\x82 Box \xe2\x94\x82\n\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x98\n```"
+        content = "# Diagram\n\n```\n" + mojibake("┌───┐\n│ Box │\n└───┘") + "\n```"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -46,6 +46,7 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050" and "encoding" in i.message.lower()
         ]
         assert len(encoding_issues) >= 1
+        assert "box-drawing character" in encoding_issues[0].message
 
     def test_detect_arrow_corruption(self):
         """Test detection of corrupted arrow symbols (â† → ←)."""
@@ -194,7 +195,7 @@ class TestEncodingCorruptionPatterns:
     def test_box_drawing_patterns(self):
         """Test box-drawing character corruption patterns."""
         # Box drawing: ┌── (corrupted as â"Œâ"€â"€)
-        content = "# Diagram\n\n```\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\n```"
+        content = "# Diagram\n\n```\n" + mojibake("┌──") + "\n```"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -202,6 +203,7 @@ class TestEncodingCorruptionPatterns:
             if i.rule_id == "MD050"
         ]
         assert len(encoding_issues) >= 1
+        assert "box-drawing character" in encoding_issues[0].message
 
 
 class TestEncodingFixApplication:
@@ -291,17 +293,17 @@ Swap Settlement = (Fixed {dash} Index) {mul} Volume
 
     def test_box_diagram(self):
         """Test corrupted ASCII box diagram (from user example)."""
-        content = """# MCP Protocol Layers
-
-```
-\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90
-\xe2\x94\x82   Application    \xe2\x94\x82  \xe2\x86\x90 Claude
-\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\xa4
-\xe2\x94\x82   MCP Client     \xe2\x94\x82
-\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x98
-```
-"""
+        diagram = (
+            "┌────────────────┐\n"
+            "│   Application    │  ← Claude\n"
+            "├────────────────┤\n"
+            "│   MCP Client     │\n"
+            "└────────────────┘\n"
+        )
+        content = "# MCP Protocol Layers\n\n```\n" + mojibake(diagram) + "```\n"
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
-        # Should detect box drawing corruption
+        # Should detect box drawing corruption (one issue per corrupted line)
         assert len(encoding_issues) >= 1
+        assert len(encoding_issues) == 5
+        assert all(i.suggested_fix.fixed_code in diagram for i in encoding_issues)

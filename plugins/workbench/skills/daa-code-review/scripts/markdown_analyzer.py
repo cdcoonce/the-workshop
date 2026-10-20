@@ -92,23 +92,23 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\xc2\xa3": "£",  # pound (Â£)
     "\xc2\xa5": "¥",  # yen (Â¥)
     # Box drawing characters
-    "\xe2\x94\x80": "─",  # horizontal (â"€)
-    "\xe2\x94\x82": "│",  # vertical (â"‚)
-    "\xe2\x94\x8c": "┌",  # top-left (â"Œ)
-    "\xe2\x94\x90": "┐",  # top-right (â"")
-    "\xe2\x94\x94": "└",  # bottom-left (â"")
-    "\xe2\x94\x98": "┘",  # bottom-right (â"˜)
-    "\xe2\x94\x9c": "├",  # left-tee (â"œ)
-    "\xe2\x94\xa4": "┤",  # right-tee (â"¤)
-    "\xe2\x94\xac": "┬",  # top-tee (â"¬)
-    "\xe2\x94\xb4": "┴",  # bottom-tee (â"´)
-    "\xe2\x94\xbc": "┼",  # cross (â"¼)
-    "\xe2\x95\x90": "═",  # double horizontal
-    "\xe2\x95\x91": "║",  # double vertical
-    "\xe2\x95\x94": "╔",  # double top-left
-    "\xe2\x95\x97": "╗",  # double top-right
-    "\xe2\x95\x9a": "╚",  # double bottom-left
-    "\xe2\x95\x9d": "╝",  # double bottom-right
+    "\u00e2\u201d\u20ac": "─",  # horizontal (â"€)
+    "\u00e2\u201d\u201a": "│",  # vertical (â"‚)
+    "\u00e2\u201d\u0152": "┌",  # top-left (â"Œ)
+    "\u00e2\u201d\x90": "┐",  # top-right (â"")
+    "\u00e2\u201d\u201d": "└",  # bottom-left (â"")
+    "\u00e2\u201d\u02dc": "┘",  # bottom-right (â"˜)
+    "\u00e2\u201d\u0153": "├",  # left-tee (â"œ)
+    "\u00e2\u201d\u00a4": "┤",  # right-tee (â"¤)
+    "\u00e2\u201d\u00ac": "┬",  # top-tee (â"¬)
+    "\u00e2\u201d\u00b4": "┴",  # bottom-tee (â"´)
+    "\u00e2\u201d\u00bc": "┼",  # cross (â"¼)
+    "\u00e2\u2022\x90": "═",  # double horizontal
+    "\u00e2\u2022\u2018": "║",  # double vertical
+    "\u00e2\u2022\u201d": "╔",  # double top-left
+    "\u00e2\u2022\u2014": "╗",  # double top-right
+    "\u00e2\u2022\u0161": "╚",  # double bottom-left
+    "\u00e2\u2022\x9d": "╝",  # double bottom-right
     # Fractions
     "\xc2\xbd": "½",  # one half
     "\xc2\xbc": "¼",  # one quarter
@@ -909,7 +909,9 @@ class MarkdownAnalyzer:
                 char_desc = "bullet point (•)"
             elif corrupted.startswith("\u00e2\u0153"):
                 char_desc = "checkmark symbol"
-            elif corrupted.startswith("\xe2\x94") or corrupted.startswith("\xe2\x95"):
+            elif corrupted.startswith("\u00e2\u201d") or corrupted.startswith(
+                "\u00e2\u2022"
+            ):
                 char_desc = "box-drawing character"
             elif corrupted in ("\xc2\xa9",):
                 char_desc = "copyright symbol (©)"

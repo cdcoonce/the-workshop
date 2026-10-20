@@ -194,3 +194,59 @@ class TestCheckmarkKeys:
         assert "checkmark symbol" not in issues[0].message
         assert "❌" in issues[0].message
         assert issues[0].suggested_fix.fixed_code == "a ❌ b"
+
+
+# #1273: box-drawing characters (11 single-line, 6 double-line). Every key was
+# wrong; ┐, ═ and ╝ contain an undefined byte (U+0090, U+0090, U+009D).
+BOX_ROWS = [
+    ("─", "─", "\xe2\x94\x80"),
+    ("│", "│", "\xe2\x94\x82"),
+    ("┌", "┌", "\xe2\x94\x8c"),
+    ("┐", "┐", "\xe2\x94\x90"),
+    ("└", "└", "\xe2\x94\x94"),
+    ("┘", "┘", "\xe2\x94\x98"),
+    ("├", "├", "\xe2\x94\x9c"),
+    ("┤", "┤", "\xe2\x94\xa4"),
+    ("┬", "┬", "\xe2\x94\xac"),
+    ("┴", "┴", "\xe2\x94\xb4"),
+    ("┼", "┼", "\xe2\x94\xbc"),
+    ("═", "═", "\xe2\x95\x90"),
+    ("║", "║", "\xe2\x95\x91"),
+    ("╔", "╔", "\xe2\x95\x94"),
+    ("╗", "╗", "\xe2\x95\x97"),
+    ("╚", "╚", "\xe2\x95\x9a"),
+    ("╝", "╝", "\xe2\x95\x9d"),
+]
+
+
+class TestBoxDrawingKeys:
+    """#1273: box-drawing keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), BOX_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in BOX_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize("target", [r[0] for r in BOX_ROWS])
+    def test_each_character_describes_as_box_drawing(self, target):
+        content = "# T\n\n```\n" + mojibake(f"a {target} b") + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "box-drawing character" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {target} b"
+
+    def test_real_box_is_flagged_and_restored(self):
+        box = "┌──┐\n│  │\n└──┘"
+        content = "# T\n\n```\n" + mojibake(box) + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert [i.suggested_fix.fixed_code for i in issues] == box.split("\n")
+
+    def test_repeated_corruption_on_one_line_reports_once(self):
+        """The mojibake of ─ contains U+201D; de-duplication stays per line."""
+        content = "# T\n\n```\n" + mojibake("─" * 8) + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert issues[0].suggested_fix.fixed_code == "─" * 8
