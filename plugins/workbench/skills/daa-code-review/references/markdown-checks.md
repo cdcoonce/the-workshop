@@ -192,16 +192,18 @@ UTF-8 encoding corruption occurs when text is saved or transmitted with incorrec
 | ------------ | ------- | ------------------- |
 | Ã—           | ×       | Multiplication sign |
 | Ã·           | ÷       | Division sign       |
-| â€"          | —       | Em dash             |
-| â€"          | –       | En dash             |
+| â€”          | —       | Em dash             |
+| â€“          | –       | En dash             |
 | â€¢          | •       | Bullet point        |
-| âœ"          | ✓       | Checkmark           |
-| â†           | ←       | Left arrow          |
-| â†'          | →       | Right arrow         |
+| âœ“          | ✓       | Checkmark           |
+| â†          | ←       | Left arrow          |
+| â†’          | →       | Right arrow         |
 | Â©           | ©       | Copyright           |
 | Â®           | ®       | Registered          |
 | â„¢          | ™       | Trademark           |
-| â"Œâ"€â"€â"˜ | ┌──┘    | Box drawing         |
+| â”Œâ”€â”€â”˜ | ┌──┘    | Box drawing         |
+
+Windows-1252 leaves five bytes undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D), so a corrupted character containing one (such as ← or ”) carries an invisible C1 control of the same number in place of a visible glyph.
 
 ### Example
 

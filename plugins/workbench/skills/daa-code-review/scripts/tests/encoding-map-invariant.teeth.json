@@ -1,0 +1,60 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_encoding_map_invariant.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_encoding_map_invariant.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1274: the em dash key reverts to the Latin-1-style literal (whole-map invariant)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\u00e2\\u20ac\\u201d\": \"—\",",
+      "replace": "    \"\\xe2\\x80\\x94\": \"—\","
+    },
+    {
+      "label": "#1274: the double-horizontal key reverts to the old literal, undefined-byte family (whole-map invariant)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\u00e2\\u2022\\x90\": \"═\",",
+      "replace": "    \"\\xe2\\x95\\x90\": \"═\","
+    },
+    {
+      "label": "#1274: the cross-mark key swaps its undefined byte for a plausible U+201D (whole-map invariant)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\u00e2\\x9d\\u0152\": \"❌\",",
+      "replace": "    \"\\u00e2\\u201d\\u0152\": \"❌\","
+    },
+    {
+      "label": "#1274: the multiplication key reverts to the Latin-1 U+0097 control (whole-map invariant)",
+      "file": "../markdown_analyzer.py",
+      "oracle": "real",
+      "find": "    \"\\u00c3\\u2014\": \"×\",",
+      "replace": "    \"\\u00c3\\x97\": \"×\","
+    }
+  ]
+}
