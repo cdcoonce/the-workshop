@@ -120,3 +120,7 @@ checks the trunk's CI runs on the head SHA, not a guess: a name that never
 reports holds the watch to its timeout. A red from a flake (a runner DNS
 failure, say) needs the job re-run and `promote` run again; the watch reads
 each name's latest run.
+
+Name a gate that only reports on the promotion PR (never on a push) with
+`--require`, so a push-event run on the same SHA cannot satisfy the watch:
+the-workshop uses `promote <pr> --require release-gate`.

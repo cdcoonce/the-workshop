@@ -101,7 +101,12 @@ file and printing a diff, on anything committed stale. `make test` runs it, so a
 component change not accompanied by regenerated output turns the build red.
 
 `make test` also runs the version-bump gate, which is the other half of shipping:
-a plugin whose hand-authored content changed must also declare a new version, or
-`claude plugin update` offers nothing and the change reaches nobody who has it
-installed. See the repo README's Development section for the full loop, and
-Plugin Versioning in CLAUDE.md for which position to move.
+a plugin whose hand-authored content changed must declare a new version before
+it reaches `main`, or `claude plugin update` offers nothing and the change
+reaches nobody who has it installed. The bump is a release-time act, not a
+per-PR one: PRs into `dev` run the gate in integration mode (`VERSION_MODE`, the
+`make test` default), which fails only a lowered or non-semver version; `make
+release` bumps every changed plugin once per promotion; and the PR into `main`
+runs release mode (`make release-check`), the one fail-closed point. See the
+repo README's Development section for the full loop, and Plugin Versioning in
+CLAUDE.md for which position to move.

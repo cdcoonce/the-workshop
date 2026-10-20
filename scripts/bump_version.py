@@ -91,6 +91,27 @@ def bump(repo: Path, plugin: str, base: str, level: str | None = None) -> BumpRe
     return BumpResult(plugin, released, new, chosen, changed)
 
 
+def release(repo: Path, base: str) -> list[BumpResult]:
+    """Bump every plugin whose shipped content differs from `base`.
+
+    The release-time counterpart of `bump`: dev PRs are version-neutral, so the
+    version moves once, here, with the required level computed over the whole
+    base..working-tree delta. The plugin set is the gate's own `changed` set, so
+    this can never disagree with `check_version_bumps --mode release` about
+    which plugins need a version. A plugin absent from `base` is new and has no
+    version to bump from. Idempotent: each `bump` is.
+    """
+    try:
+        context = gate.build_context(repo, base)
+    except LookupError as error:
+        raise BumpError(str(error)) from error
+    return [
+        bump(repo, plugin, base)
+        for plugin in context.changed
+        if gate.manifest_version(repo, plugin, context.base_sha) is not None
+    ]
+
+
 def _changed_files(repo: Path) -> list[str]:
     out = gate.run_git(repo, "status", "--porcelain", "--untracked-files=no").stdout
     return sorted(line[3:] for line in out.splitlines())
@@ -98,24 +119,40 @@ def _changed_files(repo: Path) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("plugin")
+    parser.add_argument("plugin", nargs="?")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="bump every plugin whose shipped content differs from --base (make release)",
+    )
     parser.add_argument("--repo", default=".")
     parser.add_argument("--base", default=gate.DEFAULT_BASE)
     parser.add_argument("--level", choices=gate.LEVELS)
     args = parser.parse_args(argv)
 
     repo = Path(args.repo)
+    if bool(args.plugin) == args.all:
+        parser.error("give exactly one of PLUGIN or --all")
+    if args.all and args.level:
+        parser.error("--level applies to one plugin; --all computes each level itself")
     try:
-        result = bump(repo, args.plugin, args.base, args.level)
+        results = (
+            release(repo, args.base)
+            if args.all
+            else [bump(repo, args.plugin, args.base, args.level)]
+        )
         changed_files = _changed_files(repo)
     except (BumpError, StampError, gate.GitError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    if result.changed:
-        print(f"{result.plugin}: {result.released} -> {result.new} ({result.level} against {args.base})")
-    else:
-        print(f"{result.plugin}: already at {result.new}, past the {result.level} bump from {result.released}; nothing to do")
+    if args.all and not results:
+        print(f"no plugin differs from {args.base}; nothing to release")
+    for result in results:
+        if result.changed:
+            print(f"{result.plugin}: {result.released} -> {result.new} ({result.level} against {args.base})")
+        else:
+            print(f"{result.plugin}: already at {result.new}, past the {result.level} bump from {result.released}; nothing to do")
     for name in changed_files:
         print(f"  {name}")
     return 0

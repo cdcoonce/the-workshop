@@ -150,26 +150,56 @@ with the regenerated files included in the change. `make test` covers the root
 suite, every auto-discovered skill-script suite, the vault machinery suite, the
 teeth-spec anchor gate (`make check-teeth-anchors`: every committed
 `*.teeth.json` / `teeth-spec-*.json` anchor must still resolve), the
-`stamp --check` drift gate, and the version-bump gate.
+`stamp --check` drift gate, and the version-bump gate (integration mode by default).
 
 ## Plugin Versioning
 
 A plugin's version is how an installed copy learns there is anything to take:
 `claude plugin update` compares it. **Change a plugin's shipped content without
 bumping its version and the change reaches nobody** — it merges green, promotes
-green, and silently never arrives. `make test` fails on this
-(`scripts/check_version_bumps.py`).
+green, and silently never arrives. Installs come only from `main` (the default
+branch; `marketplace.json` pins no ref), so the version exists for delivery and
+is bumped once per promotion, not once per PR.
+
+**The rule.**
+
+- **PRs into `dev` are version-neutral.** Do not bump. CI runs the gate in
+  `integration` mode (`VERSION_MODE=integration`, also the `make test` default),
+  which fails only a version that went _down_ or is not plain `X.Y.Z`; a changed
+  plugin at an unchanged version passes. Sibling PRs therefore never contend for
+  a counter.
+- **Before each ff-promotion, run `make release`** in a `chore(release)` PR into
+  `dev`. It bumps every plugin whose shipped content differs from
+  `RELEASE_BASE` (default `origin/main`) and stamps. The required level is
+  computed over the whole `dev..main` delta (below), so one bump covers every PR
+  since the last release. Running it twice changes nothing.
+- **The PR into `main` (the promotion) is gated in `release` mode** — the only
+  fail-closed point: missing bump, regression, malformed version, and level. It
+  is its own CI job, `release-gate`, which runs `make release-check` and exists
+  only on pull requests whose base is `main`. Job `test` stays in integration
+  mode for every base: the push-to-dev run of `test` shares dev's tip SHA with
+  the promotion PR and is lenient by design, so a strict `test` would sit beside
+  a green lenient one under the same name. Promote with
+  `promote <pr> --require release-gate` (github-pr-land), so the watch waits for
+  the release gate; a name that never reports holds it to its timeout, which is
+  the intended fail-closed behaviour. Adding `release-gate` to `main`'s required
+  status checks is recommended; that is the owner's settings change.
+  `make release-check` runs the same gate locally against `RELEASE_BASE`,
+  independent of `VERSION_BASE`.
+- `make verify-versions` takes `VERSION_BASE` (the diff base) and `VERSION_MODE`
+  (`integration` default, or `release`). A bare script call with no `--mode` is
+  `release` (fail closed); the Makefile and CI always pass it explicitly.
+  `make bump PLUGIN=<name> [LEVEL=...]` still bumps a single plugin from the
+  version at `VERSION_BASE` if you need one by hand.
 
 The version lives in the hand-written `plugins/<name>/.claude-plugin/plugin.json`;
 the two stamped platform manifests, both marketplaces, `README.md` and
 `docs/reference/plugins.md` carry the same value and are generated — never edit
-them by hand. Run `make bump PLUGIN=<name>` (add `LEVEL=patch|minor|major` to
-override the level the gate would demand; set `VERSION_BASE=origin/dev` for a PR
-into `dev`): it edits that one file from the version released at the base ref and
-runs `make stamp`, and a second run changes nothing. The gate diffs
-`plugins/<name>/` against the release branch, excluding stamper-owned paths and
-nothing else — generated content is a pure function of hand-authored content, so
-a real change already trips the gate through its source.
+them by hand. `make release` / `make bump` edit that one file from the version
+released at the base ref and run `make stamp`. The gate diffs `plugins/<name>/`
+against the base, excluding stamper-owned paths and nothing else — generated
+content is a pure function of hand-authored content, so a real change already
+trips the gate through its source.
 
 **Hand-authored payload counts wherever it ships from, including
 `plugins/<name>/machinery/`.** That directory was once excluded wholesale, on
@@ -208,19 +238,12 @@ An engine fix and a corrected typo look identical to it; both are hand-authored
 changes to an unchanged inventory, so both clear at patch. Judge those
 yourself — an unchanged inventory only means patch is the _floor_.
 
-The gate compares against the branch the change lands on. On a pull request, CI
-sets `VERSION_BASE=origin/<PR base>` (#568), so a PR into `dev` is gated against
-`origin/dev`. On a push to `dev` or `main`, CI sets nothing and the Makefile's
-`origin/main` default applies. Two consequences:
-
-- A bare `make test` compares against `origin/main`, so it can pass locally on a
-  branch that PR CI rejects because `dev` already carries a bump. Before opening
-  a PR into `dev`, run `VERSION_BASE=origin/dev make test` — the gate CI applies.
-- Every PR into `dev` that changes a plugin's shipped content must move that
-  plugin's version above the one `dev` carries when it merges, not above
-  `main`'s. Sibling or stacked PRs touching the same plugin need strictly
-  increasing versions and must merge in version order; after each merge, rebase
-  the next one and re-run the gate against a freshly fetched `origin/dev`.
+In release mode the gate compares against `origin/main`, so the level reflects
+everything shipping since the last release, not one PR: an added skill anywhere
+in the delta makes the release at least minor, a removed one major. Because dev
+carries no bumps between releases, `dev` sits at `main`'s version until
+`make release` runs; a push to `dev` runs integration mode so it never goes red
+for being ahead of `main`.
 
 ## Agents
 

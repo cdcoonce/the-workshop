@@ -22,15 +22,40 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
-      - name: Resolve version-bump gate base from the PR target branch
-        # This repo branches off `dev` and PRs into `dev`; only on
-        # pull_request events is github.base_ref populated with that target.
-        # On push, VERSION_BASE stays unset so the Makefile's own
-        # `origin/main` default applies. See #568.
+      - name: Resolve version-bump gate base and mode from the PR target branch
+        # Job `test` is version-neutral for every base, `main` included: it
+        # runs in integration mode against the PR's own target. The fail-closed
+        # release check is the separate `release-gate` job below, because a
+        # check name must mean one thing: the push-to-dev run of `test` is
+        # lenient by design and shares dev's tip SHA with the promotion PR.
+        # On push nothing is set, so the Makefile defaults apply (origin/main,
+        # integration). See #568.
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+        run: |
+          echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          echo "VERSION_MODE=integration" >> "$GITHUB_ENV"
 
       - name: Run gate (lint + test suites + version-bump gate)
         run: make test
+
+  release-gate:
+    # The one fail-closed delivery point: only the promotion PR (base `main`)
+    # ever reports this check, never a push. Require it on `promote`
+    # (`--require release-gate`) so a missing report holds the watch.
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Release gate (every changed plugin must be version-bumped)
+        run: make release-check RELEASE_BASE=origin/main

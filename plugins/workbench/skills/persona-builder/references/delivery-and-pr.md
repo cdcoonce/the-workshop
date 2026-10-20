@@ -20,8 +20,9 @@ pytest`. The layering test and the persona's own tests.md suite must be green.
    pack list with researched-on dates. The maintainer reviews and merges into `dev`; the
    repo's fast-forward promotion then carries it to `main` → marketplace → the
    owner receives it as a plugin update.
-   The version bump is what makes that last step happen — see Plugin Versioning
-   in CLAUDE.md.
+   The version bump is what makes that last step happen, but it is made once at
+   promotion time (`make release`), not in this PR — see Plugin Versioning in
+   CLAUDE.md.
 
 ## Patch-bundle fallback (no write access — e.g. the owner's own machine)
 
