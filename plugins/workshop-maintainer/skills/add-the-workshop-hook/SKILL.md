@@ -120,9 +120,9 @@ in memory and fails **naming the file and printing a diff** on anything
 committed stale. If it reports stale output, you skipped `make stamp` in step 6.
 
 Pass the base you are actually merging into: `make test VERSION_BASE=origin/dev`
-for a PR into `dev`. The Makefile defaults to `origin/main`, so a bare `make
-test` can pass locally on a version bump that CI correctly rejects, because
-`dev` has already moved ahead of `main`.
+for a PR into `dev`. A PR into `dev` is version-neutral: the version gate runs in
+integration mode and only fails a lowered or malformed version, so do not bump
+in the PR.
 
 Then commit with a message stating the _why_ (the constraint from step 1, the
 tradeoff from steps 3/4) and follow CLAUDE.md's branch policy: **branch off
@@ -131,9 +131,10 @@ is this repo's own integration point; GitLab is a separate downstream copy —
 sync it afterward with `sync-gitlab-dev`, not as part of landing this hook.
 Confirm remotes with `git remote -v` rather than assuming.
 
-Hooks ship in workbench, which people already have installed, so **bump
-`plugins/workbench/.claude-plugin/plugin.json`** — otherwise `claude plugin
-update` offers nothing and the hook never reaches them.
+Hooks ship in workbench, which people already have installed, so the hook
+reaches them only once workbench's version moves. Do not bump it in this PR:
+the bump happens once per promotion (`make release`, a `chore(release)` PR into
+`dev` right before the ff-promotion), and the PR into `main` is gated on it.
 
 Open design questions (shared-helper extraction, cross-tool test coverage
 gaps) are tracked in `references/reference.md`.

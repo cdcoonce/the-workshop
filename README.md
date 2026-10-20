@@ -187,8 +187,8 @@ The marketplace ships one everything-package plus focused extras. **`workbench`*
 | **`persona-staff-eng-deep`** | `1.1.1` | 0 | 0 | 1 | Senior-staff-engineer voice at full depth — reasoning, tradeoffs, and edge cases spelled out. |
 | **`persona-terse-staff-eng`** | `1.1.1` | 0 | 0 | 1 | Terse senior-staff-engineer voice — answer-first, minimal, expert assumptions. The least verbose persona. |
 | **`persona-thinking-partner`** | `1.1.1` | 0 | 0 | 1 | Socratic thinking partner — sharp questions and decision-sharpening over answers. |
-| **`workbench`** | `8.46.2` | 79 | 13 | 18 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
-| **`workshop-maintainer`** | `3.0.4` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
+| **`workbench`** | `8.46.3` | 79 | 13 | 18 | The complete Workshop toolkit — every skill, agent, methodology doc, and safety hook in one package, including the vault lifecycle, graph, capture, search, sync, and writing workflows. Skills and agents install on Claude Code, Codex, and Cortex Code; the safety hooks execute on Claude Code and Cortex Code. Plan, build, and ship with the full first-party dev workflow. |
+| **`workshop-maintainer`** | `3.0.5` | 4 | 6 | 0 | Tools for auditing and maintaining The Workshop's skills, plugins, and distribution boundaries |
 <!-- END GENERATED: plugins-table -->
 
 Each preset's `manifest.json` controls which core components to include, which to exclude, what preset-specific overrides to layer on top, and the `conventions` shown above. See the [presets reference](docs/reference/presets.md) for the skills, agents, and hooks each one ships.
@@ -482,9 +482,9 @@ The reference docs and the README component tables are **generated from source**
 
 - `make stamp` runs `scripts/stamp.py`, the repo's only build component. It reads SKILL.md/AGENT.md frontmatter and each hook script's own `WORKSHOP_HOOK` declaration, then writes every generated file from its fixed path map: the `docs/reference/` catalogs, each plugin's platform manifests, README, and `conventions.json`, plus the `<!-- BEGIN/END GENERATED -->` regions of this README and `docs/reference/build-and-wiring.md`.
 - `make stamp-check` renders the same map in memory and fails, naming the file and printing a diff, on anything committed stale.
-- `make test` runs the suites **and** two gates: `stamp-check` for generated-file drift, and the version-bump gate, which fails a plugin whose hand-authored content changed without a new version. The same gates run in CI.
+- `make test` runs the suites **and** two gates: `stamp-check` for generated-file drift, and the version-bump gate. PRs into `dev` are version-neutral (the gate fails only a lowered or non-semver version); the PR into `main` runs it in release mode and fails a plugin whose hand-authored content changed without a new version. The same gates run in CI.
 
-When you add or change a skill, hook, or agent, run `make stamp && make test`, commit the regenerated output alongside your change, and bump the version of every plugin you touched — without that bump `claude plugin update` offers nothing and the change reaches nobody. The maintainer skill `workshop-skill-creator` ends with this step; `create-hook` remains the general-purpose hook workflow.
+When you add or change a skill, hook, or agent, run `make stamp && make test`, commit the regenerated output alongside your change. Do not bump versions in the PR: `make release` bumps every changed plugin once per promotion, and without that bump `claude plugin update` offers nothing and the change reaches nobody. The maintainer skill `workshop-skill-creator` ends with this step; `create-hook` remains the general-purpose hook workflow.
 
 ### Folder Structure
 
@@ -548,7 +548,7 @@ uv run pytest --cov=scripts --cov-report=term-missing
 | ------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `make stamp` refuses to overwrite a file         | The target lacks the generation marker, so it may be hand-written | Confirm the path belongs in the stamper's map before forcing anything   |
 | `make test` fails with "stamped output is stale" | A component changed but the generated output wasn't regenerated   | Run `make stamp` and commit the regenerated output                      |
-| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | Run `make bump PLUGIN=<name>` (one hand-written file, the rest stamped); see Plugin Versioning |
+| `make test` fails on the version-bump gate       | A plugin's shipped content changed without a new version          | On a PR into `main`: run `make release` (bumps every changed plugin, the rest stamped); see Plugin Versioning |
 | Smoke test reports missing hook                  | Hook listed in `hooks.json` but script not in `hooks/scripts/`    | Add the hook script, or remove its `WORKSHOP_HOOK` declaration          |
 | Skill not found after install (Claude Code)      | Plugin not installed or not enabled, or the session predates the install | Run `claude plugin list`; install or enable `workbench`, then start a fresh session |
 | Skill not found after install (Codex)            | Marketplace not registered, or the plugin was never added          | Run `codex plugin marketplace add ...` then `codex plugin add workbench@the-workshop`; check `codex plugin list` |
