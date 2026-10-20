@@ -38,3 +38,7 @@ dist/
 # Shadow-parity ledgers — per-repo agreement history; local telemetry.
 .afk/parity/
 .coverage
+
+# Eval run raws are machine-local: transcripts carry the dispatching
+# session's private context. Only the run file directly in runs/ is committed.
+evals/*/runs/*/

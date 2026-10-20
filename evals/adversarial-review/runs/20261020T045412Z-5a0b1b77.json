@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": 1,
+          "classification": "counted",
+          "items": {
+            "A1-coverage-bound": "hit",
+            "A1-defect-decimal-from-float": "hit",
+            "A1-defect-missed-call-site": "hit",
+            "A1-defect-tests-no-teeth": "hit"
+          },
+          "parse_error": false,
+          "raw": "20261020T045412Z-5a0b1b77/A1/attempt-1/",
+          "reserve_used": 0,
+          "unmatched_findings": 0
+        }
+      ],
+      "case": "A1",
+      "fixture_fingerprint": "b9a46fe1efca2d118aa93f3757e96189628d30819524aae74e90159407e08bd0",
+      "gated_items": [
+        "A1-coverage-bound"
+      ],
+      "model_ids": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "attempts": [
+        {
+          "attempt": 1,
+          "classification": "counted",
+          "items": {
+            "A2-D1": "hit",
+            "A2-D2": "miss",
+            "A2-D3": "hit",
+            "A2-D4": "hit",
+            "A2-D5": "hit"
+          },
+          "parse_error": false,
+          "raw": "20261020T045412Z-5a0b1b77/A2/attempt-1/",
+          "reserve_used": 0,
+          "unmatched_findings": 7
+        },
+        {
+          "attempt": 2,
+          "classification": "counted",
+          "items": {
+            "A2-D1": "hit",
+            "A2-D2": "hit",
+            "A2-D3": "hit",
+            "A2-D4": "hit",
+            "A2-D5": "hit"
+          },
+          "parse_error": false,
+          "raw": "20261020T045412Z-5a0b1b77/A2/attempt-2/",
+          "reserve_used": 0,
+          "unmatched_findings": 2
+        }
+      ],
+      "case": "A2",
+      "fixture_fingerprint": "ce9e4f10245f739296948cc65359f42995c783c5fee668f6533fd13ee26b58d5",
+      "gated_items": [
+        "A2-D2"
+      ],
+      "model_ids": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "attempts": [
+        {
+          "attempt": 1,
+          "classification": "counted",
+          "items": {
+            "A3": "miss"
+          },
+          "parse_error": false,
+          "raw": "20261020T045412Z-5a0b1b77/A3/attempt-1/",
+          "reserve_used": 0,
+          "unmatched_findings": 0
+        }
+      ],
+      "case": "A3",
+      "fixture_fingerprint": "b9a46fe1efca2d118aa93f3757e96189628d30819524aae74e90159407e08bd0",
+      "gated_items": [],
+      "model_ids": [
+        "claude-sonnet-5-5"
+      ]
+    }
+  ],
+  "fingerprint": {
+    "claude_code_version": "2.1.283",
+    "direct_tier_hash": "9c8d50ed3972a9c2c0387cb1da3cf3aa588ac723b272634018c8199312ead6ca",
+    "injection_tier_hash": "1ef826dfcf904a68087a1fd824867124c0ea21e4f8dc66f270923632cfe6caf3",
+    "plugin_version": "8.46.3",
+    "run_date": "2026-10-19"
+  },
+  "skill": "adversarial-review",
+  "tokens": 769722,
+  "verdict": "green",
+  "wall_time_s": 81.2
+}
