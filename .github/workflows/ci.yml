@@ -22,15 +22,24 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
-      - name: Resolve version-bump gate base from the PR target branch
-        # This repo branches off `dev` and PRs into `dev`; only on
-        # pull_request events is github.base_ref populated with that target.
-        # On push, VERSION_BASE stays unset so the Makefile's own
-        # `origin/main` default applies. See #568.
+      - name: Resolve version-bump gate base and mode from the PR target branch
+        # Only on pull_request events is github.base_ref populated. A PR into
+        # `main` (the promotion) is the one fail-closed delivery gate:
+        # release mode. A PR into any other branch (dev, afk/*) is
+        # version-neutral: integration mode against its own base. On push
+        # nothing is set, so the Makefile defaults apply (origin/main,
+        # integration): dev is ahead of main at the same version between
+        # releases and must not go red for it. See #568.
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+        run: |
+          echo "VERSION_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          if [ "$BASE_REF" = "main" ]; then
+            echo "VERSION_MODE=release" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_MODE=integration" >> "$GITHUB_ENV"
+          fi
 
       - name: Run gate (lint + test suites + version-bump gate)
         run: make test

@@ -1220,3 +1220,179 @@ class TestSharedPerPluginState:
 
         assert find_missing_bumps(repo, "main", context) == ["mentor"]
         assert find_level_violations(repo, "main", context) == []
+
+
+class TestVersionModes:
+    """`--mode`: release is the delivery gate, integration is version-neutral.
+
+    PRs into dev no longer carry a bump (siblings fought over one counter); the
+    bump happens once per promotion and is enforced on the PR into main.
+    """
+
+    @pytest.fixture
+    def two(self, tmp_path: Path) -> Path:
+        return _repo_with_two_plugins(tmp_path)
+
+    def _run(self, repo: Path, capsys: pytest.CaptureFixture[str], *mode: str):
+        code = check_version_bumps.main(
+            ["--repo", str(repo), "--base", "main", *mode]
+        )
+        captured = capsys.readouterr()
+        return code, captured.out, captured.err
+
+    def test_omitting_the_flag_is_release_mode_fail_closed(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _plugin(two, "mentor", "0.1.0", "# v2\n")
+        commit(two, "change without bump")
+
+        code, _, err = self._run(two, capsys)
+
+        assert code == 1
+        assert "mentor (still 0.1.0)" in err
+
+    def test_integration_passes_a_change_with_no_bump(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _plugin(two, "mentor", "0.1.0", "# v2\n")
+        commit(two, "change without bump")
+
+        code, out, err = self._run(two, capsys, "--mode", "integration")
+
+        assert code == 0
+        assert "integration mode" in out
+        assert err == ""
+
+    def test_release_fails_the_same_tree_and_names_its_mode(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _plugin(two, "mentor", "0.1.0", "# v2\n")
+        commit(two, "change without bump")
+
+        code, _, err = self._run(two, capsys, "--mode", "release")
+
+        assert code == 1
+        assert "release mode" in err
+        assert "mentor" in err
+
+    def test_integration_does_not_enforce_the_bump_level(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _drop_skill(two, "advisor", "beta")
+        _manifest(two, "advisor", "1.2.1")
+        commit(two, "drop a skill, patch bump")
+
+        assert self._run(two, capsys, "--mode", "release")[0] == 1
+        assert self._run(two, capsys, "--mode", "integration")[0] == 0
+
+    def test_integration_still_fails_a_lowered_version(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _manifest(two, "advisor", "1.1.9")
+        _skill(two, "advisor", "alpha", "# alpha v2\n")
+        commit(two, "lower the version")
+
+        code, _, err = self._run(two, capsys, "--mode", "integration")
+
+        assert code == 1
+        assert "advisor: 1.2.0 -> 1.1.9" in err
+
+    def test_integration_still_fails_a_malformed_version(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _manifest(two, "advisor", "1.2.1-beta")
+        _skill(two, "advisor", "alpha", "# alpha v2\n")
+        commit(two, "non-semver version")
+
+        code, _, err = self._run(two, capsys, "--mode", "integration")
+
+        assert code == 1
+        assert "not valid semver" in err
+
+    def test_an_unknown_mode_is_refused(
+        self, two: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit) as exc:
+            check_version_bumps.main(["--repo", str(two), "--mode", "lenient"])
+        assert exc.value.code == 2
+
+
+def _ci_version_env(base_ref: str, event: str = "pull_request") -> dict[str, str]:
+    """The VERSION_* env CI really exports for a PR into `base_ref`.
+
+    Executes the workflow step's `run:` script under bash against a scratch
+    GITHUB_ENV file, honouring the step's `if:` for `event`, instead of
+    restating what the step ought to do.
+    """
+    import os
+    import tempfile
+
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    step = re.search(
+        r"      - name: Resolve version-bump gate[^\n]*\n(?P<body>(?:        .*\n|\n)+)",
+        workflow,
+    )
+    assert step, "ci.yml must keep a step that resolves the version gate base/mode"
+    body = step.group("body")
+    condition = re.search(r"if: github\.event_name == '(\w+)'", body)
+    if condition and condition.group(1) != event:
+        return {}
+    run = re.search(r"run: \|\n((?:          .*\n)+)", body)
+    assert run, "the version-gate step must use a multi-line run script"
+    script = "\n".join(line[10:] for line in run.group(1).splitlines())
+    with tempfile.TemporaryDirectory() as tmp:
+        env_file = Path(tmp) / "github_env"
+        env_file.touch()
+        subprocess.run(
+            ["bash", "-euc", script],
+            env={**os.environ, "BASE_REF": base_ref, "GITHUB_ENV": str(env_file)},
+            check=True,
+        )
+        pairs = (line.split("=", 1) for line in env_file.read_text().splitlines())
+        return {k: v for k, v in pairs}
+
+
+class TestCiVersionMode:
+    """The PR into main is the only fail-closed delivery point: pin it hard."""
+
+    def test_a_pr_into_main_is_gated_in_release_mode_against_main(self) -> None:
+        assert _ci_version_env("main") == {
+            "VERSION_BASE": "origin/main",
+            "VERSION_MODE": "release",
+        }
+
+    @pytest.mark.parametrize("base_ref", ["dev", "afk/staging", "afk/epic-7"])
+    def test_a_pr_into_any_other_branch_is_version_neutral(self, base_ref: str) -> None:
+        assert _ci_version_env(base_ref) == {
+            "VERSION_BASE": f"origin/{base_ref}",
+            "VERSION_MODE": "integration",
+        }
+
+    def test_a_push_sets_nothing_so_the_makefile_default_is_integration(self) -> None:
+        """Pushes to dev must not go red because dev is ahead of main."""
+        assert _ci_version_env("", event="push") == {}
+        makefile = (REPO_ROOT / "Makefile").read_text()
+        assert re.search(r"^VERSION_MODE \?= integration$", makefile, re.MULTILINE)
+
+    def test_release_mode_is_what_a_main_pr_actually_executes(
+        self, tmp_path: Path
+    ) -> None:
+        """End to end: the mode CI exports, fed to the real gate, rejects a no-bump."""
+        repo = _repo_with_two_plugins(tmp_path)
+        _plugin(repo, "mentor", "0.1.0", "# v2\n")
+        commit(repo, "change without bump")
+        env = _ci_version_env("main")
+
+        assert (
+            check_version_bumps.main(
+                ["--repo", str(repo), "--base", "main", "--mode", env["VERSION_MODE"]]
+            )
+            == 1
+        )
+        dev_env = _ci_version_env("dev")
+        assert (
+            check_version_bumps.main(
+                ["--repo", str(repo), "--base", "main", "--mode", dev_env["VERSION_MODE"]]
+            )
+            == 0
+        )
