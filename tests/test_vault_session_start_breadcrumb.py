@@ -302,3 +302,54 @@ def test_ordinary_checkout_cwd_writes_nowhere_new(home: Path, vault: Path) -> No
 
     assert _payload(vault / ".vault" / "plugin-state.json")["session"] == "plain"
     assert not (vault / "notes" / ".vault").exists()
+
+
+def _seed_shared(vault: Path, platform: str, root: Path, version: str) -> None:
+    record = {"platform": platform, "root": str(root), "version": version, "session": "seed"}
+    (vault / ".vault" / "plugin-state.json").write_text(json.dumps(record))
+
+
+def test_other_platforms_live_shared_record_is_not_overwritten(home: Path, vault: Path) -> None:
+    """The shared file is last-writer-wins; a live record from another platform stays.
+
+    Codex starting after Claude Code must not replace a shared record whose root
+    still exists, or one platform's start decides the other's vault gate.
+    """
+    claude = _fake_plugin(home, ROOTS["claude-code"], version="8.43.0")
+    codex = _fake_plugin(home, ROOTS["codex"], version="8.46.2")
+    _run(claude, home, vault)
+
+    _run(codex, home, vault)
+
+    assert _payload(vault / ".vault" / "plugin-state.json")["platform"] == "claude-code"
+    assert _payload(vault / ".vault" / "plugin-state.codex.json")["version"] == "8.46.2"
+
+
+def test_dangling_shared_record_from_another_platform_is_replaced(home: Path, vault: Path) -> None:
+    """A Codex record whose cache copy was pruned must not outlive the next session."""
+    claude = _fake_plugin(home, ROOTS["claude-code"], version="8.43.0")
+    _seed_shared(vault, "codex", home / ".codex/plugins/cache/the-workshop/workbench/8.37.8", "8.37.8")
+
+    _run(claude, home, vault)
+
+    shared = _payload(vault / ".vault" / "plugin-state.json")
+    assert (shared["platform"], shared["version"]) == ("claude-code", "8.43.0")
+
+
+def test_same_platform_always_refreshes_the_shared_record(home: Path, vault: Path) -> None:
+    old = _fake_plugin(home, ROOTS["codex"], version="8.37.8")
+    _run(old, home, vault)
+    new = _fake_plugin(home, ".codex/plugins/cache/the-workshop/workbench/9.9.10", version="9.9.10")
+
+    _run(new, home, vault)
+
+    assert _payload(vault / ".vault" / "plugin-state.json")["version"] == "9.9.10"
+
+
+def test_unreadable_shared_record_is_replaced(home: Path, vault: Path) -> None:
+    root = _fake_plugin(home, ROOTS["codex"])
+    (vault / ".vault" / "plugin-state.json").write_text("not json")
+
+    _run(root, home, vault)
+
+    assert _payload(vault / ".vault" / "plugin-state.json")["platform"] == "codex"

@@ -107,6 +107,23 @@ def _breadcrumb_roots(payload: dict | None) -> list[Path]:
     return roots
 
 
+def _shared_record_is_held_by_another_platform(shared: Path, platform: str) -> bool:
+    """True when ``shared`` names a different platform's copy that still exists.
+
+    The legacy shared file is last-writer-wins across platforms, so a start on
+    one platform would otherwise decide the other's gate. A record from another
+    platform is left alone only while its root is still on disk; a dangling one
+    (the cache copy was pruned by an update) is replaced so it cannot outlive
+    the next session. Unreadable or malformed records are replaced too.
+    """
+    try:
+        held = json.loads(shared.read_text())
+        root = Path(held["root"])
+        return held["platform"] != platform and root.is_dir()
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def _write_breadcrumb() -> None:
     """Record which plugin copy served this session, for the vault's presence check.
 
@@ -115,7 +132,10 @@ def _write_breadcrumb() -> None:
     the platform whose cache this copy runs from, so two platforms sharing one
     vault each keep their own record instead of overwriting each other. The
     legacy ``.vault/plugin-state.json`` is written alongside for one release so
-    an un-updated reader (``check-plugin.sh``) is unaffected.
+    an un-updated reader (``check-plugin.sh``) is unaffected; it is skipped while
+    another platform's record there still points at a live root (see
+    ``_shared_record_is_held_by_another_platform``). Readers that need a
+    platform's own state should read ``plugin-state.<platform>.json``.
 
     The payload is per-platform and per-session: ``root`` names the copy that
     executed (the datum a reader's supersession check consumes), and ``session``
@@ -139,7 +159,9 @@ def _write_breadcrumb() -> None:
         state_dir = vault_root / ".vault"
         state_dir.mkdir(parents=True, exist_ok=True)
         (state_dir / f"plugin-state.{platform}.json").write_text(rendered)
-        (state_dir / "plugin-state.json").write_text(rendered)
+        shared = state_dir / "plugin-state.json"
+        if not _shared_record_is_held_by_another_platform(shared, platform):
+            shared.write_text(rendered)
 
 
 run_engine_script("session-start.py", before=_write_breadcrumb)

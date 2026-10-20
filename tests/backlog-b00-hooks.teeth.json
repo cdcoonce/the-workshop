@@ -293,8 +293,22 @@
       "label": "#894: legacy record not written [predicted: test_legacy_breadcrumb_is_still_written_and_parses_under_check_plugin]",
       "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
       "oracle": "real",
-      "find": "(state_dir / \"plugin-state.json\").write_text(rendered)",
+      "find": "shared.write_text(rendered)",
       "replace": "pass"
+    },
+    {
+      "label": "#1280: shared record always overwritten [predicted: test_other_platforms_live_shared_record_is_not_overwritten]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "if not _shared_record_is_held_by_another_platform(shared, platform):",
+      "replace": "if True:"
+    },
+    {
+      "label": "#1280: dangling shared record kept [predicted: test_dangling_shared_record_from_another_platform_is_replaced]",
+      "file": "../plugins/workbench/hooks/scripts/vault-session-start.py",
+      "oracle": "real",
+      "find": "return held[\"platform\"] != platform and root.is_dir()",
+      "replace": "return held[\"platform\"] != platform"
     },
     {
       "label": "#894: session field dropped [predicted: test_successive_sessions_with_unchanged_root_and_version_are_distinguishable]",
