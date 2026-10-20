@@ -30,7 +30,12 @@ import subprocess  # noqa: E402
 import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-raw_payload = sys.stdin.read()
+try:
+    raw_payload = sys.stdin.read()
+except ValueError:
+    # Fail open: undecodable bytes (UnicodeDecodeError is a ValueError) name
+    # nothing this hook can act on.
+    sys.exit(0)
 payload_absent = not raw_payload.strip()
 if payload_absent:
     # Codex: hooks receive no stdin payload — every fact below self-derives.
@@ -38,7 +43,7 @@ if payload_absent:
 else:
     try:
         data = json.loads(raw_payload)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         sys.exit(0)
     if not isinstance(data, dict):
         # Fail open: a payload that isn't a JSON object isn't ours to act on.
