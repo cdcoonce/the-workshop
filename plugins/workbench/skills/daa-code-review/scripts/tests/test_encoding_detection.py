@@ -60,7 +60,7 @@ class TestEncodingCorruptionDetection:
 
     def test_detect_dash_corruption(self):
         """Test detection of corrupted em-dash (â€" → —)."""
-        content = "# Title\n\nThis \xe2\x80\x94 that"
+        content = "# Title\n\nThis " + mojibake("—") + " that"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -68,10 +68,13 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050"
         ]
         assert len(encoding_issues) >= 1
+        assert "dash character" in encoding_issues[0].message
+        assert encoding_issues[0].suggested_fix.fixed_code == "This — that"
 
     def test_detect_bullet_corruption(self):
         """Test detection of corrupted bullet points (â€¢ → •)."""
-        content = "# List\n\n\xe2\x80\xa2 Item one\n\xe2\x80\xa2 Item two"
+        bullet = mojibake("•")
+        content = f"# List\n\n{bullet} Item one\n{bullet} Item two"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -79,6 +82,8 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050"
         ]
         assert len(encoding_issues) >= 1
+        assert "bullet point" in encoding_issues[0].message
+        assert encoding_issues[0].suggested_fix.fixed_code == "• Item one"
 
     def test_no_false_positives_clean_content(self):
         """Test that clean content doesn't trigger encoding issues."""
@@ -123,12 +128,13 @@ class TestEncodingCorruptionDetection:
     def test_corruption_in_table(self):
         """Test detection of corruption in markdown tables."""
         mul = mojibake("×")
+        dash = mojibake("—")
         content = f"""# Revenue
 
 | Component | Formula |
 |-----------|---------|
 | Revenue | Generation {mul} Price |
-| Cost | Hub \xe2\x80\x94 Node |
+| Cost | Hub {dash} Node |
 """
         result = analyze_markdown(content)
 
@@ -256,10 +262,11 @@ class TestRealWorldCorruption:
     def test_formula_calculation(self):
         """Test corrupted formula calculation (from user example)."""
         mul = mojibake("×")
+        dash = mojibake("—")
         content = f"""# Example Calculation
 
-Swap Settlement = (Fixed \xe2\x80\x94 Index) {mul} Volume
-               = ($45 \xe2\x80\x94 $38) {mul} 10,000
+Swap Settlement = (Fixed {dash} Index) {mul} Volume
+               = ($45 {dash} $38) {mul} 10,000
                = $70,000
 """
         result = analyze_markdown(content)

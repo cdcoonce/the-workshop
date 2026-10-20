@@ -13,6 +13,7 @@ from markdown_analyzer import (
     analyze_markdown,
     analyze_markdown_file,
 )
+from tests.mojibake import mojibake
 
 
 class TestMarkdownAnalyzerHeadings:
@@ -581,8 +582,8 @@ class TestMarkdownAnalyzerEncodingCorruption:
         """Both curly-double-quote keys are real entries with one-character values."""
         from markdown_analyzer import ENCODING_CORRUPTION_MAP
 
-        assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9c"] == "\u201c"
-        assert ENCODING_CORRUPTION_MAP["\xe2\x80\x9d"] == "\u201d"
+        assert ENCODING_CORRUPTION_MAP[mojibake("\u201c")] == "\u201c"
+        assert ENCODING_CORRUPTION_MAP[mojibake("\u201d")] == "\u201d"
 
     def test_corruption_map_has_the_expected_entry_count(self):
         """Guards against the dict silently losing or merging entries (the #608 collapse)."""
@@ -592,7 +593,7 @@ class TestMarkdownAnalyzerEncodingCorruption:
 
     def test_corrupted_curly_quotes_suggest_proper_curly_quotes(self):
         """The auto-fix for a mis-encoded quoted word yields real curly quotes."""
-        content = "# Title\n\n\xe2\x80\x9chello\xe2\x80\x9d\n"
+        content = "# Title\n\n" + mojibake("\u201chello\u201d") + "\n"
         result = analyze_markdown(content)
 
         md050_issues = [i for i in result.issues if i.rule_id == "MD050"]
@@ -603,7 +604,7 @@ class TestMarkdownAnalyzerEncodingCorruption:
 
     def test_corrupted_right_quote_alone_is_flagged(self):
         """A corrupted right curly quote is detected on its own."""
-        content = "# Title\n\nhello\xe2\x80\x9d\n"
+        content = "# Title\n\nhello" + mojibake("\u201d") + "\n"
         result = analyze_markdown(content)
 
         md050_issues = [i for i in result.issues if i.rule_id == "MD050"]

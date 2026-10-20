@@ -68,14 +68,14 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\u00e2\u2021\x90": "⇐",  # left double arrow
     "\u00e2\u2021\u2019": "⇒",  # right double arrow
     # Dashes and punctuation
-    "\xe2\x80\x94": "—",  # em dash (â€")
-    "\xe2\x80\x93": "–",  # en dash (â€")
-    "\xe2\x80\xa2": "•",  # bullet (â€¢)
-    "\xe2\x80\xa6": "…",  # ellipsis (â€¦)
-    "\xe2\x80\x98": "'",  # left single quote
-    "\xe2\x80\x99": "'",  # right single quote
-    "\xe2\x80\x9c": "\u201c",  # left double quote
-    "\xe2\x80\x9d": "\u201d",  # right double quote
+    "\u00e2\u20ac\u201d": "—",  # em dash (â€")
+    "\u00e2\u20ac\u201c": "–",  # en dash (â€")
+    "\u00e2\u20ac\u00a2": "•",  # bullet (â€¢)
+    "\u00e2\u20ac\u00a6": "…",  # ellipsis (â€¦)
+    "\u00e2\u20ac\u02dc": "'",  # left single quote
+    "\u00e2\u20ac\u2122": "'",  # right single quote
+    "\u00e2\u20ac\u0153": "\u201c",  # left double quote
+    "\u00e2\u20ac\x9d": "\u201d",  # right double quote
     # Checkmarks and symbols
     "\xe2\x9c\x93": "✓",  # checkmark (âœ")
     "\xe2\x9c\x94": "✔",  # heavy checkmark (âœ")
@@ -86,9 +86,9 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     # Legal/trademark symbols
     "\xc2\xa9": "©",  # copyright (Â©)
     "\xc2\xae": "®",  # registered (Â®)
-    "\xe2\x84\xa2": "™",  # trademark (â„¢)
+    "\u00e2\u201e\u00a2": "™",  # trademark (â„¢)
     # Currency
-    "\xe2\x82\xac": "€",  # euro (â‚¬)
+    "\u00e2\u201a\u00ac": "€",  # euro (â‚¬)
     "\xc2\xa3": "£",  # pound (Â£)
     "\xc2\xa5": "¥",  # yen (Â¥)
     # Box drawing characters
@@ -901,11 +901,11 @@ class MarkdownAnalyzer:
                 char_desc = "division sign (÷)"
             elif corrupted.startswith("\u00e2\u2020"):
                 char_desc = "arrow symbol"
-            elif corrupted.startswith("\xe2\x80\x94") or corrupted.startswith(
-                "\xe2\x80\x93"
+            elif corrupted.startswith("\u00e2\u20ac\u201d") or corrupted.startswith(
+                "\u00e2\u20ac\u201c"
             ):
                 char_desc = "dash character"
-            elif corrupted.startswith("\xe2\x80\xa2"):
+            elif corrupted.startswith("\u00e2\u20ac\u00a2"):
                 char_desc = "bullet point (•)"
             elif corrupted.startswith("\xe2\x9c"):
                 char_desc = "checkmark symbol"
@@ -915,7 +915,7 @@ class MarkdownAnalyzer:
                 char_desc = "copyright symbol (©)"
             elif corrupted in ("\xc2\xae",):
                 char_desc = "registered symbol (®)"
-            elif corrupted.startswith("\xe2\x84"):
+            elif corrupted.startswith("\u00e2\u201e"):
                 char_desc = "trademark symbol (™)"
             else:
                 char_desc = f"character '{fixed}'"

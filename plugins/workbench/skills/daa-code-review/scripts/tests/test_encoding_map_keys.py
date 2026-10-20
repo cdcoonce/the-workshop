@@ -105,3 +105,52 @@ class TestComparisonAndArrowKeys:
         content = "# T\n\n" + mojibake(char) + "\n"
         issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
         assert "arrow symbol" in issues[0].message
+
+
+# #1271: dashes and punctuation, plus the trademark and euro signs (the other
+# 0xE2-prefixed single characters). Every key was wrong; ” ends in the
+# undefined byte 0x9D. The single-quote values are ASCII "'" today and stay so.
+PUNCTUATION_ROWS = [
+    ("—", "—", "\xe2\x80\x94"),
+    ("–", "–", "\xe2\x80\x93"),
+    ("•", "•", "\xe2\x80\xa2"),
+    ("…", "…", "\xe2\x80\xa6"),
+    ("‘", "'", "\xe2\x80\x98"),
+    ("’", "'", "\xe2\x80\x99"),
+    ("“", "“", "\xe2\x80\x9c"),
+    ("”", "”", "\xe2\x80\x9d"),
+    ("™", "™", "\xe2\x84\xa2"),
+    ("€", "€", "\xe2\x82\xac"),
+]
+
+
+class TestPunctuationKeys:
+    """#1271: dash, bullet, ellipsis, quote, trademark and euro keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), PUNCTUATION_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in PUNCTUATION_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize(
+        ("char", "fragment"),
+        [
+            ("—", "dash character"),
+            ("–", "dash character"),
+            ("•", "bullet point"),
+            ("…", "…"),
+            ("“", "“"),
+            ("”", "”"),
+            ("™", "trademark symbol"),
+            ("€", "€"),
+        ],
+    )
+    def test_real_mojibake_is_flagged_and_fixed(self, char, fragment):
+        content = "# T\n\n" + mojibake(f"a {char} b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert fragment in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {char} b"

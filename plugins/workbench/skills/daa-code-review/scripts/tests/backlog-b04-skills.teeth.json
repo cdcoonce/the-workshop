@@ -28,15 +28,15 @@
       "label": "#608: the right-curly-quote entry is missing from the corruption map (test_curly_double_quote_keys_map_to_curly_quotes)",
       "file": "../markdown_analyzer.py",
       "oracle": "real",
-      "find": "    \"\\xe2\\x80\\x9d\": \"\\u201d\",  # right double quote",
+      "find": "    \"\\u00e2\\u20ac\\x9d\": \"\\u201d\",  # right double quote",
       "replace": "    # right double quote entry dropped"
     },
     {
       "label": "#608: the left-curly-quote entry fixes to a straight quote (test_corrupted_curly_quotes_suggest_proper_curly_quotes)",
       "file": "../markdown_analyzer.py",
       "oracle": "real",
-      "find": "    \"\\xe2\\x80\\x9c\": \"\\u201c\",  # left double quote",
-      "replace": "    \"\\xe2\\x80\\x9c\": \"\\\"\",  # left double quote"
+      "find": "    \"\\u00e2\\u20ac\\u0153\": \"\\u201c\",  # left double quote",
+      "replace": "    \"\\u00e2\\u20ac\\u0153\": \"\\\"\",  # left double quote"
     },
     {
       "label": "#748: defined_refs is built from unmasked content again (test_defined_ref_inside_code_fence_does_not_define_it)",
@@ -56,7 +56,7 @@
       "label": "#608: the corruption map loses or merges an entry (test_corruption_map_has_the_expected_entry_count)",
       "file": "../markdown_analyzer.py",
       "oracle": "real",
-      "find": "    \"\\xe2\\x80\\x98\": \"'\",  # left single quote",
+      "find": "    \"\\u00e2\\u20ac\\u02dc\": \"'\",  # left single quote",
       "replace": "    # left single quote dropped"
     }
   ]
