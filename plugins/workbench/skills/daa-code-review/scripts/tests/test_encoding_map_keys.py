@@ -154,3 +154,43 @@ class TestPunctuationKeys:
         assert len(issues) == 1
         assert fragment in issues[0].message
         assert issues[0].suggested_fix.fixed_code == f"a {char} b"
+
+
+# #1272: checkmarks and symbols. Every key was wrong; ❌'s second byte is the
+# undefined 0x9D, and it differs from the others' second byte (0x9C).
+CHECKMARK_ROWS = [
+    ("✓", "✓", "\xe2\x9c\x93"),
+    ("✔", "✔", "\xe2\x9c\x94"),
+    ("✗", "✗", "\xe2\x9c\x97"),
+    ("✘", "✘", "\xe2\x9c\x98"),
+    ("✅", "✅", "\xe2\x9c\x85"),
+    ("❌", "❌", "\xe2\x9d\x8c"),
+]
+
+
+class TestCheckmarkKeys:
+    """#1272: checkmark and cross keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), CHECKMARK_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in CHECKMARK_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize("char", ["✓", "✔", "✗", "✘", "✅"])
+    def test_check_and_ballot_marks_describe_as_checkmark(self, char):
+        content = "# T\n\n" + mojibake(f"a {char} b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "checkmark symbol" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {char} b"
+
+    def test_cross_mark_gets_its_own_match_not_the_checkmark_description(self):
+        content = "# T\n\n" + mojibake("a ❌ b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "checkmark symbol" not in issues[0].message
+        assert "❌" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == "a ❌ b"

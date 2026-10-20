@@ -77,12 +77,12 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\u00e2\u20ac\u0153": "\u201c",  # left double quote
     "\u00e2\u20ac\x9d": "\u201d",  # right double quote
     # Checkmarks and symbols
-    "\xe2\x9c\x93": "✓",  # checkmark (âœ")
-    "\xe2\x9c\x94": "✔",  # heavy checkmark (âœ")
-    "\xe2\x9c\x97": "✗",  # ballot x (âœ—)
-    "\xe2\x9c\x98": "✘",  # heavy ballot x
-    "\xe2\x9c\x85": "✅",  # white heavy check mark
-    "\xe2\x9d\x8c": "❌",  # cross mark
+    "\u00e2\u0153\u201c": "✓",  # checkmark (âœ")
+    "\u00e2\u0153\u201d": "✔",  # heavy checkmark (âœ")
+    "\u00e2\u0153\u2014": "✗",  # ballot x (âœ—)
+    "\u00e2\u0153\u02dc": "✘",  # heavy ballot x
+    "\u00e2\u0153\u2026": "✅",  # white heavy check mark
+    "\u00e2\x9d\u0152": "❌",  # cross mark
     # Legal/trademark symbols
     "\xc2\xa9": "©",  # copyright (Â©)
     "\xc2\xae": "®",  # registered (Â®)
@@ -907,7 +907,7 @@ class MarkdownAnalyzer:
                 char_desc = "dash character"
             elif corrupted.startswith("\u00e2\u20ac\u00a2"):
                 char_desc = "bullet point (•)"
-            elif corrupted.startswith("\xe2\x9c"):
+            elif corrupted.startswith("\u00e2\u0153"):
                 char_desc = "checkmark symbol"
             elif corrupted.startswith("\xe2\x94") or corrupted.startswith("\xe2\x95"):
                 char_desc = "box-drawing character"

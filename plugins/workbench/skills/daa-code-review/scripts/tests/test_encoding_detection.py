@@ -26,7 +26,7 @@ class TestEncodingCorruptionDetection:
 
     def test_detect_checkmark_corruption(self):
         """Test detection of corrupted checkmark (âœ" → ✓)."""
-        content = "# Status\n\n| Done | Task |\n|------|------|\n| \xe2\x9c\x93 | Item |"
+        content = "# Status\n\n| Done | Task |\n|------|------|\n| " + mojibake("✓") + " | Item |"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -34,6 +34,7 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050" and "encoding" in i.message.lower()
         ]
         assert len(encoding_issues) >= 1
+        assert "checkmark symbol" in encoding_issues[0].message
 
     def test_detect_box_drawing_corruption(self):
         """Test detection of corrupted box-drawing characters."""
@@ -146,7 +147,7 @@ class TestEncodingCorruptionDetection:
 
     def test_fix_is_auto_fixable(self):
         """Test that encoding fixes are marked as auto-fixable."""
-        content = "# Test\n\nDone \xe2\x9c\x93"
+        content = "# Test\n\nDone " + mojibake("✓")
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -156,6 +157,7 @@ class TestEncodingCorruptionDetection:
         assert len(encoding_issues) >= 1
         assert encoding_issues[0].suggested_fix is not None
         assert encoding_issues[0].suggested_fix.auto_fixable is True
+        assert encoding_issues[0].suggested_fix.fixed_code == "Done ✓"
 
 
 class TestEncodingCorruptionPatterns:
@@ -275,12 +277,13 @@ Swap Settlement = (Fixed {dash} Index) {mul} Volume
 
     def test_enterprise_matrix_checkmarks(self):
         """Test table with corrupted checkmarks (from user example)."""
-        content = """# Enterprise Bus Matrix
+        tick = mojibake("✓")
+        content = f"""# Enterprise Bus Matrix
 
 | Business Process | Facility | Date |
 |------------------|----------|------|
-| Daily Generation | \xe2\x9c\x93 | \xe2\x9c\x93 |
-| Hourly Basis | \xe2\x9c\x93 | \xe2\x9c\x93 |
+| Daily Generation | {tick} | {tick} |
+| Hourly Basis | {tick} | {tick} |
 """
         result = analyze_markdown(content)
         encoding_issues = [i for i in result.issues if i.rule_id == "MD050"]
