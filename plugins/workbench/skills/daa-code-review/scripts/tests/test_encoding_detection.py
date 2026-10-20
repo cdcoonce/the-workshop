@@ -48,7 +48,7 @@ class TestEncodingCorruptionDetection:
 
     def test_detect_arrow_corruption(self):
         """Test detection of corrupted arrow symbols (â† → ←)."""
-        content = "# Flow\n\nData \xe2\x86\x90 Source"
+        content = "# Flow\n\nData " + mojibake("←") + " Source"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -56,6 +56,7 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050"
         ]
         assert len(encoding_issues) >= 1
+        assert "arrow symbol" in encoding_issues[0].message
 
     def test_detect_dash_corruption(self):
         """Test detection of corrupted em-dash (â€" → —)."""
@@ -108,7 +109,7 @@ class TestEncodingCorruptionDetection:
     def test_multiple_corruptions_same_line(self):
         """Test detection of multiple corruptions on same line."""
         # A × B → C (multiplication and arrow)
-        content = "# Math\n\nA " + mojibake("×") + " B \xe2\x86\x92 C"
+        content = "# Math\n\nA " + mojibake("×") + " B " + mojibake("→") + " C"
         result = analyze_markdown(content)
 
         encoding_issues = [
@@ -117,7 +118,7 @@ class TestEncodingCorruptionDetection:
         ]
         # Should find corruptions (at least one per line)
         assert len(encoding_issues) >= 1
-        assert "×" in encoding_issues[0].suggested_fix.fixed_code
+        assert encoding_issues[0].suggested_fix.fixed_code == "A × B → C"
 
     def test_corruption_in_table(self):
         """Test detection of corruption in markdown tables."""

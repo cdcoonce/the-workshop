@@ -55,18 +55,18 @@ ENCODING_CORRUPTION_MAP: dict[str, str] = {
     "\xc2\xb0": "°",  # degree
     "\xc2\xb5": "µ",  # micro
     # Comparison operators
-    "\xe2\x89\xa0": "≠",  # not equal (â‰ )
-    "\xe2\x89\xa4": "≤",  # less than or equal (â‰¤)
-    "\xe2\x89\xa5": "≥",  # greater than or equal (â‰¥)
-    "\xe2\x89\x88": "≈",  # approximately (â‰ˆ)
+    "\u00e2\u2030\u00a0": "≠",  # not equal (â‰ )
+    "\u00e2\u2030\u00a4": "≤",  # less than or equal (â‰¤)
+    "\u00e2\u2030\u00a5": "≥",  # greater than or equal (â‰¥)
+    "\u00e2\u2030\u02c6": "≈",  # approximately (â‰ˆ)
     # Arrows
-    "\xe2\x86\x90": "←",  # left arrow (â†)
-    "\xe2\x86\x92": "→",  # right arrow (â†')
-    "\xe2\x86\x91": "↑",  # up arrow (â†')
-    "\xe2\x86\x93": "↓",  # down arrow (â†")
-    "\xe2\x86\x94": "↔",  # left-right arrow
-    "\xe2\x87\x90": "⇐",  # left double arrow
-    "\xe2\x87\x92": "⇒",  # right double arrow
+    "\u00e2\u2020\x90": "←",  # left arrow (â†)
+    "\u00e2\u2020\u2019": "→",  # right arrow (â†')
+    "\u00e2\u2020\u2018": "↑",  # up arrow (â†')
+    "\u00e2\u2020\u201c": "↓",  # down arrow (â†")
+    "\u00e2\u2020\u201d": "↔",  # left-right arrow
+    "\u00e2\u2021\x90": "⇐",  # left double arrow
+    "\u00e2\u2021\u2019": "⇒",  # right double arrow
     # Dashes and punctuation
     "\xe2\x80\x94": "—",  # em dash (â€")
     "\xe2\x80\x93": "–",  # en dash (â€")
@@ -899,7 +899,7 @@ class MarkdownAnalyzer:
                 char_desc = "multiplication sign (×)"
             elif corrupted in ("\xc3\xb7",):
                 char_desc = "division sign (÷)"
-            elif corrupted.startswith("\xe2\x86"):
+            elif corrupted.startswith("\u00e2\u2020"):
                 char_desc = "arrow symbol"
             elif corrupted.startswith("\xe2\x80\x94") or corrupted.startswith(
                 "\xe2\x80\x93"
