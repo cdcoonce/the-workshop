@@ -40,13 +40,18 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         tomllib = None
 
-raw_payload = sys.stdin.read()
+try:
+    raw_payload = sys.stdin.read()
+except ValueError:
+    # Fail open: undecodable bytes (UnicodeDecodeError is a ValueError) name
+    # nothing this hook can act on.
+    sys.exit(0)
 if not raw_payload.strip():
     data = {}
 else:
     try:
         data = json.loads(raw_payload)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         sys.exit(0)
     if not isinstance(data, dict):
         # Fail open: a payload that isn't a JSON object isn't ours to act on.
