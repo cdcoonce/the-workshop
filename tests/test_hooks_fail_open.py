@@ -126,3 +126,42 @@ def test_git_baseline_defers_annotation_evaluation() -> None:
         for alias in node.names
     }
     assert "annotations" in futures
+
+
+# Invalid UTF-8 cannot ride in the str payloads above (text=True would encode
+# them), so these pass bytes. A hook that decodes stdin outside a guard raises
+# UnicodeDecodeError (a ValueError, not a JSONDecodeError) and tracebacks.
+INVALID_UTF8_PAYLOADS = [b"\xff\xfe{}", b"\xc3\x28"]
+HOOK_SCRIPTS_DIR = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts"
+
+
+def _run_on_bytes(script_name: str, payload: bytes, tmp_path: Path):
+    """Run one hook on raw bytes in a scratch dir, returning the result and
+    the tree listing afterwards so callers can assert no side effects."""
+    result = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPTS_DIR / script_name)],
+        input=payload,
+        capture_output=True,
+        timeout=30,
+        cwd=tmp_path,
+        # Strict decoding is what a UTF-8 locale gives; under the C locale or
+        # UTF-8 mode Python reads stdin with surrogateescape and the crash
+        # never reproduces, so pin it rather than inherit the runner's locale.
+        env=os.environ
+        | {
+            "CLAUDE_PROJECT_DIR": str(tmp_path),
+            "PYTHONIOENCODING": "utf-8:strict",
+        },
+    )
+    return result, sorted(p.name for p in tmp_path.rglob("*"))
+
+
+@pytest.mark.parametrize("payload", INVALID_UTF8_PAYLOADS)
+def test_warn_off_trunk_fails_open_on_invalid_utf8_stdin(
+    payload: bytes, tmp_path: Path
+) -> None:
+    result, tree = _run_on_bytes("warn-off-trunk.py", payload, tmp_path)
+    assert result.returncode == 0, result.stderr[:400]
+    assert b"Traceback" not in result.stderr
+    assert result.stdout == b"" and result.stderr == b""
+    assert tree == []
