@@ -16,7 +16,9 @@ from pathlib import Path  # noqa: E402
 
 try:
     data = json.load(sys.stdin)
-except json.JSONDecodeError:
+except (json.JSONDecodeError, ValueError):
+    # Fail open: an unreadable payload (undecodable bytes raise
+    # UnicodeDecodeError, a ValueError) names nothing this hook can act on.
     sys.exit(0)
 
 if not isinstance(data, dict):

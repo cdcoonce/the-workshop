@@ -187,3 +187,14 @@ def test_audit_config_change_fails_open_on_invalid_utf8_stdin(
     assert b"Traceback" not in result.stderr
     assert result.stdout == b"" and result.stderr == b""
     assert tree == []
+
+
+@pytest.mark.parametrize("payload", INVALID_UTF8_PAYLOADS)
+def test_snapshot_subagent_start_fails_open_on_invalid_utf8_stdin(
+    payload: bytes, tmp_path: Path
+) -> None:
+    result, tree = _run_on_bytes("snapshot-subagent-start.py", payload, tmp_path)
+    assert result.returncode == 0, result.stderr[:400]
+    assert b"Traceback" not in result.stderr
+    assert result.stdout == b"" and result.stderr == b""
+    assert tree == []
