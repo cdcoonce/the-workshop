@@ -420,6 +420,86 @@ class TestRelease:
         assert "not found" in capsys.readouterr().err
 
 
+class TestReleaseEdges:
+    def test_a_new_plugin_absent_from_base_is_skipped_not_refused(self, repo: Path) -> None:
+        _plugin(repo, "mentor", "0.1.0", "# brand new\n")
+        _plugin(repo, "advisor", "1.2.3", "# v2\n")
+        # `git diff <base>` only sees tracked paths; stage so mentor is "changed".
+        git(repo, "add", "-A")
+
+        results = bump_version.release(repo, "main")
+
+        assert [r.plugin for r in results] == ["advisor"]
+        assert _version(repo, "mentor") == "0.1.0"
+        assert _version(repo) == "1.2.4"
+
+    def test_every_changed_plugin_is_bumped_not_just_the_first(self, repo: Path) -> None:
+        _plugin(repo, "mentor", "0.4.0", "# v1\n")
+        stamp.stamp(repo)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "second plugin")
+        git(repo, "branch", "-f", "main", "HEAD")
+        _plugin(repo, "advisor", "1.2.3", "# v2\n")
+        _plugin(repo, "mentor", "0.4.0", "# v2\n")
+
+        results = bump_version.release(repo, "main")
+
+        assert sorted((r.plugin, r.new) for r in results) == [
+            ("advisor", "1.2.4"),
+            ("mentor", "0.4.1"),
+        ]
+        assert _version(repo, "advisor") == "1.2.4"
+        assert _version(repo, "mentor") == "0.4.1"
+
+    def test_all_with_level_is_a_usage_error(self, repo: Path) -> None:
+        with pytest.raises(SystemExit) as exc:
+            bump_version.main(
+                ["--all", "--level", "patch", "--repo", str(repo), "--base", "main"]
+            )
+        assert exc.value.code == 2
+
+
+class TestMakefileDefaults:
+    """What the targets resolve when nothing overrides them, run for real."""
+
+    @staticmethod
+    def _dry_run(target: str) -> str:
+        import os
+
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in {"MAKEFLAGS", "MFLAGS", "MAKELEVEL", "VERSION_BASE", "VERSION_MODE", "RELEASE_BASE"}
+        }
+        proc = subprocess.run(
+            ["make", "-n", target], cwd=REPO_ROOT, env=env,
+            capture_output=True, text=True, timeout=120, check=True,
+        )
+        return proc.stdout
+
+    def test_verify_versions_defaults_to_main_base_and_integration_mode(self) -> None:
+        assert "check_version_bumps --base origin/main --mode integration" in self._dry_run(
+            "verify-versions"
+        )
+
+    def test_release_check_defaults_to_main_base_in_release_mode(self) -> None:
+        assert "check_version_bumps --base origin/main --mode release" in self._dry_run(
+            "release-check"
+        )
+
+    def test_release_defaults_to_main_base(self) -> None:
+        assert "bump_version --all --base \"origin/main\"" in self._dry_run("release")
+
+    def test_the_default_declarations_are_pinned_verbatim(self) -> None:
+        makefile = (REPO_ROOT / "Makefile").read_text()
+        for line in (
+            "VERSION_BASE ?= origin/main",
+            "VERSION_MODE ?= integration",
+            "RELEASE_BASE ?= origin/main",
+        ):
+            assert re.search(rf"^{re.escape(line)}$", makefile, re.MULTILINE)
+
+
 class TestReleaseMakefileWiring:
     makefile = (REPO_ROOT / "Makefile").read_text()
 
