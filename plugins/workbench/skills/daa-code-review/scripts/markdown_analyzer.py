@@ -49,66 +49,66 @@ MULTIPLE_BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 # These occur when UTF-8 bytes are misinterpreted as Latin-1/Windows-1252
 ENCODING_CORRUPTION_MAP: dict[str, str] = {
     # Mathematical symbols
-    "\xc3\x97": "×",  # multiplication sign
+    "\u00c3\u2014": "×",  # multiplication sign
     "\xc3\xb7": "÷",  # division sign
     "\xc2\xb1": "±",  # plus-minus
     "\xc2\xb0": "°",  # degree
     "\xc2\xb5": "µ",  # micro
     # Comparison operators
-    "\xe2\x89\xa0": "≠",  # not equal (â‰ )
-    "\xe2\x89\xa4": "≤",  # less than or equal (â‰¤)
-    "\xe2\x89\xa5": "≥",  # greater than or equal (â‰¥)
-    "\xe2\x89\x88": "≈",  # approximately (â‰ˆ)
+    "\u00e2\u2030\u00a0": "≠",  # not equal (â‰ )
+    "\u00e2\u2030\u00a4": "≤",  # less than or equal (â‰¤)
+    "\u00e2\u2030\u00a5": "≥",  # greater than or equal (â‰¥)
+    "\u00e2\u2030\u02c6": "≈",  # approximately (â‰ˆ)
     # Arrows
-    "\xe2\x86\x90": "←",  # left arrow (â†)
-    "\xe2\x86\x92": "→",  # right arrow (â†')
-    "\xe2\x86\x91": "↑",  # up arrow (â†')
-    "\xe2\x86\x93": "↓",  # down arrow (â†")
-    "\xe2\x86\x94": "↔",  # left-right arrow
-    "\xe2\x87\x90": "⇐",  # left double arrow
-    "\xe2\x87\x92": "⇒",  # right double arrow
+    "\u00e2\u2020\x90": "←",  # left arrow (â†)
+    "\u00e2\u2020\u2019": "→",  # right arrow (â†')
+    "\u00e2\u2020\u2018": "↑",  # up arrow (â†')
+    "\u00e2\u2020\u201c": "↓",  # down arrow (â†")
+    "\u00e2\u2020\u201d": "↔",  # left-right arrow
+    "\u00e2\u2021\x90": "⇐",  # left double arrow
+    "\u00e2\u2021\u2019": "⇒",  # right double arrow
     # Dashes and punctuation
-    "\xe2\x80\x94": "—",  # em dash (â€")
-    "\xe2\x80\x93": "–",  # en dash (â€")
-    "\xe2\x80\xa2": "•",  # bullet (â€¢)
-    "\xe2\x80\xa6": "…",  # ellipsis (â€¦)
-    "\xe2\x80\x98": "'",  # left single quote
-    "\xe2\x80\x99": "'",  # right single quote
-    "\xe2\x80\x9c": "\u201c",  # left double quote
-    "\xe2\x80\x9d": "\u201d",  # right double quote
+    "\u00e2\u20ac\u201d": "—",  # em dash (â€")
+    "\u00e2\u20ac\u201c": "–",  # en dash (â€")
+    "\u00e2\u20ac\u00a2": "•",  # bullet (â€¢)
+    "\u00e2\u20ac\u00a6": "…",  # ellipsis (â€¦)
+    "\u00e2\u20ac\u02dc": "'",  # left single quote
+    "\u00e2\u20ac\u2122": "'",  # right single quote
+    "\u00e2\u20ac\u0153": "\u201c",  # left double quote
+    "\u00e2\u20ac\x9d": "\u201d",  # right double quote
     # Checkmarks and symbols
-    "\xe2\x9c\x93": "✓",  # checkmark (âœ")
-    "\xe2\x9c\x94": "✔",  # heavy checkmark (âœ")
-    "\xe2\x9c\x97": "✗",  # ballot x (âœ—)
-    "\xe2\x9c\x98": "✘",  # heavy ballot x
-    "\xe2\x9c\x85": "✅",  # white heavy check mark
-    "\xe2\x9d\x8c": "❌",  # cross mark
+    "\u00e2\u0153\u201c": "✓",  # checkmark (âœ")
+    "\u00e2\u0153\u201d": "✔",  # heavy checkmark (âœ")
+    "\u00e2\u0153\u2014": "✗",  # ballot x (âœ—)
+    "\u00e2\u0153\u02dc": "✘",  # heavy ballot x
+    "\u00e2\u0153\u2026": "✅",  # white heavy check mark
+    "\u00e2\x9d\u0152": "❌",  # cross mark
     # Legal/trademark symbols
     "\xc2\xa9": "©",  # copyright (Â©)
     "\xc2\xae": "®",  # registered (Â®)
-    "\xe2\x84\xa2": "™",  # trademark (â„¢)
+    "\u00e2\u201e\u00a2": "™",  # trademark (â„¢)
     # Currency
-    "\xe2\x82\xac": "€",  # euro (â‚¬)
+    "\u00e2\u201a\u00ac": "€",  # euro (â‚¬)
     "\xc2\xa3": "£",  # pound (Â£)
     "\xc2\xa5": "¥",  # yen (Â¥)
     # Box drawing characters
-    "\xe2\x94\x80": "─",  # horizontal (â"€)
-    "\xe2\x94\x82": "│",  # vertical (â"‚)
-    "\xe2\x94\x8c": "┌",  # top-left (â"Œ)
-    "\xe2\x94\x90": "┐",  # top-right (â"")
-    "\xe2\x94\x94": "└",  # bottom-left (â"")
-    "\xe2\x94\x98": "┘",  # bottom-right (â"˜)
-    "\xe2\x94\x9c": "├",  # left-tee (â"œ)
-    "\xe2\x94\xa4": "┤",  # right-tee (â"¤)
-    "\xe2\x94\xac": "┬",  # top-tee (â"¬)
-    "\xe2\x94\xb4": "┴",  # bottom-tee (â"´)
-    "\xe2\x94\xbc": "┼",  # cross (â"¼)
-    "\xe2\x95\x90": "═",  # double horizontal
-    "\xe2\x95\x91": "║",  # double vertical
-    "\xe2\x95\x94": "╔",  # double top-left
-    "\xe2\x95\x97": "╗",  # double top-right
-    "\xe2\x95\x9a": "╚",  # double bottom-left
-    "\xe2\x95\x9d": "╝",  # double bottom-right
+    "\u00e2\u201d\u20ac": "─",  # horizontal (â"€)
+    "\u00e2\u201d\u201a": "│",  # vertical (â"‚)
+    "\u00e2\u201d\u0152": "┌",  # top-left (â"Œ)
+    "\u00e2\u201d\x90": "┐",  # top-right (â"")
+    "\u00e2\u201d\u201d": "└",  # bottom-left (â"")
+    "\u00e2\u201d\u02dc": "┘",  # bottom-right (â"˜)
+    "\u00e2\u201d\u0153": "├",  # left-tee (â"œ)
+    "\u00e2\u201d\u00a4": "┤",  # right-tee (â"¤)
+    "\u00e2\u201d\u00ac": "┬",  # top-tee (â"¬)
+    "\u00e2\u201d\u00b4": "┴",  # bottom-tee (â"´)
+    "\u00e2\u201d\u00bc": "┼",  # cross (â"¼)
+    "\u00e2\u2022\x90": "═",  # double horizontal
+    "\u00e2\u2022\u2018": "║",  # double vertical
+    "\u00e2\u2022\u201d": "╔",  # double top-left
+    "\u00e2\u2022\u2014": "╗",  # double top-right
+    "\u00e2\u2022\u0161": "╚",  # double bottom-left
+    "\u00e2\u2022\x9d": "╝",  # double bottom-right
     # Fractions
     "\xc2\xbd": "½",  # one half
     "\xc2\xbc": "¼",  # one quarter
@@ -895,27 +895,29 @@ class MarkdownAnalyzer:
                 fixed_line = fixed_line.replace(corr, fix)
 
             # Describe what was found
-            if corrupted in ("\xc3\x97",):
+            if corrupted in ("\u00c3\u2014",):
                 char_desc = "multiplication sign (×)"
             elif corrupted in ("\xc3\xb7",):
                 char_desc = "division sign (÷)"
-            elif corrupted.startswith("\xe2\x86"):
+            elif corrupted.startswith("\u00e2\u2020"):
                 char_desc = "arrow symbol"
-            elif corrupted.startswith("\xe2\x80\x94") or corrupted.startswith(
-                "\xe2\x80\x93"
+            elif corrupted.startswith("\u00e2\u20ac\u201d") or corrupted.startswith(
+                "\u00e2\u20ac\u201c"
             ):
                 char_desc = "dash character"
-            elif corrupted.startswith("\xe2\x80\xa2"):
+            elif corrupted.startswith("\u00e2\u20ac\u00a2"):
                 char_desc = "bullet point (•)"
-            elif corrupted.startswith("\xe2\x9c"):
+            elif corrupted.startswith("\u00e2\u0153"):
                 char_desc = "checkmark symbol"
-            elif corrupted.startswith("\xe2\x94") or corrupted.startswith("\xe2\x95"):
+            elif corrupted.startswith("\u00e2\u201d") or corrupted.startswith(
+                "\u00e2\u2022"
+            ):
                 char_desc = "box-drawing character"
             elif corrupted in ("\xc2\xa9",):
                 char_desc = "copyright symbol (©)"
             elif corrupted in ("\xc2\xae",):
                 char_desc = "registered symbol (®)"
-            elif corrupted.startswith("\xe2\x84"):
+            elif corrupted.startswith("\u00e2\u201e"):
                 char_desc = "trademark symbol (™)"
             else:
                 char_desc = f"character '{fixed}'"

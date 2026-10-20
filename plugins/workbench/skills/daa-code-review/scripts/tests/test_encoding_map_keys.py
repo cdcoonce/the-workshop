@@ -1,0 +1,252 @@
+"""Per-section pins for ENCODING_CORRUPTION_MAP keys (parent issue #777).
+
+Every key must equal ``mojibake(<target character>)``: the cp1252-mojibake a
+real UTF-8 file produces, not a hand-typed Latin-1-style literal. Each row is
+``(target character, expected map value, old wrong key or None)``; the value
+column is pinned so a key change cannot silently change a fix.
+"""
+
+import pytest
+
+from markdown_analyzer import ENCODING_CORRUPTION_MAP, analyze_markdown
+from tests.mojibake import mojibake
+
+# #1269: two-byte (Latin-1 range) entries. Only the multiplication sign was
+# wrong (0x97 is an em dash in cp1252); the rest are pinned against regression.
+TWO_BYTE_ROWS = [
+    ("×", "×", "\xc3\x97"),
+    ("÷", "÷", None),
+    ("±", "±", None),
+    ("°", "°", None),
+    ("µ", "µ", None),
+    ("©", "©", None),
+    ("®", "®", None),
+    ("£", "£", None),
+    ("¥", "¥", None),
+    ("½", "½", None),
+    ("¼", "¼", None),
+    ("¾", "¾", None),
+    ("²", "²", None),
+    ("³", "³", None),
+    (" ", " ", None),
+    ("«", "«", None),
+    ("»", "»", None),
+    ("§", "§", None),
+    ("¶", "¶", None),
+]
+
+
+class TestTwoByteKeys:
+    """#1269: the Latin-1-range section keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), TWO_BYTE_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize(
+        "old_key", [r for _, _, r in TWO_BYTE_ROWS if r is not None]
+    )
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    def test_real_multiplication_mojibake_is_flagged_and_fixed(self):
+        content = "# Formula\n\n" + mojibake("Generation × Price") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "multiplication sign" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == "Generation × Price"
+
+    @pytest.mark.parametrize("char", ["©", "®", "÷"])
+    def test_latin1_range_descriptions(self, char):
+        content = "# T\n\nx " + mojibake(char) + " y\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert issues[0].suggested_fix.fixed_code == f"x {char} y"
+
+
+# #1270: comparison operators and arrows; every key was wrong. ← and ⇐ end in
+# the undefined byte 0x90, so they exercise the helper's C1-control rule.
+COMPARISON_ARROW_ROWS = [
+    ("≠", "≠", "\xe2\x89\xa0"),
+    ("≤", "≤", "\xe2\x89\xa4"),
+    ("≥", "≥", "\xe2\x89\xa5"),
+    ("≈", "≈", "\xe2\x89\x88"),
+    ("←", "←", "\xe2\x86\x90"),
+    ("→", "→", "\xe2\x86\x92"),
+    ("↑", "↑", "\xe2\x86\x91"),
+    ("↓", "↓", "\xe2\x86\x93"),
+    ("↔", "↔", "\xe2\x86\x94"),
+    ("⇐", "⇐", "\xe2\x87\x90"),
+    ("⇒", "⇒", "\xe2\x87\x92"),
+]
+
+
+class TestComparisonAndArrowKeys:
+    """#1270: comparison and arrow keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), COMPARISON_ARROW_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in COMPARISON_ARROW_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize(("char", "fragment"), [("→", "arrow symbol"), ("≤", "≤")])
+    def test_real_mojibake_is_flagged_and_fixed(self, char, fragment):
+        content = "# T\n\n" + mojibake(f"a {char} b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert fragment in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {char} b"
+
+    @pytest.mark.parametrize("char", ["←", "↑", "↓", "↔"])
+    def test_single_byte_arrows_describe_as_arrow_symbol(self, char):
+        content = "# T\n\n" + mojibake(char) + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert "arrow symbol" in issues[0].message
+
+
+# #1271: dashes and punctuation, plus the trademark and euro signs (the other
+# 0xE2-prefixed single characters). Every key was wrong; ” ends in the
+# undefined byte 0x9D. The single-quote values are ASCII "'" today and stay so.
+PUNCTUATION_ROWS = [
+    ("—", "—", "\xe2\x80\x94"),
+    ("–", "–", "\xe2\x80\x93"),
+    ("•", "•", "\xe2\x80\xa2"),
+    ("…", "…", "\xe2\x80\xa6"),
+    ("‘", "'", "\xe2\x80\x98"),
+    ("’", "'", "\xe2\x80\x99"),
+    ("“", "“", "\xe2\x80\x9c"),
+    ("”", "”", "\xe2\x80\x9d"),
+    ("™", "™", "\xe2\x84\xa2"),
+    ("€", "€", "\xe2\x82\xac"),
+]
+
+
+class TestPunctuationKeys:
+    """#1271: dash, bullet, ellipsis, quote, trademark and euro keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), PUNCTUATION_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in PUNCTUATION_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize(
+        ("char", "fragment"),
+        [
+            ("—", "dash character"),
+            ("–", "dash character"),
+            ("•", "bullet point"),
+            ("…", "…"),
+            ("“", "“"),
+            ("”", "”"),
+            ("™", "trademark symbol"),
+            ("€", "€"),
+        ],
+    )
+    def test_real_mojibake_is_flagged_and_fixed(self, char, fragment):
+        content = "# T\n\n" + mojibake(f"a {char} b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert fragment in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {char} b"
+
+
+# #1272: checkmarks and symbols. Every key was wrong; ❌'s second byte is the
+# undefined 0x9D, and it differs from the others' second byte (0x9C).
+CHECKMARK_ROWS = [
+    ("✓", "✓", "\xe2\x9c\x93"),
+    ("✔", "✔", "\xe2\x9c\x94"),
+    ("✗", "✗", "\xe2\x9c\x97"),
+    ("✘", "✘", "\xe2\x9c\x98"),
+    ("✅", "✅", "\xe2\x9c\x85"),
+    ("❌", "❌", "\xe2\x9d\x8c"),
+]
+
+
+class TestCheckmarkKeys:
+    """#1272: checkmark and cross keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), CHECKMARK_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in CHECKMARK_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize("char", ["✓", "✔", "✗", "✘", "✅"])
+    def test_check_and_ballot_marks_describe_as_checkmark(self, char):
+        content = "# T\n\n" + mojibake(f"a {char} b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "checkmark symbol" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {char} b"
+
+    def test_cross_mark_gets_its_own_match_not_the_checkmark_description(self):
+        content = "# T\n\n" + mojibake("a ❌ b") + "\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "checkmark symbol" not in issues[0].message
+        assert "❌" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == "a ❌ b"
+
+
+# #1273: box-drawing characters (11 single-line, 6 double-line). Every key was
+# wrong; ┐, ═ and ╝ contain an undefined byte (U+0090, U+0090, U+009D).
+BOX_ROWS = [
+    ("─", "─", "\xe2\x94\x80"),
+    ("│", "│", "\xe2\x94\x82"),
+    ("┌", "┌", "\xe2\x94\x8c"),
+    ("┐", "┐", "\xe2\x94\x90"),
+    ("└", "└", "\xe2\x94\x94"),
+    ("┘", "┘", "\xe2\x94\x98"),
+    ("├", "├", "\xe2\x94\x9c"),
+    ("┤", "┤", "\xe2\x94\xa4"),
+    ("┬", "┬", "\xe2\x94\xac"),
+    ("┴", "┴", "\xe2\x94\xb4"),
+    ("┼", "┼", "\xe2\x94\xbc"),
+    ("═", "═", "\xe2\x95\x90"),
+    ("║", "║", "\xe2\x95\x91"),
+    ("╔", "╔", "\xe2\x95\x94"),
+    ("╗", "╗", "\xe2\x95\x97"),
+    ("╚", "╚", "\xe2\x95\x9a"),
+    ("╝", "╝", "\xe2\x95\x9d"),
+]
+
+
+class TestBoxDrawingKeys:
+    """#1273: box-drawing keys are real mojibake."""
+
+    @pytest.mark.parametrize(("target", "value", "old_key"), BOX_ROWS)
+    def test_key_is_mojibake_of_target(self, target, value, old_key):
+        assert ENCODING_CORRUPTION_MAP[mojibake(target)] == value
+
+    @pytest.mark.parametrize("old_key", [r[2] for r in BOX_ROWS])
+    def test_old_wrong_key_is_gone(self, old_key):
+        assert old_key not in ENCODING_CORRUPTION_MAP
+
+    @pytest.mark.parametrize("target", [r[0] for r in BOX_ROWS])
+    def test_each_character_describes_as_box_drawing(self, target):
+        content = "# T\n\n```\n" + mojibake(f"a {target} b") + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert "box-drawing character" in issues[0].message
+        assert issues[0].suggested_fix.fixed_code == f"a {target} b"
+
+    def test_real_box_is_flagged_and_restored(self):
+        box = "┌──┐\n│  │\n└──┘"
+        content = "# T\n\n```\n" + mojibake(box) + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert [i.suggested_fix.fixed_code for i in issues] == box.split("\n")
+
+    def test_repeated_corruption_on_one_line_reports_once(self):
+        """The mojibake of ─ contains U+201D; de-duplication stays per line."""
+        content = "# T\n\n```\n" + mojibake("─" * 8) + "\n```\n"
+        issues = [i for i in analyze_markdown(content).issues if i.rule_id == "MD050"]
+        assert len(issues) == 1
+        assert issues[0].suggested_fix.fixed_code == "─" * 8
