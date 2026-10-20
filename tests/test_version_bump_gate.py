@@ -1352,17 +1352,27 @@ def _ci_version_env(base_ref: str, event: str = "pull_request") -> dict[str, str
         return {k: v for k, v in pairs}
 
 
+def _ci_jobs() -> dict[str, str]:
+    """Top-level job name -> its raw YAML block, from the real workflow."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    body = workflow.split("\njobs:\n", 1)[1]
+    parts = re.split(r"^  ([\w-]+):\n", body, flags=re.MULTILINE)
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
 class TestCiVersionMode:
-    """The PR into main is the only fail-closed delivery point: pin it hard."""
+    """Job `test` is never fail-closed; `release-gate` is, and only for main PRs.
 
-    def test_a_pr_into_main_is_gated_in_release_mode_against_main(self) -> None:
-        assert _ci_version_env("main") == {
-            "VERSION_BASE": "origin/main",
-            "VERSION_MODE": "release",
-        }
+    A check name must mean one thing. The push-to-dev run of `test` is lenient
+    by design and shares dev's tip SHA with the promotion PR, so a strict
+    `test` on that PR would sit beside a green lenient `test` on the same SHA
+    and `promote` could read the wrong one.
+    """
 
-    @pytest.mark.parametrize("base_ref", ["dev", "afk/staging", "afk/epic-7"])
-    def test_a_pr_into_any_other_branch_is_version_neutral(self, base_ref: str) -> None:
+    @pytest.mark.parametrize("base_ref", ["main", "dev", "afk/staging", "afk/epic-7"])
+    def test_job_test_is_integration_mode_for_every_base_main_included(
+        self, base_ref: str
+    ) -> None:
         assert _ci_version_env(base_ref) == {
             "VERSION_BASE": f"origin/{base_ref}",
             "VERSION_MODE": "integration",
@@ -1374,25 +1384,42 @@ class TestCiVersionMode:
         makefile = (REPO_ROOT / "Makefile").read_text()
         assert re.search(r"^VERSION_MODE \?= integration$", makefile, re.MULTILINE)
 
-    def test_release_mode_is_what_a_main_pr_actually_executes(
+    def test_job_test_never_mentions_release_mode(self) -> None:
+        job = _ci_jobs()["test"]
+        assert "VERSION_MODE=release" not in job
+        assert "release-check" not in job
+        assert "--mode release" not in job
+
+    def test_release_gate_runs_only_for_pull_requests_into_main(self) -> None:
+        job = _ci_jobs()["release-gate"]
+        condition = re.search(r"^    if: (.+)$", job, re.MULTILINE)
+        assert condition, "release-gate needs a job-level `if`"
+        assert condition.group(1).strip() == (
+            "github.event_name == 'pull_request' && github.base_ref == 'main'"
+        )
+        assert "push" not in condition.group(1)
+
+    def test_release_gate_checks_out_history_and_runs_release_check(self) -> None:
+        job = _ci_jobs()["release-gate"]
+        assert "fetch-depth: 0" in job
+        assert "run: make release-check RELEASE_BASE=origin/main" in job
+        assert "VERSION_MODE" not in job
+
+    def test_the_command_release_gate_runs_is_release_mode_end_to_end(
         self, tmp_path: Path
     ) -> None:
-        """End to end: the mode CI exports, fed to the real gate, rejects a no-bump."""
+        """`make release-check` really is the fail-closed gate, not a lenient one."""
         repo = _repo_with_two_plugins(tmp_path)
         _plugin(repo, "mentor", "0.1.0", "# v2\n")
         commit(repo, "change without bump")
-        env = _ci_version_env("main")
+        recipe = re.search(
+            r"^release-check:\n\t(.+)\n", (REPO_ROOT / "Makefile").read_text(), re.MULTILINE
+        )
+        assert recipe and "--mode release" in recipe.group(1)
 
         assert (
             check_version_bumps.main(
-                ["--repo", str(repo), "--base", "main", "--mode", env["VERSION_MODE"]]
+                ["--repo", str(repo), "--base", "main", "--mode", "release"]
             )
             == 1
-        )
-        dev_env = _ci_version_env("dev")
-        assert (
-            check_version_bumps.main(
-                ["--repo", str(repo), "--base", "main", "--mode", dev_env["VERSION_MODE"]]
-            )
-            == 0
         )

@@ -174,9 +174,18 @@ is bumped once per promotion, not once per PR.
   computed over the whole `dev..main` delta (below), so one bump covers every PR
   since the last release. Running it twice changes nothing.
 - **The PR into `main` (the promotion) is gated in `release` mode** — the only
-  fail-closed point: missing bump, regression, malformed version, and level.
-  CI selects it from the PR's base branch. `make release-check` runs exactly
-  that gate locally against `RELEASE_BASE`, independent of `VERSION_BASE`.
+  fail-closed point: missing bump, regression, malformed version, and level. It
+  is its own CI job, `release-gate`, which runs `make release-check` and exists
+  only on pull requests whose base is `main`. Job `test` stays in integration
+  mode for every base: the push-to-dev run of `test` shares dev's tip SHA with
+  the promotion PR and is lenient by design, so a strict `test` would sit beside
+  a green lenient one under the same name. Promote with
+  `promote <pr> --require release-gate` (github-pr-land), so the watch waits for
+  the release gate; a name that never reports holds it to its timeout, which is
+  the intended fail-closed behaviour. Adding `release-gate` to `main`'s required
+  status checks is recommended; that is the owner's settings change.
+  `make release-check` runs the same gate locally against `RELEASE_BASE`,
+  independent of `VERSION_BASE`.
 - `make verify-versions` takes `VERSION_BASE` (the diff base) and `VERSION_MODE`
   (`integration` default, or `release`). A bare script call with no `--mode` is
   `release` (fail closed); the Makefile and CI always pass it explicitly.
