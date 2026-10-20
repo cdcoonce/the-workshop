@@ -77,8 +77,8 @@
       "label": "unresolvable base leaks a LookupError",
       "file": "../scripts/bump_version.py",
       "oracle": "real",
-      "find": "raise BumpError(str(error)) from error",
-      "replace": "raise"
+      "find": "base_sha = gate.resolve_base(repo, base)\n    except LookupError as error:\n        raise BumpError(str(error)) from error",
+      "replace": "base_sha = gate.resolve_base(repo, base)\n    except LookupError as error:\n        raise"
     },
     {
       "label": "CLI exits 0 on refusal",
