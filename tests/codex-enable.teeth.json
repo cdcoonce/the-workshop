@@ -1,0 +1,77 @@
+{
+  "runner": "pytest",
+  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "-x", "tests/test_codex_enable.py"],
+  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_codex_enable.py"],
+  "mutants": [
+    {
+      "label": "renders the wrong shape instead of render_codex_hooks [predicted: test_hooks_json_is_byte_identical_to_wiring_gen_render]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "wiring_gen.render_codex_hooks(entries)",
+      "replace": "wiring_gen.render_claude_settings_hooks(entries)"
+    },
+    {
+      "label": "spec wires protect-files.py (payload-dependent hook) [predicted: test_only_the_codex_functional_hook_is_wired]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex-hooks-spec.json",
+      "oracle": "real",
+      "find": "\"script\": \"verify-tests-before-stop.py\"",
+      "replace": "\"script\": \"protect-files.py\""
+    },
+    {
+      "label": "drops the _git_baseline.py sibling from the vendored runtime [predicted: test_runtime_is_vendored_byte_identical_and_command_resolves]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "_SUPPORT_MODULES = (\"_git_baseline.py\",)",
+      "replace": "_SUPPORT_MODULES = ()"
+    },
+    {
+      "label": "identical file no longer recognised, rerun not idempotent [predicted: test_rerun_is_idempotent]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "elif dest.is_file() and dest.read_bytes() == body:",
+      "replace": "elif False:"
+    },
+    {
+      "label": "overwrites a hand-authored file without --force [predicted: test_refuses_hand_authored_hooks_json_without_force]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if differing and not args.force:",
+      "replace": "if False:"
+    },
+    {
+      "label": "refusal ignores runtime-file conflicts (half-install) [predicted: test_refuses_conflicting_runtime_file_and_writes_nothing]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "differing = [d for d, s in status.items() if s == \"differs\"]",
+      "replace": "differing = [d for d, s in status.items() if s == \"differs\" and d.name == \"hooks.json\"]"
+    },
+    {
+      "label": "--force is ignored, always refuses [predicted: test_force_overwrites_hand_authored_file]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if differing and not args.force:",
+      "replace": "if differing:"
+    },
+    {
+      "label": "trust steps not printed [predicted: test_trust_steps_printed_on_success_only]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "    print(TRUST_STEPS.format(target=target))",
+      "replace": "    pass"
+    },
+    {
+      "label": "missing target directory accepted [predicted: test_missing_target_is_an_error]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if not target.is_dir():",
+      "replace": "if False:"
+    },
+    {
+      "label": "SKILL.md drops the hook classification table [predicted: test_skill_documents_the_classification]",
+      "file": "../plugins/workbench/skills/codex-enable/SKILL.md",
+      "oracle": "real",
+      "find": "| `protect-files.py` | no |",
+      "replace": "| `protect-file.py` | no |"
+    }
+  ]
+}

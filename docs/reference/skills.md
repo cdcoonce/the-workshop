@@ -17,6 +17,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
 | `/build-review-land` | `workbench` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | `workbench` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
+| `/codex-enable` | `workbench` | Vendors a Codex-functional .codex/hooks.json into a target repo so a Codex teammate gets workbench's hook protections. |
 | `/commit` | `workbench` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
 | `/daa-code-review` | `workbench` | AI-powered code quality review for Python, Markdown, and Mermaid. |
@@ -144,6 +145,12 @@ Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable 
 *`workbench` plugin*
 
 Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. Use when building charts with Recharts, Nivo, or similar libraries. Not container chrome — use react-ui-ux.
+
+### `/codex-enable`
+
+*`workbench` plugin*
+
+Vendors a Codex-functional .codex/hooks.json into a target repo so a Codex teammate gets workbench's hook protections. Use when someone asks to enable workbench hooks on Codex or to set up .codex/hooks.json in a repo.
 
 ### `/commit`
 

@@ -275,6 +275,13 @@ flat-vs-nested in-session control and a trust-layer isolation):
   matched, so keep matchers dual-convention.
 - Headless `codex exec` runs hooks the same as above, subject to the same
   trust gates. A SessionStart entry fires with or without a `matcher`.
+- **Delivery for non-vault repos: the `codex-enable` skill (#486).** It wraps
+  `render_codex_hooks` (read-only) over a skill-owned spec and vendors a flat
+  `.codex/hooks.json` plus `.claude/scripts/` runtime. The spec holds only
+  payload-less-functional hooks: today `verify-tests-before-stop.py`. Hooks
+  that need a stdin payload (`protect-files.py`, `verify-subagent-evidence.py`)
+  or an event Codex lacks (`ConfigChange`, `SessionEnd`) are excluded. It
+  prints the two trust steps above because both gate silently.
 
 ### Skills
 
