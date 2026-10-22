@@ -109,6 +109,13 @@
       "oracle": "real",
       "find": ".vault/.plugin-session-track\n",
       "replace": ""
+    },
+    {
+      "label": "#1280: shared record read first again [predicted: test_a_stale_shared_record_from_another_platform_does_not_decide_the_version_floor]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ \"${#crumbs[@]}\" -eq 0 ] && [ -f \"$STATE\" ] && crumbs+=(\"$STATE\")",
+      "replace": "[ -f \"$STATE\" ] && crumbs=(\"$STATE\" \"${crumbs[@]}\")"
     }
   ]
 }
