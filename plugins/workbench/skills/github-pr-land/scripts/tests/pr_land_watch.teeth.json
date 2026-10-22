@@ -210,8 +210,8 @@
       "label": "the check-run line drops the suite id",
       "file": "../pr_land.py",
       "oracle": "double",
-      "find": "lines.append(f\"{name} suite={run['check_suite'].get('id')} run={run['id']} {shown}\")",
-      "replace": "lines.append(f\"{name} run={run['id']} {shown}\")"
+      "find": "line = f\"{name} suite={run['check_suite'].get('id')} run={run['id']} {shown}\"",
+      "replace": "line = f\"{name} run={run['id']} {shown}\""
     },
     {
       "label": "the status line drops the status id",
@@ -254,6 +254,48 @@
       "oracle": "real",
       "find": "                    stderr=result.stderr + append_stderr,\n",
       "replace": "                    stderr=result.stderr,\n"
+    },
+    {
+      "label": "a skipped-only name counts as green (#1283 exemption applied unconditionally)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            ran = status is not None or any(not _skipped(run) for run in accepted)\n",
+      "replace": "            ran = True\n"
+    },
+    {
+      "label": "a skipped run beside a green suite still vetoes it (#1283 unfixed)",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "            ran = status is not None or any(not _skipped(run) for run in accepted)\n",
+      "replace": "            ran = status is not None\n"
+    },
+    {
+      "label": "a skipped-only name is decided at once instead of pending",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                    if not ran:\n                        verdicts.append(None)\n",
+      "replace": "                    if not ran:\n                        verdicts.append(INDETERMINATE)\n"
+    },
+    {
+      "label": "a neutral run is ignored like a skipped one",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "    return run.get(\"status\") == \"completed\" and run.get(\"conclusion\") == \"skipped\"\n",
+      "replace": "    return run.get(\"status\") == \"completed\" and run.get(\"conclusion\") in {\"skipped\", \"neutral\"}\n"
+    },
+    {
+      "label": "a skipped run's id is returned as accepted evidence",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                    if not ran:\n                        verdicts.append(None)\n                    continue\n",
+      "replace": "                    run_ids.append(run[\"id\"])\n                    if not ran:\n                        verdicts.append(None)\n                    continue\n"
+    },
+    {
+      "label": "a skipped run stops reading the name's other suites",
+      "file": "../pr_land.py",
+      "oracle": "double",
+      "find": "                        verdicts.append(None)\n                    continue\n",
+      "replace": "                        verdicts.append(None)\n                    break\n"
     }
   ]
 }

@@ -194,6 +194,68 @@ def test_terminal_outcomes_map_to_exit_codes(world: World, kind: str, outcome: s
     assert watch(world, require=["test"]).code == expected
 
 
+# --- skipped suites (#1283) ----------------------------------------------------
+
+
+def test_skipped_suite_beside_a_green_suite_is_green(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against #1283: a push suite whose ``if:`` skipped the job must not veto the PR suite that ran it green.
+
+    The promotion head carries both runs of ``release-gate``; only the green one
+    is evidence, so only its id is returned.
+    """
+    script_ci(
+        world,
+        [check_run(81, name="release-gate", suite=1, conclusion="skipped"), check_run(82, name="release-gate", suite=2)],
+    )
+    result = watch(world, require=["release-gate"])
+    assert result.code == GREEN
+    assert result.run_ids == [82]
+    out = capsys.readouterr().out
+    assert "release-gate suite=2 run=82 success" in out
+    assert "release-gate suite=1 run=81 skipped (ignored" in out
+
+
+def test_skipped_suite_does_not_hide_a_red_suite(world: World) -> None:
+    """Guards against dropping skipped runs by dropping every run but one: a failed suite beside a skip stays red."""
+    script_ci(
+        world,
+        [check_run(83, name="release-gate", suite=1, conclusion="skipped"), check_run(84, name="release-gate", suite=2, conclusion="failure")],
+    )
+    assert watch(world, require=["release-gate"]).code == RED
+
+
+def test_skipped_only_gate_waits_then_refuses(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Guards against a skipped-only gate counting as green: with no suite that ran it, the watch pends and exits 2."""
+    script_ci(world, [check_run(85, name="release-gate", suite=1, conclusion="skipped")])
+    result = watch(world, require=["release-gate"])
+    assert result.code == INDETERMINATE
+    assert result.run_ids == []
+    assert world.clock.sleeps, "a skipped-only gate must be polled again, not decided"
+    assert world.clock.now >= 1000.0 + 60
+    out = capsys.readouterr().out
+    assert "release-gate suite=1 run=85 skipped (no suite ran it yet)" in out
+
+
+def test_skipped_suite_waits_for_the_suite_that_runs_the_gate(world: World) -> None:
+    """Guards against refusing at once when the push suite's skip is read before the PR suite registers."""
+    script_ci(
+        world,
+        [check_run(86, name="release-gate", suite=1, conclusion="skipped")],
+        [check_run(86, name="release-gate", suite=1, conclusion="skipped"), check_run(87, name="release-gate", suite=2, status="queued")],
+        [check_run(86, name="release-gate", suite=1, conclusion="skipped"), check_run(87, name="release-gate", suite=2)],
+    )
+    result = watch(world, require=["release-gate"])
+    assert result.code == GREEN
+    assert result.run_ids == [87]
+    assert world.clock.sleeps == [15, 15]
+
+
+def test_neutral_suite_beside_a_green_suite_stays_indeterminate(world: World) -> None:
+    """Guards against widening the #1283 exemption: only ``skipped`` is ignored, a ``neutral`` suite still holds."""
+    script_ci(world, [check_run(88, suite=1, conclusion="neutral"), check_run(89, suite=2)])
+    assert watch(world, require=["test"]).code == INDETERMINATE
+
+
 def test_unrecognized_conclusion_is_indeterminate(world: World) -> None:
     """Guards against an unknown conclusion GitHub may add later being read as a pass."""
     script_ci(world, [check_run(71, conclusion="brand_new_conclusion")])
