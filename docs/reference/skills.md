@@ -40,6 +40,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/gitlab-mr-create` | `workbench` | Create GitLab merge requests with `glab` — into `dev` a conventional-commit title (`HEAD` subject or a title file), into `staging` and `main` a title file; descriptions keep real newlines; both read back. |
 | `/gitlab-promotion-flow` | `workbench` | Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, ingestion). |
 | `/grill-me` | `workbench` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. |
+| `/hold-scan` | `workbench` | Checks whether anyone recorded that a PR or MR must not land: thread text, afk:hold labels, and an optional notes vault. |
 | `/improve-skill` | `workshop-maintainer` | Use when user says "improve skill", "benchmark skill", "make skill better", or invokes /improve-skill to raise a skill's benchmark pass rate before merging a PR. |
 | `/live-view-simulate-diff` | `workbench` | Simulates a proposed change to a live Snowflake view read-only and diffs it against the deployed output with float tolerance. |
 | `/measure-before-landing` | `workbench` | Run a two-arm comparison that leaves a committed ledger: prereg enforced, fixture fingerprinted, arms bracketed A-B-A, exact sign test and MDE reported. |
@@ -283,6 +284,12 @@ Integration and promotion policy for Clearway GitLab data repos (Dagster, dbt, i
 *`workbench` plugin*
 
 Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+
+### `/hold-scan`
+
+*`workbench` plugin*
+
+Checks whether anyone recorded that a PR or MR must not land: thread text, afk:hold labels, and an optional notes vault. Use before merging any PR or MR, or before trusting a "ready to merge" brief. Read-only.
 
 ### `/improve-skill`
 

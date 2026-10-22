@@ -1,0 +1,266 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/hold-scan/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/hold-scan/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "pagination: stop after page 1",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            if len(data) < PAGE_SIZE:\n                return items",
+      "replace": "            if True:\n                return items"
+    },
+    {
+      "label": "thread pattern loses `unmerged`",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "|unmerged\", re.I)",
+      "replace": "\", re.I)"
+    },
+    {
+      "label": "thread pattern gains `blocked`",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "|unmerged\", re.I)",
+      "replace": "|unmerged|blocked\", re.I)"
+    },
+    {
+      "label": "thread pattern is case-sensitive",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "unmerged\", re.I)\nVAULT",
+      "replace": "unmerged\")\nVAULT"
+    },
+    {
+      "label": "thread quote is the whole body",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            return line.strip()",
+      "replace": "            return body"
+    },
+    {
+      "label": "acknowledgement comment also counts as a hit",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            scan.acks.append({\"url_or_path\": url_of(item), \"timestamp\": ts})\n            continue",
+      "replace": "            scan.acks.append({\"url_or_path\": url_of(item), \"timestamp\": ts})"
+    },
+    {
+      "label": "oldest acknowledgement reported instead of newest",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "ack = max(scan.acks",
+      "replace": "ack = min(scan.acks"
+    },
+    {
+      "label": "acknowledgement may sit anywhere in the body",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    return first.lower().startswith(ACK_PREFIX)",
+      "replace": "    return ACK_PREFIX in (body or \"\").lower()"
+    },
+    {
+      "label": "reviews are not scanned",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        _scan_texts(scan, reviews, \"body\", \"submitted_at\", html, False)",
+      "replace": "        pass"
+    },
+    {
+      "label": "inline review comments are not scanned",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        _scan_texts(scan, inline, \"body\", \"created_at\", html, False)",
+      "replace": "        pass"
+    },
+    {
+      "label": "requires:human counts as a hold label",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if HOLD_LABEL in names:",
+      "replace": "        if HOLD_LABEL in names or \"requires:human\" in names:"
+    },
+    {
+      "label": "Depends on targets are not followed",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            for dep in _depends_on(issue.get(\"body\") or \"\"):\n                numbers.append(dep)\n                _gh_issue",
+      "replace": "            for dep in []:\n                numbers.append(dep)\n                _gh_issue"
+    },
+    {
+      "label": "Depends on matches anywhere in a line",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "r\"^\\s*(?:[-*]\\s*)?(?:\\*\\*)?depends on\\b(.*)$\"",
+      "replace": "r\"^.*?depends on\\b(.*)$\""
+    },
+    {
+      "label": "stale threshold shortened to 12 days",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "STALE_AFTER = timedelta(days=14)",
+      "replace": "STALE_AFTER = timedelta(days=12)"
+    },
+    {
+      "label": "stale ignores PR state",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    if ts is None or (state or \"\").lower() not in (\"open\", \"opened\"):",
+      "replace": "    if ts is None:"
+    },
+    {
+      "label": "failed call no longer marks the scan failed",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        self.failed = True\n        self.note(name, \"failed\"",
+      "replace": "        self.note(name, \"failed\""
+    },
+    {
+      "label": "a failure outranks a hit",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    if scan.hits:\n        verdict = HOLD_FOUND\n    elif scan.failed:\n        verdict = SCAN_ERROR",
+      "replace": "    if scan.failed:\n        verdict = SCAN_ERROR\n    elif scan.hits:\n        verdict = HOLD_FOUND"
+    },
+    {
+      "label": "config vault_root accepted without vault.json",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if (root_path / \".vault\" / \"vault.json\").is_file():\n            scan.note(\"vault\", \"read\", f\"found by config",
+      "replace": "        if True:\n            scan.note(\"vault\", \"read\", f\"found by config"
+    },
+    {
+      "label": "walk-up skipped; config only",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    found = _walk_up(os.environ.get(\"CLAUDE_PROJECT_DIR\") or os.environ.get(\"PWD\") or os.getcwd())",
+      "replace": "    found = None"
+    },
+    {
+      "label": "PWD fallback dropped",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "os.environ.get(\"CLAUDE_PROJECT_DIR\") or os.environ.get(\"PWD\") or os.getcwd())",
+      "replace": "os.environ.get(\"CLAUDE_PROJECT_DIR\") or os.getcwd())"
+    },
+    {
+      "label": "description frontmatter no longer owns a note",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "(repo|description):",
+      "replace": "(repo):"
+    },
+    {
+      "label": "Current Status scope runs to end of file",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "(\"## \",)):\n            check(path, block)",
+      "replace": "(\"## Zz\",)):\n            check(path, block)"
+    },
+    {
+      "label": "hold word not required for a vault hit",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            if VAULT_HOLD_WORDS.search(para) and _has_number",
+      "replace": "            if _has_number"
+    },
+    {
+      "label": "number match is a digit prefix (#23 matches #236)",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if int(m.group(1)) not in numbers:",
+      "replace": "        if not any(m.group(1).startswith(str(n)) for n in numbers):"
+    },
+    {
+      "label": "foreign repo prefix counts",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "                return True\n            continue\n        before",
+      "replace": "                return True\n        before"
+    },
+    {
+      "label": "aliases ignored",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    prefixes = {name.lower(), *(a.lower() for a in aliases)}",
+      "replace": "    prefixes = {name.lower()}"
+    },
+    {
+      "label": "every Key Decisions entry is in scope",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    mine = [e for e in entries if word.search(e)]",
+      "replace": "    mine = entries"
+    },
+    {
+      "label": "Key Decisions entry ignores the ## stop heading",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "re.compile(r\"^### \"), (\"### \", \"## \"))",
+      "replace": "re.compile(r\"^### \"), (\"### \",))"
+    },
+    {
+      "label": "list items split into separate paragraphs",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "re.split(r\"\\n\\s*\\n\", block)",
+      "replace": "re.split(r\"\\n\", block)"
+    },
+    {
+      "label": "vault quote not cut",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "scan.hit(\"vault\", str(path), para[:QUOTE_LIMIT], None)",
+      "replace": "scan.hit(\"vault\", str(path), para, None)"
+    },
+    {
+      "label": "slash/dash before # is accepted",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if before not in (\"-\", \"/\"):",
+      "replace": "        if True:"
+    },
+    {
+      "label": "GitLab system notes are scanned",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        notes = [n for n in notes if not n.get(\"system\")]",
+      "replace": "        notes = list(notes)"
+    },
+    {
+      "label": "GitLab project slug uses the full path as NAME",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    name = slug.rsplit(\"/\", 1)[-1]",
+      "replace": "    name = slug"
+    },
+    {
+      "label": "hold words match inside longer words (household)",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "VAULT_HOLD_WORDS = re.compile(r\"\\b(held|hold|holding|frozen|freeze|reserv\\w*|do not merge|revert\\w*)\\b\", re.I)",
+      "replace": "VAULT_HOLD_WORDS = re.compile(r\"(held|hold|holding|frozen|freeze|reserv\\w*|do not merge|revert\\w*)\", re.I)"
+    }
+  ]
+}
