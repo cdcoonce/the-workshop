@@ -21,6 +21,12 @@ or, worse, is read as green.
 | `1`  | red — `failure`, `cancelled`, `timed_out`, `action_required`, `startup_failure`, or status `failure`/`error` |
 | `2`  | indeterminate — timeout, `neutral`/`skipped`/`stale`, unknown outcome, no required checks, or a refusal      |
 
+A `skipped` run is no evidence either way: it is ignored when another suite (or a
+status) reports the same name, and a name with only skipped runs pends to the
+timeout. One workflow triggered on both `push` and `pull_request` puts two suites
+on the same SHA, and a job whose `if:` matches only one event reports `skipped`
+in the other (#1283).
+
 Only `0` means go. Never read `2` as "probably fine".
 
 ## Shared conventions
@@ -121,6 +127,8 @@ reports holds the watch to its timeout. A red from a flake (a runner DNS
 failure, say) needs the job re-run and `promote` run again; the watch reads
 each name's latest run.
 
-Name a gate that only reports on the promotion PR (never on a push) with
-`--require`, so a push-event run on the same SHA cannot satisfy the watch:
-the-workshop uses `promote <pr> --require release-gate`.
+Name a gate that only runs on the promotion PR with `--require` (or make it
+required on the release branch). Its push-event suite on the same SHA reports
+the job `skipped`, which the watch ignores beside the PR suite's verdict and
+never counts as green on its own: the-workshop uses
+`promote <pr> --require release-gate`.

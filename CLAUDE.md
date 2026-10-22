@@ -182,7 +182,9 @@ is bumped once per promotion, not once per PR.
   a green lenient one under the same name. Promote with
   `promote <pr> --require release-gate` (github-pr-land), so the watch waits for
   the release gate; a name that never reports holds it to its timeout, which is
-  the intended fail-closed behaviour. Adding `release-gate` to `main`'s required
+  the intended fail-closed behaviour. The push run on the same SHA reports the
+  job `skipped`; the watch ignores that suite beside the PR suite's verdict and
+  pends on a skip alone (#1283). Adding `release-gate` to `main`'s required
   status checks is recommended; that is the owner's settings change.
   `make release-check` runs the same gate locally against `RELEASE_BASE`,
   independent of `VERSION_BASE`.

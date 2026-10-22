@@ -14,7 +14,8 @@ Subcommands:
   ``main`` to that literal SHA, exiting 2 when the push bypassed protection.
 
 Exit contract: 0 green, 1 red, 2 indeterminate (timeout, refusal, neutral or
-unknown outcome, unreadable input). Must run inside a clone of the PR's repo;
+unknown outcome, unreadable input). A ``skipped`` run is ignored when another
+suite or a status reports the same name, and pends when nothing else does. Must run inside a clone of the PR's repo;
 every ``gh`` call is pinned to that repo.
 
 Stdlib only, Python 3.10+.
@@ -294,6 +295,15 @@ def _run_verdict(run: dict) -> int | None:
     return INDETERMINATE
 
 
+def _skipped(run: dict) -> bool:
+    """Whether *run* finished ``skipped``: its job never ran in that suite (an ``if:`` was false).
+
+    A skip is no evidence either way. One suite's skip is ignored when another
+    suite or a status reports the name; a name with nothing but skips pends.
+    """
+    return run.get("status") == "completed" and run.get("conclusion") == "skipped"
+
+
 def _status_verdict(status: dict) -> int | None:
     state = status.get("state")
     if state in STATUS_PENDING:
@@ -372,9 +382,18 @@ def watch_sha(
             if not accepted and status is None:
                 lines.append(f"{name} no check runs or statuses yet")
                 verdicts.append(None)
+            ran = status is not None or any(not _skipped(run) for run in accepted)
             for run in accepted:
                 shown = run.get("conclusion") if run.get("status") == "completed" else run.get("status")
-                lines.append(f"{name} suite={run['check_suite'].get('id')} run={run['id']} {shown}")
+                line = f"{name} suite={run['check_suite'].get('id')} run={run['id']} {shown}"
+                if _skipped(run):
+                    # The same workflow on a push and on a PR shares the SHA; a job gated by
+                    # `if:` to one event reports skipped in the other's suite (#1283).
+                    lines.append(f"{line} (ignored: another suite reports it)" if ran else f"{line} (no suite ran it yet)")
+                    if not ran:
+                        verdicts.append(None)
+                    continue
+                lines.append(line)
                 run_ids.append(run["id"])
                 verdicts.append(_run_verdict(run))
             if status is not None:
