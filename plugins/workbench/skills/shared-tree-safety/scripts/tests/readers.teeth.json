@@ -39,15 +39,15 @@
       "label": "stop excluding the script's own pid",
       "file": "../readers.py",
       "oracle": "real",
-      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
-      "replace": "        if pid != os.getpid():\n            excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n"
+      "find": "        ancestors.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        if pid != os.getpid():\n            ancestors.add(pid)\n        pid = parent_of.get(pid, 0)\n"
     },
     {
       "label": "stop excluding ancestor pids",
       "file": "../readers.py",
       "oracle": "real",
-      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
-      "replace": "        excluded.add(pid)\n        pid = 0\n"
+      "find": "        ancestors.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        ancestors.add(pid)\n        pid = 0\n"
     },
     {
       "label": "scan only `projects.<path>.mcpServers`",
@@ -130,8 +130,8 @@
       "label": "exclude only own pid and direct parent",
       "file": "../readers.py",
       "oracle": "real",
-      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
-      "replace": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0) if pid == os.getpid() else 0\n"
+      "find": "        ancestors.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        ancestors.add(pid)\n        pid = parent_of.get(pid, 0) if pid == os.getpid() else 0\n"
     },
     {
       "label": "match launchd `ProgramArguments` but not `WorkingDirectory`",
@@ -202,6 +202,20 @@
       "oracle": "real",
       "find": "if pid <= 0 or pid in ignore or not _pid_is_live(pid):",
       "replace": "if pid <= 0 or pid in ignore or pid in (os.getpid(), os.getppid()) or not _pid_is_live(pid):"
+    },
+    {
+      "label": "drop the isascii guard on holder marker names",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if not marker.name.isascii() or not marker.name.isdigit():",
+      "replace": "if not marker.name.isdigit():"
+    },
+    {
+      "label": "stop the ancestor walk at an --ignore-pid ancestor",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    while pid and pid not in ancestors:",
+      "replace": "    while pid and pid not in ancestors and pid not in ignore:"
     }
   ]
 }

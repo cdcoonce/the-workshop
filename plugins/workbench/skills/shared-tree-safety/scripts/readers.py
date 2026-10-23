@@ -70,11 +70,12 @@ def _process_rows() -> list[dict]:
 def live_processes(needles: list[str], ignore: set[int]) -> list[dict]:
     rows = _process_rows()
     parent_of = {row["pid"]: row["ppid"] for row in rows}
-    excluded = set(ignore)
+    ancestors: set[int] = set()
     pid = os.getpid()
-    while pid and pid not in excluded:
-        excluded.add(pid)
+    while pid and pid not in ancestors:
+        ancestors.add(pid)
         pid = parent_of.get(pid, 0)
+    excluded = ancestors | ignore
     own = os.getpid()
     return [
         row

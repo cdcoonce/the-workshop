@@ -443,6 +443,33 @@ def test_holders_liveness_names_pid_one_own_pid_and_ancestor(
     assert code == 3 and obj["summary"]["holders"] == 1
 
 
+def test_non_ascii_digit_marker_name_is_ignored_not_a_crash(
+    tmp_path, home, capsys
+) -> None:
+    """Defect: a marker named with a non-ASCII digit crashes int() (isascii guard)."""
+    cache = tmp_path / "cache"
+    make_marker(cache, "\u00b2")
+    code, obj = call([needle_token(), "--holders", str(cache)], capsys, home)
+    assert code == 0 and obj["summary"]["holders"] == 0
+
+
+def test_ancestors_above_an_ignored_pid_are_still_excluded(tmp_path) -> None:
+    """Defect: the ancestor walk stops at an --ignore-pid ancestor (the claude pid)."""
+    import shlex
+
+    token = needle_token()
+    exe = sys.executable
+    spawn = "import subprocess,sys; sys.exit(subprocess.run(sys.argv[1:]).returncode)"
+    inner = (
+        f"{shlex.quote(exe)} {shlex.quote(str(SCRIPTS / 'readers.py'))} {token} "
+        f"--json --home {shlex.quote(str(tmp_path))} --ignore-pid $$; r=$?; exit $r"
+    )
+    argv = [exe, "-c", spawn, exe, "-c", spawn, "sh", "-c", inner]
+    result = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["summary"]["live"] == 0
+
+
 def test_holder_marker_for_live_child_counts(children, tmp_path, home, capsys) -> None:
     """Defect: a live child's marker is not counted as a holder."""
     child, _, needle = long_child(children, tmp_path)
@@ -593,6 +620,7 @@ def test_skill_section_carries_the_required_content() -> None:
         LOOKUP,
         'uv run --no-project --python ">=3.11" python "<skill base directory>/scripts/readers.py"',
         "Read the listed holders",
+        "does not mean holders are clear",
     ):
         assert literal in body, literal
     for word in (

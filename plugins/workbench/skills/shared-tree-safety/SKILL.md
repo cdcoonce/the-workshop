@@ -44,6 +44,8 @@ When to pass the flags:
   p=$$; while [ "$p" -gt 1 ]; do c=$(ps -o comm= -p "$p"); case "$c" in claude|*/claude) echo "$p"; break;; esac; p=$(ps -o ppid= -p "$p" | tr -d ' '); done
   ```
 
+  An empty result means the pid was not found (for example `claude` running as `node` on Linux); it does not mean holders are clear. Look the pid up another way, or read the listed holders and judge each.
+
 The `Live check:` and `Not checked:` form is guidance local to this skill.
 
 ## Iron rules
