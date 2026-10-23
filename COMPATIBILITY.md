@@ -57,6 +57,7 @@ Every event this repo ships a hook for, with the mechanism it depends on:
 | ------------------ | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | `PreToolUse`       | `protect-files.py`                            | exit code 2 to deny                                                               |
 | `PreToolUse`       | `branch-policy.py`                            | exit code 2 to deny; `Bash` tool matcher                                          |
+| `PreToolUse`       | `refuse-held-merge.py`                        | exit code 2 to deny; `Bash\|bash\|shell` tool matcher                              |
 | `PostToolUse`      | `post-edit-lint.py`                           | side effect only                                                                  |
 | `UserPromptSubmit` | `suggest-handoff-on-context.py`               | `systemMessage`                                                                   |
 | `Stop`             | `verify-tests-before-stop.py`                 | exit code 2 to block                                                              |
@@ -264,7 +265,8 @@ flat-vs-nested in-session control and a trust-layer isolation):
   itself supplies. Hooks that parse a stdin payload (tool name, file path)
   fire but learn nothing — on Codex a hook must derive its facts itself
   (e.g. from `git status`). Exit-code blocking semantics are untestable
-  without a payload-driven decision and remain unverified.
+  without a payload-driven decision and remain unverified. `refuse-held-merge.py`
+  is inert on Codex for this reason: with no `tool_input.command` it exits 0.
 - **cwd = the workspace root**, so relative hook commands and the
   `"${CLAUDE_PROJECT_DIR:-.}"` fallback pattern both resolve correctly.
 - Tool-ID matcher names differ from Claude Code's (`edit`, `write`,
@@ -424,6 +426,7 @@ What that means for the hooks this repo ships:
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `protect-files.py` (PreToolUse, exit 2)                      | works                                                                                                                                  |
 | `branch-policy.py` (PreToolUse on Bash, exit 2)              | exit 2 works; the `Bash` tool-name match on Cortex is unconfirmed                                                                      |
+| `refuse-held-merge.py` (PreToolUse on Bash, exit 2)          | exit 2 works; the `bash` tool ID in its matcher is an unverified snake_case guess                                                       |
 | `post-edit-lint.py` (PostToolUse)                            | works                                                                                                                                  |
 | `suggest-handoff-on-context.py` (UserPromptSubmit)           | event exists; `systemMessage` support unconfirmed                                                                                      |
 | `verify-tests-before-stop.py` (Stop, exit 2)                 | works                                                                                                                                  |

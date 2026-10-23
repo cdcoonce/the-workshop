@@ -64,6 +64,15 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh protect-files.py"
           }
         ]
+      },
+      {
+        "matcher": "Bash|bash|shell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh refuse-held-merge.py"
+          }
+        ]
       }
     ],
     "SessionEnd": [

@@ -126,6 +126,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `inject-skill-router.py` | `SessionStart` | SessionStart hook: inject the skill router and preset conventions as additionalContext. |
 | `post-edit-lint.py` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
 | `protect-files.py` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
+| `refuse-held-merge.py` | `PreToolUse` | PreToolUse hook (Bash): refuse `gh pr merge` / `glab mr merge` on a recorded hold. |
 | `remind-skill-announce.py` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `UserPromptSubmit` | UserPromptSubmit hook: tell the user (not the agent) once the session's context grows large. |
