@@ -109,6 +109,20 @@
       "oracle": "real",
       "find": ".vault/.plugin-session-track\n",
       "replace": ""
+    },
+    {
+      "label": "#1280: shared record read first again [predicted: test_a_stale_shared_record_from_another_platform_does_not_decide_the_version_floor]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ \"${#crumbs[@]}\" -eq 0 ] && [ -f \"$STATE\" ] && crumbs+=(\"$STATE\")",
+      "replace": "[ -f \"$STATE\" ] && crumbs=(\"$STATE\" \"${crumbs[@]}\")"
+    },
+    {
+      "label": "#1280: shared record appended after the per-platform ones [predicted: test_a_shared_record_is_ignored_entirely_while_a_platform_record_exists]",
+      "file": "../plugins/workbench/machinery/scaffold/vault/check-plugin.sh",
+      "oracle": "real",
+      "find": "[ \"${#crumbs[@]}\" -eq 0 ] && [ -f \"$STATE\" ] && crumbs+=(\"$STATE\")",
+      "replace": "[ -f \"$STATE\" ] && crumbs+=(\"$STATE\")"
     }
   ]
 }
