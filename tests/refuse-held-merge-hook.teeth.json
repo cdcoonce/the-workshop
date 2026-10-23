@@ -283,6 +283,20 @@
       "oracle": "real",
       "find": "SCAN_TIMEOUT = 45",
       "replace": "SCAN_TIMEOUT = 450"
+    },
+    {
+      "label": "timestamps compared as strings",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if hit_ts is not None and hit_ts < ack_ts:",
+      "replace": "            if h.get(\"timestamp\") and str(h[\"timestamp\"]) < str(acknowledgement[\"timestamp\"]):"
+    },
+    {
+      "label": "scanner exit code trusted before stdout JSON",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    try:\n        out = json.loads(proc.stdout)",
+      "replace": "    if proc.returncode in (1, 2):\n        raise Refuse('scanner failed')\n    try:\n        out = json.loads(proc.stdout)"
     }
   ]
 }

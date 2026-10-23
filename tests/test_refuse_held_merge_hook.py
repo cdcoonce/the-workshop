@@ -374,3 +374,30 @@ def test_plugin_root_derived_from_own_path(rig, tmp_path):
     spec.loader.exec_module(mod)
     assert mod.default_plugin_root() == REPO_ROOT / "plugins" / "workbench"
     assert (mod.default_plugin_root() / "skills" / "hold-scan" / "scripts" / "hold_scan.py").is_file()
+
+
+# ---- carried forward from the #1017 review ----------------------------------
+
+
+def test_timestamps_compare_as_datetimes_not_strings(rig):
+    """GitLab adds milliseconds: '10:00:00.500Z' sorts after '10:00:00Z' as text but is later as time."""
+    hold = hit("thread", "2026-09-01T10:00:00.500Z")
+    assert rig.run("gh pr merge 1 -R a/b", found(hold, acknowledgement=ack("2026-09-01T10:00:01Z"))).returncode == 0
+    assert rig.run("gh pr merge 1 -R a/b", found(hold, acknowledgement=ack("2026-09-01T10:00:00Z"))).returncode == 2
+    assert rig.run("gh pr merge 1 -R a/b", found(hit("thread", "2026-09-01T10:00:00Z"),
+                                                 acknowledgement=ack("2026-09-01T10:00:00.500Z"))).returncode == 0
+
+
+def test_offset_timestamps_compare_as_instants(rig):
+    hold = hit("thread", "2026-09-01T12:00:00+02:00")  # 10:00 UTC
+    assert rig.run("gh pr merge 1 -R a/b", found(hold, acknowledgement=ack("2026-09-01T10:30:00Z"))).returncode == 0
+    assert rig.run("gh pr merge 1 -R a/b", found(hold, acknowledgement=ack("2026-09-01T09:30:00Z"))).returncode == 2
+
+
+@pytest.mark.parametrize("exit_code", [0, 1, 2])
+def test_stdout_json_is_parsed_before_the_exit_code(rig, tmp_path, exit_code):
+    """HOLD-FOUND exits 1 and SCAN-ERROR exits 2 yet both print JSON: the verdict, not the rc, decides."""
+    script = tmp_path / "plugin" / "skills" / "hold-scan" / "scripts" / "hold_scan.py"
+    script.write_text(STUB + f"\nsys.exit({exit_code})\n")
+    assert rig.run("gh pr merge 1 -R a/b", CLEAN).returncode == 0
+    assert rig.run("gh pr merge 1 -R a/b", found(hit("thread", T))).returncode == 2
