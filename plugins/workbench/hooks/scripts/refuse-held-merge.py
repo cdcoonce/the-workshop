@@ -23,6 +23,10 @@ hook makes no GitHub or GitLab call. An acknowledgement clears `thread` hits
 older than itself and all `vault` hits, never a `label` hit, and never a hit of
 any other source.
 
+Residual bypasses, kept on purpose (quoted text is not a merge, and this is a speed
+bump): `bash -c '...'` (the likeliest agent form), `sh -c`, `eval`, a `$cmd`
+expansion, a shell alias or function, and `python3 -c "os.system(...)"`.
+
 Fails open on input it cannot understand (malformed or empty stdin, a non-Bash
 tool, a non-string command). Fails closed once it has a merge it must scan: a
 scanner error, an unparseable result or a timeout exits 2. Codex sends hooks no
@@ -79,6 +83,7 @@ def default_plugin_root() -> Path:
 
 def _tokens(command: str) -> list[list[str]]:
     """Split a command line into simple commands; a lone ``\\n`` token is kept as a separator."""
+    command = re.sub(r"\\\r?\n", "", command)  # a backslash-newline continuation joins lines
     lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCT)
     lexer.whitespace_split = True
     lexer.whitespace = " \t\r"

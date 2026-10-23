@@ -297,6 +297,27 @@
       "oracle": "real",
       "find": "    try:\n        out = json.loads(proc.stdout)",
       "replace": "    if proc.returncode in (1, 2):\n        raise Refuse('scanner failed')\n    try:\n        out = json.loads(proc.stdout)"
+    },
+    {
+      "label": "gh matched only as a bare word (basename dropped)",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        tool = os.path.basename(head)",
+      "replace": "        tool = head"
+    },
+    {
+      "label": "env/command/sudo/nohup/exec wrappers not stripped",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "\"time\", \"env\", \"command\", \"sudo\", \"nohup\", \"exec\"}",
+      "replace": "\"time\"}"
+    },
+    {
+      "label": "backslash-newline continuation not joined",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    command = re.sub(r\"\\\\\\r?\\n\", \"\", command)",
+      "replace": "    command = command"
     }
   ]
 }

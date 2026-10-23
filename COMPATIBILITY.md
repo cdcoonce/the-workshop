@@ -67,6 +67,12 @@ Every event this repo ships a hook for, with the mechanism it depends on:
 | `ConfigChange`     | `audit-config-change.py`                      | `systemMessage`; side effect only                                                 |
 | `SessionEnd`       | `warn-off-trunk.py`                           | side effect only (stderr); **`SessionEnd` does not exist on Codex** — inert there |
 
+`refuse-held-merge.py` is a speed bump, not a security boundary. It reads the
+command text and counts a merge only where it starts a command, so these forms
+pass unscanned: `bash -c '...'` (the likeliest agent form), `sh -c`, `eval`, a
+`$cmd` expansion, a shell alias or function, and `python3 -c "os.system(...)"`.
+`gh api` merges, the web UI and afk's local fast-forward are also outside it.
+
 Constraints that shape the hooks above, and would break them if they changed:
 
 - **`SessionStart` supports only `command` and `mcp_tool`** — not `prompt` or

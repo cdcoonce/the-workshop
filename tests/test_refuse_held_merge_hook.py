@@ -401,3 +401,32 @@ def test_stdout_json_is_parsed_before_the_exit_code(rig, tmp_path, exit_code):
     script.write_text(STUB + f"\nsys.exit({exit_code})\n")
     assert rig.run("gh pr merge 1 -R a/b", CLEAN).returncode == 0
     assert rig.run("gh pr merge 1 -R a/b", found(hit("thread", T))).returncode == 2
+
+
+# ---- review round 2 ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("cmd", [
+    "/opt/homebrew/bin/gh pr merge 5 -R a/b",
+    "env X=1 gh pr merge 5 -R a/b",
+    "command gh pr merge 5 -R a/b",
+    "sudo gh pr merge 5 -R a/b",
+    "nohup gh pr merge 5 -R a/b",
+    "exec gh pr merge 5 -R a/b",
+    "gh pr \\\nmerge 5 -R a/b",
+    "gh pr merge 5 \\\n  -R a/b",
+])
+def test_wrapped_and_continued_merges_are_scanned(rig, cmd):
+    r = rig.run(cmd, found(hit("thread", T)))
+    assert r.returncode == 2 and rig.scans == [["--repo", "a/b", "--pr", "5", "--json"]]
+
+
+def test_continuation_inside_single_quotes_is_literal(rig):
+    rig.run("echo 'gh pr\\\nmerge 5'")
+    assert rig.scans == []
+
+
+def test_continuation_with_no_space_is_not_a_merge(rig):
+    """The shell deletes backslash-newline outright, so `gh pr\\<nl>merge` runs `gh prmerge`."""
+    rig.run("gh pr\\\nmerge 5 -R a/b")
+    assert rig.scans == []
