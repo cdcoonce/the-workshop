@@ -1,0 +1,175 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "--with=ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+    "--with",
+    "fastembed==0.8.0",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_semantic_index_identity_guard.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "--with",
+    "pyyaml",
+    "--with",
+    "graphmark>=0.11,<0.12",
+    "--with=ragmark[mcp] @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl",
+    "--with",
+    "fastembed==0.8.0",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--collect-only",
+    "tests/test_semantic_index_identity_guard.py"
+  ],
+  "mutants": [
+    {
+      "label": "compare identities with `is not` instead of `!=`",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "recorded != embedder.identity():",
+      "replace": "recorded is not embedder.identity():"
+    },
+    {
+      "label": "run the comparison on the non-force path as well",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "if force and not accept_identity_change:",
+      "replace": "if not accept_identity_change:"
+    },
+    {
+      "label": "run the comparison after the rebuild has deleted the files",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "    embedder = FastembedEmbedder()\n    if force and not accept_identity_change:\n        recorded = _recorded_identity(store)\n        if recorded is not None and recorded != embedder.identity():\n            raise IdentityChangeRefused(recorded, embedder.identity())\n    refresh = index.reindex if force else index.refresh\n    report = refresh(config, store, embedder)\n",
+      "replace": "    embedder = FastembedEmbedder()\n    refresh = index.reindex if force else index.refresh\n    report = refresh(config, store, embedder)\n    if force and not accept_identity_change:\n        recorded = _recorded_identity(store)\n        if recorded is not None and recorded != embedder.identity():\n            raise IdentityChangeRefused(recorded, embedder.identity())\n"
+    },
+    {
+      "label": "unlink ragmark.db and then raise",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "            raise IdentityChangeRefused(recorded, embedder.identity())\n",
+      "replace": "            (config.index_dir / \"ragmark.db\").unlink()\n            raise IdentityChangeRefused(recorded, embedder.identity())\n"
+    },
+    {
+      "label": "let IdentityChangeRefused fall through to the generic handler",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "    except IdentityChangeRefused as exc:",
+      "replace": "    except ZeroDivisionError as exc:"
+    },
+    {
+      "label": "ignore --accept-identity-change",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "accept_identity_change=args.accept_identity_change,",
+      "replace": "accept_identity_change=False,"
+    },
+    {
+      "label": "render the recorded identity on both sides of the message",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "f\"{_render_identity(recorded)} to {_render_identity(requested)}; \"",
+      "replace": "f\"{_render_identity(recorded)} to {_render_identity(recorded)}; \""
+    },
+    {
+      "label": "leave remediation empty",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "            \"List the processes that use this index first, then pass \"\n            \"--accept-identity-change, or run the readers under the recorded \"\n            \"identity instead.\",\n",
+      "replace": "            \"\",\n"
+    },
+    {
+      "label": "replace the remediation text",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "            \"List the processes that use this index first, then pass \"\n            \"--accept-identity-change, or run the readers under the recorded \"\n            \"identity instead.\",\n",
+      "replace": "            \"Check stderr.\",\n"
+    },
+    {
+      "label": "let --accept-identity-change alone imply --force",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "force=args.force,",
+      "replace": "force=args.force or args.accept_identity_change,"
+    },
+    {
+      "label": "refuse when the database has no recorded identity",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "if recorded is not None and recorded != embedder.identity():",
+      "replace": "if recorded is None or recorded != embedder.identity():"
+    },
+    {
+      "label": "refuse when the database cannot be read",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "    except (sqlite3.Error, OSError, ValueError):\n        return None",
+      "replace": "    except (OSError, ValueError):\n        return None"
+    },
+    {
+      "label": "disable the guard in build_index (CLI-only guard leaves it open)",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "if force and not accept_identity_change:",
+      "replace": "if force and not accept_identity_change and False:"
+    },
+    {
+      "label": "compare only the version component of the identity",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "recorded != embedder.identity():",
+      "replace": "recorded.version != embedder.identity().version:"
+    },
+    {
+      "label": "emit a third key in the refusal's JSON object",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "_emit({\"error\": message, \"remediation\": remediation})",
+      "replace": "_emit({\"error\": message, \"remediation\": remediation, \"extra\": 1})"
+    },
+    {
+      "label": "make IdentityChangeRefused subclass BaseException",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "find": "class IdentityChangeRefused(Exception):",
+      "replace": "class IdentityChangeRefused(BaseException):"
+    },
+    {
+      "label": "[control] emit the refusal's JSON keys in reverse order",
+      "file": "engine/semantic_index.py",
+      "oracle": "real",
+      "expect": "survived",
+      "why": "Key order of the refusal's JSON object is not specified; no test reads it.",
+      "find": "_emit({\"error\": message, \"remediation\": remediation})",
+      "replace": "_emit({\"remediation\": remediation, \"error\": message})"
+    }
+  ]
+}
