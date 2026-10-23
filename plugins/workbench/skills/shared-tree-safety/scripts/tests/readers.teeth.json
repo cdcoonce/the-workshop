@@ -1,0 +1,207 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "test_readers.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--collect-only",
+    "test_readers.py"
+  ],
+  "mutants": [
+    {
+      "label": "truncate each command line to 160 characters",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "\"command\": parts[3],",
+      "replace": "\"command\": parts[3][:160],"
+    },
+    {
+      "label": "stop excluding the script's own pid",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        if pid != os.getpid():\n            excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n"
+    },
+    {
+      "label": "stop excluding ancestor pids",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        excluded.add(pid)\n        pid = 0\n"
+    },
+    {
+      "label": "scan only `projects.<path>.mcpServers`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    entries = _server_entries(\"claude\", \"user\", data.get(\"mcpServers\"), needles)",
+      "replace": "    entries = []"
+    },
+    {
+      "label": "scan only top-level `mcpServers`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    if isinstance(projects, dict):",
+      "replace": "    if False:"
+    },
+    {
+      "label": "match `command` but not `args`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, server.get(\"command\"), *elements):",
+      "replace": "if _matches(needles, server.get(\"command\")):"
+    },
+    {
+      "label": "match `args` but not `command`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, server.get(\"command\"), *elements):",
+      "replace": "if _matches(needles, *elements):"
+    },
+    {
+      "label": "match or print `env` values in the claude source",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, server.get(\"command\"), *elements):",
+      "replace": "if _matches(needles, server.get(\"command\"), *elements) or (source == \"claude\" and _matches(needles, *[v for v in (server.get(\"env\") or {}).values()])):"
+    },
+    {
+      "label": "exit 3 when only a declared registration matches",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "return 3 if processes or held else 0",
+      "replace": "return 3 if processes or held or declared else 0"
+    },
+    {
+      "label": "count a `.in_use` marker without the signal-0 test",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if pid <= 0 or pid in ignore or not _pid_is_live(pid):",
+      "replace": "if pid <= 0 or pid in ignore:"
+    },
+    {
+      "label": "use only the first needle",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    needles = list(args.needles)\n",
+      "replace": "    needles = list(args.needles)[:1]\n"
+    },
+    {
+      "label": "ignore `--ignore-pid`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    ignore = set(args.ignore_pid)",
+      "replace": "    ignore = set()"
+    },
+    {
+      "label": "print the two closing lines in `--json` mode",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    else:\n        for row in processes:",
+      "replace": "    if True:\n        for row in processes:"
+    },
+    {
+      "label": "write a cache file under `--home`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    needles = list(args.needles)\n",
+      "replace": "    (home / \".readers-cache\").write_text(\"\")\n    needles = list(args.needles)\n"
+    },
+    {
+      "label": "exclude only own pid and direct parent",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0)\n",
+      "replace": "        excluded.add(pid)\n        pid = parent_of.get(pid, 0) if pid == os.getpid() else 0\n"
+    },
+    {
+      "label": "match launchd `ProgramArguments` but not `WorkingDirectory`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, data.get(\"WorkingDirectory\"), *elements):",
+      "replace": "if _matches(needles, *elements):"
+    },
+    {
+      "label": "exit code ignores holders",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "return 3 if processes or held else 0",
+      "replace": "return 3 if processes else 0"
+    },
+    {
+      "label": "print the command truncated at 160 in text mode",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "print(f\"{row['pid']} {row['command']}\")",
+      "replace": "print(f\"{row['pid']} {row['command'][:160]}\")"
+    },
+    {
+      "label": "print no process lines in text mode",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "for row in processes:\n            print(",
+      "replace": "for row in []:\n            print("
+    },
+    {
+      "label": "match case-insensitively",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "        needle in text\n",
+      "replace": "        needle.lower() in text.lower()\n"
+    },
+    {
+      "label": "write a file under `HOME`, `TMPDIR` or `XDG_CACHE_HOME`",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "    needles = list(args.needles)\n",
+      "replace": "    Path(os.environ[\"TMPDIR\"], \"x\").write_text(\"\")\n    needles = list(args.needles)\n"
+    },
+    {
+      "label": "print the crontab line",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "        if _matches(needles, line)\n    ]",
+      "replace": "        if _matches(needles, line) and not print(line)\n    ]"
+    },
+    {
+      "label": "match or print `env` values in the codex source",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, server.get(\"command\"), *elements):",
+      "replace": "if _matches(needles, server.get(\"command\"), *elements) or (source == \"codex\" and _matches(needles, *[v for v in (server.get(\"env\") or {}).values()])):"
+    },
+    {
+      "label": "match or print `env` values in the mcp-json source",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if _matches(needles, server.get(\"command\"), *elements):",
+      "replace": "if _matches(needles, server.get(\"command\"), *elements) or (source == \"mcp-json\" and _matches(needles, *[v for v in (server.get(\"env\") or {}).values()])):"
+    },
+    {
+      "label": "exclude ancestor pids from holders",
+      "file": "../readers.py",
+      "oracle": "real",
+      "find": "if pid <= 0 or pid in ignore or not _pid_is_live(pid):",
+      "replace": "if pid <= 0 or pid in ignore or pid in (os.getpid(), os.getppid()) or not _pid_is_live(pid):"
+    }
+  ]
+}
