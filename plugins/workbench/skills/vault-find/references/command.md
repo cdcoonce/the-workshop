@@ -28,7 +28,7 @@ Use the machinery project environment with its `embeddings` extra. The compatibi
 
 ### `/find --reindex`
 
-Run `uv run --project "<engine>/.." --extra embeddings python "<engine>/semantic_index.py" reindex --force`. This explicitly rebuilds the requested vault's `.ragmark` index. Report `{indexed, skipped, removed, defects, total_chunks, elapsed}`. `indexed` counts added plus updated notes, `skipped` counts unchanged notes, and parse defects remain visible. A forced rebuild starts fresh, so its removal count does not describe the discarded prior snapshot.
+Run `uv run --project "<engine>/.." --extra embeddings python "<engine>/semantic_index.py" reindex --force`. This explicitly rebuilds the requested vault's `.ragmark` index. Report `{indexed, skipped, removed, defects, total_chunks, elapsed}`. `indexed` counts added plus updated notes, `skipped` counts unchanged notes, and parse defects remain visible. A rebuild that would change the recorded model identity is refused unless `--accept-identity-change` is passed. A forced rebuild starts fresh, so its removal count does not describe the discarded prior snapshot.
 
 ### `/find --status`
 
@@ -49,7 +49,7 @@ Ragmark manages its pinned local model. Its cache defaults to `~/.cache/ragmark/
 ## Failure Handling
 
 - **Missing capability or dependency:** surface the structured error and remediation. Do not retry with broader scope or the old engine. A keyword fallback must honor the same owner scope and machine context and be labelled `(hybrid unavailable — keyword results)`.
-- **Missing index:** the query path initializes it. **Corrupt or model-mismatched index:** surface the error; an explicit `--reindex` is the recovery path, after the reported cause is understood.
+- **Missing index:** the query path initializes it. **Corrupt or model-mismatched index:** surface the error; for a corrupt index an explicit `--reindex` is the recovery path, after the reported cause is understood; for a model mismatch, list the processes that use the index first, then append `--accept-identity-change` to the `reindex --force` command above.
 - **Empty or short results:** report what was returned. This does not establish that the vault contains no relevant evidence. Do not infer quality from the absolute score scale.
 - **CLI failures:** parse `{error, remediation}` from stdout and surface them clearly; stderr holds diagnostic details.
 
