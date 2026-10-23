@@ -387,6 +387,13 @@
       "oracle": "real",
       "find": "don['\u2019]t merge",
       "replace": "don't merge"
+    },
+    {
+      "label": "GitLab Depends-on target label match is substring",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "            if target is not None and HOLD_LABEL in (target.get(\"labels\") or []):",
+      "replace": "            if target is not None and any(HOLD_LABEL in lab for lab in (target.get(\"labels\") or [])):"
     }
   ]
 }

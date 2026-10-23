@@ -783,3 +783,10 @@ def test_curly_apostrophe_dont_merge(stub, no_vault, body):
     stub.pr(BR, 1)
     stub.thread(BR, 1, [comment(body)])
     assert scan(*gh(BR, 1))[0] == 1
+
+
+def test_gitlab_depends_on_target_label_match_is_exact(stub, no_vault):
+    gl_stub(stub, closes=[{"iid": 7, "labels": [], "description": "Depends on #8", "web_url": "u7"}])
+    stub.api[f"{GLQ}/issues/8"] = {"iid": 8, "labels": ["afk:hold-released"], "web_url": "https://gitlab.example/i/8"}
+    code, out = scan("--gitlab", GL, "--mr", "42")
+    assert code == 0 and out["hits"] == []
