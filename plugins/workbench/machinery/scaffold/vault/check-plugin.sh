@@ -45,11 +45,14 @@ json_field() { # json_field <key> <file>
   sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$2" 2>/dev/null | head -1
 }
 
+# Per-platform breadcrumbs first: the legacy shared file is last-writer-wins
+# across platforms, so another platform's stale write there must not decide the
+# version below (#1280). It is read only when no per-platform file exists.
 crumbs=()
-[ -f "$STATE" ] && crumbs+=("$STATE")
 for f in "$VAULT_ROOT"/.vault/plugin-state.*.json; do
   [ -f "$f" ] && crumbs+=("$f")
 done
+[ "${#crumbs[@]}" -eq 0 ] && [ -f "$STATE" ] && crumbs+=("$STATE")
 
 min_version="$(sed -n 's/.*"min_plugin_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
   "$VAULT_ROOT/.vault/vault.json" 2>/dev/null)"

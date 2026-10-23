@@ -192,3 +192,29 @@ def test_a_corrupt_breadcrumb_fails_open(vault: Path) -> None:
 def test_the_scaffolded_gitignore_covers_the_session_tracker() -> None:
     ignored = (PLUGIN / "machinery" / "scaffold" / "gitignore.tmpl").read_text()
     assert ".vault/.plugin-session-track" in ignored
+
+
+def test_a_stale_shared_record_from_another_platform_does_not_decide_the_version_floor(vault: Path) -> None:
+    # #1280: the shared file is last-writer-wins across platforms. A codex write
+    # left an old version there; claude-code's own record is current.
+    (vault / ".vault" / "vault.json").write_text('{"min_plugin_version": "9.0.0"}\n')
+    _crumb(vault, "plugin-state.json", version="8.0.0", platform="codex", session="live-1")
+    _crumb(vault, "plugin-state.claude-code.json", version="9.9.9", platform="claude-code", session="live-1")
+    _crumb(vault, "plugin-state.codex.json", version="9.9.9", platform="codex", session="live-1")
+    result = _check(vault)
+    assert result.returncode == 0
+    assert "STALE" not in result.stderr
+
+
+def test_a_shared_record_is_ignored_entirely_while_a_platform_record_exists(vault: Path) -> None:
+    # The shared file's root and session must not reach the SUPERSEDED check or
+    # the NOT-RUNNING signature once a per-platform record exists (#1280).
+    orphan = vault / "cache" / "codex-old"
+    orphan.mkdir(parents=True)
+    (orphan / ".orphaned_at").write_text("1\n")
+    _crumb(vault, "plugin-state.json", version="9.9.9", platform="codex", root=orphan, session="shared-frozen")
+    for index in range(6):
+        _crumb(vault, "plugin-state.claude-code.json", session=f"live-{index}")
+        result = _check(vault)
+        assert result.returncode == 0
+        assert result.stderr == ""
