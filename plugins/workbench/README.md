@@ -60,7 +60,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/request-refactor-plan` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/session-orchestrator` | Supervises user-visible worker sessions across projects and platforms. |
-| `/shared-tree-safety` | Protect work when a git tree may be shared with a live autonomous agent or another session. |
+| `/shared-tree-safety` | Check who else uses a git tree, index, venv or cache before you reset, rebuild, delete, prune or call it dormant: live processes, MCP and launchd registrations, other sessions. |
 | `/sql-deploy-precheck` | Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. |
 | `/stale-artifact-sweep` | Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or blocker against current reality, with evidence. |
 | `/tdd` | Test-driven development with red-green-refactor loop. |
