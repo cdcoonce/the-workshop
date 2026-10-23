@@ -606,3 +606,180 @@ def test_no_write_calls_are_made(stub, no_vault):
     scan(*gh(BR, 1))
     for c in stub.calls:
         assert "-X" not in c and "--method" not in c and "-f" not in c and "--input" not in c
+
+
+# ---- review round: fail closed, scope teeth, hold preservation ---------------
+
+
+def test_real_run_missing_executable_is_scan_error(monkeypatch, no_vault):
+    """The real `_run` (no stub): a missing `gh` must read SCAN-ERROR, never NO-HOLD-FOUND."""
+    monkeypatch.setenv("PATH", str(no_vault))
+    code, out = scan(*gh(BR, 1))
+    assert code == 2 and out["verdict"] == "SCAN-ERROR"
+    assert any(e["status"] == "failed" for e in out["scanned"])
+
+
+def test_real_run_timeout_is_scan_error(monkeypatch, no_vault):
+    def boom(*a, **k):
+        raise hold_scan.subprocess.TimeoutExpired(a[0], 1)
+
+    monkeypatch.setattr(hold_scan.subprocess, "run", boom)
+    code, out = scan(*gh(BR, 1))
+    assert code == 2 and out["verdict"] == "SCAN-ERROR"
+
+
+def test_real_run_returns_nonzero_on_failure():
+    rc, out, err = hold_scan._run(["/nonexistent/definitely-not-here"])
+    assert rc != 0 and out == ""
+
+
+@pytest.mark.parametrize("payload", [{"a": 1}, "str", None])
+def test_non_list_page_payload_is_scan_error(stub, no_vault, payload):
+    stub.pr(BR, 1)
+    stub.thread(BR, 1)
+    stub.api[f"repos/{BR}/pulls/1/reviews"] = payload if payload is not None else {}
+    code, out = scan(*gh(BR, 1))
+    assert code == 2 and out["verdict"] == "SCAN-ERROR"
+
+
+def _owned(root, repo, status_text, rel="a.md"):
+    write_note(root, ".vault/vault.json", "{}")
+    write_note(root, rel, f'---\nrepo: "https://github.com/{repo}"\n---\n## Current Status\n\n{status_text}\n')
+
+
+def test_walk_up_beats_config_vault_root(stub, no_vault, tmp_path, monkeypatch):
+    walked, configured = tmp_path / "walked", tmp_path / "configured"
+    _owned(walked, BR, "#9 is frozen")
+    _owned(configured, BR, "nothing")
+    cfg = no_vault / ".workshop/hold-scan"
+    cfg.mkdir(parents=True)
+    (cfg / "hold-scan.toml").write_text(f'vault_root = "{configured}"\n')
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(walked))
+    _vault_pr(stub, BR, 9)
+    code, out = scan(*gh(BR, 9))
+    assert code == 1 and str(walked) in vault_hits(out)[0]["url_or_path"]
+
+
+def test_scope_heading_is_end_anchored(stub, vault, tmp_path, monkeypatch):
+    root = tmp_path / "anch"
+    write_note(root, ".vault/vault.json", "{}")
+    write_note(root, "a.md", f'---\nrepo: "https://github.com/{BR}"\n---\n## Current Status Archive\n\n#9 is frozen\n')
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    _vault_pr(stub, BR, 9)
+    assert scan(*gh(BR, 9))[0] == 0
+
+
+def test_ownership_only_from_frontmatter(stub, vault, tmp_path, monkeypatch):
+    root = tmp_path / "own"
+    write_note(root, ".vault/vault.json", "{}")
+    write_note(root, "a.md", f'---\ntitle: x\n---\nrepo: "https://github.com/{BR}"\n## Current Status\n\n#9 is frozen\n')
+    write_note(root, "b.md", f'intro\nrepo: "https://github.com/{BR}"\n## Current Status\n\n#9 is frozen\n')
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    _vault_pr(stub, BR, 9)
+    assert scan(*gh(BR, 9))[0] == 0
+
+
+@pytest.mark.parametrize("hidden", [".obsidian", ".trash"])
+def test_hidden_dirs_not_scanned(stub, vault, tmp_path, monkeypatch, hidden):
+    root = tmp_path / "hid"
+    write_note(root, ".vault/vault.json", "{}")
+    _owned(root, BR, "#9 is frozen", rel=f"{hidden}/a.md")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    _vault_pr(stub, BR, 9)
+    assert scan(*gh(BR, 9))[0] == 0
+
+
+def test_vault_hit_order_is_sorted(stub, vault, tmp_path, monkeypatch):
+    root = tmp_path / "ord"
+    for rel in ("z.md", "m.md", "a.md"):
+        _owned(root, BR, "#9 is frozen", rel=rel)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    _vault_pr(stub, BR, 9)
+    paths = [Path(h["url_or_path"]).name for h in vault_hits(scan(*gh(BR, 9))[1])]
+    assert paths == ["a.md", "m.md", "z.md"]
+
+
+def _kd(root, entry):
+    write_note(root, ".vault/vault.json", "{}")
+    write_note(root, "brain/Key Decisions.md", f"# KD\n\n### 2026-01-01 {entry}\n\n#9 is frozen\n")
+
+
+@pytest.mark.parametrize("entry,expect", [("breakroomer notes", 0), ("my-breakroom-x", 1), ("BREAKROOM notes", 1),
+                                          ("Breakroom notes", 1), ("unbreakroom", 0)])
+def test_key_decisions_name_is_whole_word_and_case_insensitive(stub, vault, tmp_path, monkeypatch, entry, expect):
+    root = tmp_path / "kdw"
+    _kd(root, entry)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    _vault_pr(stub, BR, 9)
+    assert scan(*gh(BR, 9))[0] == expect
+
+
+def test_label_match_is_exact_github(stub, no_vault):
+    stub.pr(BR, 5, closing=[7])
+    stub.thread(BR, 5)
+    stub.issue(BR, 7, labels=["afk:hold-released", "xafk:hold", "AFK:HOLD"])
+    assert scan(*gh(BR, 5))[0] == 0
+
+
+def test_label_match_is_exact_gitlab(stub, no_vault):
+    gl_stub(stub, closes=[{"iid": 7, "labels": ["afk:hold-released"], "description": "", "web_url": "u"}])
+    assert scan("--gitlab", GL, "--mr", "42")[0] == 0
+
+
+def test_gitlab_depends_on_is_followed(stub, no_vault):
+    gl_stub(stub, closes=[{"iid": 7, "labels": [], "description": "Depends on #8", "web_url": "u7"}])
+    stub.api[f"{GLQ}/issues/8"] = {"iid": 8, "labels": ["afk:hold"], "web_url": "https://gitlab.example/i/8"}
+    code, out = scan("--gitlab", GL, "--mr", "42")
+    assert code == 1 and out["hits"][0]["url_or_path"] == "https://gitlab.example/i/8"
+
+
+def test_ack_matching_is_strict_and_outside_the_contract_otherwise(stub, no_vault):
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [comment("  hold-scan: acknowledged x"), comment("Hold-Scan: Acknowledged x"),
+                        comment("- hold-scan: acknowledged x")])
+    _, out = scan(*gh(BR, 1))
+    assert out["acknowledgement"] is None
+
+
+def test_edited_comment_stamped_with_the_later_time(stub, no_vault):
+    c = comment("do not merge", ts="2026-09-01T09:00:00Z")
+    c["updated_at"] = "2026-09-01T11:00:00Z"
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [c])
+    _, out = scan(*gh(BR, 1))
+    assert out["hits"][0]["timestamp"] == "2026-09-01T11:00:00Z"
+
+
+def test_updated_before_created_does_not_move_the_stamp(stub, no_vault):
+    c = comment("do not merge", ts="2026-09-01T09:00:00Z")
+    c["updated_at"] = "2026-09-01T08:00:00Z"
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [c])
+    assert scan(*gh(BR, 1))[1]["hits"][0]["timestamp"] == "2026-09-01T09:00:00Z"
+
+
+def test_edited_inline_and_gitlab_notes_use_updated_at(stub, no_vault):
+    inline = comment("do not merge", ts="2026-09-01T09:00:00Z")
+    inline["updated_at"] = "2026-09-02T09:00:00Z"
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, inline=[inline])
+    assert scan(*gh(BR, 1))[1]["hits"][0]["timestamp"] == "2026-09-02T09:00:00Z"
+    n = note("do not merge", 9, "2026-09-01T09:00:00Z")
+    n["updated_at"] = "2026-09-03T09:00:00Z"
+    gl_stub(stub, notes=[n])
+    assert scan("--gitlab", GL, "--mr", "42")[1]["hits"][0]["timestamp"] == "2026-09-03T09:00:00Z"
+
+
+def test_edited_ack_keeps_its_creation_time(stub, no_vault):
+    a = comment("hold-scan: acknowledged ok", ts="2026-09-01T10:00:00Z", url="https://x/a")
+    a["updated_at"] = "2026-09-09T10:00:00Z"
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [a])
+    assert scan(*gh(BR, 1))[1]["acknowledgement"]["timestamp"] == "2026-09-01T10:00:00Z"
+
+
+@pytest.mark.parametrize("body", ["don’t merge", "Don’t merge this"])
+def test_curly_apostrophe_dont_merge(stub, no_vault, body):
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [comment(body)])
+    assert scan(*gh(BR, 1))[0] == 1

@@ -30,7 +30,7 @@ EXIT = {NO_HOLD_FOUND: 0, HOLD_FOUND: 1, SCAN_ERROR: 2}
 # Measured 2026-09-26 over 717 afk/* PRs: recall 2/2, no false hit on a merged
 # PR. Never add `blocked`, `regression`, `frozen` or `held` here: afk's own
 # "Reviewer advisory (non-blocking)" header is 52 of 58 `blocked` hits.
-THREAD_PATTERN = re.compile(r"holding (this|it)|do not merge|don't merge|not merg(e|ing)|unmerged", re.I)
+THREAD_PATTERN = re.compile(r"holding (this|it)|do not merge|don['’]t merge|not merg(e|ing)|unmerged", re.I)
 VAULT_HOLD_WORDS = re.compile(r"\b(held|hold|holding|frozen|freeze|reserv\w*|do not merge|revert\w*)\b", re.I)
 ACK_PREFIX = "hold-scan: acknowledged"
 HOLD_LABEL = "afk:hold"
@@ -119,12 +119,24 @@ def _match_line(body: str) -> str | None:
 
 
 def _is_ack(body: str) -> bool:
-    first = (body or "").lstrip().split("\n", 1)[0]
-    return first.lower().startswith(ACK_PREFIX)
+    return (body or "").split("\n", 1)[0].startswith(ACK_PREFIX)
+
+
+def _later(created: str | None, updated: str | None) -> str | None:
+    """The later of two timestamps, as the original string. An edit moves a hit forward."""
+    a, b = _parse_ts(created), _parse_ts(updated)
+    if a is None or (b is not None and b > a):
+        return updated if b is not None else created
+    return created
 
 
 def _scan_texts(scan: Scan, items: list[dict], body_key: str, ts_key: str, url_of, can_ack: bool) -> None:
-    """Turn thread items into hits and, for conversation comments, acknowledgements."""
+    """Turn thread items into hits and, for conversation comments, acknowledgements.
+
+    A hit carries the later of its creation and ``updated_at`` time, so a hold edited
+    into an old comment after an acknowledgement is not older than that acknowledgement.
+    An acknowledgement keeps its creation time.
+    """
     for item in items:
         body = item.get(body_key) or ""
         ts = item.get(ts_key)
@@ -133,7 +145,7 @@ def _scan_texts(scan: Scan, items: list[dict], body_key: str, ts_key: str, url_o
             continue
         line = _match_line(body)
         if line is not None:
-            scan.hit("thread", url_of(item), line, ts)
+            scan.hit("thread", url_of(item), line, _later(ts, item.get("updated_at")))
 
 
 def _depends_on(body: str) -> list[int]:

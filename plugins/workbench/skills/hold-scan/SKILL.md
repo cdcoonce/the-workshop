@@ -37,13 +37,13 @@ python3 "<skill base dir>/scripts/hold_scan.py" --gitlab GROUP/PROJECT --mr N --
 `--json` prints exactly four top-level keys.
 
 - `verdict`: as above.
-- `hits`: each is `{source, url_or_path, quote, timestamp}`. `source` is `thread`, `label` or `vault`. `timestamp` is null for `label` and `vault`.
-- `acknowledgement`: `{url_or_path, timestamp}` of the newest PR/MR conversation comment whose first line starts with `hold-scan: acknowledged`, else null. The scanner only reports it and never counts it as a hit. What an acknowledgement clears is the consumer's policy (the refuse-held-merge hook), not this script's.
+- `hits`: each is `{source, url_or_path, quote, timestamp}`. `source` is `thread`, `label` or `vault`. `timestamp` is null for `label` and `vault`. A `thread` hit carries the later of the comment's creation time and its `updated_at`, so a hold edited in after an acknowledgement is newer than it.
+- `acknowledgement`: `{url_or_path, timestamp}` of the newest PR/MR conversation comment whose first line starts with `hold-scan: acknowledged`, else null, carrying the comment's creation time (an edit does not move it). Matching is exact: the first line must begin `hold-scan: acknowledged` with no leading space, in that case, and a bulleted or quoted form is not an acknowledgement. Leniency there is outside the contract, because a looser match clears holds. The scanner only reports it and never counts it as a hit. What an acknowledgement clears is the consumer's policy (the refuse-held-merge hook), not this script's.
 - `scanned`: one `{name, status, detail}` per source. `status` is `read`, `skipped`, `failed` or `info`. A failed entry's `name` is the exact command. `stale-no-thread` (`info`) marks an open PR over 14 days old with no comments, reviews or inline comments; it never changes the verdict.
 
 ## Sources
 
-1. **Thread text.** Conversation comments, reviews and inline review comments (GitLab: non-system MR notes), paged 100 at a time until a short page. A body is a hit on `holding (this|it)|do not merge|don't merge|not merg(e|ing)|unmerged`, case-insensitive. The quote is the matching line.
+1. **Thread text.** Conversation comments, reviews and inline review comments (GitLab: non-system MR notes), paged 100 at a time until a short page. A body is a hit on `holding (this|it)|do not merge|don['’]t merge|not merg(e|ing)|unmerged`, case-insensitive (the curly apostrophe is covered; double spaces, a phrase split across lines, non-breaking spaces and mojibake are documented misses). The quote is the matching line.
    - Never add `blocked`, `regression`, `frozen` or `held`. Measured on 717 `afk/*` PRs: 52 of 58 `blocked` hits were afk's "Reviewer advisory (non-blocking)" header, and `regression` was a hold in 1 of 26.
    - Closing issues' comments are not read. Their precision was never measured, and issue threads carry spec-review verdicts. An unmeasured source is not armed.
 2. **Labels.** `afk:hold` on a closing issue, or on a `Depends on` target of one (one level deep), is a hit. `requires:human` never is.
@@ -58,6 +58,17 @@ Not fixed, recorded: on the real vault a ragmark decision entry names #114 in a
 paragraph containing "frozen corpus", so ragmark PR #129 (which closes #114)
 gets a vault hit. A vault hit is evidence to read, not a verdict. Read the
 quoted paragraph before deciding.
+
+## Known limits
+
+The guard preserves a hold when in doubt, so these read as hits or misses by design.
+
+- A hold inside a code fence or a `> quoted` reply is a live hit.
+- Negated or lifted text ("do not merge" followed by "ok to merge now") still hits.
+- `cannot merge until` hits through `not merge`, and so does any use of "unmerged".
+- Thread quotes are not truncated: a 2 MB line prints whole. Only vault quotes are cut (300 characters).
+- A bulleted `- hold-scan: acknowledged` is not an acknowledgement.
+- Double spaces, a phrase split across lines, non-breaking spaces and mojibake miss the pattern.
 
 ## What this skill does not do
 

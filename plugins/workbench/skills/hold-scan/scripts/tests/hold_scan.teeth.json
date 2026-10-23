@@ -77,7 +77,7 @@
       "label": "acknowledgement may sit anywhere in the body",
       "file": "../hold_scan.py",
       "oracle": "real",
-      "find": "    return first.lower().startswith(ACK_PREFIX)",
+      "find": "    return (body or \"\").split(\"\\n\", 1)[0].startswith(ACK_PREFIX)",
       "replace": "    return ACK_PREFIX in (body or \"\").lower()"
     },
     {
@@ -261,6 +261,132 @@
       "oracle": "real",
       "find": "VAULT_HOLD_WORDS = re.compile(r\"\\b(held|hold|holding|frozen|freeze|reserv\\w*|do not merge|revert\\w*)\\b\", re.I)",
       "replace": "VAULT_HOLD_WORDS = re.compile(r\"(held|hold|holding|frozen|freeze|reserv\\w*|do not merge|revert\\w*)\", re.I)"
+    },
+    {
+      "label": "_run coerces OSError/timeout to an empty success",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        return 127, \"\", f\"{type(exc).__name__}: {exc}\"",
+      "replace": "        return 0, \"[]\", \"\""
+    },
+    {
+      "label": "non-list page payload silently skipped",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "                if data is not None:\n                    self.fail(",
+      "replace": "                if False:\n                    self.fail("
+    },
+    {
+      "label": "config vault_root beats walk-up",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    found = _walk_up(os.environ.get(\"CLAUDE_PROJECT_DIR\")",
+      "replace": "    if config.get(\"vault_root\") and (Path(config[\"vault_root\"]) / \".vault\" / \"vault.json\").is_file():\n        return Path(config[\"vault_root\"])\n    found = _walk_up(os.environ.get(\"CLAUDE_PROJECT_DIR\")"
+    },
+    {
+      "label": "scope heading not end-anchored",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "^## Current Status\\s*$",
+      "replace": "^## Current Status"
+    },
+    {
+      "label": "frontmatter close ignored (body repo: line owns)",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if line.strip() == \"---\":\n            return False\n",
+      "replace": ""
+    },
+    {
+      "label": "note without frontmatter can own",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    if not lines or lines[0].strip() != \"---\":\n        return False\n",
+      "replace": ""
+    },
+    {
+      "label": "hidden directories scanned",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if any(part.startswith(\".\") for part in path.relative_to(root).parts):\n            continue",
+      "replace": "        if False:\n            continue"
+    },
+    {
+      "label": "vault walk order reversed",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "sorted(root.rglob(\"*.md\"))",
+      "replace": "sorted(root.rglob(\"*.md\"), reverse=True)"
+    },
+    {
+      "label": "Key Decisions name match not whole-word",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "rf\"\\b(?:{names})\\b\", re.I)",
+      "replace": "rf\"(?:{names})\", re.I)"
+    },
+    {
+      "label": "Key Decisions name match case-sensitive",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "rf\"\\b(?:{names})\\b\", re.I)",
+      "replace": "rf\"\\b(?:{names})\\b\")"
+    },
+    {
+      "label": "GitHub label match is substring",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if HOLD_LABEL in names:",
+      "replace": "        if any(HOLD_LABEL in (n or \"\") for n in names):"
+    },
+    {
+      "label": "GitLab label match is substring",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if HOLD_LABEL in (issue.get(\"labels\") or []):",
+      "replace": "        if any(HOLD_LABEL in lab for lab in (issue.get(\"labels\") or [])):"
+    },
+    {
+      "label": "GitLab Depends on not followed",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        for dep in _depends_on(issue.get(\"description\") or \"\"):",
+      "replace": "        for dep in []:"
+    },
+    {
+      "label": "acknowledgement match lenient (whitespace, case)",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    return (body or \"\").split(\"\\n\", 1)[0].startswith(ACK_PREFIX)",
+      "replace": "    return (body or \"\").lstrip().split(\"\\n\", 1)[0].lower().startswith(ACK_PREFIX)"
+    },
+    {
+      "label": "edit time ignored on thread hits",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "scan.hit(\"thread\", url_of(item), line, _later(ts, item.get(\"updated_at\")))",
+      "replace": "scan.hit(\"thread\", url_of(item), line, ts)"
+    },
+    {
+      "label": "edit time moves the acknowledgement",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "scan.acks.append({\"url_or_path\": url_of(item), \"timestamp\": ts})",
+      "replace": "scan.acks.append({\"url_or_path\": url_of(item), \"timestamp\": _later(ts, item.get(\"updated_at\"))})"
+    },
+    {
+      "label": "an earlier updated_at wins",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    if a is None or (b is not None and b > a):",
+      "replace": "    if a is None or b is not None:"
+    },
+    {
+      "label": "curly apostrophe dropped from don't pattern",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "don['\u2019]t merge",
+      "replace": "don't merge"
     }
   ]
 }
