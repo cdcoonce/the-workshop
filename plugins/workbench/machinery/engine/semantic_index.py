@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sqlite3
 import sys
 import time
 import traceback
@@ -129,7 +130,42 @@ def embed_texts(texts: list[str]) -> np.ndarray:
     return FastembedEmbedder().embed(texts)
 
 
-def build_index(vault_root: Path, force: bool = False) -> dict:
+class IdentityChangeRefused(Exception):
+    """A forced rebuild would change the identity recorded in the index."""
+
+    def __init__(self, recorded: Any, requested: Any) -> None:
+        self.recorded = recorded
+        self.requested = requested
+        super().__init__(
+            "Rebuilding re-records the index identity from "
+            f"{_render_identity(recorded)} to {_render_identity(requested)}; "
+            f"every reader that resolves {_render_identity(recorded)} will "
+            "refuse the index afterwards."
+        )
+
+
+def _render_identity(identity: Any) -> str:
+    return f"{identity.name} (dim {identity.dim}, v{identity.version})"
+
+
+def _recorded_identity(store: Any) -> Any:
+    """Return the identity recorded in the index, or None when there is none.
+
+    An absent, identity-less or unreadable database yields None: ``--force``
+    is the documented remedy for a corrupt index, so it must still rebuild.
+    """
+    from contextlib import closing
+
+    try:
+        with closing(store.connect()) as conn:
+            return store.read_identity(conn)
+    except (sqlite3.Error, OSError, ValueError):
+        return None
+
+
+def build_index(
+    vault_root: Path, force: bool = False, accept_identity_change: bool = False
+) -> dict:
     """Refresh or rebuild ragmark's derived index and report actual work.
 
     Parameters
@@ -138,11 +174,19 @@ def build_index(vault_root: Path, force: bool = False) -> dict:
         Explicit vault root.
     force : bool
         Use ragmark's full rebuild rather than incremental refresh.
+    accept_identity_change : bool
+        Allow a forced rebuild that changes the identity recorded in the index.
 
     Returns
     -------
     dict
         Legacy indexed/skipped/total_chunks/elapsed plus removed and defects.
+
+    Raises
+    ------
+    IdentityChangeRefused
+        A forced rebuild would change the recorded identity and
+        ``accept_identity_change`` is false; the index is left untouched.
     """
     from contextlib import closing
 
@@ -153,8 +197,13 @@ def build_index(vault_root: Path, force: bool = False) -> dict:
     started = time.monotonic()
     config = config_for_vault(vault_root)
     store = IndexStore(config.index_dir)
+    embedder = FastembedEmbedder()
+    if force and not accept_identity_change:
+        recorded = _recorded_identity(store)
+        if recorded is not None and recorded != embedder.identity():
+            raise IdentityChangeRefused(recorded, embedder.identity())
     refresh = index.reindex if force else index.refresh
-    report = refresh(config, store, FastembedEmbedder())
+    report = refresh(config, store, embedder)
     with closing(store.connect()) as conn:
         total_chunks = store.chunk_count(conn)
     return {
@@ -255,7 +304,20 @@ def cmd_reindex(args: argparse.Namespace, vault_root: Path) -> None:
         Explicit target vault.
     """
     try:
-        _emit(build_index(vault_root, force=args.force))
+        _emit(
+            build_index(
+                vault_root,
+                force=args.force,
+                accept_identity_change=args.accept_identity_change,
+            )
+        )
+    except IdentityChangeRefused as exc:
+        _error(
+            str(exc),
+            "List the processes that use this index first, then pass "
+            "--accept-identity-change, or run the readers under the recorded "
+            "identity instead.",
+        )
     except ImportError as exc:
         _error(str(exc), CAPABILITY_REMEDIATION)
     except Exception as exc:
@@ -337,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
     p_reindex = sub.add_parser("reindex", help="Rebuild the vector index.")
     p_reindex.add_argument(
         "--force", action="store_true", help="Re-embed all notes regardless of cache."
+    )
+    p_reindex.add_argument(
+        "--accept-identity-change",
+        action="store_true",
+        help="With --force, allow a rebuild that changes the recorded model identity.",
     )
     p_reindex.set_defaults(func=cmd_reindex)
 
