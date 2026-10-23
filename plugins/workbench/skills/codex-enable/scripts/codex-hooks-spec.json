@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "event": "Stop",
+      "script": "verify-tests-before-stop.py",
+      "args": [],
+      "timeout_ms": 120000
+    }
+  ]
+}
