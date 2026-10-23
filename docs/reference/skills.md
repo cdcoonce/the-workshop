@@ -55,7 +55,7 @@ Every skill served from `plugins/`, parsed from each skill's `SKILL.md` frontmat
 | `/request-refactor-plan` | `workbench` | Use when user wants to plan a refactor, create a refactoring RFC, break a refactor into safe incremental steps, or find architectural improvement opportunities (deepening shallow modules, consolidating tightly-coupled code, making a codebase more testable or AI-navigable). |
 | `/security-review` | `workbench` | Security code review for vulnerabilities with confidence-based reporting. |
 | `/session-orchestrator` | `workbench` | Supervises user-visible worker sessions across projects and platforms. |
-| `/shared-tree-safety` | `workbench` | Protect work when a git tree may be shared with a live autonomous agent or another session. |
+| `/shared-tree-safety` | `workbench` | Check who else uses a git tree, index, venv or cache before you reset, rebuild, delete, prune or call it dormant: live processes, MCP and launchd registrations, other sessions. |
 | `/sql-deploy-precheck` | `workbench` | Compile-checks warehouse SQL (Snowflake, BigQuery, Redshift) against the live schema before deploying, catching drift. |
 | `/stale-artifact-sweep` | `workbench` | Re-verifies a recorded issue, review finding, "do not merge" comment, TODO, or blocker against current reality, with evidence. |
 | `/sync-gitlab-dev` | `workshop-maintainer` | Push this repo's GitHub dev to GitLab as a reviewable merge request into GitLab dev, since GitLab is a manually-updated downstream copy (no auto-mirror bot) whose dev MRs merge on CI green. |
@@ -378,7 +378,7 @@ Supervises user-visible worker sessions across projects and platforms. Use when 
 
 *`workbench` plugin*
 
-Protect work when a git tree may be shared with a live autonomous agent or another session. Use before `reset --hard`, force-checkout, or `clean` on any tree an agent might be using, or when taking over a directory mid-task.
+Check who else uses a git tree, index, venv or cache before you reset, rebuild, delete, prune or call it dormant: live processes, MCP and launchd registrations, other sessions. Use before `reset --hard`, `clean`, `reindex --force` or rm.
 
 ### `/sql-deploy-precheck`
 
