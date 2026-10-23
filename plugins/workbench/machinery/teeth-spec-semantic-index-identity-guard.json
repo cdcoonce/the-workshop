@@ -163,6 +163,20 @@
       "replace": "class IdentityChangeRefused(BaseException):"
     },
     {
+      "label": "docs: delete the `/find --reindex` refusal sentence",
+      "file": "../skills/vault-find/references/command.md",
+      "oracle": "real",
+      "find": "A rebuild that would change the recorded model identity is refused unless `--accept-identity-change` is passed. ",
+      "replace": ""
+    },
+    {
+      "label": "docs: revert the model-mismatch clause to plain `--reindex` while keeping the flag literal",
+      "file": "../skills/vault-find/references/command.md",
+      "oracle": "real",
+      "find": "for a model mismatch, list the processes that use the index first, then append `--accept-identity-change` to the `reindex --force` command above.",
+      "replace": "for a model mismatch, an explicit `--reindex` is the recovery path (`--accept-identity-change` exists)."
+    },
+    {
       "label": "[control] emit the refusal's JSON keys in reverse order",
       "file": "engine/semantic_index.py",
       "oracle": "real",

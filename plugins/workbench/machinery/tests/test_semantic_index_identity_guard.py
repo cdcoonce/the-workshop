@@ -244,14 +244,21 @@ def test_guard_lives_in_build_index_not_only_the_cli(vault, monkeypatch) -> None
 
 
 def test_command_doc_carries_the_flag() -> None:
-    """Defect: the operator-facing doc still presents plain --reindex as recovery."""
+    """Defect: the doc drops the refusal sentence or names plain --reindex as the
+    recovery for a model mismatch."""
     doc = (
         Path(__file__).resolve().parents[2]
         / "skills/vault-find/references/command.md"
     ).read_text()
-    assert "--accept-identity-change" in doc
+    section = doc.split("### `/find --reindex`", 1)[1].split("\n#", 1)[0]
+    assert "refused unless `--accept-identity-change` is passed" in section
+
     bullet = next(
         line for line in doc.splitlines() if line.startswith("- **Missing index:**")
     )
     clause = bullet.split("**Corrupt or model-mismatched index:**", 1)[1]
-    assert "--accept-identity-change" in clause
+    assert clause.count("`--reindex`") == 1  # the corrupt-index recovery only
+    assert "model mismatch" in clause
+    mismatch = clause.split("model mismatch", 1)[1]
+    assert "`--accept-identity-change`" in mismatch
+    assert "`--reindex`" not in mismatch
