@@ -1,7 +1,29 @@
 {
   "runner": "pytest",
-  "test_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "-x", "tests/test_codex_enable.py"],
-  "collect_command": ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "tests/test_codex_enable.py"],
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_codex_enable.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_codex_enable.py"
+  ],
   "mutants": [
     {
       "label": "renders the wrong shape instead of render_codex_hooks [predicted: test_hooks_json_is_byte_identical_to_wiring_gen_render]",
@@ -28,7 +50,7 @@
       "label": "identical file no longer recognised, rerun not idempotent [predicted: test_rerun_is_idempotent]",
       "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
       "oracle": "real",
-      "find": "elif dest.is_file() and dest.read_bytes() == body:",
+      "find": "elif dest.read_bytes() == body:",
       "replace": "elif False:"
     },
     {
@@ -72,6 +94,97 @@
       "oracle": "real",
       "find": "| `protect-files.py` | no |",
       "replace": "| `protect-file.py` | no |"
+    },
+    {
+      "label": "--force skips differing runtime (non-.json) files [predicted: test_force_replaces_differing_runtime_files]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if status[dest] == \"unchanged\":\n                continue",
+      "replace": "if status[dest] == \"unchanged\" or (status[dest] == \"differs\" and dest.suffix != \".json\"):\n                continue"
+    },
+    {
+      "label": "trust steps lose the target path [predicted: test_trust_steps_name_the_target_path]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "TRUST_STEPS.format(target=target)",
+      "replace": "TRUST_STEPS.format(target=\"<repo>\")"
+    },
+    {
+      "label": "refusal no longer lists the conflicting files [predicted: test_refusal_lists_each_conflicting_file]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "            print(f\"  {dest.relative_to(target)}\")",
+      "replace": "            pass"
+    },
+    {
+      "label": "byte compare weakened to length compare [predicted: test_same_length_hand_edit_is_still_a_conflict]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "elif dest.read_bytes() == body:",
+      "replace": "elif len(dest.read_bytes()) == len(body):"
+    },
+    {
+      "label": "directory at destination no longer blocked [predicted: test_directory_at_a_destination_errors]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if not dest.is_file():\n            return \"exists and is not a regular file\"",
+      "replace": "if False:\n            return \"exists and is not a regular file\""
+    },
+    {
+      "label": "dangling symlink no longer blocked [predicted: test_dangling_symlink_at_hooks_json_errors]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if dest.is_symlink() and not dest.exists():",
+      "replace": "if False:"
+    },
+    {
+      "label": "status label overwritten becomes written [predicted: test_force_reports_overwritten]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "{'overwritten' if state == 'differs' else state:>11}",
+      "replace": "{state:>11}"
+    },
+    {
+      "label": "write failure no longer rolls back [predicted: test_mid_write_failure_rolls_back]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "for dest, old, old_mode in reversed(undo):",
+      "replace": "for dest, old, old_mode in []:"
+    },
+    {
+      "label": "unchanged files rewritten on rerun [predicted: test_rerun_does_not_rewrite_unchanged_files]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if status[dest] == \"unchanged\":\n                continue",
+      "replace": "if False:\n                continue"
+    },
+    {
+      "label": "exec bit dropped from vendored runner [predicted: test_runner_keeps_its_exec_bit]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "            dest.write_bytes(body)\n            os.chmod(dest, mode)",
+      "replace": "            dest.write_bytes(body)"
+    },
+    {
+      "label": "spec check for unshipped hook removed [predicted: test_spec_naming_an_unshipped_hook_is_an_error]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "        if not (_HOOK_SCRIPTS / entry[\"script\"]).is_file():",
+      "replace": "        if False:"
+    },
+    {
+      "label": "non-directory ancestor not detected (file-where-dir) [predicted: test_file_where_a_directory_is_needed_errors_without_traceback]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "    if not ancestor.is_dir():\n        return f\"needs {ancestor} to be a directory\"",
+      "replace": "    if False:\n        return None"
+    },
+    {
+      "label": "unwritable ancestor not preflighted [predicted: test_unwritable_runtime_dir_errors_and_leaves_no_hooks_json]",
+      "file": "../plugins/workbench/skills/codex-enable/scripts/codex_enable.py",
+      "oracle": "real",
+      "find": "if not os.access(ancestor, os.W_OK | os.X_OK):",
+      "replace": "if False:"
     }
   ]
 }

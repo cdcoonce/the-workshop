@@ -26,6 +26,7 @@ It wraps `render_codex_hooks` from `machinery/tools/wiring_gen.py` over `scripts
 
 - **Rerun-safe.** Identical files report `unchanged`.
 - **Never a silent half-install.** If any target file exists and differs, it prints `REFUSED`, lists the files, and writes nothing. `--force` overwrites them. Read the diff before forcing; a hand-authored `hooks.json` may carry hooks you want to keep.
+- **Fails clean.** An unwritable or blocked path (a file where a directory is needed, a read-only directory, a dangling symlink or a directory at a destination) prints `ERROR:` and exits 2 before writing. A write that still fails midway is rolled back. Runtime files are written before `hooks.json`, and vendored files keep the source file mode.
 - **Trust steps.** Codex skips untrusted hooks silently. On success it prints the two steps only the owner can do: `trust_level = "trusted"` for the repo in `~/.codex/config.toml`, then per-hook approval on first run. Relay them; don't edit `~/.codex/config.toml` yourself.
 
 ## Which hooks are Codex-functional

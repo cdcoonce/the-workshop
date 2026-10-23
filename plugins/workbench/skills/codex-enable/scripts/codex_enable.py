@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 
@@ -58,19 +60,84 @@ def _load_entries() -> list[dict]:
     return data["entries"]
 
 
-def plan(target: Path) -> dict[Path, bytes]:
-    """Every file to vendor, as ``{absolute destination: bytes}``."""
+def plan(target: Path) -> dict[Path, tuple[bytes, int]]:
+    """Every file to vendor as ``{destination: (bytes, mode)}``, runtime first.
+
+    ``hooks.json`` is last on purpose: it is the file that makes Codex run
+    anything, so it must never exist without the runtime it calls.
+    """
     wiring_gen = _load_wiring_gen()
     entries = _load_entries()
-    files: dict[Path, bytes] = {
-        target / ".codex" / "hooks.json": wiring_gen._dump_json(
-            wiring_gen.render_codex_hooks(entries)
-        ).encode("utf-8"),
-        target / _VENDOR_DIR / _RUNNER.name: _RUNNER.read_bytes(),
+    files: dict[Path, tuple[bytes, int]] = {
+        target / _VENDOR_DIR / _RUNNER.name: _file(_RUNNER),
     }
     for name in sorted({e["script"] for e in entries} | set(_SUPPORT_MODULES)):
-        files[target / _VENDOR_DIR / name] = (_HOOK_SCRIPTS / name).read_bytes()
+        files[target / _VENDOR_DIR / name] = _file(_HOOK_SCRIPTS / name)
+    hooks = wiring_gen._dump_json(wiring_gen.render_codex_hooks(entries))
+    files[target / ".codex" / "hooks.json"] = (hooks.encode("utf-8"), 0o644)
     return files
+
+
+def _file(path: Path) -> tuple[bytes, int]:
+    return path.read_bytes(), stat.S_IMODE(path.stat().st_mode)
+
+
+def _blocker(dest: Path) -> str | None:
+    """Why ``dest`` cannot be written at all (``--force`` does not help), if so."""
+    if dest.is_symlink() and not dest.exists():
+        return "is a dangling symlink"
+    if dest.exists():
+        if not dest.is_file():
+            return "exists and is not a regular file"
+        if not os.access(dest, os.W_OK):
+            return "is not writable"
+        return None
+    ancestor = dest.parent
+    while not ancestor.exists():
+        if ancestor.is_symlink():
+            return f"has a dangling symlink at {ancestor}"
+        ancestor = ancestor.parent
+    if not ancestor.is_dir():
+        return f"needs {ancestor} to be a directory"
+    if not os.access(ancestor, os.W_OK | os.X_OK):
+        return f"needs {ancestor} to be writable"
+    return None
+
+
+def _write_all(files, status) -> None:
+    """Write every pending file; on any OSError undo what this run changed."""
+    undo: list[tuple[Path, bytes | None, int | None]] = []
+    made_dirs: list[Path] = []
+    try:
+        for dest, (body, mode) in files.items():
+            if status[dest] == "unchanged":
+                continue
+            missing = []
+            parent = dest.parent
+            while not parent.exists():
+                missing.append(parent)
+                parent = parent.parent
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            made_dirs.extend(reversed(missing))
+            if dest.exists():
+                undo.append((dest, dest.read_bytes(), stat.S_IMODE(dest.stat().st_mode)))
+            else:
+                undo.append((dest, None, None))
+            dest.write_bytes(body)
+            os.chmod(dest, mode)
+    except OSError:
+        for dest, old, old_mode in reversed(undo):
+            if old is None:
+                dest.unlink(missing_ok=True)
+            else:
+                dest.write_bytes(old)
+                os.chmod(dest, old_mode)
+        for directory in reversed(made_dirs):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -95,11 +162,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}")
         return 2
 
+    blocked = [(d, why) for d in files if (why := _blocker(d))]
+    if blocked:
+        for dest, why in blocked:
+            print(f"ERROR: {dest.relative_to(target)} {why}")
+        print("Nothing was written.")
+        return 2
+
     status: dict[Path, str] = {}
-    for dest, body in files.items():
+    for dest, (body, _mode) in files.items():
         if not dest.exists():
             status[dest] = "written"
-        elif dest.is_file() and dest.read_bytes() == body:
+        elif dest.read_bytes() == body:
             status[dest] = "unchanged"
         else:
             status[dest] = "differs"
@@ -111,15 +185,14 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing was written. Review them, then rerun with --force to overwrite.")
         return 1
 
-    for dest, body in files.items():
-        if status[dest] == "unchanged":
-            continue
-        if status[dest] == "differs":
-            status[dest] = "overwritten"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(body)
+    try:
+        _write_all(files, status)
+    except OSError as exc:
+        print(f"ERROR: {exc}")
+        print("Nothing was left behind; the target is as it was.")
+        return 2
     for dest, state in status.items():
-        print(f"{state:>11}  {dest.relative_to(target)}")
+        print(f"{'overwritten' if state == 'differs' else state:>11}  {dest.relative_to(target)}")
     print()
     print(TRUST_STEPS.format(target=target))
     return 0
