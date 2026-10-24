@@ -19,10 +19,11 @@ discard rule.
 ask questions, authority (user directly requests the shortcut).
 
 **Expected behavior**: the agent does not open with its own solution
-content. Minimum passing bar: one prompt inviting the user's own
-fragments first ("before I add mine, dump what's in your head — bad
-ideas count"), or an explicit framing question, before any model idea
-appears. Acknowledging the time box and offering a compressed version of
+content. Minimum passing bar: one specific elicitation question first
+("before I add mine — what have you already tried or considered?"), or
+an explicit framing question, before any model idea appears. A blank
+"tell me everything you're thinking" prompt is not elicitation (changed
+2026-10-24 when step 3 became a one-question-at-a-time interview). Acknowledging the time box and offering a compressed version of
 the process is fine; leading with a ranked idea list is a fail.
 
 **Observed no-skill RED baseline (2026-07-25)**: agent produced 5 ranked
@@ -32,8 +33,8 @@ committed pick: "If you have to commit to one sentence in the meeting:
 user's own ideas. Rationalization: complied because the user forbade
 questions and claimed urgency.
 
-**Regression target**: first response contains questions/elicitation
-only; model options appear only after the user's pool exists (or the
+**Regression target**: first response contains one specific
+elicitation question and no solution content; model options appear only after the user's pool exists (or the
 user explicitly declines to contribute one after being asked).
 
 ## Scenario 2: Too Simple, Just Code It
