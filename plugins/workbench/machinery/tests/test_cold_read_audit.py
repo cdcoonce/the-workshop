@@ -475,6 +475,20 @@ def test_preflight_only_run_with_a_failed_preflight_is_not_scratch_either(tmp_pa
     assert (tokens["scratch"], tokens["probe_build"], tokens["preflight"]) == ("none", "none", "failed")
 
 
+def test_exit_code_prefixed_failed_preflight_is_neither_scratch_nor_probe(tmp_path, capsys):
+    """Guards a build that skips the ``Exit code <N>`` line for the kind but not for the preflight mark.
+
+    A real failed preflight exits non-zero, so its result reads
+    ``Exit code 1`` then ``PREFLIGHT failed``; the command is still a preflight
+    and never counts as scratch use or a probe.
+    """
+    path = Transcript()
+    path.bash(NOISY_PREFLIGHT_COMMAND, "Exit code 1\nPREFLIGHT failed cause=uv-missing", is_error=True)
+    path.end_turn()
+    tokens = run(capsys, path.write(tmp_path), "--issue", "1179", "--scratch-dir", SCRATCH).tokens
+    assert (tokens["scratch"], tokens["probe_build"], tokens["preflight"]) == ("none", "none", "failed")
+
+
 def test_preflight_plus_ls_of_scratch_dir_is_scratch_without_a_probe(tmp_path, capsys):
     """Guards a build that reports ``probe_build=ran`` for any command touching the scratch directory.
 
@@ -684,6 +698,23 @@ def test_preflight_failed_flag_needs_another_tool_use_after_it(tmp_path, capsys)
     went_on.end_turn()
     tokens = run(capsys, went_on.write(tmp_path / "c"), "--issue", "1179").tokens
     assert tokens["flags"] == "scratch-none,no-probe-build,preflight-failed"
+
+
+def test_exit_code_prefixed_failed_preflight_raises_preflight_failed_flag(tmp_path, capsys):
+    """Guards a build that reads a real failed preflight, behind the harness's ``Exit code`` line, as ``none``.
+
+    The result ``Exit code 1`` then ``PREFLIGHT failed cause=x`` (``is_error``
+    true) reads ``failed``; with another tool use after it the flag
+    ``preflight-failed`` is raised and ``preflight-none`` is not.
+    """
+    t = Transcript()
+    t.bash("echo setup", "Exit code 1\nPREFLIGHT failed cause=x", is_error=True)
+    t.tool("Read", "text", file_path="a.md")
+    t.end_turn()
+    tokens = run(capsys, t.write(tmp_path), "--issue", "1179").tokens
+    assert tokens["preflight"] == "failed"
+    assert "preflight-failed" in tokens["flags"].split(",")
+    assert "preflight-none" not in tokens["flags"].split(",")
 
 
 # --------------------------------------------------------------------------- #
@@ -2057,13 +2088,20 @@ def test_comments_seen_reads_every_comments_fetch_result(tmp_path, capsys):
         pytest.param("PREFLIGHT failed", "failed", id="bare-failed"),
         pytest.param("note: PREFLIGHT ok follows", "none", id="ok-inside-the-text"),
         pytest.param("see PREFLIGHT failed later", "none", id="failed-inside-the-text"),
+        pytest.param("Exit code 1\nPREFLIGHT failed cause=x", "failed", id="exit-code-failed"),
+        pytest.param("Exit code 1\nPREFLIGHT ok", "ok", id="exit-code-ok"),
+        pytest.param("Exit code 1\nnote PREFLIGHT failed", "none", id="exit-code-then-prose"),
+        pytest.param("Exit code x\nPREFLIGHT failed", "none", id="exit-code-nonnumeric"),
+        pytest.param("Exit code 1\nExit code 2\nPREFLIGHT failed", "none", id="exit-code-twice"),
     ],
 )
 def test_preflight_words_must_begin_the_result(output, expected, tmp_path, capsys):
     """Guards a build that finds ``PREFLIGHT ok`` or ``PREFLIGHT failed`` anywhere in the result, or needs more than the prefix.
 
     The result must begin with the words; a result that is exactly them is
-    enough, and the same words later in the text are not a preflight.
+    enough, and the same words later in the text are not a preflight. One first
+    line ``Exit code <N>`` (digits), which the harness writes for a non-zero
+    exit, is skipped; nothing else is.
     """
     assert tokens_of(capsys, tmp_path, "echo setup", "--issue", "1179", output=output)["preflight"] == expected
 
