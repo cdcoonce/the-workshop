@@ -201,8 +201,16 @@ def _tool_use(block: dict) -> ToolUse:
     return ToolUse(block.get("id"), block.get("name"), command if isinstance(command, str) else "")
 
 
+_EXIT_CODE_LINE = re.compile(r"^Exit code [0-9]+\n")
+
+
 def _preflight_kind(text: str) -> str | None:
-    """``ok`` or ``failed`` when *text* begins a preflight result, else ``None``."""
+    """``ok`` or ``failed`` when *text* begins a preflight result, else ``None``.
+
+    One first line ``Exit code <N>``, which the harness writes for a command
+    that exits non-zero, is skipped; the words must begin the rest.
+    """
+    text = _EXIT_CODE_LINE.sub("", text, count=1)
     if text.startswith(PREFLIGHT_OK):
         return "ok"
     if text.startswith(PREFLIGHT_FAILED):
