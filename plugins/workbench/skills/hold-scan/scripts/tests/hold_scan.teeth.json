@@ -382,6 +382,13 @@
       "replace": "    if a is None or b is not None:"
     },
     {
+      "label": "`_later` compares raw strings, not parsed datetimes",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "    a, b = _parse_ts(created), _parse_ts(updated)",
+      "replace": "    a, b = created, updated"
+    },
+    {
       "label": "curly apostrophe dropped from don't pattern",
       "file": "../hold_scan.py",
       "oracle": "real",
