@@ -1,0 +1,18 @@
+[
+  {
+    "user": {
+      "login": "cdcoonce"
+    },
+    "created_at": "2026-08-10T10:52:44Z",
+    "html_url": "https://github.com/cdcoonce/breakroom/pull/112#issuecomment-5239179832",
+    "body": "### Reviewer advisory (non-blocking)\n\nReviewed the diff as text, plus the surrounding call sites."
+  },
+  {
+    "user": {
+      "login": "cdcoonce"
+    },
+    "created_at": "2026-08-17T00:54:25Z",
+    "html_url": "https://github.com/cdcoonce/breakroom/pull/112#issuecomment-5310618968",
+    "body": "Holding this unmerged. The dict-merge-order half of #42 is correct and has teeth; the tail-window half is a silent data-corruption regression. Follow-up filed as #164 with the full spec."
+  }
+]
