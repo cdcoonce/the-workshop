@@ -18,7 +18,7 @@ Accept freeform content from the user and route it to the appropriate vault loca
 2. **Determine the target**:
    - For new notes: create in the suggested folder with the appropriate template
    - For updates to existing notes: find and update the relevant note
-   - For wins: update `perf/Brag Doc.md` AND create evidence if substantial
+   - For wins: update `perf/Brag Doc.md` AND create evidence if substantial. A Brag Doc entry is one top-level `- **YYYY-MM-DD (...)**` bullet with no nested sub-bullets. It says what happened and its impact, is at most 700 characters, and carries at least one wikilink to the full narrative; a story already told in Key Decisions is linked, not retold. The vault gate (`ci/ledger_cap.py`) enforces the cap on entries dated on or after its cutoff.
    - For tasks: append to the current week's task file in `personal/tasks/` using `task_manager.add_task()`. Extract any wikilinks from the text. Do NOT create a standalone note — tasks go into the weekly file.
 
 3. **Apply the template**:

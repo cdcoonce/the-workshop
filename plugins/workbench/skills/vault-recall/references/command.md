@@ -49,7 +49,7 @@ If a step genuinely needs deep judgment, do NOT escalate the model — leave a o
    Frontmatter and ≥1 wikilink are mandatory (validate-write enforces this).
 
 5. **Update `personal/Index.md`** — add stubs under a `### Builds` subsection of projects. One line each.
-6. **Run the `brag-spotter` agent** over only the stubs created this run (skip if zero). Let it propose Brag Doc entries; write the ones that meet its own bar — autonomous vault writes are approved, git is the undo.
+6. **Run the `brag-spotter` agent** over only the stubs created this run (skip if zero). brag-spotter only proposes candidates; recall (the calling skill) writes the ones that hold up, in the Brag shape — autonomous vault writes are approved, git is the undo. A Brag Doc entry is one top-level `- **YYYY-MM-DD (...)**` bullet with no nested sub-bullets. It says what happened and its impact, is at most 700 characters, and carries at least one wikilink to the full narrative; a story already told in Key Decisions is linked, not retold. The vault gate (`ci/ledger_cap.py`) enforces the cap on entries dated on or after its cutoff.
 7. **Run the `cross-linker` agent** over only the files created/modified this run (skip if zero).
 8. **Refresh the handoff** per `/handoff` — fold in what landed (one line per stub, linked) and clear anything the merges resolved.
 9. **Write state + sync.** Update `.brain/recall-state.json` (`last_run` = now). Commit everything: `vault: /recall consolidation YYYY-MM-DD` and push per `/sync`.

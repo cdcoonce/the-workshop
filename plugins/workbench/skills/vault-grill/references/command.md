@@ -82,7 +82,7 @@ Charles's head but not yet (fully) in the vault.
 | -------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **Person**           | remit · history with Charles · how they work · what they care about · relationships/influence · current plate | `org/people/<Full Name>.md`                   |
 | **Project**          | goal / definition-of-done · status & momentum · key decisions + *why* · risks / open questions · stakeholders / deps · origin | `work/active/` or `personal/projects/`        |
-| **Decision**         | the choice & context · options considered · rationale / tradeoffs · what it forecloses · revisit conditions | `brain/Key Decisions.md` or a decision record |
+| **Decision**         | the choice & context · options considered · rationale / tradeoffs · what it forecloses · revisit conditions | `brain/Key Decisions.md` only if it binds more than one project or the vault itself (one paragraph, at most 800 characters including its heading, with a wikilink to the full record; `ci/ledger_cap.py` enforces it); a per-project decision goes to a `## Decisions` section on the project note, newest first |
 | **Concept / learning** | it in your words · why it matters to you · how it connects · where you're fuzzy · sources           | `personal/learning/`                          |
 | **Idea**             | core insight · what sparked it · what it could become · what would kill it · adjacent ideas           | `personal/ideas/`                             |
 | **Unmatched**        | one question to name the type, then improvise                                                         | route by best fit                             |
