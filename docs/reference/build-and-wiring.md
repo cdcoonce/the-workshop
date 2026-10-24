@@ -79,6 +79,7 @@ uses a descriptive prefix (for example `protect-files.py` documents itself as a
 | `inject_persona.py` | `persona-thinking-partner` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
 | `post-edit-lint.py` | `workbench` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
 | `protect-files.py` | `workbench` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
+| `refuse-held-merge.py` | `workbench` | `PreToolUse` | PreToolUse hook (Bash): refuse `gh pr merge` / `glab mr merge` on a recorded hold. |
 | `remind-skill-announce.py` | `workbench` | `PostToolUse` | PostToolUse hook: remind Claude to announce a skill it just invoked. |
 | `snapshot-subagent-start.py` | `workbench` | `SubagentStart` | SubagentStart hook: record a git baseline for the evidence check at stop. |
 | `suggest-handoff-on-context.py` | `workbench` | `UserPromptSubmit` | UserPromptSubmit hook: tell the user (not the agent) once the session's context grows large. |

@@ -1,0 +1,323 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_refuse_held_merge_hook.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "--collect-only",
+    "-q",
+    "tests/test_refuse_held_merge_hook.py"
+  ],
+  "mutants": [
+    {
+      "label": "tool-name gate removed",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "payload.get(\"tool_name\") not in TOOLS",
+      "replace": "False"
+    },
+    {
+      "label": "matcher IDs lose `shell`",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "TOOLS = {\"Bash\", \"bash\", \"shell\"}",
+      "replace": "TOOLS = {\"Bash\", \"bash\"}"
+    },
+    {
+      "label": "--disable-auto still scanned",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if \"--disable-auto\" in args:\n                continue\n",
+      "replace": ""
+    },
+    {
+      "label": "loop depth ignored",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            merges.append(Merge(tool, args, cwd, depth > 0 or fed))",
+      "replace": "            merges.append(Merge(tool, args, cwd, fed))"
+    },
+    {
+      "label": "xargs feed ignored",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            merges.append(Merge(tool, args, cwd, depth > 0 or fed))",
+      "replace": "            merges.append(Merge(tool, args, cwd, depth > 0))"
+    },
+    {
+      "label": "second merge allowed",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        if len(merges) > 1 or merges[0].looped:",
+      "replace": "        if merges[0].looped:"
+    },
+    {
+      "label": "newline not a command separator",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "_PUNCT = \";&|()\\n\"",
+      "replace": "_PUNCT = \";&|()\""
+    },
+    {
+      "label": "subshell/$( not a command start",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "_PUNCT = \";&|()\\n\"",
+      "replace": "_PUNCT = \";&|\\n\""
+    },
+    {
+      "label": "do/then not stripped",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "_PRE_WORDS = {\"do\", \"then\", ",
+      "replace": "_PRE_WORDS = {"
+    },
+    {
+      "label": "quoted text counted as a merge (raw substring)",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            merges.append(Merge(tool, args, cwd, depth > 0 or fed))\n    return merges",
+      "replace": "            merges.append(Merge(tool, args, cwd, depth > 0 or fed))\n    if not merges and _MERGE_PHRASE.search(command):\n        merges.append(Merge('gh', ['x'], cwd, False))\n    return merges"
+    },
+    {
+      "label": "unparseable merge phrase passes",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "                raise Refuse(\"Refusing merge: the command cannot be parsed. Run the merge as its own call.\")",
+      "replace": "                return 0, \"\""
+    },
+    {
+      "label": "non-literal number accepted",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    elif positional and re.fullmatch(r\"\\d+\", positional):",
+      "replace": "    elif positional:"
+    },
+    {
+      "label": "URL number not parsed",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    url = _from_url(merge.tool, positional) if positional else None",
+      "replace": "    url = None"
+    },
+    {
+      "label": "--repo= form ignored",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if a.startswith(\"--repo=\"):\n                repo = a.split(\"=\", 1)[1]\n            elif a in",
+      "replace": "            if False:\n                pass\n            elif a in"
+    },
+    {
+      "label": "value flags do not skip their value",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            elif \"=\" not in a and a in _VALUE_FLAGS:\n                i += 1",
+      "replace": "            elif False:\n                i += 1"
+    },
+    {
+      "label": "literal cd ignored",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            cwd = _resolve_cd(cwd, words)\n            continue",
+      "replace": "            continue"
+    },
+    {
+      "label": "non-literal cd keeps old cwd",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            cwd = _resolve_cd(cwd, words)\n            continue",
+      "replace": "            cwd = _resolve_cd(cwd, words) or cwd\n            continue"
+    },
+    {
+      "label": "missing origin falls through to scan with empty repo",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    if repo is None:\n        raise Refuse(\n            \"Refusing merge: cannot tell",
+      "replace": "    if False:\n        raise Refuse(\n            \"Refusing merge: cannot tell"
+    },
+    {
+      "label": "glab origin keeps only last two segments",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    return \"/\".join(parts) if tool == \"glab\" else \"/\".join(parts[-2:])",
+      "replace": "    return \"/\".join(parts[-2:])"
+    },
+    {
+      "label": "gitlab argv uses --repo",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        return [\"--gitlab\", repo, \"--mr\", str(number)]",
+      "replace": "        return [\"--repo\", repo, \"--pr\", str(number)]"
+    },
+    {
+      "label": "scan timeout fails open",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        raise Refuse(f\"Refusing merge: {call} timed out after",
+      "replace": "        return {\"verdict\": \"NO-HOLD-FOUND\"}\n        raise Refuse(f\"Refusing merge: {call} timed out after"
+    },
+    {
+      "label": "unparseable scanner output fails open",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    except json.JSONDecodeError:\n        raise Refuse(",
+      "replace": "    except json.JSONDecodeError:\n        return {\"verdict\": \"NO-HOLD-FOUND\"}\n        raise Refuse("
+    },
+    {
+      "label": "unknown verdict accepted as clean",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    if not isinstance(out, dict) or out.get(\"verdict\") not in (\"HOLD-FOUND\", \"NO-HOLD-FOUND\", \"SCAN-ERROR\"):",
+      "replace": "    if not isinstance(out, dict):"
+    },
+    {
+      "label": "SCAN-ERROR passes",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        if verdict == \"SCAN-ERROR\":",
+      "replace": "        if verdict == \"SCAN-ERROR\" and False:"
+    },
+    {
+      "label": "SCAN-ERROR does not name failed calls",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            failed = [e.get(\"name\", \"?\") for e",
+      "replace": "            failed = [\"\" for e"
+    },
+    {
+      "label": "thread ack is not strictly after (>=)",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if hit_ts is not None and hit_ts < ack_ts:",
+      "replace": "            if hit_ts is not None and hit_ts <= ack_ts:"
+    },
+    {
+      "label": "ack clears threads regardless of time",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if hit_ts is not None and hit_ts < ack_ts:",
+      "replace": "            if True:"
+    },
+    {
+      "label": "vault hits need no ack",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        if source == \"vault\" and acknowledgement:",
+      "replace": "        if source == \"vault\":"
+    },
+    {
+      "label": "ack clears label hits",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        if source == \"vault\" and acknowledgement:\n            continue",
+      "replace": "        if source in (\"vault\", \"label\") and acknowledgement:\n            continue"
+    },
+    {
+      "label": "unknown source cleared by ack",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        left.append(h)\n    return left",
+      "replace": "        if acknowledgement and source not in (\"thread\", \"label\"):\n            continue\n        left.append(h)\n    return left"
+    },
+    {
+      "label": "ack instruction omitted",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        lines.append(ACK_INSTRUCTION)",
+      "replace": "        pass"
+    },
+    {
+      "label": "label reason omitted",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        if any(h.get(\"source\") == \"label\" for h in left):",
+      "replace": "        if False:"
+    },
+    {
+      "label": "cleared hits still printed",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        lines += [f\"- [{h.get('source')}] {h.get('url_or_path')}: {h.get('quote')}\" for h in left]",
+      "replace": "        lines += [f\"- [{h.get('source')}] {h.get('url_or_path')}: {h.get('quote')}\" for h in out.get('hits', [])]"
+    },
+    {
+      "label": "malformed stdin blocks",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    except (json.JSONDecodeError, OSError):\n        return 0",
+      "replace": "    except (json.JSONDecodeError, OSError):\n        return 2"
+    },
+    {
+      "label": "plugin root ignores CLAUDE_PLUGIN_ROOT",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    return Path(env) if env else default_plugin_root()",
+      "replace": "    return default_plugin_root()"
+    },
+    {
+      "label": "default plugin root off by one",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    return Path(__file__).resolve().parents[2]",
+      "replace": "    return Path(__file__).resolve().parents[1]"
+    },
+    {
+      "label": "timeout constant raised",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "SCAN_TIMEOUT = 45",
+      "replace": "SCAN_TIMEOUT = 450"
+    },
+    {
+      "label": "timestamps compared as strings",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "            if hit_ts is not None and hit_ts < ack_ts:",
+      "replace": "            if h.get(\"timestamp\") and str(h[\"timestamp\"]) < str(acknowledgement[\"timestamp\"]):"
+    },
+    {
+      "label": "scanner exit code trusted before stdout JSON",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    try:\n        out = json.loads(proc.stdout)",
+      "replace": "    if proc.returncode in (1, 2):\n        raise Refuse('scanner failed')\n    try:\n        out = json.loads(proc.stdout)"
+    },
+    {
+      "label": "gh matched only as a bare word (basename dropped)",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "        tool = os.path.basename(head)",
+      "replace": "        tool = head"
+    },
+    {
+      "label": "env/command/sudo/nohup/exec wrappers not stripped",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "\"time\", \"env\", \"command\", \"sudo\", \"nohup\", \"exec\"}",
+      "replace": "\"time\"}"
+    },
+    {
+      "label": "backslash-newline continuation not joined",
+      "file": "../plugins/workbench/hooks/scripts/refuse-held-merge.py",
+      "oracle": "real",
+      "find": "    command = re.sub(r\"\\\\\\r?\\n\", \"\", command)",
+      "replace": "    command = command"
+    }
+  ]
+}
