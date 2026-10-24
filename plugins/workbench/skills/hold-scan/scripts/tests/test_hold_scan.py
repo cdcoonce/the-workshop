@@ -758,6 +758,22 @@ def test_updated_before_created_does_not_move_the_stamp(stub, no_vault):
     assert scan(*gh(BR, 1))[1]["hits"][0]["timestamp"] == "2026-09-01T09:00:00Z"
 
 
+@pytest.mark.parametrize("created, updated, expect", [
+    # As strings "." sorts before "Z", so the half-second edit would read as earlier.
+    ("2026-10-01T10:00:00Z", "2026-10-01T10:00:00.500Z", "updated"),
+    # 05:30-05:00 is 10:30Z, later than 10:00Z, though "05" sorts before "10".
+    ("2026-10-01T10:00:00Z", "2026-10-01T05:30:00-05:00", "updated"),
+    # The reverse: as strings the update would read as later.
+    ("2026-10-01T10:00:00.500Z", "2026-10-01T10:00:00Z", "created"),
+])
+def test_later_compares_parsed_times_not_strings(stub, no_vault, created, updated, expect):
+    c = comment("do not merge", ts=created)
+    c["updated_at"] = updated
+    stub.pr(BR, 1)
+    stub.thread(BR, 1, [c])
+    assert scan(*gh(BR, 1))[1]["hits"][0]["timestamp"] == {"created": created, "updated": updated}[expect]
+
+
 def test_edited_inline_and_gitlab_notes_use_updated_at(stub, no_vault):
     inline = comment("do not merge", ts="2026-09-01T09:00:00Z")
     inline["updated_at"] = "2026-09-02T09:00:00Z"
