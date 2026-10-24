@@ -3,8 +3,10 @@
 Every skill that writes `brain/Key Decisions.md` or `perf/Brag Doc.md` states
 the same scope test and the same two caps (800 and 700 characters), which the
 vault gate `ci/ledger_cap.py` enforces. Assertions pin meaningful phrases, not
-whole paragraphs, so a reword that keeps the rule passes and one that drops it
-fails.
+whole paragraphs. Numbers match on word boundaries, and the scope test, the cap
+phrasing and the nesting ban each accept a small set of equivalent wordings, so
+a reword that keeps the rule passes and one that drops it fails. The teeth spec
+holds reword controls that prove it.
 """
 
 import re
@@ -24,6 +26,14 @@ SPOTTER = WORKBENCH / "agents" / "brag-spotter" / "AGENT.md"
 
 KD_CAP = 800
 BRAG_CAP = 700
+SCOPE_RE = r"(more than one project|two or more projects) or the vault itself"
+NO_NEST_RE = r"(no|without) nested sub-bullets"
+
+
+def _cap(n: int) -> str:
+    return rf"(at most|no more than|up to) \b{n}\b characters"
+
+
 BRAG_WRITERS = {
     "wrap-up": WRAP_UP,
     "standup": STANDUP,
@@ -54,7 +64,7 @@ def _decision_row(text: str) -> str:
 def test_wrap_up_key_decisions_scope_is_cross_project_only():
     raw = WRAP_UP.read_text()
     step = " ".join(_step(raw, 6).split())
-    assert "more than one project or the vault itself" in step
+    assert re.search(SCOPE_RE, step)
     assert "`## Decisions` section on the project note" in step
     assert re.search(r"session status.{0,60}handoff and the project note", step, re.I)
     assert "significant decisions" not in step.lower()
@@ -62,25 +72,48 @@ def test_wrap_up_key_decisions_scope_is_cross_project_only():
 
 def test_wrap_up_key_decisions_entry_is_capped_and_linked():
     step = " ".join(_step(WRAP_UP.read_text(), 6).split())
-    assert re.search(rf"at most {KD_CAP} characters including its heading", step)
+    assert re.search(_cap(KD_CAP) + r" including its heading", step)
     assert "one paragraph" in step
     assert re.search(r"wikilink to the full record", step)
 
 
 def test_grill_routes_per_project_decisions_to_the_project_note():
     row = " ".join(_decision_row(GRILL.read_text()).split())
-    assert "more than one project or the vault itself" in row
+    assert re.search(SCOPE_RE, row)
     assert "`## Decisions` section on the project note" in row
-    assert str(KD_CAP) in row
+    assert re.search(rf"\b{KD_CAP}\b", row)
+
+
+def test_grill_decision_entry_requires_a_wikilink():
+    row = " ".join(_decision_row(GRILL.read_text()).split())
+    assert "wikilink to the full record" in row
 
 
 @pytest.mark.parametrize("name", sorted(BRAG_WRITERS))
 def test_brag_writers_state_the_one_bullet_shape_and_cap(name):
     text = _flat(BRAG_WRITERS[name])
     assert "one top-level `- **YYYY-MM-DD (...)**` bullet" in text
-    assert "no nested sub-bullets" in text
-    assert re.search(rf"at most {BRAG_CAP} characters", text)
+    assert re.search(NO_NEST_RE, text)
+    assert re.search(_cap(BRAG_CAP), text)
     assert "wikilink to the full narrative" in text
+
+
+@pytest.mark.parametrize("name", sorted(BRAG_WRITERS))
+def test_brag_writers_link_rather_than_retell(name):
+    assert "linked, not retold" in _flat(BRAG_WRITERS[name])
+
+
+def test_brag_spotter_states_the_brag_shape_and_cap():
+    text = _flat(SPOTTER)
+    draft = re.search(r"Suggested Brag Doc entry \([^)]*\)", text)
+    assert draft, "step 4 draft line not found"
+    assert re.search(_cap(BRAG_CAP), draft.group(0))
+    marker = text.find("in the Brag shape:")
+    assert marker >= 0, "step 5 shape clause not found"
+    shape = text[marker:]
+    assert re.search(NO_NEST_RE, shape)
+    assert re.search(_cap(BRAG_CAP), shape)
+    assert "wikilink to the full narrative" in shape
 
 
 def test_brag_spotter_never_writes_and_recall_writes_its_candidates():

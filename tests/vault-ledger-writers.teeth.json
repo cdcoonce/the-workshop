@@ -67,6 +67,34 @@
       "replace": "is at most 900 characters"
     },
     {
+      "label": "8: dump 'linked, not retold' clause deleted",
+      "file": "../plugins/workbench/skills/vault-dump/references/command.md",
+      "oracle": "real",
+      "find": "narrative; a story already told in Key Decisions is linked, not retold.",
+      "replace": "narrative."
+    },
+    {
+      "label": "9: grill Decision row loses its wikilink-to-the-record clause",
+      "file": "../plugins/workbench/skills/vault-grill/references/command.md",
+      "oracle": "real",
+      "find": "with a wikilink to the full record; ",
+      "replace": ""
+    },
+    {
+      "label": "10: brag-spotter step 5 shape clause deleted",
+      "file": "../plugins/workbench/agents/brag-spotter/AGENT.md",
+      "oracle": "real",
+      "find": " in the Brag shape: one top-level `- **YYYY-MM-DD (...)**` bullet, no nested sub-bullets, at most 700 characters, with a wikilink to the full narrative.",
+      "replace": "."
+    },
+    {
+      "label": "11: brag-spotter step 4 draft cap deleted",
+      "file": "../plugins/workbench/agents/brag-spotter/AGENT.md",
+      "oracle": "real",
+      "find": " (a draft in the Brag shape, at most 700 characters)",
+      "replace": ""
+    },
+    {
       "label": "7 [control]: project-note Decisions 'newest first' clause deleted",
       "file": "../plugins/workbench/skills/vault-wrap-up/references/command.md",
       "oracle": "real",
@@ -74,6 +102,33 @@
       "replace": "on the project note, with the same date-led bullet",
       "expect": "survived",
       "why": "No test pins the ordering of the project-note ## Decisions section; the wrap-up scope tests pin only the section name and the Key Decisions routing."
+    },
+    {
+      "label": "12 [control]: wrap-up scope reworded to 'two or more projects'",
+      "file": "../plugins/workbench/skills/vault-wrap-up/references/command.md",
+      "oracle": "real",
+      "find": "decisions that bind more than one project or the vault itself",
+      "replace": "decisions that bind two or more projects or the vault itself",
+      "expect": "survived",
+      "why": "A reword that keeps the rule must not trip the tests."
+    },
+    {
+      "label": "13 [control]: dump cap reworded to 'no more than 700 characters'",
+      "file": "../plugins/workbench/skills/vault-dump/references/command.md",
+      "oracle": "real",
+      "find": "is at most 700 characters",
+      "replace": "is no more than 700 characters",
+      "expect": "survived",
+      "why": "A reword that keeps the rule must not trip the tests."
+    },
+    {
+      "label": "14 [control]: standup nesting ban reworded to 'without nested sub-bullets'",
+      "file": "../plugins/workbench/skills/vault-standup/references/command.md",
+      "oracle": "real",
+      "find": " with no nested sub-bullets",
+      "replace": " without nested sub-bullets",
+      "expect": "survived",
+      "why": "A reword that keeps the rule must not trip the tests."
     }
   ]
 }
