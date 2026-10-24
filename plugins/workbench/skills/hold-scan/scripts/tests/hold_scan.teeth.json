@@ -207,14 +207,14 @@
       "replace": "    prefixes = {name.lower()}"
     },
     {
-      "label": "every Key Decisions entry is in scope",
+      "label": "every Holds entry is in scope",
       "file": "../hold_scan.py",
       "oracle": "real",
       "find": "    mine = [e for e in entries if word.search(e)]",
       "replace": "    mine = entries"
     },
     {
-      "label": "Key Decisions entry ignores the ## stop heading",
+      "label": "Holds entry ignores the ## stop heading",
       "file": "../hold_scan.py",
       "oracle": "real",
       "find": "re.compile(r\"^### \"), (\"### \", \"## \"))",
@@ -319,14 +319,14 @@
       "replace": "sorted(root.rglob(\"*.md\"), reverse=True)"
     },
     {
-      "label": "Key Decisions name match not whole-word",
+      "label": "Holds name match not whole-word",
       "file": "../hold_scan.py",
       "oracle": "real",
       "find": "rf\"\\b(?:{names})\\b\", re.I)",
       "replace": "rf\"(?:{names})\", re.I)"
     },
     {
-      "label": "Key Decisions name match case-sensitive",
+      "label": "Holds name match case-sensitive",
       "file": "../hold_scan.py",
       "oracle": "real",
       "find": "rf\"\\b(?:{names})\\b\", re.I)",

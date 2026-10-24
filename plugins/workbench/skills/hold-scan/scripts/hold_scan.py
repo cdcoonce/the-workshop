@@ -338,7 +338,7 @@ def _has_number(paragraph: str, numbers: set[int], prefixes: set[str]) -> bool:
 
 
 def scan_vault(scan: Scan, root: Path, slug: str, name: str, aliases: list[str], numbers: set[int]) -> None:
-    """Scan the two vault scopes for a paragraph naming a searched number beside a hold word."""
+    """Scan the two vault scopes: status paragraphs, and open-hold entries in brain/Holds.md."""
     prefixes = {name.lower(), *(a.lower() for a in aliases)}
 
     def check(path: Path, block: str) -> None:
@@ -361,17 +361,18 @@ def scan_vault(scan: Scan, root: Path, slug: str, name: str, aliases: list[str],
             check(path, block)
     scan.note("vault:owning-notes", "read", f"{owned} notes own {slug}")
 
-    kd = root / "brain" / "Key Decisions.md"
-    if not kd.is_file():
-        scan.note("vault:key-decisions", "skipped", "brain/Key Decisions.md not found")
+    holds = root / "brain" / "Holds.md"
+    if not holds.is_file():
+        scan.note("vault:holds", "skipped", "brain/Holds.md not found")
         return
     names = "|".join(re.escape(n) for n in prefixes)
     word = re.compile(rf"\b(?:{names})\b", re.I)
-    entries = _section(kd.read_text(errors="replace"), re.compile(r"^### "), ("### ", "## "))
+    entries = _section(holds.read_text(errors="replace"), re.compile(r"^### "), ("### ", "## "))
     mine = [e for e in entries if word.search(e)]
     for entry in mine:
-        check(kd, entry)
-    scan.note("vault:key-decisions", "read", f"{len(mine)} of {len(entries)} entries name {name}")
+        if _has_number(entry, numbers, prefixes):
+            scan.hit("vault", str(holds), entry.splitlines()[0].strip()[:QUOTE_LIMIT], None)
+    scan.note("vault:holds", "read", f"{len(mine)} of {len(entries)} entries name {name}")
 
 
 # ---- Driver -----------------------------------------------------------------

@@ -1,0 +1,79 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "plugins/workbench/skills/hold-scan/scripts/tests"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "plugins/workbench/skills/hold-scan/scripts/tests"
+  ],
+  "mutants": [
+    {
+      "label": "1 B1: scan_vault reads Key Decisions.md again",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "holds = root / \"brain\" / \"Holds.md\"",
+      "replace": "holds = root / \"brain\" / \"Key Decisions.md\""
+    },
+    {
+      "label": "2 B3: Holds entry needs a hold word again",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        if _has_number(entry, numbers, prefixes):",
+      "replace": "        if VAULT_HOLD_WORDS.search(entry) and _has_number(entry, numbers, prefixes):"
+    },
+    {
+      "label": "3 B2: repo/alias scoping is substring, not whole-word",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "rf\"\\b(?:{names})\\b\", re.I)",
+      "replace": "rf\"(?:{names})\", re.I)"
+    },
+    {
+      "label": "4 B4: missing Holds.md records no skipped note",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "        scan.note(\"vault:holds\", \"skipped\", \"brain/Holds.md not found\")\n        return",
+      "replace": "        return"
+    },
+    {
+      "label": "5 B5: preamble under the top # heading is treated as an entry",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "_section(holds.read_text(errors=\"replace\"), re.compile(r\"^### \"), (\"### \", \"## \"))",
+      "replace": "_section(holds.read_text(errors=\"replace\"), re.compile(r\"^(?:### |# )\"), (\"### \", \"## \"))"
+    },
+    {
+      "label": "6 B3: quote is the whole entry text, not the heading line",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "entry.splitlines()[0].strip()[:QUOTE_LIMIT]",
+      "replace": "entry.strip()[:QUOTE_LIMIT]"
+    },
+    {
+      "label": "7 control: Holds.md read with errors=strict",
+      "file": "../hold_scan.py",
+      "oracle": "real",
+      "find": "_section(holds.read_text(errors=\"replace\"), re.compile(r\"^### \"), (\"### \", \"## \"))",
+      "replace": "_section(holds.read_text(errors=\"strict\"), re.compile(r\"^### \"), (\"### \", \"## \"))",
+      "expect": "survived",
+      "why": "No test feeds non-UTF-8 bytes into Holds.md, so strict decoding is never exercised."
+    }
+  ]
+}

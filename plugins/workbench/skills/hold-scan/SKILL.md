@@ -48,8 +48,9 @@ python3 "<skill base dir>/scripts/hold_scan.py" --gitlab GROUP/PROJECT --mr N --
    - Closing issues' comments are not read. Their precision was never measured, and issue threads carry spec-review verdicts. An unmeasured source is not armed.
 2. **Labels.** `afk:hold` on a closing issue, or on a `Depends on` target of one (one level deep), is a hit. `requires:human` never is.
 3. **Vault (optional).** Resolved by walking up from `CLAUDE_PROJECT_DIR` (else `PWD`) for `.vault/vault.json`, else `vault_root` in `~/.workshop/hold-scan/hold-scan.toml`, else skipped. The skill works on a machine with no vault. A configured `vault_root` without `.vault/vault.json`, or malformed TOML, is a failed call.
-   - Scope is two places: the `## Current Status` section of each note whose frontmatter `repo:` or `description:` contains `OWNER/NAME`, and each `### ` entry of `brain/Key Decisions.md` naming the repo (or an alias) as a whole word.
-   - A hit is a paragraph holding a searched number (the PR, its closing issues, their `Depends on` targets) and a hold word (`held|hold|holding|frozen|freeze|reserv*|do not merge|revert*`). A number counts only whole (`#23` is not `#236`) and only bare or prefixed by the repo name or an alias (`hcc#42` is never household-app's).
+   - Scope is two places. First, the `## Current Status` section of each note whose frontmatter `repo:` or `description:` contains `OWNER/NAME`: a hit there is a paragraph holding a searched number (the PR, its closing issues, their `Depends on` targets) and a hold word (`held|hold|holding|frozen|freeze|reserv*|do not merge|revert*`). Second, `brain/Holds.md`, the vault's list of open holds. `brain/Key Decisions.md` is no longer read.
+   - `brain/Holds.md` holds open holds only. Each hold is one `### ` entry, e.g. `### 2026-10-11 afk-agent-system#1638 — reason`, with a free-text body. Lifting a hold means deleting its entry. The frontmatter and intro before the first `### ` are never an entry, and a `## ` heading ends the last entry. An entry is in scope when it names the repo (or an alias) as a whole word, case-insensitively. In scope, a searched number is a hit with no hold word required, since the file's only content is holds; the quote is the entry's heading line. A missing `brain/Holds.md` is a `skipped` note (`vault:holds`), not a clean read.
+   - A number counts only whole (`#23` is not `#236`) and only bare or prefixed by the repo name or an alias (`hcc#42` is never household-app's).
    - Config shape: top-level `vault_root = "/abs/path"`, and `[aliases]` keyed by repo NAME, e.g. `household-app = ["happ"]`.
 
 ## Known false positive
@@ -64,7 +65,7 @@ quoted paragraph before deciding.
 The guard preserves a hold when in doubt, so these read as hits or misses by design.
 
 - A hold inside a code fence or a `> quoted` reply is a live hit.
-- Negated or lifted text ("do not merge" followed by "ok to merge now") still hits.
+- Negated or lifted text ("do not merge" followed by "ok to merge now") still hits in thread text and `## Current Status`. A `brain/Holds.md` hold is lifted by deleting its entry, so lifted text there does not hit.
 - `cannot merge until` hits through `not merge`, and so does any use of "unmerged".
 - Thread quotes are not truncated: a 2 MB line prints whole. Only vault quotes are cut (300 characters).
 - A bulleted `- hold-scan: acknowledged` is not an acknowledgement.

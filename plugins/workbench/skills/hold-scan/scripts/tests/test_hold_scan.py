@@ -346,7 +346,7 @@ def test_number_boundaries_with_a_hold_word(stub, vault, tmp_path, monkeypatch, 
 def test_alias(stub, vault, tmp_path, monkeypatch):
     root = tmp_path / "alias"
     write_note(root, ".vault/vault.json", "{}")
-    write_note(root, "brain/Key Decisions.md", "# KD\n\n### 2026-09-05 chain\n\nhapp#236 frozen\n")
+    write_note(root, "brain/Holds.md", "# Holds\n\n### 2026-09-05 chain\n\nhapp#236 waits on the exit test\n")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
     _vault_pr(stub, HA, 251, [236])
     code, out = scan(*gh(HA, 251))  # `vault` fixture put the alias config in HOME
@@ -387,15 +387,103 @@ def test_a_list_is_one_paragraph(stub, vault, tmp_path, monkeypatch):
     assert code == 1
 
 
-def test_key_decisions_entry_ends_at_next_heading(stub, vault, tmp_path, monkeypatch):
+def test_holds_entry_ends_at_next_heading(stub, vault, tmp_path, monkeypatch):
     root = tmp_path / "kd"
     write_note(root, ".vault/vault.json", "{}")
-    write_note(root, "brain/Key Decisions.md",
-               "# KD\n\n### one breakroom\n\nnothing here\n\n### two other\n\n#9 is held\n\n## Later\n\n#9 frozen breakroom\n")
+    write_note(root, "brain/Holds.md",
+               "# Holds\n\n### one breakroom\n\nnothing here\n\n### two other\n\n#9 is held\n\n## Later\n\n#9 breakroom\n")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
     _vault_pr(stub, BR, 9)
     code, out = scan(*gh(BR, 9))
     assert code == 0 and vault_hits(out) == []
+
+
+# ---- brain/Holds.md ---------------------------------------------------------
+
+
+def _holds_vault(tmp_path, monkeypatch, holds_text=None, kd_text=None):
+    root = tmp_path / "hv"
+    write_note(root, ".vault/vault.json", "{}")
+    if holds_text is not None:
+        write_note(root, "brain/Holds.md", holds_text)
+    if kd_text is not None:
+        write_note(root, "brain/Key Decisions.md", kd_text)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    return root
+
+
+def test_holds_entry_without_a_hold_word_is_a_hit(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\n### 2026-10-11 breakroom#9 \u2014 waits on review\n\nmerge after the audit lands\n")
+    _vault_pr(stub, BR, 9)
+    code, out = scan(*gh(BR, 9))
+    assert code == 1 and len(vault_hits(out)) == 1
+    assert vault_hits(out)[0]["url_or_path"].endswith("brain/Holds.md")
+
+
+def test_holds_hit_quote_is_the_entry_heading_line(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\n### 2026-10-11 breakroom \u2014 reason\n\nfirst para\n\nPR #9 is the one\n")
+    _vault_pr(stub, BR, 9)
+    _, out = scan(*gh(BR, 9))
+    assert [h["quote"] for h in vault_hits(out)] == ["### 2026-10-11 breakroom \u2014 reason"]
+
+
+def test_key_decisions_entry_with_hold_word_and_number_is_not_a_hit(stub, vault, tmp_path, monkeypatch):
+    """B1 regression guard: Key Decisions is no longer read."""
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\nnone open\n",
+                 "# KD\n\n### 2026-09-05 breakroom\n\nbreakroom#9 is frozen and held\n")
+    _vault_pr(stub, BR, 9)
+    code, out = scan(*gh(BR, 9))
+    assert vault_hits(out) == [] and code == 0
+
+
+def test_key_decisions_alone_is_never_read(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, None, "# KD\n\n### 2026-09-05 breakroom\n\n#9 is held\n")
+    _vault_pr(stub, BR, 9)
+    assert vault_hits(scan(*gh(BR, 9))[1]) == []
+
+
+def test_missing_holds_file_is_skipped_not_silent(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch)
+    _vault_pr(stub, BR, 9)
+    code, out = scan(*gh(BR, 9))
+    assert code == 0
+    entry = [e for e in out["scanned"] if e["name"] == "vault:holds"][0]
+    assert entry["status"] == "skipped" and "Holds.md" in entry["detail"]
+    assert not any("key-decisions" in e["name"] for e in out["scanned"])
+
+
+def test_holds_preamble_is_never_an_entry(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch,
+                 "---\ndate: 2026-10-24\ntags:\n  - holds\n---\n# Holds\n\nOpen holds on breakroom#9 live below.\n\n"
+                 "### 2026-10-11 other-repo#3 \u2014 unrelated\n\nnothing\n")
+    _vault_pr(stub, BR, 9)
+    code, out = scan(*gh(BR, 9))
+    assert vault_hits(out) == [] and code == 0
+
+
+def test_holds_entry_stops_at_a_level_two_heading(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch,
+                 "# Holds\n\n### 2026-10-11 breakroom \u2014 reason\n\nnothing\n\n## Notes\n\nbreakroom #9 here\n")
+    _vault_pr(stub, BR, 9)
+    assert vault_hits(scan(*gh(BR, 9))[1]) == []
+
+
+def test_holds_entry_naming_the_repo_with_another_number_is_not_a_hit(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\n### 2026-10-11 breakroom#90 \u2014 reason\n\n#90\n")
+    _vault_pr(stub, BR, 9)
+    assert vault_hits(scan(*gh(BR, 9))[1]) == []
+
+
+def test_holds_entry_not_naming_the_repo_is_out_of_scope(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\n### 2026-10-11 ragmark \u2014 reason\n\n#9\n")
+    _vault_pr(stub, BR, 9)
+    assert vault_hits(scan(*gh(BR, 9))[1]) == []
+
+
+def test_holds_alias_scopes_an_entry(stub, vault, tmp_path, monkeypatch):
+    _holds_vault(tmp_path, monkeypatch, "# Holds\n\n### 2026-10-11 happ#236 \u2014 reason\n\nbody\n")
+    _vault_pr(stub, HA, 251, [236])
+    assert scan(*gh(HA, 251))[0] == 1
 
 
 # ---- vault resolution -------------------------------------------------------
@@ -562,7 +650,7 @@ def test_gitlab_keys_match_github(stub, no_vault):
 def test_gitlab_vault_uses_last_path_segment(stub, vault):
     gl_stub(stub, closes=[])
     stub.api[f"{GLQ}/merge_requests/42/notes"] = []
-    write_note(vault, "brain/Key Decisions.md", "### e project\n\n#42 is frozen\n")
+    write_note(vault, "brain/Holds.md", "### e project\n\n#42 waits\n")
     code, out = scan("--gitlab", GL, "--mr", "42")
     assert code == 1 and vault_hits(out)
 
@@ -701,12 +789,12 @@ def test_vault_hit_order_is_sorted(stub, vault, tmp_path, monkeypatch):
 
 def _kd(root, entry):
     write_note(root, ".vault/vault.json", "{}")
-    write_note(root, "brain/Key Decisions.md", f"# KD\n\n### 2026-01-01 {entry}\n\n#9 is frozen\n")
+    write_note(root, "brain/Holds.md", f"# Holds\n\n### 2026-01-01 {entry}\n\n#9 waits\n")
 
 
 @pytest.mark.parametrize("entry,expect", [("breakroomer notes", 0), ("my-breakroom-x", 1), ("BREAKROOM notes", 1),
                                           ("Breakroom notes", 1), ("unbreakroom", 0)])
-def test_key_decisions_name_is_whole_word_and_case_insensitive(stub, vault, tmp_path, monkeypatch, entry, expect):
+def test_holds_name_is_whole_word_and_case_insensitive(stub, vault, tmp_path, monkeypatch, entry, expect):
     root = tmp_path / "kdw"
     _kd(root, entry)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
