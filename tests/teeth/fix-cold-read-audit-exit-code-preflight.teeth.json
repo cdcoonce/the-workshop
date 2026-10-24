@@ -1,0 +1,66 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "sh",
+    "-c",
+    "cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.11,<0.12' python -m pytest -q tests/test_cold_read_audit.py"
+  ],
+  "collect_command": [
+    "sh",
+    "-c",
+    "cd plugins/workbench/machinery && uv run --with pytest --with hypothesis --with numpy --with pyyaml --with 'graphmark>=0.11,<0.12' python -m pytest -q --collect-only tests/test_cold_read_audit.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 B1: remove the Exit-code skip [test_preflight_words_must_begin_the_result[exit-code-failed]]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    text = _EXIT_CODE_LINE.sub(\"\", text, count=1)\n",
+      "replace": ""
+    },
+    {
+      "label": "2 B2: any text after Exit code [test_preflight_words_must_begin_the_result[exit-code-nonnumeric]]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "r\"^Exit code [0-9]+\\n\"",
+      "replace": "r\"^Exit code [^\\n]+\\n\""
+    },
+    {
+      "label": "3 B2: skip repeated prefix lines [test_preflight_words_must_begin_the_result[exit-code-twice]]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "r\"^Exit code [0-9]+\\n\"",
+      "replace": "r\"^(?:Exit code [0-9]+\\n)+\""
+    },
+    {
+      "label": "4 B2: failed branch tests containment [test_preflight_words_must_begin_the_result[exit-code-then-prose]]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "    if text.startswith(PREFLIGHT_FAILED):",
+      "replace": "    if PREFLIGHT_FAILED in text:"
+    },
+    {
+      "label": "5 B3: preflight mark only for non-error results [test_exit_code_prefixed_failed_preflight_raises_preflight_failed_flag]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.result is not None:\n            use.preflight =",
+      "replace": "        if use.result is not None and not use.result.is_error:\n            use.preflight ="
+    },
+    {
+      "label": "6 B4: _probe_build stops excluding the preflight use [test_exit_code_prefixed_failed_preflight_is_neither_scratch_nor_probe]",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "        if use.preflight or use.result is None:\n            continue\n        if PROBE_PATTERN",
+      "replace": "        if use.result is None:\n            continue\n        if PROBE_PATTERN"
+    },
+    {
+      "label": "7 control: skip also accepts CRLF",
+      "file": "../../plugins/workbench/machinery/engine/cold_read_audit.py",
+      "oracle": "real",
+      "find": "r\"^Exit code [0-9]+\\n\"",
+      "replace": "r\"^Exit code [0-9]+\\r?\\n\"",
+      "expect": "survived",
+      "why": "No test feeds a CRLF-terminated Exit code line, and the spec text does not decide that case."
+    }
+  ]
+}
