@@ -64,7 +64,7 @@ If `rolled_over: True`, the function has already:
    Which of these deserve entries in perf/Brag Doc.md? [user picks; skip if none]
    ```
 
-3. After user picks entries (or says "none"), append them to `perf/Brag Doc.md` under the current quarter.
+3. After user picks entries (or says "none"), append them to `perf/Brag Doc.md` under the current quarter. A Brag Doc entry is one top-level `- **YYYY-MM-DD (...)**` bullet with no nested sub-bullets. It says what happened and its impact, is at most 700 characters, and carries at least one wikilink to the full narrative; a story already told in Key Decisions is linked, not retold. The vault gate (`ci/ledger_cap.py`) enforces the cap on entries dated on or after its cutoff.
 4. Then proceed with the rest of the standup against the freshly-leaned `work/Tasks.md`.
 
 On a personal machine, skip this step — personal/tasks already uses weekly files and `task_manager.rollover_tasks()`.

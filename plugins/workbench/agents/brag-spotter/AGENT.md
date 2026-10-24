@@ -32,10 +32,10 @@ Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and
 
 4. For each uncaptured win found, report:
    - Source note (file path + relevant excerpt)
-   - Suggested Brag Doc entry (one-line summary)
+   - Suggested Brag Doc entry (a draft in the Brag shape, at most 700 characters)
    - Related competencies (wikilinks to competency notes)
 
-5. Output a structured list of suggestions. Do NOT modify the Brag Doc directly — present findings for the user to approve.
+5. Output a structured list of suggestions. Do NOT modify the Brag Doc directly — you propose candidates only. The calling skill (recall, wrap-up) writes the ones that hold up, in the Brag shape: one top-level `- **YYYY-MM-DD (...)**` bullet, no nested sub-bullets, at most 700 characters, with a wikilink to the full narrative.
 
 ## Constraints
 
