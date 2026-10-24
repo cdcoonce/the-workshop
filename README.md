@@ -205,7 +205,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/advisor-product-design` | `advisor-product-design` | Product-design and UI/UX advisor for an engineer who ships real interfaces — data apps, dashboards, mobile, web. |
 | `/advisor-product-strategy` | `advisor-product-strategy` | Product-strategy sounding board and coach for a design+PM hybrid at an early-stage startup — decision stress-testing, influence-case building, prioritization on thin evidence, and verdict-first design critique. |
 | `/blueprint` | `workbench` | Charts an effort too big for one session as a map of decision tickets, worked one ticket at a time. |
-| `/brainstorm` | `workbench` | Shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
+| `/brainstorm` | `workbench` | Interviews the user like a business analyst to shape a fuzzy idea into a committed direction before any plan, PRD, or code exists. |
 | `/build-review-land` | `workbench` | Ships one PR via a builder, a blind mutation reviewer who commits a re-runnable teeth spec, a RED-confirm fixer, and a pinned landing. |
 | `/chart-taste` | `workbench` | Applies chart-design taste to React data viz — a chart-type decision tree and dials for density, complexity, color restraint. |
 | `/codex-enable` | `workbench` | Vendors a Codex-functional .codex/hooks.json into a target repo so a Codex teammate gets workbench's hook protections. |
