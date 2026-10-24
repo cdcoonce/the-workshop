@@ -1,0 +1,79 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_vault_ledger_writers.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_vault_ledger_writers.py"
+  ],
+  "mutants": [
+    {
+      "label": "1: wrap-up step 6 scope reverts to the significant-decisions catch-all",
+      "file": "../plugins/workbench/skills/vault-wrap-up/references/command.md",
+      "oracle": "real",
+      "find": "Review the session for decisions that bind more than one project or the vault itself \u2014 cross-system conventions, tooling or process choices, anything whose _why_ you'd want to recover months later.",
+      "replace": "Review the session for significant decisions \u2014 architecture choices, tooling selections, process or convention changes, anything whose _why_ you'd want to recover months later."
+    },
+    {
+      "label": "2: wrap-up Key Decisions 800 cap deleted",
+      "file": "../plugins/workbench/skills/vault-wrap-up/references/command.md",
+      "oracle": "real",
+      "find": "at most 800 characters including its heading, dated,",
+      "replace": "dated,"
+    },
+    {
+      "label": "3: grill per-project route replaced by the old destination",
+      "file": "../plugins/workbench/skills/vault-grill/references/command.md",
+      "oracle": "real",
+      "find": "`brain/Key Decisions.md` only if it binds more than one project or the vault itself (one paragraph, at most 800 characters including its heading, with a wikilink to the full record; `ci/ledger_cap.py` enforces it); a per-project decision goes to a `## Decisions` section on the project note, newest first",
+      "replace": "`brain/Key Decisions.md` or a decision record"
+    },
+    {
+      "label": "4: standup no-nested-sub-bullets clause deleted",
+      "file": "../plugins/workbench/skills/vault-standup/references/command.md",
+      "oracle": "real",
+      "find": " with no nested sub-bullets",
+      "replace": ""
+    },
+    {
+      "label": "5: recall reverts to writing what meets the agent's own bar",
+      "file": "../plugins/workbench/skills/vault-recall/references/command.md",
+      "oracle": "real",
+      "find": "brag-spotter only proposes candidates; recall (the calling skill) writes the ones that hold up, in the Brag shape",
+      "replace": "Let it propose Brag Doc entries; write the ones that meet its own bar"
+    },
+    {
+      "label": "6: dump Brag cap 700 -> 900",
+      "file": "../plugins/workbench/skills/vault-dump/references/command.md",
+      "oracle": "real",
+      "find": "is at most 700 characters",
+      "replace": "is at most 900 characters"
+    },
+    {
+      "label": "7 [control]: project-note Decisions 'newest first' clause deleted",
+      "file": "../plugins/workbench/skills/vault-wrap-up/references/command.md",
+      "oracle": "real",
+      "find": "on the project note, newest first, with the same date-led bullet",
+      "replace": "on the project note, with the same date-led bullet",
+      "expect": "survived",
+      "why": "No test pins the ordering of the project-note ## Decisions section; the wrap-up scope tests pin only the section name and the Key Decisions routing."
+    }
+  ]
+}
