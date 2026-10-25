@@ -19,7 +19,7 @@ Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and
 
 ## Process
 
-1. Read `perf/Brag Doc.md` to know what's already captured.
+1. Read `perf/Brag Doc.md` to know what's already captured. Older quarters are rolled out of it into `perf/archive/brag-YYYY-QN.md` (one file per quarter, whole sections kept verbatim), so also check those archive files (`perf/archive/brag-*.md`) before calling a win uncaptured. A win found there is already captured.
 
 2. Scan recent work notes (`git log --since="7 days ago" --name-only` then read modified notes in `work/`).
 

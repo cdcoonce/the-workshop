@@ -68,6 +68,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/ledger_rollover.py",
+      "target": ".claude/scripts/ledger_rollover.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/note_lifecycle.py",
       "target": ".claude/scripts/note_lifecycle.py"
     },

@@ -56,6 +56,14 @@ Read the outcome, don't infer it: `replayed` (exit 0) means HEAD — the session
 
 After a hand merge or a replay, the primary checkout's local `main` may be left behind `origin/<target>` while another live session holds staged work in it. Advance it with `git merge --ff-only`, never a bare `git reset --keep` (which drops the index); see "Advancing a branch checked out in a shared tree" in the `shared-tree-safety` skill.
 
+### Quarterly ledger rollover commits (sync a rollover alone)
+
+`ledger_rollover.py rollover --apply` (run on the first standup of a new quarter) moves old entries out of `brain/Key Decisions.md` into `brain/archive/key-decisions/YYYY-QN.md`, and old `## QN YYYY` sections out of `perf/Brag Doc.md` into `perf/archive/brag-YYYY-QN.md`. In git that is many deleted entries plus new files. The entry replay does not recognise a pure move: it refuses any entry deletion, and the archive paths are not on its allowlist (`LEDGER_FILES`), so a rollover that needs replaying fails closed instead of losing or duplicating entries. So a rollover is synced alone:
+
+1. Pull first (`/sync pull`) so the ledgers match origin, then run the rollover.
+2. Commit the rollover on its own, with no other ledger edits in the same commit, and push it before any other ledger work. Nothing else is written to the ledgers in between.
+3. If the push is rejected because origin moved, or the replay refuses on the deletions, do not hand-merge: reset the rollover commit away, pull, and run the rollover again. It is idempotent and works from origin's text, so the second run produces the correct commit.
+
 ### Pull
 
 1. Resolve the sync target as in Push step 5, then run `git pull --rebase origin <target>`

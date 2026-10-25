@@ -281,6 +281,19 @@ ACCUMULATING_HUB_FILES = frozenset({
     "perf/Brag Doc.md",
 })
 
+# Quarterly rollover archives (ledger_rollover.py) accumulate the same way the
+# live ledgers do, so they get the same orphan exemption.
+ACCUMULATING_HUB_PREFIXES = (
+    "brain/archive/key-decisions/",
+    "perf/archive/brag-",
+)
+
+
+def is_accumulating_hub(rel: str) -> bool:
+    """True for a hub file or a rollover archive path (vault-relative, posix)."""
+    return rel in ACCUMULATING_HUB_FILES or rel.startswith(ACCUMULATING_HUB_PREFIXES)
+
+
 def _entry_order_issues(vault_root: Path) -> list[Issue]:
     """Report dated entries that run older-to-newer in a newest-first log.
 
@@ -469,7 +482,7 @@ def audit(vault_root: Path, today: date | None = None) -> dict[str, Any]:
         rel = rel_posix(path, vault_root) or str(path)
         if _is_transient(rel):
             continue
-        if rel in ACCUMULATING_HUB_FILES:
+        if is_accumulating_hub(rel):
             continue
         if len(_body(path).strip()) > 300 and not incoming[path]:
             orphans.append(Issue(rel, "no incoming backlinks"))

@@ -96,6 +96,19 @@ LANE_B_EXCLUDED_PATHS = frozenset({
     "perf/Brag Doc.md",
 })
 
+# Quarterly rollover archives (ledger_rollover.py) are the same append-log
+# shape as the live ledgers they come from.
+LANE_B_EXCLUDED_PREFIXES = (
+    "brain/archive/key-decisions/",
+    "perf/archive/brag-",
+)
+
+
+def is_lane_b_excluded(rel: str) -> bool:
+    """True when the missing-links review skips ``rel`` (vault-relative, posix)."""
+    return rel in LANE_B_EXCLUDED_PATHS or rel.startswith(LANE_B_EXCLUDED_PREFIXES)
+
+
 ORPHAN_MIN_CHARS = 300       # notes this long with no [[link]] → orphan flag
 
 SCOPED_DIRS = GRAPH_NOTE_DIRS
@@ -1378,9 +1391,9 @@ def run_lane_b(
     if not notes_content:
         return empty
 
-    reviewed = [(rel, c) for rel, c in notes_content if rel not in LANE_B_EXCLUDED_PATHS]
+    reviewed = [(rel, c) for rel, c in notes_content if not is_lane_b_excluded(rel)]
     coverage = {
-        "excluded": [rel for rel, _ in notes_content if rel in LANE_B_EXCLUDED_PATHS],
+        "excluded": [rel for rel, _ in notes_content if is_lane_b_excluded(rel)],
         "windowed": [rel for rel, c in reviewed if len(c) > NOTE_WINDOW_CHARS],
     }
     if reviewed:
