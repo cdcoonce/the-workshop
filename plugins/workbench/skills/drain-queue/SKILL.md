@@ -58,7 +58,7 @@ When the issue body opens with ``Build path: hand-built under the `drain-queue` 
 a test does not grade a stated rule, measured or not, arrives as a must-kill list for the
 worker and the independent teeth pass, not as a REWRITE.
 
-The reader writes its own verdict comment on the issue before returning. The ticket is the
+The conductor posts the reader's verdict comment on the issue as soon as the reader returns; the reader runs no network command. The ticket is the
 memory store; a verdict that lives only in the conductor's context dies with the session.
 
 **2. Dispatch one worker into one worktree.** Build the prompt from
