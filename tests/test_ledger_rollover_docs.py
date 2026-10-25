@@ -53,3 +53,11 @@ def test_vault_sync_docs_say_a_rollover_is_synced_alone() -> None:
     text = _text(SYNC).lower()
     assert "rollover" in text and "alone" in text
     assert "brain/archive/key-decisions" in text
+
+
+def test_standup_reports_a_skipped_brag_section_and_says_why() -> None:
+    text = _text(STANDUP)
+    section = text[text.index("Quarterly Ledger Rollover") :]
+    section = section.split("### 2.6.")[0]
+    assert re.search(r'(?i)`result\["skipped"\]`|reported as `skipped`|`skipped`', section)
+    assert re.search(r"(?i)conflicts? with an existing archive section", section)

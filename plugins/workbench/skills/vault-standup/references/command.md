@@ -84,6 +84,8 @@ The function moves text verbatim, byte for byte, in its original order:
 - Whole `## QN YYYY` sections other than the current quarter in the Brag Doc go to `perf/archive/brag-YYYY-QN.md`.
 - Each archive file has frontmatter (Brag archives are tagged `brag-doc-archive`, not `brag-doc`) and a link back to the live file. The live file keeps an `## Archive` list linking every archive file.
 
+If `result["skipped"]` lists any Brag archive path, report each one and say why: its quarter section was left in the live file because it conflicts with an existing archive section (the archive holds different text for that quarter), so the two need a manual look. Report this even when `result["moved"]` is empty.
+
 If `result["moved"]` is empty, say nothing and continue. Otherwise announce `Rolled the ledgers into the quarterly archives: {moved}`, and commit the rollover **alone**, on a tree that matches origin, before any other ledger edit (see `/sync`, "Quarterly ledger rollover commits"). `pulse` and `brag-spotter` read the archive files too, so nothing is lost from the win history.
 
 The one-time backlog run uses the same function through the CLI. It is a dry run by default and prints the entry or section count per target file; add `--apply` to write:
