@@ -339,12 +339,14 @@ def test_template_runs_no_network_command() -> None:
     the template must carry no network command and must ban them."""
     import re
 
+    rule = "Run no `gh`, `curl` or other GitHub or network command."
     template = _template()
+    assert rule in template
+    template = template.replace(rule, "")
     assert not re.search(r"\bgh (issue|api|pr|run|label)\b", template)
     lowered = template.lower()
     for phrase in ("curl", "fetch the issue", "--comments", "may read and fetch"):
         assert phrase not in lowered, f"template still says {phrase!r}"
-    assert "Run no `gh`, `curl` or other GitHub or network command." in template
 
 
 def test_template_starts_with_the_preflight() -> None:
