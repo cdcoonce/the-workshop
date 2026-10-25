@@ -89,7 +89,7 @@ def test_vault_audit_orphan_check_exempts_archive_files(tmp_path: Path) -> None:
     (tmp_path / ARCHIVE_PATHS[1]).write_text(body + "\n[[Somewhere]]\n")
     (tmp_path / "perf" / "Somewhere.md").write_text("---\ndate: 2026-01-01\ndescription: x\ntags:\n  - t\n---\n" + "x" * 400)
     report = vault_audit.audit(tmp_path)
-    assert ARCHIVE_PATHS[1] not in [i.file for i in report["orphans"]]
+    assert ARCHIVE_PATHS[1] not in [i["file"] for i in report["issues"]["orphans"]]
 
 
 def test_gardener_lane_b_exclusion_covers_archive_paths() -> None:

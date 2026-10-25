@@ -836,21 +836,33 @@ def collect_vault_git(vault_root: Path, tz: ZoneInfo, since: date) -> dict | Non
 _WIN_RE = re.compile(r"^- \*\*(\d{4})-(\d{2})-(\d{2})")
 
 
+def _win_files(brag_path: Path) -> list[Path]:
+    """The live Brag Doc plus its quarterly rollover archives (``perf/archive/brag-*.md``)."""
+    files = [brag_path] if brag_path.is_file() else []
+    archive_dir = brag_path.parent / "archive"
+    if archive_dir.is_dir():
+        files.extend(sorted(archive_dir.glob("brag-*.md")))
+    return files
+
+
 def collect_wins(brag_path: Path, tz: ZoneInfo) -> dict[str, int]:
-    """Dated Brag Doc bullets → wins per week. Dates are already local."""
-    if not brag_path.is_file():
-        return {}
+    """Dated Brag Doc bullets → wins per week. Dates are already local.
+
+    Counts the live file and ``archive/brag-*.md`` beside it, so the quarterly
+    rollover (ledger_rollover.py) does not shrink the weekly win history.
+    """
     out: dict[str, int] = {}
-    for line in brag_path.read_text(errors="ignore").splitlines():
-        m = _WIN_RE.match(line)
-        if not m:
-            continue
-        try:
-            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:
-            continue
-        week = _week_of_date(d)
-        out[week] = out.get(week, 0) + 1
+    for path in _win_files(brag_path):
+        for line in path.read_text(errors="ignore").splitlines():
+            m = _WIN_RE.match(line)
+            if not m:
+                continue
+            try:
+                d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                continue
+            week = _week_of_date(d)
+            out[week] = out.get(week, 0) + 1
     return out
 
 

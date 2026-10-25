@@ -69,6 +69,30 @@ If `rolled_over: True`, the function has already:
 
 On a personal machine, skip this step — personal/tasks already uses weekly files and `task_manager.rollover_tasks()`.
 
+### 2.55. Quarterly Ledger Rollover
+
+`brain/Key Decisions.md` and `perf/Brag Doc.md` grow without bound, so on the first standup of a new quarter, move everything dated before the current calendar quarter (Q1 = Jan to Mar) into archive files. Run it on every machine; it is idempotent, and a second run in the same quarter changes nothing.
+
+```python
+from ledger_rollover import rollover_ledgers
+result = rollover_ledgers(vault_root, apply=True)
+```
+
+The function moves text verbatim, byte for byte, in its original order:
+
+- `### YYYY-MM-DD` entries under `## Recent` in Key Decisions go to `brain/archive/key-decisions/YYYY-QN.md`, newest first.
+- Whole `## QN YYYY` sections other than the current quarter in the Brag Doc go to `perf/archive/brag-YYYY-QN.md`.
+- Each archive file has frontmatter (Brag archives are tagged `brag-doc-archive`, not `brag-doc`) and a link back to the live file. The live file keeps an `## Archive` list linking every archive file.
+
+If `result["moved"]` is empty, say nothing and continue. Otherwise announce `Rolled the ledgers into the quarterly archives: {moved}`, and commit the rollover **alone**, on a tree that matches origin, before any other ledger edit (see `/sync`, "Quarterly ledger rollover commits"). `pulse` and `brag-spotter` read the archive files too, so nothing is lost from the win history.
+
+The one-time backlog run uses the same function through the CLI. It is a dry run by default and prints the entry or section count per target file; add `--apply` to write:
+
+```bash
+python3 <engine>/ledger_rollover.py rollover --vault-root <vault root>
+python3 <engine>/ledger_rollover.py rollover --vault-root <vault root> --apply
+```
+
 ### 2.6. Stale Prep Sweep
 
 A meeting-prep note carries the meeting date in `date:`, so once it has passed the prep is objectively done. This deterministic, no-LLM sweep flips such notes to `completed` so the Active surfaces (`work/Index.md`, the Obsidian Bases) stay honest without a manual pass:
