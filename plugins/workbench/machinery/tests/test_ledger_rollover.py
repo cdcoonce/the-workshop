@@ -149,6 +149,26 @@ def test_key_decisions_conservation_is_byte_for_byte() -> None:
     assert len(after) == len(before)
 
 
+def test_key_decisions_conservation_keeps_whitespace_blank_runs_and_unterminated_tail() -> None:
+    # Trailing spaces and tabs, a double blank line inside an entry, and a last
+    # entry with no final newline must all survive the move byte for byte.
+    entries = [
+        _kd_entry("2026-10-24", "today"),
+        "### 2026-09-30 (ctx) - spaced   \n\nline with trailing spaces   \nline with tab\t\n\n\nafter a double blank line  \n\n",
+        "### 2026-06-30 (ctx) - mid\n\nbody\t \n\n",
+        "### 2026-01-02 (ctx) - tail  \t\n\nlast line, no final newline  \t",
+    ]
+    text = KD_HEAD + "".join(entries)
+    before = _entry_chunks(text)
+    plan = lr.plan_rollover({KD: text}, TODAY)
+    after: list[str] = []
+    for path in (KD, KD_Q3, KD_Q2, KD_Q1):
+        after.extend(_entry_chunks(plan.files[path]))
+    assert sorted(after) == sorted(before)
+    assert entries[1] in plan.files[KD_Q3]
+    assert plan.files[KD_Q1].endswith("last line, no final newline  \t")
+
+
 def test_key_decisions_keeps_recent_heading_and_rule_paragraph() -> None:
     plan = lr.plan_rollover({KD: KD_TEXT}, TODAY)
     live = plan.files[KD]
@@ -168,6 +188,28 @@ def test_key_decisions_second_run_changes_nothing() -> None:
     second = lr.plan_rollover(files, TODAY)
     assert second.files == {}
     assert second.moved == {}
+
+
+def test_key_decisions_second_run_with_existing_archive_changes_nothing() -> None:
+    existing = (
+        "---\ndate: 2026-07-05\ndescription: \"x\"\ntags:\n  - key-decisions-archive\n---\n"
+        "# Key Decisions 2026-Q3\n\nBack to [[Key Decisions]].\n\n" + KD_ENTRIES[2]
+    )
+    first = lr.plan_rollover({KD: KD_TEXT, KD_Q3: existing}, TODAY)
+    # Finished state: feed every output file back (plus the untouched archive).
+    settled = {KD_Q3: existing, **first.files}
+    again = lr.plan_rollover(settled, TODAY)
+    assert again.files == {}
+    assert again.moved == {}
+    # Half-finished state: the archives were written but the live file was not.
+    # The re-run must drop the entries from live without archiving them twice.
+    half = {path: text for path, text in first.files.items() if path != KD}
+    half[KD] = KD_TEXT
+    rerun = lr.plan_rollover(half, TODAY)
+    for path in (KD_Q3, KD_Q2, KD_Q1):
+        assert rerun.files.get(path, first.files[path]) == first.files[path]
+        assert rerun.files.get(path, first.files[path]).count("### 2026-09-30") <= 1
+    assert rerun.files[KD] == first.files[KD]
 
 
 def test_nothing_to_move_changes_nothing() -> None:
@@ -311,6 +353,20 @@ def test_brag_second_run_changes_nothing() -> None:
     assert second.files == {}
 
 
+def test_brag_second_run_with_existing_archive_changes_nothing() -> None:
+    seeded = lr.plan_rollover({BRAG: BRAG_TEXT}, TODAY)
+    existing = {BRAG_Q3: seeded.files[BRAG_Q3]}
+    first = lr.plan_rollover({BRAG: BRAG_TEXT, **existing}, TODAY)
+    assert lr.plan_rollover({**existing, **first.files}, TODAY).files == {}
+    # Half-finished: archives written, live file not. The re-run drops the
+    # already-archived sections from live and leaves the archives alone.
+    half = {**existing, **{p: t for p, t in first.files.items() if p != BRAG}, BRAG: BRAG_TEXT}
+    rerun = lr.plan_rollover(half, TODAY)
+    assert rerun.skipped == []
+    assert rerun.files[BRAG] == first.files[BRAG]
+    assert BRAG_Q3 not in rerun.files and BRAG_Q2 not in rerun.files
+
+
 def test_brag_section_for_an_already_archived_quarter_is_not_clobbered() -> None:
     first = lr.plan_rollover({BRAG: BRAG_TEXT}, TODAY)
     changed_section = BRAG_Q3_SEC.replace("nested detail", "other detail")
@@ -391,3 +447,15 @@ def test_cli_apply_writes(tmp_path: Path, capsys) -> None:
     assert rc == 0
     assert (root / KD_Q3).is_file()
     assert "applied" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kind", ["missing", "file"])
+def test_cli_rejects_a_vault_root_that_is_not_a_directory(tmp_path: Path, capsys, kind: str) -> None:
+    root = tmp_path / "nope"
+    if kind == "file":
+        root.write_text("x", encoding="utf-8")
+    rc = lr.main(["rollover", "--vault-root", str(root), "--today", "2026-10-24"])
+    captured = capsys.readouterr()
+    assert rc != 0
+    assert "nothing to move" not in captured.out
+    assert str(root) in captured.err and "not a directory" in captured.err
