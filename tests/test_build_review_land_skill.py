@@ -134,3 +134,30 @@ def test_land_command_names_the_real_script() -> None:
 
 def test_skill_stops_on_ambiguous_anchor() -> None:
     assert "ambiguous anchor" in _flat(SKILL.read_text())
+
+
+def test_no_template_hardcodes_a_spec_directory() -> None:
+    """The spec's path is the conductor's call, not a fixed `tests/teeth/` (#1306).
+
+    A repo's changed-spec gate can infer a spec's cwd from where it sits, so a
+    fixed directory breaks any suite that runs from somewhere else.
+    """
+    for path in (SKILL, REVIEWER, FIXER):
+        assert "tests/teeth/" not in path.read_text(), path.name
+    assert "<spec path>" in _slots({"both"})
+
+
+def test_spec_sits_beside_its_suite_with_argv_commands() -> None:
+    text = _flat(SKILL.read_text())
+    assert "beside the tests its command runs" in text
+    assert "no `sh -c` and no `cd`" in _flat(REVIEWER.read_text())
+
+
+def test_nobody_commits_while_a_mutating_run_is_live() -> None:
+    builder = SKILLS / "drain-queue" / "references" / "builder-dispatch.md"
+    for path in (SKILL, builder):
+        assert "Never commit while" in _flat(path.read_text()), path.name
+
+
+def test_reviewer_does_not_count_a_gate_that_stopped_early() -> None:
+    assert "stops before its last step is not a pass" in _flat(REVIEWER.read_text())
