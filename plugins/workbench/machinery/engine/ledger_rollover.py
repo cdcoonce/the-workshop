@@ -445,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
     if root is None:
         print("ledger_rollover: no vault root found; pass --vault-root", file=sys.stderr)
         return 2
+    if not Path(root).is_dir():
+        print(f"ledger_rollover: vault root {root} is not a directory", file=sys.stderr)
+        return 2
     result = rollover_ledgers(root, today=args.today, apply=args.apply)
     print(f"ledger rollover ({'applied' if result['applied'] else 'dry run'}) in {root}")
     if not result["moved"] and not result["skipped"]:
