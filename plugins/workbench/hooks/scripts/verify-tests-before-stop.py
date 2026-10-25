@@ -9,7 +9,10 @@ no-op instead of a full suite run.
 
 Fails open everywhere: no test command detected, not a git repo, git/test
 binary missing, or the run itself errors out all exit 0 rather than
-blocking on ambiguity. Portable across Claude Code, Cortex Code (CoCo),
+blocking on ambiguity. A gate already running in the same worktree (the same
+test command, or a `teeth_check.py` run, whose cwd is inside it) defers the
+check instead of starting a second suite beside it, since a teeth stage
+mutates source in place. Portable across Claude Code, Cortex Code (CoCo),
 and Codex — pure stdlib. Codex delivers hooks *no stdin payload at all*
 (see COMPATIBILITY.md → Codex → Hooks), so empty stdin is the payload-less
 platform condition, not malformed input: the hook proceeds with
@@ -24,6 +27,7 @@ that isn't a JSON object still fails open.
 WORKSHOP_HOOK = {"event": "Stop"}
 
 import json  # noqa: E402
+import os  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
@@ -139,6 +143,127 @@ if state_file.exists():
         previous_signature = None
 
 if signature == previous_signature:
+    sys.exit(0)
+
+
+def _process_table():
+    """Yield ``(pid, ppid, argv)`` for every visible process, or nothing.
+
+    Linux reads ``/proc`` for exact argv; elsewhere ``ps`` is split on
+    whitespace, which is lossy only for arguments that contain spaces.
+    """
+    proc = Path("/proc")
+    if (proc / "self" / "cmdline").exists():
+        for entry in proc.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                argv = (entry / "cmdline").read_bytes().split(b"\0")
+                stat = (entry / "stat").read_text()
+            except OSError:
+                continue
+            fields = stat.rsplit(")", 1)[-1].split()
+            if len(fields) < 2 or not fields[1].isdigit():
+                continue
+            yield int(entry.name), int(fields[1]), [
+                a.decode("utf-8", "replace") for a in argv if a
+            ]
+        return
+    try:
+        listed = subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,args="],
+            capture_output=True, text=True, timeout=10, errors="replace",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    for line in listed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0].isdigit() and parts[1].isdigit():
+            yield int(parts[0]), int(parts[1]), parts[2:]
+
+
+def _process_cwds(pids):
+    """Map each pid to its working directory, where the OS will say."""
+    if not pids:
+        return {}
+    if Path("/proc/self/cwd").exists():
+        found = {}
+        for pid in pids:
+            try:
+                found[pid] = Path(os.readlink(f"/proc/{pid}/cwd"))
+            except OSError:
+                pass
+        return found
+    try:
+        listed = subprocess.run(
+            ["lsof", "-a", "-d", "cwd", "-Fpn", "-p", ",".join(map(str, pids))],
+            capture_output=True, text=True, timeout=10, errors="replace",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    found, pid = {}, None
+    for line in listed.stdout.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            found[pid] = Path(line[1:])
+    return found
+
+
+def _is_gate(argv, command):
+    """True when *argv* runs *command* (extra arguments allowed) or teeth_check.py."""
+    if any(Path(arg).name == "teeth_check.py" for arg in argv):
+        return True
+    if not argv or Path(argv[0]).name != Path(command[0]).name:
+        return False
+    rest = iter(argv[1:])
+    return all(token in rest for token in command[1:])
+
+
+def live_gate(project_dir: Path, command):
+    """The pid of a gate already running in *project_dir*'s worktree, else None.
+
+    The suite this hook runs may mutate source in place (a teeth stage), so a
+    second run beside a live one in the same tree can capture the other's
+    mutants or fail on them. Our own ancestors are not a rival run.
+    """
+    table = list(_process_table())
+    parents = {pid: ppid for pid, ppid, _ in table}
+    ours, pid = set(), os.getpid()
+    while pid and pid not in ours:
+        ours.add(pid)
+        pid = parents.get(pid, 0)
+    candidates = [p for p, _, argv in table if p not in ours and _is_gate(argv, command)]
+    if not candidates:
+        return None
+    try:
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=project_dir, capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if not top:
+        return None
+    root = Path(top).resolve()
+    for pid, where in _process_cwds(candidates).items():
+        try:
+            where = where.resolve()
+        except OSError:
+            continue
+        if where == root or root in where.parents:
+            return pid
+    return None
+
+
+rival = live_gate(cwd, test_command)
+if rival is not None:
+    # Defer, not pass: no state is written, so the next Stop verifies again.
+    print(
+        f"verify-tests-before-stop: a gate is already running in this tree "
+        f"(pid {rival}); not starting `{' '.join(test_command)}` beside it.",
+        file=sys.stderr,
+    )
     sys.exit(0)
 
 try:
