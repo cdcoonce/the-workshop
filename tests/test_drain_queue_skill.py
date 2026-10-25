@@ -401,8 +401,12 @@ def test_template_lists_unresolved_numbers_for_the_conductor() -> None:
     """Offline, the reader cannot resolve cited issue or PR numbers; it must
     list them for the conductor rather than guess or silently skip."""
     template = _template()
+    start = template.index("An issue or PR number the body cites")
+    end = template.find(" - ", start)  # flattened: the next bullet starts at " - "
+    rule = template[start : end if end != -1 else len(template)]
     for phrase in ("Unresolved offline", "REASONED", "the conductor resolves"):
-        assert phrase in template, f"template lacks {phrase!r}"
+        assert phrase in rule, f"offline-numbers rule lacks {phrase!r}"
+    assert "Unresolved offline" in template[template.index("Return:") :]
 
 
 def test_template_returns_the_verdict_comment_and_posts_nothing() -> None:
