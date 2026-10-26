@@ -10,7 +10,7 @@ task-spawning or memory tools, do not wait on timers, do not merge.
 
 Work in `<worktree path>` on branch `<branch>` (the reviewer has returned and
 nothing else runs there). Do not touch the main checkout. Gate command:
-`<gate command>`. Teeth spec: `tests/teeth/<branch-slug>.teeth.json`. Run long
+`<gate command>`. Teeth spec: `<spec path>`. Run long
 commands in the foreground, output to `<log>`, then `echo rc=$?`, never through
 `tail`.
 
@@ -24,12 +24,14 @@ commands in the foreground, output to `<log>`, then `echo rc=$?`, never through
    green (if it is red, the review named a real defect; fix the source first
    with its own red-first commit, then continue).
 2. Prove it bites: re-run the spec with
-   `uv run python <path to>/teeth_check.py tests/teeth/<branch-slug>.teeth.json --changed-since <base> --json`
+   `uv run python <path to>/teeth_check.py <spec path> --changed-since <base> --json`
+   (from the same directory the reviewer ran it)
    and confirm the stated mutation is now killed by this test. If it is not,
    you may change the test's **inputs** so it discriminates (a wider
    excursion, higher noise, a boundary value) and must record the change. You
    may not change the mutation, delete a row, or weaken an assertion.
-3. Commit the test (and any source fix) by path, conventional message.
+3. Commit the test (and any source fix) by path, conventional message. Never
+   commit while a teeth run or the gate is live; read `git diff --staged` first.
 
 When every proposed test is in, run `teeth_check.py` once in full, then the
 full gate. Finish with an empty `git status` and say so.

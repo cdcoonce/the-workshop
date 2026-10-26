@@ -12,6 +12,10 @@ Work in `<worktree path>` (the builder's worktree, already on branch
 `<branch>`; the builder has returned and nothing else runs there). Do not touch
 the main checkout. Gate command: `<gate command>`. Run long commands in the
 foreground, output to `<log>`, then `echo rc=$?` — never through `tail`.
+A gate that stops before its last step is not a pass: rerun it after fixing
+what stopped it (a stale base ref is fetched, not skipped), or report which steps
+never ran. Never commit while a teeth run or the gate is live; either may hold
+a mutant in source. Read `git diff --staged` before every commit.
 
 ## Spec (normative)
 
@@ -27,8 +31,11 @@ foreground, output to `<log>`, then `echo rc=$?` — never through `tail`.
 
 1. Read the PR diff and the PR body's `Deviations` section. Do not read the
    intents against the tests first; anchor them against the source.
-2. Write `tests/teeth/<branch-slug>.teeth.json` in `detector-teeth-check`'s
-   format: `runner`, `test_command`, `collect_command`, and one `mutants` row
+2. Write `<spec path>` (the conductor chose it beside the suite it runs; keep it
+   there) in `detector-teeth-check`'s format: `runner`, `test_command` and
+   `collect_command` as plain argv with paths relative to the directory they run
+   from — no `sh -c` and no `cd`; copy the command shape of the nearest committed
+   spec — and `file` paths relative to the spec itself, then one `mutants` row
    per intent with `label` (the intent's number and behavior), `file`,
    `oracle` (`real` or `double`), exact-string `find` / `replace`. The control
    row carries `"expect": "survived"` and a one-sentence `why`. An intent you
@@ -36,7 +43,9 @@ foreground, output to `<log>`, then `echo rc=$?` — never through `tail`.
    `UNANCHORED` with the reason.
    The reviewer never edits source by hand to mutate it: it only writes the
    teeth spec and runs `teeth_check.py`, which injects and restores each mutant.
-3. Run `uv run python <path to>/teeth_check.py tests/teeth/<branch-slug>.teeth.json --json > <log>`.
+3. From the directory the command's paths resolve against (the spec's own or the
+   nearest ancestor where they all exist — the cwd a repo gate infers), run
+   `uv run python <path to>/teeth_check.py <spec path> --json > <log>`.
    A red baseline or an ambiguous anchor is a stop: report it, do not fix it.
 4. Spec-deviation probe: for each `Deviations` item, is it allowed by the spec,
    a spec defect, or a builder defect? Then try two inputs the spec implies and
@@ -54,7 +63,7 @@ foreground, output to `<log>`, then `echo rc=$?` — never through `tail`.
 | - | -------- | -------- | -------------- | ------ | -------- |
 <one row per intent; result in RED-predicted | RED-other | GREEN | UNANCHORED | CONTROL>
 
-Full run: <k> killed of <n>, <c> controls survived as expected. Spec: `tests/teeth/<branch-slug>.teeth.json` at <sha>.
+Full run: <k> killed of <n>, <c> controls survived as expected. Spec: `<spec path>` at <sha>.
 
 ## Spec-deviation probe
 <one line per deviation item and per probe input: what, verdict, evidence>
