@@ -68,7 +68,8 @@ Constraints:
   existing test blocks you, stop and report it.
 - <count assertion>
 - Conventional commit, staged explicitly (never `git add .`). No co-author or generated-by
-  attribution footers of any kind.
+  attribution footers of any kind. Never commit while the gate or a teeth check is live: either
+  may hold a mutant in a source file. Read `git diff --staged` before every commit.
 - Open a pull request against <integration-branch>. Body: two or three sentences plus
   `Closes #<N>`, and the teeth evidence from step 4.
 - Do NOT merge the pull request. Do not comment on issues. Do not use artifact,

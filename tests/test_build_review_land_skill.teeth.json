@@ -134,8 +134,8 @@
       "oracle": "real",
       "expect": "survived",
       "why": "The two bullets are independent rules; order carries no meaning and no test or tool reads the list positionally.",
-      "find": "- Serial, one worktree, no concurrent suites: a teeth run beside a running\n  suite contaminates it.\n- Workers never merge, never spawn agents, never use artifact, task-spawning\n  or memory tools, never wait on timers.\n",
-      "replace": "- Workers never merge, never spawn agents, never use artifact, task-spawning\n  or memory tools, never wait on timers.\n- Serial, one worktree, no concurrent suites: a teeth run beside a running\n  suite contaminates it.\n"
+      "find": "- Serial, one worktree, no concurrent suites: a teeth run beside a suite contaminates it.\n  Never commit while a teeth run or the gate is live (either may hold a mutant in source); read `git diff --staged` first.\n- Workers never merge, never spawn agents, never use artifact, task-spawning\n  or memory tools, never wait on timers.\n",
+      "replace": "- Workers never merge, never spawn agents, never use artifact, task-spawning\n  or memory tools, never wait on timers.\n- Serial, one worktree, no concurrent suites: a teeth run beside a suite contaminates it.\n  Never commit while a teeth run or the gate is live (either may hold a mutant in source); read `git diff --staged` first.\n"
     },
     {
       "label": "16 frontmatter name matches the directory",
@@ -157,6 +157,55 @@
       "oracle": "real",
       "find": "A red baseline or an ambiguous anchor stops the review.",
       "replace": "A red baseline stops the review."
+    },
+    {
+      "label": "19 no template hardcodes tests/teeth/ (fixer)",
+      "file": "../plugins/workbench/skills/build-review-land/references/fixer.md",
+      "oracle": "real",
+      "find": "Teeth spec: `<spec path>`.",
+      "replace": "Teeth spec: `tests/teeth/<spec path>`."
+    },
+    {
+      "label": "20 spec path is a slot both templates carry",
+      "file": "../plugins/workbench/skills/build-review-land/SKILL.md",
+      "oracle": "real",
+      "find": "| `<spec path>`        | both     |",
+      "replace": "| `<spec file>`        | both     |"
+    },
+    {
+      "label": "21 Step 0 places the spec beside its suite",
+      "file": "../plugins/workbench/skills/build-review-land/SKILL.md",
+      "oracle": "real",
+      "find": "3. **Spec path**, beside the tests its command runs and named",
+      "replace": "3. **Spec path**, under `tests/` and named"
+    },
+    {
+      "label": "22 reviewer forbids sh -c and cd in commands",
+      "file": "../plugins/workbench/skills/build-review-land/references/reviewer.md",
+      "oracle": "real",
+      "find": " — no `sh -c` and no `cd`;",
+      "replace": ";"
+    },
+    {
+      "label": "23 SKILL.md forbids committing during a live run",
+      "file": "../plugins/workbench/skills/build-review-land/SKILL.md",
+      "oracle": "real",
+      "find": "\n  Never commit while a teeth run or the gate is live (either may hold a mutant in source); read `git diff --staged` first.",
+      "replace": ""
+    },
+    {
+      "label": "24 builder-dispatch forbids committing during a live run",
+      "file": "../plugins/workbench/skills/drain-queue/references/builder-dispatch.md",
+      "oracle": "real",
+      "find": " Never commit while the gate or a teeth check is live: either\n  may hold a mutant in a source file.",
+      "replace": ""
+    },
+    {
+      "label": "25 reviewer: a gate that stopped early is not a pass",
+      "file": "../plugins/workbench/skills/build-review-land/references/reviewer.md",
+      "oracle": "real",
+      "find": "A gate that stops before its last step is not a pass: rerun",
+      "replace": "A gate that stops before its last step: rerun"
     }
   ]
 }
