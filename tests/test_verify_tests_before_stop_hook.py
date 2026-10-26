@@ -15,7 +15,14 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = REPO_ROOT / "plugins" / "workbench" / "hooks" / "scripts" / "verify-tests-before-stop.py"
+HOOK_PATH = (
+    REPO_ROOT
+    / "plugins"
+    / "workbench"
+    / "hooks"
+    / "scripts"
+    / "verify-tests-before-stop.py"
+)
 
 
 def run_hook(payload: dict) -> subprocess.CompletedProcess[str]:
@@ -43,7 +50,9 @@ def run_hook_raw(
 
 def _init_git_repo(path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=path, check=True
+    )
     subprocess.run(["git", "config", "user.name", "Test"], cwd=path, check=True)
 
 
@@ -107,7 +116,9 @@ def test_payloadless_blocks_once_per_failing_signature(tmp_path: Path) -> None:
     assert first.returncode == 2
 
     second = run_hook_raw("", cwd=tmp_path)
-    assert second.returncode == 0, "unchanged failing tree must not re-block payload-less"
+    assert second.returncode == 0, (
+        "unchanged failing tree must not re-block payload-less"
+    )
 
     (tmp_path / "dirty.txt").write_text("v2")
     third = run_hook_raw("", cwd=tmp_path)
@@ -212,7 +223,9 @@ def test_unchanged_signature_skips_rerun_after_green_pass(tmp_path: Path) -> Non
     second = run_hook({"cwd": str(tmp_path), "session_id": "s3"})
 
     assert second.returncode == 0
-    assert not marker.exists(), "test command was re-invoked despite an unchanged signature"
+    assert not marker.exists(), (
+        "test command was re-invoked despite an unchanged signature"
+    )
 
 
 def test_clean_tree_at_different_commit_reruns_tests(tmp_path: Path) -> None:
@@ -239,7 +252,9 @@ def test_clean_tree_at_different_commit_reruns_tests(tmp_path: Path) -> None:
     second = run_hook({"cwd": str(tmp_path), "session_id": "s5"})
 
     assert second.returncode == 0
-    assert marker.exists(), "clean tree at a new commit was wrongly treated as unchanged"
+    assert marker.exists(), (
+        "clean tree at a new commit was wrongly treated as unchanged"
+    )
 
 
 def test_changed_signature_after_green_pass_reruns_tests(tmp_path: Path) -> None:
@@ -338,3 +353,115 @@ def test_detection_file_that_is_a_directory_fails_open(
 
     assert result.returncode == 0
     assert "Traceback" not in result.stderr
+
+
+def _live(argv: list[str], cwd: Path, **env: str) -> subprocess.Popen[bytes]:
+    import os
+
+    # Own session, so the kill below takes the recipe's `sleep` child too.
+    return subprocess.Popen(
+        argv, cwd=cwd, env={**os.environ, **env}, start_new_session=True
+    )
+
+
+def _stop(proc: subprocess.Popen[bytes]) -> None:
+    import os
+    import signal
+
+    os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
+
+
+_SLOW_WHEN_LIVE = 'test:\n\t@if [ -n "$$LIVE" ]; then sleep 20; fi; exit 1\n'
+
+
+@pytest.mark.parametrize("extra", [[], ["VERSION_BASE=origin/dev"]])
+def test_live_test_command_in_this_tree_defers_instead_of_running(
+    tmp_path: Path, extra: list[str]
+) -> None:
+    # A second `make test` beside a live one in the same tree can capture the
+    # other's in-place mutants (check-teeth-changed) or fail spuriously.
+    _init_git_repo(tmp_path)
+    (tmp_path / "Makefile").write_text(_SLOW_WHEN_LIVE)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+    gate = _live(["make", "test", *extra], tmp_path, LIVE="1")
+    try:
+        result = run_hook({"cwd": str(tmp_path), "session_id": "live"})
+    finally:
+        _stop(gate)
+
+    assert result.returncode == 0, result.stderr
+    assert "already running" in result.stderr
+    state = tmp_path / ".git" / "the-workshop-stop-gate" / "live.txt"
+    assert not state.exists(), "a deferred check must not record a green state"
+
+
+def test_live_teeth_run_in_this_tree_defers(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    _write_makefile(tmp_path, exit_code=1)
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+    (tmp_path / "sub").mkdir()
+    teeth = _live(
+        [
+            sys.executable,
+            "-c",
+            "import time; time.sleep(20)",
+            "teeth_check.py",
+            "s.json",
+        ],
+        tmp_path / "sub",
+    )
+    try:
+        result = run_hook({"cwd": str(tmp_path), "session_id": "teeth"})
+    finally:
+        _stop(teeth)
+
+    assert result.returncode == 0, result.stderr
+    assert "already running" in result.stderr
+
+
+def test_live_test_command_in_another_tree_does_not_defer(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    other = tmp_path / "other"
+    repo.mkdir()
+    other.mkdir()
+    _init_git_repo(repo)
+    _write_makefile(repo, exit_code=1)
+    (repo / "dirty.txt").write_text("uncommitted")
+    (other / "Makefile").write_text(_SLOW_WHEN_LIVE)
+    gate = _live(["make", "test"], other, LIVE="1")
+    try:
+        result = run_hook({"cwd": str(repo), "session_id": "other"})
+    finally:
+        _stop(gate)
+
+    assert result.returncode == 2
+    assert "Tests are failing" in result.stderr
+
+
+def test_hook_run_from_inside_the_gate_is_not_its_own_rival(tmp_path: Path) -> None:
+    # The outer `make test` is this hook's ancestor, not a second run: the
+    # hook must still verify (here: run the inner suite, which fails).
+    _init_git_repo(tmp_path)
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({"cwd": str(tmp_path), "session_id": "self"}))
+    (tmp_path / "Makefile").write_text(
+        "test:\n"
+        f'\t@if [ -n "$$OUTER" ]; then OUTER= {sys.executable} {HOOK_PATH} < {payload}; '
+        "else exit 1; fi\n"
+    )
+    (tmp_path / "dirty.txt").write_text("uncommitted")
+
+    import os
+
+    outer = subprocess.run(
+        ["make", "test"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "OUTER": "1"},
+    )
+
+    assert outer.returncode != 0
+    assert "Tests are failing" in outer.stderr

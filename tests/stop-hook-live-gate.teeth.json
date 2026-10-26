@@ -1,0 +1,86 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_verify_tests_before_stop_hook.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_verify_tests_before_stop_hook.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 a live gate in this tree defers the run [test_live_test_command_in_this_tree_defers_instead_of_running]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "if rival is not None:",
+      "replace": "if False:"
+    },
+    {
+      "label": "2 extra arguments on the live command still match [..._defers_instead_of_running[extra1]]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "    return all(token in rest for token in command[1:])",
+      "replace": "    return argv[1:] == list(command[1:])"
+    },
+    {
+      "label": "3 a live teeth_check.py run counts as a gate [test_live_teeth_run_in_this_tree_defers]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "    if any(Path(arg).name == \"teeth_check.py\" for arg in argv):\n        return True\n",
+      "replace": ""
+    },
+    {
+      "label": "4 only a gate inside this worktree defers [test_live_test_command_in_another_tree_does_not_defer]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "        if where == root or root in where.parents:",
+      "replace": "        if True:"
+    },
+    {
+      "label": "5 a gate in a subdirectory of the worktree defers [test_live_teeth_run_in_this_tree_defers]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "        if where == root or root in where.parents:",
+      "replace": "        if where == root:"
+    },
+    {
+      "label": "6 a deferred check records no green state [..._defers_instead_of_running]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "    # Defer, not pass: no state is written, so the next Stop verifies again.\n",
+      "replace": "    state_file.parent.mkdir(parents=True, exist_ok=True)\n    state_file.write_text(signature)\n"
+    },
+    {
+      "label": "7 the hook's own ancestors are not a rival [test_hook_run_from_inside_the_gate_is_not_its_own_rival]",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "if p not in ours and _is_gate(argv, command)]",
+      "replace": "if _is_gate(argv, command)]"
+    },
+    {
+      "label": "8 [control] skip the git call when nothing matched",
+      "file": "../plugins/workbench/hooks/scripts/verify-tests-before-stop.py",
+      "oracle": "real",
+      "find": "    if not candidates:\n        return None\n",
+      "replace": "",
+      "expect": "survived",
+      "why": "An optimisation only: with no candidates the cwd loop below finds nothing and returns None anyway."
+    }
+  ]
+}
