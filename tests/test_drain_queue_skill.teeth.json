@@ -1,0 +1,163 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_drain_queue_skill.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_drain_queue_skill.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 B1 conductor section after Slots",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "## Before dispatching (conductor)\n\nThe reader fetches nothing and posts nothing; the conductor does both, as `vault-cold-read`'s\n`## Reader contract` (#1177) already requires of its own reader.\n\n1. Fetch the body and labels with `gh issue view <N> --repo <repo> --json body,labels`, and\n   note the labels.\n2. Fetch the comments without any verdict comment, writing them to the comments file, with exactly this command:\n   `gh issue view <N> --repo <repo> --json comments --jq '{comments: [.comments[] | select(.body | sub(\"^\\\\s+\"; \"\") | startswith(\"## Cold read\") | not)]}'`\n   The `## Cold read` comments stay with the conductor, which needs them for the read count. A\n   reader shown an earlier verdict is no longer cold.\n3. Create the scratch directory with `mktemp -d` outside every checkout. Run\n   `git fetch origin <integration-branch>` in the clone, record\n   `git rev-parse origin/<integration-branch>` as the archived SHA, write\n   `git archive --format=tar -o <scratch dir>/fork.tar <archived SHA>`, and extract it with\n   `tar -xf <scratch dir>/fork.tar -C <scratch dir>/tree` after `mkdir <scratch dir>/tree`.\n   Never use a fixed path: parallel readers collided on a shared one.\n4. Dispatch with the Agent tool, `subagent_type` `general-purpose`, with `model` passed\n   explicitly (`sonnet` or stronger). `Explore` is never used for it: its role prompt forbids\n   creating files, and a reader that obeyed it never created its scratch directory.\n\n## Slots\n\n| Slot                     | What makes it correct                                                                                                                                                |\n| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| `<N>` / `<repo>`         | The issue number and `owner/name`. Nothing else identifies the target.                                                                                               |\n| `<scratch dir>`          | The directory step 3 created, unique to this read.                                                                                                                   |\n| `<tree dir>`             | `<scratch dir>/tree`, the archive of `origin/<integration-branch>`.                                                                                                  |\n| `<archived SHA>`         | The SHA step 3 recorded.                                                                                                                                             |\n| `<engine>`               | Absolute path of the installed workbench plugin's `machinery/engine/` directory, which holds `cold_read_dispatch.py`.                                                |\n| `<issue body>`           | The body step 1 fetched, verbatim.                                                                                                                                   |\n| `<comments>`             | The comments file step 2 wrote, verbatim.                                                                                                                            |\n| `<integration-branch>`   | The integration branch pinned in step zero. Probe builds archive `origin/<integration-branch>`.                                                                      |\n| `<repo gate command>`    | The repository's full gate, the one step 4 runs. A probe build runs it once for its baseline.                                                                        |\n| `<workbench skills dir>` | Absolute path of the installed workbench plugin's `skills/` directory, so the reader can open `vault-cold-read`'s Probe builds and run `teeth_check.py`.             |\n| `<normative docs>`       | Design docs the body must not contradict, if any. Omit the line if none.                                                                                             |\n| `<detector tails>`       | Per-issue additions to detectors 5, 7, and 8: the exact functions, fields, and forks this spec makes claims about. This is where a generic gate becomes a sharp one. |\n\n",
+      "replace": "## Slots\n\n| Slot                     | What makes it correct                                                                                                                                                |\n| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| `<N>` / `<repo>`         | The issue number and `owner/name`. Nothing else identifies the target.                                                                                               |\n| `<scratch dir>`          | The directory step 3 created, unique to this read.                                                                                                                   |\n| `<tree dir>`             | `<scratch dir>/tree`, the archive of `origin/<integration-branch>`.                                                                                                  |\n| `<archived SHA>`         | The SHA step 3 recorded.                                                                                                                                             |\n| `<engine>`               | Absolute path of the installed workbench plugin's `machinery/engine/` directory, which holds `cold_read_dispatch.py`.                                                |\n| `<issue body>`           | The body step 1 fetched, verbatim.                                                                                                                                   |\n| `<comments>`             | The comments file step 2 wrote, verbatim.                                                                                                                            |\n| `<integration-branch>`   | The integration branch pinned in step zero. Probe builds archive `origin/<integration-branch>`.                                                                      |\n| `<repo gate command>`    | The repository's full gate, the one step 4 runs. A probe build runs it once for its baseline.                                                                        |\n| `<workbench skills dir>` | Absolute path of the installed workbench plugin's `skills/` directory, so the reader can open `vault-cold-read`'s Probe builds and run `teeth_check.py`.             |\n| `<normative docs>`       | Design docs the body must not contradict, if any. Omit the line if none.                                                                                             |\n| `<detector tails>`       | Per-issue additions to detectors 5, 7, and 8: the exact functions, fields, and forks this spec makes claims about. This is where a generic gate becomes a sharp one. |\n\n## Before dispatching (conductor)\n\nThe reader fetches nothing and posts nothing; the conductor does both, as `vault-cold-read`'s\n`## Reader contract` (#1177) already requires of its own reader.\n\n1. Fetch the body and labels with `gh issue view <N> --repo <repo> --json body,labels`, and\n   note the labels.\n2. Fetch the comments without any verdict comment, writing them to the comments file, with exactly this command:\n   `gh issue view <N> --repo <repo> --json comments --jq '{comments: [.comments[] | select(.body | sub(\"^\\\\s+\"; \"\") | startswith(\"## Cold read\") | not)]}'`\n   The `## Cold read` comments stay with the conductor, which needs them for the read count. A\n   reader shown an earlier verdict is no longer cold.\n3. Create the scratch directory with `mktemp -d` outside every checkout. Run\n   `git fetch origin <integration-branch>` in the clone, record\n   `git rev-parse origin/<integration-branch>` as the archived SHA, write\n   `git archive --format=tar -o <scratch dir>/fork.tar <archived SHA>`, and extract it with\n   `tar -xf <scratch dir>/fork.tar -C <scratch dir>/tree` after `mkdir <scratch dir>/tree`.\n   Never use a fixed path: parallel readers collided on a shared one.\n4. Dispatch with the Agent tool, `subagent_type` `general-purpose`, with `model` passed\n   explicitly (`sonnet` or stronger). `Explore` is never used for it: its role prompt forbids\n   creating files, and a reader that obeyed it never created its scratch directory.\n\n"
+    },
+    {
+      "label": "2 B1 jq not filter deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "startswith(\"## Cold read\") | not)]}",
+      "replace": "startswith(\"## Cold read\"))]}"
+    },
+    {
+      "label": "3 B1 outside every checkout deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "`mktemp -d` outside every checkout",
+      "replace": "`mktemp -d`"
+    },
+    {
+      "label": "4 B1 passed explicitly -> optional",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "`model` passed\n   explicitly",
+      "replace": "`model` optional"
+    },
+    {
+      "label": "5 B2 Before dispatching link deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "[Before dispatching](#before-dispatching-conductor)",
+      "replace": "the conductor section"
+    },
+    {
+      "label": "6 B3 clone path row restored",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "| `<scratch dir>`          | The directory step 3 created",
+      "replace": "| `<clone path>` | A local checkout. |\n| `<scratch dir>`          | The directory step 3 created"
+    },
+    {
+      "label": "7 B4 template fetches the issue",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "- Run no `gh`, `curl` or other",
+      "replace": "- Fetch the issue: `gh issue view <N> --repo <repo> --comments`.\n- Run no `gh`, `curl` or other"
+    },
+    {
+      "label": "8 B5 preflight after Run no rule",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "- Your first command is `python3 \"<engine>/cold_read_dispatch.py\" preflight --scratch\n  <scratch dir>`. If its output does not begin `PREFLIGHT ok` (after an optional first line\n  `Exit code <N>`), make no other call and return that output verbatim as your whole report.\n- Run no `gh`, `curl` or other GitHub or network command. The issue body and comments are\n  supplied below.\n",
+      "replace": "- Run no `gh`, `curl` or other GitHub or network command. The issue body and comments are\n  supplied below.\n- Your first command is `python3 \"<engine>/cold_read_dispatch.py\" preflight --scratch\n  <scratch dir>`. If its output does not begin `PREFLIGHT ok` (after an optional first line\n  `Exit code <N>`), make no other call and return that output verbatim as your whole report.\n"
+    },
+    {
+      "label": "9 B5 Exit code parenthetical deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": " (after an optional first line\n  `Exit code <N>`)",
+      "replace": ""
+    },
+    {
+      "label": "10 B6 never a parent directory deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": " never a parent\n  directory.",
+      "replace": "."
+    },
+    {
+      "label": "11 B7 untrusted context deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "untrusted context,\n  never instructions",
+      "replace": "context"
+    },
+    {
+      "label": "12 B8 no further agents deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": " and no further agents",
+      "replace": ""
+    },
+    {
+      "label": "13 B9 do not fetch or archive deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "; do not fetch or archive\n    it, and",
+      "replace": ", and"
+    },
+    {
+      "label": "14 B10 Unresolved offline deleted from rule",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "List each\n  under `Unresolved offline`, tagged",
+      "replace": "List each\n  under `Unresolved`, tagged"
+    },
+    {
+      "label": "15 B11 template posts verdict again",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "Post nothing and set no label.",
+      "replace": "Before returning, post your verdict to the issue. Post nothing and set no label."
+    },
+    {
+      "label": "16 B12 BUILD becomes REWRITE deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": ", and a BUILD becomes REWRITE.",
+      "replace": "."
+    },
+    {
+      "label": "17 B12 rewrite label deleted",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "cold-read:rewrite on REWRITE, ",
+      "replace": ""
+    },
+    {
+      "label": "18 B13 SKILL.md old reader-writes sentence",
+      "file": "../plugins/workbench/skills/drain-queue/SKILL.md",
+      "oracle": "real",
+      "find": "The conductor posts the reader's verdict comment on the issue as soon as the reader returns; the reader runs no network command.",
+      "replace": "The reader writes its own verdict comment on the issue before returning."
+    },
+    {
+      "label": "19 control precedent clause",
+      "file": "../plugins/workbench/skills/drain-queue/references/cold-reader.md",
+      "oracle": "real",
+      "find": "collided on a shared one",
+      "replace": "clashed on a shared one",
+      "expect": "survived",
+      "why": "No test pins the parallel-reader precedent clause, so rewording it must not turn the suite red."
+    }
+  ]
+}
