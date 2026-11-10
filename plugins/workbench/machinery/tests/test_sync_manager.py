@@ -857,6 +857,47 @@ def test_push_from_worktree_session_branch_lands_on_main_without_a_stray_branch(
     assert _remote_heads(b, "refs/heads/claude/*") == "", "no stray session branch on the remote"
 
 
+# --- a conflicted autostash apply leaves an unmerged index; say so, loudly ---
+
+
+def _stuck_stash_conflict(tmp_path):
+    """B untracks a file that A has dirty: pull rebases fine, the stash pop conflicts."""
+    a, b = _setup(tmp_path)
+    (a / "state.json").write_text("v1\n")
+    _git(a, "add", ".")
+    _git(a, "commit", "-m", "track state")
+    _git(a, "push", "origin", "main")
+    _git(b, "pull", "origin", "main")
+    _git(b, "rm", "-q", "state.json")
+    _git(b, "commit", "-m", "untrack state")
+    _git(b, "push", "origin", "main")
+    (a / "state.json").write_text("v2 dirty\n")
+    return a
+
+
+def test_pull_stash_pop_conflict_names_paths_and_the_kept_stash(tmp_path):
+    a = _stuck_stash_conflict(tmp_path)
+
+    res = sm.pull(a)
+
+    assert not res.success
+    assert res.conflicts == ["state.json"]
+    assert "stash@{0}" in res.message
+    assert "Rebase aborted" not in res.message, "the rebase finished; there was nothing to abort"
+
+
+def test_pull_with_unmerged_index_from_an_earlier_pull_names_paths(tmp_path):
+    a = _stuck_stash_conflict(tmp_path)
+    sm.pull(a)
+
+    res = sm.pull(a)  # git itself now refuses: "unmerged files"
+
+    assert not res.success
+    assert res.conflicts == ["state.json"]
+    assert "stash" in res.message.lower()
+    assert "git stash list" in res.message
+
+
 # --- _parse_conflict_files: never surface free-text as a path (#55) ---
 
 def test_parse_conflict_content_keeps_full_path_with_spaces():
