@@ -59,6 +59,11 @@ _LOCK_FILENAME = "vault-sync.lock"
 _LOCK_STALE_SECONDS = 120  # a healthy pull holds the lock well under this (25s git timeout + one retry)
 _FETCH_HEAD_RACE_ERR = "cannot rebase onto multiple branches"
 _RETRY_DELAY_SECONDS = 1.0
+# git's wording when --autostash re-applies local edits after a finished rebase
+# and they conflict (the stash is kept), and when it refuses to pull at all
+# because an earlier failure left unmerged index entries.
+_STASH_CONFLICT_MARKER = "autostash resulted in conflicts"
+_UNMERGED_MARKER = "unmerged files"
 
 
 def _run_git(args: list[str], cwd: Path, timeout: int = 25) -> subprocess.CompletedProcess[str]:
@@ -287,6 +292,58 @@ def _artifact_notice(refused: dict[str, str]) -> str:
     )
 
 
+def _unmerged_paths(cwd: Path) -> list[str]:
+    """Paths with unmerged index entries, read NUL-delimited so spaces survive."""
+    result = _run_git(["ls-files", "-u", "-z"], cwd)
+    paths: list[str] = []
+    for entry in result.stdout.split("\0"):
+        if "\t" not in entry:
+            continue
+        path = entry.split("\t", 1)[1]
+        if path not in paths:
+            paths.append(path)
+    return paths
+
+
+def _stuck_index_result(cwd: Path, output: str) -> SyncResult | None:
+    """Report a pull that failed on, or left behind, unmerged index entries.
+
+    Two shapes, same state. (1) The rebase finished but ``--autostash`` could
+    not re-apply the stashed edits: git keeps the stash, leaves the conflict in
+    the index and may still exit 0 (seen on a fast-forward); ``rebase --abort``
+    has nothing to abort and the pre-pull state is NOT restored. (2) Every later
+    pull then refuses outright on those entries. Without this, both read as a
+    success, a generic failure or a "Rebase aborted" conflict while the index
+    silently stays unmerged and every later wrap-up finds foreign-looking staged
+    edits. Never resolves.
+    """
+    lowered = output.lower()
+    stash_conflict = _STASH_CONFLICT_MARKER in lowered
+    if not (stash_conflict or _UNMERGED_MARKER in lowered) or _rebase_in_progress(cwd):
+        return None
+    paths = _unmerged_paths(cwd)
+    where = f" in {', '.join(paths)}" if paths else ""
+    if stash_conflict:
+        what = (
+            "Pull rebased, but re-applying your stashed local edits conflicted"
+            f"{where}. Nothing is lost: the edits are still in stash@{{0}}, and the"
+            " index now holds the half-applied result (staged changes you did not make"
+            " may be that result)."
+        )
+    else:
+        what = (
+            f"Pull refused: unmerged index entries{where} from an earlier failed pull."
+        )
+    return SyncResult(
+        success=False,
+        message=(
+            f"{what} Nothing was auto-resolved. Run `git status` and `git stash list`;"
+            " pulls keep failing until the unmerged entries are resolved by hand."
+        ),
+        conflicts=paths,
+    )
+
+
 def _parse_conflict_files(output: str) -> list[str]:
     """Extract conflicting file paths from git output — only when a path can be isolated confidently.
 
@@ -316,7 +373,9 @@ def _parse_conflict_files(output: str) -> list[str]:
 def pull(vault_path: str | Path) -> SyncResult:
     """Pull latest changes from remote with rebase.
 
-    If a conflict occurs, aborts the rebase and returns the conflict list.
+    If a rebase conflict occurs, aborts the rebase and returns the conflict list.
+    If the autostash re-apply conflicts instead, nothing can be aborted: the
+    stash is kept, the index is left unmerged, and the result names the paths.
     Never auto-resolves conflicts.
 
     Concurrent-safe: takes an exclusive lockfile in the git dir so simultaneous
@@ -361,8 +420,9 @@ def pull(vault_path: str | Path) -> SyncResult:
         # at Stop, so SessionStart routinely fires with a dirty working tree.
         # Without this, git refuses outright ("cannot pull with rebase: You have
         # unstaged changes") and the vault silently stops syncing until someone
-        # notices. Git stashes, rebases, and restores in one step; on conflict
-        # the abort below restores the pre-pull state.
+        # notices. Git stashes, rebases, and restores in one step. A rebase
+        # conflict is undone by the abort below; a conflict re-applying the stash
+        # is not (the rebase already finished): see _stuck_index_result.
         base_args = ["pull", "--rebase", "--autostash"]
 
         try:
@@ -385,6 +445,10 @@ def pull(vault_path: str | Path) -> SyncResult:
             return SyncResult(success=False, message="Git is not installed or not on PATH.")
 
         if result.returncode == 0:
+            # git can exit 0 even when re-applying the autostash conflicted.
+            stuck = _stuck_index_result(cwd, f"{result.stdout}\n{result.stderr}")
+            if stuck is not None:
+                return stuck
             stdout = result.stdout.strip()
             if "Already up to date" in stdout:
                 return SyncResult(success=True, message="Already up to date.")
@@ -392,6 +456,11 @@ def pull(vault_path: str | Path) -> SyncResult:
 
         # Pull failed — likely conflict
         all_output = f"{result.stdout}\n{result.stderr}"
+
+        stuck = _stuck_index_result(cwd, all_output)
+        if stuck is not None:
+            return stuck
+
         conflicts = _parse_conflict_files(all_output)
 
         # Abort the rebase to return to clean state
