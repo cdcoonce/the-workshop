@@ -8,6 +8,9 @@ from models import Severity
 from python_analyzer import analyze_python_file, get_severity_for_rule
 
 
+BUGGY = "import os\nx = 1; y = 2\n\n\ndef f(a=[]):\n    return a\n"
+
+
 def rule_ids(path: Path) -> set[str]:
     return {issue.rule_id for issue in analyze_python_file(path).issues}
 
@@ -22,28 +25,32 @@ class TestRepoConfigWins:
             '[tool.ruff.lint]\nselect = ["E"]\n', encoding="utf-8"
         )
         src = tmp_path / "mod.py"
-        src.write_text("import os\nx = 1; y = 2\n", encoding="utf-8")
+        src.write_text(BUGGY, encoding="utf-8")
         ids = rule_ids(src)
         assert "E702" in ids
         assert "F401" not in ids
+        assert "B006" not in ids
 
     def test_ruff_toml_in_ancestor_directory_governs_nested_file(self, tmp_path: Path):
         (tmp_path / "ruff.toml").write_text('[lint]\nselect = ["E"]\n', encoding="utf-8")
         nested = tmp_path / "pkg" / "sub"
         nested.mkdir(parents=True)
         src = nested / "mod.py"
-        src.write_text("import os\nx = 1; y = 2\n", encoding="utf-8")
+        src.write_text(BUGGY, encoding="utf-8")
         ids = rule_ids(src)
         assert "E702" in ids
         assert "F401" not in ids
+        assert "B006" not in ids
 
     def test_pyproject_without_tool_ruff_table_is_not_a_config(self, tmp_path: Path):
         (tmp_path / "pyproject.toml").write_text(
             '[project]\nname = "x"\nversion = "0"\n', encoding="utf-8"
         )
         src = tmp_path / "mod.py"
-        src.write_text("import os\n", encoding="utf-8")
-        assert "F401" in rule_ids(src)
+        src.write_text(BUGGY, encoding="utf-8")
+        ids = rule_ids(src)
+        assert "F401" in ids
+        assert "B006" in ids
 
 
 class TestNoConfigFallback:

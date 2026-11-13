@@ -1,0 +1,109 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_ruff_config.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_ruff_config.py"
+  ],
+  "mutants": [
+    {
+      "label": "always pass --select=ALL, ignoring repo config and the fallback (test_pyproject_select_replaces_the_default_rule_set)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "[] if find_ruff_config(file_path) else [\"--extend-select=B,S\"]",
+      "replace": "[\"--select=ALL\"]"
+    },
+    {
+      "label": "always extend with B,S even when a repo config exists (test_pyproject_select_replaces_the_default_rule_set)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "[] if find_ruff_config(file_path) else [\"--extend-select=B,S\"]",
+      "replace": "[\"--extend-select=B,S\"]"
+    },
+    {
+      "label": "fallback drops B and S (test_defaults_plus_bugbear_and_bandit_not_all_rules)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "[] if find_ruff_config(file_path) else [\"--extend-select=B,S\"]",
+      "replace": "[] if find_ruff_config(file_path) else []"
+    },
+    {
+      "label": "S101 test-file downgrade disabled (test_assert_in_test_file_is_info)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):",
+      "replace": "if False:"
+    },
+    {
+      "label": "S101 downgraded in every file (test_assert_outside_test_files_stays_error)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):",
+      "replace": "if rule_id in TEST_FILE_INFO_RULES:"
+    },
+    {
+      "label": "files under tests/ no longer count as test files (test_assert_in_test_file_is_info)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "return \"tests\" in file_path.parts[:-1]",
+      "replace": "return False"
+    },
+    {
+      "label": "tests/ directory match widened to the filename too (test_assert_outside_test_files_stays_error)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "return \"tests\" in file_path.parts[:-1]",
+      "replace": "return any(\"test\" in part for part in file_path.parts)"
+    },
+    {
+      "label": "conftest.py dropped from the basename patterns (test_assert_in_test_file_is_info)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "_TEST_FILE_PATTERNS = (\"test_*.py\", \"*_test.py\", \"conftest.py\")",
+      "replace": "_TEST_FILE_PATTERNS = (\"test_*.py\", \"*_test.py\")"
+    },
+    {
+      "label": "config discovery checks only the file's own directory (test_ruff_toml_in_ancestor_directory_governs_nested_file)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "for directory in (start, *start.parents):",
+      "replace": "for directory in (start,):"
+    },
+    {
+      "label": "any pyproject.toml counts as a ruff config (test_pyproject_without_tool_ruff_table_is_not_a_config)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "if _PYPROJECT_RUFF_TABLE.search(text):",
+      "replace": "if True:"
+    },
+    {
+      "label": "S101 downgrade ignores the path-less call (test_severity_without_a_path_is_unchanged)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "    if file_path is None:\n        return False\n",
+      "replace": "    if file_path is None:\n        return True\n"
+    }
+  ]
+}
