@@ -36,6 +36,10 @@ private_key_bytes = p_key.private_bytes(
         )
 ```
 
+## Ruff Configuration
+
+The repo's own ruff config wins (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in `pyproject.toml`). With no config, ruff's defaults plus `B` (bugbear) and `S` (bandit) run. `assert` (S101) in test files is INFO (nit); elsewhere it is ERROR (blocking).
+
 ## External Tools
 
 The skill uses **ruff** as the primary linter. Ruff is a fast Python linter that implements rules from multiple tools including pycodestyle, pyflakes, isort, pydocstyle, and more.

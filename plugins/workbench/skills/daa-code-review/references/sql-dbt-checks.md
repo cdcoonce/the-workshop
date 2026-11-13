@@ -8,8 +8,9 @@ Run `uvx sqlfluff lint --format json <paths>`.
 
 - If `dbt_project.yml` exists at the repo root, use the dbt templater.
 - Otherwise use the `snowflake` dialect.
+- If `dbt_project.yml` exists but the dbt templater fails (deps or profile missing), fall back to the `snowflake` dialect and flag the fallback in the output; the SQL verdict is then incomplete.
 - A repo `.sqlfluff` wins over both defaults; do not override it.
-- If `uvx` or sqlfluff fails to run, report that; never report SQL clean on a tool failure.
+- If `uvx` or sqlfluff fails to run, report that; the verdict is incomplete, never clean. sqlfluff lint findings are nits.
 
 ## Judgment checklist
 

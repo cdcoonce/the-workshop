@@ -25,14 +25,14 @@ User: "Don't apply any fixes, I'll handle them manually"
 Approve fixes grouped by issue category.
 
 ```
-User: "Apply all PEP8 fixes"
+User: "Apply all style fixes"
 User: "Fix all the unused imports"
 User: "Apply docstring fixes but skip type hint ones"
 ```
 
 Categories:
 
-- `pep8` - Style violations
+- `style` - Style violations (PEP8, formatting)
 - `type_hint` - Type annotation issues
 - `docstring` - Documentation issues
 - `unused_code` - Dead code
@@ -47,9 +47,9 @@ Categories:
 Approve fixes by severity level.
 
 ```
-User: "Fix all errors first"
-User: "Apply warning-level fixes only"
-User: "Skip the info-level suggestions"
+User: "Fix all blocking findings first"
+User: "Apply should-fix findings only"
+User: "Skip the nits"
 ```
 
 ### 4. By File
@@ -98,9 +98,9 @@ After applying fixes:
 
 ```
 Claude: I found 15 issues in your code:
-        - 3 errors (must fix)
-        - 8 warnings (should fix)
-        - 4 info (consider fixing)
+        - 3 blocking (must fix)
+        - 8 should-fix
+        - 4 nit (consider fixing)
 
         12 of these are auto-fixable. How would you like to proceed?
 
@@ -110,16 +110,16 @@ Claude: I found 15 issues in your code:
         3. Review individually
         4. Show me the report first
 
-User: Let's fix all the errors first, then review the warnings.
+User: Let's fix the blocking ones first, then review the should-fix.
 
-Claude: Applying 3 error fixes...
+Claude: Applying 3 blocking fixes...
         ✓ Fixed undefined variable in utils.py:42
         ✓ Fixed syntax error in parser.py:15
         ✓ Fixed security issue in auth.py:88
 
-        Now for the 8 warnings. Would you like to:
-        1. Apply all 8 warning fixes
-        2. Review by category (3 unused imports, 3 PEP8, 2 type hints)
+        Now for the 8 should-fix findings. Would you like to:
+        1. Apply all 8 should-fix fixes
+        2. Review by category (3 unused imports, 3 style, 2 type hints)
         3. Review individually
 ```
 

@@ -12,14 +12,12 @@ Diff-first quality review for the DAA stack. Deterministic tools run first, then
 
 ## Target resolution
 
-- Default: current branch vs its integration target (from repo policy: `dev` for the-workshop and Clearway GitLab repos), diffed from `git merge-base`. Read surrounding context, report only on changed hunks.
-- `--mr <n>`: that MR's diff via `glab`. `--pr <n>`: that PR's diff via `gh`.
-- Explicit paths and pasted snippets still work; review them whole.
+Default: current branch vs its integration target, diffed from the merge-base; report only on changed hunks. `--mr <n>` (glab) and `--pr <n>` (gh) review that diff. Explicit paths and pasted snippets are reviewed whole. Empty diff: say there is nothing to review and stop. Commands and target rules: [targets-and-output.md](references/targets-and-output.md).
 
 ## Modes
 
 - **Full (default for user calls):** this skill's standards pass, then the fan-out in [umbrella.md](references/umbrella.md) (`/code-review` for correctness bugs, `security-review` for vulnerabilities), merged and deduped.
-- **`--quality-only` (dev-cycle and agents):** standards pass only. No fan-out, no `/code-review`, no `security-review`.
+- **`--quality-only` (dev-cycle and agents):** standards pass only. No fan-out, no `/code-review`, no `security-review`. Force it when running inside a subagent or when invoked from `security-review`.
 
 ## Standards pass
 
@@ -34,17 +32,18 @@ Run the deterministic check, then judge. Beyond tool output, check SOLID/DRY/YAG
 | Mermaid   | `mmdc` parse when on PATH, else unverified  | [mermaid-checks.md](references/mermaid-checks.md)   |
 | Dagster   | none; defer to `dagster-expert`             | asset, sensor, schedule patterns                    |
 
-Analyzer CLI: `python scripts/<analyzer>.py <paths...> --json`. Exit 0 = ran; 2 = path missing or unreadable; 3 = ruff unavailable (Python). On exit 2 or 3, report the failure (for 3: say ruff is missing) and never report that file clean.
+Analyzers live in this skill's own `scripts/` dir. Resolve it as an absolute path from the `Base directory for this skill: /...` line the loader announces (`<skill_dir>`), never relative to the repo:
+`uv run --with ruff python <skill_dir>/scripts/python_analyzer.py <paths...> --json` (Markdown: `markdown_analyzer.py`, no `--with ruff`). Exit 0 = ran; 2 = path missing or unreadable; 3 = ruff unavailable. The repo's own ruff config wins; with none, defaults plus `B` and `S` run, and `assert` in test files is a nit (details: python-checks.md).
 
 ## Severity contract
 
-Every finding is **blocking**, **should-fix**, or **nit**. Analyzer ERROR = blocking, WARNING = should-fix, INFO = nit. **Clean means zero blocking findings**; dev-cycle loops on this.
+Every finding is **blocking**, **should-fix**, or **nit**. Analyzer ERROR = blocking, WARNING = should-fix, INFO = nit; a source with no level = should-fix. sqlfluff lint = nit because it reports style, while analyzer WARNINGs flag likely defects. **Clean means zero blocking findings and a complete run.** The verdict is **incomplete**, never clean, whenever a check failed or went unverified: analyzer exit 2 or 3, sqlfluff failure, `mmdc` absent, or a fan-out source unavailable.
 
 ## Output
 
-- Chat, grouped by severity, each finding with `file:line` and a source tag (`standards`, `ruff`, `sqlfluff`, `code-review`, `security-review`).
-- `--save`: write to `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md`.
-- `--post`: show the exact comment text and post to the MR/PR (`glab`/`gh`) only on an explicit yes.
+- Chat, grouped by severity, each finding with `file:line` and a source tag (`standards`, `ruff`, `sqlfluff`, `code-review`, `security-review`), then the verdict.
+- `--save`: write to `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md`, creating the directory.
+- `--post`: one summary comment, shown verbatim, posted only on an explicit yes.
 - Never write anything inside the repo.
 
 ## Fixes
