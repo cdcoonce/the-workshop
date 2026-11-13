@@ -367,11 +367,14 @@ def run_analyzer_cli(
     analyze_file: Callable[[Path], "AnalysisResult"],
     description: str,
     argv: Optional[Sequence[str]] = None,
+    preflight: Optional[Callable[[], Optional[str]]] = None,
 ) -> int:
     """Run a file analyzer as a command-line tool.
 
     Exit code is 0 whenever analysis ran, whatever it found; 2 when an input
-    path does not exist (message on stderr, nothing on stdout).
+    path does not exist or cannot be read or decoded; 3 when ``preflight``
+    reports that a required tool is unavailable. Failures write to stderr
+    and leave stdout empty.
 
     Parameters
     ----------
@@ -381,6 +384,8 @@ def run_analyzer_cli(
         Argparse description.
     argv : Optional[Sequence[str]]
         Arguments; defaults to ``sys.argv[1:]``.
+    preflight : Optional[Callable[[], Optional[str]]]
+        Returns an error message when a required tool is unavailable, else None.
 
     Returns
     -------
@@ -392,10 +397,27 @@ def run_analyzer_cli(
     parser.add_argument("--json", action="store_true", help="emit JSON on stdout")
     args = parser.parse_args(argv)
 
+    if preflight is not None:
+        tool_error = preflight()
+        if tool_error:
+            print(f"error: {tool_error}", file=sys.stderr)
+            return 3
+
     missing = [path for path in args.paths if not path.is_file()]
     if missing:
         for path in missing:
             print(f"error: file not found: {path}", file=sys.stderr)
+        return 2
+
+    unreadable = []
+    for path in args.paths:
+        try:
+            path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            unreadable.append((path, exc))
+    if unreadable:
+        for path, exc in unreadable:
+            print(f"error: cannot read {path}: {exc}", file=sys.stderr)
         return 2
 
     results = [analyze_file(path) for path in args.paths]

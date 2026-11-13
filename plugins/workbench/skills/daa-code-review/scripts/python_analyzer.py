@@ -521,4 +521,10 @@ def analyze_python_file(file_path: Path) -> AnalysisResult:
 
 
 if __name__ == "__main__":
-    raise SystemExit(run_analyzer_cli(analyze_python_file, "Analyze Python files with ruff."))
+    raise SystemExit(
+        run_analyzer_cli(
+            analyze_python_file,
+            "Analyze Python files with ruff.",
+            preflight=lambda: None if check_ruff_available() else "ruff not available",
+        )
+    )
