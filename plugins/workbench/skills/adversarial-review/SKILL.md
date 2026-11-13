@@ -106,5 +106,5 @@ without checking the run journal that every lens actually returned.
 
 - `plan-ceo-review` — challenges a plan **before** implementation. This runs after work claims to be done.
 - `security-review` — threat model and attacker surface. Reach for it when a finding is a vulnerability.
-- `daa-code-review` — style, lint, and quality signal. Cheaper, and not adversarial.
+- `daa-code-review` — style, lint, and quality signal. `--quality-only` is the cheap standards pass; full mode also runs `/code-review` and `security-review`. Either way, not adversarial.
 - `detector-teeth-check` — proves a suite would catch its bug. Recommend it when a ledger row is "the tests cover this"; do not run it from here.
