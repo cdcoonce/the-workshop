@@ -57,7 +57,7 @@
       "replace": "if False:"
     },
     {
-      "label": "S101 downgraded in every file (test_assert_outside_test_files_stays_error)",
+      "label": "S101 downgraded in every file (test_assert_outside_test_files_is_warning)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):",
@@ -71,7 +71,7 @@
       "replace": "return False"
     },
     {
-      "label": "tests/ directory match widened to the filename too (test_assert_outside_test_files_stays_error)",
+      "label": "tests/ directory match widened to the filename too (test_assert_outside_test_files_is_warning)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "return \"tests\" in file_path.parts[:-1]",
@@ -99,11 +99,32 @@
       "replace": "if True:"
     },
     {
-      "label": "S101 downgrade ignores the path-less call (test_severity_without_a_path_is_unchanged)",
+      "label": "S101 downgrade ignores the path-less call (test_severity_without_a_path_is_warning)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "    if file_path is None:\n        return False\n",
       "replace": "    if file_path is None:\n        return True\n"
+    },
+    {
+      "label": "S prefix maps back to ERROR (test_bandit_rules_are_warning_not_blocking)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "\"S\": Severity.WARNING,",
+      "replace": "\"S\": Severity.ERROR,"
+    },
+    {
+      "label": "S101 back in ERROR_RULES (test_assert_outside_test_files_is_warning)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "\"B018\",  # useless expression",
+      "replace": "\"B018\", \"S101\",  # useless expression"
+    },
+    {
+      "label": "F821 dropped from ERROR_RULES (test_runtime_defects_stay_error)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "\"F821\",  # undefined name",
+      "replace": "\"F821X\",  # undefined name"
     }
   ]
 }

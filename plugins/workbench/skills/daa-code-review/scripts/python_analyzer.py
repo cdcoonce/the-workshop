@@ -94,7 +94,7 @@ RUFF_SEVERITY_MAP: dict[str, Severity] = {
     "D": Severity.INFO,  # docstrings
     "ANN": Severity.INFO,  # annotations
     "B": Severity.WARNING,  # bugbear - potential bugs
-    "S": Severity.ERROR,  # security issues
+    "S": Severity.WARNING,  # bandit: routine calls; real vulns belong to security-review
 }
 
 # Rules that indicate errors (runtime issues)
@@ -104,7 +104,6 @@ ERROR_RULES = {
     "F823",  # local variable referenced before assignment
     "E999",  # syntax error
     "B018",  # useless expression
-    "S101",  # assert used (can be warning in prod)
 }
 
 # Rules downgraded to INFO inside test files (pytest relies on bare assert).
