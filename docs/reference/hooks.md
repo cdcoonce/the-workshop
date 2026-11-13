@@ -17,6 +17,7 @@ Lifecycle hooks and the events they run on. The event column is read back out of
 | `inject_persona.py` | `persona-staff-eng-deep` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
 | `inject_persona.py` | `persona-terse-staff-eng` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
 | `inject_persona.py` | `persona-thinking-partner` | `SessionStart` | SessionStart hook: inject a persona output-style as additionalContext. |
+| `keep-awake-after-stop.py` | `workbench` | `Stop` | Stop hook: hold the Mac awake after a turn so idle compaction can fire. |
 | `post-edit-lint.py` | `workbench` | `PostToolUse` | Post-edit hook: auto-format and lint edited files with whatever toolchain is |
 | `protect-files.py` | `workbench` | `PreToolUse` | Pre-edit hook: block edits to sensitive/generated files. |
 | `refuse-held-merge.py` | `workbench` | `PreToolUse` | PreToolUse hook (Bash): refuse `gh pr merge` / `glab mr merge` on a recorded hold. |
@@ -83,6 +84,12 @@ SessionStart hook: inject a persona output-style as additionalContext.
 *`persona-thinking-partner` plugin · events: `SessionStart` · matcher: —*
 
 SessionStart hook: inject a persona output-style as additionalContext.
+
+### `keep-awake-after-stop.py`
+
+*`workbench` plugin · events: `Stop` · matcher: —*
+
+Stop hook: hold the Mac awake after a turn so idle compaction can fire.
 
 ### `post-edit-lint.py`
 

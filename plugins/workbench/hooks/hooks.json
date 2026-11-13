@@ -109,6 +109,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-hook.sh keep-awake-after-stop.py"
+          },
+          {
+            "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$WORKSHOP_PLUGIN_ROOT}}\"/hooks/run-vault-hook.sh vault-stop-1-notebook-update.py"
           },
           {
