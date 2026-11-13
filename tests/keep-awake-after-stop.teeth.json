@@ -1,0 +1,108 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "tests/test_keep_awake_after_stop_hook.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_keep_awake_after_stop_hook.py"
+  ],
+  "mutants": [
+    {
+      "label": "#1 exact hold command: duration 4200 becomes 420 [predicted: test_spawns_caffeinate_with_exact_argv]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "HOLD_SECONDS = 4200",
+      "replace": "HOLD_SECONDS = 420"
+    },
+    {
+      "label": "#2 floor inclusive: < becomes <= at the boundary [predicted: test_exactly_at_floor_spawns]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "tokens < _floor()",
+      "replace": "tokens <= _floor()"
+    },
+    {
+      "label": "#3 floor env override ignored [predicted: test_env_floor_override]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "raw = os.environ.get(_FLOOR_ENV, \"\")",
+      "replace": "raw = \"\""
+    },
+    {
+      "label": "#4 AC only: AC Power check always true [predicted: test_on_battery_does_not_spawn]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "return result.returncode == 0 and \"AC Power\" in result.stdout",
+      "replace": "return True"
+    },
+    {
+      "label": "#5 subagent usage ignored: isSidechain skip removed [predicted: test_sidechain_usage_is_ignored]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "if record.get(\"isSidechain\") is True:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#6 one hold per session: previous hold not terminated [predicted: test_replaces_previous_hold_for_same_session]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "os.kill(pid, signal.SIGTERM)",
+      "replace": "pass"
+    },
+    {
+      "label": "#7 pid reuse guard: caffeinate command check removed [predicted: test_does_not_kill_pid_that_is_not_caffeinate]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "if result.returncode != 0 or \"caffeinate\" not in result.stdout:",
+      "replace": "if result.returncode != 0:"
+    },
+    {
+      "label": "#8 session key stays in state dir: sanitising regex removed [predicted: test_unsafe_session_id_does_not_escape_state_dir]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "if isinstance(session_id, str) and _SAFE_SESSION.fullmatch(session_id):",
+      "replace": "if isinstance(session_id, str) and session_id:"
+    },
+    {
+      "label": "#9 opt-out ignored [predicted: test_opt_out_env_disables]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "if os.environ.get(\"WORKSHOP_KEEP_AWAKE\") == \"0\":",
+      "replace": "if False:"
+    },
+    {
+      "label": "#10 missing binaries: which check removed [predicted: test_missing_binaries_is_a_noop]",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "if caffeinate is None or pmset is None:",
+      "replace": "if False:"
+    },
+    {
+      "label": "#11 [control] detached child: start_new_session True becomes False",
+      "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
+      "oracle": "real",
+      "find": "start_new_session=True,",
+      "replace": "start_new_session=False,",
+      "expect": "survived",
+      "why": "With stdin, stdout and stderr all on DEVNULL the hook returns promptly whether or not the child has its own session, so no timing test can tell them apart."
+    }
+  ]
+}
