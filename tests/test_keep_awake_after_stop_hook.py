@@ -369,6 +369,25 @@ def test_missing_binaries_is_a_noop(make_rig):
         assert not r.log.exists()
 
 
+def test_missing_caffeinate_never_invokes_pmset(make_rig):
+    r = make_rig(caffeinate=False)
+    r.write_transcript(_assistant(250_000))
+    result = r.run()
+    assert result.returncode == 0 and result.stdout == ""
+    assert not r.spawned()
+    assert not r.log.exists()
+    assert not r.pmset_log.exists() or r.pmset_log.read_text() == ""
+
+
+def test_missing_pmset_does_not_spawn(make_rig):
+    r = make_rig(pmset=False)
+    r.write_transcript(_assistant(250_000))
+    result = r.run()
+    assert result.returncode == 0 and result.stdout == ""
+    assert not r.spawned()
+    assert not r.log.exists()
+
+
 # B7
 
 

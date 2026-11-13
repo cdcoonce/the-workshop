@@ -89,7 +89,7 @@
       "replace": "if False:"
     },
     {
-      "label": "#10 missing binaries: which check removed [predicted: test_missing_binaries_is_a_noop]",
+      "label": "#10 missing binaries: which check removed [predicted: test_missing_caffeinate_never_invokes_pmset]",
       "file": "../plugins/workbench/hooks/scripts/keep-awake-after-stop.py",
       "oracle": "real",
       "find": "if caffeinate is None or pmset is None:",
