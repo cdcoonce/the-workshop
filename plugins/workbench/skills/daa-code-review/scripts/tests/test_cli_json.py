@@ -89,7 +89,7 @@ class TestPythonAnalyzerCli:
         proc = run_cli(PY_CLI, str(tmp_path / "nope.py"), "--json")
         assert proc.returncode == 2
         assert proc.stdout == ""
-        assert "nope.py" in proc.stderr
+        assert "file not found" in proc.stderr and "nope.py" in proc.stderr
 
     def test_plain_text_mode_prints_a_line_per_issue(self, py_file: Path):
         proc = run_cli(PY_CLI, str(py_file))
@@ -131,7 +131,7 @@ class TestMarkdownAnalyzerCli:
         proc = run_cli(MD_CLI, str(md_file), str(tmp_path / "nope.md"), "--json")
         assert proc.returncode == 2
         assert proc.stdout == ""
-        assert "nope.md" in proc.stderr
+        assert "file not found" in proc.stderr and "nope.md" in proc.stderr
 
     def test_plain_text_mode_prints_a_line_per_issue(self, md_file: Path):
         proc = run_cli(MD_CLI, str(md_file))

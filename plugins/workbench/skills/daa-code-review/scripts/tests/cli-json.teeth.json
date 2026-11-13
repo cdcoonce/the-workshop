@@ -155,6 +155,34 @@
       "replace": "{result.source_path}:0:"
     },
     {
+      "label": "missing ruff exits 0 (test_cli_exits_3_with_stderr_and_empty_stdout_when_ruff_absent)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "            return 3",
+      "replace": "            return 0"
+    },
+    {
+      "label": "ruff preflight never reports unavailable (test_cli_exits_3_with_stderr_and_empty_stdout_when_ruff_absent)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "None if check_ruff_available() else \"ruff not available\"",
+      "replace": "None"
+    },
+    {
+      "label": "only OSError caught on read, decode errors crash (test_non_utf8_file_exits_2_without_traceback)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "except OSError as exc:"
+    },
+    {
+      "label": "cannot-read message not printed (test_non_utf8_file_exits_2_without_traceback)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "print(f\"error: cannot read {path}: {exc}\", file=sys.stderr)",
+      "replace": "pass"
+    },
+    {
       "label": "[control] swap the two independent add_argument calls",
       "file": "../models.py",
       "oracle": "real",
