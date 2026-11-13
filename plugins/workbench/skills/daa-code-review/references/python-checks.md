@@ -13,6 +13,7 @@ This document details the Python code quality checks performed by the daa-code-r
 | Complexity     | Functions with high cyclomatic complexity | INFO         |
 | Runtime Errors | Undefined names, syntax errors            | ERROR        |
 | Imports        | Unsorted imports, banned imports          | INFO         |
+| Security (S)   | Bandit routine calls (S1xx)               | WARNING      |
 
 ## Naming
 
@@ -119,7 +120,8 @@ Potential bugs and runtime issues.
 | B006 | Mutable default argument                    | WARNING  |
 | B007 | Loop control variable not used              | WARNING  |
 | B008 | Function call in default argument           | WARNING  |
-| S1xx | Security issues (bandit)                    | ERROR    |
+| F822 | Undefined name in `__all__`                 | ERROR    |
+| B018 | Useless expression                          | ERROR    |
 
 ### Imports (Category: `import`)
 
@@ -134,9 +136,24 @@ Import organization and style.
 
 ## Severity Mapping
 
-- **ERROR**: Issues that will likely cause runtime failures or security vulnerabilities
-- **WARNING**: Issues that should be fixed (unused code, potential bugs)
-- **INFO**: Style improvements and suggestions (formatting, documentation)
+Source of truth: `RUFF_SEVERITY_MAP` and `ERROR_RULES` in `scripts/python_analyzer.py`.
+
+| Prefix | Severity |
+| ------ | -------- |
+| E      | WARNING  |
+| W      | INFO     |
+| F      | WARNING  |
+| C90    | INFO     |
+| I      | INFO     |
+| N      | INFO     |
+| D      | INFO     |
+| ANN    | INFO     |
+| B      | WARNING  |
+| S      | WARNING  |
+
+- **ERROR** (blocking): only F821, F822, F823, E999 and B018.
+- **WARNING** (should-fix): the prefixes above, unknown rules, and every bandit `S` finding (S1xx included). Security vulnerabilities are not ERROR here; real ones belong to `security-review`.
+- **INFO** (nit): the prefixes above, and S101 in test files.
 
 ## Auto-Fixable Issues
 

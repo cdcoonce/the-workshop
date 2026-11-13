@@ -42,9 +42,9 @@ Every finding is **blocking**, **should-fix**, or **nit**. Analyzer ERROR = bloc
 ## Output
 
 - Chat, grouped by severity, each finding with `file:line` and a source tag (`standards`, `ruff`, `sqlfluff`, `code-review`, `security-review`), then the verdict.
-- `--save`: write to `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md`, creating the directory.
+- `--save`: write to `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md` (`/` in the branch name becomes `-`: `feat/x` is `feat-x`), creating the directory.
 - `--post`: one summary comment, shown verbatim, posted only on an explicit yes.
-- Never write anything inside the repo.
+- Never write review output (report, saved files, post bodies, temp files) inside the repo; applying approved fixes edits repo files.
 
 ## Fixes
 

@@ -12,7 +12,7 @@ Read surrounding context for understanding, but file findings only on changed li
 
 ## Save
 
-`--save` writes `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md`; create the directory if missing. Nothing is written inside the repo.
+`--save` writes `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md`; `/` in the branch name is replaced with `-` (`feat/x` becomes `feat-x`); create the directory if missing. Nothing is written inside the repo.
 
 ## Post
 

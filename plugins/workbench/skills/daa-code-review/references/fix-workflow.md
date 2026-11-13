@@ -126,7 +126,7 @@ Claude: Applying 3 blocking fixes...
 ## Safety Considerations
 
 - Always show diff before applying changes
-- Back up files before bulk operations
+- Back up files before bulk operations, but outside the repo: under `~/.workshop/daa-code-review/` or a temp dir (a git stash is also fine). Never write `.bak` files beside the originals
 - Verify changes don't break functionality
 - Re-run tests after applying fixes
 - Some fixes may have unintended consequences
