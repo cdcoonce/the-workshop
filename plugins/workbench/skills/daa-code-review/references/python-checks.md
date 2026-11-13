@@ -1,6 +1,6 @@
 # Python Quality Checks Reference
 
-This document details the Python code quality checks performed by the daa-code-review skill. The coding standard is `dignified-python`; judge changed hunks against it. Run the deterministic pass with `python scripts/python_analyzer.py <paths...> --json` (exit 3 means ruff is missing; say so, never report clean).
+This document details the Python code quality checks performed by the daa-code-review skill. The coding standard is `dignified-python`; judge changed hunks against it. Run the deterministic pass with the command in SKILL.md ("Analyzer CLI"): an absolute `<skill_dir>` path under `uv run --with ruff` (exit 3 means ruff is missing; say so, never report clean).
 
 ## Category Overview
 
@@ -38,7 +38,7 @@ private_key_bytes = p_key.private_bytes(
 
 ## Ruff Configuration
 
-The repo's own ruff config wins (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in `pyproject.toml`). With no config, ruff's defaults plus `B` (bugbear) and `S` (bandit) run. `assert` (S101) in test files is INFO (nit); elsewhere it is ERROR (blocking).
+The repo's own ruff config wins (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in `pyproject.toml`). With no config, ruff's defaults plus `B` (bugbear) and `S` (bandit) run. Bandit (`S`) findings are WARNING (should-fix): they are hints for the quality pass, and real vulnerability calls belong to `security-review`. `assert` (S101) in test files is INFO (nit). A test file is one whose basename matches `test_*.py`, `*_test.py` or `conftest.py`, or one under a `tests/` directory (`is_test_file` in `scripts/python_analyzer.py`).
 
 ## External Tools
 

@@ -3,7 +3,7 @@
 ## Resolve the target
 
 1. Integration target comes from repo policy: the nearest project instructions or CI config. That is `dev` for the-workshop and Clearway GitLab repos. Otherwise use `origin/HEAD`; ask if that is ambiguous.
-2. `base=$(git merge-base HEAD origin/<target>)`
+2. `git fetch origin <target>`, then `base=$(git merge-base HEAD origin/<target>)`. If the fetch fails (offline, no remote), fall back to the local `<target>` branch and say the base may be stale; if neither ref exists, ask.
 3. Changed files: `git diff --name-only $base...HEAD`. Hunk ranges: `git diff -U0 $base...HEAD`.
 4. `--mr <n>`: `glab mr diff <n>`. `--pr <n>`: `gh pr diff <n>`.
 5. Empty diff: say there is nothing to review and stop.
