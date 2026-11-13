@@ -1,6 +1,7 @@
 """Tests for the analyzers' JSON command-line interface."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,14 +18,29 @@ SKIPPED_HEADING_MD = "# Title\n\n### Skipped\n\nText.\n"
 CLEAN_MD = "# Title\n\n## Section\n\nText.\n"
 
 
-def run_cli(script: Path, *args: str) -> subprocess.CompletedProcess:
+def run_cli(script: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(script), *args],
         capture_output=True,
         text=True,
         cwd=SCRIPTS,
         check=False,
+        env=env,
     )
+
+
+def assert_read_failure(proc: subprocess.CompletedProcess, bad: Path) -> None:
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+    assert f"error: cannot read {bad}" in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
+@pytest.fixture
+def binary_file(tmp_path: Path) -> Path:
+    path = tmp_path / "binary.dat"
+    path.write_bytes(b"\xff\xfe\x00\x80 not utf-8\n")
+    return path
 
 
 @pytest.fixture
@@ -121,3 +137,50 @@ class TestMarkdownAnalyzerCli:
         proc = run_cli(MD_CLI, str(md_file))
         assert proc.returncode == 0
         assert f"{md_file}:3" in proc.stdout
+
+
+class TestMissingRuff:
+    def test_cli_exits_3_with_stderr_and_empty_stdout_when_ruff_absent(
+        self, tmp_path: Path
+    ):
+        empty_bin = tmp_path / "empty-bin"
+        empty_bin.mkdir()
+        env = {**os.environ, "PATH": str(empty_bin)}
+        bad = tmp_path / "broken.py"
+        bad.write_text("def (:\n", encoding="utf-8")
+        proc = run_cli(PY_CLI, str(bad), "--json", env=env)
+        assert proc.returncode == 3
+        assert proc.stdout == ""
+        assert "ruff not available" in proc.stderr
+
+
+class TestUnreadableInputs:
+    @pytest.mark.parametrize("cli", [PY_CLI, MD_CLI], ids=["python", "markdown"])
+    def test_non_utf8_file_exits_2_without_traceback(self, cli: Path, binary_file: Path):
+        assert_read_failure(run_cli(cli, str(binary_file), "--json"), binary_file)
+
+    @pytest.mark.parametrize("cli", [PY_CLI, MD_CLI], ids=["python", "markdown"])
+    def test_mixed_good_and_bad_prints_nothing_to_stdout(
+        self, cli: Path, binary_file: Path, tmp_path: Path
+    ):
+        good = tmp_path / ("good.py" if cli == PY_CLI else "good.md")
+        good.write_text(CLEAN_PY if cli == PY_CLI else CLEAN_MD, encoding="utf-8")
+        assert_read_failure(
+            run_cli(cli, str(good), str(binary_file), "--json"), binary_file
+        )
+
+    @pytest.mark.skipif(
+        sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        reason="chmod 000 cannot deny reads on Windows or as root",
+    )
+    @pytest.mark.parametrize("cli", [PY_CLI, MD_CLI], ids=["python", "markdown"])
+    def test_permission_denied_file_exits_2_without_traceback(
+        self, cli: Path, tmp_path: Path
+    ):
+        locked = tmp_path / "locked.txt"
+        locked.write_text("x = 1\n", encoding="utf-8")
+        locked.chmod(0o000)
+        try:
+            assert_read_failure(run_cli(cli, str(locked), "--json"), locked)
+        finally:
+            locked.chmod(0o600)
