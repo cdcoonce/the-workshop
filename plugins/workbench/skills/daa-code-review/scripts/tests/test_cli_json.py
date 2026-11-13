@@ -12,7 +12,7 @@ PY_CLI = SCRIPTS / "python_analyzer.py"
 MD_CLI = SCRIPTS / "markdown_analyzer.py"
 
 UNUSED_IMPORT_PY = "import os\n"
-CLEAN_PY = '"""Module docstring."""\n\nVALUE = 1\n'
+CLEAN_PY = '# Copyright 2026 Example\n"""Module docstring."""\n\nVALUE = 1\n'
 SKIPPED_HEADING_MD = "# Title\n\n### Skipped\n\nText.\n"
 CLEAN_MD = "# Title\n\n## Section\n\nText.\n"
 
@@ -59,6 +59,7 @@ class TestPythonAnalyzerCli:
         assert issue["message"]
 
     def test_clean_file_has_no_issues_and_exits_zero(self, tmp_path: Path):
+        (tmp_path / "__init__.py").write_text("", encoding="utf-8")
         path = tmp_path / "clean.py"
         path.write_text(CLEAN_PY, encoding="utf-8")
         proc = run_cli(PY_CLI, str(path), "--json")

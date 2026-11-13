@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from models import (
+    run_analyzer_cli,
     AnalysisResult,
     FileType,
     Issue,
@@ -517,3 +518,7 @@ def analyze_python_file(file_path: Path) -> AnalysisResult:
 
     source = file_path.read_text(encoding="utf-8")
     return analyze_python(source, file_path)
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_analyzer_cli(analyze_python_file, "Analyze Python files with ruff."))

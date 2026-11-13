@@ -4,6 +4,10 @@ This module defines the core data structures used throughout the code review
 skill, including severity levels, issue representations, and analysis results.
 """
 
+import argparse
+import json
+import sys
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -208,6 +212,24 @@ class Issue:
             result["context"] = self.context
         return result
 
+    def to_json_dict(self) -> dict:
+        """Return the machine-readable form emitted by the analyzer CLIs.
+
+        Returns
+        -------
+        dict
+            ``severity``, ``category``, ``line``, ``message``, ``rule_id`` and
+            ``source``; enums as their values, ``line`` as ``None`` when unset.
+        """
+        return {
+            "severity": self.severity.value,
+            "category": self.category.value,
+            "line": self.location.line_start,
+            "message": self.message,
+            "rule_id": self.rule_id,
+            "source": self.source,
+        }
+
 
 @dataclass
 class AnalysisResult:
@@ -324,6 +346,23 @@ class AnalysisResult:
             if issue.suggested_fix and issue.suggested_fix.auto_fixable
         ]
 
+    def to_json_dict(self) -> dict:
+        """Return the machine-readable form emitted by the analyzer CLIs.
+
+        Returns
+        -------
+        dict
+            ``file`` (path string or ``None`` for a snippet), ``file_type``,
+            ``tools_used`` and ``issues`` (each from ``Issue.to_json_dict``).
+        """
+        return {
+            "file": str(self.source_path) if self.source_path is not None else None,
+            "file_type": self.file_type.value,
+            "tools_used": list(self.tools_used),
+            "issues": [issue.to_json_dict() for issue in self.issues],
+        }
+
+
 
 @dataclass
 class ReviewReport:
@@ -420,3 +459,51 @@ class ReviewReport:
         for result in self.results:
             fixable.extend(result.get_fixable_issues())
         return fixable
+
+
+def run_analyzer_cli(
+    analyze_file: Callable[[Path], "AnalysisResult"],
+    description: str,
+    argv: Optional[Sequence[str]] = None,
+) -> int:
+    """Run a file analyzer as a command-line tool.
+
+    Exit code is 0 whenever analysis ran, whatever it found; 2 when an input
+    path does not exist (message on stderr, nothing on stdout).
+
+    Parameters
+    ----------
+    analyze_file : Callable[[Path], AnalysisResult]
+        The analyzer entry point for one file.
+    description : str
+        Argparse description.
+    argv : Optional[Sequence[str]]
+        Arguments; defaults to ``sys.argv[1:]``.
+
+    Returns
+    -------
+    int
+        Process exit code.
+    """
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("paths", nargs="+", type=Path, help="files to analyze")
+    parser.add_argument("--json", action="store_true", help="emit JSON on stdout")
+    args = parser.parse_args(argv)
+
+    missing = [path for path in args.paths if not path.is_file()]
+    if missing:
+        for path in missing:
+            print(f"error: file not found: {path}", file=sys.stderr)
+        return 2
+
+    results = [analyze_file(path) for path in args.paths]
+    if args.json:
+        print(json.dumps([result.to_json_dict() for result in results], indent=2))
+    else:
+        for result in results:
+            for issue in result.issues:
+                print(
+                    f"{result.source_path}:{issue.location.line_start}: "
+                    f"{issue.severity.value} {issue.rule_id} {issue.message}"
+                )
+    return 0
