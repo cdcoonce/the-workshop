@@ -85,16 +85,36 @@ class TestAssertSeverityInTests:
         assert {i.severity for i in found} == {Severity.INFO}
 
     @pytest.mark.parametrize("relpath", ["src/mod.py", "testing/mod.py", "contest.py"])
-    def test_assert_outside_test_files_stays_error(self, tmp_path: Path, relpath: str):
+    def test_assert_outside_test_files_is_warning(self, tmp_path: Path, relpath: str):
         src = tmp_path / relpath
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text("assert 1 == 1\n", encoding="utf-8")
         found = issues_for(src, "S101")
         assert found
-        assert {i.severity for i in found} == {Severity.ERROR}
+        assert {i.severity for i in found} == {Severity.WARNING}
 
     def test_other_error_rules_are_not_downgraded_in_test_files(self):
         assert get_severity_for_rule("F821", Path("tests/test_x.py")) == Severity.ERROR
 
-    def test_severity_without_a_path_is_unchanged(self):
-        assert get_severity_for_rule("S101") == Severity.ERROR
+    def test_severity_without_a_path_is_warning(self):
+        assert get_severity_for_rule("S101") == Severity.WARNING
+
+
+class TestBanditSeverity:
+    @pytest.mark.parametrize("rule", ["S603", "S607", "S101", "S105"])
+    def test_bandit_rules_are_warning_not_blocking(self, rule: str):
+        assert get_severity_for_rule(rule) == Severity.WARNING
+
+    @pytest.mark.parametrize("rule", ["F821", "F822", "F823", "E999"])
+    def test_runtime_defects_stay_error(self, rule: str):
+        assert get_severity_for_rule(rule) == Severity.ERROR
+
+    def test_subprocess_call_is_warning_end_to_end(self, tmp_path: Path):
+        src = tmp_path / "mod.py"
+        src.write_text(
+            "import subprocess\n\nsubprocess.run(['ls'], check=False)\n",
+            encoding="utf-8",
+        )
+        found = issues_for(src, "S607")
+        assert found
+        assert {i.severity for i in found} == {Severity.WARNING}
