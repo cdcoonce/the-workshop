@@ -43,6 +43,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/context_spend.py",
+      "target": ".claude/scripts/context_spend.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },
