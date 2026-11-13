@@ -2,37 +2,9 @@
 
 This document describes the workflow for reviewing and applying suggested fixes.
 
-## Output Formats
-
-### Console (Interactive)
-
-Colorized output with severity indicators:
-
-- ✗ ERROR (red) - Must fix
-- ⚠ WARNING (yellow) - Should fix
-- ℹ INFO (blue) - Consider fixing
-
-### Markdown Report
-
-Saved to `docs/code_reviews/{YYYY-MM-DD}_{file_name}.md`. For multi-file reviews, use a descriptive name (e.g., `2026-03-02_full_repo_review.md`).
-
-Structured report with:
-
-- Summary statistics
-- Status badge (Passed/Failed)
-- Issues table per file
-- Expandable issue details
-- Category breakdown
-
 ## Overview
 
-The code review process follows these steps:
-
-1. **Analyze** - Run linters and Claude analysis on code
-2. **Report** - Generate report with issues and suggested fixes
-3. **Review** - User reviews the report
-4. **Approve** - User selects which fixes to apply
-5. **Apply** - Implement approved fixes
+SKILL.md defines the output and severity contract. After findings are reported, the user approves fixes in one of the modes below; apply only what is approved.
 
 ## Approval Modes
 
@@ -68,6 +40,7 @@ Categories:
 - `import` - Import organization
 - `markdown` - Markdown formatting
 - `mermaid` - Diagram syntax
+- `sql` / `yaml` - SQL/dbt and YAML findings
 
 ### 3. By Severity
 
@@ -169,42 +142,3 @@ User: "I disagree with this suggestion"
 ```
 
 Claude should respect user decisions and not repeatedly suggest declined fixes.
-
-## Usage Patterns
-
-### Full Repository Review
-
-```
-User: "Review the code quality in my project"
-
-1. List Python and Markdown files
-2. Analyze each file
-3. Aggregate into ReviewReport
-4. Present console summary
-5. Save report to docs/code_reviews/{YYYY-MM-DD}_full_repo_review.md
-6. Offer to apply fixes
-```
-
-### Quick Code Check
-
-```
-User: [pastes code snippet]
-      "Any issues with this?"
-
-1. Analyze snippet directly
-2. Report issues inline
-3. Suggest specific fixes
-```
-
-### Pre-Commit Review
-
-```
-User: "Check these files before I commit"
-
-1. Analyze specified files
-2. Focus on errors and warnings
-3. Block if errors found
-4. Apply quick fixes if approved
-5. Check if README needs updating based on changes
-6. Update README if new features, APIs, or dependencies changed
-```
