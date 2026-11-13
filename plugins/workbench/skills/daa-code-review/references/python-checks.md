@@ -1,6 +1,6 @@
 # Python Quality Checks Reference
 
-This document details the Python code quality checks performed by the daa-code-review skill. The coding standard is `dignified-python`; judge changed hunks against it. Run the deterministic pass with the command in SKILL.md ("Analyzer CLI"): an absolute `<skill_dir>` path under `uv run --with ruff` (exit 3 means ruff is missing; say so, never report clean).
+This document details the Python code quality checks performed by the daa-code-review skill. The coding standard is `dignified-python`; judge changed hunks against it. Run the deterministic pass with the command in SKILL.md's "Standards pass" section: an absolute `<skill_dir>` path under `uv run --with ruff` (exit 3 means ruff is missing; say so, never report clean).
 
 ## Category Overview
 

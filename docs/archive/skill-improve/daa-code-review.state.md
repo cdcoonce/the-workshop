@@ -2,13 +2,13 @@
 schema_version: 1
 slug: daa-code-review
 skill_path: plugins/workbench/skills/daa-code-review/SKILL.md
-status: in_progress
-current_phase: iterate
+status: completed
+current_phase: finalize
 target_pass_rate: 90
 max_iterations: 5
-current_iteration: 0
-best_score: 73
-best_iteration: 0
+current_iteration: 1
+best_score: 100
+best_iteration: 1
 baseline_score: 73
 stall_count: 0
 new_test_ids:
@@ -21,6 +21,7 @@ updated: 2026-11-13
 | Iteration | Score | Notes                                     |
 | --------- | ----- | ----------------------------------------- |
 | 0         | 73%   | Baseline on 11 surviving tests (T00 + 10) |
+| 1         | 100%  | T01, T04, T11 fixed (44fd7e88)            |
 
 ## Log
 
@@ -31,3 +32,7 @@ updated: 2026-11-13
 - 2026-11-13 — RED step: one batched no-skill run over T01-T19 (not 19 dispatches). Discarded T02, T05, T06, T07, T08, T09, T10, T16, T17 (no-skill agent already produced the expected behavior). Kept T01, T03, T04, T11, T12, T13, T14, T15, T18, T19.
 - 2026-11-13 — Baseline score: 73%. 8/11 tests passed (fails: T01, T04, T11).
 - 2026-11-13 — Phase 4 runs on feat/daa-code-review-redesign, not a separate improve/ branch, and best versions are tracked by commit rather than a .best_skill.md sidecar, because the failures live in references/ as well as SKILL.md.
+- 2026-11-13 — Iteration 1: 100%. Previous best: 73%. New best (44fd7e88).
+- 2026-11-13 — Loop exited: target reached. Final score: 100%.
+- 2026-11-13 — Phase 5 started.
+- 2026-11-13 — Run complete. Final: 100%. PR held for Charles (MR timing is his call).
