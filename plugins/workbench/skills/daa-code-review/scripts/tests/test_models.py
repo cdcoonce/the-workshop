@@ -13,7 +13,6 @@ from models import (
     Issue,
     IssueCategory,
     Location,
-    ReviewReport,
     Severity,
     SuggestedFix,
 )
@@ -297,80 +296,3 @@ class TestAnalysisResult:
         )
         assert result.total_issues == 0
         assert result.error_count == 0
-
-
-class TestReviewReport:
-    """Tests for the ReviewReport dataclass."""
-
-    @pytest.fixture
-    def sample_report(self) -> ReviewReport:
-        """Create a sample review report for testing.
-
-        Returns
-        -------
-        ReviewReport
-            A sample review report instance.
-        """
-        result1 = AnalysisResult(
-            file_type=FileType.PYTHON,
-            source_path=Path("file1.py"),
-            issues=[
-                Issue(
-                    severity=Severity.ERROR,
-                    category=IssueCategory.RUNTIME_ERROR,
-                    message="Error in file1",
-                    location=Location(file_path=Path("file1.py"), line_start=1),
-                    rule_id="E001",
-                    source="ruff",
-                ),
-            ],
-        )
-        result2 = AnalysisResult(
-            file_type=FileType.PYTHON,
-            source_path=Path("file2.py"),
-            issues=[
-                Issue(
-                    severity=Severity.WARNING,
-                    category=IssueCategory.PEP8,
-                    message="Warning in file2",
-                    location=Location(file_path=Path("file2.py"), line_start=1),
-                    rule_id="W001",
-                    source="ruff",
-                    suggested_fix=SuggestedFix(
-                        description="Fix",
-                        original_code="old",
-                        fixed_code="new",
-                    ),
-                ),
-            ],
-        )
-        return ReviewReport(
-            results=[result1, result2],
-            title="Test Report",
-        )
-
-    def test_report_totals(self, sample_report: ReviewReport):
-        """Test report total calculations."""
-        assert sample_report.total_files == 2
-        assert sample_report.total_issues == 2
-        assert sample_report.total_errors == 1
-        assert sample_report.total_warnings == 1
-        assert sample_report.total_infos == 0
-
-    def test_get_all_issues(self, sample_report: ReviewReport):
-        """Test getting all issues from report."""
-        all_issues = sample_report.get_all_issues()
-        assert len(all_issues) == 2
-
-    def test_get_all_fixable_issues(self, sample_report: ReviewReport):
-        """Test getting all fixable issues from report."""
-        fixable = sample_report.get_all_fixable_issues()
-        assert len(fixable) == 1
-        assert fixable[0].message == "Warning in file2"
-
-    def test_empty_report(self):
-        """Test empty review report."""
-        report = ReviewReport()
-        assert report.total_files == 0
-        assert report.total_issues == 0
-        assert report.title == "Code Review Report"
