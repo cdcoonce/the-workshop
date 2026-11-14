@@ -1,0 +1,56 @@
+{
+  "_about": "Hand-derived from the transcript reader spec (B1-B8) before the fixtures were built. Per fixture: distinct calls keyed by message.id/requestId with session id, subagent flag, kept output tokens, and 5m/1h cache-write tokens. Ties across files go to the later file in sorted path order.",
+  "two_line_call": {
+    "project": "-proj-alpha",
+    "calls": {
+      "msg_a1/req_a1": {"session": "sess-a1", "subagent": false, "output": 50, "write_5m": 15, "write_1h": 5}
+    }
+  },
+  "disagreeing_usage": {
+    "project": "-proj-alpha",
+    "note": "msg_b1 lines have output 10, 30, 80: first-line gives 10, keep-largest gives 80 and takes input from that line (120). msg_b2 ties at 40: the later line wins (input 9).",
+    "calls": {
+      "msg_b1/req_b1": {"session": "sess-b1", "subagent": false, "output": 80, "input": 120, "write_5m": 0, "write_1h": 0},
+      "msg_b2/req_b2": {"session": "sess-b1", "subagent": false, "output": 40, "input": 9, "write_5m": 4, "write_1h": 0}
+    }
+  },
+  "cross_file": {
+    "project": "-proj-alpha",
+    "calls": {
+      "msg_c1/req_c1": {"session": "sess-c2", "subagent": false, "output": 25, "write_5m": 6, "write_1h": 0},
+      "msg_c2/req_c2": {"session": "sess-c2", "subagent": false, "output": 12, "write_5m": 0, "write_1h": 0}
+    }
+  },
+  "subagent": {
+    "project": "-proj-alpha",
+    "calls": {
+      "msg_d1/req_d1": {"session": "sess-d1", "subagent": false, "output": 30, "write_5m": 10, "write_1h": 0},
+      "msg_d2/req_d2": {"session": "sess-d1", "subagent": true, "agent_id": "ad1", "output": 44, "write_5m": 0, "write_1h": 16}
+    }
+  },
+  "malformed_and_window": {
+    "project": "-proj-alpha",
+    "malformed_lines": 2,
+    "calls": {
+      "msg_e1/req_e1": {"session": "sess-e1", "subagent": false, "output": 11, "write_5m": 3, "write_1h": 0},
+      "msg_e2/req_e2": {"session": "sess-e1", "subagent": false, "output": 22, "write_5m": 0, "write_1h": 0},
+      "msg_e3/req_e3": {"session": "sess-e1", "subagent": false, "output": 33, "write_5m": 0, "write_1h": 0},
+      "msg_e4/req_e4": {"session": "sess-e1", "subagent": false, "output": 44, "write_5m": 0, "write_1h": 0}
+    },
+    "window": {
+      "since": "2026-11-01",
+      "until": "2026-11-30",
+      "calls": ["msg_e1/req_e1", "msg_e3/req_e3"]
+    }
+  },
+  "attachments": {
+    "project": "-proj-alpha",
+    "calls": {
+      "msg_f1/req_f1": {"session": "sess-f1", "subagent": false, "output": 5, "write_5m": 0, "write_1h": 0}
+    },
+    "attachments": [
+      {"session": "sess-f1", "subagent": false, "agent_id": null, "subtype": "skill_listing", "size": 48},
+      {"session": "sess-f1", "subagent": true, "agent_id": "af1", "subtype": "hook_note", "size": 39}
+    ]
+  }
+}

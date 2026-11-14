@@ -596,3 +596,72 @@ class TestBudgetOverride:
         out = capsys.readouterr().out
         assert "/ $300" in out
         assert "% of cap" in out
+
+
+# ---------------------------------------------------------------------------
+# scan through the shared transcript reader (issue #1329, B9)
+# ---------------------------------------------------------------------------
+class TestScanViaSharedReader:
+    def test_subagent_calls_are_in_every_breakdown(self, tmp_path: Path) -> None:
+        # B9(a). Before: only <project>/*.jsonl was read, so the subagent call
+        # was invisible and the month total was $5.00. Now it is counted under
+        # the top-level project key (never "subagents").
+        main = tmp_path / "proj-a"
+        main.mkdir()
+        _write_jsonl(main / "sess.jsonl", [_usage_record("req-1")])  # opus 1M in = $5
+        sub = main / "sess" / "subagents"
+        sub.mkdir(parents=True)
+        _write_jsonl(
+            sub / "agent-x1.jsonl",
+            [_usage_record("req-2", model="claude-3-5-haiku")],  # haiku 1M in = $1
+        )
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 6.0
+        assert result["by_tier"] == {"haiku": 1.0, "opus": 5.0}
+        assert result["by_day"] == {"2026-06-15": 6.0}
+        assert result["by_project"] == {"proj-a": 6.0}
+
+    def test_subagent_project_alias_still_applied(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(budget_burn, "_PROJECT_ALIASES", {"old-": "new-"})
+        sub = tmp_path / "old-thing" / "sess" / "subagents"
+        sub.mkdir(parents=True)
+        _write_jsonl(sub / "agent-x1.jsonl", [_usage_record("req-1")])
+        assert scan(tmp_path, "2026-06")["by_project"] == {"new-thing": 5.0}
+
+    def test_dedup_keeps_the_largest_output_line(self, tmp_path: Path) -> None:
+        # B9(b). One call, two lines: the first has no output yet, the last
+        # carries the full output. First-line dedup counted $5.00 (1M input,
+        # 0 output); keep-largest takes the last line: 5 + 25 = $30.00.
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        first = {
+            "requestId": "req-1",
+            "timestamp": "2026-06-15T12:00:00Z",
+            "message": {
+                "id": "msg-1",
+                "model": "claude-opus-4",
+                "usage": {"input_tokens": 1_000_000, "output_tokens": 0},
+            },
+        }
+        last = json.loads(json.dumps(first))
+        last["message"]["usage"]["output_tokens"] = 1_000_000
+        _write_jsonl(project / "s.jsonl", [first, last])
+        assert scan(tmp_path, "2026-06")["total"] == 30.0
+
+    def test_record_without_timestamp_uses_file_month(self, tmp_path: Path) -> None:
+        import os
+        from datetime import datetime, timezone
+
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        rec = _usage_record("req-1")
+        rec.pop("timestamp")
+        path = project / "s.jsonl"
+        _write_jsonl(path, [rec])
+        epoch = datetime(2026, 6, 20, tzinfo=timezone.utc).timestamp()
+        os.utime(path, (epoch, epoch))
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 5.0
+        assert result["by_day"] == {}  # no timestamp, no day bucket
