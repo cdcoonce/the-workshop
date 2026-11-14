@@ -49,7 +49,7 @@ SPEC_ROWS = [
 SPEC_KEYS = [r[0] for r in SPEC_ROWS]
 
 
-def mk(model="claude-opus-4-8", i=0, o=0, cr=0, w5=0, w1=0, speed=None):
+def mk(model="claude-opus-4-8", i=0, o=0, cr=0, w5=0, w1=0, speed=None, tot=None):
     return SimpleNamespace(
         model=model,
         input_tokens=i,
@@ -57,7 +57,7 @@ def mk(model="claude-opus-4-8", i=0, o=0, cr=0, w5=0, w1=0, speed=None):
         cache_read_tokens=cr,
         cache_write_5m_tokens=w5,
         cache_write_1h_tokens=w1,
-        cache_write_tokens=w5 + w1,
+        cache_write_tokens=w5 + w1 if tot is None else tot,
         speed=speed,
     )
 
@@ -438,3 +438,54 @@ def test_module_docstring_cites_the_price_sources_and_date() -> None:
     assert "https://platform.claude.com/docs/en/about-claude/pricing" in doc
     assert "https://platform.claude.com/docs/en/build-with-claude/fast-mode" in doc
     assert "2026-11-14" in doc
+
+
+# ---------------------------------------------------------------------------
+# review fixes: conserved writes, prompt length from the larger figure, invalid counts
+# ---------------------------------------------------------------------------
+def test_prompt_length_uses_total_cache_write_when_split_under_sums() -> None:
+    # 200,000 written tokens with a split that names only 2 of them: the prompt
+    # is over 100,000, so the long row applies to every component.
+    r = pricing.price_call(mk(HAIKU, i=1, w5=1, w1=1, tot=200_000))
+    assert close(r.input_usd, 1 * 0.50 / M)
+    assert close(r.write_5m_usd, (1 + 199_998) * 0.625 / M)
+    assert close(r.write_1h_usd, 1 * 1.0 / M)
+
+
+def test_unsplit_write_shortfall_is_priced_at_five_minute_rate() -> None:
+    r = pricing.price_call(mk("claude-opus-4-8", w5=10, w1=20, tot=1_000_030))
+    assert close(r.write_5m_usd, (10 + 1_000_000) * 6.25 / M)
+    assert close(r.write_1h_usd, 20 * 10 / M)
+    assert close(r.total_usd, r.write_5m_usd + r.write_1h_usd)
+
+
+@pytest.mark.parametrize(
+    "bad", [True, 1.5, "100", -5, float("nan"), None], ids=repr
+)
+@pytest.mark.parametrize(
+    "field",
+    ["input_tokens", "cache_write_5m_tokens", "cache_write_tokens"],
+)
+def test_invalid_token_count_makes_call_unpriced_and_listed(bad, field) -> None:
+    call = mk("claude-opus-4-8", o=1_000_000)
+    setattr(call, field, bad)
+    r = pricing.price_call(call)
+    assert r.priced is False
+    assert r.total_usd == 0.0
+    assert "invalid token count" in r.reason
+    assert field in r.reason
+    pricer = pricing.Pricer()
+    pricer.price(call)
+    (row,) = pricer.unpriced()
+    assert row["calls"] == 1
+    assert "invalid token count" in row["reason"]
+
+
+def test_valid_all_zero_call_still_not_listed() -> None:
+    pricer = pricing.Pricer()
+    r = pricer.price(mk("<synthetic>"))
+    assert r.priced is True and r.total_usd == 0.0
+    # a missing attribute is a zero, not an invalid count
+    r2 = pricer.price(SimpleNamespace(model="claude-opus-4-8"))
+    assert r2.priced is True and r2.total_usd == 0.0
+    assert pricer.unpriced() == []

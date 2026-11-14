@@ -206,6 +206,34 @@ class TestCallFields:
         (c,) = tr.read(tmp_path).calls
         assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (9, 9, 0)
 
+    def test_empty_cache_creation_split_puts_total_in_five_minute(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=200_000)
+        rec["message"]["usage"]["cache_creation"] = {}
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (
+            200_000, 200_000, 0)
+
+    def test_under_summed_split_adds_shortfall_to_five_minute(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=200_000)
+        rec["message"]["usage"]["cache_creation"] = {
+            "ephemeral_5m_input_tokens": 1,
+            "ephemeral_1h_input_tokens": 1,
+        }
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (199_999, 1)
+
+    def test_over_summed_split_is_kept_as_read(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=5)
+        rec["message"]["usage"]["cache_creation"] = {
+            "ephemeral_5m_input_tokens": 4,
+            "ephemeral_1h_input_tokens": 3,
+        }
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (5, 4, 3)
+
     def test_attribution_passthrough_and_absent(self, tmp_path: Path) -> None:
         full = _asst("m1", "r1", output_tokens=1)
         full.update(
