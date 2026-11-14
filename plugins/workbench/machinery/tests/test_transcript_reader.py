@@ -389,7 +389,9 @@ class TestUntrusted:
         }
         _write(tmp_path / "p" / "s.jsonl", [rec])
         (c,) = tr.read(tmp_path).calls
-        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (0, 2)
+        # total 5: the bad 5m value reads 0, the 2 tokens in 1h stay, and the
+        # 3 the split does not name go to 5m (B4a).
+        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (3, 2)
 
     def test_non_object_cache_creation_means_absent(self, tmp_path: Path) -> None:
         rec = _asst(output_tokens=1, cache_creation_input_tokens=5)

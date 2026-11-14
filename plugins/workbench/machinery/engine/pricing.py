@@ -26,6 +26,11 @@ and keeps the list of what it could not price, so every caller reports the same
 thing. A call whose token counts are all zero costs nothing and is never
 unpriced.
 
+Spec amendment P4a: prompt length is input plus cache read plus the larger of the
+total cache-write count and the 5-minute plus 1-hour split, write tokens the
+split does not name are priced at the 5-minute rate, and a token count that is
+not a non-negative int makes the call unpriced (a missing count is 0).
+
 Stdlib only; imports nothing else from the engine but its defaults.
 """
 
@@ -162,6 +167,34 @@ def _tokens(call: object, name: str) -> int:
     return 0
 
 
+_COUNT_ATTRS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_5m_tokens",
+    "cache_write_1h_tokens",
+    "cache_write_tokens",
+)
+
+
+def _invalid_counts(call: object) -> list[str]:
+    """Names of count attributes present on the call that are not non-negative ints."""
+    bad = []
+    for name in _COUNT_ATTRS:
+        if not hasattr(call, name):
+            continue
+        value = getattr(call, name)
+        if not (isinstance(value, int) and not isinstance(value, bool) and value >= 0):
+            bad.append(name)
+    return bad
+
+
+def _total_write(call: object, counts: dict[str, int]) -> int:
+    """Total cache-write tokens: the call's own total, else the split's sum."""
+    split = counts["write_5m"] + counts["write_1h"]
+    return max(_tokens(call, "cache_write_tokens"), split)
+
+
 def _counts(call: object) -> dict[str, int]:
     return {
         "input": _tokens(call, "input_tokens"),
@@ -183,6 +216,9 @@ def price_call(call: object, table: dict[str, dict] | None = None) -> PricedCall
     counts = _counts(call)
     model = getattr(call, "model", None)
     key = _resolve(model, table)
+    invalid = _invalid_counts(call)
+    if invalid:
+        return _unpriced(key, f"invalid token count in {', '.join(invalid)}")
     if not any(counts.values()):
         return PricedCall(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, True, key)
     if key is None:
@@ -193,7 +229,7 @@ def price_call(call: object, table: dict[str, dict] | None = None) -> PricedCall
     rates = row
     threshold = row.get("long_prompt_threshold")
     if threshold is not None:
-        prompt = counts["input"] + counts["cache_read"] + counts["write_5m"] + counts["write_1h"]
+        prompt = counts["input"] + counts["cache_read"] + _total_write(call, counts)
         if prompt > threshold:
             rates = row["long_prompt"]
     factor = 1
@@ -201,6 +237,8 @@ def price_call(call: object, table: dict[str, dict] | None = None) -> PricedCall
         factor = row.get("fast_multiplier")
         if factor is None:
             return _unpriced(key, f"fast mode has no price for {key}")
+    shortfall = _total_write(call, counts) - counts["write_5m"] - counts["write_1h"]
+    counts = {**counts, "write_5m": counts["write_5m"] + shortfall}
     applied = {name: rates[name] * factor for name in _COMPONENTS}
     usd = {name: counts[name] * rates[name] / _PER * factor for name in _COMPONENTS}
     total = sum(usd.values())
@@ -240,7 +278,9 @@ class Pricer:
                 },
             )
             row["calls"] += 1
-            for name, n in _counts(call).items():
+            counts = _counts(call)
+            counts["write_5m"] += _total_write(call, counts) - counts["write_5m"] - counts["write_1h"]
+            for name, n in counts.items():
                 row["tokens"][name] += n
         return result
 
