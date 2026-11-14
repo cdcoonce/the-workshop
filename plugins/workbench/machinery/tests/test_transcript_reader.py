@@ -171,6 +171,17 @@ class TestDedup:
         _write(tmp_path / "p" / "s.jsonl", [a, b, dup])
         assert len(tr.read(tmp_path).calls) == 2
 
+    def test_duplicate_call_across_files_belongs_to_later_sorted_path(
+        self, tmp_path: Path
+    ) -> None:
+        # Spec B2a: on a tie the later file in sorted path order owns the call,
+        # whatever order the filesystem lists the files in.
+        line = _asst("m", "r", output_tokens=5)
+        _write(tmp_path / "p" / "a.jsonl", [line])
+        _write(tmp_path / "p" / "b.jsonl", [line])
+        (call,) = tr.read(tmp_path).calls
+        assert call.session_id == "b"
+
     def test_unidentifiable_lines_each_count(self, tmp_path: Path) -> None:
         a = _asst(output_tokens=1)
         a["message"].pop("id")
@@ -393,6 +404,37 @@ class TestUntrusted:
         rec["uuid"] = ["c"]
         _write(tmp_path / "p" / "s.jsonl", [rec, dict(rec)])
         assert len(tr.read(tmp_path).calls) == 2
+
+    @pytest.mark.parametrize("kind", ["user", "system", "attachment"])
+    def test_explicit_non_assistant_type_yields_no_call(self, tmp_path: Path, kind) -> None:
+        rec = _asst(output_tokens=7)
+        rec["type"] = kind
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        assert tr.read(tmp_path).calls == []
+
+    def test_typeless_record_counts_as_call(self, tmp_path: Path) -> None:
+        # The older transcript shape budget_burn accepted: no `type` key.
+        rec = _asst(output_tokens=7)
+        del rec["type"]
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (call,) = tr.read(tmp_path).calls
+        assert call.output_tokens == 7
+
+    def test_discovery_ignores_misplaced_subagents_and_root_jsonl(
+        self, tmp_path: Path
+    ) -> None:
+        rec = _asst(output_tokens=3)
+        _write(tmp_path / "p" / "subagents" / "x.jsonl", [rec])
+        _write(tmp_path / "p" / "a" / "b" / "subagents" / "agent-x.jsonl", [rec])
+        _write(tmp_path / "root.jsonl", [rec])
+        _write(tmp_path / "p" / "s" / "subagents" / "notes.txt", [rec])
+        result = tr.read(tmp_path)
+        assert result.calls == [] and result.attachments == []
+        # Coverage pins the current behavior: none of these is a transcript
+        # file, so none is counted as found or read.
+        assert result.coverage.files_found == 0
+        assert result.coverage.files_read == 0
+        assert result.coverage.files_skipped == []
 
     def test_non_dict_attachment_record_and_subtype(self, tmp_path: Path) -> None:
         _write(

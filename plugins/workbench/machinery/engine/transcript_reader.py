@@ -20,7 +20,9 @@ One API call is written on several lines (one per content block) that share
 into a new file. A call is therefore identified by ``(message.id, requestId)``
 (``uuid`` when both are missing), counted once for the whole scan, and takes all
 its usage from the line with the largest ``output_tokens`` (the later line on a
-tie). ``CallCollector`` also offers ``mode="request"``, the first-seen-per-request
+tie). When lines tie across files, the call belongs to the file that sorts later
+by path; the choice is arbitrary but stable, and never depends on the order the
+filesystem lists files in. ``CallCollector`` also offers ``mode="request"``, the first-seen-per-request
 rule ``context_spend --dedupe request`` keeps for old baselines.
 
 Stdlib only; no shell.
