@@ -443,3 +443,37 @@ class TestUntrusted:
         )
         (a,) = tr.read(tmp_path).attachments
         assert a.subtype is None
+
+
+# ---------------------------------------------------------------------------
+# speed (issue #1330, P10)
+# ---------------------------------------------------------------------------
+class TestSpeed:
+    def _read(self, tmp_path: Path, usage: dict) -> tr.Call:
+        _write(tmp_path / "p" / "s.jsonl", [_asst(**usage)])
+        (call,) = tr.read(tmp_path).calls
+        return call
+
+    def test_string_speed_is_carried(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": "fast"}).speed == "fast"
+
+    def test_standard_speed_string_is_carried_as_is(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": "standard"}).speed == "standard"
+
+    @pytest.mark.parametrize("value", [None, 1, True, ["fast"], {"a": 1}])
+    def test_non_string_speed_is_none(self, tmp_path: Path, value) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": value}).speed is None
+
+    def test_absent_speed_is_none(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1}).speed is None
+
+    def test_speed_comes_from_the_kept_line(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path / "p" / "s.jsonl",
+            [
+                _asst(output_tokens=1, speed="fast"),
+                _asst(output_tokens=9, speed="standard"),
+            ],
+        )
+        (call,) = tr.read(tmp_path).calls
+        assert (call.output_tokens, call.speed) == (9, "standard")
