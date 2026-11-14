@@ -2,20 +2,10 @@
 
 This document details Mermaid diagram validation performed by the daa-code-review skill.
 
-## Skill-Level Checklist
+## Verification
 
-Search web for latest Mermaid.js documentation before validating. Check:
-
-- Diagram type declaration
-- Node/edge syntax
-- Structural correctness
-- Relationship definitions
-
-## Important
-
-For Mermaid validation, Claude must search the web for the latest Mermaid documentation to ensure syntax rules are current. Mermaid syntax evolves frequently, and validation must use up-to-date specifications.
-
-**Always search:** `site:mermaid.js.org` for current syntax documentation.
+1. If `mmdc` is on PATH, parse each changed diagram: write the block to a temp file outside the repo and run `mmdc -i <file> -o <tmp>.svg`. A non-zero exit is a blocking finding with the parser message.
+2. If `mmdc` is not on PATH, do not install it and do not look anything up. Apply the checks below by reading, and report each diagram as **unverified** (not clean).
 
 ## Supported Diagram Types
 
@@ -208,10 +198,9 @@ erDiagram
 ## Validation Process
 
 1. **Parse diagram type** from first line
-2. **Search latest Mermaid docs** for type-specific syntax
-3. **Validate structural syntax** (brackets, arrows, keywords)
-4. **Check semantic correctness** (referenced nodes exist)
-5. **Report issues with line numbers and suggestions**
+2. **Validate structural syntax** (brackets, arrows, keywords)
+3. **Check semantic correctness** (referenced nodes exist)
+4. **Report issues with line numbers and suggestions**
 
 ## Auto-Fix Capabilities
 

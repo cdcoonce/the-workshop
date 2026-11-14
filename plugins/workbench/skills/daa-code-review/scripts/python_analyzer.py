@@ -5,7 +5,9 @@ like ruff, with results normalized into the common Issue format.
 """
 
 import functools
+import fnmatch
 import json
+import re
 import subprocess
 import tempfile
 import time
@@ -15,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from models import (
+    run_analyzer_cli,
     AnalysisResult,
     FileType,
     Issue,
@@ -91,7 +94,7 @@ RUFF_SEVERITY_MAP: dict[str, Severity] = {
     "D": Severity.INFO,  # docstrings
     "ANN": Severity.INFO,  # annotations
     "B": Severity.WARNING,  # bugbear - potential bugs
-    "S": Severity.ERROR,  # security issues
+    "S": Severity.WARNING,  # bandit: routine calls; real vulns belong to security-review
 }
 
 # Rules that indicate errors (runtime issues)
@@ -101,8 +104,14 @@ ERROR_RULES = {
     "F823",  # local variable referenced before assignment
     "E999",  # syntax error
     "B018",  # useless expression
-    "S101",  # assert used (can be warning in prod)
 }
+
+# Rules downgraded to INFO inside test files (pytest relies on bare assert).
+TEST_FILE_INFO_RULES = {"S101"}
+
+_TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
+_RUFF_CONFIG_FILES = ("ruff.toml", ".ruff.toml")
+_PYPROJECT_RUFF_TABLE = re.compile(r"^\s*\[tool\.ruff[\].]", re.MULTILINE)
 
 # Pyflakes rules that are runtime defects rather than unused code; they
 # override the blanket "F" -> UNUSED_CODE prefix mapping.
@@ -139,19 +148,87 @@ def get_category_for_rule(rule_id: str) -> IssueCategory:
     return IssueCategory.PEP8
 
 
-def get_severity_for_rule(rule_id: str) -> Severity:
+def is_test_file(file_path: Optional[Path]) -> bool:
+    """Return True for pytest-style test files.
+
+    A test file has a basename matching ``test_*.py``, ``*_test.py`` or
+    ``conftest.py``, or sits anywhere under a directory named ``tests``.
+
+    Parameters
+    ----------
+    file_path : Optional[Path]
+        Path of the analyzed file; None for an inline snippet.
+
+    Returns
+    -------
+    bool
+        True if the path looks like a test file.
+    """
+    if file_path is None:
+        return False
+    if any(fnmatch.fnmatch(file_path.name, pat) for pat in _TEST_FILE_PATTERNS):
+        return True
+    return "tests" in file_path.parts[:-1]
+
+
+def find_ruff_config(file_path: Optional[Path]) -> Optional[Path]:
+    """Find the ruff config governing a file, mirroring ruff's own discovery.
+
+    Walks up from the file's directory to the filesystem root; the nearest
+    directory holding ``ruff.toml``, ``.ruff.toml`` or a ``pyproject.toml``
+    with a ``[tool.ruff]`` table wins (``ruff.toml`` over ``.ruff.toml`` over
+    ``pyproject.toml`` within one directory).
+
+    Parameters
+    ----------
+    file_path : Optional[Path]
+        Path of the analyzed file; None or a missing file has no config.
+
+    Returns
+    -------
+    Optional[Path]
+        The governing config file, or None.
+    """
+    if file_path is None or not file_path.exists():
+        return None
+    start = file_path.resolve().parent
+    for directory in (start, *start.parents):
+        for name in _RUFF_CONFIG_FILES:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+        pyproject = directory / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                text = pyproject.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if _PYPROJECT_RUFF_TABLE.search(text):
+                return pyproject
+    return None
+
+
+def get_severity_for_rule(
+    rule_id: str, file_path: Optional[Path] = None
+) -> Severity:
     """Determine the severity level for a ruff rule ID.
 
     Parameters
     ----------
     rule_id : str
         The ruff rule identifier (e.g., 'F841', 'E501').
+    file_path : Optional[Path]
+        File the rule fired in; test files downgrade ``TEST_FILE_INFO_RULES``
+        to INFO.
 
     Returns
     -------
     Severity
         The corresponding severity level.
     """
+    if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):
+        return Severity.INFO
+
     # Check if it's a known error rule
     if rule_id in ERROR_RULES:
         return Severity.ERROR
@@ -254,14 +331,17 @@ def run_ruff_check(
     """
     with _ruff_target(source, file_path) as target:
         try:
-            # Run ruff with comprehensive rules
+            # The repo's own config governs when one exists (ruff discovers it
+            # from the target path); otherwise ruff's defaults plus B and S.
+            rule_args = (
+                [] if find_ruff_config(file_path) else ["--extend-select=B,S"]
+            )
             result = subprocess.run(
                 [
                     "ruff",
                     "check",
                     "--output-format=json",
-                    "--select=ALL",  # Enable all rules
-                    "--ignore=ANN401",  # Ignore Any annotations
+                    *rule_args,
                     target,
                 ],
                 capture_output=True,
@@ -407,7 +487,7 @@ def parse_ruff_diagnostic(
             )
 
     return Issue(
-        severity=get_severity_for_rule(rule_id),
+        severity=get_severity_for_rule(rule_id, file_path),
         category=get_category_for_rule(rule_id),
         message=message,
         location=location,
@@ -517,3 +597,13 @@ def analyze_python_file(file_path: Path) -> AnalysisResult:
 
     source = file_path.read_text(encoding="utf-8")
     return analyze_python(source, file_path)
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        run_analyzer_cli(
+            analyze_python_file,
+            "Analyze Python files with ruff.",
+            preflight=lambda: None if check_ruff_available() else "ruff not available",
+        )
+    )

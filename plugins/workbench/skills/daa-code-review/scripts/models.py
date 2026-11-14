@@ -4,6 +4,10 @@ This module defines the core data structures used throughout the code review
 skill, including severity levels, issue representations, and analysis results.
 """
 
+import argparse
+import json
+import sys
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -208,6 +212,24 @@ class Issue:
             result["context"] = self.context
         return result
 
+    def to_json_dict(self) -> dict:
+        """Return the machine-readable form emitted by the analyzer CLIs.
+
+        Returns
+        -------
+        dict
+            ``severity``, ``category``, ``line``, ``message``, ``rule_id`` and
+            ``source``; enums as their values, ``line`` as ``None`` when unset.
+        """
+        return {
+            "severity": self.severity.value,
+            "category": self.category.value,
+            "line": self.location.line_start,
+            "message": self.message,
+            "rule_id": self.rule_id,
+            "source": self.source,
+        }
+
 
 @dataclass
 class AnalysisResult:
@@ -324,99 +346,88 @@ class AnalysisResult:
             if issue.suggested_fix and issue.suggested_fix.auto_fixable
         ]
 
+    def to_json_dict(self) -> dict:
+        """Return the machine-readable form emitted by the analyzer CLIs.
 
-@dataclass
-class ReviewReport:
-    """Complete code review report aggregating all analysis results.
+        Returns
+        -------
+        dict
+            ``file`` (path string or ``None`` for a snippet), ``file_type``,
+            ``tools_used`` and ``issues`` (each from ``Issue.to_json_dict``).
+        """
+        return {
+            "file": str(self.source_path) if self.source_path is not None else None,
+            "file_type": self.file_type.value,
+            "tools_used": list(self.tools_used),
+            "issues": [issue.to_json_dict() for issue in self.issues],
+        }
+
+
+def run_analyzer_cli(
+    analyze_file: Callable[[Path], "AnalysisResult"],
+    description: str,
+    argv: Optional[Sequence[str]] = None,
+    preflight: Optional[Callable[[], Optional[str]]] = None,
+) -> int:
+    """Run a file analyzer as a command-line tool.
+
+    Exit code is 0 whenever analysis ran, whatever it found; 2 when an input
+    path does not exist or cannot be read or decoded; 3 when ``preflight``
+    reports that a required tool is unavailable. Failures write to stderr
+    and leave stdout empty.
 
     Parameters
     ----------
-    results : list[AnalysisResult]
-        List of analysis results for all files/snippets reviewed.
-    title : str
-        Title for the report.
+    analyze_file : Callable[[Path], AnalysisResult]
+        The analyzer entry point for one file.
+    description : str
+        Argparse description.
+    argv : Optional[Sequence[str]]
+        Arguments; defaults to ``sys.argv[1:]``.
+    preflight : Optional[Callable[[], Optional[str]]]
+        Returns an error message when a required tool is unavailable, else None.
+
+    Returns
+    -------
+    int
+        Process exit code.
     """
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("paths", nargs="+", type=Path, help="files to analyze")
+    parser.add_argument("--json", action="store_true", help="emit JSON on stdout")
+    args = parser.parse_args(argv)
 
-    results: list[AnalysisResult] = field(default_factory=list)
-    title: str = "Code Review Report"
+    if preflight is not None:
+        tool_error = preflight()
+        if tool_error:
+            print(f"error: {tool_error}", file=sys.stderr)
+            return 3
 
-    @property
-    def total_files(self) -> int:
-        """Total number of files analyzed.
+    missing = [path for path in args.paths if not path.is_file()]
+    if missing:
+        for path in missing:
+            print(f"error: file not found: {path}", file=sys.stderr)
+        return 2
 
-        Returns
-        -------
-        int
-            Number of files/snippets analyzed.
-        """
-        return len(self.results)
+    unreadable = []
+    for path in args.paths:
+        try:
+            path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            unreadable.append((path, exc))
+    if unreadable:
+        for path, exc in unreadable:
+            print(f"error: cannot read {path}: {exc}", file=sys.stderr)
+        return 2
 
-    @property
-    def total_issues(self) -> int:
-        """Total issues across all files.
-
-        Returns
-        -------
-        int
-            Sum of all issues.
-        """
-        return sum(result.total_issues for result in self.results)
-
-    @property
-    def total_errors(self) -> int:
-        """Total error-level issues across all files.
-
-        Returns
-        -------
-        int
-            Sum of all errors.
-        """
-        return sum(result.error_count for result in self.results)
-
-    @property
-    def total_warnings(self) -> int:
-        """Total warning-level issues across all files.
-
-        Returns
-        -------
-        int
-            Sum of all warnings.
-        """
-        return sum(result.warning_count for result in self.results)
-
-    @property
-    def total_infos(self) -> int:
-        """Total info-level issues across all files.
-
-        Returns
-        -------
-        int
-            Sum of all info items.
-        """
-        return sum(result.info_count for result in self.results)
-
-    def get_all_issues(self) -> list[Issue]:
-        """Get all issues from all results.
-
-        Returns
-        -------
-        list[Issue]
-            Flattened list of all issues.
-        """
-        all_issues = []
-        for result in self.results:
-            all_issues.extend(result.issues)
-        return all_issues
-
-    def get_all_fixable_issues(self) -> list[Issue]:
-        """Get all auto-fixable issues from all results.
-
-        Returns
-        -------
-        list[Issue]
-            List of all auto-fixable issues.
-        """
-        fixable = []
-        for result in self.results:
-            fixable.extend(result.get_fixable_issues())
-        return fixable
+    results = [analyze_file(path) for path in args.paths]
+    if args.json:
+        print(json.dumps([result.to_json_dict() for result in results], indent=2))
+    else:
+        for result in results:
+            for issue in result.issues:
+                print(
+                    f"{result.source_path}:{issue.location.line_start}: "
+                    f"{issue.severity.value} {issue.rule_id} {issue.message}"
+                )
+    return 0
