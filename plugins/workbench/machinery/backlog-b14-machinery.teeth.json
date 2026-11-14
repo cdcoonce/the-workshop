@@ -102,11 +102,11 @@
       "replace": "note: [e[\"display\"] for e in entries if isinstance(e, dict) and isinstance(e.get(\"display\"), str)]"
     },
     {
-      "label": "#788 RATES replaced wholesale",
-      "file": "engine/budget_burn.py",
+      "label": "#788 MODEL_PRICES replaced wholesale (override discards the other default rows)",
+      "file": "engine/pricing.py",
       "oracle": "real",
-      "find": "RATES: dict[str, tuple[float, float]] = {\n    **DEFAULT_RATES,\n    **_from_config(\"RATES\", DEFAULT_RATES),\n}",
-      "replace": "RATES: dict[str, tuple[float, float]] = _from_config(\"RATES\", DEFAULT_RATES)"
+      "find": "table[key] = dict(row)",
+      "replace": "table = {k: dict(r) for k, r in overrides.items()}"
     },
     {
       "label": "#788 zero budget divides",
@@ -270,18 +270,18 @@
       "replace": "extract_broken_displays(entries)"
     },
     {
-      "label": "indep: 788 override wins reversed",
-      "file": "engine/budget_burn.py",
+      "label": "indep: 788 MODEL_PRICES default wins over the override",
+      "file": "engine/pricing.py",
       "oracle": "real",
-      "find": "    **DEFAULT_RATES,\n    **_from_config(\"RATES\", DEFAULT_RATES),",
-      "replace": "    **_from_config(\"RATES\", DEFAULT_RATES),\n    **DEFAULT_RATES,"
+      "find": "table[key] = dict(row)",
+      "replace": "table.setdefault(key, dict(row))"
     },
     {
-      "label": "indep: 788 override ignored",
+      "label": "indep: 788 MODEL_PRICES override ignored",
       "file": "engine/budget_burn.py",
       "oracle": "real",
-      "find": "    **_from_config(\"RATES\", DEFAULT_RATES),\n}",
-      "replace": "}"
+      "find": "overrides = _from_config(\"MODEL_PRICES\", None)",
+      "replace": "overrides = None"
     },
     {
       "label": "indep: 788 zero-budget guard on negative only",
