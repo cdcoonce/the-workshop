@@ -139,13 +139,41 @@
       "replace": "len(json.dumps(rec, separators"
     },
     {
-      "label": "15 [control] file iteration in reverse sorted order",
+      "label": "15 B2a duplicate ownership is deterministic by sorted path",
       "file": "../engine/transcript_reader.py",
       "oracle": "real",
       "find": "return sorted(path.iterdir())",
-      "replace": "return sorted(path.iterdir(), reverse=True)",
+      "replace": "return sorted(path.iterdir(), reverse=True)"
+    },
+    {
+      "label": "16 [control] result calls listed in reverse insertion order",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "return list(self._calls.values())",
+      "replace": "return list(reversed(self._calls.values()))",
       "expect": "survived",
-      "why": "No total depends on discovery order; identical-usage duplicates differ only in file-derived fields the suite does not pin."
+      "why": "The spec fixes which calls exist and their contents, not the order the list returns them in; every test and total sorts or sums."
+    },
+    {
+      "label": "17 type check dropped: any record with usage counts",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "if rec.get(\"type\") not in (None, \"assistant\"):\n        return None",
+      "replace": "if False:\n        return None"
+    },
+    {
+      "label": "18 typeless record rejected: type must equal assistant",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "rec.get(\"type\") not in (None, \"assistant\")",
+      "replace": "rec.get(\"type\") != \"assistant\""
+    },
+    {
+      "label": "19 discovery widened to a recursive **/*.jsonl glob",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "    for proj in _safe_iterdir(Path(root)):\n        if not _is_dir(proj):\n            continue\n",
+      "replace": "    for hit in sorted(Path(root).glob(\"**/*.jsonl\")):\n        found.append(FileInfo(hit, hit.relative_to(root).parts[0], hit.stem, False, None, _mtime(hit)))\n    return found\n    for proj in _safe_iterdir(Path(root)):\n        if not _is_dir(proj):\n            continue\n"
     }
   ]
 }
