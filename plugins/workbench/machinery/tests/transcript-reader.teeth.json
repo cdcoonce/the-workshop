@@ -1,0 +1,151 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_transcript_reader.py",
+    "test_budget_burn.py",
+    "test_context_spend.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_transcript_reader.py",
+    "test_budget_burn.py",
+    "test_context_spend.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 B2 dedup disabled: every line its own call",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "key = self._key(rec)\n        call = _call_from_record",
+      "replace": "key = self._key(rec) + (len(self._calls),)\n        call = _call_from_record"
+    },
+    {
+      "label": "2 B3 keep first line instead of largest",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "if self.mode == \"message-request\" and call.output_tokens >= old.output_tokens:",
+      "replace": "if False:"
+    },
+    {
+      "label": "3 B3 tie goes to earlier line (>= to >)",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "call.output_tokens >= old.output_tokens",
+      "replace": "call.output_tokens > old.output_tokens"
+    },
+    {
+      "label": "4 B2 dedup state per file",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "key = self._key(rec)\n        call = _call_from_record",
+      "replace": "key = self._key(rec) + (str(info.path),)\n        call = _call_from_record"
+    },
+    {
+      "label": "5 B1 subagent discovery removed",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "elif _is_dir(entry):",
+      "replace": "elif False:"
+    },
+    {
+      "label": "6 B1 subagent project key is the parent dir name",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "FileInfo(sub, proj.name, entry.name, True, agent, _mtime(sub))",
+      "replace": "FileInfo(sub, sub.parent.name, entry.name, True, agent, _mtime(sub))"
+    },
+    {
+      "label": "7 B5 until bound ignored",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "(since is None or day >= since) and (until is None or day <= until)",
+      "replace": "(since is None or day >= since)"
+    },
+    {
+      "label": "8 B5 missing timestamp in-window under a window",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "if day is None:\n        return False",
+      "replace": "if day is None:\n        return True"
+    },
+    {
+      "label": "9 B4 5m and 1h cache-write fields swapped",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "w5 = _tokens(split.get(\"ephemeral_5m_input_tokens\"))\n        w1 = _tokens(split.get(\"ephemeral_1h_input_tokens\"))",
+      "replace": "w5 = _tokens(split.get(\"ephemeral_1h_input_tokens\"))\n        w1 = _tokens(split.get(\"ephemeral_5m_input_tokens\"))"
+    },
+    {
+      "label": "10 B4 absent split gives 0 for the 5m figure",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "w5, w1 = total_write, 0",
+      "replace": "w5, w1 = 0, 0"
+    },
+    {
+      "label": "11 B4 attributionSkill read from under message",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "attribution_skill=rec.get(\"attributionSkill\"),",
+      "replace": "attribution_skill=msg.get(\"attributionSkill\"),"
+    },
+    {
+      "label": "12 B7 malformed lines not counted",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "                    except ValueError:\n                        cov.malformed_lines += 1\n                        continue\n                    if not isinstance(rec, dict):\n                        cov.malformed_lines += 1\n                        continue",
+      "replace": "                    except ValueError:\n                        continue\n                    if not isinstance(rec, dict):\n                        continue"
+    },
+    {
+      "label": "13 B8 bool token value passes as integer",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "isinstance(value, int) and not isinstance(value, bool) and value >= 0",
+      "replace": "isinstance(value, int) and value >= 0"
+    },
+    {
+      "label": "14 B6 attachment size measures the whole record",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "len(json.dumps(att, separators",
+      "replace": "len(json.dumps(rec, separators"
+    },
+    {
+      "label": "15 [control] file iteration in reverse sorted order",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "return sorted(path.iterdir())",
+      "replace": "return sorted(path.iterdir(), reverse=True)",
+      "expect": "survived",
+      "why": "No total depends on discovery order; identical-usage duplicates differ only in file-derived fields the suite does not pin."
+    }
+  ]
+}
