@@ -403,9 +403,10 @@ class TestCollectClaude:
         assert got["sessions_by_week"] == {"2026-W30": 1}
         # Tokens: req_1 once (1500) + req_2 (2100) + req_3 (5000) = 8600.
         assert got["tokens_by_week"] == {"2026-W30": 8600}
-        # Spend: opus 1000*5/1M + 500*25/1M = 0.0175; haiku 2000*1 + 100*5 → 0.0025;
-        # sonnet 4000*3 + 1000*15 → 0.027. Total 0.047.
-        assert got["spend_by_week"]["2026-W30"] == pytest.approx(0.047)
+        # Spend, per model through pricing: opus-5 1000*5/1M + 500*25/1M = 0.0175;
+        # haiku-4-5 2000*1 + 100*5 → 0.0025; sonnet-5 4000*2 + 1000*10 → 0.018
+        # (was 0.027 at the old sonnet tier 3/15). Total 0.038.
+        assert got["spend_by_week"]["2026-W30"] == pytest.approx(0.038)
 
     def test_empty_root(self, tmp_path: Path) -> None:
         got = collect_claude(tmp_path, TZ)

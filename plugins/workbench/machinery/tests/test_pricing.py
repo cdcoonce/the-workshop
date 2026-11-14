@@ -2,8 +2,8 @@
 
 The expected prices below are typed in from the spec's table, independently of
 ``pricing_defaults.py``, so a wrong default shows up as a failing row here.
-Every row is priced with 1,000,000 tokens of one component at a time, so each
-expected dollar figure is exactly that component's price per million.
+Each row is priced with a round token count per component and compared to the
+spec price times that count over 1,000,000.
 """
 
 from __future__ import annotations
@@ -71,17 +71,30 @@ def close(a: float, b: float) -> bool:
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("row", SPEC_ROWS, ids=SPEC_KEYS)
 def test_default_row_prices_each_component_exactly(row) -> None:
+    # 20,000 tokens of each component keeps the prompt (80,000) under the
+    # haiku 5.5 long-prompt threshold, so the standard row is the one priced.
     key, p_in, p_out, p_w5, p_w1, p_cr, _fast = row
-    r = pricing.price_call(mk(key, i=M, o=M, cr=M, w5=M, w1=M))
+    n = 20_000
+    r = pricing.price_call(mk(key, i=n, o=n, cr=n, w5=n, w1=n))
     assert r.priced is True
     assert r.table_key == key
     assert r.reason is None
-    assert close(r.input_usd, p_in)
-    assert close(r.output_usd, p_out)
-    assert close(r.cache_read_usd, p_cr)
-    assert close(r.write_5m_usd, p_w5)
-    assert close(r.write_1h_usd, p_w1)
-    assert close(r.total_usd, p_in + p_out + p_cr + p_w5 + p_w1)
+    assert close(r.input_usd, n * p_in / M)
+    assert close(r.output_usd, n * p_out / M)
+    assert close(r.cache_read_usd, n * p_cr / M)
+    assert close(r.write_5m_usd, n * p_w5 / M)
+    assert close(r.write_1h_usd, n * p_w1 / M)
+    assert close(r.total_usd, n * (p_in + p_out + p_cr + p_w5 + p_w1) / M)
+
+
+@pytest.mark.parametrize("row", SPEC_ROWS, ids=SPEC_KEYS)
+def test_default_row_fast_multiplier(row) -> None:
+    key, p_in, *_rest, fast = row
+    r = pricing.price_call(mk(key, i=20_000, speed="fast"))
+    if fast is None:
+        assert r.priced is False
+    else:
+        assert close(r.input_usd, 20_000 * p_in * fast / M)
 
 
 def test_default_table_has_exactly_the_spec_keys() -> None:

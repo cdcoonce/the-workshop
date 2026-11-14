@@ -75,6 +75,7 @@ class Call:
     attribution_mcp_server: object = None
     attribution_mcp_tool: object = None
     file_mtime: float = 0.0  # of the file holding the kept line
+    speed: str | None = None  # message.usage.speed when a string
 
 
 @dataclass(frozen=True)
@@ -280,6 +281,7 @@ def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
         attribution_mcp_server=rec.get("attributionMcpServer"),
         attribution_mcp_tool=rec.get("attributionMcpTool"),
         file_mtime=info.mtime,
+        speed=_text(usage.get("speed")),
     )
 
 
