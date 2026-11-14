@@ -260,7 +260,7 @@ def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
         w5 = _tokens(split.get("ephemeral_5m_input_tokens"))
         w1 = _tokens(split.get("ephemeral_1h_input_tokens"))
     else:
-        w5, w1 = total_write, 0
+        w5 = w1 = 0
     shortfall = total_write - w5 - w1
     if shortfall > 0:
         w5 += shortfall
