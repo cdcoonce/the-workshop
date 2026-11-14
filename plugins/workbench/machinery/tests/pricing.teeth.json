@@ -97,7 +97,7 @@
       "label": "8 prompt length counts cache reads and writes",
       "file": "../engine/pricing.py",
       "oracle": "real",
-      "find": "prompt = counts[\"input\"] + counts[\"cache_read\"] + counts[\"write_5m\"] + counts[\"write_1h\"]",
+      "find": "prompt = counts[\"input\"] + counts[\"cache_read\"] + _total_write(call, counts)",
       "replace": "prompt = counts[\"input\"]"
     },
     {
@@ -169,6 +169,27 @@
       "oracle": "real",
       "find": "speed=_text(usage.get(\"speed\")),",
       "replace": "speed=_text(rec.get(\"speed\")),"
+    },
+    {
+      "label": "20 P4 prompt length uses 5m + 1h only, not the total write",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "prompt = counts[\"input\"] + counts[\"cache_read\"] + _total_write(call, counts)",
+      "replace": "prompt = counts[\"input\"] + counts[\"cache_read\"] + counts[\"write_5m\"] + counts[\"write_1h\"]"
+    },
+    {
+      "label": "21 write shortfall (total over 5m + 1h) is not priced",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "shortfall = _total_write(call, counts) - counts[\"write_5m\"] - counts[\"write_1h\"]\n    counts = {**counts, \"write_5m\": counts[\"write_5m\"] + shortfall}",
+      "replace": "shortfall = 0\n    counts = {**counts, \"write_5m\": counts[\"write_5m\"] + shortfall}"
+    },
+    {
+      "label": "22 invalid token count coerced to 0 as before",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "    if invalid:\n        return _unpriced",
+      "replace": "    if False:\n        return _unpriced"
     },
     {
       "label": "19 [control] components summed in a different order",
