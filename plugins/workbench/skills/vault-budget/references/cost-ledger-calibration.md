@@ -56,15 +56,13 @@ Do not leave the plugin disabled when you finish. If a run fails partway, enable
 
 ## Run the script
 
-The script is `fixed_weight_calibrate.py` in the engine directory: `plugins/workbench/machinery/engine/fixed_weight_calibrate.py` in the-workshop checkout, and `.claude/scripts/fixed_weight_calibrate.py` in a vault the machinery is vendored into. Run it from the root of whichever tree you have, with the ids in run order, one id per run, `full` first:
+The script is `fixed_weight_calibrate.py` in the engine directory, beside `cost_ledger.py`: `plugins/workbench/machinery/engine/fixed_weight_calibrate.py` in a the-workshop checkout, or `machinery/engine/` under the installed plugin's base directory (written `<engine>` below, as in `command.md`). Run it with the ids in run order, one id per run, `full` first:
 
 ```
-python3 plugins/workbench/machinery/engine/fixed_weight_calibrate.py \
+python3 "<engine>/fixed_weight_calibrate.py" \
   --full F1 F2 F3 F4 F5 \
   --bare B1 B2 B3 B4 B5
 ```
-
-(in a vault, `python3 .claude/scripts/fixed_weight_calibrate.py` in place of the first line).
 
 Options: `--projects-root DIR` (default `~/.claude/projects`), `--out PATH` (default: `cost_ledger_calibration.json` in the directory the `budget_burn` per-machine config is loaded from, which is where `cost_ledger.py --fixed-weight` looks without `--calibration`), `--min-runs N` (default 5, never below 2), `--claude-code-version V` (needed only when the transcripts record no version; it must match them when they do), `--date YYYY-MM-DD` (default today).
 
@@ -81,7 +79,7 @@ On stdout: runs per arm, the version, the mean measured and predicted token diff
 
 The file has numbers, a date and a version only: no session id, project key or path, so it is safe to quote.
 
-Check the result: `python3 cost_ledger.py --fixed-weight` (add `--calibration PATH` for a file elsewhere). The report drops the `UNCALIBRATED ESTIMATE` line and shows the calibration's date, runs and version.
+Check the result: `python3 "<engine>/cost_ledger.py" --fixed-weight` (add `--calibration PATH` for a file elsewhere). The report drops the `UNCALIBRATED ESTIMATE` line and shows the calibration's date, runs and version.
 
 ## What to record on the issue
 

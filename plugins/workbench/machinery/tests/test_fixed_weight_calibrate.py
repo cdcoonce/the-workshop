@@ -607,8 +607,8 @@ class TestProcedureDocument:
         assert "every Claude Code session started anywhere on the machine" in PROCEDURE
         assert "Close your other Claude Code sessions" in PROCEDURE
         assert "plugins/workbench/machinery/engine/fixed_weight_calibrate.py" in PROCEDURE
-        assert ".claude/scripts/fixed_weight_calibrate.py" in PROCEDURE
-        assert "python3 plugins/workbench/machinery/engine/fixed_weight_calibrate.py" in PROCEDURE
+        assert ".claude/scripts/" not in PROCEDURE
+        assert 'python3 "<engine>/fixed_weight_calibrate.py"' in PROCEDURE
         assert "pair[2]" in PROCEDURE
 
     def test_states_what_the_factor_does_and_does_not_cover(self) -> None:
