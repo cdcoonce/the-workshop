@@ -153,15 +153,15 @@
       "label": "16 calibration factor ignored",
       "file": "../engine/fixed_weight.py",
       "oracle": "real",
-      "find": "chars / cpt * factor",
-      "replace": "chars / cpt"
+      "find": "tokens[key] = {c: chars / cpt * factor",
+      "replace": "tokens[key] = {c: chars / cpt"
     },
     {
       "label": "17 characters multiplied by the ratio",
       "file": "../engine/fixed_weight.py",
       "oracle": "real",
-      "find": "chars / cpt * factor",
-      "replace": "chars * cpt * factor"
+      "find": "tokens[key] = {c: chars / cpt * factor",
+      "replace": "tokens[key] = {c: chars * cpt * factor"
     },
     {
       "label": "18 files without snapshot never counted",
@@ -216,7 +216,7 @@
       "label": "25 schema_version left at 3",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "SCHEMA_VERSION = 4",
+      "find": "SCHEMA_VERSION = 5",
       "replace": "SCHEMA_VERSION = 3"
     },
     {
