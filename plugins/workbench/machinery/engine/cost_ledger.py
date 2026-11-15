@@ -13,6 +13,8 @@ Usage:
     python3 cost_ledger.py                              # current month, report
     python3 cost_ledger.py --since 2026-11-01 --until 2026-11-14
     python3 cost_ledger.py --json ledger.json           # also write the rows
+    python3 cost_ledger.py --meter-usd 41.50            # compare with the usage view
+    python3 cost_ledger.py --export-aggregates agg.json # shareable, no identifiers
 """
 
 from __future__ import annotations
@@ -20,6 +22,8 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
+import math
+import os
 import re
 import sys
 from datetime import date, datetime, timezone
@@ -29,7 +33,8 @@ import budget_burn
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+AGGREGATES_VERSION = 1
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TOP_SESSIONS = 10
@@ -196,6 +201,49 @@ def _agent_type(root: Path, project: str, session: str, agent_id: str, acc: _Acc
     return "unknown"
 
 
+def _recorded_cost(rows: list[dict], result: transcript_reader.ReadResult,
+                   since: str | None, until: str | None) -> dict:
+    """The recorded-cost check (X1, X3) over the session ``rows``.
+
+    A session is comparable when it has a recorded figure whose record does not
+    flag an unknown model cost, no unpriced call, and every dated call of the
+    session (main and subagents, in or out of the window) inside the window.
+    """
+    dated = [(c, _instant(c.timestamp)) for c in result.calls]
+    outside = {
+        (c.project, c.session_id)
+        for c, at in dated
+        if at is not None and not _day_in_window(at.date().isoformat(), since, until)
+    }
+    states = {(c.project, c.session_id): c for c in result.cost_states}
+    ledger = recorded = flagged_ledger = flagged_recorded = 0.0
+    comparable = flagged = 0
+    for row in rows:
+        skey = (row["project"], row["session_id"])
+        state = states.get(skey)
+        if state is None or row["unpriced_calls"] or skey in outside:
+            continue
+        if state.has_unknown_model_cost:
+            flagged += 1
+            flagged_ledger += row["usd"]
+            flagged_recorded += state.total_cost_usd
+        else:
+            comparable += 1
+            ledger += row["usd"]
+            recorded += state.total_cost_usd
+    return {
+        "sessions_in_window": len(rows),
+        "sessions_comparable": comparable,
+        "ledger_usd": _r(ledger),
+        "recorded_usd": _r(recorded),
+        "difference_usd": _r(ledger - recorded),
+        "gap_percent": _r(abs(ledger - recorded) / recorded * 100) if recorded else None,
+        "flagged_unknown_sessions": flagged,
+        "flagged_ledger_usd": _r(flagged_ledger),
+        "flagged_recorded_usd": _r(flagged_recorded),
+    }
+
+
 def build_ledger(
     root: Path,
     *,
@@ -305,6 +353,123 @@ def build_ledger(
         "sessions": rows,
         "skills": skill_rows,
         "unattributed": unattributed_row,
+        "meter": None,
+        "recorded_cost": _recorded_cost(rows, result, since, until),
+    }
+
+
+def meter_check(ledger_usd: float, meter_usd: float) -> dict:
+    """The meter block (M2, M4): the ledger total against a hand-read meter figure.
+
+    ``difference_usd`` is ledger minus meter, signed. The flag is set strictly above
+    10 percent of the meter, in either direction; exactly 10 percent does not flag.
+    The gap percent is rounded to six places before the comparison, so a gap that
+    is 10 percent in decimal (0.33 against 0.3) is not pushed over by float noise.
+    """
+    difference = ledger_usd - meter_usd
+    gap_percent = abs(difference) / meter_usd * 100
+    return {
+        "meter_usd": _r(meter_usd),
+        "ledger_usd": _r(ledger_usd),
+        "difference_usd": _r(difference),
+        "gap_percent": _r(gap_percent),
+        "gap_flag": round(gap_percent, 6) > 10,
+    }
+
+
+def apply_meter(ledger: dict, meter_usd: float) -> dict:
+    """Set ``ledger["meter"]`` from ``meter_usd`` and return the ledger."""
+    ledger["meter"] = meter_check(ledger["totals"]["usd"], meter_usd)
+    return ledger
+
+
+def parse_meter(text: str) -> float:
+    """``text`` as a finite number greater than 0, else ValueError."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise ValueError(f"--meter-usd must be a number greater than 0: {text!r}") from None
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"--meter-usd must be a finite number greater than 0: {text!r}")
+    return value
+
+
+def distribution(values: list[float]) -> dict:
+    """Min, quartiles and max of ``values`` (E3); linear interpolation at (n-1)q."""
+    names = (("min", 0.0), ("p25", 0.25), ("median", 0.5), ("p75", 0.75), ("max", 1.0))
+    if not values:
+        return {name: None for name, _ in names}
+    ordered = sorted(values)
+    out = {}
+    for name, q in names:
+        pos = (len(ordered) - 1) * q
+        lo = math.floor(pos)
+        hi = math.ceil(pos)
+        out[name] = _r(ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo))
+    return out
+
+
+def build_aggregates(ledger: dict) -> dict:
+    """The aggregates-only export (E2), built field by field from an allow-list.
+
+    Nothing is copied wholesale from the ledger: no project key, path, session id,
+    agent id or call timestamp has a place in the object.
+    """
+    by_type: dict[str, dict] = {}
+    by_model: dict[str, dict] = {}
+    for session in ledger["sessions"]:
+        for agent in session["agents"]:
+            if agent["agent_id"] != "main":
+                slot = by_type.setdefault(agent["agent_type"], {"calls": 0, "usd": 0.0})
+                slot["calls"] += agent["calls"]
+                slot["usd"] += agent["usd"]
+            for model, share in agent["by_model"].items():
+                slot = by_model.setdefault(model, {"calls": 0, "usd": 0.0})
+                slot["calls"] += share["calls"]
+                slot["usd"] += share["usd"]
+
+    def shares(table: dict[str, dict]) -> dict:
+        return {k: {"calls": v["calls"], "usd": _r(v["usd"])} for k, v in sorted(table.items())}
+
+    t = ledger["totals"]
+    un = ledger["unattributed"]
+    cov = ledger["coverage"]
+    return {
+        "aggregates_version": AGGREGATES_VERSION,
+        "window": {"since": ledger["window"]["since"], "until": ledger["window"]["until"]},
+        "totals": {
+            "calls": t["calls"],
+            "unpriced_calls": t["unpriced_calls"],
+            "usd": t["usd"],
+            "tokens": {k: t["tokens"][k] for k in KINDS},
+            "usd_breakdown": {k: t["usd_breakdown"][k] for k in KINDS},
+            "main_usd": t["main_usd"],
+            "subagent_usd": t["subagent_usd"],
+        },
+        "subagent_by_agent_type": shares(by_type),
+        "by_model": shares(by_model),
+        "skills": [
+            {"skill": r["skill"], "calls": r["calls"], "usd": r["usd"], "sessions": r["sessions"]}
+            for r in sorted(ledger["skills"], key=lambda r: r["skill"])
+        ],
+        "unattributed": {"calls": un["calls"], "usd": un["usd"], "sessions": un["sessions"]},
+        "session_count": len(ledger["sessions"]),
+        "session_usd_distribution": distribution([s["usd"] for s in ledger["sessions"]]),
+        "coverage": {
+            k: cov[k]
+            for k in ("files_found", "files_read", "files_skipped", "malformed_lines", "undated_calls")
+        },
+        "unpriced": [
+            {
+                "model": u["model"],
+                "reason": u["reason"],
+                "calls": u["calls"],
+                "tokens": {k: u["tokens"][k] for k in KINDS},
+            }
+            for u in ledger["unpriced"]
+        ],
+        "meter": None if ledger["meter"] is None else dict(ledger["meter"]),
+        "recorded_cost": dict(ledger["recorded_cost"]),
     }
 
 
@@ -341,11 +506,49 @@ def _skill_lines(ledger: dict) -> list[str]:
     return lines
 
 
+def _signed_usd(x: float) -> str:
+    sign = "+" if x > 0 else "-" if x < 0 else ""
+    return f"{sign}${abs(x):,.2f}"
+
+
+def _meter_lines(meter: dict) -> list[str]:
+    lines = []
+    if meter["gap_flag"]:
+        lines.append(
+            f"METER GAP: ledger and meter differ by {meter['gap_percent']:.1f}%, more than 10%"
+        )
+    lines += [
+        "Meter check (figure read by hand from the usage view)",
+        f"  Ledger total: ${meter['ledger_usd']:,.2f}",
+        f"  Meter:        ${meter['meter_usd']:,.2f}",
+        f"  Difference:   {_signed_usd(meter['difference_usd'])} (ledger minus meter)",
+        f"  Gap:          {meter['gap_percent']:.1f}%",
+    ]
+    return lines
+
+
+def _recorded_lines(rc: dict) -> list[str]:
+    gap = "n/a" if rc["gap_percent"] is None else f"{rc['gap_percent']:.1f}%"
+    lines = [
+        f"  Recorded-cost check: {rc['sessions_comparable']} of {rc['sessions_in_window']} sessions "
+        f"comparable; ledger ${rc['ledger_usd']:,.2f} vs recorded ${rc['recorded_usd']:,.2f}, gap {gap}"
+    ]
+    if rc["flagged_unknown_sessions"]:
+        n = rc["flagged_unknown_sessions"]
+        lines.append(
+            f"  Recorded-cost check: {n} {'session' if n == 1 else 'sessions'} not comparable "
+            f"(unknown model cost); ledger ${rc['flagged_ledger_usd']:,.2f} "
+            f"vs recorded ${rc['flagged_recorded_usd']:,.2f}"
+        )
+    return lines
+
+
 def report(ledger: dict) -> str:
     win = ledger["window"]
     t = ledger["totals"]
     total = t["usd"]
-    lines = [
+    lines = _meter_lines(ledger["meter"]) if ledger.get("meter") else []
+    lines += [
         f"Cost ledger — {win['since'] or 'start'} to {win['until'] or 'now'}",
         f"  Window total: ${total:,.2f} over {t['calls']:,} calls",
         "  Main versus subagents:",
@@ -369,6 +572,8 @@ def report(ledger: dict) -> str:
     lines.append(f"  Top {_TOP_SESSIONS} sessions:")
     lines += [f"    {_usd(s['usd'])}  {s['project']}  {s['session_id']}" for s in top] or ["    (none)"]
     lines += _skill_lines(ledger)
+    if ledger.get("recorded_cost"):
+        lines += _recorded_lines(ledger["recorded_cost"])
     c = ledger["coverage"]
     lines.append(
         f"  Coverage: files found {c['files_found']}, read {c['files_read']}, "
@@ -388,11 +593,49 @@ def _fail(message: str) -> int:
     return 2
 
 
+def _write_all(outputs: list[tuple[str, str, str]]) -> str | None:
+    """Write every ``(flag, path, text)`` or none: stage each beside its target, then rename.
+
+    Returns an error message, or ``None`` on success. On failure no destination is
+    created or changed and no staging file is left behind.
+    """
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for flag, name, text in outputs:
+            dest = Path(name)
+            if dest.is_dir():
+                return f"cannot write {flag} {name}: is a directory"
+            tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+            try:
+                tmp.write_text(text, encoding="utf-8")
+            except OSError as exc:
+                return f"cannot write {flag} {name}: {exc.strerror or exc}"
+            staged.append((tmp, dest))
+        for (tmp, dest), (flag, name, _) in zip(staged, outputs):
+            try:
+                os.replace(tmp, dest)
+            except OSError as exc:
+                return f"cannot write {flag} {name}: {exc.strerror or exc}"
+        staged.clear()
+        return None
+    finally:
+        for tmp, _ in staged:
+            tmp.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Spend per session and per agent.")
     ap.add_argument("--since", default=None, help="YYYY-MM-DD, inclusive")
     ap.add_argument("--until", default=None, help="YYYY-MM-DD, inclusive")
     ap.add_argument("--json", default=None, metavar="PATH", help="also write the ledger here")
+    ap.add_argument(
+        "--meter-usd", default=None, metavar="N",
+        help="dollar figure read by hand from the usage view; adds the meter check",
+    )
+    ap.add_argument(
+        "--export-aggregates", default=None, metavar="PATH",
+        help="write an aggregates-only JSON file with no identifiers",
+    )
     ap.add_argument(
         "--projects-root",
         default=str(Path.home() / ".claude" / "projects"),
@@ -406,15 +649,27 @@ def main(argv: list[str] | None = None) -> int:
     if since is not None and until is not None and since > until:
         return _fail(f"--since {since} is after --until {until}")
 
+    meter = None
+    if args.meter_usd is not None:
+        try:
+            meter = parse_meter(args.meter_usd)
+        except ValueError as exc:
+            return _fail(str(exc))
+
     root = Path(args.projects_root)
     if not root.is_dir():
         return _fail(f"--projects-root is not a directory: {root}")
     ledger = build_ledger(root, since=since, until=until, today=date.today())
+    if meter is not None:
+        apply_meter(ledger, meter)
+    outputs: list[tuple[str, str, str]] = []
     if args.json is not None:
-        try:
-            Path(args.json).write_text(dumps(ledger), encoding="utf-8")
-        except OSError as exc:
-            return _fail(f"cannot write --json {args.json}: {exc.strerror or exc}")
+        outputs.append(("--json", args.json, dumps(ledger)))
+    if args.export_aggregates is not None:
+        outputs.append(("--export-aggregates", args.export_aggregates, dumps(build_aggregates(ledger))))
+    error = _write_all(outputs)
+    if error is not None:
+        return _fail(error)
     sys.stdout.write(report(ledger))
     return 0
 

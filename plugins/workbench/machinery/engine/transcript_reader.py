@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,11 +102,28 @@ class Coverage:
     malformed_lines: int = 0
 
 
+@dataclass(frozen=True)
+class CostState:
+    """The largest recorded ``totalCostUSD`` of one main session file.
+
+    ``has_unknown_model_cost`` is the flag of the record that supplied the figure;
+    anything other than a literal ``false`` there counts as unknown. When several
+    records tie on the largest figure the session is unknown unless every tied
+    record has a literal ``false``.
+    """
+
+    project: str
+    session_id: str
+    total_cost_usd: float
+    has_unknown_model_cost: bool
+
+
 @dataclass
 class ReadResult:
     calls: list[Call]
     attachments: list[Attachment]
     coverage: Coverage
+    cost_states: list[CostState] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +382,18 @@ def attachment_from_record(info: FileInfo, rec: dict) -> Attachment | None:
 
 
 # ---------------------------------------------------------------------------
+# cost-state records
+# ---------------------------------------------------------------------------
+def _recorded_total(value: object) -> float | None:
+    """A finite non-negative number (bools excluded), else None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return float(value)
+
+
+# ---------------------------------------------------------------------------
 # high-level read
 # ---------------------------------------------------------------------------
 def read(root: Path, since: str | None = None, until: str | None = None) -> ReadResult:
@@ -375,10 +405,25 @@ def read(root: Path, since: str | None = None, until: str | None = None) -> Read
     coverage = Coverage()
     collector = CallCollector()
     attachments: list[Attachment] = []
+    states: dict[tuple[str, str], CostState] = {}
     for info, rec in iter_records(root, coverage=coverage):
         collector.add(info, rec)
+        if rec.get("type") == "cost-state" and not info.is_subagent:
+            total = _recorded_total(rec.get("totalCostUSD"))
+            if total is not None:
+                skey = (info.project, info.session_id)
+                unknown = rec.get("hasUnknownModelCost") is not False
+                old = states.get(skey)
+                if old is None or total > old.total_cost_usd:
+                    states[skey] = CostState(info.project, info.session_id, total, unknown)
+                elif total == old.total_cost_usd and unknown and not old.has_unknown_model_cost:
+                    # tied records: unknown unless every tied record says literally false
+                    states[skey] = CostState(info.project, info.session_id, total, True)
         att = attachment_from_record(info, rec)
         if att is not None and in_window(att.timestamp, since, until):
             attachments.append(att)
     calls = [c for c in collector.calls if in_window(c.timestamp, since, until)]
-    return ReadResult(calls=calls, attachments=attachments, coverage=coverage)
+    return ReadResult(
+        calls=calls, attachments=attachments, coverage=coverage,
+        cost_states=[states[k] for k in sorted(states)],
+    )

@@ -1,6 +1,6 @@
 # Cost ledger JSON schema
 
-Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 2.
+Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 3.
 
 Every figure covers in-window calls with a usable timestamp; undated calls are counted in `coverage.undated_calls` and in nothing else. Dollars are rounded to six places when a row is built, so a sum of rows can differ from the rounded total by a rounding step per row. Units: count, tokens, USD, ISO timestamp string, text.
 
@@ -16,7 +16,23 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `coverage.files_skipped` | count | Transcript files found but not read. |
 | `coverage.malformed_lines` | count | Lines that were not valid JSON records. |
 | `coverage.undated_calls` | count | Calls with no usable timestamp; in no row and in no total. |
-| `schema_version` | count | Schema version of this file: `2`. See the version history below. |
+| `meter` | object or null | The meter check; `null` unless `--meter-usd` was given. Compares the window total with a dollar figure read by hand from Claude Code's usage view. |
+| `meter.difference_usd` | USD | `ledger_usd` minus `meter_usd`, signed: positive when the ledger is above the meter. |
+| `meter.gap_flag` | boolean | `true` when the gap percent, rounded to six decimal places, is strictly more than 10; exactly 10 percent does not set it, so 0.33 against a 0.3 meter does not flag. |
+| `meter.gap_percent` | percent | The absolute difference as a percent of `meter_usd`. |
+| `meter.ledger_usd` | USD | The window total, `totals.usd`. |
+| `meter.meter_usd` | USD | The figure given with `--meter-usd`; finite and greater than 0. |
+| `recorded_cost` | object | The recorded-cost check, always present: ledger dollars against the cumulative `totalCostUSD` Claude Code records in `cost-state` records of main session files. |
+| `recorded_cost.difference_usd` | USD | `ledger_usd` minus `recorded_usd`, signed. |
+| `recorded_cost.flagged_ledger_usd` | USD | Ledger dollars of the flagged sessions. Reported only, never in the comparable sums. |
+| `recorded_cost.flagged_recorded_usd` | USD | Recorded dollars of the flagged sessions. Reported only. |
+| `recorded_cost.flagged_unknown_sessions` | count | In-window sessions whose supplying record has `hasUnknownModelCost` true and that meet the other comparability conditions. |
+| `recorded_cost.gap_percent` | percent or null | The absolute difference as a percent of `recorded_usd`; `null` when `recorded_usd` is 0. |
+| `recorded_cost.ledger_usd` | USD | Whole-session ledger dollars (main plus subagents) of the comparable sessions. |
+| `recorded_cost.recorded_usd` | USD | Recorded dollars of the comparable sessions. |
+| `recorded_cost.sessions_comparable` | count | In-window sessions that meet every condition in "Recorded cost and when it is comparable". |
+| `recorded_cost.sessions_in_window` | count | Session rows, that is sessions with an in-window call. |
+| `schema_version` | count | Schema version of this file: `3`. See the version history below. |
 | `sessions` | list | One row per (project, session id) with an in-window call, sorted by project then session id. |
 | `sessions[]` | object | One session row. |
 | `sessions[].agents` | list | One row per agent in the session: `main` first, then subagents by agent id. |
@@ -145,7 +161,18 @@ A call's skill is the `attributionSkill` on its own record, when that is a non-e
 
 Skill rows are a lower bound. The invoking call and later-turn work are not counted: a call whose own record has no `attributionSkill` lands in `unattributed` whatever happened around it. Read `unattributed` as "not attributed on its own record", not as "no skill involved".
 
+## Meter and recorded cost
+
+`meter` is a check against a figure you read by hand; it is `null` unless `--meter-usd N` was given. `recorded_cost` is automatic.
+
+Claude Code writes `cost-state` records into main session files with a cumulative `totalCostUSD` and a `hasUnknownModelCost` flag. They carry no timestamp and cover the whole session, subagents included. For each session the recorded figure is the largest `totalCostUSD` among the records of its main file (a value that is not a finite non-negative number, or is a boolean, is ignored; records in subagent files are ignored). When several records tie on the largest figure, the session counts as unknown unless every tied record has `hasUnknownModelCost` literally `false`.
+
+## Recorded cost and when it is comparable
+
+A session is comparable when all of these hold: it has a recorded figure; `hasUnknownModelCost` is literally false on the record that supplied the figure, and on every record tied with it for the largest figure; it has no unpriced call; and every dated call of the session, main and subagents, inside or outside the window, falls inside the window. The comparison is the whole-session ledger dollars against the recorded figure. A session that meets every condition except the `hasUnknownModelCost` one is flagged: counted in `flagged_unknown_sessions` with its dollars in `flagged_ledger_usd` and `flagged_recorded_usd`, and never added to the comparable sums.
+
 ## Version history
 
 - 1: sessions and agents.
 - 2: skills and unattributed added; `schema_version` is 2.
+- 3: `meter` and `recorded_cost` added; `schema_version` is 3.
