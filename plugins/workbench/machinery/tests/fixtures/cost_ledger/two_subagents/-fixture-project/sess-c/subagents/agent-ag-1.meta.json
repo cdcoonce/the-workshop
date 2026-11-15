@@ -1,0 +1,1 @@
+{"agentType": "type-a", "description": "task a", "toolUseId": "toolu-1", "spawnDepth": 1, "model": "sonnet", "requestShape": "shape-1", "requestNonInteractive": true}
