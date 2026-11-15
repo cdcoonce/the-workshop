@@ -1,0 +1,107 @@
+{
+  "_about": "Hand-derived from the slice 4 spec (L1-L11) before the module was written. Window 2026-11-10 to 2026-11-12 inclusive. Token counts are multiples of 62500 so every dollar figure is exact in binary floating point. Call m1 and m4 fall just outside the window, m2 and m3 exactly on its ends, m5 is undated, m6 uses a model with no price, b2 is out of window so project -proj-beta session sess-2 has no row.",
+  "calls": {
+    "msg_b1/req_b1": {
+      "agent_id": "main",
+      "agent_type": "main",
+      "project": "-proj-beta",
+      "session": "sess-1"
+    },
+    "msg_m2/req_m2": {
+      "agent_id": "main",
+      "agent_type": "main",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_m3/req_m3": {
+      "agent_id": "main",
+      "agent_type": "main",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_m6/req_m6": {
+      "agent_id": "main",
+      "agent_type": "main",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s1/req_s1": {
+      "agent_id": "aa1",
+      "agent_type": "reviewer",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s2/req_s2": {
+      "agent_id": "aa1",
+      "agent_type": "reviewer",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s3/req_s3": {
+      "agent_id": "aa2",
+      "agent_type": "explorer",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s4/req_s4": {
+      "agent_id": "aa3",
+      "agent_type": "reviewer",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s5/req_s5": {
+      "agent_id": "aa4",
+      "agent_type": "scout",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s6/req_s6": {
+      "agent_id": "aa5",
+      "agent_type": "unknown",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    },
+    "msg_s7/req_s7": {
+      "agent_id": "aa6",
+      "agent_type": "fallback-name",
+      "project": "-proj-alpha",
+      "session": "sess-1"
+    }
+  },
+  "coverage": {
+    "files_found": 9,
+    "files_read": 9,
+    "files_skipped": 0,
+    "malformed_lines": 0,
+    "undated_calls": 1
+  },
+  "session_usd": {
+    "-proj-alpha/sess-1": 24.078125,
+    "-proj-beta/sess-1": 1.015625
+  },
+  "totals": {
+    "calls": 11,
+    "main_usd": 7.75,
+    "subagent_usd": 17.34375,
+    "tokens": {
+      "cache_read": 500000,
+      "input": 875000,
+      "output": 750000,
+      "write_1h": 187500,
+      "write_5m": 375000
+    },
+    "unpriced_calls": 1,
+    "usd": 25.09375,
+    "usd_breakdown": {
+      "cache_read": 0.25,
+      "input": 3.4375,
+      "output": 17.1875,
+      "write_1h": 1.875,
+      "write_5m": 2.34375
+    }
+  },
+  "window": {
+    "since": "2026-11-10",
+    "until": "2026-11-12"
+  }
+}

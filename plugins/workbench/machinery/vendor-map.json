@@ -48,6 +48,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/cost_ledger.py",
+      "target": ".claude/scripts/cost_ledger.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },
