@@ -1,0 +1,210 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_cost_ledger.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_cost_ledger.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 subagent call lands in the main row",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "agent_id = (call.agent_id or \"unknown\") if call.is_subagent else \"main\"",
+      "replace": "agent_id = \"main\""
+    },
+    {
+      "label": "2 agent rows keyed by agent type",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "agent_id = (call.agent_id or \"unknown\") if call.is_subagent else \"main\"",
+      "replace": "agent_id = (_meta_type(Path(root), call.project, call.session_id, call.agent_id or \"\") or call.agent_id or \"unknown\") if call.is_subagent else \"main\""
+    },
+    {
+      "label": "3 session rows keyed by session id only",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "skey = (call.project, call.session_id)",
+      "replace": "skey = (\"\", call.session_id)"
+    },
+    {
+      "label": "4 until exclusive",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if not transcript_reader.in_window(call.timestamp, since, until):",
+      "replace": "if not transcript_reader.in_window(call.timestamp, since, until) or (until is not None and call.timestamp[:10] == until):"
+    },
+    {
+      "label": "5 since not enforced",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if not transcript_reader.in_window(call.timestamp, since, until):",
+      "replace": "if not transcript_reader.in_window(call.timestamp, None, until):"
+    },
+    {
+      "label": "7 undated calls included in rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        if not _dated(call.timestamp):\n            undated += 1\n            continue\n        if not transcript_reader.in_window(call.timestamp, since, until):\n            continue\n",
+      "replace": "        if not _dated(call.timestamp):\n            undated += 1\n        elif not transcript_reader.in_window(call.timestamp, since, until):\n            continue\n"
+    },
+    {
+      "label": "8 undated count never incremented",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "            undated += 1\n            continue",
+      "replace": "            undated += 0\n            continue"
+    },
+    {
+      "label": "9 meta.json agentType ignored",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "from_meta = _meta_type(root, project, session, agent_id)",
+      "replace": "from_meta = None"
+    },
+    {
+      "label": "10 no attribution fallback",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    if len(acc.attributions) == 1:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "11 mixed model reports the first call's model",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    return \"mixed\"",
+      "replace": "    return models[0] or \"unknown\""
+    },
+    {
+      "label": "12 unpriced calls dropped from rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        priced = pricer.price(call)\n",
+      "replace": "        priced = pricer.price(call)\n        if not priced.priced:\n            continue\n"
+    },
+    {
+      "label": "13 per-machine MODEL_PRICES override ignored",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "pricer = pricing.Pricer(budget_burn.MODEL_PRICES)",
+      "replace": "pricer = pricing.Pricer(__import__(\"pricing_defaults\").DEFAULT_MODEL_PRICES)"
+    },
+    {
+      "label": "14 schema_version 2",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 1",
+      "replace": "SCHEMA_VERSION = 2"
+    },
+    {
+      "label": "15 sessions sorted by session id only",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "for skey in sorted(sessions):",
+      "replace": "for skey in sorted(sessions, key=lambda k: k[1]):"
+    },
+    {
+      "label": "16 per-call dollars rounded before summing",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        self.usd += priced.total_usd\n",
+      "replace": "        self.usd += round(priced.total_usd, 6)\n"
+    },
+    {
+      "label": "17 top sessions ascending",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "key=lambda s: (-s[\"usd\"], s[\"project\"], s[\"session_id\"]))[:_TOP_SESSIONS]",
+      "replace": "key=lambda s: (s[\"usd\"], s[\"project\"], s[\"session_id\"]))[:_TOP_SESSIONS]"
+    },
+    {
+      "label": "18 unpriced list never printed",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    for row in ledger[\"unpriced\"]:",
+      "replace": "    for row in []:"
+    },
+    {
+      "label": "19 coverage line dropped",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    c = ledger[\"coverage\"]\n    lines.append(\n",
+      "replace": "    c = ledger[\"coverage\"]\n    _ = (\n"
+    },
+    {
+      "label": "20 subagent dollars counted into main",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "            subagent_usd += priced.total_usd",
+      "replace": "            main_usd += priced.total_usd"
+    },
+    {
+      "label": "21 subagent dollars by model use the row's model",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "            for model, v in a[\"by_model\"].items():\n                by_model[model] = by_model.get(model, 0.0) + v[\"usd\"]",
+      "replace": "            by_model[a[\"model\"]] = by_model.get(a[\"model\"], 0.0) + a[\"usd\"]"
+    },
+    {
+      "label": "22 default window ignores today",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "since, until = month_window(today)",
+      "replace": "since, until = None, None"
+    },
+    {
+      "label": "23 inverted window accepted",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    if since is not None and until is not None and since > until:",
+      "replace": "    if False:"
+    },
+    {
+      "label": "24 last_timestamp is the first timestamp",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"last_timestamp\": max(acc.timestamps),",
+      "replace": "\"last_timestamp\": min(acc.timestamps),"
+    },
+    {
+      "label": "25 [control] calls summed in reverse order",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "for call in result.calls:",
+      "replace": "for call in reversed(result.calls):",
+      "expect": "survived",
+      "why": "Float addition order moves only the last ulp; every fixture dollar figure is exactly representable (token counts are multiples of 62500), so both orders give identical sums, and rows are emitted in sorted order independent of encounter order. Not inert for arbitrary token counts."
+    }
+  ]
+}
