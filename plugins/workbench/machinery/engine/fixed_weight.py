@@ -80,8 +80,11 @@ class Calibration:
     calibrated: bool = False
 
 
-def load_calibration(path: Path) -> Calibration:
+def load_calibration(path: Path, *, required: bool = False) -> Calibration:
     """The factor in the JSON file at ``path``; no file means factor 1.0, uncalibrated.
+
+    With ``required`` (a path the user named) a missing file raises ``CalibrationError``
+    instead: a typo must not silently give uncalibrated numbers.
 
     A file that exists but is unreadable, is not a JSON object, or has a missing or
     invalid ``factor`` (a finite number greater than 0) raises ``CalibrationError``.
@@ -91,6 +94,8 @@ def load_calibration(path: Path) -> Calibration:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
+        if required:
+            raise CalibrationError(f"calibration file {path} does not exist") from None
         return Calibration()
     except (OSError, ValueError) as exc:
         reason = getattr(exc, "strerror", None) or str(exc)
@@ -225,6 +230,11 @@ def _r(x: float) -> float:
     return round(x, 6)
 
 
+def _tokens_out(x: float) -> float:
+    """Tokens per file as output: three places, like dollars are six."""
+    return round(x, 3)
+
+
 def _share(part: float, whole: float) -> float | None:
     return _r(part / whole) if whole else None
 
@@ -295,6 +305,17 @@ def estimate(
         if call.is_subagent:
             subagent_usd += sum(charge.values())
 
+    # Per-call caps hold up to float noise (and ``_CAP_SLACK``); the sum over calls may
+    # still land a hair above the window's own sum. Pull it back so that neither a share
+    # nor the rounded dollars can exceed the window.
+    fixed_total = sum(v for part in usd.values() for v in part.values())
+    if fixed_total > window_usd > 0:
+        pull = window_usd / fixed_total
+        for part in usd.values():
+            part["write"] *= pull
+            part["read"] *= pull
+        subagent_usd *= pull
+
     rows = []
     for name, group in COMPONENTS:
         per_file = [tokens[k][name] for k in charged_files if name in tokens.get(k, {})]
@@ -304,9 +325,9 @@ def estimate(
                 "group": group,
                 "files": len(per_file),
                 "tokens_per_file": {
-                    "min": min(per_file) if per_file else None,
-                    "median": statistics.median(per_file) if per_file else None,
-                    "max": max(per_file) if per_file else None,
+                    "min": _tokens_out(min(per_file)) if per_file else None,
+                    "median": _tokens_out(statistics.median(per_file)) if per_file else None,
+                    "max": _tokens_out(max(per_file)) if per_file else None,
                 },
                 "usd": _r(usd[name]["write"] + usd[name]["read"]),
                 "write_usd": _r(usd[name]["write"]),

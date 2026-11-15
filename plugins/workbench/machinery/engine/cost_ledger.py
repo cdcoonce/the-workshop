@@ -355,7 +355,7 @@ def build_ledger(
         cal = calibration if calibration is not None else _fw.Calibration()
         estimate = _fw.estimate(
             collector.files, window_calls, pricer,
-            factor=cal.factor, calibrated=cal.calibrated, window_usd=totals["usd"],
+            factor=cal.factor, calibrated=cal.calibrated, window_usd=total.usd,
         )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -742,9 +742,10 @@ def main(argv: list[str] | None = None) -> int:
 
     calibration = None
     if args.fixed_weight:
-        path = Path(args.calibration) if args.calibration is not None else _config_dir() / _fw.CALIBRATION_FILE
+        explicit = args.calibration is not None
+        path = Path(args.calibration) if explicit else _config_dir() / _fw.CALIBRATION_FILE
         try:
-            calibration = _fw.load_calibration(path)
+            calibration = _fw.load_calibration(path, required=explicit)
         except _fw.CalibrationError as exc:
             return _fail(str(exc))
 

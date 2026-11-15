@@ -27,7 +27,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `fixed_weight.components[].files` | count | Transcript files where the component's size is more than 0 and at least one call was charged. |
 | `fixed_weight.components[].group` | text | `setup` or `claude_code`. |
 | `fixed_weight.components[].read_usd` | USD | Dollars charged to the component on calls that read the fixed context from the cache. |
-| `fixed_weight.components[].tokens_per_file` | object | Estimated tokens of the component per transcript file, over the files counted in `files`; the three values are `null` when there are none. |
+| `fixed_weight.components[].tokens_per_file` | object | Estimated tokens of the component per transcript file, over the files counted in `files`; the three values are rounded to three decimal places, and are `null` when there are none. |
 | `fixed_weight.components[].tokens_per_file.max` | tokens | Largest per-file estimate. |
 | `fixed_weight.components[].tokens_per_file.median` | tokens | Median per-file estimate. |
 | `fixed_weight.components[].tokens_per_file.min` | tokens | Smallest per-file estimate. |
@@ -37,17 +37,17 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `fixed_weight.files_without_snapshot` | count | Transcript files with an in-window dated call and no `prompt_snapshot` record: their system prompt and tool schemas are counted as 0. |
 | `fixed_weight.groups` | object | Dollars by group, holding `setup` and `claude_code`; the two `usd` values sum to `fixed_weight.total_usd`. |
 | `fixed_weight.groups.claude_code` | object | The group present regardless of the user's setup: system prompt, built-in tool schemas and listing, other attachments. |
-| `fixed_weight.groups.claude_code.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.groups.claude_code.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, taken from the unrounded dollars and then rounded to six places, so never more than 1; `null` when `totals.usd` is 0. |
 | `fixed_weight.groups.claude_code.usd` | USD | Dollars charged to the group. |
 | `fixed_weight.groups.setup` | object | What the user's setup adds: skill and agent listings, instructions, hook context, MCP instructions, MCP tool schemas and listing. Its dollars are an upper bound on what removing all of it would save. |
-| `fixed_weight.groups.setup.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.groups.setup.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, taken from the unrounded dollars and then rounded to six places, so never more than 1; `null` when `totals.usd` is 0. |
 | `fixed_weight.groups.setup.usd` | USD | Dollars charged to the group. |
 | `fixed_weight.mcp` | object | The MCP subtotal: `mcp_instructions`, `mcp_tool_schemas` and `mcp_tool_listing`, all inside the `setup` group. |
-| `fixed_weight.mcp.share_of_total` | fraction or null | The subtotal as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.mcp.share_of_total` | fraction or null | The subtotal as a fraction of `totals.usd`, taken from the unrounded dollars and then rounded to six places, so never more than 1; `null` when `totals.usd` is 0. |
 | `fixed_weight.mcp.usd` | USD | Dollars charged to the three MCP components. |
 | `fixed_weight.read_calls` | count | Charged calls on which the fixed context was costed as a cache read. |
-| `fixed_weight.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
-| `fixed_weight.subagent_share` | fraction or null | `subagent_usd` as a fraction of `total_usd`, rounded to six places; `null` when `total_usd` is 0. |
+| `fixed_weight.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`, taken from the unrounded dollars and then rounded to six places, so never more than 1; `null` when `totals.usd` is 0. |
+| `fixed_weight.subagent_share` | fraction or null | `subagent_usd` as a fraction of `total_usd`, taken from the unrounded dollars and then rounded to six places; `0.0` when fixed-weight dollars exist but none were charged in subagent files, and `null` only when `total_usd` is 0. |
 | `fixed_weight.subagent_usd` | USD | Fixed-weight dollars charged in subagent files. |
 | `fixed_weight.total_usd` | USD | Fixed-weight dollars over the window: the sum of the component dollars, rounded to six places. Never more than `totals.usd`. |
 | `fixed_weight.unpriced_calls` | count | Calls that would have been charged but have no price; charged nothing. |
@@ -214,7 +214,7 @@ A session is comparable when all of these hold: it has a recorded figure; `hasUn
 
 **What is sized.** Each transcript file, the main session or one subagent, is estimated on its own, because a subagent pays for its own copy. A file's fixed context is its injected attachments up to its first assistant record with usable usage, the system prompt, and the tool schemas. Attachments after that first call are ignored, and so is an attachment with no `rendered` text, because it was not sent. The system prompt is the `systemPrompt` of the file's first `prompt_snapshot` that has one. Tool schemas come from the first `prompt_snapshot` in the file that lists tools; each tool's size is the compact JSON length of its `schema`, and a tool with no schema object or no name is ignored. A `deferred_tools_delta` is split between `mcp_tool_listing` and `builtin_tool_listing` by the share of its `addedNames` that start with `mcp__`. A file with no `prompt_snapshot` still has its attachments estimated, with system prompt and tool schemas counted as 0, and is counted in `fixed_weight.files_without_snapshot`.
 
-**Tokens.** Component tokens are characters divided by `chars_per_token` (3.7) times `calibration_factor`, kept as a fraction. The factor comes from `--calibration PATH`, else from `cost_ledger_calibration.json` in the directory the budget_burn per-machine config is loaded from. The file is a JSON object whose `factor` is a finite number greater than 0; other keys are ignored. With no file the factor is 1.0 and `calibrated` is `false`. A file that exists but is unreadable, is not an object, or has a missing or invalid `factor` stops the run with exit code 2.
+**Tokens.** Component tokens are characters divided by `chars_per_token` (3.7) times `calibration_factor`, kept as a fraction. The factor comes from `--calibration PATH` (a path that does not exist stops the run with exit code 2), else from `cost_ledger_calibration.json` in the directory the budget_burn per-machine config is loaded from. The file is a JSON object whose `factor` is a finite number greater than 0; other keys are ignored. With no `--calibration` flag and no file at the default path the factor is 1.0 and `calibrated` is `false`. A file that exists but is unreadable, is not an object, or has a missing or invalid `factor` stops the run with exit code 2.
 
 **The costing rule, per call.** Let T be the file's total fixed tokens. For each in-window, dated, priced call of the file, when T is more than 0:
 
@@ -223,7 +223,7 @@ A session is comparable when all of these hold: it has a recorded figure; `hasUn
 
 The rates are the ones that call paid, so its own model, long-prompt row and fast multiplier apply. The first call gets no special treatment. A call with no price is charged nothing and counted in `unpriced_calls`; a call with no tokens is neither charged nor counted.
 
-**The cap.** If the fixed charge on a call is more than that call's own dollars, every component's charge on that call is scaled by the same ratio so they sum to the call's dollars, and the call is counted in `capped_calls`. So `fixed_weight.total_usd` can never exceed `totals.usd`.
+**The cap.** If the fixed charge on a call is more than that call's own dollars, every component's charge on that call is scaled by the same ratio so they sum to the call's dollars, and the call is counted in `capped_calls`. So `fixed_weight.total_usd` can never exceed `totals.usd`: every share is taken from the unrounded dollars and rounded afterwards, so none can be above 1, and a sum that float noise leaves a hair above the window's own sum is pulled back to it.
 
 **Groups.** `setup` is what the user's setup adds and its dollars are the upper bound on what removing all of it would save. `claude_code` is present regardless. `mcp` is a subtotal of three `setup` components.
 

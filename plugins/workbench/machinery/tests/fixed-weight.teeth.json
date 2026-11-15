@@ -195,8 +195,8 @@
       "label": "22 invalid calibration file falls back to 1.0",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "            calibration = _fw.load_calibration(path)\n        except _fw.CalibrationError as exc:\n            return _fail(str(exc))",
-      "replace": "            calibration = _fw.load_calibration(path)\n        except _fw.CalibrationError:\n            calibration = _fw.Calibration()"
+      "find": "            calibration = _fw.load_calibration(path, required=explicit)\n        except _fw.CalibrationError as exc:\n            return _fail(str(exc))",
+      "replace": "            calibration = _fw.load_calibration(path, required=explicit)\n        except _fw.CalibrationError:\n            calibration = _fw.Calibration()"
     },
     {
       "label": "23 estimate computed without the flag",
@@ -227,7 +227,42 @@
       "replace": "size = 0"
     },
     {
-      "label": "27 [control] file's calls charged in reverse order",
+      "label": "27 shares from rounded dollars (denominator is the rounded window total)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "window_usd=total.usd,",
+      "replace": "window_usd=totals[\"usd\"],"
+    },
+    {
+      "label": "28 shares from rounded dollars (numerator is rounded)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "return _r(part / whole) if whole else None",
+      "replace": "return _r(_r(part) / whole) if whole else None"
+    },
+    {
+      "label": "29 explicit missing calibration path treated as no file",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "load_calibration(path, required=explicit)",
+      "replace": "load_calibration(path)"
+    },
+    {
+      "label": "30 tokens_per_file left unrounded",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "return round(x, 3)",
+      "replace": "return x"
+    },
+    {
+      "label": "31 fixed-weight total not pulled back to the window total",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "if fixed_total > window_usd > 0:",
+      "replace": "if False:"
+    },
+    {
+      "label": "32 [control] file's calls charged in reverse order",
       "file": "../engine/fixed_weight.py",
       "oracle": "real",
       "find": "for call in calls:",

@@ -8,11 +8,15 @@ a size in tokens and every figure is exact.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -39,6 +43,17 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(ENGINE / "cost_ledger.py"), *args], capture_output=True, text=True
     )
+
+
+def run_default(config_dir: Path, *args: str, chars_per_token: float | None = None) -> SimpleNamespace:
+    """Run ``cost_ledger.main`` in-process with the per-machine config directory pointed at ``config_dir``."""
+    out, err = io.StringIO(), io.StringIO()
+    ratio = fixed_weight.CHARS_PER_TOKEN if chars_per_token is None else chars_per_token
+    with mock.patch.object(cost_ledger, "_config_dir", lambda: config_dir), \
+            mock.patch.object(fixed_weight, "CHARS_PER_TOKEN", ratio), \
+            contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = cost_ledger.main(list(args))
+    return SimpleNamespace(returncode=rc, stdout=out.getvalue(), stderr=err.getvalue())
 
 
 def components(fw: dict) -> dict[str, dict]:
@@ -225,6 +240,19 @@ class TestCostingRule:
         # claude-sonnet-4-6 reads at 0.3 per million
         root = session(tmp_path, [att("instructions", 1000), call(1, model="claude-sonnet-4-6", cr=5000)])
         assert components(fw_of(root))["instructions"]["read_usd"] == 0.0003
+
+    def test_each_call_in_a_mixed_model_file_is_priced_at_its_own_models_rate(self, tmp_path: Path) -> None:
+        # one file, T = 1000: an opus-4-8 read (0.5 per million) then a sonnet-4-6 read (0.3)
+        root = session(tmp_path, [
+            att("instructions", 1000),
+            call(1, cr=5000),
+            call(2, ts="2026-11-11T02:00:00Z", model="claude-sonnet-4-6", cr=5000),
+        ])
+        fw = fw_of(root)
+        c = components(fw)["instructions"]
+        assert fw["read_calls"] == 2
+        assert c["read_usd"] == 0.0008  # 1000 x 0.5 / 1e6 + 1000 x 0.3 / 1e6, not 2 x 0.0005
+        assert c["usd"] == 0.0008
 
     def test_fast_multiplier_applies_through_the_applied_rates(self, tmp_path: Path) -> None:
         rec = call(1, cr=5000)
@@ -433,7 +461,7 @@ class TestFlag:
         proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--calibration", str(bad))
         assert proc.returncode == 0 and "FIXED WEIGHT" not in proc.stdout
 
-    def test_empty_window_prints_zeros_and_divides_by_nothing(self, tmp_path: Path) -> None:
+    def test_empty_window_prints_the_section_with_null_shares_and_divides_by_nothing(self, tmp_path: Path) -> None:
         out = tmp_path / "o.json"
         proc = run_cli("--since", "2030-01-01", "--until", "2030-01-02", "--projects-root", str(ROOT),
                        "--fixed-weight", "--json", str(out))
@@ -442,7 +470,7 @@ class TestFlag:
         assert fw["total_usd"] == 0 and fw["share_of_total"] is None and fw["subagent_share"] is None
         assert fw["groups"]["setup"]["share_of_total"] is None and fw["mcp"]["share_of_total"] is None
         assert all(c["tokens_per_file"] == {"min": None, "median": None, "max": None} for c in fw["components"])
-        assert "FIXED WEIGHT" in proc.stdout
+        assert "FIXED WEIGHT" in proc.stdout and "n/a" in proc.stdout
 
     def test_json_is_deterministic_and_matches_the_library(self, tmp_path: Path) -> None:
         a, b = tmp_path / "a.json", tmp_path / "b.json"
@@ -482,8 +510,15 @@ class TestReport:
         assert proc.returncode == 0, proc.stderr
         return proc.stdout.splitlines()
 
+    def report_default(self, config_dir: Path) -> list[str]:
+        """The report with no --calibration flag and no file in ``config_dir`` (the default path)."""
+        proc = run_default(config_dir, *WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                           chars_per_token=3.7)
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout.splitlines()
+
     def test_header_and_uncalibrated_line_without_a_file(self, tmp_path: Path) -> None:
-        lines = self.report("--calibration", str(tmp_path / "absent.json"))
+        lines = self.report_default(tmp_path)
         i = lines.index("FIXED WEIGHT")
         assert lines[i + 1] == "UNCALIBRATED ESTIMATE"
 
@@ -507,7 +542,7 @@ class TestReport:
         assert components(fw)["system_prompt"]["tokens_per_file"]["max"] == pytest.approx(500)
 
     def test_sections_come_in_the_specified_order(self, tmp_path: Path) -> None:
-        text = "\n".join(self.report("--calibration", str(tmp_path / "absent.json")))
+        text = "\n".join(self.report_default(tmp_path))
         order = [
             "FIXED WEIGHT", "UNCALIBRATED ESTIMATE", "upper bound", "MCP", "present regardless",
             "skill_listing", "Subagent share of fixed-weight dollars", "Fixed-weight coverage", "capped",
@@ -516,7 +551,7 @@ class TestReport:
         assert positions == sorted(positions)
 
     def test_figures_in_the_section(self, tmp_path: Path) -> None:
-        text = "\n".join(self.report("--calibration", str(tmp_path / "absent.json")))
+        text = "\n".join(self.report_default(tmp_path))
         assert "17.5% of window spend" in text          # setup 0.012782 of 0.073215
         assert "36.6% of window spend" in text          # claude_code
         assert "5.8% of window spend" in text           # mcp
@@ -526,7 +561,7 @@ class TestReport:
         assert "capped on 1 call" in text
 
     def test_component_table_is_dollars_descending_with_median_and_range(self, tmp_path: Path) -> None:
-        lines = self.report("--calibration", str(tmp_path / "absent.json"))
+        lines = self.report_default(tmp_path)
         rows = [ln for ln in lines if ln.startswith("    ") and any(
             ln.split()[0] == c["component"] for c in WANT["fixed_weight"]["components"]
         )]
@@ -540,13 +575,12 @@ class TestReport:
 
     def test_no_cap_line_when_nothing_was_capped(self, tmp_path: Path) -> None:
         root = session(tmp_path, [att("instructions", 1000), call(1, cr=100_000)])
-        proc = run_cli(*WINDOW, "--projects-root", str(root), "--fixed-weight",
-                       "--calibration", str(tmp_path / "absent.json"))
+        proc = run_default(tmp_path, *WINDOW, "--projects-root", str(root), "--fixed-weight")
         assert proc.returncode == 0, proc.stderr
         assert "capped" not in proc.stdout.lower()
 
     def test_no_verdict_is_stated(self, tmp_path: Path) -> None:
-        text = "\n".join(self.report("--calibration", str(tmp_path / "absent.json"))).lower()
+        text = "\n".join(self.report_default(tmp_path)).lower()
         for word in ("verdict", "recommend", "should remove"):
             assert word not in text
 
@@ -593,3 +627,110 @@ class TestCliCalibrationRefusals:
         want = Path(cfg.__file__).parent if cfg is not None and getattr(cfg, "__file__", None) \
             else Path(budget_burn.__file__).parent
         assert cost_ledger._config_dir() == want
+
+
+# ---------------------------------------------------------------------------
+# shares come from unrounded dollars (review: a share above 1 at sub-cent size)
+# ---------------------------------------------------------------------------
+def _all_shares(fw: dict) -> list[float]:
+    shares = [fw["share_of_total"], fw["subagent_share"], fw["mcp"]["share_of_total"]]
+    shares += [g["share_of_total"] for g in fw["groups"].values()]
+    return [s for s in shares if s is not None]
+
+
+class TestSharesFromUnroundedDollars:
+    SUBCENT = [  # (input, output, cache read) tokens of four capped calls, 148.5 micro-dollars
+        (0, 1, 2), (0, 3, 2), (2, 1, 1), (2, 0, 2),
+    ]
+
+    def _records(self, calls: list[tuple[int, int, int]], extra: list[dict] | None = None) -> list[dict]:
+        recs = [att("instructions", 3700), *(extra or [])]
+        for n, (i, o, r) in enumerate(calls, 1):
+            recs.append(call(n, ts=f"2026-11-11T0{n}:00:00Z", inp=i, out=o, cr=r))
+        return recs
+
+    def test_share_of_total_never_exceeds_one_after_rounding(self, tmp_path: Path) -> None:
+        root = session(tmp_path, self._records(self.SUBCENT))
+        ledger = build(root, fixed_weight=True)
+        fw = ledger["fixed_weight"]
+        assert fw["capped_calls"] == 4
+        # rounded: 0.000149 against totals.usd 0.000148 would be a share of 1.0034
+        assert fw["total_usd"] <= ledger["totals"]["usd"]
+        assert fw["share_of_total"] == 1.0
+        assert fw["groups"]["setup"]["share_of_total"] == 1.0
+
+    def test_a_window_that_rounds_up_still_gives_a_share_of_exactly_one(self, tmp_path: Path) -> None:
+        # one capped sonnet-4-6 call of 9 cache-read tokens costs 2.7e-06, which rounds up to 3e-06;
+        # the share is of the unrounded 2.7e-06 (a rounded denominator would give 0.9, a
+        # rounded numerator 1.111)
+        root = session(tmp_path, [att("instructions", 3700),
+                                  call(1, model="claude-sonnet-4-6", cr=9)])
+        ledger = build(root, fixed_weight=True)
+        fw = ledger["fixed_weight"]
+        assert ledger["totals"]["usd"] == 3e-06 and fw["total_usd"] == 3e-06
+        assert fw["share_of_total"] == 1.0 and fw["groups"]["setup"]["share_of_total"] == 1.0
+        assert all(s <= 1.0 for s in _all_shares(fw))
+
+    SMALL = [
+        [(0, 1, 2)],
+        [(0, 1, 2), (0, 3, 2)],
+        [(1, 1, 1), (0, 0, 3), (2, 0, 2)],
+        [(0, 1, 1), (0, 1, 1), (0, 1, 1), (0, 1, 1), (0, 1, 1), (0, 1, 1), (0, 1, 1)],
+        [(3, 3, 3), (1, 0, 0), (0, 0, 1)],
+    ]
+
+    @pytest.mark.parametrize("calls", SMALL)
+    @pytest.mark.parametrize("size", [50, 3700, 9999])
+    def test_no_share_exceeds_one_and_fixed_never_above_window(
+        self, tmp_path: Path, calls: list[tuple[int, int, int]], size: int
+    ) -> None:
+        extra = [att("skill_listing", size), att("mcp_instructions_delta", size // 2)]
+        root = session(tmp_path, self._records(calls, extra),
+                       subagent=[att("instructions", size), call(9, inp=1, out=1, cr=1)])
+        ledger = build(root, fixed_weight=True)
+        fw = ledger["fixed_weight"]
+        assert fw["total_usd"] <= ledger["totals"]["usd"]
+        assert all(s <= 1.0 for s in _all_shares(fw)), fw
+
+    def test_subagent_share_is_zero_when_no_dollars_are_in_subagent_files(self, tmp_path: Path) -> None:
+        root = session(tmp_path, [att("instructions", 1000), call(1, cr=5000)])
+        fw = fw_of(root)
+        assert fw["total_usd"] > 0 and fw["subagent_usd"] == 0 and fw["subagent_share"] == 0.0
+
+
+class TestTokensPerFileRounding:
+    def test_min_median_and_max_are_rounded_to_three_places(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(fixed_weight, "CHARS_PER_TOKEN", 3.0)
+        root = session(tmp_path, [att("instructions", 10), call(1, cr=5000)],
+                       subagent=[att("instructions", 20), call(9, cr=5000)])
+        ledger = build(root, fixed_weight=True)
+        t = components(ledger["fixed_weight"])["instructions"]["tokens_per_file"]
+        assert t == {"min": 3.333, "median": 5.0, "max": 6.667}
+        exported = cost_ledger.build_aggregates(ledger)["fixed_weight"]
+        assert components(exported)["instructions"]["tokens_per_file"] == t
+
+
+# ---------------------------------------------------------------------------
+# an explicit --calibration path that does not exist is a refusal
+# ---------------------------------------------------------------------------
+class TestCliMissingCalibration:
+    def test_explicit_missing_path_exits_2_with_one_line_and_writes_nothing(self, tmp_path: Path) -> None:
+        out = tmp_path / "o.json"
+        missing = tmp_path / "nope.json"
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                       "--calibration", str(missing), "--json", str(out))
+        assert proc.returncode == 2
+        assert proc.stdout == ""
+        assert len(proc.stderr.strip().splitlines()) == 1 and "calibration" in proc.stderr
+        assert str(missing) in proc.stderr
+        assert not out.exists()
+
+    def test_default_path_absent_is_factor_one_and_uncalibrated(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(cost_ledger, "_config_dir", lambda: tmp_path)
+        rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
+        out = capsys.readouterr().out
+        assert rc == 0 and "UNCALIBRATED ESTIMATE" in out
