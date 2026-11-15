@@ -1,6 +1,6 @@
 # Cost ledger JSON schema
 
-Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 4.
+Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 5.
 
 Every figure covers in-window calls with a usable timestamp; undated calls are counted in `coverage.undated_calls` and in nothing else. Dollars are rounded to six places when a row is built, so a sum of rows can differ from the rounded total by a rounding step per row. Units: count, tokens, USD, ISO timestamp string, text.
 
@@ -18,9 +18,38 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `coverage.undated_calls` | count | Calls with no usable timestamp; in no row and in no total. |
 | `fixed_weight` | object or null | The fixed-weight estimate; `null` unless `--fixed-weight` was given, and then no estimation work is done. An uncalibrated estimate of what the fixed context (system prompt, tool schemas, injected setup text) cost the window. Not a measurement: see "Fixed weight and how it is costed". |
 | `fixed_weight.calibrated` | boolean | `true` when a calibration file supplied the factor; `false` when none was found (the report then says `UNCALIBRATED ESTIMATE`). |
+| `fixed_weight.calibration` | object or null | Where the factor came from; `null` when no calibration file was used. Provenance only: it changes no figure. |
+| `fixed_weight.calibration.claude_code_version` | text or null | The Claude Code version the calibration was measured on, as the file states it; `null` when the file has none or it is not a plain version string. |
+| `fixed_weight.calibration.date` | text or null | The day (YYYY-MM-DD) the calibration was made, from the file; `null` when absent or malformed. |
+| `fixed_weight.calibration.runs_per_arm` | count or null | How many matched session pairs the factor was measured from, from the file; `null` when absent or not a positive whole number. |
 | `fixed_weight.calibration_factor` | number | The factor applied to every token estimate: from the calibration file, else `1.0`. |
 | `fixed_weight.capped_calls` | count | Calls on which the fixed charge was scaled down because it exceeded the call's own dollars. |
 | `fixed_weight.chars_per_token` | number | Characters per token used to turn sizes into tokens: `3.7`. |
+| `fixed_weight.comparison` | object or null | The estimate re-run at other factors, so the effect of calibration is visible; `null` when no calibration file was used. Each run is the whole costing rule again at that factor, not a rescaling, because the write threshold and the cap depend on the factor. The fields outside `comparison` are the estimate at the file's `factor`. |
+| `fixed_weight.comparison.high` | object or null | The estimate at the file's `high`; `null` when the file has no bounds. |
+| `fixed_weight.comparison.high.calibration_factor` | number | The factor this run used: `1.0` for `uncalibrated`, the file's `low` or `high` for those two. |
+| `fixed_weight.comparison.high.mcp_share_of_total` | fraction or null | The MCP subtotal as a fraction of `totals.usd`; same rule as `fixed_weight.mcp.share_of_total`. |
+| `fixed_weight.comparison.high.mcp_usd` | USD | Dollars charged to the three MCP components in this run. |
+| `fixed_weight.comparison.high.setup_share_of_total` | fraction or null | The `setup` group as a fraction of `totals.usd`; same rule as `fixed_weight.groups.setup.share_of_total`. |
+| `fixed_weight.comparison.high.setup_usd` | USD | Dollars charged to the `setup` group in this run. |
+| `fixed_weight.comparison.high.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`; same rule as `fixed_weight.share_of_total`. |
+| `fixed_weight.comparison.high.total_usd` | USD | Fixed-weight dollars in this run. |
+| `fixed_weight.comparison.low` | object or null | The estimate at the file's `low`; `null` when the file has no bounds. |
+| `fixed_weight.comparison.low.calibration_factor` | number | The factor this run used: `1.0` for `uncalibrated`, the file's `low` or `high` for those two. |
+| `fixed_weight.comparison.low.mcp_share_of_total` | fraction or null | The MCP subtotal as a fraction of `totals.usd`; same rule as `fixed_weight.mcp.share_of_total`. |
+| `fixed_weight.comparison.low.mcp_usd` | USD | Dollars charged to the three MCP components in this run. |
+| `fixed_weight.comparison.low.setup_share_of_total` | fraction or null | The `setup` group as a fraction of `totals.usd`; same rule as `fixed_weight.groups.setup.share_of_total`. |
+| `fixed_weight.comparison.low.setup_usd` | USD | Dollars charged to the `setup` group in this run. |
+| `fixed_weight.comparison.low.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`; same rule as `fixed_weight.share_of_total`. |
+| `fixed_weight.comparison.low.total_usd` | USD | Fixed-weight dollars in this run. |
+| `fixed_weight.comparison.uncalibrated` | object or null | The estimate at factor `1.0`. |
+| `fixed_weight.comparison.uncalibrated.calibration_factor` | number | The factor this run used: `1.0` for `uncalibrated`, the file's `low` or `high` for those two. |
+| `fixed_weight.comparison.uncalibrated.mcp_share_of_total` | fraction or null | The MCP subtotal as a fraction of `totals.usd`; same rule as `fixed_weight.mcp.share_of_total`. |
+| `fixed_weight.comparison.uncalibrated.mcp_usd` | USD | Dollars charged to the three MCP components in this run. |
+| `fixed_weight.comparison.uncalibrated.setup_share_of_total` | fraction or null | The `setup` group as a fraction of `totals.usd`; same rule as `fixed_weight.groups.setup.share_of_total`. |
+| `fixed_weight.comparison.uncalibrated.setup_usd` | USD | Dollars charged to the `setup` group in this run. |
+| `fixed_weight.comparison.uncalibrated.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`; same rule as `fixed_weight.share_of_total`. |
+| `fixed_weight.comparison.uncalibrated.total_usd` | USD | Fixed-weight dollars in this run. |
 | `fixed_weight.components` | list | One entry per fixed component, always all eleven, in the fixed order: `skill_listing`, `instructions`, `hook_context`, `agent_listing`, `mcp_instructions`, `mcp_tool_schemas`, `mcp_tool_listing` (group `setup`), then `system_prompt`, `builtin_tool_schemas`, `builtin_tool_listing`, `other` (group `claude_code`). |
 | `fixed_weight.components[]` | object | One component. |
 | `fixed_weight.components[].component` | text | Component name. |
@@ -227,9 +256,14 @@ The rates are the ones that call paid, so its own model, long-prompt row and fas
 
 **Groups.** `setup` is what the user's setup adds and its dollars are the upper bound on what removing all of it would save. `claude_code` is present regardless. `mcp` is a subtotal of three `setup` components.
 
+## Calibration and its range
+
+A calibration file holds `factor`, and may hold `low` and `high`, the smallest and largest per-pair ratio the calibration measured. Both or neither: a file with only one, a bound that is not a finite number greater than 0, or a factor outside `low` to `high` is refused (exit 2). A file with only `factor` is valid and shows no range. `date`, `claude_code_version` and `runs_per_arm` are read when well formed and shown in the report and in `fixed_weight.calibration`. How a file is made, and what the factor covers, is in [cost-ledger-calibration.md](cost-ledger-calibration.md).
+
 ## Version history
 
 - 1: sessions and agents.
 - 2: skills and unattributed added; `schema_version` is 2.
 - 3: `meter` and `recorded_cost` added; `schema_version` is 3.
 - 4: `fixed_weight` added (the fixed-weight estimate, `null` without `--fixed-weight`); `schema_version` is 4.
+- 5: `fixed_weight.calibration` and `fixed_weight.comparison` added (the calibration file's provenance, and the estimate re-run at factor 1.0 and at the file's `low` and `high`; both `null` when uncalibrated); `schema_version` is 5.

@@ -479,7 +479,7 @@ class TestFlag:
             assert proc.returncode == 0, proc.stderr
         assert a.read_bytes() == b.read_bytes()
         obj = json.loads(a.read_text())
-        assert obj["schema_version"] == 4
+        assert obj["schema_version"] == 5
         assert obj["fixed_weight"]["total_usd"] == WANT["fixed_weight"]["total_usd"]
         assert a.read_text() == cost_ledger.dumps(obj)
 
@@ -734,3 +734,209 @@ class TestCliMissingCalibration:
         rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
         out = capsys.readouterr().out
         assert rc == 0 and "UNCALIBRATED ESTIMATE" in out
+
+
+# ---------------------------------------------------------------------------
+# slice 8 (#1335): calibration bounds, comparison runs, report lines
+# ---------------------------------------------------------------------------
+POINT_KEYS = {
+    "calibration_factor", "total_usd", "share_of_total", "setup_usd",
+    "setup_share_of_total", "mcp_usd", "mcp_share_of_total",
+}
+
+
+def cal_file(tmp_path: Path, body: dict, name: str = "c.json") -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(body))
+    return path
+
+
+def cli_fw(tmp_path: Path, cal: Path, name: str = "o.json") -> dict:
+    out = tmp_path / name
+    proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                   "--calibration", str(cal), "--json", str(out))
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(out.read_text())["fixed_weight"]
+
+
+def point_of(fw: dict) -> dict:
+    return {
+        "calibration_factor": fw["calibration_factor"],
+        "total_usd": fw["total_usd"],
+        "share_of_total": fw["share_of_total"],
+        "setup_usd": fw["groups"]["setup"]["usd"],
+        "setup_share_of_total": fw["groups"]["setup"]["share_of_total"],
+        "mcp_usd": fw["mcp"]["usd"],
+        "mcp_share_of_total": fw["mcp"]["share_of_total"],
+    }
+
+
+class TestCalibrationBounds:
+    def test_bounds_and_provenance_are_loaded(self, tmp_path: Path) -> None:
+        path = cal_file(tmp_path, {"factor": 1.5, "low": 1.0, "high": 2.0, "date": "2026-11-14",
+                                   "claude_code_version": "9.9.9", "runs_per_arm": 5})
+        assert fixed_weight.load_calibration(path) == fixed_weight.Calibration(
+            1.5, True, 1.0, 2.0, "2026-11-14", "9.9.9", 5)
+
+    def test_factor_only_stays_valid_with_no_range(self, tmp_path: Path) -> None:
+        got = fixed_weight.load_calibration(cal_file(tmp_path, {"factor": 1.5}))
+        assert (got.low, got.high, got.date, got.claude_code_version, got.runs_per_arm) == (
+            None, None, None, None, None)
+
+    def test_bounds_equal_to_the_factor_are_valid(self, tmp_path: Path) -> None:
+        got = fixed_weight.load_calibration(cal_file(tmp_path, {"factor": 1.5, "low": 1.5, "high": 1.5}))
+        assert (got.low, got.high) == (1.5, 1.5)
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"factor": 1.5, "low": 1.0},
+            {"factor": 1.5, "high": 2.0},
+            {"factor": 1.5, "low": 1.6, "high": 2.0},
+            {"factor": 1.5, "low": 1.0, "high": 1.4},
+            {"factor": 1.5, "low": 2.0, "high": 1.0},
+            {"factor": 1.5, "low": 0, "high": 2.0},
+            {"factor": 1.5, "low": -1.0, "high": 2.0},
+            {"factor": 1.5, "low": 1.0, "high": 0},
+            {"factor": 1.5, "low": "1.0", "high": 2.0},
+            {"factor": 1.5, "low": None, "high": 2.0},
+            {"factor": 1.5, "low": 1.0, "high": None},
+            {"factor": 1.5, "low": True, "high": 2.0},
+        ],
+    )
+    def test_invalid_bounds_are_refused(self, tmp_path: Path, body: dict) -> None:
+        path = cal_file(tmp_path, body)
+        with pytest.raises(fixed_weight.CalibrationError):
+            fixed_weight.load_calibration(path)
+        out = tmp_path / "o.json"
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                       "--calibration", str(path), "--json", str(out))
+        assert proc.returncode == 2 and not out.exists()
+        assert len(proc.stderr.strip().splitlines()) == 1
+
+    @pytest.mark.parametrize("text", ['{"factor": 1.5, "low": NaN, "high": 2}',
+                                      '{"factor": 1.5, "low": 1, "high": Infinity}'])
+    def test_non_finite_bounds_are_refused(self, tmp_path: Path, text: str) -> None:
+        path = tmp_path / "c.json"
+        path.write_text(text)
+        with pytest.raises(fixed_weight.CalibrationError):
+            fixed_weight.load_calibration(path)
+
+    def test_provenance_of_the_wrong_type_reads_as_absent(self, tmp_path: Path) -> None:
+        path = cal_file(tmp_path, {"factor": 1, "date": 20261114, "claude_code_version": 9,
+                                   "runs_per_arm": "5"})
+        got = fixed_weight.load_calibration(path)
+        assert (got.date, got.claude_code_version, got.runs_per_arm) == (None, None, None)
+        path = cal_file(tmp_path, {"factor": 1, "date": "someone's note", "claude_code_version": "a b/c",
+                                   "runs_per_arm": True})
+        got = fixed_weight.load_calibration(path)
+        assert (got.date, got.claude_code_version, got.runs_per_arm) == (None, None, None)
+
+
+class TestComparison:
+    BODY = {"factor": 2.0, "low": 0.25, "high": 3.0, "date": "2026-11-14",
+            "claude_code_version": "9.9.9", "runs_per_arm": 5}
+
+    def test_each_comparison_equals_a_factor_only_run_at_that_factor(self, tmp_path: Path) -> None:
+        fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
+        assert set(fw["comparison"]) == {"uncalibrated", "low", "high"}
+        for name, factor in (("uncalibrated", 1.0), ("low", 0.25), ("high", 3.0)):
+            alone = cli_fw(tmp_path, cal_file(tmp_path, {"factor": factor}, f"f{name}.json"), f"{name}.json")
+            assert fw["comparison"][name] == point_of(alone), name
+            assert set(fw["comparison"][name]) == POINT_KEYS
+
+    def test_the_points_differ_because_the_rule_is_rerun_not_rescaled(self, tmp_path: Path) -> None:
+        fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
+        totals = {fw["comparison"][k]["total_usd"] for k in ("uncalibrated", "low", "high")}
+        assert len(totals) == 3
+        rescaled = fw["comparison"]["uncalibrated"]["total_usd"] * 3.0
+        assert fw["comparison"]["high"]["total_usd"] != pytest.approx(rescaled, rel=1e-3)
+
+    def test_existing_fields_are_the_estimate_at_the_files_factor(self, tmp_path: Path) -> None:
+        fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
+        alone = cli_fw(tmp_path, cal_file(tmp_path, {"factor": 2.0}, "alone.json"), "alone.json")
+        for key in alone:
+            if key not in ("comparison", "calibration"):
+                assert fw[key] == alone[key], key
+
+    def test_low_and_high_are_null_without_bounds(self, tmp_path: Path) -> None:
+        fw = cli_fw(tmp_path, cal_file(tmp_path, {"factor": 2.0}))
+        assert fw["comparison"]["low"] is None and fw["comparison"]["high"] is None
+        assert fw["comparison"]["uncalibrated"]["calibration_factor"] == 1.0
+
+    def test_calibration_object(self, tmp_path: Path) -> None:
+        fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
+        assert fw["calibration"] == {"date": "2026-11-14", "claude_code_version": "9.9.9", "runs_per_arm": 5}
+        bare = cli_fw(tmp_path, cal_file(tmp_path, {"factor": 2.0}, "b.json"), "b.json")
+        assert bare["calibration"] == {"date": None, "claude_code_version": None, "runs_per_arm": None}
+
+    def test_uncalibrated_has_null_comparison_and_calibration(self) -> None:
+        fw = fw_of(ROOT)
+        assert fw["comparison"] is None and fw["calibration"] is None
+
+    def test_extra_estimates_are_computed_only_when_calibrated(self, tmp_path: Path) -> None:
+        real = fixed_weight.estimate
+        for cal, runs in ((None, 1), (fixed_weight.Calibration(2.0, True), 2),
+                          (fixed_weight.Calibration(2.0, True, 0.25, 3.0), 4)):
+            with mock.patch.object(fixed_weight, "estimate", wraps=real) as spy:
+                build(ROOT, fixed_weight=True, calibration=cal)
+            assert spy.call_count == runs, cal
+
+    def test_not_run_without_the_flag(self) -> None:
+        with mock.patch.object(fixed_weight, "estimate") as spy:
+            build(ROOT, calibration=fixed_weight.Calibration(2.0, True, 0.25, 3.0))
+        assert spy.call_count == 0
+
+    def test_export_carries_the_new_fields(self, tmp_path: Path) -> None:
+        cal = cal_file(tmp_path, self.BODY)
+        full, agg = tmp_path / "f.json", tmp_path / "a.json"
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--fixed-weight", "--calibration", str(cal),
+                       "--json", str(full), "--export-aggregates", str(agg))
+        assert proc.returncode == 0, proc.stderr
+        exported = json.loads(agg.read_text())["fixed_weight"]
+        assert exported == json.loads(full.read_text())["fixed_weight"]
+        assert exported["comparison"]["high"]["calibration_factor"] == 3.0
+        assert exported["calibration"]["claude_code_version"] == "9.9.9"
+
+
+class TestCalibratedReport:
+    BODY = TestComparison.BODY
+
+    def lines(self, tmp_path: Path, body: dict) -> list[str]:
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                       "--calibration", str(cal_file(tmp_path, body)))
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout.splitlines()
+
+    def test_lines_appear_after_the_setup_line(self, tmp_path: Path) -> None:
+        lines = self.lines(tmp_path, self.BODY)
+        fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
+        un = fw["comparison"]["uncalibrated"]["setup_share_of_total"]
+        cal = fw["groups"]["setup"]["share_of_total"]
+        low = fw["comparison"]["low"]["setup_share_of_total"]
+        high = fw["comparison"]["high"]["setup_share_of_total"]
+        pct = lambda x: f"{x * 100:.1f}%"  # noqa: E731
+        setup = next(i for i, ln in enumerate(lines) if ln.startswith("  Setup (what your setup adds)"))
+        side = next(i for i, ln in enumerate(lines) if "uncalibrated" in ln and "calibrated (factor 2)" in ln)
+        assert pct(un) in lines[side] and pct(cal) in lines[side]
+        rng = next(i for i, ln in enumerate(lines) if "calibration range" in ln)
+        assert pct(low) in lines[rng] and pct(high) in lines[rng]
+        prov = next(i for i, ln in enumerate(lines) if ln.startswith("  Calibration:"))
+        assert "2026-11-14" in lines[prov] and "5 runs per arm" in lines[prov] and "9.9.9" in lines[prov]
+        assert setup < side and setup < rng and setup < prov
+        assert not any("UNCALIBRATED" in ln for ln in lines)
+
+    def test_no_range_line_without_bounds(self, tmp_path: Path) -> None:
+        lines = self.lines(tmp_path, {"factor": 2.0})
+        assert not any("calibration range" in ln for ln in lines)
+        assert any("calibrated (factor 2)" in ln for ln in lines)
+        prov = next(ln for ln in lines if ln.startswith("  Calibration:"))
+        assert "unknown" in prov
+
+    def test_lines_absent_when_not_calibrated(self, tmp_path: Path) -> None:
+        proc = run_default(tmp_path, *WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                           chars_per_token=3.7)
+        text = proc.stdout
+        assert "UNCALIBRATED ESTIMATE" in text
+        assert "calibration range" not in text and "  Calibration:" not in text
+        assert "calibrated (factor" not in text

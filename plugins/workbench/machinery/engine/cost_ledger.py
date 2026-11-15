@@ -36,7 +36,7 @@ import fixed_weight as _fw
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 AGGREGATES_VERSION = 1
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -353,9 +353,8 @@ def build_ledger(
     estimate = None
     if collector is not None:
         cal = calibration if calibration is not None else _fw.Calibration()
-        estimate = _fw.estimate(
-            collector.files, window_calls, pricer,
-            factor=cal.factor, calibrated=cal.calibrated, window_usd=total.usd,
+        estimate = _fw.estimate_with_calibration(
+            collector.files, window_calls, pricer, cal, window_usd=total.usd,
         )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -568,6 +567,35 @@ def _share_text(share: float | None) -> str:
     return "n/a" if share is None else f"{share * 100:.1f}%"
 
 
+def _calibration_lines(fw: dict) -> list[str]:
+    """Setup share before and after calibration, its range, and where the factor came from."""
+    comparison, provenance = fw.get("comparison"), fw.get("calibration")
+    if not fw["calibrated"] or comparison is None:
+        return []
+    plain, factor = comparison["uncalibrated"], fw["calibration_factor"]
+    lines = [
+        f"  Setup share of window spend: {_share_text(plain['setup_share_of_total'])} uncalibrated "
+        f"(factor 1) vs {_share_text(fw['groups']['setup']['share_of_total'])} calibrated (factor {factor:g})"
+    ]
+    if comparison["low"] is not None and comparison["high"] is not None:
+        low, high = comparison["low"], comparison["high"]
+        lines.append(
+            f"  Setup share across the calibration range: {_share_text(low['setup_share_of_total'])} "
+            f"at low (factor {low['calibration_factor']:g}) to {_share_text(high['setup_share_of_total'])} "
+            f"at high (factor {high['calibration_factor']:g})"
+        )
+    if provenance is not None:
+        def show(value: object) -> str:
+            return "unknown" if value is None else str(value)
+
+        lines.append(
+            f"  Calibration: measured {show(provenance['date'])}, "
+            f"{show(provenance['runs_per_arm'])} runs per arm, "
+            f"Claude Code version {show(provenance['claude_code_version'])}"
+        )
+    return lines
+
+
 def _fixed_weight_lines(fw: dict) -> list[str]:
     lines = ["FIXED WEIGHT"]
     if not fw["calibrated"]:
@@ -578,6 +606,9 @@ def _fixed_weight_lines(fw: dict) -> list[str]:
         "of window spend; the upper bound, the saving if all of it were removed",
         f"    of which MCP (servers, tool schemas, tool listing): {_usd(mcp['usd'])}  "
         f"{_share_text(mcp['share_of_total'])} of window spend",
+    ]
+    lines += _calibration_lines(fw)
+    lines += [
         f"  Claude Code (present regardless): {_usd(cc['usd'])}  "
         f"{_share_text(cc['share_of_total'])} of window spend",
         "  Components by dollars (median and range of tokens per file):",
@@ -663,6 +694,11 @@ def _config_dir() -> Path:
     return Path(where).parent if where else Path(budget_burn.__file__).parent
 
 
+def default_calibration_path() -> Path:
+    """Where ``--fixed-weight`` looks for a calibration file when ``--calibration`` is not given."""
+    return _config_dir() / _fw.CALIBRATION_FILE
+
+
 def _fail(message: str) -> int:
     print(f"cost_ledger: {message}", file=sys.stderr)
     return 2
@@ -743,7 +779,7 @@ def main(argv: list[str] | None = None) -> int:
     calibration = None
     if args.fixed_weight:
         explicit = args.calibration is not None
-        path = Path(args.calibration) if explicit else _config_dir() / _fw.CALIBRATION_FILE
+        path = Path(args.calibration) if explicit else default_calibration_path()
         try:
             calibration = _fw.load_calibration(path, required=explicit)
         except _fw.CalibrationError as exc:
