@@ -242,10 +242,10 @@ class TestJsonFile:
         text = out.read_text()
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert obj["schema_version"] == 3
+        assert obj["schema_version"] == 4
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
-            "skills", "unattributed", "meter", "recorded_cost",
+            "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
         }
 
 
@@ -365,7 +365,12 @@ class TestSchemaDocument:
     def emitted() -> set[str]:
         # The slice 6 fixture exercises everything the slice 5 one does, plus a
         # recorded cost and (with a meter applied) a meter block.
-        ledger = cost_ledger.apply_meter(build(HERE / "fixtures" / "cost_ledger_export" / "projects"), 12.5)
+        # Slice 7 adds the fixed-weight estimate, which the document covers too.
+        ledger = cost_ledger.build_ledger(
+            HERE / "fixtures" / "cost_ledger_export" / "projects",
+            since="2026-11-10", until="2026-11-12", today=TODAY, fixed_weight=True,
+        )
+        cost_ledger.apply_meter(ledger, 12.5)
         assert ledger["unpriced"], "fixture must exercise an unpriced-model entry"
         assert ledger["recorded_cost"]["sessions_comparable"] > 0
         assert any(a["by_model"] for s in ledger["sessions"] for a in s["agents"])

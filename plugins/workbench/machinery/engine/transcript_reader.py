@@ -36,7 +36,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -396,17 +396,28 @@ def _recorded_total(value: object) -> float | None:
 # ---------------------------------------------------------------------------
 # high-level read
 # ---------------------------------------------------------------------------
-def read(root: Path, since: str | None = None, until: str | None = None) -> ReadResult:
+def read(
+    root: Path,
+    since: str | None = None,
+    until: str | None = None,
+    on_record: Callable[[FileInfo, dict], None] | None = None,
+) -> ReadResult:
     """Every de-duplicated call and attachment under ``root`` in the window.
 
     Reads every file: the window is judged on each call's own timestamp, never
     on file modification time (``iter_records(since=...)`` offers that shortcut).
+
+    ``on_record(info, rec)``, when given, is called once for every parsed record
+    of every file read, in file order, before any window filtering, so a caller
+    can gather what it needs in the same pass. ``None`` changes nothing.
     """
     coverage = Coverage()
     collector = CallCollector()
     attachments: list[Attachment] = []
     states: dict[tuple[str, str], CostState] = {}
     for info, rec in iter_records(root, coverage=coverage):
+        if on_record is not None:
+            on_record(info, rec)
         collector.add(info, rec)
         if rec.get("type") == "cost-state" and not info.is_subagent:
             total = _recorded_total(rec.get("totalCostUSD"))

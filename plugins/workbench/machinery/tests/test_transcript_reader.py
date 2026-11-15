@@ -569,3 +569,53 @@ class TestCostStates:
         sub.parent.mkdir(parents=True)
         sub.write_text(_cs(9.0) + "\n")
         assert tr.read(tmp_path).cost_states == []
+
+
+# ---------------------------------------------------------------------------
+# on_record hook (slice 7, F1)
+# ---------------------------------------------------------------------------
+class TestOnRecord:
+    def _tree(self, tmp_path: Path) -> Path:
+        root = tmp_path / "projects"
+        _write(root / "-zh-p" / "sess-zh1.jsonl", [
+            {"type": "attachment", "attachment": {"type": "instructions"}, "rendered": [{"content": "abc"}]},
+            "{not json",
+            ["not", "an", "object"],
+            _asst(mid="zh-m1", rid="zh-r1", ts="2026-01-01T00:00:00Z", input_tokens=5),
+            _asst(mid="zh-m2", rid="zh-r2", ts="2026-12-01T00:00:00Z", input_tokens=7),
+        ])
+        _write(root / "-zh-p" / "sess-zh1" / "subagents" / "agent-zha.jsonl", [
+            {"type": "attachment", "attachment": {"type": "skill_listing"}},
+        ])
+        return root
+
+    def test_called_once_per_parsed_record_in_file_order(self, tmp_path: Path) -> None:
+        seen: list[tuple[str | None, str | None]] = []
+        tr.read(self._tree(tmp_path), on_record=lambda info, rec: seen.append(
+            (info.agent_id, rec.get("type"))))
+        assert len(seen) == 4  # the two bad lines are not parsed records
+        main = [t for agent, t in seen if agent is None]
+        assert main == ["attachment", "assistant", "assistant"]
+        assert [t for agent, t in seen if agent == "zha"] == ["attachment"]
+
+    def test_receives_file_info_and_the_record(self, tmp_path: Path) -> None:
+        got: list[tuple[tr.FileInfo, dict]] = []
+        tr.read(self._tree(tmp_path), on_record=lambda info, rec: got.append((info, rec)))
+        assert all(isinstance(info, tr.FileInfo) and isinstance(rec, dict) for info, rec in got)
+        main = next(rec for info, rec in got if not info.is_subagent)
+        assert main["attachment"] == {"type": "instructions"}
+        assert {info.agent_id for info, _ in got} == {None, "zha"}
+
+    def test_runs_before_any_window_filtering(self, tmp_path: Path) -> None:
+        root = self._tree(tmp_path)
+        seen: list[dict] = []
+        result = tr.read(root, since="2026-06-01", until="2026-06-30", on_record=lambda i, r: seen.append(r))
+        assert result.calls == []
+        assert len(seen) == 4
+
+    def test_default_is_unchanged(self, tmp_path: Path) -> None:
+        root = self._tree(tmp_path)
+        plain = tr.read(root)
+        hooked = tr.read(root, on_record=lambda i, r: None)
+        assert plain.calls == hooked.calls and plain.attachments == hooked.attachments
+        assert plain.coverage == hooked.coverage
