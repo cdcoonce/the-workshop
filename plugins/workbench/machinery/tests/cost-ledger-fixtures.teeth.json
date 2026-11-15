@@ -1,0 +1,35 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv", "run", "--with", "pytest", "python", "-m", "pytest", "-q", "test_cost_ledger_fixtures.py"
+  ],
+  "collect_command": [
+    "uv", "run", "--with", "pytest", "python", "-m", "pytest", "--collect-only", "-q", "test_cost_ledger_fixtures.py"
+  ],
+  "mutants": [
+    {
+      "label": "skill attribution on the call that invokes the skill",
+      "file": "fixtures/cost_ledger/skill_then_unattributed/-fixture-project/sess-a.jsonl",
+      "oracle": "real",
+      "find": "\"requestId\": \"req-1\", \"message\": {\"id\": \"msg-1\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-5-5\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu-1\", \"name\": \"Skill\"",
+      "replace": "\"requestId\": \"req-1\", \"attributionSkill\": \"plugin-p:skill-one\", \"message\": {\"id\": \"msg-1\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-5-5\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu-1\", \"name\": \"Skill\"",
+      "why": "test_a_invoking_call_is_unattributed_next_call_is_attributed_prompt_resets"
+    },
+    {
+      "label": "subagent meta toolUseId points at no parent Agent tool_use",
+      "file": "fixtures/cost_ledger/two_subagents/-fixture-project/sess-c/subagents/agent-ag-1.meta.json",
+      "oracle": "real",
+      "find": "\"toolUseId\": \"toolu-1\"",
+      "replace": "\"toolUseId\": \"toolu-9\"",
+      "why": "test_c_subagents_link_to_exactly_one_parent_agent_tool_use"
+    },
+    {
+      "label": "one API call split into two calls by a differing requestId",
+      "file": "fixtures/cost_ledger/two_subagents/-fixture-project/sess-c/subagents/agent-ag-1.jsonl",
+      "oracle": "real",
+      "find": "\"requestId\": \"req-a1\", \"message\": {\"id\": \"msg-a1\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-5-5\", \"content\": [{\"type\": \"tool_use\"",
+      "replace": "\"requestId\": \"req-a1b\", \"message\": {\"id\": \"msg-a1\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-5-5\", \"content\": [{\"type\": \"tool_use\"",
+      "why": "test_dedup_matches_expected_json[two_subagents]"
+    }
+  ]
+}
