@@ -331,9 +331,10 @@ def _skill_lines(ledger: dict) -> list[str]:
     lines = [f"  Top {_TOP_SKILLS} skills by dollars:"]
     lines += [f"    {r['skill']:24} {_usd(r['usd'])}  {r['calls']:,} calls" for r in shown] or ["    (none)"]
     if rest:
-        lines.append(f"    {len(rest)} more skills {_usd(sum(r['usd'] for r in rest))}")
+        noun = "skill" if len(rest) == 1 else "skills"
+        lines.append(f"    {len(rest)} more {noun} {_usd(sum(r['usd'] for r in rest))}")
     un = ledger["unattributed"]
-    lines.append(f"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)")
+    lines.append(f"    {'(unattributed)':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)")
     lines.append(
         "  Skill rows are a lower bound: the invoking call and later-turn work are not counted."
     )

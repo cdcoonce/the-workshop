@@ -270,19 +270,47 @@ class TestReport:
         rest_line = next(ln for ln in out.splitlines() if "more skills" in ln)
         assert "$1.25" in rest_line
 
+    def test_rest_line_says_one_more_skill_for_one_and_n_more_skills_otherwise(
+        self, tmp_path: Path
+    ) -> None:
+        src = SKILLS_FIXTURES / "many_skills" / "projects" / "-p3" / "s1.jsonl"
+        kept = [ln for ln in src.read_text().splitlines() if '"skill-17"' not in ln]
+        proj = tmp_path / "projects" / "-p3"
+        proj.mkdir(parents=True)
+        (proj / "s1.jsonl").write_text("\n".join(kept) + "\n")
+        proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
+                       "--projects-root", str(tmp_path / "projects"))
+        assert proc.returncode == 0, proc.stderr
+        one = [ln.strip() for ln in proc.stdout.splitlines() if "more skill" in ln]
+        assert len(one) == 1 and one[0].startswith("1 more skill ")
+        assert "1 more skills" not in proc.stdout
+        out = self.many()
+        many = [ln.strip() for ln in out.splitlines() if "more skill" in ln]
+        assert len(many) == 1 and many[0].startswith("2 more skills ")
+
     def test_no_rest_line_with_15_or_fewer_skills(self) -> None:
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"))
         assert "more skills" not in proc.stdout
         assert "workbench:commit" in proc.stdout
 
+    def test_skill_named_unattributed_does_not_collide_with_the_bucket_label(self) -> None:
+        proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
+                       "--projects-root", str(SKILLS_FIXTURES / "projects"))
+        lines = [ln.strip() for ln in proc.stdout.splitlines()]
+        skill_lines = [ln for ln in lines if ln.startswith("unattributed")]
+        bucket_lines = [ln for ln in lines if ln.startswith("(unattributed)")]
+        assert len(skill_lines) == 1 and len(bucket_lines) == 1
+        assert skill_lines[0] != bucket_lines[0]
+        assert "%" not in skill_lines[0] and "%" in bucket_lines[0]
+
     def test_unattributed_row_always_printed_with_share(self) -> None:
         out = self.many()
-        row = next(ln for ln in out.splitlines() if ln.strip().startswith("unattributed"))
+        row = next(ln for ln in out.splitlines() if ln.strip().startswith("(unattributed)"))
         assert "$0.00" in row and "0%" in row
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"))
-        row = next(ln for ln in proc.stdout.splitlines() if ln.strip().startswith("unattributed") and "%" in ln)
+        row = next(ln for ln in proc.stdout.splitlines() if ln.strip().startswith("(unattributed)") and "%" in ln)
         assert "$4.38" in row or "$4.37" in row  # 4.375 over a 12.8125 window total
         assert "34%" in row
 
@@ -296,7 +324,7 @@ class TestReport:
                        "--projects-root", str(SKILLS_FIXTURES / "projects"))
         assert proc.returncode == 0, proc.stderr
         assert "Traceback" not in proc.stderr
-        row = next(ln for ln in proc.stdout.splitlines() if ln.strip().startswith("unattributed"))
+        row = next(ln for ln in proc.stdout.splitlines() if ln.strip().startswith("(unattributed)"))
         assert "$0.00" in row and "0%" in row
         assert "lower bound" in proc.stdout
 

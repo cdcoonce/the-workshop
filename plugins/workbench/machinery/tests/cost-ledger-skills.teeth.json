@@ -147,8 +147,8 @@
       "label": "16 unattributed line hidden when zero",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "    lines.append(f\"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")",
-      "replace": "    if un[\"calls\"]:\n        lines.append(f\"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")"
+      "find": "    lines.append(f\"    {'(unattributed)':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")",
+      "replace": "    if un[\"calls\"]:\n        lines.append(f\"    {'(unattributed)':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")"
     },
     {
       "label": "17 unattributed share of attributed dollars",
@@ -161,7 +161,7 @@
       "label": "18 remainder line dropped silently",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "    if rest:\n        lines.append(f\"    {len(rest)} more skills {_usd(sum(r['usd'] for r in rest))}\")\n",
+      "find": "    if rest:\n        noun = \"skill\" if len(rest) == 1 else \"skills\"\n        lines.append(f\"    {len(rest)} more {noun} {_usd(sum(r['usd'] for r in rest))}\")\n",
       "replace": "    if rest:\n        pass\n"
     },
     {

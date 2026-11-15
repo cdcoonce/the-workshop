@@ -100,7 +100,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `totals.usd_breakdown.write_1h` | USD | 1-hour cache-write dollars of the whole window. |
 | `totals.usd_breakdown.write_5m` | USD | 5-minute cache-write dollars of the whole window. |
 | `unattributed` | object | Calls whose own record carries no non-empty text `attributionSkill`; always present, zeros when there are none. |
-| `unattributed.calls` | count | In-window calls of the unattributed calls. |
+| `unattributed.calls` | count | In-window calls that carry no skill. |
 | `unattributed.sessions` | count | Distinct (project, session id) pairs with an unattributed call. |
 | `unattributed.tokens` | object | Tokens of the unattributed calls, by kind. |
 | `unattributed.tokens.cache_read` | tokens | Cache-read tokens of the unattributed calls. |
@@ -127,7 +127,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `unpriced[].tokens.output` | tokens | Output tokens of the unpriced calls. |
 | `unpriced[].tokens.write_1h` | tokens | 1-hour cache-write tokens of the unpriced calls. |
 | `unpriced[].tokens.write_5m` | tokens | 5-minute cache-write tokens of the unpriced calls. |
-| `window` | text | Object holding the window the figures cover. |
+| `window` | object | The window the figures cover, holding `since` and `until`. |
 | `window.since` | text | First day of the window, `YYYY-MM-DD`, inclusive, judged on each call's UTC date; `null` when open. |
 | `window.until` | text | Last day of the window, `YYYY-MM-DD`, inclusive; `null` when open. |
 
@@ -141,7 +141,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 
 ## Attribution and its limits
 
-A call's skill is the `attributionSkill` on its own record, when that is a non-empty string, and nothing else: it is not inferred from Skill tool calls, neighbouring calls or the plugin name. Subagent calls follow the same rule from their own records. Names are as observed: `commit` and `workbench:commit` are two skills.
+A call's skill is the `attributionSkill` on its own record, when that is a non-empty string, and nothing else: it is not inferred from Skill tool calls, neighbouring calls or the plugin name. Subagent calls follow the same rule from their own records. Names are as observed: `commit` and `workbench:commit` are two skills, and names are not trimmed or case-folded, so a name that is only whitespace stays its own row.
 
 Skill rows are a lower bound. The invoking call and later-turn work are not counted: a call whose own record has no `attributionSkill` lands in `unattributed` whatever happened around it. Read `unattributed` as "not attributed on its own record", not as "no skill involved".
 
