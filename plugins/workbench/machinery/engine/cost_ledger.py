@@ -15,12 +15,14 @@ Usage:
     python3 cost_ledger.py --json ledger.json           # also write the rows
     python3 cost_ledger.py --meter-usd 41.50            # compare with the usage view
     python3 cost_ledger.py --export-aggregates agg.json # shareable, no identifiers
+    python3 cost_ledger.py --fixed-weight               # uncalibrated fixed-context estimate
 """
 
 from __future__ import annotations
 
 import argparse
 import calendar
+import copy
 import json
 import math
 import os
@@ -30,10 +32,11 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import budget_burn
+import fixed_weight as _fw
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 AGGREGATES_VERSION = 1
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -250,16 +253,23 @@ def build_ledger(
     since: str | None = None,
     until: str | None = None,
     today: date,
+    fixed_weight: bool = False,
+    calibration: _fw.Calibration | None = None,
 ) -> dict:
     """The ledger object (L8) for ``root``.
 
     With neither ``since`` nor ``until`` the window is the calendar month of
     ``today``; one alone leaves the other end open. The library never reads the
     clock: ``today`` is the caller's.
+
+    ``fixed_weight`` adds the fixed-weight estimate (``calibration`` supplies its
+    factor, default 1.0 uncalibrated); without it the key is ``None`` and no
+    estimation work is done.
     """
     if since is None and until is None:
         since, until = month_window(today)
-    result = transcript_reader.read(Path(root))
+    collector = _fw.Collector() if fixed_weight else None
+    result = transcript_reader.read(Path(root), on_record=collector)
     pricer = pricing.Pricer(budget_burn.MODEL_PRICES)
 
     undated = 0
@@ -270,6 +280,7 @@ def build_ledger(
     unattributed = _SkillAcc()
     main_usd = 0.0
     subagent_usd = 0.0
+    window_calls: list[transcript_reader.Call] = []
     for call in result.calls:
         instant = _instant(call.timestamp)
         if instant is None:
@@ -287,6 +298,7 @@ def build_ledger(
             slot[agent_id] = (_Acc(), call.is_subagent)
         slot[agent_id][0].add(call, priced)
         total.add(call, priced)
+        window_calls.append(call)
         skill = _skill_of(call)
         if skill is None:
             unattributed.add(call, priced)
@@ -338,6 +350,13 @@ def build_ledger(
     totals = _measures(total)
     totals["main_usd"] = _r(main_usd)
     totals["subagent_usd"] = _r(subagent_usd)
+    estimate = None
+    if collector is not None:
+        cal = calibration if calibration is not None else _fw.Calibration()
+        estimate = _fw.estimate(
+            collector.files, window_calls, pricer,
+            factor=cal.factor, calibrated=cal.calibrated, window_usd=totals["usd"],
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "window": {"since": since, "until": until},
@@ -355,6 +374,7 @@ def build_ledger(
         "unattributed": unattributed_row,
         "meter": None,
         "recorded_cost": _recorded_cost(rows, result, since, until),
+        "fixed_weight": estimate,
     }
 
 
@@ -470,6 +490,7 @@ def build_aggregates(ledger: dict) -> dict:
         ],
         "meter": None if ledger["meter"] is None else dict(ledger["meter"]),
         "recorded_cost": dict(ledger["recorded_cost"]),
+        "fixed_weight": copy.deepcopy(ledger.get("fixed_weight")),
     }
 
 
@@ -543,6 +564,51 @@ def _recorded_lines(rc: dict) -> list[str]:
     return lines
 
 
+def _share_text(share: float | None) -> str:
+    return "n/a" if share is None else f"{share * 100:.1f}%"
+
+
+def _fixed_weight_lines(fw: dict) -> list[str]:
+    lines = ["FIXED WEIGHT"]
+    if not fw["calibrated"]:
+        lines.append("UNCALIBRATED ESTIMATE")
+    setup, cc, mcp = fw["groups"]["setup"], fw["groups"]["claude_code"], fw["mcp"]
+    lines += [
+        f"  Setup (what your setup adds): {_usd(setup['usd'])}  {_share_text(setup['share_of_total'])} "
+        "of window spend; the upper bound, the saving if all of it were removed",
+        f"    of which MCP (servers, tool schemas, tool listing): {_usd(mcp['usd'])}  "
+        f"{_share_text(mcp['share_of_total'])} of window spend",
+        f"  Claude Code (present regardless): {_usd(cc['usd'])}  "
+        f"{_share_text(cc['share_of_total'])} of window spend",
+        "  Components by dollars (median and range of tokens per file):",
+    ]
+    order = {c["component"]: i for i, c in enumerate(fw["components"])}
+    for c in sorted(fw["components"], key=lambda c: (-c["usd"], order[c["component"]])):
+        t = c["tokens_per_file"]
+        if t["median"] is None:
+            span = "no files"
+        else:
+            span = (
+                f"median {t['median']:,.0f}, range {t['min']:,.0f} to {t['max']:,.0f} tokens "
+                f"({c['files']} {'file' if c['files'] == 1 else 'files'})"
+            )
+        lines.append(f"    {c['component']:22} {_usd(c['usd'])}  {span}")
+    lines += [
+        f"  Subagent share of fixed-weight dollars: {_share_text(fw['subagent_share'])} "
+        f"({_usd(fw['subagent_usd']).strip()})",
+        f"  Fixed-weight coverage: {fw['files_estimated']} files estimated, "
+        f"{fw['files_without_snapshot']} without a snapshot; "
+        f"{fw['write_calls']} write calls, {fw['read_calls']} read calls",
+    ]
+    if fw["capped_calls"]:
+        n = fw["capped_calls"]
+        lines.append(
+            f"  Estimate capped on {n} {'call' if n == 1 else 'calls'}: the fixed charge "
+            "cannot exceed a call's own dollars"
+        )
+    return lines
+
+
 def report(ledger: dict) -> str:
     win = ledger["window"]
     t = ledger["totals"]
@@ -582,12 +648,21 @@ def report(ledger: dict) -> str:
     )
     for row in ledger["unpriced"]:
         lines.append(f"  Unpriced: {row['model'] or '(no model)'} x{row['calls']} — {row['reason']}")
+    if ledger.get("fixed_weight"):
+        lines += _fixed_weight_lines(ledger["fixed_weight"])
     return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+def _config_dir() -> Path:
+    """The directory ``budget_burn`` loads its per-machine config from."""
+    config = getattr(budget_burn, "_config", None)
+    where = getattr(config, "__file__", None)
+    return Path(where).parent if where else Path(budget_burn.__file__).parent
+
+
 def _fail(message: str) -> int:
     print(f"cost_ledger: {message}", file=sys.stderr)
     return 2
@@ -637,6 +712,15 @@ def main(argv: list[str] | None = None) -> int:
         help="write an aggregates-only JSON file with no identifiers",
     )
     ap.add_argument(
+        "--fixed-weight", action="store_true",
+        help="add the uncalibrated fixed-context estimate",
+    )
+    ap.add_argument(
+        "--calibration", default=None, metavar="PATH",
+        help=f"JSON file with a factor for --fixed-weight (default: {_fw.CALIBRATION_FILE} "
+        "beside the budget_burn config)",
+    )
+    ap.add_argument(
         "--projects-root",
         default=str(Path.home() / ".claude" / "projects"),
     )
@@ -656,10 +740,21 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             return _fail(str(exc))
 
+    calibration = None
+    if args.fixed_weight:
+        path = Path(args.calibration) if args.calibration is not None else _config_dir() / _fw.CALIBRATION_FILE
+        try:
+            calibration = _fw.load_calibration(path)
+        except _fw.CalibrationError as exc:
+            return _fail(str(exc))
+
     root = Path(args.projects_root)
     if not root.is_dir():
         return _fail(f"--projects-root is not a directory: {root}")
-    ledger = build_ledger(root, since=since, until=until, today=date.today())
+    ledger = build_ledger(
+        root, since=since, until=until, today=date.today(),
+        fixed_weight=args.fixed_weight, calibration=calibration,
+    )
     if meter is not None:
         apply_meter(ledger, meter)
     outputs: list[tuple[str, str, str]] = []

@@ -53,6 +53,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/fixed_weight.py",
+      "target": ".claude/scripts/fixed_weight.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },

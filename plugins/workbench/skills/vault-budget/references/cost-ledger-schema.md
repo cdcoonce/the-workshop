@@ -1,6 +1,6 @@
 # Cost ledger JSON schema
 
-Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 3.
+Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 4.
 
 Every figure covers in-window calls with a usable timestamp; undated calls are counted in `coverage.undated_calls` and in nothing else. Dollars are rounded to six places when a row is built, so a sum of rows can differ from the rounded total by a rounding step per row. Units: count, tokens, USD, ISO timestamp string, text.
 
@@ -16,6 +16,42 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `coverage.files_skipped` | count | Transcript files found but not read. |
 | `coverage.malformed_lines` | count | Lines that were not valid JSON records. |
 | `coverage.undated_calls` | count | Calls with no usable timestamp; in no row and in no total. |
+| `fixed_weight` | object or null | The fixed-weight estimate; `null` unless `--fixed-weight` was given, and then no estimation work is done. An uncalibrated estimate of what the fixed context (system prompt, tool schemas, injected setup text) cost the window. Not a measurement: see "Fixed weight and how it is costed". |
+| `fixed_weight.calibrated` | boolean | `true` when a calibration file supplied the factor; `false` when none was found (the report then says `UNCALIBRATED ESTIMATE`). |
+| `fixed_weight.calibration_factor` | number | The factor applied to every token estimate: from the calibration file, else `1.0`. |
+| `fixed_weight.capped_calls` | count | Calls on which the fixed charge was scaled down because it exceeded the call's own dollars. |
+| `fixed_weight.chars_per_token` | number | Characters per token used to turn sizes into tokens: `3.7`. |
+| `fixed_weight.components` | list | One entry per fixed component, always all eleven, in the fixed order: `skill_listing`, `instructions`, `hook_context`, `agent_listing`, `mcp_instructions`, `mcp_tool_schemas`, `mcp_tool_listing` (group `setup`), then `system_prompt`, `builtin_tool_schemas`, `builtin_tool_listing`, `other` (group `claude_code`). |
+| `fixed_weight.components[]` | object | One component. |
+| `fixed_weight.components[].component` | text | Component name. |
+| `fixed_weight.components[].files` | count | Transcript files where the component's size is more than 0 and at least one call was charged. |
+| `fixed_weight.components[].group` | text | `setup` or `claude_code`. |
+| `fixed_weight.components[].read_usd` | USD | Dollars charged to the component on calls that read the fixed context from the cache. |
+| `fixed_weight.components[].tokens_per_file` | object | Estimated tokens of the component per transcript file, over the files counted in `files`; the three values are `null` when there are none. |
+| `fixed_weight.components[].tokens_per_file.max` | tokens | Largest per-file estimate. |
+| `fixed_weight.components[].tokens_per_file.median` | tokens | Median per-file estimate. |
+| `fixed_weight.components[].tokens_per_file.min` | tokens | Smallest per-file estimate. |
+| `fixed_weight.components[].usd` | USD | Dollars charged to the component over the window; `write_usd` plus `read_usd`, rounded to six places. |
+| `fixed_weight.components[].write_usd` | USD | Dollars charged to the component on calls that wrote the fixed context to the cache. |
+| `fixed_weight.files_estimated` | count | Transcript files with at least one charged call. A subagent file counts on its own. |
+| `fixed_weight.files_without_snapshot` | count | Transcript files with an in-window dated call and no `prompt_snapshot` record: their system prompt and tool schemas are counted as 0. |
+| `fixed_weight.groups` | object | Dollars by group, holding `setup` and `claude_code`; the two `usd` values sum to `fixed_weight.total_usd`. |
+| `fixed_weight.groups.claude_code` | object | The group present regardless of the user's setup: system prompt, built-in tool schemas and listing, other attachments. |
+| `fixed_weight.groups.claude_code.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.groups.claude_code.usd` | USD | Dollars charged to the group. |
+| `fixed_weight.groups.setup` | object | What the user's setup adds: skill and agent listings, instructions, hook context, MCP instructions, MCP tool schemas and listing. Its dollars are an upper bound on what removing all of it would save. |
+| `fixed_weight.groups.setup.share_of_total` | fraction or null | The group's dollars as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.groups.setup.usd` | USD | Dollars charged to the group. |
+| `fixed_weight.mcp` | object | The MCP subtotal: `mcp_instructions`, `mcp_tool_schemas` and `mcp_tool_listing`, all inside the `setup` group. |
+| `fixed_weight.mcp.share_of_total` | fraction or null | The subtotal as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.mcp.usd` | USD | Dollars charged to the three MCP components. |
+| `fixed_weight.read_calls` | count | Charged calls on which the fixed context was costed as a cache read. |
+| `fixed_weight.share_of_total` | fraction or null | `total_usd` as a fraction of `totals.usd`, rounded to six places; `null` when `totals.usd` is 0. |
+| `fixed_weight.subagent_share` | fraction or null | `subagent_usd` as a fraction of `total_usd`, rounded to six places; `null` when `total_usd` is 0. |
+| `fixed_weight.subagent_usd` | USD | Fixed-weight dollars charged in subagent files. |
+| `fixed_weight.total_usd` | USD | Fixed-weight dollars over the window: the sum of the component dollars, rounded to six places. Never more than `totals.usd`. |
+| `fixed_weight.unpriced_calls` | count | Calls that would have been charged but have no price; charged nothing. |
+| `fixed_weight.write_calls` | count | Charged calls on which the fixed context was costed as a cache write. |
 | `meter` | object or null | The meter check; `null` unless `--meter-usd` was given. Compares the window total with a dollar figure read by hand from Claude Code's usage view. |
 | `meter.difference_usd` | USD | `ledger_usd` minus `meter_usd`, signed: positive when the ledger is above the meter. |
 | `meter.gap_flag` | boolean | `true` when the gap percent, rounded to six decimal places, is strictly more than 10; exactly 10 percent does not set it, so 0.33 against a 0.3 meter does not flag. |
@@ -32,7 +68,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `recorded_cost.recorded_usd` | USD | Recorded dollars of the comparable sessions. |
 | `recorded_cost.sessions_comparable` | count | In-window sessions that meet every condition in "Recorded cost and when it is comparable". |
 | `recorded_cost.sessions_in_window` | count | Session rows, that is sessions with an in-window call. |
-| `schema_version` | count | Schema version of this file: `3`. See the version history below. |
+| `schema_version` | count | Schema version of this file: `4`. See the version history below. |
 | `sessions` | list | One row per (project, session id) with an in-window call, sorted by project then session id. |
 | `sessions[]` | object | One session row. |
 | `sessions[].agents` | list | One row per agent in the session: `main` first, then subagents by agent id. |
@@ -153,6 +189,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 - Sessions to totals: the session rows sum to `totals` in the same measures.
 - Skills plus unattributed to totals: every in-window dated call is in exactly one skill row or in `unattributed`, so the skill rows plus `unattributed` sum to `totals` in `calls`, `unpriced_calls`, each `tokens` kind and each `usd_breakdown` kind, and to `totals.usd`.
 - Main plus subagent: `totals.main_usd` + `totals.subagent_usd` = `totals.usd`.
+- Fixed weight: the `fixed_weight.components[].usd` values sum to `fixed_weight.total_usd`, the two `fixed_weight.groups` values sum to it too, and it is never more than `totals.usd`, because the estimate is capped on every call.
 - An unpriced call counts in `calls`, `unpriced_calls` and `tokens` and adds no dollars.
 
 ## Attribution and its limits
@@ -171,8 +208,28 @@ Claude Code writes `cost-state` records into main session files with a cumulativ
 
 A session is comparable when all of these hold: it has a recorded figure; `hasUnknownModelCost` is literally false on the record that supplied the figure, and on every record tied with it for the largest figure; it has no unpriced call; and every dated call of the session, main and subagents, inside or outside the window, falls inside the window. The comparison is the whole-session ledger dollars against the recorded figure. A session that meets every condition except the `hasUnknownModelCost` one is flagged: counted in `flagged_unknown_sessions` with its dollars in `flagged_ledger_usd` and `flagged_recorded_usd`, and never added to the comparable sums.
 
+## Fixed weight and how it is costed
+
+`fixed_weight` estimates what the fixed context cost: the text every call of a session sends again. It is an estimate from character counts, not a measurement, and it is `null` unless `--fixed-weight` was given.
+
+**What is sized.** Each transcript file, the main session or one subagent, is estimated on its own, because a subagent pays for its own copy. A file's fixed context is its injected attachments up to its first assistant record with usable usage, the system prompt, and the tool schemas. Attachments after that first call are ignored, and so is an attachment with no `rendered` text, because it was not sent. The system prompt is the `systemPrompt` of the file's first `prompt_snapshot` that has one. Tool schemas come from the first `prompt_snapshot` in the file that lists tools; each tool's size is the compact JSON length of its `schema`, and a tool with no schema object or no name is ignored. A `deferred_tools_delta` is split between `mcp_tool_listing` and `builtin_tool_listing` by the share of its `addedNames` that start with `mcp__`. A file with no `prompt_snapshot` still has its attachments estimated, with system prompt and tool schemas counted as 0, and is counted in `fixed_weight.files_without_snapshot`.
+
+**Tokens.** Component tokens are characters divided by `chars_per_token` (3.7) times `calibration_factor`, kept as a fraction. The factor comes from `--calibration PATH`, else from `cost_ledger_calibration.json` in the directory the budget_burn per-machine config is loaded from. The file is a JSON object whose `factor` is a finite number greater than 0; other keys are ignored. With no file the factor is 1.0 and `calibrated` is `false`. A file that exists but is unreadable, is not an object, or has a missing or invalid `factor` stops the run with exit code 2.
+
+**The costing rule, per call.** Let T be the file's total fixed tokens. For each in-window, dated, priced call of the file, when T is more than 0:
+
+- if the call's total cache-write tokens are at least T, the fixed context is taken to have been written on that call, and every component is charged its tokens times the write rate, the call's 1-hour write rate when its 1-hour write tokens alone are at least T, else its 5-minute write rate;
+- otherwise it is taken to have been read, and every component is charged its tokens times the cache-read rate.
+
+The rates are the ones that call paid, so its own model, long-prompt row and fast multiplier apply. The first call gets no special treatment. A call with no price is charged nothing and counted in `unpriced_calls`; a call with no tokens is neither charged nor counted.
+
+**The cap.** If the fixed charge on a call is more than that call's own dollars, every component's charge on that call is scaled by the same ratio so they sum to the call's dollars, and the call is counted in `capped_calls`. So `fixed_weight.total_usd` can never exceed `totals.usd`.
+
+**Groups.** `setup` is what the user's setup adds and its dollars are the upper bound on what removing all of it would save. `claude_code` is present regardless. `mcp` is a subtotal of three `setup` components.
+
 ## Version history
 
 - 1: sessions and agents.
 - 2: skills and unattributed added; `schema_version` is 2.
 - 3: `meter` and `recorded_cost` added; `schema_version` is 3.
+- 4: `fixed_weight` added (the fixed-weight estimate, `null` without `--fixed-weight`); `schema_version` is 4.

@@ -294,9 +294,9 @@ class TestJson:
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
-            "skills", "unattributed", "meter", "recorded_cost",
+            "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
         }
-        assert obj["schema_version"] == 3
+        assert obj["schema_version"] == 4
         assert obj["window"] == {"since": "2026-11-10", "until": "2026-11-12"}
         assert obj["totals"]["usd"] == EXPECTED["totals"]["usd"]
         assert obj["totals"]["main_usd"] == EXPECTED["totals"]["main_usd"]
