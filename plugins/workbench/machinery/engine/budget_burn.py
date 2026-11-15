@@ -33,6 +33,7 @@ from pathlib import Path
 from budget_burn_defaults import MONTHLY_BUDGET as DEFAULT_MONTHLY_BUDGET
 from budget_burn_defaults import PROJECT_ALIASES as DEFAULT_PROJECT_ALIASES
 from budget_burn_defaults import RATES as DEFAULT_RATES
+import transcript_reader
 import vault_utils
 
 try:  # Scaffold-owned config; absent in a vault vendored before it existed.
@@ -126,62 +127,50 @@ def _record_cost(usage: dict, tier: str) -> float:
     ) / 1_000_000
 
 
-def _month_of(record: dict, fallback: str) -> str:
-    """YYYY-MM for a record, from its ISO timestamp, else the file's month."""
-    ts = record.get("timestamp")
+def _month_of(call: transcript_reader.Call) -> str:
+    """YYYY-MM for a call, from its ISO timestamp, else its file's month."""
+    ts = call.timestamp
     if isinstance(ts, str) and len(ts) >= 7:
         return ts[:7]
-    return fallback
+    return datetime.fromtimestamp(call.file_mtime, tz=timezone.utc).strftime("%Y-%m")
 
 
 def scan(projects_root: Path, target_month: str) -> dict:
-    """Sum cost for ``target_month`` (YYYY-MM) across all project transcripts."""
+    """Sum cost for ``target_month`` (YYYY-MM) across all project transcripts.
+
+    Calls come only from ``transcript_reader``: main and subagent transcripts,
+    each API call counted once for the whole scan (``(message.id, requestId)``,
+    usage from the line with the largest output), keyed to the top-level project.
+    """
     by_tier: dict[str, float] = {}
     by_project: dict[str, float] = {}
     by_day: dict[str, float] = {}
     total = 0.0
-    # Claude Code writes the SAME message.usage on multiple transcript lines per
-    # response (one per content block / streaming chunk). Summing every record
-    # over-counts ~2.7x — dedup by requestId so each real API call counts once.
-    seen: set[str] = set()
 
-    for transcript in projects_root.glob("*/*.jsonl"):
-        project = transcript.parent.name
+    for call in transcript_reader.read(projects_root).calls:
+        tier = _tier(call.model)
+        if not tier or _month_of(call) != target_month:
+            continue
+        project = call.project
         for legacy, current in _PROJECT_ALIASES.items():
             if project.startswith(legacy):
                 project = current + project[len(legacy) :]
                 break
-        file_month = datetime.fromtimestamp(
-            transcript.stat().st_mtime, tz=timezone.utc
-        ).strftime("%Y-%m")
-        for line in transcript.read_text(errors="ignore").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            msg = rec.get("message") or {}
-            usage = msg.get("usage") or rec.get("usage")
-            model = msg.get("model") or rec.get("model")
-            tier = _tier(model)
-            if not usage or not tier:
-                continue
-            if _month_of(rec, file_month) != target_month:
-                continue
-            rid = rec.get("requestId") or msg.get("id")
-            if rid is not None:
-                if rid in seen:
-                    continue  # same API call, duplicate transcript record
-                seen.add(rid)
-            cost = _record_cost(usage, tier)
-            total += cost
-            by_tier[tier] = by_tier.get(tier, 0.0) + cost
-            by_project[project] = by_project.get(project, 0.0) + cost
-            day = (rec.get("timestamp") or "")[:10]
-            if day:
-                by_day[day] = by_day.get(day, 0.0) + cost
+        cost = _record_cost(
+            {
+                "input_tokens": call.input_tokens,
+                "output_tokens": call.output_tokens,
+                "cache_read_input_tokens": call.cache_read_tokens,
+                "cache_creation_input_tokens": call.cache_write_tokens,
+            },
+            tier,
+        )
+        total += cost
+        by_tier[tier] = by_tier.get(tier, 0.0) + cost
+        by_project[project] = by_project.get(project, 0.0) + cost
+        day = (call.timestamp or "")[:10]
+        if day:
+            by_day[day] = by_day.get(day, 0.0) + cost
 
     return {
         "month": target_month,

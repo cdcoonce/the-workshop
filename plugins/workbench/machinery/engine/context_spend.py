@@ -55,6 +55,7 @@ import sys
 from pathlib import Path
 
 import budget_burn
+import transcript_reader
 
 # Token categories, in the order costs are indexed everywhere below.
 CATS = ("in", "out", "cw", "cr")
@@ -190,14 +191,6 @@ def _in_window(ts: object, since: str | None, until: str | None) -> bool:
     return (since is None or day >= since) and (until is None or day <= until)
 
 
-def _file_may_hold_window(path: Path, since: str | None) -> bool:
-    """A file last written before ``since`` cannot hold newer messages."""
-    if since is None:
-        return True
-    mtime = datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.timezone.utc)
-    return mtime.strftime("%Y-%m-%d") >= since
-
-
 class _Scan:
     """Everything one pass over the transcripts collects."""
 
@@ -214,99 +207,84 @@ class _Scan:
 
 def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Scan:
     out = _Scan()
-    for path in sorted(root.glob("**/*.jsonl")):
-        if not _file_may_hold_window(path, since):
-            continue
-        out.files += 1
-        parts = path.relative_to(root).parts
-        sub = "subagents" in parts
-        sid = parts[1] if sub and len(parts) > 1 else path.stem
-        trig = "none"
-        with path.open(errors="replace") as fh:
-            for raw in fh:
-                try:
-                    d = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(d, dict):
-                    continue
-                kind = d.get("type")
-                side = sub or bool(d.get("isSidechain"))
-                if kind == "user":
-                    msg = d.get("message") or {}
-                    c = msg.get("content")
-                    if isinstance(c, list) and any(
-                        isinstance(b, dict) and b.get("type") == "tool_result" for b in c
-                    ):
-                        if not side:
-                            for b in c:
-                                if not isinstance(b, dict) or b.get("type") != "tool_result":
-                                    continue
-                                tid = b.get("tool_use_id")
-                                if tid and tid not in out._seen_results:
-                                    out._seen_results.add(tid)
-                                    out.result_bytes[tid] = _result_bytes(b.get("content"))
-                        continue
-                    trig = classify_trigger(d)
-                elif kind == "system":
-                    if (
-                        d.get("subtype") == "compact_boundary"
-                        and not side
-                        and _in_window(d.get("timestamp"), since, until)
-                    ):
-                        meta = d.get("compactMetadata") or {}
-                        out.boundaries[sid].append(
-                            {
-                                "ts": _epoch(d.get("timestamp")) or 0.0,
-                                "trigger": meta.get("trigger"),
-                                "pre": meta.get("preTokens"),
-                                "post": meta.get("postTokens"),
-                            }
-                        )
-                elif kind == "assistant":
-                    out.assistant_lines += 1
-                    msg = d.get("message") or {}
-                    content = msg.get("content")
-                    if isinstance(content, list) and not side:
-                        for b in content:
-                            if (
-                                isinstance(b, dict)
-                                and b.get("type") == "tool_use"
-                                and b.get("name") == "Read"
-                                and isinstance(b.get("input"), dict)
-                                and b["input"].get("file_path")
-                                and b.get("id") not in out._seen_reads
-                            ):
-                                out._seen_reads.add(b["id"])
-                                out.reads[sid].append(
-                                    (_epoch(d.get("timestamp")) or 0.0, b["input"]["file_path"], b["id"])
-                                )
-                    usage = msg.get("usage")
-                    if not usage or not _in_window(d.get("timestamp"), since, until):
-                        continue
-                    rid, mid = d.get("requestId"), msg.get("id")
-                    if dedupe == "request":
-                        key: tuple = (rid or mid,)
-                    else:
-                        key = (mid, rid)
-                    if key in ((None,), (None, None)):
-                        key = (d.get("uuid"),)
-                    rec = {
-                        "model": msg.get("model"),
-                        "i": usage.get("input_tokens", 0) or 0,
-                        "o": usage.get("output_tokens", 0) or 0,
-                        "cw": usage.get("cache_creation_input_tokens", 0) or 0,
-                        "cr": usage.get("cache_read_input_tokens", 0) or 0,
-                        "side": side,
-                        "sid": sid,
-                        "trig": trig,
+    collector = transcript_reader.CallCollector(dedupe)
+    coverage = transcript_reader.Coverage()
+    meta: dict[tuple, tuple[bool, str]] = {}  # call key -> (side, trigger) at the kept line
+    trig_by_file: dict[Path, str] = {}
+    for info, d in transcript_reader.iter_records(root, since=since, coverage=coverage):
+        sub = info.is_subagent
+        sid = info.session_id
+        trig = trig_by_file.get(info.path, "none")
+        kind = d.get("type")
+        side = sub or bool(d.get("isSidechain"))
+        if kind == "user":
+            msg = d.get("message") or {}
+            c = msg.get("content")
+            if isinstance(c, list) and any(
+                isinstance(b, dict) and b.get("type") == "tool_result" for b in c
+            ):
+                if not side:
+                    for b in c:
+                        if not isinstance(b, dict) or b.get("type") != "tool_result":
+                            continue
+                        tid = b.get("tool_use_id")
+                        if tid and tid not in out._seen_results:
+                            out._seen_results.add(tid)
+                            out.result_bytes[tid] = _result_bytes(b.get("content"))
+                continue
+            trig_by_file[info.path] = classify_trigger(d)
+        elif kind == "system":
+            if (
+                d.get("subtype") == "compact_boundary"
+                and not side
+                and _in_window(d.get("timestamp"), since, until)
+            ):
+                cmeta = d.get("compactMetadata") or {}
+                out.boundaries[sid].append(
+                    {
                         "ts": _epoch(d.get("timestamp")) or 0.0,
+                        "trigger": cmeta.get("trigger"),
+                        "pre": cmeta.get("preTokens"),
+                        "post": cmeta.get("postTokens"),
                     }
-                    old = out.calls.get(key)
-                    if old is None:
-                        out.calls[key] = rec
-                    elif dedupe == "message-request" and rec["o"] >= old["o"]:
-                        out.calls[key] = rec
+                )
+        elif kind == "assistant":
+            out.assistant_lines += 1
+            msg = d.get("message") or {}
+            content = msg.get("content")
+            if isinstance(content, list) and not side:
+                for b in content:
+                    if (
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_use"
+                        and b.get("name") == "Read"
+                        and isinstance(b.get("input"), dict)
+                        and b["input"].get("file_path")
+                        and b.get("id") not in out._seen_reads
+                    ):
+                        out._seen_reads.add(b["id"])
+                        out.reads[sid].append(
+                            (_epoch(d.get("timestamp")) or 0.0, b["input"]["file_path"], b["id"])
+                        )
+            if not _in_window(d.get("timestamp"), since, until):
+                continue
+            kept = collector.add(info, d)
+            if kept is not None:
+                meta[kept.key] = (side, trig)
+    out.files = coverage.files_read
+    for call in collector.calls:
+        side, trig = meta[call.key]
+        out.calls[call.key] = {
+            "model": call.model,
+            "i": call.input_tokens,
+            "o": call.output_tokens,
+            "cw": call.cache_write_tokens,
+            "cr": call.cache_read_tokens,
+            "side": side,
+            "sid": call.session_id,
+            "trig": trig,
+            "ts": _epoch(call.timestamp) or 0.0,
+        }
     return out
 
 
