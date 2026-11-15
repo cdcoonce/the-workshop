@@ -507,3 +507,46 @@ class TestSpeed:
         )
         (call,) = tr.read(tmp_path).calls
         assert (call.output_tokens, call.speed) == (9, "standard")
+
+
+# ---------------------------------------------------------------------------
+# cost-state records (cost ledger slice 6, #1333)
+# ---------------------------------------------------------------------------
+def _cs(total: object, unknown: object = False) -> str:
+    return json.dumps({"type": "cost-state", "totalCostUSD": total, "hasUnknownModelCost": unknown})
+
+
+class TestCostStates:
+    def test_default_is_empty_and_calls_are_unchanged(self, tmp_path: Path) -> None:
+        result = tr.read(tmp_path)
+        assert result.cost_states == []
+
+    def test_largest_total_per_main_file_with_its_own_flag(self, tmp_path: Path) -> None:
+        main = tmp_path / "-p" / "s1.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text("\n".join([_cs(1.0, True), _cs(2.5, False), _cs(1.5, True)]) + "\n")
+        (state,) = tr.read(tmp_path).cost_states
+        assert (state.project, state.session_id) == ("-p", "s1")
+        assert state.total_cost_usd == 2.5 and state.has_unknown_model_cost is False
+
+    def test_invalid_totals_are_ignored(self, tmp_path: Path) -> None:
+        main = tmp_path / "-p" / "s1.jsonl"
+        main.parent.mkdir(parents=True)
+        lines = [_cs("3"), _cs(True), _cs(False), _cs(-1), _cs(None), '{"type": "cost-state"}',
+                 '{"type": "cost-state", "totalCostUSD": NaN}',
+                 '{"type": "cost-state", "totalCostUSD": Infinity}', _cs(0.0)]
+        main.write_text("\n".join(lines) + "\n")
+        (state,) = tr.read(tmp_path).cost_states
+        assert state.total_cost_usd == 0.0
+
+    def test_no_state_when_nothing_is_valid(self, tmp_path: Path) -> None:
+        main = tmp_path / "-p" / "s1.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text(_cs("x") + "\n")
+        assert tr.read(tmp_path).cost_states == []
+
+    def test_subagent_files_are_ignored(self, tmp_path: Path) -> None:
+        sub = tmp_path / "-p" / "s1" / "subagents" / "agent-a1.jsonl"
+        sub.parent.mkdir(parents=True)
+        sub.write_text(_cs(9.0) + "\n")
+        assert tr.read(tmp_path).cost_states == []

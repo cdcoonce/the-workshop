@@ -234,7 +234,7 @@ class TestNoUnattributedCall:
 
 
 class TestJsonFile:
-    def test_schema_version_2_and_new_top_level_keys(self, tmp_path: Path) -> None:
+    def test_schema_version_3_and_top_level_keys(self, tmp_path: Path) -> None:
         out = tmp_path / "o.json"
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"), "--json", str(out))
@@ -242,10 +242,10 @@ class TestJsonFile:
         text = out.read_text()
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert obj["schema_version"] == 2
+        assert obj["schema_version"] == 3
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
-            "skills", "unattributed",
+            "skills", "unattributed", "meter", "recorded_cost",
         }
 
 
@@ -363,8 +363,11 @@ def documented_paths() -> set[str]:
 class TestSchemaDocument:
     @staticmethod
     def emitted() -> set[str]:
-        ledger = build(SKILLS_FIXTURES / "projects")
+        # The slice 6 fixture exercises everything the slice 5 one does, plus a
+        # recorded cost and (with a meter applied) a meter block.
+        ledger = cost_ledger.apply_meter(build(HERE / "fixtures" / "cost_ledger_export" / "projects"), 12.5)
         assert ledger["unpriced"], "fixture must exercise an unpriced-model entry"
+        assert ledger["recorded_cost"]["sessions_comparable"] > 0
         assert any(a["by_model"] for s in ledger["sessions"] for a in s["agents"])
         assert any(a["agent_id"] != "main" for s in ledger["sessions"] for a in s["agents"])
         return flatten(ledger)
@@ -389,6 +392,7 @@ class TestSchemaDocument:
         assert "as observed" in text
         assert re.search(r"\b1\b.*sessions and agents", text)
         assert re.search(r"\b2\b.*skills and unattributed", text)
+        assert re.search(r"\b3\b.*meter.*recorded", text)
 
     def test_command_document_links_the_schema(self) -> None:
         command = (SCHEMA_DOC.parent / "command.md").read_text(encoding="utf-8")
