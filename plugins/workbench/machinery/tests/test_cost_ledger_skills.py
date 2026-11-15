@@ -22,6 +22,7 @@ ENGINE = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE))
 
 import cost_ledger
+import fixed_weight
 
 HERE = Path(__file__).resolve().parent
 SLICE1 = HERE / "fixtures" / "cost_ledger"
@@ -234,7 +235,7 @@ class TestNoUnattributedCall:
 
 
 class TestJsonFile:
-    def test_schema_version_3_and_top_level_keys(self, tmp_path: Path) -> None:
+    def test_schema_version_5_and_top_level_keys(self, tmp_path: Path) -> None:
         out = tmp_path / "o.json"
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"), "--json", str(out))
@@ -242,7 +243,7 @@ class TestJsonFile:
         text = out.read_text()
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert obj["schema_version"] == 4
+        assert obj["schema_version"] == 5
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
             "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
@@ -371,11 +372,17 @@ class TestSchemaDocument:
             since="2026-11-10", until="2026-11-12", today=TODAY, fixed_weight=True,
         )
         cost_ledger.apply_meter(ledger, 12.5)
+        # Slice 8 adds the comparison and calibration objects, filled only when calibrated.
+        calibrated = cost_ledger.build_ledger(
+            HERE / "fixtures" / "cost_ledger_export" / "projects",
+            since="2026-11-10", until="2026-11-12", today=TODAY, fixed_weight=True,
+            calibration=fixed_weight.Calibration(1.5, True, 1.0, 2.0, "2026-11-14", "9.9.9", 5),
+        )
         assert ledger["unpriced"], "fixture must exercise an unpriced-model entry"
         assert ledger["recorded_cost"]["sessions_comparable"] > 0
         assert any(a["by_model"] for s in ledger["sessions"] for a in s["agents"])
         assert any(a["agent_id"] != "main" for s in ledger["sessions"] for a in s["agents"])
-        return flatten(ledger)
+        return flatten(ledger) | flatten(calibrated)
 
     def test_every_emitted_path_is_documented(self) -> None:
         missing = sorted(self.emitted() - documented_paths())

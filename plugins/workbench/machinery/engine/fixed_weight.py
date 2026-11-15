@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import statistics
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,10 +75,40 @@ class CalibrationError(ValueError):
     """A calibration file exists but cannot be used."""
 
 
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")
+
+
 @dataclass(frozen=True)
 class Calibration:
+    """The factor, and what a calibration file says about where it came from.
+
+    ``low`` and ``high`` bound the factor (both or neither). ``date``,
+    ``claude_code_version`` and ``runs_per_arm`` are provenance only: ``None`` when the
+    file lacks them or holds something of the wrong shape.
+    """
+
     factor: float = 1.0
     calibrated: bool = False
+    low: float | None = None
+    high: float | None = None
+    date: str | None = None
+    claude_code_version: str | None = None
+    runs_per_arm: int | None = None
+
+
+def valid_version(text: object) -> bool:
+    """True for a version string safe to carry in a calibration file (letters, digits, . _ + -)."""
+    return isinstance(text, str) and _VERSION.fullmatch(text) is not None
+
+
+def _positive_number(value: object) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+        and value > 0
+    )
 
 
 def load_calibration(path: Path, *, required: bool = False) -> Calibration:
@@ -88,7 +119,10 @@ def load_calibration(path: Path, *, required: bool = False) -> Calibration:
 
     A file that exists but is unreadable, is not a JSON object, or has a missing or
     invalid ``factor`` (a finite number greater than 0) raises ``CalibrationError``.
-    Other keys are ignored.
+    ``low`` and ``high`` are both or neither, each a finite number greater than 0, with
+    ``low <= factor <= high``; anything else raises. ``date`` (YYYY-MM-DD),
+    ``claude_code_version`` and ``runs_per_arm`` are read when well formed. Other keys
+    are ignored.
     """
     path = Path(path)
     try:
@@ -116,7 +150,31 @@ def load_calibration(path: Path, *, required: bool = False) -> Calibration:
         raise CalibrationError(
             f"calibration file {path} needs a finite number greater than 0 as \"factor\""
         )
-    return Calibration(float(factor), True)
+    low, high = data.get("low"), data.get("high")
+    if "low" in data or "high" in data:
+        if "low" not in data or "high" not in data:
+            raise CalibrationError(f"calibration file {path} needs both \"low\" and \"high\", or neither")
+        if not _positive_number(low) or not _positive_number(high):
+            raise CalibrationError(
+                f"calibration file {path} needs finite numbers greater than 0 as \"low\" and \"high\""
+            )
+        if not low <= factor <= high:
+            raise CalibrationError(f"calibration file {path} needs low <= factor <= high")
+        low, high = float(low), float(high)
+    else:
+        low = high = None
+    stamp = data.get("date")
+    version = data.get("claude_code_version")
+    runs = data.get("runs_per_arm")
+    return Calibration(
+        float(factor),
+        True,
+        low,
+        high,
+        stamp if isinstance(stamp, str) and _DATE.fullmatch(stamp) else None,
+        version if valid_version(version) else None,
+        runs if isinstance(runs, int) and not isinstance(runs, bool) and runs > 0 else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +279,18 @@ class Collector:
             state.add("builtin_tool_listing", size * (1.0 - share))
             return
         state.add(_SUBTYPE_COMPONENT.get(subtype, "other"), size)
+
+
+def total_fixed_tokens(
+    sizes: FileSizes, *, factor: float = 1.0, chars_per_token: float | None = None
+) -> float:
+    """All fixed tokens of one file (every component, both groups) at ``factor``.
+
+    The same sizing ``estimate`` uses: characters over characters-per-token (the
+    module's ``CHARS_PER_TOKEN`` unless given) times the factor, per component.
+    """
+    cpt = CHARS_PER_TOKEN if chars_per_token is None else chars_per_token
+    return sum(chars / cpt * factor for chars in sizes.chars.values() if chars > 0)
 
 
 # ---------------------------------------------------------------------------
@@ -370,3 +440,58 @@ def estimate(
 def _has_snapshot(files: dict[FileKey, FileSizes], key: FileKey) -> bool:
     state = files.get(key)
     return state is not None and state.has_snapshot
+
+
+def _point(fw: dict) -> dict:
+    """The few figures a comparison run keeps from a full estimate."""
+    setup = fw["groups"][SETUP]
+    return {
+        "calibration_factor": fw["calibration_factor"],
+        "total_usd": fw["total_usd"],
+        "share_of_total": fw["share_of_total"],
+        "setup_usd": setup["usd"],
+        "setup_share_of_total": setup["share_of_total"],
+        "mcp_usd": fw["mcp"]["usd"],
+        "mcp_share_of_total": fw["mcp"]["share_of_total"],
+    }
+
+
+def estimate_with_calibration(
+    files: dict[FileKey, FileSizes],
+    calls: Iterable[transcript_reader.Call],
+    pricer: pricing.Pricer,
+    calibration: Calibration,
+    *,
+    window_usd: float,
+) -> dict:
+    """``estimate`` at the calibration's factor, plus ``calibration`` and ``comparison``.
+
+    Calibrated, the costing rule is run again in full at factor 1.0 and at ``low`` and
+    ``high`` when the file has them: the write threshold and the cap depend on the
+    factor, so a comparison is never a rescaling. Uncalibrated, both keys are ``None``
+    and nothing extra is computed.
+    """
+    calls = list(calls)
+
+    def at(factor: float, calibrated: bool) -> dict:
+        return estimate(
+            files, calls, pricer, factor=factor, window_usd=window_usd, calibrated=calibrated
+        )
+
+    result = at(calibration.factor, calibration.calibrated)
+    if not calibration.calibrated:
+        result["calibration"] = None
+        result["comparison"] = None
+        return result
+    result["calibration"] = {
+        "date": calibration.date,
+        "claude_code_version": calibration.claude_code_version,
+        "runs_per_arm": calibration.runs_per_arm,
+    }
+    bounded = calibration.low is not None and calibration.high is not None
+    result["comparison"] = {
+        "uncalibrated": _point(at(1.0, True)),
+        "low": _point(at(calibration.low, True)) if bounded else None,
+        "high": _point(at(calibration.high, True)) if bounded else None,
+    }
+    return result

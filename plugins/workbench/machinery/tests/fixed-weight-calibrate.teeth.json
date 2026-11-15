@@ -1,0 +1,262 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_fixed_weight_calibrate.py",
+    "test_fixed_weight.py",
+    "test_transcript_reader.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_fixed_weight_calibrate.py",
+    "test_fixed_weight.py",
+    "test_transcript_reader.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 factor is ratio of sums",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "\"factor\": _round(sum(measured) / sum(predicted)),",
+      "replace": "\"factor\": _round(statistics.fmean(ratios)),"
+    },
+    {
+      "label": "2 factor is measured over predicted",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "\"factor\": _round(sum(measured) / sum(predicted)),",
+      "replace": "\"factor\": _round(sum(predicted) / sum(measured)),"
+    },
+    {
+      "label": "3 low is minimum per-pair ratio",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "\"low\": _round(min(ratios)),",
+      "replace": "\"low\": _round(ratios[0]),"
+    },
+    {
+      "label": "4 high is maximum per-pair ratio",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "\"high\": _round(max(ratios)),",
+      "replace": "\"high\": _round(ratios[-1]),"
+    },
+    {
+      "label": "5 difference is full minus bare",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "measured.append(tokens[\"full\"][0] - tokens[\"bare\"][0])",
+      "replace": "measured.append(tokens[\"bare\"][0] - tokens[\"full\"][0])"
+    },
+    {
+      "label": "6 non-positive predicted pair refuses",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if any(p <= 0 for p in predicted):",
+      "replace": "if sum(predicted) <= 0:"
+    },
+    {
+      "label": "7 cache-read tokens counted",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "call.input_tokens + call.cache_write_tokens + call.cache_read_tokens",
+      "replace": "call.input_tokens + call.cache_write_tokens"
+    },
+    {
+      "label": "8 cache-write tokens counted",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "call.input_tokens + call.cache_write_tokens + call.cache_read_tokens",
+      "replace": "call.input_tokens + call.cache_read_tokens"
+    },
+    {
+      "label": "9 first call in file order used",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if key not in self._first_call:",
+      "replace": "if True:"
+    },
+    {
+      "label": "10 subagent files ignored",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if info.is_subagent or info.session_id not in self.wanted:",
+      "replace": "if info.session_id not in self.wanted:"
+    },
+    {
+      "label": "11 arms must be the same size",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if len(full) != len(bare):",
+      "replace": "if (full.__setitem__(slice(None), full[:min(len(full), len(bare))]), bare.__setitem__(slice(None), bare[:min(len(full), len(bare))])) and False:"
+    },
+    {
+      "label": "12 min-runs enforced",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if len(full) < min_runs:",
+      "replace": "if False:"
+    },
+    {
+      "label": "13 id in two projects refuses",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if len(matches) > 1:",
+      "replace": "if False:"
+    },
+    {
+      "label": "14 duplicate id refuses",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if sid in seen:",
+      "replace": "if False:"
+    },
+    {
+      "label": "15 refusal names a position not an id",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "f\"{arm}[{pos}] matches no main session file\"",
+      "replace": "f\"{arm}[{pos}] {sid} matches no main session file\""
+    },
+    {
+      "label": "16 two transcript versions refuse",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "if len(versions) > 1:",
+      "replace": "if False:"
+    },
+    {
+      "label": "17 flag and transcript version must agree",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "raise Refusal(\"--claude-code-version differs from the version the sessions record\")",
+      "replace": "version = claude_code_version"
+    },
+    {
+      "label": "18 no factor file on refusal",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "obj = calibrate(",
+      "replace": "_write_whole(out, \"{}\\n\")\n        obj = calibrate("
+    },
+    {
+      "label": "19 stdev is the sample standard deviation",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "statistics.stdev(measured)",
+      "replace": "statistics.pstdev(measured)"
+    },
+    {
+      "label": "20 predicted uses factor 1.0",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "return fixed_weight.total_fixed_tokens(sizes, factor=1.0), sizes.has_snapshot",
+      "replace": "return fixed_weight.total_fixed_tokens(sizes, factor=fixed_weight.load_calibration(cost_ledger.default_calibration_path()).factor), sizes.has_snapshot"
+    },
+    {
+      "label": "21 low <= factor <= high enforced",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "if not low <= factor <= high:",
+      "replace": "if False:"
+    },
+    {
+      "label": "22 low without high refuses",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "if \"low\" not in data or \"high\" not in data:",
+      "replace": "if (\"low\" in data) != (\"high\" in data) and ((data.setdefault(\"low\", factor), data.setdefault(\"high\", factor)), (low := data[\"low\"]), (high := data[\"high\"])) and False:"
+    },
+    {
+      "label": "23 comparison is a re-run not a rescale",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "def at(factor: float, calibrated: bool) -> dict:",
+      "replace": "def at(factor: float, calibrated: bool) -> dict:\n        if factor not in (1.0, calibration.factor):\n            base = estimate(files, calls, pricer, factor=calibration.factor, window_usd=window_usd, calibrated=calibrated)\n            k = factor / calibration.factor\n            base[\"calibration_factor\"] = factor\n            base[\"total_usd\"] = _r(base[\"total_usd\"] * k)\n            base[\"share_of_total\"] = _share(base[\"total_usd\"], window_usd)\n            for g in base[\"groups\"].values():\n                g[\"usd\"] = _r(g[\"usd\"] * k)\n                g[\"share_of_total\"] = _share(g[\"usd\"], window_usd)\n            base[\"mcp\"][\"usd\"] = _r(base[\"mcp\"][\"usd\"] * k)\n            base[\"mcp\"][\"share_of_total\"] = _share(base[\"mcp\"][\"usd\"], window_usd)\n            return base\n        return at_real(factor, calibrated)\n\n    def at_real(factor: float, calibrated: bool) -> dict:"
+    },
+    {
+      "label": "24 uncalibrated comparison uses factor 1.0",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "\"uncalibrated\": _point(at(1.0, True)),",
+      "replace": "\"uncalibrated\": _point(result),"
+    },
+    {
+      "label": "25 comparison null when uncalibrated",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "result[\"comparison\"] = None",
+      "replace": "result[\"comparison\"] = {\"uncalibrated\": _point(at(1.0, True)), \"low\": None, \"high\": None}"
+    },
+    {
+      "label": "26 low/high null without bounds",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "bounded = calibration.low is not None and calibration.high is not None",
+      "replace": "bounded = True\n    calibration = Calibration(calibration.factor, True, calibration.factor if calibration.low is None else calibration.low, calibration.factor if calibration.high is None else calibration.high)"
+    },
+    {
+      "label": "27 calibration lines only when calibrated",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if not fw[\"calibrated\"] or comparison is None:",
+      "replace": "if comparison is None:\n        comparison = {\"uncalibrated\": {\"setup_share_of_total\": fw[\"groups\"][\"setup\"][\"share_of_total\"]}, \"low\": None, \"high\": None}\n    if False:"
+    },
+    {
+      "label": "28 schema_version is 5",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 5",
+      "replace": "SCHEMA_VERSION = 4"
+    },
+    {
+      "label": "29 non-positive measured pair refuses",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "        if m <= 0:\n            raise Refusal(\n                f\"pair[{pos}]",
+      "replace": "        if m <= 0 and sum(measured) <= 0:\n            raise Refusal(\n                f\"pair[{pos}]"
+    },
+    {
+      "label": "30 [control] pairs summed in reverse",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "\"factor\": _round(sum(measured) / sum(predicted)),",
+      "replace": "\"factor\": _round(sum(reversed(measured)) / sum(reversed(predicted))),",
+      "expect": "survived",
+      "why": "Measured differences are exact integers and the predicted differences are sums of fixture sizes whose figures are exact; summing the same pairs in reverse order moves nothing at the 6-place rounding the factor file keeps. Scope: only float addition order, a last-bit difference hidden by rounding unless a figure sits on a rounding boundary; ratios, low and high are computed per pair and are not touched."
+    }
+  ]
+}

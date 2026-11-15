@@ -1,0 +1,18 @@
+{
+  "_note": "Derived by hand from the slice 8 spec before the code. Five pairs, 3.7 characters per token. Predicted tokens of a session are its fixed characters over 3.7: bare sessions hold 3700 characters (1000 tokens), full sessions 3700 plus a skill listing of 740, 2220, 1110, 1850 and 1480 characters (predicted differences 200, 600, 300, 500, 400 tokens, sum 2000). Measured tokens are input plus all cache writes plus cache reads of the FIRST call: bare 5000, 5200, 4900, 5100, 5050; full 5300, 5740, 5260, 6100, 5430 (measured differences 300, 540, 360, 1000, 380, sum 2580). Ratio of sums 2580 / 2000 = 1.29; per-pair ratios 1.5, 0.9, 1.2, 2.0, 0.95, so low 0.9 (pair 2) and high 2.0 (pair 4); the mean of ratios would be 1.31 and the median 1.2. Measured mean 516, sample stdev sqrt(324320 / 4) = 284.746. The third bare session has no prompt snapshot (its 1000 tokens are an instructions attachment).",
+  "date": "2026-11-14",
+  "version": "9.9.9",
+  "factor_file": {
+    "chars_per_token": 3.7,
+    "claude_code_version": "9.9.9",
+    "date": "2026-11-14",
+    "factor": 1.29,
+    "high": 2.0,
+    "low": 0.9,
+    "measured_tokens_diff": {"max": 1000.0, "mean": 516.0, "min": 300.0, "stdev": 284.746},
+    "predicted_tokens_diff": {"max": 600.0, "mean": 400.0, "min": 200.0},
+    "runs_per_arm": 5,
+    "sessions_without_snapshot": 1
+  },
+  "stdout": "runs per arm: 5\nClaude Code version: 9.9.9\nmean measured token difference: 516.000\nmean predicted token difference: 400.000\ncalibration factor: 1.290000 (low 0.900000, high 2.000000)\nsessions without a snapshot: 1\nwrote {OUT}\n"
+}

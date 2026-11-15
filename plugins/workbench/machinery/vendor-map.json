@@ -58,6 +58,11 @@
     },
     {
       "kind": "file",
+      "source": "engine/fixed_weight_calibrate.py",
+      "target": ".claude/scripts/fixed_weight_calibrate.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },
