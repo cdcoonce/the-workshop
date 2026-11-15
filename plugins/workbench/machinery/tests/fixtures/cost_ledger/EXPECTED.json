@@ -1,0 +1,39 @@
+{
+  "_about": "Ground truth a cost ledger must reproduce from these synthetic fixtures. Derived from the attribution rules in docs/experiments/2026-11-14-cost-ledger-attribution-spike/README.md, not from the fixture contents. A call is one distinct (message.id, requestId) pair across all files of a fixture; its output_tokens is the largest output_tokens among its records; its skill is its own top-level attributionSkill or null.",
+  "fixtures": {
+    "skill_then_unattributed": {
+      "call_count": 4,
+      "calls": {
+        "req-1": {"session": "sess-a", "agent": "main", "skill": null, "output_tokens": 9},
+        "req-2": {"session": "sess-a", "agent": "main", "skill": "plugin-p:skill-one", "output_tokens": 7},
+        "req-3": {"session": "sess-a", "agent": "main", "skill": "plugin-p:skill-one", "output_tokens": 6},
+        "req-4": {"session": "sess-a", "agent": "main", "skill": null, "output_tokens": 3}
+      }
+    },
+    "two_skills": {
+      "call_count": 9,
+      "calls": {
+        "req-1": {"session": "sess-b", "agent": "main", "skill": null, "output_tokens": 8},
+        "req-2": {"session": "sess-b", "agent": "main", "skill": "plugin-p:skill-one", "output_tokens": 4},
+        "req-3": {"session": "sess-b", "agent": "main", "skill": null, "output_tokens": 6},
+        "req-4": {"session": "sess-b", "agent": "main", "skill": "skill-two", "output_tokens": 7},
+        "req-5": {"session": "sess-b", "agent": "main", "skill": "skill-two", "output_tokens": 5},
+        "req-6": {"session": "sess-b", "agent": "main", "skill": null, "output_tokens": 3},
+        "req-7": {"session": "sess-b", "agent": "main", "skill": "plugin-p:skill-one", "output_tokens": 4},
+        "req-8": {"session": "sess-b", "agent": "main", "skill": "plugin-p:skill-one", "output_tokens": 10},
+        "req-9": {"session": "sess-b", "agent": "main", "skill": "skill-two", "output_tokens": 5}
+      }
+    },
+    "two_subagents": {
+      "call_count": 6,
+      "calls": {
+        "req-1": {"session": "sess-c", "agent": "main", "skill": null, "output_tokens": 11},
+        "req-2": {"session": "sess-c", "agent": "main", "skill": null, "output_tokens": 3},
+        "req-a1": {"session": "sess-c", "agent": {"agentId": "ag-1", "agentType": "type-a"}, "skill": null, "output_tokens": 9},
+        "req-a2": {"session": "sess-c", "agent": {"agentId": "ag-1", "agentType": "type-a"}, "skill": null, "output_tokens": 5},
+        "req-b1": {"session": "sess-c", "agent": {"agentId": "ag-2", "agentType": "type-b"}, "skill": "plugin-q:skill-x", "output_tokens": 6},
+        "req-b2": {"session": "sess-c", "agent": {"agentId": "ag-2", "agentType": "type-b"}, "skill": null, "output_tokens": 2}
+      }
+    }
+  }
+}
