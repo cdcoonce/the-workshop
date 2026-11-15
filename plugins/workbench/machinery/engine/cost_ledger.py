@@ -22,7 +22,7 @@ import calendar
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import budget_burn
@@ -44,8 +44,35 @@ def month_window(today: date) -> tuple[str, str]:
     return today.replace(day=1).isoformat(), today.replace(day=last).isoformat()
 
 
-def _dated(ts: object) -> bool:
-    return isinstance(ts, str) and _DAY.fullmatch(ts[:10]) is not None
+def _instant(ts: object) -> datetime | None:
+    """The moment ``ts`` names, in UTC, or None when it is not a usable timestamp.
+
+    Accepts an ISO-8601 string with a trailing ``Z`` or a numeric offset. A
+    string with no offset is read as UTC. Anything else, including a non-string,
+    is undated (L3).
+    """
+    if not isinstance(ts, str):
+        return None
+    text = ts.strip()
+    if text[-1:] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def utc_day(ts: object) -> str | None:
+    """The UTC calendar date (YYYY-MM-DD) of ``ts``, or None when undated."""
+    moment = _instant(ts)
+    return None if moment is None else moment.date().isoformat()
+
+
+def _day_in_window(day: str, since: str | None, until: str | None) -> bool:
+    return (since is None or day >= since) and (until is None or day <= until)
 
 
 def parse_day(text: str) -> str:
@@ -172,10 +199,12 @@ def build_ledger(
     main_usd = 0.0
     subagent_usd = 0.0
     for call in result.calls:
-        if not _dated(call.timestamp):
+        instant = _instant(call.timestamp)
+        if instant is None:
             undated += 1
             continue
-        if not transcript_reader.in_window(call.timestamp, since, until):
+        day = instant.date().isoformat()
+        if not _day_in_window(day, since, until):
             continue
         priced = pricer.price(call)
         skey = (call.project, call.session_id)
@@ -213,8 +242,8 @@ def build_ledger(
         srow = {
             "project": skey[0],
             "session_id": skey[1],
-            "first_timestamp": min(acc.timestamps),
-            "last_timestamp": max(acc.timestamps),
+            "first_timestamp": min(acc.timestamps, key=_instant),
+            "last_timestamp": max(acc.timestamps, key=_instant),
             "agents": agent_rows,
         }
         srow.update(_measures(acc))
@@ -320,9 +349,15 @@ def main(argv: list[str] | None = None) -> int:
     if since is not None and until is not None and since > until:
         return _fail(f"--since {since} is after --until {until}")
 
-    ledger = build_ledger(Path(args.projects_root), since=since, until=until, today=date.today())
+    root = Path(args.projects_root)
+    if not root.is_dir():
+        return _fail(f"--projects-root is not a directory: {root}")
+    ledger = build_ledger(root, since=since, until=until, today=date.today())
     if args.json is not None:
-        Path(args.json).write_text(dumps(ledger), encoding="utf-8")
+        try:
+            Path(args.json).write_text(dumps(ledger), encoding="utf-8")
+        except OSError as exc:
+            return _fail(f"cannot write --json {args.json}: {exc.strerror or exc}")
     sys.stdout.write(report(ledger))
     return 0
 

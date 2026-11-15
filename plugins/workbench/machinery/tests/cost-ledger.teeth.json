@@ -61,22 +61,22 @@
       "label": "4 until exclusive",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "if not transcript_reader.in_window(call.timestamp, since, until):",
-      "replace": "if not transcript_reader.in_window(call.timestamp, since, until) or (until is not None and call.timestamp[:10] == until):"
+      "find": "if not _day_in_window(day, since, until):",
+      "replace": "if not _day_in_window(day, since, until) or (until is not None and day == until):"
     },
     {
       "label": "5 since not enforced",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "if not transcript_reader.in_window(call.timestamp, since, until):",
-      "replace": "if not transcript_reader.in_window(call.timestamp, None, until):"
+      "find": "if not _day_in_window(day, since, until):",
+      "replace": "if not _day_in_window(day, None, until):"
     },
     {
       "label": "7 undated calls included in rows",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "        if not _dated(call.timestamp):\n            undated += 1\n            continue\n        if not transcript_reader.in_window(call.timestamp, since, until):\n            continue\n",
-      "replace": "        if not _dated(call.timestamp):\n            undated += 1\n        elif not transcript_reader.in_window(call.timestamp, since, until):\n            continue\n"
+      "find": "        if instant is None:\n            undated += 1\n            continue\n        day = instant.date().isoformat()\n",
+      "replace": "        if instant is None:\n            undated += 1\n            day = since or until or \"2026-01-01\"\n        else:\n            day = instant.date().isoformat()\n"
     },
     {
       "label": "8 undated count never incremented",
@@ -194,8 +194,22 @@
       "label": "24 last_timestamp is the first timestamp",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "\"last_timestamp\": max(acc.timestamps),",
-      "replace": "\"last_timestamp\": min(acc.timestamps),"
+      "find": "\"last_timestamp\": max(acc.timestamps, key=_instant),",
+      "replace": "\"last_timestamp\": min(acc.timestamps, key=_instant),"
+    },
+    {
+      "label": "26 window uses the raw first ten characters, not the UTC date",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        day = instant.date().isoformat()\n        if not _day_in_window",
+      "replace": "        day = call.timestamp[:10]\n        if not _day_in_window"
+    },
+    {
+      "label": "27 nonexistent projects root accepted",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    if not root.is_dir():",
+      "replace": "    if False:"
     },
     {
       "label": "25 [control] calls summed in reverse order",

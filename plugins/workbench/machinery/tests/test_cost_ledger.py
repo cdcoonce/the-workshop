@@ -391,3 +391,126 @@ class TestCli:
     def test_default_run_with_no_flags_succeeds(self, tmp_path: Path) -> None:
         proc = run_cli("--projects-root", str(tmp_path))
         assert proc.returncode == 0, proc.stderr
+
+
+# ---------------------------------------------------------------------------
+# Review round: ordering, rounding, UTC window, CLI refusals, subagent rows
+# ---------------------------------------------------------------------------
+def put_call(
+    root: Path,
+    project: str,
+    session: str,
+    rid: str,
+    ts: object = "2026-11-11T00:00:00Z",
+    model: str = "claude-opus-4-8",
+    **usage: int,
+) -> None:
+    """Append one assistant call to ``root/project/session.jsonl``."""
+    path = root / project / f"{session}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rec = {
+        "type": "assistant",
+        "requestId": rid,
+        "timestamp": ts,
+        "message": {"id": f"m_{rid}", "model": model, "usage": usage or {"input_tokens": 1}},
+    }
+    with path.open("a") as fh:
+        fh.write(json.dumps(rec) + "\n")
+
+
+class TestOrderingAndRounding:
+    def test_sessions_sorted_by_project_then_session_id(self, tmp_path: Path) -> None:
+        # The reader walks sorted paths, so the calls arrive as
+        # (-pa, s-x), (-pa, s), (-pb, r): "s-x.jsonl" sorts before "s.jsonl".
+        # Sorted by session id alone they would read s, s-x, r.
+        for project, session in [("-pb", "r"), ("-pa", "s"), ("-pa", "s-x")]:
+            put_call(tmp_path, project, session, f"{project}{session}")
+        keys = [(s["project"], s["session_id"]) for s in build(tmp_path)["sessions"]]
+        assert keys == [("-pa", "s"), ("-pa", "s-x"), ("-pb", "r")]
+
+    def test_dollars_sum_unrounded_then_round_once(self, tmp_path: Path) -> None:
+        # Ten calls of one cache-read token on haiku (0.1 per million): each call
+        # is 1e-07, so rounding per call gives 0, while the sum is 1e-06.
+        for i in range(10):
+            put_call(tmp_path, "-p", "s1", f"r{i}", model="claude-haiku-4-5", cache_read_input_tokens=1)
+        ledger = build(tmp_path)
+        session = ledger["sessions"][0]
+        assert session["usd"] == 1e-06
+        assert session["agents"][0]["usd"] == 1e-06
+        assert session["usd_breakdown"]["cache_read"] == 1e-06
+        assert ledger["totals"]["usd"] == 1e-06
+
+
+class TestUtcWindow:
+    OFFSET = "2026-11-12T23:30:00-05:00"  # 2026-11-13T04:30:00Z
+
+    def test_offset_timestamp_is_windowed_by_its_utc_date(self, tmp_path: Path) -> None:
+        put_call(tmp_path, "-p", "s1", "r1", ts=self.OFFSET)
+        assert build(tmp_path, since="2026-11-10", until="2026-11-12")["totals"]["calls"] == 0
+        assert build(tmp_path, since="2026-11-13", until="2026-11-13")["totals"]["calls"] == 1
+        assert build(tmp_path, since="2026-11-10", until="2026-11-13")["totals"]["calls"] == 1
+
+    def test_unparsable_timestamp_is_undated(self, tmp_path: Path) -> None:
+        put_call(tmp_path, "-p", "s1", "r1", ts="2026-11-11 not a time")
+        put_call(tmp_path, "-p", "s1", "r2", ts="2026-11-11T00:00:00Z")
+        ledger = build(tmp_path)
+        assert ledger["coverage"]["undated_calls"] == 1
+        assert ledger["totals"]["calls"] == 1
+
+    def test_helper_accepts_z_and_offsets(self) -> None:
+        assert cost_ledger.utc_day("2026-11-12T23:59:59Z") == "2026-11-12"
+        assert cost_ledger.utc_day(self.OFFSET) == "2026-11-13"
+        assert cost_ledger.utc_day("2026-11-13T01:00:00+05:30") == "2026-11-12"
+        assert cost_ledger.utc_day(None) is None
+        assert cost_ledger.utc_day(12345) is None
+        assert cost_ledger.utc_day("nonsense") is None
+
+    def test_first_and_last_timestamp_are_extremes_by_instant_as_raw_strings(self, tmp_path: Path) -> None:
+        late_by_instant = self.OFFSET  # 04:30Z on the 13th
+        early_by_instant = "2026-11-13T01:00:00Z"  # later as a string
+        put_call(tmp_path, "-p", "s1", "r1", ts=late_by_instant)
+        put_call(tmp_path, "-p", "s1", "r2", ts=early_by_instant)
+        row = build(tmp_path, since="2026-11-13", until="2026-11-13")["sessions"][0]
+        assert row["first_timestamp"] == early_by_instant
+        assert row["last_timestamp"] == late_by_instant
+
+
+class TestCliRefusals:
+    def test_json_into_missing_directory_exits_2_cleanly(self, tmp_path: Path) -> None:
+        out = tmp_path / "no-such-dir" / "out.json"
+        proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
+                       "--projects-root", str(ROOT), "--json", str(out))
+        assert proc.returncode == 2
+        assert "Traceback" not in proc.stderr
+        assert len(proc.stderr.strip().splitlines()) == 1
+        assert not out.parent.exists()
+
+    def test_nonexistent_projects_root_exits_2_and_writes_no_json(self, tmp_path: Path) -> None:
+        out = tmp_path / "never.json"
+        proc = run_cli("--projects-root", str(tmp_path / "nope"), "--json", str(out))
+        assert proc.returncode == 2
+        assert proc.stdout == ""
+        assert len(proc.stderr.strip().splitlines()) == 1
+        assert not out.exists()
+
+    def test_projects_root_that_is_a_file_exits_2(self, tmp_path: Path) -> None:
+        a_file = tmp_path / "file.txt"
+        a_file.write_text("x")
+        proc = run_cli("--projects-root", str(a_file))
+        assert proc.returncode == 2
+        assert len(proc.stderr.strip().splitlines()) == 1
+
+    def test_existing_empty_root_reports_zeros(self, tmp_path: Path) -> None:
+        out = tmp_path / "o.json"
+        proc = run_cli("--projects-root", str(tmp_path), "--json", str(out))
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(out.read_text())["totals"]["calls"] == 0
+
+
+class TestAgentRowsMatchOracle:
+    @pytest.mark.parametrize("key", sorted(EXPECTED["agent_rows"]))
+    def test_subagent_row_calls_and_usd(self, key: str) -> None:
+        project, session, agent_id = key.split("/")
+        row = agent_row(build(), project, session, agent_id)
+        want = EXPECTED["agent_rows"][key]
+        assert (row["calls"], row["usd"]) == (want["calls"], want["usd"])
