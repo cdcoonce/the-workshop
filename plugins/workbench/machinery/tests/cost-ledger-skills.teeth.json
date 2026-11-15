@@ -1,0 +1,191 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 skill bucketed by attribution_plugin",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "value = call.attribution_skill\n",
+      "replace": "value = call.attribution_plugin\n"
+    },
+    {
+      "label": "2 qualifier stripped before bucketing",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return value if isinstance(value, str) and value else None",
+      "replace": "return value.split(\":\")[-1] if isinstance(value, str) and value else None"
+    },
+    {
+      "label": "3 skill name lower-cased",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return value if isinstance(value, str) and value else None",
+      "replace": "return value.lower() if isinstance(value, str) and value else None"
+    },
+    {
+      "label": "4 empty string is a skill named empty",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return value if isinstance(value, str) and value else None",
+      "replace": "return value if isinstance(value, str) else None"
+    },
+    {
+      "label": "5 non-string stringified into a skill",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return value if isinstance(value, str) and value else None",
+      "replace": "return str(value) if value is not None and value != \"\" else None"
+    },
+    {
+      "label": "6 previous call's skill carried forward",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "skill = _skill_of(call)\n",
+      "replace": "skill = _skill_of(call) or getattr(unattributed, \"carry\", None)\n        unattributed.carry = skill\n"
+    },
+    {
+      "label": "7 subagent calls always unattributed",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "skill = _skill_of(call)\n",
+      "replace": "skill = None if call.is_subagent else _skill_of(call)\n"
+    },
+    {
+      "label": "8 unattributed calls dropped",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        if skill is None:\n            unattributed.add(call, priced)\n",
+      "replace": "        if skill is None:\n            pass\n"
+    },
+    {
+      "label": "9 unattributed omitted when no calls",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        \"unattributed\": unattributed_row,\n",
+      "replace": "        **({\"unattributed\": unattributed_row} if unattributed.calls else {}),\n"
+    },
+    {
+      "label": "10 unpriced calls skipped in skill rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "skills.setdefault(skill, _SkillAcc()).add(call, priced)",
+      "replace": "(skills.setdefault(skill, _SkillAcc()).add(call, priced) if priced.priced else None)"
+    },
+    {
+      "label": "11 sessions counts calls",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "self.sessions.add((call.project, call.session_id))",
+      "replace": "self.sessions.add((call.project, call.session_id, self.calls))"
+    },
+    {
+      "label": "12 sessions ignores project",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "self.sessions.add((call.project, call.session_id))",
+      "replace": "self.sessions.add(call.session_id)"
+    },
+    {
+      "label": "13 skills left in first-seen order",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "for name in sorted(skills):",
+      "replace": "for name in skills:"
+    },
+    {
+      "label": "14 schema_version left at 1",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 2",
+      "replace": "SCHEMA_VERSION = 1"
+    },
+    {
+      "label": "15 skills table ascending by dollars",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "ranked = sorted(ledger[\"skills\"], key=lambda r: (-r[\"usd\"], r[\"skill\"]))",
+      "replace": "ranked = sorted(ledger[\"skills\"], key=lambda r: (r[\"usd\"], r[\"skill\"]))"
+    },
+    {
+      "label": "16 unattributed line hidden when zero",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    lines.append(f\"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")",
+      "replace": "    if un[\"calls\"]:\n        lines.append(f\"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)\")"
+    },
+    {
+      "label": "17 unattributed share of attributed dollars",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "({_pct(un['usd'], total)}%)",
+      "replace": "({_pct(un['usd'], total - un['usd'])}%)"
+    },
+    {
+      "label": "18 remainder line dropped silently",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    if rest:\n        lines.append(f\"    {len(rest)} more skills {_usd(sum(r['usd'] for r in rest))}\")\n",
+      "replace": "    if rest:\n        pass\n"
+    },
+    {
+      "label": "19 extra emitted field on skill rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "row = {\"skill\": name, \"sessions\": len(skills[name].sessions)}",
+      "replace": "row = {\"skill\": name, \"sessions\": len(skills[name].sessions), \"extra\": 1}"
+    },
+    {
+      "label": "20 sessions not emitted on unattributed",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "unattributed_row = {\"sessions\": len(unattributed.sessions)}",
+      "replace": "unattributed_row = {}"
+    },
+    {
+      "label": "21 [control] calls summed in reverse order",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "for call in result.calls:",
+      "replace": "for call in reversed(result.calls):",
+      "expect": "survived",
+      "why": "Float addition order moves only the last ulp; the skills fixture figures are exactly representable and rows are emitted sorted by name, so encounter order is invisible. Broader than the intent: the one loop also feeds session and agent rows (same site as slice 4 control 25). Not inert for arbitrary token counts."
+    }
+  ]
+}
