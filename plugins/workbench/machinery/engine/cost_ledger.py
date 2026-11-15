@@ -687,16 +687,15 @@ def report(ledger: dict) -> str:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-def _config_dir() -> Path:
-    """The directory ``budget_burn`` loads its per-machine config from."""
-    config = getattr(budget_burn, "_config", None)
-    where = getattr(config, "__file__", None)
-    return Path(where).parent if where else Path(budget_burn.__file__).parent
+DEFAULT_CALIBRATION_HELP = f"~/.workshop/cost-ledger/{_fw.CALIBRATION_FILE}"
 
 
 def default_calibration_path() -> Path:
-    """Where ``--fixed-weight`` looks for a calibration file when ``--calibration`` is not given."""
-    return _config_dir() / _fw.CALIBRATION_FILE
+    """The one default calibration file, outside any plugin install so a plugin update keeps it.
+
+    ``Path.home()`` is read at call time, so a test redirects it with ``HOME``.
+    """
+    return Path.home() / ".workshop" / "cost-ledger" / _fw.CALIBRATION_FILE
 
 
 def _fail(message: str) -> int:
@@ -753,8 +752,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--calibration", default=None, metavar="PATH",
-        help=f"JSON file with a factor for --fixed-weight (default: {_fw.CALIBRATION_FILE} "
-        "beside the budget_burn config)",
+        help=f"JSON file with a factor for --fixed-weight (default: {DEFAULT_CALIBRATION_HELP})",
     )
     ap.add_argument(
         "--projects-root",

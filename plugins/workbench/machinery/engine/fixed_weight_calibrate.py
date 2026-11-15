@@ -243,7 +243,7 @@ def main(argv: list[str] | None = None, *, today: _date | None = None) -> int:
     ap.add_argument("--full", nargs="+", required=True, metavar="ID", help="session ids of the full arm")
     ap.add_argument("--bare", nargs="+", required=True, metavar="ID", help="session ids of the bare arm")
     ap.add_argument("--projects-root", default=str(Path.home() / ".claude" / "projects"))
-    ap.add_argument("--out", default=None, metavar="PATH", help="factor file (default: the estimator's)")
+    ap.add_argument("--out", default=None, metavar="PATH", help=f"factor file (default: {cost_ledger.DEFAULT_CALIBRATION_HELP})")
     ap.add_argument("--min-runs", type=int, default=DEFAULT_MIN_RUNS, metavar="N")
     ap.add_argument("--claude-code-version", default=None, metavar="V")
     ap.add_argument("--date", default=None, metavar="YYYY-MM-DD")
@@ -253,7 +253,8 @@ def main(argv: list[str] | None = None, *, today: _date | None = None) -> int:
         root = Path(args.projects_root)
         if not root.is_dir():
             raise Refusal("--projects-root is not a directory")
-        out = Path(args.out) if args.out is not None else cost_ledger.default_calibration_path()
+        make_parents = args.out is None
+        out = Path(args.out) if not make_parents else cost_ledger.default_calibration_path()
         obj = calibrate(
             root, args.full, args.bare,
             min_runs=args.min_runs, claude_code_version=args.claude_code_version, day=day,
@@ -261,6 +262,8 @@ def main(argv: list[str] | None = None, *, today: _date | None = None) -> int:
         if not all(math.isfinite(obj[k]) for k in ("factor", "low", "high")):
             raise Refusal("the factor is not a finite number")
         try:
+            if make_parents:
+                out.parent.mkdir(parents=True, exist_ok=True)
             _write_whole(out, dumps(obj))
         except OSError as exc:
             raise Refusal(f"cannot write the factor file: {exc.strerror or exc}") from None

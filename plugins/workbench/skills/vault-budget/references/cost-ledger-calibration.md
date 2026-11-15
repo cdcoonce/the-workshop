@@ -4,11 +4,11 @@ How to measure the factor `cost_ledger.py --fixed-weight` multiplies its token e
 
 ## The idea
 
-The estimator guesses the tokens of the fixed context (system prompt, tool schemas, what your setup injects) from characters. To check the guess, run the same one-line prompt in fresh sessions two ways: `full` (your whole setup) and `bare` (the workbench plugin disabled). The first API call of a fresh session sends the fixed context and almost nothing else, so the difference in tokens on that call between a full and a bare session is the true weight of what the plugin adds. The estimator predicts that same difference from characters. Measured over predicted, summed over the pairs, is the factor.
+The estimator guesses the tokens of the fixed context (system prompt, tool schemas, what your setup injects) from characters. To check the guess, run the same one-line prompt in fresh sessions two ways: `full` (your whole setup) and `bare` (the workbench plugin switched off for that one run). The first API call of a fresh session sends the fixed context and almost nothing else, so the difference in tokens on that call between a full and a bare session is the true weight of what the plugin adds. The estimator predicts that same difference from characters. Measured over predicted, summed over the pairs, is the factor.
 
 ## Commands and their status
 
-Every `claude` command below was checked against the local `claude --help`, `claude plugin --help`, `claude plugin disable --help` and `claude plugin enable --help` output (Claude Code 2.1.316 when this was written); no session was started to write this document. A statement help text cannot confirm is marked `UNVERIFIED`; there are three, collected at the end.
+Every `claude` command below was checked against the local `claude --help` and `claude plugin --help` output. The `--settings` override and the transcript location were verified in a real run on 2026-11-15 with Claude Code 2.1.316. Repeat the check on the first bare run (see "The two arms").
 
 ## Prerequisites
 
@@ -34,7 +34,7 @@ claude -p --session-id "$ID" "Reply with the single word: ok"
 echo "$ID"
 ```
 
-`-p` (print and exit) and `--session-id <uuid>` (a valid UUID) are in `claude --help`. Write the id on a list, under `full` or `bare`, in the order you ran it. The transcript lands under `~/.claude/projects/<project-key>/<id>.jsonl`, which you can confirm with `find ~/.claude/projects -name "$ID.jsonl"`. `UNVERIFIED`: that a `-p` run writes its transcript there (the help says `--no-session-persistence` turns saving off for `-p`, which implies it is on by default). If the file is missing, stop; the script will refuse the id.
+`-p` (print and exit) and `--session-id <uuid>` (a valid UUID) are in `claude --help`. Write the id on a list, under `full` or `bare`, in the order you ran it. The transcript lands under `~/.claude/projects/<project-key>/<id>.jsonl`, which you can confirm with `find ~/.claude/projects -name "$ID.jsonl"` (a `-p` run with `--session-id` writes it there; verified 2026-11-15). If the file is missing, stop; the script will refuse the id.
 
 ## The two arms
 
@@ -42,17 +42,17 @@ Run at least 5 sessions per arm, alternating: full, bare, full, bare, and so on,
 
 Full run: the plugin enabled (the normal state). Run the command above.
 
-Bare run:
+Bare run: the one-run command with the plugin switched off through the settings override:
 
-1. Disable the plugin: `claude plugin disable <plugin>` (add `--scope user`, `project` or `local` to match where it is enabled, if auto-detection picks the wrong one; `claude plugin list` shows the state).
-2. Run the one-run command above, in the same working directory.
-3. Restore the plugin straight away: `claude plugin enable <plugin>`; check it with `claude plugin list`.
+```
+claude -p --session-id "$ID" \
+  --settings '{"enabledPlugins":{"<plugin>":false}}' \
+  "Reply with the single word: ok"
+```
 
-`UNVERIFIED`: that a session started right after `claude plugin disable` loads without the plugin (the help does not say when a disable takes effect). Check it once, on the first bare run: after the run, the bare transcript's skill listing must have no workbench entries, and its first call must be smaller than a full run's. If the bare run is not smaller, the plugin was still loaded; do not use the calibration.
+The override applies to that run only and changes nothing for other sessions: there is no state to restore and no need to close other Claude Code sessions. Run it in the same working directory as the full runs.
 
-`claude plugin disable` changes shared state, not one session: every Claude Code session started anywhere on the machine while the plugin is disabled loads without it. Close your other Claude Code sessions, or do not start any, from the first disable until you have re-enabled the plugin after the last bare run, and re-enable it immediately after each bare run, as step 3 says.
-
-Do not leave the plugin disabled when you finish. If a run fails partway, enable it again and discard that pair's two ids (drop both, keep the order of the rest).
+On the first bare run, check that the override took: the bare transcript's skill listing must have no workbench entries, and its first call must be smaller than a full run's. If the bare run is not smaller, the plugin was still loaded; do not use the calibration. If a run fails partway, discard that pair's two ids (drop both, keep the order of the rest).
 
 ## Run the script
 
@@ -64,9 +64,11 @@ python3 "<engine>/fixed_weight_calibrate.py" \
   --bare B1 B2 B3 B4 B5
 ```
 
-Options: `--projects-root DIR` (default `~/.claude/projects`), `--out PATH` (default: `cost_ledger_calibration.json` in the directory the `budget_burn` per-machine config is loaded from, which is where `cost_ledger.py --fixed-weight` looks without `--calibration`), `--min-runs N` (default 5, never below 2), `--claude-code-version V` (needed only when the transcripts record no version; it must match them when they do), `--date YYYY-MM-DD` (default today).
+Options: `--projects-root DIR` (default `~/.claude/projects`), `--out PATH` (default: `~/.workshop/cost-ledger/cost_ledger_calibration.json`, created with its directories if missing, which is where `cost_ledger.py --fixed-weight` looks without `--calibration`; an explicit `--out` needs its parent directory to exist), `--min-runs N` (default 5, never below 2), `--claude-code-version V` (needed only when the transcripts record no version; it must match them when they do), `--date YYYY-MM-DD` (default today).
 
-It refuses, with one line on stderr and nothing written, when: an id matches no main session file, or main files in more than one project (it says `full[2]`, the position in the arm counted from 1, never the id or a path); an id is given twice; the arms differ in size or are smaller than `--min-runs`; a session has no assistant call with usable usage; a pair predicts no more fixed tokens in full than in bare; a pair measured no more tokens in full than in bare (it says `pair[2]`, the position of the first such pair counted from 1: the plugin was not actually disabled for that bare run, or the arms are swapped or mismatched; every pair must measure a positive difference, which also guarantees `low` is above 0); the sessions record two Claude Code versions.
+The default location is outside the plugin install, so the signed-off factor survives plugin updates.
+
+It refuses, with one line on stderr and nothing written, when: an id matches no main session file, or main files in more than one project (it says `full[2]`, the position in the arm counted from 1, never the id or a path); an id is given twice; the arms differ in size or are smaller than `--min-runs`; a session has no assistant call with usable usage; a pair predicts no more fixed tokens in full than in bare; a pair measured no more tokens in full than in bare (it says `pair[2]`, the position of the first such pair counted from 1: the plugin was not actually switched off for that bare run, or the arms are swapped or mismatched; every pair must measure a positive difference, which also guarantees `low` is above 0); the sessions record two Claude Code versions.
 
 ## What the output means
 
@@ -91,9 +93,3 @@ Numbers only: factor, low, high, runs per arm, Claude Code version, date. Nothin
 - The estimator applies it to every transcript file, subagent files included. A subagent has its own system prompt and tool set, and the characters-per-token ratio of that text is known to differ from a main session's, so the factor is a better fit for main sessions than for subagents.
 - It does not cover text that changes over a session (conversation, tool results) or components added later in a session; the estimator already counts only what was sent before the first call.
 - It goes stale when Claude Code changes its system prompt or tools. Re-run the procedure on a new version.
-
-## Unverified
-
-1. That a `-p` run with `--session-id` writes `<project-key>/<id>.jsonl` under the projects root.
-2. That a session started after `claude plugin disable <plugin>` loads without the plugin.
-3. That `claude plugin enable <plugin>` restores it for the next session started (the help says only "Enable a disabled plugin").
