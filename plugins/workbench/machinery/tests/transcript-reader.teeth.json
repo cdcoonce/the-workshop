@@ -104,11 +104,11 @@
       "replace": "w5 = _tokens(split.get(\"ephemeral_1h_input_tokens\"))\n        w1 = _tokens(split.get(\"ephemeral_5m_input_tokens\"))"
     },
     {
-      "label": "10 B4 absent split gives 0 for the 5m figure",
+      "label": "10 B4/B4a write tokens the split does not name go to the 1-hour figure",
       "file": "../engine/transcript_reader.py",
       "oracle": "real",
-      "find": "w5, w1 = total_write, 0",
-      "replace": "w5, w1 = 0, 0"
+      "find": "        w5 += shortfall",
+      "replace": "        w1 += shortfall"
     },
     {
       "label": "11 B4 attributionSkill read from under message",
@@ -174,6 +174,13 @@
       "oracle": "real",
       "find": "    for proj in _safe_iterdir(Path(root)):\n        if not _is_dir(proj):\n            continue\n",
       "replace": "    for hit in sorted(Path(root).glob(\"**/*.jsonl\")):\n        found.append(FileInfo(hit, hit.relative_to(root).parts[0], hit.stem, False, None, _mtime(hit)))\n    return found\n    for proj in _safe_iterdir(Path(root)):\n        if not _is_dir(proj):\n            continue\n"
+    },
+    {
+      "label": "20 B4a shortfall of an under-summed split dropped",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "    if shortfall > 0:\n        w5 += shortfall\n",
+      "replace": "    if False:\n        w5 += shortfall\n"
     }
   ]
 }

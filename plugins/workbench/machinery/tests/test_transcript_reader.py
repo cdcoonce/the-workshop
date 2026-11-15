@@ -206,6 +206,34 @@ class TestCallFields:
         (c,) = tr.read(tmp_path).calls
         assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (9, 9, 0)
 
+    def test_empty_cache_creation_split_puts_total_in_five_minute(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=200_000)
+        rec["message"]["usage"]["cache_creation"] = {}
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (
+            200_000, 200_000, 0)
+
+    def test_under_summed_split_adds_shortfall_to_five_minute(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=200_000)
+        rec["message"]["usage"]["cache_creation"] = {
+            "ephemeral_5m_input_tokens": 1,
+            "ephemeral_1h_input_tokens": 1,
+        }
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (199_999, 1)
+
+    def test_over_summed_split_is_kept_as_read(self, tmp_path: Path) -> None:
+        rec = _asst(output_tokens=1, cache_creation_input_tokens=5)
+        rec["message"]["usage"]["cache_creation"] = {
+            "ephemeral_5m_input_tokens": 4,
+            "ephemeral_1h_input_tokens": 3,
+        }
+        _write(tmp_path / "p" / "s.jsonl", [rec])
+        (c,) = tr.read(tmp_path).calls
+        assert (c.cache_write_tokens, c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (5, 4, 3)
+
     def test_attribution_passthrough_and_absent(self, tmp_path: Path) -> None:
         full = _asst("m1", "r1", output_tokens=1)
         full.update(
@@ -361,7 +389,9 @@ class TestUntrusted:
         }
         _write(tmp_path / "p" / "s.jsonl", [rec])
         (c,) = tr.read(tmp_path).calls
-        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (0, 2)
+        # total 5: the bad 5m value reads 0, the 2 tokens in 1h stay, and the
+        # 3 the split does not name go to 5m (B4a).
+        assert (c.cache_write_5m_tokens, c.cache_write_1h_tokens) == (3, 2)
 
     def test_non_object_cache_creation_means_absent(self, tmp_path: Path) -> None:
         rec = _asst(output_tokens=1, cache_creation_input_tokens=5)
@@ -443,3 +473,37 @@ class TestUntrusted:
         )
         (a,) = tr.read(tmp_path).attachments
         assert a.subtype is None
+
+
+# ---------------------------------------------------------------------------
+# speed (issue #1330, P10)
+# ---------------------------------------------------------------------------
+class TestSpeed:
+    def _read(self, tmp_path: Path, usage: dict) -> tr.Call:
+        _write(tmp_path / "p" / "s.jsonl", [_asst(**usage)])
+        (call,) = tr.read(tmp_path).calls
+        return call
+
+    def test_string_speed_is_carried(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": "fast"}).speed == "fast"
+
+    def test_standard_speed_string_is_carried_as_is(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": "standard"}).speed == "standard"
+
+    @pytest.mark.parametrize("value", [None, 1, True, ["fast"], {"a": 1}])
+    def test_non_string_speed_is_none(self, tmp_path: Path, value) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1, "speed": value}).speed is None
+
+    def test_absent_speed_is_none(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, {"output_tokens": 1}).speed is None
+
+    def test_speed_comes_from_the_kept_line(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path / "p" / "s.jsonl",
+            [
+                _asst(output_tokens=1, speed="fast"),
+                _asst(output_tokens=9, speed="standard"),
+            ],
+        )
+        (call,) = tr.read(tmp_path).calls
+        assert (call.output_tokens, call.speed) == (9, "standard")

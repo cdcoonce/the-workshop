@@ -41,9 +41,11 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import budget_burn
+import pricing
 from pulse_defaults import AUTHOR_MACHINE_RULES as DEFAULT_AUTHOR_MACHINE_RULES
 from pulse_defaults import (
     AUTOMATION_SUBJECT_PATTERNS as DEFAULT_AUTOMATION_SUBJECT_PATTERNS,
@@ -391,6 +393,35 @@ def _domain(project: str, rules: tuple = DOMAIN_RULES) -> str:
 # ---------------------------------------------------------------------------
 # Collector: Claude Code transcripts
 # ---------------------------------------------------------------------------
+def _usage_usd(usage: dict, model: str) -> float:
+    """USD for one raw ``usage`` block, priced per model through ``pricing``.
+
+    Unpriced models add no dollars (their tokens are still counted by the caller).
+    """
+
+    def count(name: str) -> int:
+        value = usage.get(name)
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+    split = usage.get("cache_creation")
+    if isinstance(split, dict):
+        w5 = split.get("ephemeral_5m_input_tokens")
+        w1 = split.get("ephemeral_1h_input_tokens")
+    else:
+        w5, w1 = usage.get("cache_creation_input_tokens"), 0
+    speed = usage.get("speed")
+    call = SimpleNamespace(
+        model=model,
+        input_tokens=count("input_tokens"),
+        output_tokens=count("output_tokens"),
+        cache_read_tokens=count("cache_read_input_tokens"),
+        cache_write_5m_tokens=w5 if isinstance(w5, int) else 0,
+        cache_write_1h_tokens=w1 if isinstance(w1, int) else 0,
+        speed=speed if isinstance(speed, str) else None,
+    )
+    return pricing.price_call(call, budget_burn.MODEL_PRICES).total_usd
+
+
 def collect_claude(
     projects_root: Path, tz: ZoneInfo, repos_root: Path | None = None
 ) -> dict:
@@ -469,7 +500,7 @@ def collect_claude(
                     tokens_by_week[week] = tokens_by_week.get(week, 0) + toks
                     spend_by_week[week] = spend_by_week.get(
                         week, 0.0
-                    ) + budget_burn._record_cost(usage, tier)
+                    ) + _usage_usd(usage, model)
 
             # Candidate attention events: non-sidechain and timestamped. The
             # session-level entrypoint verdict is applied after the loop.

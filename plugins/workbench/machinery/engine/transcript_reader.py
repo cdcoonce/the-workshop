@@ -22,7 +22,7 @@ into a new file. A call is therefore identified by ``(message.id, requestId)``
 its usage from the line with the largest ``output_tokens`` (the later line on a
 tie). When lines tie across files, the call belongs to the file that sorts later
 by path; the choice is arbitrary but stable, and never depends on the order the
-filesystem lists files in. ``CallCollector`` also offers ``mode="request"``, the first-seen-per-request
+filesystem lists files in. Spec amendment B4a: write tokens are conserved, so when the 5-minute plus 1-hour split sums to less than the total cache-write count the shortfall is added to the 5-minute figure (the cheaper tier), and a split that sums to more is kept as read. ``CallCollector`` also offers ``mode="request"``, the first-seen-per-request
 rule ``context_spend --dedupe request`` keeps for old baselines.
 
 Stdlib only; no shell.
@@ -75,6 +75,7 @@ class Call:
     attribution_mcp_server: object = None
     attribution_mcp_tool: object = None
     file_mtime: float = 0.0  # of the file holding the kept line
+    speed: str | None = None  # message.usage.speed when a string
 
 
 @dataclass(frozen=True)
@@ -259,7 +260,10 @@ def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
         w5 = _tokens(split.get("ephemeral_5m_input_tokens"))
         w1 = _tokens(split.get("ephemeral_1h_input_tokens"))
     else:
-        w5, w1 = total_write, 0
+        w5 = w1 = 0
+    shortfall = total_write - w5 - w1
+    if shortfall > 0:
+        w5 += shortfall
     return Call(
         key=key,
         project=info.project,
@@ -280,6 +284,7 @@ def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
         attribution_mcp_server=rec.get("attributionMcpServer"),
         attribution_mcp_tool=rec.get("attributionMcpTool"),
         file_mtime=info.mtime,
+        speed=_text(usage.get("speed")),
     )
 
 

@@ -37,7 +37,10 @@ are the instrument's own rules, so an old baseline stays comparable):
   ``--model-rule billable`` is budget_burn's rule (only fable/opus/sonnet/haiku).
 * ``--pricing relative`` (default) uses unit weights (input 1, output 5, cache
   write 1.25, cache read 0.1) times a tier factor (opus/fable/unknown 5,
-  sonnet 1, haiku 0.27); ``--pricing usd`` reuses budget_burn's price table.
+  sonnet 1, haiku 0.27); ``--pricing usd`` prices every call through ``pricing``
+  (per-model table, 5-minute and 1-hour cache-write split, fast mode, the vault's
+  ``MODEL_PRICES`` override). A call whose model is not in the table is reported
+  under ``unpriced`` and costs 0; it is still counted in the token analyses.
 
 Usage:
     python3 context_spend.py --since 2026-10-13 --until 2026-11-12
@@ -55,6 +58,7 @@ import sys
 from pathlib import Path
 
 import budget_burn
+import pricing as price_engine
 import transcript_reader
 
 # Token categories, in the order costs are indexed everywhere below.
@@ -88,18 +92,27 @@ def _rel_tier(model: str) -> float:
 
 
 def rates_for(model: str, pricing: str) -> tuple[float, float, float, float]:
-    """Per-token (in, out, cache-write, cache-read) rates for ``model``."""
-    if pricing == "usd":
-        tier = budget_burn._tier(model) or "opus"
-        rate_in, rate_out = budget_burn.RATES[tier]
-        return (
-            rate_in / 1e6,
-            rate_out / 1e6,
-            rate_in * 1.25 / 1e6,
-            rate_in * 0.1 / 1e6,
-        )
+    """Per-token relative (in, out, cache-write, cache-read) rates for ``model``.
+
+    Dollar pricing is per call (``_usd_rates``), not per model.
+    """
     t = _rel_tier(model)
     return tuple(t * w / 1e6 for w in REL_WEIGHTS)  # type: ignore[return-value]
+
+
+def _usd_rates(priced: price_engine.PricedCall, w5: int, w1: int) -> tuple[float, float, float, float]:
+    """Per-token (in, out, cache-write, cache-read) USD rates of a priced call.
+
+    The cache-write rate is the blend of the 5-minute and 1-hour prices the call
+    actually paid, or the 5-minute price when it wrote nothing; the ceiling
+    simulation uses it for hypothetical resume writes.
+    """
+    if not priced.priced or priced.rates is None:
+        return (0.0, 0.0, 0.0, 0.0)
+    r = priced.rates
+    written = w5 + w1
+    cw = (priced.write_5m_usd + priced.write_1h_usd) / written if written else r["write_5m"] / 1e6
+    return (r["input"] / 1e6, r["output"] / 1e6, cw, r["cache_read"] / 1e6)
 
 
 def _cost(rates: tuple[float, ...], i: int, o: int, cw: int, cr: int) -> float:
@@ -284,6 +297,7 @@ def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Sca
             "sid": call.session_id,
             "trig": trig,
             "ts": _epoch(call.timestamp) or 0.0,
+            "call": call,
         }
     return out
 
@@ -332,6 +346,7 @@ def analyze(
     resume_sizes = resume_sizes if resume_sizes is not None else [30_000, 80_000]
     scan = _scan(root, since, until, dedupe)
 
+    pricer = price_engine.Pricer(budget_burn.MODEL_PRICES)
     calls: list[dict] = []
     dropped = 0
     for rec in scan.calls.values():
@@ -342,9 +357,25 @@ def analyze(
         if model_rule == "billable" and budget_burn._tier(model) is None:
             dropped += 1
             continue
-        rec["rates"] = rates_for(model, pricing)
+        tokens = {"in": rec["i"], "out": rec["o"], "cw": rec["cw"], "cr": rec["cr"]}
+        if pricing == "usd":
+            call = rec["call"]
+            priced = pricer.price(call)
+            rec["rates"] = _usd_rates(
+                priced, call.cache_write_5m_tokens, call.cache_write_1h_tokens
+            )
+            rec["cat"] = {
+                "in": priced.input_usd,
+                "out": priced.output_usd,
+                "cw": priced.write_5m_usd + priced.write_1h_usd,
+                "cr": priced.cache_read_usd,
+            }
+            rec["cost"] = priced.total_usd
+        else:
+            rec["rates"] = rates_for(model, pricing)
+            rec["cat"] = {k: tokens[k] * rate for k, rate in zip(CATS, rec["rates"])}
+            rec["cost"] = _cost(rec["rates"], rec["i"], rec["o"], rec["cw"], rec["cr"])
         rec["ctx"] = rec["i"] + rec["cw"] + rec["cr"]
-        rec["cost"] = _cost(rec["rates"], rec["i"], rec["o"], rec["cw"], rec["cr"])
         calls.append(rec)
     total = sum(r["cost"] for r in calls)
 
@@ -363,6 +394,8 @@ def analyze(
         "dropped_no_model": dropped,
         "total_cost": total,
     }
+    if pricing == "usd":
+        result["unpriced"] = pricer.unpriced()
 
     # 1. by model / category
     by_model: dict[str, dict] = {}
@@ -374,11 +407,11 @@ def analyze(
         )
         m["calls"] += 1
         m["cost"] += r["cost"]
-        for k, rate in zip(CATS, r["rates"]):
+        for k in CATS:
             tokens = r[{"in": "i", "out": "o", "cw": "cw", "cr": "cr"}[k]]
             m[k] += tokens
             cat_tokens[k] += tokens
-            cat_cost[k] += tokens * rate
+            cat_cost[k] += r["cat"][k]
     for m in by_model.values():
         m["share"] = _share(m["cost"], total)
     result["by_model"] = dict(sorted(by_model.items(), key=lambda kv: -kv[1]["cost"]))
@@ -567,6 +600,12 @@ def render_text(r: dict) -> str:
         "",
         "1. Cost by model",
     ]
+    for u in r.get("unpriced", []):
+        tokens = sum(u["tokens"].values())
+        L.insert(
+            -1,
+            f"  unpriced: {u['model']} x{u['calls']} ({tokens:,} tokens, cost counted as 0) — {u['reason']}",
+        )
     for m, v in r["by_model"].items():
         L.append(
             f"  {m:28s} calls={v['calls']:7d} in={v['in'] / 1e6:8.2f}M out={v['out'] / 1e6:7.2f}M "
