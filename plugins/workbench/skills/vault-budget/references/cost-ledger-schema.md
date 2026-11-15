@@ -18,7 +18,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `coverage.undated_calls` | count | Calls with no usable timestamp; in no row and in no total. |
 | `meter` | object or null | The meter check; `null` unless `--meter-usd` was given. Compares the window total with a dollar figure read by hand from Claude Code's usage view. |
 | `meter.difference_usd` | USD | `ledger_usd` minus `meter_usd`, signed: positive when the ledger is above the meter. |
-| `meter.gap_flag` | boolean | `true` when the absolute difference is strictly more than 10 percent of `meter_usd`; exactly 10 percent does not set it. |
+| `meter.gap_flag` | boolean | `true` when the gap percent, rounded to six decimal places, is strictly more than 10; exactly 10 percent does not set it, so 0.33 against a 0.3 meter does not flag. |
 | `meter.gap_percent` | percent | The absolute difference as a percent of `meter_usd`. |
 | `meter.ledger_usd` | USD | The window total, `totals.usd`. |
 | `meter.meter_usd` | USD | The figure given with `--meter-usd`; finite and greater than 0. |
@@ -165,11 +165,11 @@ Skill rows are a lower bound. The invoking call and later-turn work are not coun
 
 `meter` is a check against a figure you read by hand; it is `null` unless `--meter-usd N` was given. `recorded_cost` is automatic.
 
-Claude Code writes `cost-state` records into main session files with a cumulative `totalCostUSD` and a `hasUnknownModelCost` flag. They carry no timestamp and cover the whole session, subagents included. For each session the recorded figure is the largest `totalCostUSD` among the records of its main file (a value that is not a finite non-negative number, or is a boolean, is ignored; records in subagent files are ignored).
+Claude Code writes `cost-state` records into main session files with a cumulative `totalCostUSD` and a `hasUnknownModelCost` flag. They carry no timestamp and cover the whole session, subagents included. For each session the recorded figure is the largest `totalCostUSD` among the records of its main file (a value that is not a finite non-negative number, or is a boolean, is ignored; records in subagent files are ignored). When several records tie on the largest figure, the session counts as unknown unless every tied record has `hasUnknownModelCost` literally `false`.
 
 ## Recorded cost and when it is comparable
 
-A session is comparable when all of these hold: it has a recorded figure; `hasUnknownModelCost` is false on the record that supplied the figure; it has no unpriced call; and every dated call of the session, main and subagents, inside or outside the window, falls inside the window. The comparison is the whole-session ledger dollars against the recorded figure. A session that meets every condition except the `hasUnknownModelCost` one is flagged: counted in `flagged_unknown_sessions` with its dollars in `flagged_ledger_usd` and `flagged_recorded_usd`, and never added to the comparable sums.
+A session is comparable when all of these hold: it has a recorded figure; `hasUnknownModelCost` is literally false on the record that supplied the figure, and on every record tied with it for the largest figure; it has no unpriced call; and every dated call of the session, main and subagents, inside or outside the window, falls inside the window. The comparison is the whole-session ledger dollars against the recorded figure. A session that meets every condition except the `hasUnknownModelCost` one is flagged: counted in `flagged_unknown_sessions` with its dollars in `flagged_ledger_usd` and `flagged_recorded_usd`, and never added to the comparable sums.
 
 ## Version history
 

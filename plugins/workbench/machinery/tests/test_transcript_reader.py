@@ -529,6 +529,25 @@ class TestCostStates:
         assert (state.project, state.session_id) == ("-p", "s1")
         assert state.total_cost_usd == 2.5 and state.has_unknown_model_cost is False
 
+    @pytest.mark.parametrize(
+        "flags, unknown",
+        [((False, True), True), ((True, False), True), ((False, False), False), ((True, True), True),
+         ((False, "no"), True), ((False, None), True)],
+    )
+    def test_tied_totals_are_unknown_unless_every_record_is_false(self, tmp_path: Path, flags, unknown) -> None:
+        main = tmp_path / "-p" / "s1.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text("\n".join(_cs(2.5, f) for f in flags) + "\n")
+        (state,) = tr.read(tmp_path).cost_states
+        assert state.total_cost_usd == 2.5 and state.has_unknown_model_cost is unknown
+
+    def test_a_larger_total_replaces_the_tied_flags(self, tmp_path: Path) -> None:
+        main = tmp_path / "-p" / "s1.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text("\n".join([_cs(2.5, True), _cs(2.5, True), _cs(3.0, False)]) + "\n")
+        (state,) = tr.read(tmp_path).cost_states
+        assert state.total_cost_usd == 3.0 and state.has_unknown_model_cost is False
+
     def test_invalid_totals_are_ignored(self, tmp_path: Path) -> None:
         main = tmp_path / "-p" / "s1.jsonl"
         main.parent.mkdir(parents=True)

@@ -23,6 +23,7 @@ import argparse
 import calendar
 import json
 import math
+import os
 import re
 import sys
 from datetime import date, datetime, timezone
@@ -362,14 +363,17 @@ def meter_check(ledger_usd: float, meter_usd: float) -> dict:
 
     ``difference_usd`` is ledger minus meter, signed. The flag is set strictly above
     10 percent of the meter, in either direction; exactly 10 percent does not flag.
+    The gap percent is rounded to six places before the comparison, so a gap that
+    is 10 percent in decimal (0.33 against 0.3) is not pushed over by float noise.
     """
     difference = ledger_usd - meter_usd
+    gap_percent = abs(difference) / meter_usd * 100
     return {
         "meter_usd": _r(meter_usd),
         "ledger_usd": _r(ledger_usd),
         "difference_usd": _r(difference),
-        "gap_percent": _r(abs(difference) / meter_usd * 100),
-        "gap_flag": abs(difference) > meter_usd / 10,
+        "gap_percent": _r(gap_percent),
+        "gap_flag": round(gap_percent, 6) > 10,
     }
 
 
@@ -589,6 +593,36 @@ def _fail(message: str) -> int:
     return 2
 
 
+def _write_all(outputs: list[tuple[str, str, str]]) -> str | None:
+    """Write every ``(flag, path, text)`` or none: stage each beside its target, then rename.
+
+    Returns an error message, or ``None`` on success. On failure no destination is
+    created or changed and no staging file is left behind.
+    """
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for flag, name, text in outputs:
+            dest = Path(name)
+            if dest.is_dir():
+                return f"cannot write {flag} {name}: is a directory"
+            tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+            try:
+                tmp.write_text(text, encoding="utf-8")
+            except OSError as exc:
+                return f"cannot write {flag} {name}: {exc.strerror or exc}"
+            staged.append((tmp, dest))
+        for (tmp, dest), (flag, name, _) in zip(staged, outputs):
+            try:
+                os.replace(tmp, dest)
+            except OSError as exc:
+                return f"cannot write {flag} {name}: {exc.strerror or exc}"
+        staged.clear()
+        return None
+    finally:
+        for tmp, _ in staged:
+            tmp.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Spend per session and per agent.")
     ap.add_argument("--since", default=None, help="YYYY-MM-DD, inclusive")
@@ -628,16 +662,14 @@ def main(argv: list[str] | None = None) -> int:
     ledger = build_ledger(root, since=since, until=until, today=date.today())
     if meter is not None:
         apply_meter(ledger, meter)
+    outputs: list[tuple[str, str, str]] = []
     if args.json is not None:
-        try:
-            Path(args.json).write_text(dumps(ledger), encoding="utf-8")
-        except OSError as exc:
-            return _fail(f"cannot write --json {args.json}: {exc.strerror or exc}")
+        outputs.append(("--json", args.json, dumps(ledger)))
     if args.export_aggregates is not None:
-        try:
-            Path(args.export_aggregates).write_text(dumps(build_aggregates(ledger)), encoding="utf-8")
-        except OSError as exc:
-            return _fail(f"cannot write --export-aggregates {args.export_aggregates}: {exc.strerror or exc}")
+        outputs.append(("--export-aggregates", args.export_aggregates, dumps(build_aggregates(ledger))))
+    error = _write_all(outputs)
+    if error is not None:
+        return _fail(error)
     sys.stdout.write(report(ledger))
     return 0
 

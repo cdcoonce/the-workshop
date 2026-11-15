@@ -107,7 +107,9 @@ class CostState:
     """The largest recorded ``totalCostUSD`` of one main session file.
 
     ``has_unknown_model_cost`` is the flag of the record that supplied the figure;
-    anything other than a literal ``false`` there counts as unknown.
+    anything other than a literal ``false`` there counts as unknown. When several
+    records tie on the largest figure the session is unknown unless every tied
+    record has a literal ``false``.
     """
 
     project: str
@@ -410,11 +412,13 @@ def read(root: Path, since: str | None = None, until: str | None = None) -> Read
             total = _recorded_total(rec.get("totalCostUSD"))
             if total is not None:
                 skey = (info.project, info.session_id)
+                unknown = rec.get("hasUnknownModelCost") is not False
                 old = states.get(skey)
                 if old is None or total > old.total_cost_usd:
-                    states[skey] = CostState(
-                        info.project, info.session_id, total, rec.get("hasUnknownModelCost") is not False
-                    )
+                    states[skey] = CostState(info.project, info.session_id, total, unknown)
+                elif total == old.total_cost_usd and unknown and not old.has_unknown_model_cost:
+                    # tied records: unknown unless every tied record says literally false
+                    states[skey] = CostState(info.project, info.session_id, total, True)
         att = attachment_from_record(info, rec)
         if att is not None and in_window(att.timestamp, since, until):
             attachments.append(att)

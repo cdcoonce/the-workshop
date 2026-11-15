@@ -107,6 +107,19 @@ class TestRecordedCost:
 # ---------------------------------------------------------------------------
 # meter (M1-M4)
 # ---------------------------------------------------------------------------
+class TestTiedCostStates:
+    @pytest.mark.parametrize("flags", [(False, True), (True, False), (False, False), (True, True)])
+    def test_tie_is_comparable_only_when_every_tied_record_is_false(self, tmp_path: Path, flags) -> None:
+        root = tiny_root(tmp_path, 1_000_000)
+        path = root / "-zq-tiny" / "sess-zt1.jsonl"
+        recs = [json.dumps({"type": "cost-state", "totalCostUSD": 5.0, "hasUnknownModelCost": f}) for f in flags]
+        path.write_text(path.read_text() + "\n".join(recs) + "\n")
+        rc = build(root)["recorded_cost"]
+        comparable = flags == (False, False)
+        assert rc["sessions_comparable"] == int(comparable)
+        assert rc["flagged_unknown_sessions"] == int(not comparable)
+
+
 class TestMeterFigures:
     @pytest.mark.parametrize(
         "ledger_usd, meter, flag",
@@ -125,6 +138,22 @@ class TestMeterFigures:
         assert got["difference_usd"] == round(ledger_usd - meter, 6)
         assert got["gap_percent"] == pytest.approx(abs(ledger_usd - meter) / meter * 100, abs=1e-6)
         assert set(got) == {"meter_usd", "ledger_usd", "difference_usd", "gap_percent", "gap_flag"}
+
+    @pytest.mark.parametrize(
+        "ledger_usd, meter, flag",
+        [
+            (0.33, 0.3, False), (0.27, 0.3, False),
+            (1.1, 1.0, False), (0.9, 1.0, False),
+            (3.3, 3.0, False), (2.7, 3.0, False),
+            (77.0, 70.0, False), (63.0, 70.0, False),
+            (11.01, 10.0, True), (8.99, 10.0, True),
+        ],
+    )
+    def test_decimal_ten_percent_does_not_flag(self, ledger_usd, meter, flag) -> None:
+        # the gap printed is 10.0 for the first eight rows; the flag must agree with it
+        got = cost_ledger.meter_check(ledger_usd, meter)
+        assert got["gap_flag"] is flag
+        assert (got["gap_percent"] > 10) is flag
 
     def test_exact_figures(self) -> None:
         got = cost_ledger.meter_check(12.1875, 12.5)
@@ -178,6 +207,19 @@ class TestMeterCli:
         proc = run_cli(*WINDOW, "--projects-root", str(tiny_root(tmp_path, tokens)), "--meter-usd", meter)
         assert proc.returncode == 0, proc.stderr
         assert proc.stdout.startswith("METER GAP") is flagged
+        assert ("METER GAP" in proc.stdout) is flagged
+
+    @pytest.mark.parametrize(
+        "tokens, meter, flagged",
+        [(66_000, "0.3", False), (54_000, "0.3", False),
+         (220_000, "1", False), (180_000, "1", False),
+         (660_000, "3", False), (540_000, "3", False),
+         (15_400_000, "70", False), (12_600_000, "70", False),
+         (2_202_000, "10", True), (1_798_000, "10", True)],
+    )
+    def test_decimal_threshold_through_the_cli(self, tmp_path, tokens, meter, flagged) -> None:
+        proc = run_cli(*WINDOW, "--projects-root", str(tiny_root(tmp_path, tokens)), "--meter-usd", meter)
+        assert proc.returncode == 0, proc.stderr
         assert ("METER GAP" in proc.stdout) is flagged
 
     @pytest.mark.parametrize("bad", ["0", "-1", "-0.5", "abc", "", "nan", "inf", "-inf", "1e999"])
@@ -256,6 +298,22 @@ class TestExport:
             "min": 1.0, "p25": 1.75, "median": 2.5, "p75": 3.25, "max": 4.0}
         assert cost_ledger.distribution([]) == {k: None for k in ("min", "p25", "median", "p75", "max")}
 
+    def test_distribution_median_is_not_the_mean(self) -> None:
+        assert cost_ledger.distribution([1.0, 2.0, 9.0])["median"] == 2.0
+
+    def test_agent_type_table_covers_subagent_rows_only(self) -> None:
+        ledger = build()
+        table = cost_ledger.build_aggregates(ledger)["subagent_by_agent_type"]
+        sub_calls = sum(a["calls"] for s in ledger["sessions"] for a in s["agents"] if a["agent_id"] != "main")
+        assert sum(v["calls"] for v in table.values()) == sub_calls
+        assert sum(v["usd"] for v in table.values()) == pytest.approx(ledger["totals"]["subagent_usd"], abs=1e-6)
+        assert "main" not in table
+
+    def test_export_carries_the_meter_block(self) -> None:
+        ledger = cost_ledger.apply_meter(build(), 6.09375)
+        got = cost_ledger.build_aggregates(ledger)["meter"]
+        assert got is not None and got["meter_usd"] == 6.09375 and got["gap_flag"] is True
+
     def test_empty_window_exports_nulls(self, tmp_path: Path) -> None:
         agg = tmp_path / "a.json"
         proc = run_cli("--since", "2030-01-01", "--until", "2030-01-02",
@@ -270,6 +328,29 @@ class TestExport:
         proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--export-aggregates", str(bad))
         assert proc.returncode == 2
         assert len(proc.stderr.strip().splitlines()) == 1
+
+    @pytest.mark.parametrize("bad_first", [True, False])
+    def test_either_destination_unwritable_writes_neither(self, tmp_path: Path, bad_first: bool) -> None:
+        good = tmp_path / "good.json"
+        good.write_text("keep me")
+        bad = tmp_path / "missing-dir" / "bad.json"
+        j, a = (bad, good) if bad_first else (good, bad)
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--json", str(j), "--export-aggregates", str(a))
+        assert proc.returncode == 2
+        assert len(proc.stderr.strip().splitlines()) == 1 and proc.stdout == ""
+        assert good.read_text() == "keep me" and not bad.exists()
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["good.json"]
+
+    @pytest.mark.parametrize("bad_first", [True, False])
+    def test_directory_destination_writes_neither(self, tmp_path: Path, bad_first: bool) -> None:
+        good = tmp_path / "good.json"
+        bad = tmp_path / "adir"
+        bad.mkdir()
+        j, a = (bad, good) if bad_first else (good, bad)
+        proc = run_cli(*WINDOW, "--projects-root", str(ROOT), "--json", str(j), "--export-aggregates", str(a))
+        assert proc.returncode == 2
+        assert len(proc.stderr.strip().splitlines()) == 1
+        assert not good.exists()
 
     def test_rounded_to_six_places(self, tmp_path: Path) -> None:
         # 1 token of input at 5 per million is 0.000005; 3 tokens at 5/M = 0.000015: six places.

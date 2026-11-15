@@ -46,22 +46,22 @@
       "label": "1 meter flag at exactly 10 percent",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "> meter_usd / 10,",
-      "replace": ">= meter_usd / 10,"
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "round(gap_percent, 6) >= 10,"
     },
     {
       "label": "2 meter flag only when ledger is above meter",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "\"gap_flag\": abs(difference) >",
-      "replace": "\"gap_flag\": difference >"
+      "find": "gap_percent = abs(difference) /",
+      "replace": "gap_percent = difference /"
     },
     {
       "label": "3 meter threshold 20 percent",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "meter_usd / 10,",
-      "replace": "meter_usd / 5,"
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "round(gap_percent, 6) > 20,"
     },
     {
       "label": "4 gap percent relative to the ledger total",
@@ -216,6 +216,20 @@
       "oracle": "real",
       "find": "SCHEMA_VERSION = 3",
       "replace": "SCHEMA_VERSION = 2"
+    },
+    {
+      "label": "27 meter flag from the unrounded gap percent",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "gap_percent > 10,"
+    },
+    {
+      "label": "28 tied cost-state records: take the first record's flag",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "elif total == old.total_cost_usd and unknown and not old.has_unknown_model_cost:",
+      "replace": "elif False:"
     },
     {
       "label": "26 [control] comparable sessions summed in reverse",
