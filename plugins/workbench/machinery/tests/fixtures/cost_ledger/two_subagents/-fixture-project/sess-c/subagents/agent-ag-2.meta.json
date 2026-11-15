@@ -1,0 +1,1 @@
+{"agentType": "type-b", "description": "task b", "toolUseId": "toolu-2", "spawnDepth": 1, "model": "haiku", "requestShape": "shape-1", "requestNonInteractive": true}
