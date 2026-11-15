@@ -292,8 +292,11 @@ class TestJson:
         assert text.endswith("}\n") and not text.endswith("\n\n")
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert set(obj) == {"schema_version", "window", "totals", "coverage", "unpriced", "sessions"}
-        assert obj["schema_version"] == 1
+        assert set(obj) == {
+            "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
+            "skills", "unattributed",
+        }
+        assert obj["schema_version"] == 2
         assert obj["window"] == {"since": "2026-11-10", "until": "2026-11-12"}
         assert obj["totals"]["usd"] == EXPECTED["totals"]["usd"]
         assert obj["totals"]["main_usd"] == EXPECTED["totals"]["main_usd"]
