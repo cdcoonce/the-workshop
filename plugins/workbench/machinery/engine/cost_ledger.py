@@ -29,10 +29,11 @@ import budget_burn
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TOP_SESSIONS = 10
+_TOP_SKILLS = 15
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,27 @@ class _Acc:
         row["usd"] += priced.total_usd
 
 
+class _SkillAcc(_Acc):
+    """Running measures for one skill row, or the unattributed bucket."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sessions: set[tuple[str, str]] = set()
+
+    def add(self, call: transcript_reader.Call, priced: pricing.PricedCall) -> None:
+        super().add(call, priced)
+        self.sessions.add((call.project, call.session_id))
+
+
+def _skill_of(call: transcript_reader.Call) -> str | None:
+    """The call's own ``attributionSkill`` exactly as written, else None (S1).
+
+    Nothing is inferred from Skill tool calls, neighbouring calls or the plugin.
+    """
+    value = call.attribution_skill
+    return value if isinstance(value, str) and value else None
+
+
 def _r(x: float) -> float:
     return round(x, 6)
 
@@ -196,6 +218,8 @@ def build_ledger(
     sessions: dict[tuple[str, str], _Acc] = {}
     agents: dict[tuple[str, str], dict[str, tuple[_Acc, bool]]] = {}
     total = _Acc()
+    skills: dict[str, _SkillAcc] = {}
+    unattributed = _SkillAcc()
     main_usd = 0.0
     subagent_usd = 0.0
     for call in result.calls:
@@ -215,6 +239,11 @@ def build_ledger(
             slot[agent_id] = (_Acc(), call.is_subagent)
         slot[agent_id][0].add(call, priced)
         total.add(call, priced)
+        skill = _skill_of(call)
+        if skill is None:
+            unattributed.add(call, priced)
+        else:
+            skills.setdefault(skill, _SkillAcc()).add(call, priced)
         if call.is_subagent:
             subagent_usd += priced.total_usd
         else:
@@ -249,6 +278,14 @@ def build_ledger(
         srow.update(_measures(acc))
         rows.append(srow)
 
+    skill_rows = []
+    for name in sorted(skills):
+        row = {"skill": name, "sessions": len(skills[name].sessions)}
+        row.update(_measures(skills[name]))
+        skill_rows.append(row)
+    unattributed_row = {"sessions": len(unattributed.sessions)}
+    unattributed_row.update(_measures(unattributed))
+
     cov = result.coverage
     totals = _measures(total)
     totals["main_usd"] = _r(main_usd)
@@ -266,6 +303,8 @@ def build_ledger(
         },
         "unpriced": pricer.unpriced(),
         "sessions": rows,
+        "skills": skill_rows,
+        "unattributed": unattributed_row,
     }
 
 
@@ -283,6 +322,22 @@ def _pct(part: float, whole: float) -> int:
 
 def _usd(x: float) -> str:
     return f"${x:,.2f}".rjust(11)
+
+
+def _skill_lines(ledger: dict) -> list[str]:
+    total = ledger["totals"]["usd"]
+    ranked = sorted(ledger["skills"], key=lambda r: (-r["usd"], r["skill"]))
+    shown, rest = ranked[:_TOP_SKILLS], ranked[_TOP_SKILLS:]
+    lines = [f"  Top {_TOP_SKILLS} skills by dollars:"]
+    lines += [f"    {r['skill']:24} {_usd(r['usd'])}  {r['calls']:,} calls" for r in shown] or ["    (none)"]
+    if rest:
+        lines.append(f"    {len(rest)} more skills {_usd(sum(r['usd'] for r in rest))}")
+    un = ledger["unattributed"]
+    lines.append(f"    {'unattributed':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)")
+    lines.append(
+        "  Skill rows are a lower bound: the invoking call and later-turn work are not counted."
+    )
+    return lines
 
 
 def report(ledger: dict) -> str:
@@ -312,6 +367,7 @@ def report(ledger: dict) -> str:
     top = sorted(ledger["sessions"], key=lambda s: (-s["usd"], s["project"], s["session_id"]))[:_TOP_SESSIONS]
     lines.append(f"  Top {_TOP_SESSIONS} sessions:")
     lines += [f"    {_usd(s['usd'])}  {s['project']}  {s['session_id']}" for s in top] or ["    (none)"]
+    lines += _skill_lines(ledger)
     c = ledger["coverage"]
     lines.append(
         f"  Coverage: files found {c['files_found']}, read {c['files_read']}, "
