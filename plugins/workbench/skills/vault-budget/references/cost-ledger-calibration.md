@@ -50,21 +50,25 @@ Bare run:
 
 `UNVERIFIED`: that a session started right after `claude plugin disable` loads without the plugin (the help does not say when a disable takes effect). Check it once, on the first bare run: after the run, the bare transcript's skill listing must have no workbench entries, and its first call must be smaller than a full run's. If the bare run is not smaller, the plugin was still loaded; do not use the calibration.
 
+`claude plugin disable` changes shared state, not one session: every Claude Code session started anywhere on the machine while the plugin is disabled loads without it. Close your other Claude Code sessions, or do not start any, from the first disable until you have re-enabled the plugin after the last bare run, and re-enable it immediately after each bare run, as step 3 says.
+
 Do not leave the plugin disabled when you finish. If a run fails partway, enable it again and discard that pair's two ids (drop both, keep the order of the rest).
 
 ## Run the script
 
-From the plugin's engine directory (or wherever the vendored `fixed_weight_calibrate.py` lives), with the ids in run order:
+The script is `fixed_weight_calibrate.py` in the engine directory: `plugins/workbench/machinery/engine/fixed_weight_calibrate.py` in the-workshop checkout, and `.claude/scripts/fixed_weight_calibrate.py` in a vault the machinery is vendored into. Run it from the root of whichever tree you have, with the ids in run order, one id per run, `full` first:
 
 ```
-python3 fixed_weight_calibrate.py \
+python3 plugins/workbench/machinery/engine/fixed_weight_calibrate.py \
   --full F1 F2 F3 F4 F5 \
   --bare B1 B2 B3 B4 B5
 ```
 
+(in a vault, `python3 .claude/scripts/fixed_weight_calibrate.py` in place of the first line).
+
 Options: `--projects-root DIR` (default `~/.claude/projects`), `--out PATH` (default: `cost_ledger_calibration.json` in the directory the `budget_burn` per-machine config is loaded from, which is where `cost_ledger.py --fixed-weight` looks without `--calibration`), `--min-runs N` (default 5, never below 2), `--claude-code-version V` (needed only when the transcripts record no version; it must match them when they do), `--date YYYY-MM-DD` (default today).
 
-It refuses, with one line on stderr and nothing written, when: an id matches no main session file, or main files in more than one project (it says `full[2]`, the position in the arm counted from 1, never the id or a path); an id is given twice; the arms differ in size or are smaller than `--min-runs`; a session has no assistant call with usable usage; a pair predicts no more fixed tokens in full than in bare, or the full arm measured no more tokens than the bare arm in total (the plugin was not actually disabled, or the arms are swapped); the sessions record two Claude Code versions.
+It refuses, with one line on stderr and nothing written, when: an id matches no main session file, or main files in more than one project (it says `full[2]`, the position in the arm counted from 1, never the id or a path); an id is given twice; the arms differ in size or are smaller than `--min-runs`; a session has no assistant call with usable usage; a pair predicts no more fixed tokens in full than in bare; a pair measured no more tokens in full than in bare (it says `pair[2]`, the position of the first such pair counted from 1: the plugin was not actually disabled for that bare run, or the arms are swapped or mismatched; every pair must measure a positive difference, which also guarantees `low` is above 0); the sessions record two Claude Code versions.
 
 ## What the output means
 

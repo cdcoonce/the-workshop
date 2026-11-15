@@ -159,8 +159,12 @@ def calibrate(
 
     if any(p <= 0 for p in predicted):
         raise Refusal("a pair predicts no more fixed tokens in full than in bare; check the arms")
-    if sum(measured) <= 0:
-        raise Refusal("the full arm measured no more tokens than the bare arm")
+    for pos, m in enumerate(measured, start=1):
+        if m <= 0:
+            raise Refusal(
+                f"pair[{pos}] measured no more tokens in full than in bare; "
+                "the plugin was not disabled for that bare run, or the pair is mismatched"
+            )
     ratios = [m / p for m, p in zip(measured, predicted)]
 
     versions = set().union(*(s.versions for s in found.values()))

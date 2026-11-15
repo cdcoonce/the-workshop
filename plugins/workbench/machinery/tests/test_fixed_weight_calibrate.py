@@ -51,7 +51,31 @@ def calibrate_args(root: Path, out: Path, *extra: str, full: list[str] = FULL,
     return [*arms(full, bare), "--projects-root", str(root), "--out", str(out), "--date", DATE, *extra]
 
 
+def _ids_in(args: list[str]) -> list[str]:
+    """Every id on the command line: the words after --full and --bare."""
+    ids: list[str] = []
+    take = False
+    for word in args:
+        if word.startswith("--"):
+            take = word in ("--full", "--bare")
+        elif take:
+            ids.append(word)
+    return ids
+
+
+def _fixture_names() -> tuple[str, ...]:
+    """Every session id and project key the fixture holds, read from its files."""
+    names = {p.name for p in ROOT.iterdir()}
+    for path in ROOT.rglob("*.jsonl"):
+        names.add(path.stem)
+    for path in ROOT.rglob("*"):
+        if path.is_dir():
+            names.add(path.name)
+    return tuple(sorted(names - {"subagents"}))
+
+
 def refuse(proc: subprocess.CompletedProcess, out: Path, hide: tuple[str, ...] = IDENTIFIERS) -> None:
+    hide = tuple(dict.fromkeys((*hide, *_ids_in(list(proc.args[2:])), *_fixture_names())))
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert not out.exists()
     assert list(out.parent.glob("*")) == [], "a refusal must leave no temp file behind"
@@ -220,6 +244,35 @@ class TestMeasuredAndPredicted:
         assert run_two(root, plain).returncode == 0
         assert out.read_bytes() == plain.read_bytes()
 
+    def test_subagent_file_with_an_earlier_or_larger_first_call_never_supplies_the_measure(
+        self, tmp_path: Path, out: Path
+    ) -> None:
+        root = tmp_path / "p"
+        two_pairs(root)
+        for sid, n in (("zf0", 1), ("zb1", 2)):
+            sub = root / "-zz-proj" / sid / "subagents" / "agent-zza.jsonl"
+            sub.parent.mkdir(parents=True)
+            early = {**rec_call(sid, 7, (800000, 0, 0, 0)), "timestamp": "2026-11-10T00:00:00Z"}
+            sub.write_text(json.dumps(early) + "\n")
+        # main files only: full 110 and 310, bare 60 and 110 -> differences 50 and 200
+        assert run_two(root, out).returncode == 0
+        got = json.loads(out.read_text())
+        assert (got["measured_tokens_diff"]["min"], got["measured_tokens_diff"]["max"]) == (50.0, 200.0)
+
+    def test_predicted_ignores_an_existing_calibration_file_at_the_default_path(
+        self, tmp_path: Path
+    ) -> None:
+        cfg = tmp_path / "cfg"
+        cfg.mkdir()
+        (cfg / fixed_weight.CALIBRATION_FILE).write_text(json.dumps({"factor": 3.0}))
+        target = tmp_path / "result.json"
+        with mock.patch.object(cost_ledger, "_config_dir", lambda: cfg):
+            rc = calibrate.main([*calibrate_args(ROOT, target)])
+        assert rc == 0
+        got = json.loads(target.read_text())
+        assert got["factor"] == 1.29
+        assert got["predicted_tokens_diff"] == WANT["factor_file"]["predicted_tokens_diff"]
+
     def test_predicted_uses_the_module_chars_per_token(self, tmp_path: Path, out: Path) -> None:
         root = tmp_path / "p"
         two_pairs(root)
@@ -270,6 +323,16 @@ class TestRefusalsFindingSessions:
         proc = run(*calibrate_args(ROOT, out, full=[*FULL[:2], "cal-nope", *FULL[3:]]))
         refuse(proc, out)
         assert "full[3]" in proc.stderr
+
+    def test_an_unknown_id_given_on_the_command_line_is_never_echoed(self, out: Path) -> None:
+        unknown = "zq-never-in-any-list-7731"
+        assert unknown not in IDENTIFIERS and unknown not in _fixture_names()
+        for arm in ("full", "bare"):
+            kw = {arm: [unknown, *(FULL if arm == "full" else BARE)[1:]]}
+            proc = run(*calibrate_args(ROOT, out, **kw))
+            refuse(proc, out)
+            assert unknown not in proc.stdout + proc.stderr
+            assert f"{arm}[1]" in proc.stderr
 
     def test_unknown_bare_id_names_the_bare_position(self, out: Path) -> None:
         proc = run(*calibrate_args(ROOT, out, bare=[*BARE[:4], "cal-nope"]))
@@ -353,15 +416,82 @@ class TestRefusalsMeasuring:
         two_pairs(root, full_chars=(370, 1480))  # first pair predicts 0
         refuse(run_two(root, out), out)
 
-    def test_one_pair_negative_measured_difference_is_allowed_but_not_a_non_positive_sum(
+    def test_one_pair_negative_measured_difference_refuses_naming_its_position(
         self, tmp_path: Path, out: Path
     ) -> None:
         root = tmp_path / "p"
         two_pairs(root, full_usage=((10, 20, 0, 0), (10, 0, 800, 0)))  # pair 1 measures below bare
         proc = run_two(root, out)
+        refuse(proc, out, hide=(*IDENTIFIERS, "zf0", "zb0", str(root)))
+        assert "pair[1]" in proc.stderr
+
+    def test_negative_measured_pair_in_second_position_is_named(self, tmp_path: Path, out: Path) -> None:
+        root = tmp_path / "p"
+        two_pairs(root, full_usage=((10, 100, 0, 0), (10, 0, 50, 0)))  # pair 2: 60 against bare 110
+        proc = run_two(root, out)
+        refuse(proc, out)
+        assert "pair[2]" in proc.stderr
+
+    def test_zero_measured_difference_refuses(self, tmp_path: Path, out: Path) -> None:
+        root = tmp_path / "p"
+        two_pairs(root, full_usage=((10, 50, 0, 0), (10, 0, 300, 0)))  # pair 1 ties its bare partner
+        proc = run_two(root, out)
+        refuse(proc, out)
+        assert "pair[1]" in proc.stderr
+
+    def test_unequal_arms_at_or_above_min_runs(self, out: Path) -> None:
+        proc = run(*calibrate_args(ROOT, out, "--min-runs", "2", full=FULL[:3], bare=BARE[:2]))
+        refuse(proc, out)
+        proc = run(*calibrate_args(ROOT, out, "--min-runs", "5", full=FULL[:5], bare=BARE[:5]))
         assert proc.returncode == 0, proc.stderr
-        got = json.loads(out.read_text())
-        assert got["low"] < 0  # the per-pair ratio keeps its sign; only the sums gate
+
+
+# ---------------------------------------------------------------------------
+# a file the script writes is a file the estimator accepts
+# ---------------------------------------------------------------------------
+def _variant_equal_ratios(root: Path) -> list[str]:
+    two_pairs(root, full_usage=((10, 100, 0, 0), (10, 0, 300, 0)),
+              bare_usage=((10, 0, 0, 0), (10, 0, 0, 0)))
+    return list(TWO)
+
+
+def _variant_default(root: Path) -> list[str]:
+    two_pairs(root)
+    return list(TWO)
+
+
+def _variant_wide_ratios(root: Path) -> list[str]:
+    two_pairs(root, full_usage=((10, 5000, 0, 0), (10, 0, 70, 0)), bare_usage=((10, 0, 0, 0), (10, 0, 0, 0)))
+    return list(TWO)
+
+
+def _variant_flag_version(root: Path) -> list[str]:
+    two_pairs(root, version=None)
+    return [*TWO, "--claude-code-version", "3.2.1"]
+
+
+class TestWrittenFileIsAccepted:
+    @pytest.mark.parametrize("variant", [_variant_default, _variant_equal_ratios, _variant_wide_ratios,
+                                         _variant_flag_version])
+    def test_estimator_loads_and_the_cli_runs_on_whatever_the_script_writes(
+        self, variant, tmp_path: Path, out: Path
+    ) -> None:
+        root = tmp_path / "p"
+        args = variant(root)
+        proc = run(*args, "--projects-root", str(root), "--out", str(out))
+        assert proc.returncode == 0, proc.stderr
+        cal = fixed_weight.load_calibration(out, required=True)
+        assert 0 < cal.low <= cal.factor <= cal.high
+        cli = subprocess.run(
+            [sys.executable, str(ENGINE / "cost_ledger.py"), "--fixed-weight", "--calibration", str(out),
+             "--projects-root", str(ROOT), "--since", "2026-01-01", "--until", "2026-12-31"],
+            capture_output=True, text=True,
+        )
+        assert "needs finite numbers" not in cli.stderr and "calibration" not in cli.stderr.lower(), cli.stderr
+
+    def test_the_oracle_fixture_file_is_accepted(self, out: Path) -> None:
+        assert run(*calibrate_args(ROOT, out)).returncode == 0
+        assert fixed_weight.load_calibration(out, required=True).low == 0.9
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +602,14 @@ class TestProcedureDocument:
             "Numbers only", "factor, low, high, runs per arm, Claude Code version, date",
         ):
             assert needle in PROCEDURE, needle
+
+    def test_warns_that_disabling_the_plugin_reaches_every_session_and_names_the_script(self) -> None:
+        assert "every Claude Code session started anywhere on the machine" in PROCEDURE
+        assert "Close your other Claude Code sessions" in PROCEDURE
+        assert "plugins/workbench/machinery/engine/fixed_weight_calibrate.py" in PROCEDURE
+        assert ".claude/scripts/fixed_weight_calibrate.py" in PROCEDURE
+        assert "python3 plugins/workbench/machinery/engine/fixed_weight_calibrate.py" in PROCEDURE
+        assert "pair[2]" in PROCEDURE
 
     def test_states_what_the_factor_does_and_does_not_cover(self) -> None:
         assert "first call of a main session" in PROCEDURE

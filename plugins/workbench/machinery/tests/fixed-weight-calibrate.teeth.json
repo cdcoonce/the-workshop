@@ -243,7 +243,14 @@
       "replace": "SCHEMA_VERSION = 4"
     },
     {
-      "label": "29 [control] pairs summed in reverse",
+      "label": "29 non-positive measured pair refuses",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "        if m <= 0:\n            raise Refusal(\n                f\"pair[{pos}]",
+      "replace": "        if m <= 0 and sum(measured) <= 0:\n            raise Refusal(\n                f\"pair[{pos}]"
+    },
+    {
+      "label": "30 [control] pairs summed in reverse",
       "file": "../engine/fixed_weight_calibrate.py",
       "oracle": "real",
       "find": "\"factor\": _round(sum(measured) / sum(predicted)),",
