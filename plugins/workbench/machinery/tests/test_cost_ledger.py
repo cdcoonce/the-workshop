@@ -366,7 +366,10 @@ class TestReport:
 
     def test_top_sessions_ordered_by_dollars(self) -> None:
         out = self.report()
-        assert out.index("-proj-alpha") < out.index("-proj-beta", out.index("-proj-alpha"))
+        # Only the "Top 10 sessions:" rows: the Largest sessions section reprints each project.
+        section = out.split("Top 10 sessions:", 1)[1].split("Largest sessions", 1)[0]
+        assert "-proj-alpha" in section and "-proj-beta" in section
+        assert section.index("-proj-alpha") < section.index("-proj-beta")
 
     def test_report_is_printed_with_json(self, tmp_path: Path) -> None:
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",

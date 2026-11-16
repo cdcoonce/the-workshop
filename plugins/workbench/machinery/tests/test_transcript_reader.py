@@ -675,6 +675,21 @@ class TestCallTrigger:
         assert got["m1"] == ("human-typed", True)
         assert got["m2"] == ("none", False)
 
+    def test_trigger_is_not_inherited_by_a_later_file(self, tmp_path: Path) -> None:
+        # a1.jsonl is read first and ends with a human-typed user record.
+        _write(tmp_path / "p" / "a1.jsonl", [_u("human"), _asst("m1", "r1", input_tokens=1)])
+        _write(tmp_path / "p" / "b1.jsonl", [_asst("m2", "r2", input_tokens=1)])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got["m1"] == ("human-typed", False)
+        assert got["m2"] == ("none", False)
+
+    def test_after_tool_result_is_not_inherited_by_a_later_file(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "a1.jsonl", [_u("human"), _tr(), _asst("m1", "r1", input_tokens=1)])
+        _write(tmp_path / "p" / "b1.jsonl", [_asst("m2", "r2", input_tokens=1)])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got["m1"] == ("human-typed", True)
+        assert got["m2"] == ("none", False)
+
     def test_classifier_unchanged(self) -> None:
         assert tr.classify_trigger(_u("human")) == "human-typed"
         assert tr.classify_trigger(_u(meta=True)) == "meta/system-injected"

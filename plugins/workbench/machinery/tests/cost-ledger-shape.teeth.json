@@ -260,6 +260,13 @@
       "replace": "\"context_median\": statistics.median(sorted(contexts)) if contexts else None,",
       "expect": "survived",
       "why": "statistics.median sorts its input itself, so sorting first changes nothing for any list; no test can tell them apart. Scope: only the spelling of the median call."
+    },
+    {
+      "label": "32 B3 text drops the label tie-break in the trigger ordering",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "key=lambda r: (-r[\"usd\"], r[\"trigger\"])",
+      "replace": "key=lambda r: -r[\"usd\"]"
     }
   ]
 }

@@ -201,6 +201,16 @@ class TestTriggerRows:
         assert trig(ledger, "task-notification")["subagent_usd"] == pytest.approx(usd(70), abs=1e-6)
         assert trig(ledger, "human-typed")["calls"] == 1
 
+    def test_trigger_state_is_not_shared_between_files_read_in_order(self, tmp_path: Path) -> None:
+        # a1.jsonl is read before b1.jsonl and ends with a human-typed user record.
+        main_file(tmp_path, "a1", [user("human"), asst("first", i=100)])
+        main_file(tmp_path, "b1", [asst("second", i=200)])
+        ledger = build(tmp_path)
+        assert trig(ledger, "none")["calls"] == 1
+        assert trig(ledger, "none")["usd"] == pytest.approx(usd(200), abs=1e-6)
+        assert trig(ledger, "human-typed")["calls"] == 1
+        assert trig(ledger, "human-typed")["usd"] == pytest.approx(usd(100), abs=1e-6)
+
     def test_main_subagent_split(self, tmp_path: Path) -> None:
         main_file(tmp_path, "s1", [user("human"), asst("m", i=100)])
         sub_file(tmp_path, "s1", "x", [user("human"), asst("s", i=300)])
@@ -252,9 +262,14 @@ class TestTriggerRows:
         assert section[-1].strip() == f"Sum of rows ${total:,.2f}; window total ${total:,.2f}"
 
     def test_text_ties_break_by_label(self, tmp_path: Path) -> None:
-        main_file(tmp_path, "s1", [user("human"), asst("a", i=10), user(), asst("b", i=10)])
-        text = cost_ledger.report(build(tmp_path))
-        assert text.index("human-typed  ") < text.index("programmatic  ")
+        # Equal dollars; TRIGGERS order puts human-typed first, label order puts hook first.
+        main_file(tmp_path, "s1", [
+            user("human"), asst("a", i=10), user(text="Stop hook feedback: x"), asst("b", i=10),
+        ])
+        ledger = build(tmp_path)
+        assert trig(ledger, "human-typed")["usd"] == trig(ledger, "hook")["usd"] > 0
+        text = cost_ledger.report(ledger)
+        assert text.index("hook  ") < text.index("human-typed  ")
 
 
 class TestExport:
@@ -361,6 +376,39 @@ class TestShape:
         shaped_ids = [ln.split()[2] for ln in shaped]
         assert top_ids == shaped_ids
         assert top_ids[0] == "s11" and "s00" not in top_ids
+
+    def test_above_long_context_share_divides_by_the_sessions_dollars(self, tmp_path: Path) -> None:
+        main_file(tmp_path, "s1", [asst("a", i=250_000)])
+        main_file(tmp_path, "s2", [asst("b", i=10_000)])
+        ledger = build(tmp_path)
+        s1 = session(ledger, "s1")
+        window = ledger["totals"]["usd"]
+        assert s1["shape"]["share_above_long_context"] == 1.0
+        assert s1["shape"]["share_above_long_context"] != round(
+            s1["shape"]["usd_above_long_context"] / window, 6
+        )
+        assert session(ledger, "s2")["shape"]["share_above_long_context"] == 0.0
+        text = cost_ledger.report(ledger)
+        row = next(ln for ln in text.splitlines() if "context first" in ln and "s1" in ln)
+        assert f"of ${usd(250_000):,.2f} (100.0%)" in row
+        assert f"of ${window:,.2f}" not in row
+
+    def test_largest_sessions_follow_top_ten_order_not_context(self, tmp_path: Path) -> None:
+        # Dollars: A > C > B. Context max: B > A > C (cache reads are cheap).
+        main_file(tmp_path, "sA", [asst("a", i=100_000)])
+        main_file(tmp_path, "sB", [asst("b", cr=400_000)])
+        main_file(tmp_path, "sC", [asst("c", i=50_000)])
+        ledger = build(tmp_path)
+        by_usd = [s["session_id"] for s in sorted(ledger["sessions"], key=lambda s: -s["usd"])]
+        by_ctx = [s["session_id"] for s in sorted(
+            ledger["sessions"], key=lambda s: -s["shape"]["context_max"])]
+        assert by_usd == ["sA", "sC", "sB"] and by_ctx == ["sB", "sA", "sC"]
+        text = cost_ledger.report(ledger)
+        head = "Largest sessions (context = input + cache read + cache write tokens per main-thread call)"
+        top = text.split("Top 10 sessions:", 1)[1].split(head, 1)[0].strip().splitlines()
+        shaped = text.split(head, 1)[1].split("Cost by trigger", 1)[0].strip().splitlines()
+        assert [ln.split()[2] for ln in top] == ["sA", "sC", "sB"]
+        assert [ln.split()[2] for ln in shaped] == ["sA", "sC", "sB"]
 
     def test_row_text(self, tmp_path: Path) -> None:
         main_file(tmp_path, "s1", [asst("a", i=1000), asst("b", i=300_000), asst("c", i=2000)])
