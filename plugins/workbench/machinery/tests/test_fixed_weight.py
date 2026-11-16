@@ -489,7 +489,7 @@ class TestFlag:
             assert proc.returncode == 0, proc.stderr
         assert a.read_bytes() == b.read_bytes()
         obj = json.loads(a.read_text())
-        assert obj["schema_version"] == 5
+        assert obj["schema_version"] == 6
         assert obj["fixed_weight"]["total_usd"] == WANT["fixed_weight"]["total_usd"]
         assert a.read_text() == cost_ledger.dumps(obj)
 
@@ -589,9 +589,10 @@ class TestReport:
         assert proc.returncode == 0, proc.stderr
         assert "capped" not in proc.stdout.lower()
 
-    def test_no_verdict_is_stated(self, tmp_path: Path) -> None:
+    def test_no_recommendation_is_stated(self, tmp_path: Path) -> None:
+        # Slice 9 added the verdict block, so the word "verdict" is now expected.
         text = "\n".join(self.report_default(tmp_path)).lower()
-        for word in ("verdict", "recommend", "should remove"):
+        for word in ("recommend", "should remove"):
             assert word not in text
 
 
@@ -913,7 +914,7 @@ class TestComparison:
         fw = cli_fw(tmp_path, cal_file(tmp_path, self.BODY))
         alone = cli_fw(tmp_path, cal_file(tmp_path, {"factor": 2.0}, "alone.json"), "alone.json")
         for key in alone:
-            if key not in ("comparison", "calibration"):
+            if key not in ("comparison", "calibration", "verdict"):
                 assert fw[key] == alone[key], key
 
     def test_low_and_high_are_null_without_bounds(self, tmp_path: Path) -> None:
