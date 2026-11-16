@@ -65,13 +65,8 @@ import transcript_reader
 CATS = ("in", "out", "cw", "cr")
 # Relative weights: input 1, output 5, cache write 1.25, cache read 0.1.
 REL_WEIGHTS = (1.0, 5.0, 1.25, 0.1)
-TRIGGERS = (
-    "human-typed",
-    "task-notification",
-    "meta/system-injected",
-    "programmatic",
-    "hook",
-)
+TRIGGERS = transcript_reader.TRIGGERS
+classify_trigger = transcript_reader.classify_trigger
 CONTEXT_THRESHOLDS = (200_000, 500_000)
 REREAD_WINDOW_CALLS = 20
 REWRITE_MIN_CONTEXT = 100_000
@@ -149,31 +144,6 @@ def _share(part: float, whole: float) -> float:
 # ---------------------------------------------------------------------------
 # transcript parsing
 # ---------------------------------------------------------------------------
-def classify_trigger(entry: dict) -> str:
-    """Turn trigger of a (non tool-result) ``user`` transcript entry."""
-    msg = entry.get("message") or {}
-    content = msg.get("content")
-    if isinstance(content, str):
-        text = content
-    elif isinstance(content, list):
-        text = " ".join(
-            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
-        )
-    else:
-        text = ""
-    origin = entry.get("origin") or {}
-    kind = origin.get("kind") if isinstance(origin, dict) else None
-    if text.startswith("<task-notification>") or kind == "task-notification":
-        return "task-notification"
-    if text.startswith("Stop hook feedback") or "hook" in text[:40].lower():
-        return "hook"
-    if kind == "human":
-        return "human-typed"
-    if entry.get("isMeta"):
-        return "meta/system-injected"
-    return "programmatic"
-
-
 def _epoch(ts: object) -> float | None:
     if not isinstance(ts, str) or not ts:
         return None
@@ -223,19 +193,15 @@ def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Sca
     collector = transcript_reader.CallCollector(dedupe)
     coverage = transcript_reader.Coverage()
     meta: dict[tuple, tuple[bool, str]] = {}  # call key -> (side, trigger) at the kept line
-    trig_by_file: dict[Path, str] = {}
     for info, d in transcript_reader.iter_records(root, since=since, coverage=coverage):
         sub = info.is_subagent
         sid = info.session_id
-        trig = trig_by_file.get(info.path, "none")
         kind = d.get("type")
         side = sub or bool(d.get("isSidechain"))
         if kind == "user":
-            msg = d.get("message") or {}
-            c = msg.get("content")
-            if isinstance(c, list) and any(
-                isinstance(b, dict) and b.get("type") == "tool_result" for b in c
-            ):
+            collector.add(info, d)  # updates the file's trigger state
+            if transcript_reader.is_tool_result_record(d):
+                c = (d.get("message") or {}).get("content")
                 if not side:
                     for b in c:
                         if not isinstance(b, dict) or b.get("type") != "tool_result":
@@ -245,7 +211,6 @@ def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Sca
                             out._seen_results.add(tid)
                             out.result_bytes[tid] = _result_bytes(b.get("content"))
                 continue
-            trig_by_file[info.path] = classify_trigger(d)
         elif kind == "system":
             if (
                 d.get("subtype") == "compact_boundary"
@@ -283,7 +248,7 @@ def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Sca
                 continue
             kept = collector.add(info, d)
             if kept is not None:
-                meta[kept.key] = (side, trig)
+                meta[kept.key] = (side, kept.trigger)
     out.files = coverage.files_read
     for call in collector.calls:
         side, trig = meta[call.key]

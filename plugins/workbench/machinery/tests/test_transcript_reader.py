@@ -619,3 +619,80 @@ class TestOnRecord:
         hooked = tr.read(root, on_record=lambda i, r: None)
         assert plain.calls == hooked.calls and plain.attachments == hooked.attachments
         assert plain.coverage == hooked.coverage
+
+
+# ---------------------------------------------------------------------------
+# slice 10: Call.trigger and Call.after_tool_result
+# ---------------------------------------------------------------------------
+def _u(origin=None, text="go", meta=False) -> dict:
+    rec: dict = {"type": "user", "message": {"content": text}}
+    if origin:
+        rec["origin"] = {"kind": origin}
+    if meta:
+        rec["isMeta"] = True
+    return rec
+
+
+def _tr() -> dict:
+    return {"type": "user", "message": {"content": [{"type": "tool_result", "content": "x"}]}}
+
+
+class TestCallTrigger:
+    def test_defaults_on_a_hand_built_call(self) -> None:
+        call = tr.Call(
+            key=("k",), project="p", session_id="s", is_subagent=False, agent_id=None, model=None,
+            timestamp=None, input_tokens=0, output_tokens=0, cache_read_tokens=0,
+            cache_write_tokens=0, cache_write_5m_tokens=0, cache_write_1h_tokens=0,
+        )
+        assert call.trigger == "none" and call.after_tool_result is False
+
+    def test_none_before_any_user_record(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "s.jsonl", [_asst("m1", "r1", input_tokens=1)])
+        (call,) = tr.read(tmp_path).calls
+        assert (call.trigger, call.after_tool_result) == ("none", False)
+
+    def test_trigger_kept_across_tool_result_and_flagged(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "s.jsonl", [
+            _u("human"), _asst("m1", "r1", input_tokens=1), _tr(),
+            _asst("m2", "r2", input_tokens=1), _asst("m3", "r3", input_tokens=1),
+        ])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got == {
+            "m1": ("human-typed", False), "m2": ("human-typed", True), "m3": ("human-typed", True),
+        }
+
+    def test_new_user_record_replaces_trigger_and_clears_flag(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "s.jsonl", [
+            _u("human"), _tr(), _u(text="<task-notification>x"), _asst("m1", "r1", input_tokens=1),
+        ])
+        (call,) = tr.read(tmp_path).calls
+        assert (call.trigger, call.after_tool_result) == ("task-notification", False)
+
+    def test_subagent_file_resets(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "s.jsonl", [_u("human"), _tr(), _asst("m1", "r1", input_tokens=1)])
+        _write(tmp_path / "p" / "s" / "subagents" / "agent-a.jsonl", [_asst("m2", "r2", input_tokens=1)])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got["m1"] == ("human-typed", True)
+        assert got["m2"] == ("none", False)
+
+    def test_trigger_is_not_inherited_by_a_later_file(self, tmp_path: Path) -> None:
+        # a1.jsonl is read first and ends with a human-typed user record.
+        _write(tmp_path / "p" / "a1.jsonl", [_u("human"), _asst("m1", "r1", input_tokens=1)])
+        _write(tmp_path / "p" / "b1.jsonl", [_asst("m2", "r2", input_tokens=1)])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got["m1"] == ("human-typed", False)
+        assert got["m2"] == ("none", False)
+
+    def test_after_tool_result_is_not_inherited_by_a_later_file(self, tmp_path: Path) -> None:
+        _write(tmp_path / "p" / "a1.jsonl", [_u("human"), _tr(), _asst("m1", "r1", input_tokens=1)])
+        _write(tmp_path / "p" / "b1.jsonl", [_asst("m2", "r2", input_tokens=1)])
+        got = {c.key[0]: (c.trigger, c.after_tool_result) for c in tr.read(tmp_path).calls}
+        assert got["m1"] == ("human-typed", True)
+        assert got["m2"] == ("none", False)
+
+    def test_classifier_unchanged(self) -> None:
+        assert tr.classify_trigger(_u("human")) == "human-typed"
+        assert tr.classify_trigger(_u(meta=True)) == "meta/system-injected"
+        assert tr.classify_trigger(_u(text="Stop hook feedback")) == "hook"
+        assert tr.classify_trigger(_u()) == "programmatic"
+        assert tr.is_tool_result_record(_tr()) and not tr.is_tool_result_record(_u())

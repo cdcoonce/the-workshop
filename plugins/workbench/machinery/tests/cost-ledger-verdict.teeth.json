@@ -195,7 +195,7 @@
       "label": "21 SCHEMA_VERSION is 6 (mutant: 5)",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "SCHEMA_VERSION = 6",
+      "find": "SCHEMA_VERSION = 7",
       "replace": "SCHEMA_VERSION = 5"
     },
     {

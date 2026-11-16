@@ -489,7 +489,7 @@ class TestFlag:
             assert proc.returncode == 0, proc.stderr
         assert a.read_bytes() == b.read_bytes()
         obj = json.loads(a.read_text())
-        assert obj["schema_version"] == 6
+        assert obj["schema_version"] == 7
         assert obj["fixed_weight"]["total_usd"] == WANT["fixed_weight"]["total_usd"]
         assert a.read_text() == cost_ledger.dumps(obj)
 

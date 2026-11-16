@@ -27,6 +27,7 @@ import json
 import math
 import os
 import re
+import statistics
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -36,12 +37,20 @@ import fixed_weight as _fw
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 AGGREGATES_VERSION = 1
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TOP_SESSIONS = 10
 _TOP_SKILLS = 15
+# A call whose context (input + cache read + total cache write) is strictly above
+# this many tokens counts as long-context.
+LONG_CONTEXT_TOKENS = 200_000
+TRIGGER_ROWS = (*transcript_reader.TRIGGERS, "none")
+
+
+def _context_size(call: transcript_reader.Call) -> int:
+    return call.input_tokens + call.cache_read_tokens + call.cache_write_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +290,12 @@ def build_ledger(
     main_usd = 0.0
     subagent_usd = 0.0
     window_calls: list[transcript_reader.Call] = []
+    main_contexts: dict[tuple[str, str], list[int]] = {}
+    above_usd: dict[tuple[str, str], float] = {}
+    trig: dict[str, dict] = {
+        t: {"calls": 0, "usd": 0.0, "main_usd": 0.0, "subagent_usd": 0.0, "atr_calls": 0, "atr_usd": 0.0}
+        for t in TRIGGER_ROWS
+    }
     for call in result.calls:
         instant = _instant(call.timestamp)
         if instant is None:
@@ -299,6 +314,18 @@ def build_ledger(
         slot[agent_id][0].add(call, priced)
         total.add(call, priced)
         window_calls.append(call)
+        size = _context_size(call)
+        if not call.is_subagent:
+            main_contexts.setdefault(skey, []).append(size)
+        if size > LONG_CONTEXT_TOKENS:
+            above_usd[skey] = above_usd.get(skey, 0.0) + priced.total_usd
+        slot_t = trig[call.trigger if call.trigger in trig else "none"]
+        slot_t["calls"] += 1
+        slot_t["usd"] += priced.total_usd
+        slot_t["subagent_usd" if call.is_subagent else "main_usd"] += priced.total_usd
+        if call.after_tool_result:
+            slot_t["atr_calls"] += 1
+            slot_t["atr_usd"] += priced.total_usd
         skill = _skill_of(call)
         if skill is None:
             unattributed.add(call, priced)
@@ -336,6 +363,16 @@ def build_ledger(
             "agents": agent_rows,
         }
         srow.update(_measures(acc))
+        contexts = main_contexts.get(skey, [])
+        above = above_usd.get(skey, 0.0)
+        srow["shape"] = {
+            "main_calls": len(contexts),
+            "context_first": contexts[0] if contexts else None,
+            "context_median": statistics.median(contexts) if contexts else None,
+            "context_max": max(contexts) if contexts else None,
+            "usd_above_long_context": _r(above),
+            "share_above_long_context": _r(above / acc.usd) if acc.usd else None,
+        }
         rows.append(srow)
 
     skill_rows = []
@@ -350,6 +387,19 @@ def build_ledger(
     totals = _measures(total)
     totals["main_usd"] = _r(main_usd)
     totals["subagent_usd"] = _r(subagent_usd)
+    trigger_rows = [
+        {
+            "trigger": t,
+            "calls": v["calls"],
+            "usd": _r(v["usd"]),
+            "main_usd": _r(v["main_usd"]),
+            "subagent_usd": _r(v["subagent_usd"]),
+            "after_tool_result_calls": v["atr_calls"],
+            "after_tool_result_usd": _r(v["atr_usd"]),
+            "share_of_total": _r(v["usd"] / total.usd) if total.usd else None,
+        }
+        for t, v in trig.items()
+    ]
     estimate = None
     if collector is not None:
         cal = calibration if calibration is not None else _fw.Calibration()
@@ -368,7 +418,9 @@ def build_ledger(
             "undated_calls": undated,
         },
         "unpriced": pricer.unpriced(),
+        "long_context_tokens": LONG_CONTEXT_TOKENS,
         "sessions": rows,
+        "triggers": trigger_rows,
         "skills": skill_rows,
         "unattributed": unattributed_row,
         "meter": None,
@@ -472,6 +524,7 @@ def build_aggregates(ledger: dict) -> dict:
             for r in sorted(ledger["skills"], key=lambda r: r["skill"])
         ],
         "unattributed": {"calls": un["calls"], "usd": un["usd"], "sessions": un["sessions"]},
+        "triggers": copy.deepcopy(ledger["triggers"]),
         "session_count": len(ledger["sessions"]),
         "session_usd_distribution": distribution([s["usd"] for s in ledger["sessions"]]),
         "coverage": {
@@ -522,6 +575,54 @@ def _skill_lines(ledger: dict) -> list[str]:
     lines.append(f"    {'(unattributed)':24} {_usd(un['usd'])}  {un['calls']:,} calls  ({_pct(un['usd'], total)}%)")
     lines.append(
         "  Skill rows are a lower bound: the invoking call and later-turn work are not counted."
+    )
+    return lines
+
+
+def _tok(x: float | None) -> str:
+    return "-" if x is None else f"{x:,.0f}"
+
+
+def _largest_session_lines(top: list[dict], threshold: int) -> list[str]:
+    """The shape of the sessions already chosen for the top-ten list, in its order."""
+    lines = [
+        "  Largest sessions (context = input + cache read + cache write tokens per main-thread call)"
+    ]
+    rows = []
+    for s in top:
+        shape = s.get("shape")
+        if shape is None:
+            continue
+        rows.append(
+            f"    {_usd(s['usd'])}  {s['project']}  {s['session_id']}  "
+            f"{shape['main_calls']:,} main calls  context first {_tok(shape['context_first'])} / "
+            f"median {_tok(shape['context_median'])} / max {_tok(shape['context_max'])}  "
+            f"above {threshold // 1000}k: ${shape['usd_above_long_context']:,.2f} of "
+            f"${s['usd']:,.2f} ({_share_text(shape['share_above_long_context'])})"
+        )
+    return lines + (rows or ["    (none)"])
+
+
+def _trigger_lines(ledger: dict) -> list[str]:
+    rows = ledger.get("triggers")
+    if rows is None:
+        return []
+    lines = [
+        "  Cost by trigger (all calls; a call's trigger is the last user record before it "
+        "in its own transcript)"
+    ]
+    shown = sorted((r for r in rows if r["calls"]), key=lambda r: (-r["usd"], r["trigger"]))
+    for r in shown:
+        lines.append(
+            f"    {r['trigger']:22} {r['calls']:,} calls  {_usd(r['usd'])}  "
+            f"{_share_text(r['share_of_total'])}  after tool result: "
+            f"${r['after_tool_result_usd']:,.2f} in {r['after_tool_result_calls']:,} calls"
+        )
+    if not shown:
+        lines.append("    (none)")
+    lines.append(
+        f"    Sum of rows {_usd(sum(r['usd'] for r in rows)).strip()}; "
+        f"window total {_usd(ledger['totals']['usd']).strip()}"
     )
     return lines
 
@@ -693,6 +794,8 @@ def report(ledger: dict) -> str:
     top = sorted(ledger["sessions"], key=lambda s: (-s["usd"], s["project"], s["session_id"]))[:_TOP_SESSIONS]
     lines.append(f"  Top {_TOP_SESSIONS} sessions:")
     lines += [f"    {_usd(s['usd'])}  {s['project']}  {s['session_id']}" for s in top] or ["    (none)"]
+    lines += _largest_session_lines(top, ledger.get("long_context_tokens", LONG_CONTEXT_TOKENS))
+    lines += _trigger_lines(ledger)
     lines += _skill_lines(ledger)
     if ledger.get("recorded_cost"):
         lines += _recorded_lines(ledger["recorded_cost"])

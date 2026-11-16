@@ -1,6 +1,6 @@
 # Cost ledger JSON schema
 
-Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 6.
+Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 7.
 
 Every figure covers in-window calls with a usable timestamp; undated calls are counted in `coverage.undated_calls` and in nothing else. Dollars are rounded to six places when a row is built, so a sum of rows can differ from the rounded total by a rounding step per row. Units: count, tokens, USD, ISO timestamp string, text.
 
@@ -95,6 +95,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `fixed_weight.verdict.share` | fraction or null | The `setup` group's share of window spend at the factor in use (`fixed_weight.groups.setup.share_of_total`); `null` when window spend is zero. |
 | `fixed_weight.verdict.verdict` | text | `CANNOT FIT` when `high` is below the bar; `CUTTABLE` when `low` is at or above it; `UNDECIDED` otherwise (so `high` equal to the bar with `low` below it is `UNDECIDED`); `NO DATA` when `share` is `null`. |
 | `fixed_weight.write_calls` | count | Charged calls on which the fixed context was costed as a cache write. |
+| `long_context_tokens` | tokens | The long-context threshold, 200000. A call is long-context when its context size (input plus cache read plus total cache write tokens) is strictly greater than this. |
 | `meter` | object or null | The meter check; `null` unless `--meter-usd` was given. Compares the window total with a dollar figure read by hand from Claude Code's usage view. |
 | `meter.difference_usd` | USD | `ledger_usd` minus `meter_usd`, signed: positive when the ledger is above the meter. |
 | `meter.gap_flag` | boolean | `true` when the gap percent, rounded to six decimal places, is strictly more than 10; exactly 10 percent does not set it, so 0.33 against a 0.3 meter does not flag. |
@@ -111,7 +112,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `recorded_cost.recorded_usd` | USD | Recorded dollars of the comparable sessions. |
 | `recorded_cost.sessions_comparable` | count | In-window sessions that meet every condition in "Recorded cost and when it is comparable". |
 | `recorded_cost.sessions_in_window` | count | Session rows, that is sessions with an in-window call. |
-| `schema_version` | count | Schema version of this file: `6`. See the version history below. |
+| `schema_version` | count | Schema version of this file: `7`. See the version history below. |
 | `sessions` | list | One row per (project, session id) with an in-window call, sorted by project then session id. |
 | `sessions[]` | object | One session row. |
 | `sessions[].agents` | list | One row per agent in the session: `main` first, then subagents by agent id. |
@@ -143,6 +144,13 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `sessions[].last_timestamp` | ISO timestamp string | Latest in-window call, by instant, as written in the transcript. |
 | `sessions[].project` | text | Project directory name, as observed. |
 | `sessions[].session_id` | text | Session id, as observed. |
+| `sessions[].shape` | object | Context shape of the session's main-thread calls, and its dollars above the long-context threshold. |
+| `sessions[].shape.context_first` | tokens or null | Context size of the first main-thread call in transcript order; `null` when the session has no main-thread call. |
+| `sessions[].shape.context_max` | tokens or null | Largest context size among the main-thread calls; `null` when there is none. |
+| `sessions[].shape.context_median` | tokens or null | Median context size of the main-thread calls (the mean of the middle two when the count is even, so it can end in .5); `null` when there is none. |
+| `sessions[].shape.main_calls` | count | In-window calls of the session on the main thread (not subagents). |
+| `sessions[].shape.share_above_long_context` | fraction or null | `usd_above_long_context` over `sessions[].usd`, six places; `null` when the session's dollars are 0. |
+| `sessions[].shape.usd_above_long_context` | USD | Dollars of all the session's calls, main and subagent, whose own context size is strictly greater than `long_context_tokens`. |
 | `sessions[].tokens` | object | Tokens of the session, by kind. |
 | `sessions[].tokens.cache_read` | tokens | Cache-read tokens of the session. |
 | `sessions[].tokens.input` | tokens | Fresh input tokens of the session. |
@@ -194,6 +202,16 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `totals.usd_breakdown.output` | USD | Output dollars of the whole window. |
 | `totals.usd_breakdown.write_1h` | USD | 1-hour cache-write dollars of the whole window. |
 | `totals.usd_breakdown.write_5m` | USD | 5-minute cache-write dollars of the whole window. |
+| `triggers` | list | Cost by turn trigger: always six rows, one for each of `human-typed`, `task-notification`, `meta/system-injected`, `programmatic`, `hook`, in that order, then `none`. Every in-window call, main or subagent, is in exactly one row. |
+| `triggers[]` | object | One trigger row. |
+| `triggers[].after_tool_result_calls` | count | Calls of the row whose most recent earlier user record in their own transcript file is a tool result. |
+| `triggers[].after_tool_result_usd` | USD | Dollars of those calls. |
+| `triggers[].calls` | count | In-window calls of the row. The rows sum to `totals.calls`. |
+| `triggers[].main_usd` | USD | Dollars of the row's main-thread calls. |
+| `triggers[].share_of_total` | fraction or null | `usd` over `totals.usd`, six places; `null` when the total is 0. |
+| `triggers[].subagent_usd` | USD | Dollars of the row's subagent calls; `main_usd` plus `subagent_usd` is `usd` up to rounding. |
+| `triggers[].trigger` | text | The label. A call's trigger is that of the last non-tool-result user record before it in its own transcript file (a subagent file does not inherit its parent's), or `none` when the file has no earlier user record. |
+| `triggers[].usd` | USD | Dollars of the row. The rows sum to `totals.usd` to six places. |
 | `unattributed` | object | Calls whose own record carries no non-empty text `attributionSkill`; always present, zeros when there are none. |
 | `unattributed.calls` | count | In-window calls that carry no skill. |
 | `unattributed.sessions` | count | Distinct (project, session id) pairs with an unattributed call. |
@@ -282,3 +300,4 @@ A calibration file holds `factor`, and may hold `low` and `high`, the smallest a
 - 4: `fixed_weight` added (the fixed-weight estimate, `null` without `--fixed-weight`); `schema_version` is 4.
 - 5: `fixed_weight.calibration` and `fixed_weight.comparison` added (the calibration file's provenance, and the estimate re-run at factor 1.0 and at the file's `low` and `high`; both `null` when uncalibrated); `schema_version` is 5.
 - 6: `fixed_weight.verdict` added (the share of window spend the setup group accounts for, set against the 20% bar fixed on 2026-11-14, with its range, provisional flag and, when cuttable, the components); `schema_version` is 6.
+- 7: `triggers` (cost by turn trigger), `long_context_tokens` and `sessions[].shape` (per-session context figures and dollars above the long-context threshold) added; `schema_version` is 7. The aggregates export carries `triggers` and no per-session shape; `aggregates_version` stays 1.

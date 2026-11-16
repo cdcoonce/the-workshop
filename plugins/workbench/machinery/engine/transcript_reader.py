@@ -40,6 +40,50 @@ from typing import Callable, Iterator
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
+# Turn triggers, in the order the cost views list them; ``none`` (no user
+# record earlier in the file) is appended by the views that need it.
+TRIGGERS = (
+    "human-typed",
+    "task-notification",
+    "meta/system-injected",
+    "programmatic",
+    "hook",
+)
+
+
+def classify_trigger(entry: dict) -> str:
+    """Turn trigger of a (non tool-result) ``user`` transcript entry."""
+    msg = entry.get("message") or {}
+    content = msg.get("content")
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        text = " ".join(
+            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+        )
+    else:
+        text = ""
+    origin = entry.get("origin") or {}
+    kind = origin.get("kind") if isinstance(origin, dict) else None
+    if text.startswith("<task-notification>") or kind == "task-notification":
+        return "task-notification"
+    if text.startswith("Stop hook feedback") or "hook" in text[:40].lower():
+        return "hook"
+    if kind == "human":
+        return "human-typed"
+    if entry.get("isMeta"):
+        return "meta/system-injected"
+    return "programmatic"
+
+
+def is_tool_result_record(entry: dict) -> bool:
+    """True for a ``user`` record whose content carries a ``tool_result`` block."""
+    msg = entry.get("message") or {}
+    c = msg.get("content")
+    return isinstance(c, list) and any(
+        isinstance(b, dict) and b.get("type") == "tool_result" for b in c
+    )
+
 
 @dataclass(frozen=True)
 class FileInfo:
@@ -77,6 +121,11 @@ class Call:
     attribution_mcp_tool: object = None
     file_mtime: float = 0.0  # of the file holding the kept line
     speed: str | None = None  # message.usage.speed when a string
+    # Label of the last non-tool-result user record earlier in the same file
+    # ("none" when there is none); never inherited from a parent file.
+    trigger: str = "none"
+    # True when the last user record earlier in the same file is a tool result.
+    after_tool_result: bool = False
 
 
 @dataclass(frozen=True)
@@ -263,7 +312,13 @@ def in_window(ts: object, since: str | None, until: str | None) -> bool:
     return (since is None or day >= since) and (until is None or day <= until)
 
 
-def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
+def _call_from_record(
+    info: FileInfo,
+    rec: dict,
+    key: tuple,
+    trigger: str = "none",
+    after_tool_result: bool = False,
+) -> Call | None:
     if rec.get("type") not in (None, "assistant"):
         return None
     msg = rec.get("message")
@@ -303,6 +358,8 @@ def _call_from_record(info: FileInfo, rec: dict, key: tuple) -> Call | None:
         attribution_mcp_tool=rec.get("attributionMcpTool"),
         file_mtime=info.mtime,
         speed=_text(usage.get("speed")),
+        trigger=trigger,
+        after_tool_result=after_tool_result,
     )
 
 
@@ -322,6 +379,9 @@ class CallCollector:
         self.mode = mode
         self._calls: dict[tuple, Call] = {}
         self._anonymous = 0
+        # per file: (trigger of the last non-tool-result user record, whether
+        # the last user record was a tool result)
+        self._user_state: dict[Path, tuple[str, bool]] = {}
 
     def _key(self, rec: dict) -> tuple:
         msg = rec.get("message")
@@ -338,9 +398,21 @@ class CallCollector:
         return (mid or "", rid or "")
 
     def add(self, info: FileInfo, rec: dict) -> Call | None:
-        """Offer one record. Returns the call if this line is now the kept one."""
+        """Offer one record. Returns the call if this line is now the kept one.
+
+        ``user`` records update the file's trigger state and yield no call, so a
+        caller that reads a subset of records must still offer every user record.
+        """
+        if rec.get("type") == "user":
+            trig, _ = self._user_state.get(info.path, ("none", False))
+            if is_tool_result_record(rec):
+                self._user_state[info.path] = (trig, True)
+            else:
+                self._user_state[info.path] = (classify_trigger(rec), False)
+            return None
         key = self._key(rec)
-        call = _call_from_record(info, rec, key)
+        trig, after = self._user_state.get(info.path, ("none", False))
+        call = _call_from_record(info, rec, key, trig, after)
         if call is None:
             return None
         old = self._calls.get(key)
