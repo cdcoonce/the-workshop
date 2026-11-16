@@ -255,7 +255,7 @@ class TestExport:
         assert set(obj) == {
             "aggregates_version", "window", "totals", "subagent_by_agent_type", "by_model",
             "skills", "unattributed", "session_count", "session_usd_distribution", "coverage",
-            "unpriced", "meter", "recorded_cost", "fixed_weight",
+            "unpriced", "meter", "recorded_cost", "fixed_weight", "triggers",
         }
         assert obj["aggregates_version"] == 1 and isinstance(obj["aggregates_version"], int)
         assert obj["window"] == {"since": "2026-11-10", "until": "2026-11-12"}

@@ -120,7 +120,7 @@ class TestSessionRows:
         s = build()["sessions"][0]
         assert set(s) == {
             "project", "session_id", "first_timestamp", "last_timestamp", "calls",
-            "unpriced_calls", "usd", "tokens", "usd_breakdown", "agents",
+            "unpriced_calls", "usd", "tokens", "usd_breakdown", "agents", "shape",
         }
         assert set(s["tokens"]) == set(KINDS)
         assert set(s["usd_breakdown"]) == set(KINDS)
@@ -295,8 +295,9 @@ class TestJson:
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
             "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
+            "triggers", "long_context_tokens",
         }
-        assert obj["schema_version"] == 6
+        assert obj["schema_version"] == 7
         assert obj["window"] == {"since": "2026-11-10", "until": "2026-11-12"}
         assert obj["totals"]["usd"] == EXPECTED["totals"]["usd"]
         assert obj["totals"]["main_usd"] == EXPECTED["totals"]["main_usd"]

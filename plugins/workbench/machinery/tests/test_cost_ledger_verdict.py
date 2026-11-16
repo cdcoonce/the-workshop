@@ -188,7 +188,7 @@ class TestCli:
                         "--json", str(full), "--export-aggregates", str(agg), home=tmp_path)
         assert proc.returncode == 0, proc.stderr
         obj = json.loads(full.read_text())
-        assert obj["schema_version"] == 6
+        assert obj["schema_version"] == 7
         assert set(obj["fixed_weight"]["verdict"]) == KEYS
         assert json.loads(agg.read_text())["fixed_weight"]["verdict"] == obj["fixed_weight"]["verdict"]
 
@@ -254,10 +254,10 @@ class TestDocuments:
     schema = (SKILL_REFS / "cost-ledger-schema.md").read_text(encoding="utf-8")
     command = (SKILL_REFS / "command.md").read_text(encoding="utf-8")
 
-    def test_schema_states_version_6_everywhere(self) -> None:
-        assert "Current `schema_version`: 6." in self.schema
-        assert "Schema version of this file: `6`." in self.schema
-        assert cost_ledger.SCHEMA_VERSION == 6
+    def test_schema_states_version_7_everywhere(self) -> None:
+        assert "Current `schema_version`: 7." in self.schema
+        assert "Schema version of this file: `7`." in self.schema
+        assert cost_ledger.SCHEMA_VERSION == 7
         assert "Schema version of this file: `4`" not in self.schema
         assert "Current `schema_version`: 5" not in self.schema
 

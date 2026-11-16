@@ -196,7 +196,7 @@ class TestSkillRows:
         s = self.ledger["sessions"][0]
         assert set(s) == {
             "project", "session_id", "first_timestamp", "last_timestamp", "calls",
-            "unpriced_calls", "usd", "tokens", "usd_breakdown", "agents",
+            "unpriced_calls", "usd", "tokens", "usd_breakdown", "agents", "shape",
         }
 
     def test_nothing_inferred_from_plugin_or_skill_tool_calls(self, tmp_path: Path) -> None:
@@ -236,7 +236,7 @@ class TestNoUnattributedCall:
 
 
 class TestJsonFile:
-    def test_schema_version_6_and_top_level_keys(self, tmp_path: Path) -> None:
+    def test_schema_version_7_and_top_level_keys(self, tmp_path: Path) -> None:
         out = tmp_path / "o.json"
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"), "--json", str(out))
@@ -244,10 +244,11 @@ class TestJsonFile:
         text = out.read_text()
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert obj["schema_version"] == 6
+        assert obj["schema_version"] == 7
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
             "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
+            "triggers", "long_context_tokens",
         }
 
 
