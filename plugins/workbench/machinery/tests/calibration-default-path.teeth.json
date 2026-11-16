@@ -47,11 +47,11 @@
   ],
   "mutants": [
     {
-      "label": "1 default is under the home directory",
+      "label": "1 default is under the home directory (mutant: a wrong directory under the home, not under cost-ledger)",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
       "find": "    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE",
-      "replace": "    return Path(__file__).parent / _fw.CALIBRATION_FILE"
+      "replace": "    return Path.home() / \".workshop\" / \"vault-budget\" / _fw.CALIBRATION_FILE"
     },
     {
       "label": "2 home is read at call time",
@@ -68,11 +68,11 @@
       "replace": "    _cfg = Path(getattr(getattr(budget_burn, \"_config\", None), \"__file__\", None) or budget_burn.__file__).parent / _fw.CALIBRATION_FILE\n    if _cfg.exists():\n        return _cfg\n    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE"
     },
     {
-      "label": "4 calibrate default --out shares the one function",
+      "label": "4 calibrate default --out shares the one function (mutant: a wrong directory under the home, not under cost-ledger)",
       "file": "../engine/fixed_weight_calibrate.py",
       "oracle": "real",
       "find": "else cost_ledger.default_calibration_path()",
-      "replace": "else Path(cost_ledger.__file__).parent / cost_ledger._fw.CALIBRATION_FILE"
+      "replace": "else Path.home() / \".workshop\" / \"vault-budget\" / cost_ledger._fw.CALIBRATION_FILE"
     },
     {
       "label": "5 missing default means uncalibrated",

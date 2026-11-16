@@ -15,10 +15,38 @@ it the way it does in production — by anchoring on the vault root.
 
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# Session-level home redirect. It runs when pytest imports this conftest, before any
+# test module is collected, so engine code that resolves a home at import time (or in
+# a module constant) gets a temp path and never the developer's real one. Tests that
+# need a different home still set HOME themselves. Restored and removed at exit.
+_REAL_HOME = os.environ.get("HOME")
+SESSION_HOME = tempfile.mkdtemp(prefix="machinery-session-home-")
+os.environ["HOME"] = SESSION_HOME
+
+
+def _restore_home() -> None:
+    if _REAL_HOME is None:
+        os.environ.pop("HOME", None)
+    else:
+        os.environ["HOME"] = _REAL_HOME
+    shutil.rmtree(SESSION_HOME, ignore_errors=True)
+
+
+atexit.register(_restore_home)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    _restore_home()
+
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "engine"
 sys.path.insert(0, str(ENGINE_DIR))

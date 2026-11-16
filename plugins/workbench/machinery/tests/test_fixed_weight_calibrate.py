@@ -598,6 +598,24 @@ class TestDefaults:
         assert rc == 2
         assert not (tmp_path / ".workshop").exists()
 
+    def test_sentinel_at_the_default_path_survives_every_path_not_aimed_at_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A file already at the default path is touched only when the default path is the target."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        sentinel = cost_ledger.default_calibration_path()
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text('{"factor": 7.777}')
+        before = sentinel.read_bytes()
+        refused = calibrate.main([*arms(bare=BARE[:4]), "--projects-root", str(ROOT), "--date", DATE])
+        assert refused == 2 and sentinel.read_bytes() == before
+        target = tmp_path / "explicit.json"
+        assert calibrate.main([*calibrate_args(ROOT, target)]) == 0
+        assert target.exists() and sentinel.read_bytes() == before
+        # the one exception: with no --out the default path is the target and is replaced
+        assert calibrate.main([*arms(), "--projects-root", str(ROOT), "--date", DATE]) == 0
+        assert sentinel.read_bytes() != before
+
     def test_help_shows_the_literal_tilde_default(self) -> None:
         proc = run("--help")
         assert proc.returncode == 0
