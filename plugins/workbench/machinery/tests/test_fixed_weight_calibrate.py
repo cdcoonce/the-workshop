@@ -8,6 +8,7 @@ changing one thing, or from a two-pair scenario with ``--min-runs 2``.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -39,6 +40,7 @@ IDENTIFIERS = (*FULL, *BARE, "cx-alpha", "cx-beta", "cost_ledger_calibration", "
 
 # Subprocess runs get an empty home, so no test reads or writes the real ~/.workshop.
 SCRATCH_HOME = tempfile.mkdtemp(prefix="cost-ledger-home-")
+atexit.register(shutil.rmtree, SCRATCH_HOME, ignore_errors=True)
 
 
 def run(*args: str) -> subprocess.CompletedProcess:

@@ -8,10 +8,12 @@ a size in tokens and every figure is exact.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import sys
@@ -43,6 +45,7 @@ def build(root: Path = ROOT, since: str = "2026-11-10", until: str = "2026-11-12
 
 # Subprocess runs get an empty home, so no test reads or writes the real ~/.workshop.
 SCRATCH_HOME = tempfile.mkdtemp(prefix="cost-ledger-home-")
+atexit.register(shutil.rmtree, SCRATCH_HOME, ignore_errors=True)
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:
@@ -653,14 +656,28 @@ class TestCliCalibrationRefusals:
         (cfg / fixed_weight.CALIBRATION_FILE).write_text('{"factor": 3}')
         fake = SimpleNamespace(__file__=str(cfg / "_config.py"))
         monkeypatch.setattr(budget_burn, "_config", fake, raising=False)
-        beside_engine = ENGINE / fixed_weight.CALIBRATION_FILE
-        assert not beside_engine.exists()
-        beside_engine.write_text('{"factor": 3}')
-        try:
-            rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
-        finally:
-            beside_engine.unlink()
+        fake_engine = tmp_path / "engine"
+        fake_engine.mkdir()
+        (fake_engine / fixed_weight.CALIBRATION_FILE).write_text('{"factor": 3}')
+        monkeypatch.setattr(cost_ledger, "__file__", str(fake_engine / "cost_ledger.py"))
+        rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
         assert rc == 0 and "UNCALIBRATED ESTIMATE" in capsys.readouterr().out
+
+    def test_calibration_flag_wins_over_a_file_at_the_default_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        target = cost_ledger.default_calibration_path()
+        target.parent.mkdir(parents=True)
+        target.write_text('{"factor": 3}')
+        other = tmp_path / "other.json"
+        other.write_text('{"factor": 2}')
+        out = tmp_path / "o.json"
+        rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                               "--calibration", str(other), "--json", str(out)])
+        capsys.readouterr()
+        fw = json.loads(out.read_text())["fixed_weight"]
+        assert rc == 0 and fw["calibrated"] is True and fw["calibration_factor"] == 2.0
 
     def test_help_shows_the_literal_tilde_default(self) -> None:
         proc = run_cli("--help")
