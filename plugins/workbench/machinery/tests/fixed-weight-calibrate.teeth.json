@@ -236,10 +236,10 @@
       "replace": "if comparison is None:\n        comparison = {\"uncalibrated\": {\"setup_share_of_total\": fw[\"groups\"][\"setup\"][\"share_of_total\"]}, \"low\": None, \"high\": None}\n    if False:"
     },
     {
-      "label": "28 schema_version is 5",
+      "label": "28 schema_version is 6",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "SCHEMA_VERSION = 5",
+      "find": "SCHEMA_VERSION = 6",
       "replace": "SCHEMA_VERSION = 4"
     },
     {

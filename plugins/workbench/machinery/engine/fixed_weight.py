@@ -38,6 +38,11 @@ CALIBRATION_FILE = "cost_ledger_calibration.json"
 _PER = 1_000_000
 _CAP_SLACK = 1e-9  # relative; float noise must not count as a cap
 
+# The bar was fixed on 2026-11-14, before any ledger numbers existed: the setup is worth
+# changing only if removable fixed context is this fraction of window spend or more.
+VERDICT_BAR = 0.20
+VERDICT_BAR_SET = "2026-11-14"
+
 SETUP = "setup"
 CLAUDE_CODE = "claude_code"
 
@@ -456,6 +461,60 @@ def _point(fw: dict) -> dict:
     }
 
 
+def verdict(estimate: dict) -> dict:
+    """The verdict against ``VERDICT_BAR`` for an ``estimate_with_calibration`` result.
+
+    Pure: reads only ``estimate`` (and the two constants). The judged figure is the setup
+    group's share of window spend; the claude_code group is not removable and never counts.
+    """
+    share = estimate["groups"][SETUP]["share_of_total"]
+    comparison = estimate.get("comparison")
+    calibration = estimate.get("calibration")
+    calibrated = bool(estimate["calibrated"])
+    low = high = share
+    if share is not None and comparison and comparison.get("low") and comparison.get("high"):
+        points = (
+            comparison["low"]["setup_share_of_total"],
+            share,
+            comparison["high"]["setup_share_of_total"],
+        )
+        low, high = min(points), max(points)
+    if share is None:
+        word = "NO DATA"
+    elif high < VERDICT_BAR:
+        word = "CANNOT FIT"
+    elif low >= VERDICT_BAR:
+        word = "CUTTABLE"
+    else:
+        word = "UNDECIDED"
+    components: list[dict] = []
+    if word == "CUTTABLE":
+        setup_usd = estimate["groups"][SETUP]["usd"]
+        rows = [c for c in estimate["components"] if c["group"] == SETUP]
+        # A component's share of window spend, from its dollars and the setup block's own
+        # figures (the estimate does not carry the window total).
+        components = [
+            {
+                "name": c["component"],
+                "usd": c["usd"],
+                "share_of_total": _r(c["usd"] / setup_usd * share) if setup_usd else 0.0,
+            }
+            for c in rows
+        ]
+        components.sort(key=lambda c: (-c["usd"], c["name"]))
+    return {
+        "bar": VERDICT_BAR,
+        "bar_set": VERDICT_BAR_SET,
+        "share": share,
+        "low": low,
+        "high": high,
+        "verdict": word,
+        "provisional": not calibrated,
+        "runs_per_arm": calibration.get("runs_per_arm") if calibration else None,
+        "components": components,
+    }
+
+
 def estimate_with_calibration(
     files: dict[FileKey, FileSizes],
     calls: Iterable[transcript_reader.Call],
@@ -464,7 +523,7 @@ def estimate_with_calibration(
     *,
     window_usd: float,
 ) -> dict:
-    """``estimate`` at the calibration's factor, plus ``calibration`` and ``comparison``.
+    """``estimate`` at the calibration's factor, plus ``calibration`` and ``comparison`` and ``verdict``.
 
     Calibrated, the costing rule is run again in full at factor 1.0 and at ``low`` and
     ``high`` when the file has them: the write threshold and the cap depend on the
@@ -482,6 +541,7 @@ def estimate_with_calibration(
     if not calibration.calibrated:
         result["calibration"] = None
         result["comparison"] = None
+        result["verdict"] = verdict(result)
         return result
     result["calibration"] = {
         "date": calibration.date,
@@ -494,4 +554,5 @@ def estimate_with_calibration(
         "low": _point(at(calibration.low, True)) if bounded else None,
         "high": _point(at(calibration.high, True)) if bounded else None,
     }
+    result["verdict"] = verdict(result)
     return result

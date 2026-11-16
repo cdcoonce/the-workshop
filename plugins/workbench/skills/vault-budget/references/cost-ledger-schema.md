@@ -1,6 +1,6 @@
 # Cost ledger JSON schema
 
-Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 5.
+Reference for the file `cost_ledger.py --json PATH` writes, and for the object `build_ledger` returns. See [command.md](command.md) for how to run it. Current `schema_version`: 6.
 
 Every figure covers in-window calls with a usable timestamp; undated calls are counted in `coverage.undated_calls` and in nothing else. Dollars are rounded to six places when a row is built, so a sum of rows can differ from the rounded total by a rounding step per row. Units: count, tokens, USD, ISO timestamp string, text.
 
@@ -80,6 +80,20 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `fixed_weight.subagent_usd` | USD | Fixed-weight dollars charged in subagent files. |
 | `fixed_weight.total_usd` | USD | Fixed-weight dollars over the window: the sum of the component dollars, rounded to six places. Never more than `totals.usd`. |
 | `fixed_weight.unpriced_calls` | count | Calls that would have been charged but have no price; charged nothing. |
+| `fixed_weight.verdict` | object | The decision the report ends in: the setup group's share of window spend against the bar. Present wherever `fixed_weight` is; there is no verdict without `--fixed-weight`. |
+| `fixed_weight.verdict.bar` | fraction | The bar: removable fixed context is worth cutting at this fraction of window spend or more (`0.2`). |
+| `fixed_weight.verdict.bar_set` | text | The day (YYYY-MM-DD) the bar was fixed, before any ledger numbers existed. |
+| `fixed_weight.verdict.components` | list | Only when `verdict` is `CUTTABLE`: the `setup` components, largest dollars first (ties by name). Empty for every other verdict. The `claude_code` group is never listed. |
+| `fixed_weight.verdict.components[]` | object | One `setup` component. |
+| `fixed_weight.verdict.components[].name` | text | The component name, as in `fixed_weight.components[].component`. |
+| `fixed_weight.verdict.components[].share_of_total` | fraction | The component's dollars as a fraction of `totals.usd`. |
+| `fixed_weight.verdict.components[].usd` | USD | The component's fixed-weight dollars. |
+| `fixed_weight.verdict.high` | fraction or null | The largest of the `setup` share at the factor in use and at the comparison's `low` and `high` points; equal to `share` when there are no bounds; `null` with no data. |
+| `fixed_weight.verdict.low` | fraction or null | The smallest of those same three figures (the estimator has a cap and a clamp, so the share need not rise with the factor); equal to `share` when there are no bounds; `null` with no data. |
+| `fixed_weight.verdict.provisional` | boolean | `true` exactly when the estimate is uncalibrated. A calibrated estimate without bounds is not provisional. |
+| `fixed_weight.verdict.runs_per_arm` | count or null | The calibration's recorded `runs_per_arm`; `null` when there is no calibration or it records none. |
+| `fixed_weight.verdict.share` | fraction or null | The `setup` group's share of window spend at the factor in use (`fixed_weight.groups.setup.share_of_total`); `null` when window spend is zero. |
+| `fixed_weight.verdict.verdict` | text | `CANNOT FIT` when `high` is below the bar; `CUTTABLE` when `low` is at or above it; `UNDECIDED` otherwise (so `high` equal to the bar with `low` below it is `UNDECIDED`); `NO DATA` when `share` is `null`. |
 | `fixed_weight.write_calls` | count | Charged calls on which the fixed context was costed as a cache write. |
 | `meter` | object or null | The meter check; `null` unless `--meter-usd` was given. Compares the window total with a dollar figure read by hand from Claude Code's usage view. |
 | `meter.difference_usd` | USD | `ledger_usd` minus `meter_usd`, signed: positive when the ledger is above the meter. |
@@ -97,7 +111,7 @@ Paths are dotted, `[]` marks list elements, and `<model>` stands for a model nam
 | `recorded_cost.recorded_usd` | USD | Recorded dollars of the comparable sessions. |
 | `recorded_cost.sessions_comparable` | count | In-window sessions that meet every condition in "Recorded cost and when it is comparable". |
 | `recorded_cost.sessions_in_window` | count | Session rows, that is sessions with an in-window call. |
-| `schema_version` | count | Schema version of this file: `4`. See the version history below. |
+| `schema_version` | count | Schema version of this file: `6`. See the version history below. |
 | `sessions` | list | One row per (project, session id) with an in-window call, sorted by project then session id. |
 | `sessions[]` | object | One session row. |
 | `sessions[].agents` | list | One row per agent in the session: `main` first, then subagents by agent id. |
@@ -267,3 +281,4 @@ A calibration file holds `factor`, and may hold `low` and `high`, the smallest a
 - 3: `meter` and `recorded_cost` added; `schema_version` is 3.
 - 4: `fixed_weight` added (the fixed-weight estimate, `null` without `--fixed-weight`); `schema_version` is 4.
 - 5: `fixed_weight.calibration` and `fixed_weight.comparison` added (the calibration file's provenance, and the estimate re-run at factor 1.0 and at the file's `low` and `high`; both `null` when uncalibrated); `schema_version` is 5.
+- 6: `fixed_weight.verdict` added (the share of window spend the setup group accounts for, set against the 20% bar fixed on 2026-11-14, with its range, provisional flag and, when cuttable, the components); `schema_version` is 6.

@@ -36,7 +36,7 @@ import fixed_weight as _fw
 import pricing
 import transcript_reader
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 AGGREGATES_VERSION = 1
 KINDS = ("input", "output", "cache_read", "write_5m", "write_1h")
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -637,6 +637,31 @@ def _fixed_weight_lines(fw: dict) -> list[str]:
             f"  Estimate capped on {n} {'call' if n == 1 else 'calls'}: the fixed charge "
             "cannot exceed a call's own dollars"
         )
+    if fw.get("verdict"):
+        lines += _verdict_lines(fw["verdict"])
+    return lines
+
+
+def _verdict_lines(v: dict) -> list[str]:
+    def pct(x: float) -> str:
+        return f"{x * 100:.2f}%"
+
+    lines = [f"Verdict (bar {v['bar'] * 100:g}% of window spend, set {v['bar_set']})"]
+    word = v["verdict"]
+    if word == "NO DATA":
+        return lines + ["  NO DATA: window spend is zero"]
+    lines.append(
+        f"  Removable setup share: {pct(v['share'])} (low {pct(v['low'])}, high {pct(v['high'])})"
+    )
+    text = ("PROVISIONAL " if v["provisional"] else "") + word
+    if word == "UNDECIDED":
+        runs = "unknown" if v["runs_per_arm"] is None else v["runs_per_arm"]
+        text += f": calibration spread too wide (runs per arm recorded: {runs})"
+    lines.append(f"  {text}")
+    if word == "CUTTABLE":
+        lines += [
+            f"    {c['name']}  ${c['usd']:,.2f}  {pct(c['share_of_total'])}" for c in v["components"]
+        ]
     return lines
 
 

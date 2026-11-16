@@ -13,6 +13,7 @@ import json
 import re
 import subprocess
 import sys
+from unittest import mock
 from datetime import date
 from pathlib import Path
 
@@ -235,7 +236,7 @@ class TestNoUnattributedCall:
 
 
 class TestJsonFile:
-    def test_schema_version_5_and_top_level_keys(self, tmp_path: Path) -> None:
+    def test_schema_version_6_and_top_level_keys(self, tmp_path: Path) -> None:
         out = tmp_path / "o.json"
         proc = run_cli("--since", "2026-11-10", "--until", "2026-11-12",
                        "--projects-root", str(SKILLS_FIXTURES / "projects"), "--json", str(out))
@@ -243,7 +244,7 @@ class TestJsonFile:
         text = out.read_text()
         obj = json.loads(text)
         assert text == json.dumps(obj, sort_keys=True, indent=2) + "\n"
-        assert obj["schema_version"] == 5
+        assert obj["schema_version"] == 6
         assert set(obj) == {
             "schema_version", "window", "totals", "coverage", "unpriced", "sessions",
             "skills", "unattributed", "meter", "recorded_cost", "fixed_weight",
@@ -378,11 +379,18 @@ class TestSchemaDocument:
             since="2026-11-10", until="2026-11-12", today=TODAY, fixed_weight=True,
             calibration=fixed_weight.Calibration(1.5, True, 1.0, 2.0, "2026-11-14", "9.9.9", 5),
         )
+        # Slice 9 adds the verdict; its component list is filled only when CUTTABLE.
+        with mock.patch.object(fixed_weight, "VERDICT_BAR", 0.05):
+            cuttable = cost_ledger.build_ledger(
+                HERE / "fixtures" / "cost_ledger_fixed" / "projects",
+                since="2026-11-10", until="2026-11-12", today=TODAY, fixed_weight=True,
+            )
+        assert cuttable["fixed_weight"]["verdict"]["components"], "fixture must reach CUTTABLE"
         assert ledger["unpriced"], "fixture must exercise an unpriced-model entry"
         assert ledger["recorded_cost"]["sessions_comparable"] > 0
         assert any(a["by_model"] for s in ledger["sessions"] for a in s["agents"])
         assert any(a["agent_id"] != "main" for s in ledger["sessions"] for a in s["agents"])
-        return flatten(ledger) | flatten(calibrated)
+        return flatten(ledger) | flatten(calibrated) | flatten(cuttable)
 
     def test_every_emitted_path_is_documented(self) -> None:
         missing = sorted(self.emitted() - documented_paths())
