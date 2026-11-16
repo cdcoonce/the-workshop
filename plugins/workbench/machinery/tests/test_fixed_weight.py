@@ -8,10 +8,14 @@ a size in tokens and every figure is exact.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import io
 import json
+import os
+import shutil
 import subprocess
+import tempfile
 import sys
 from datetime import date
 from pathlib import Path
@@ -39,17 +43,23 @@ def build(root: Path = ROOT, since: str = "2026-11-10", until: str = "2026-11-12
     return cost_ledger.build_ledger(root, since=since, until=until, today=TODAY, **kw)
 
 
+# Subprocess runs get an empty home, so no test reads or writes the real ~/.workshop.
+SCRATCH_HOME = tempfile.mkdtemp(prefix="cost-ledger-home-")
+atexit.register(shutil.rmtree, SCRATCH_HOME, ignore_errors=True)
+
+
 def run_cli(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(ENGINE / "cost_ledger.py"), *args], capture_output=True, text=True
+        [sys.executable, str(ENGINE / "cost_ledger.py"), *args], capture_output=True, text=True,
+        env={**os.environ, "HOME": SCRATCH_HOME},
     )
 
 
-def run_default(config_dir: Path, *args: str, chars_per_token: float | None = None) -> SimpleNamespace:
-    """Run ``cost_ledger.main`` in-process with the per-machine config directory pointed at ``config_dir``."""
+def run_default(home: Path, *args: str, chars_per_token: float | None = None) -> SimpleNamespace:
+    """Run ``cost_ledger.main`` in-process with ``HOME`` pointed at ``home`` (the default calibration path)."""
     out, err = io.StringIO(), io.StringIO()
     ratio = fixed_weight.CHARS_PER_TOKEN if chars_per_token is None else chars_per_token
-    with mock.patch.object(cost_ledger, "_config_dir", lambda: config_dir), \
+    with mock.patch.dict(os.environ, {"HOME": str(home)}), \
             mock.patch.object(fixed_weight, "CHARS_PER_TOKEN", ratio), \
             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         rc = cost_ledger.main(list(args))
@@ -510,9 +520,9 @@ class TestReport:
         assert proc.returncode == 0, proc.stderr
         return proc.stdout.splitlines()
 
-    def report_default(self, config_dir: Path) -> list[str]:
-        """The report with no --calibration flag and no file in ``config_dir`` (the default path)."""
-        proc = run_default(config_dir, *WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+    def report_default(self, home: Path) -> list[str]:
+        """The report with no --calibration flag and no file under ``home`` (the default path)."""
+        proc = run_default(home, *WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
                            chars_per_token=3.7)
         assert proc.returncode == 0, proc.stderr
         return proc.stdout.splitlines()
@@ -603,11 +613,24 @@ class TestCliCalibrationRefusals:
                        "--calibration", str(tmp_path))
         assert proc.returncode == 2 and len(proc.stderr.strip().splitlines()) == 1
 
-    def test_default_path_is_in_the_budget_burn_config_directory(
+    def test_default_path_is_under_home_and_read_at_call_time(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert cost_ledger.default_calibration_path() == (
+            tmp_path / ".workshop" / "cost-ledger" / "cost_ledger_calibration.json"
+        )
+        other = tmp_path / "other"
+        monkeypatch.setenv("HOME", str(other))
+        assert cost_ledger.default_calibration_path().is_relative_to(other)
+
+    def test_file_at_the_default_path_is_read_with_no_flag(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        (tmp_path / "cost_ledger_calibration.json").write_text('{"factor": 3}')
-        monkeypatch.setattr(cost_ledger, "_config_dir", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        target = cost_ledger.default_calibration_path()
+        target.parent.mkdir(parents=True)
+        target.write_text('{"factor": 3}')
         rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
         out = capsys.readouterr().out
         assert rc == 0 and "FIXED WEIGHT" in out and "UNCALIBRATED" not in out
@@ -615,18 +638,52 @@ class TestCliCalibrationRefusals:
     def test_default_path_with_a_bad_file_exits_2(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        (tmp_path / "cost_ledger_calibration.json").write_text("nope")
-        monkeypatch.setattr(cost_ledger, "_config_dir", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        target = cost_ledger.default_calibration_path()
+        target.parent.mkdir(parents=True)
+        target.write_text("nope")
         rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
         assert rc == 2 and len(capsys.readouterr().err.strip().splitlines()) == 1
 
-    def test_config_dir_is_where_budget_burn_loads_its_config(self) -> None:
+    def test_files_beside_the_engine_and_a_budget_burn_config_are_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         import budget_burn
 
-        cfg = getattr(budget_burn, "_config", None)
-        want = Path(cfg.__file__).parent if cfg is not None and getattr(cfg, "__file__", None) \
-            else Path(budget_burn.__file__).parent
-        assert cost_ledger._config_dir() == want
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        cfg = tmp_path / "cfg"
+        cfg.mkdir()
+        (cfg / fixed_weight.CALIBRATION_FILE).write_text('{"factor": 3}')
+        fake = SimpleNamespace(__file__=str(cfg / "_config.py"))
+        monkeypatch.setattr(budget_burn, "_config", fake, raising=False)
+        fake_engine = tmp_path / "engine"
+        fake_engine.mkdir()
+        (fake_engine / fixed_weight.CALIBRATION_FILE).write_text('{"factor": 3}')
+        monkeypatch.setattr(cost_ledger, "__file__", str(fake_engine / "cost_ledger.py"))
+        rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
+        assert rc == 0 and "UNCALIBRATED ESTIMATE" in capsys.readouterr().out
+
+    def test_calibration_flag_wins_over_a_file_at_the_default_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        target = cost_ledger.default_calibration_path()
+        target.parent.mkdir(parents=True)
+        target.write_text('{"factor": 3}')
+        other = tmp_path / "other.json"
+        other.write_text('{"factor": 2}')
+        out = tmp_path / "o.json"
+        rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight",
+                               "--calibration", str(other), "--json", str(out)])
+        capsys.readouterr()
+        fw = json.loads(out.read_text())["fixed_weight"]
+        assert rc == 0 and fw["calibrated"] is True and fw["calibration_factor"] == 2.0
+
+    def test_help_shows_the_literal_tilde_default(self) -> None:
+        proc = run_cli("--help")
+        assert proc.returncode == 0
+        flat = "".join(proc.stdout.split())  # argparse may wrap at the hyphens
+        assert "~/.workshop/cost-ledger/cost_ledger_calibration.json" in flat
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +787,7 @@ class TestCliMissingCalibration:
     def test_default_path_absent_is_factor_one_and_uncalibrated(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        monkeypatch.setattr(cost_ledger, "_config_dir", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
         rc = cost_ledger.main([*WINDOW, "--projects-root", str(ROOT), "--fixed-weight"])
         out = capsys.readouterr().out
         assert rc == 0 and "UNCALIBRATED ESTIMATE" in out

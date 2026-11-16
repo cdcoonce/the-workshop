@@ -8,9 +8,12 @@ changing one thing, or from a two-pair scenario with ``--min-runs 2``.
 
 from __future__ import annotations
 
+import atexit
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 from unittest import mock
@@ -35,10 +38,15 @@ DATE = "2026-11-14"
 IDENTIFIERS = (*FULL, *BARE, "cx-alpha", "cx-beta", "cost_ledger_calibration", "cal-fa1")
 
 
+# Subprocess runs get an empty home, so no test reads or writes the real ~/.workshop.
+SCRATCH_HOME = tempfile.mkdtemp(prefix="cost-ledger-home-")
+atexit.register(shutil.rmtree, SCRATCH_HOME, ignore_errors=True)
+
+
 def run(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(ENGINE / "fixed_weight_calibrate.py"), *args],
-        capture_output=True, text=True,
+        capture_output=True, text=True, env={**os.environ, "HOME": SCRATCH_HOME},
     )
 
 
@@ -262,11 +270,12 @@ class TestMeasuredAndPredicted:
     def test_predicted_ignores_an_existing_calibration_file_at_the_default_path(
         self, tmp_path: Path
     ) -> None:
-        cfg = tmp_path / "cfg"
-        cfg.mkdir()
-        (cfg / fixed_weight.CALIBRATION_FILE).write_text(json.dumps({"factor": 3.0}))
+        home = tmp_path / "home"
+        existing = home / ".workshop" / "cost-ledger" / fixed_weight.CALIBRATION_FILE
+        existing.parent.mkdir(parents=True)
+        existing.write_text(json.dumps({"factor": 3.0}))
         target = tmp_path / "result.json"
-        with mock.patch.object(cost_ledger, "_config_dir", lambda: cfg):
+        with mock.patch.dict(os.environ, {"HOME": str(home)}):
             rc = calibrate.main([*calibrate_args(ROOT, target)])
         assert rc == 0
         got = json.loads(target.read_text())
@@ -563,11 +572,55 @@ class TestVersion:
 # defaults
 # ---------------------------------------------------------------------------
 class TestDefaults:
-    def test_out_defaults_to_the_estimators_default_calibration_path(self, tmp_path: Path) -> None:
-        with mock.patch.object(cost_ledger, "_config_dir", lambda: tmp_path):
-            rc = calibrate.main([*arms(), "--projects-root", str(ROOT), "--date", DATE])
+    def test_out_defaults_to_the_estimators_default_calibration_path_and_makes_directories(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        want = tmp_path / ".workshop" / "cost-ledger" / fixed_weight.CALIBRATION_FILE
+        assert not want.parent.exists()
+        rc = calibrate.main([*arms(), "--projects-root", str(ROOT), "--date", DATE])
         assert rc == 0
-        assert json.loads((tmp_path / fixed_weight.CALIBRATION_FILE).read_text())["factor"] == 1.29
+        assert want == cost_ledger.default_calibration_path()
+        assert json.loads(want.read_text())["factor"] == 1.29
+
+    def test_explicit_out_with_a_missing_parent_refuses_and_creates_nothing(self, tmp_path: Path) -> None:
+        target = tmp_path / "missing" / "deeper" / "factor.json"
+        proc = run(*calibrate_args(ROOT, target))
+        assert proc.returncode == 2 and proc.stdout == ""
+        assert len(proc.stderr.strip().splitlines()) == 1
+        assert not (tmp_path / "missing").exists()
+
+    def test_refusal_with_default_out_creates_no_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        rc = calibrate.main([*arms(bare=BARE[:4]), "--projects-root", str(ROOT), "--date", DATE])
+        assert rc == 2
+        assert not (tmp_path / ".workshop").exists()
+
+    def test_sentinel_at_the_default_path_survives_every_path_not_aimed_at_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A file already at the default path is touched only when the default path is the target."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        sentinel = cost_ledger.default_calibration_path()
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text('{"factor": 7.777}')
+        before = sentinel.read_bytes()
+        refused = calibrate.main([*arms(bare=BARE[:4]), "--projects-root", str(ROOT), "--date", DATE])
+        assert refused == 2 and sentinel.read_bytes() == before
+        target = tmp_path / "explicit.json"
+        assert calibrate.main([*calibrate_args(ROOT, target)]) == 0
+        assert target.exists() and sentinel.read_bytes() == before
+        # the one exception: with no --out the default path is the target and is replaced
+        assert calibrate.main([*arms(), "--projects-root", str(ROOT), "--date", DATE]) == 0
+        assert sentinel.read_bytes() != before
+
+    def test_help_shows_the_literal_tilde_default(self) -> None:
+        proc = run("--help")
+        assert proc.returncode == 0
+        flat = "".join(proc.stdout.split())  # argparse may wrap at the hyphens
+        assert "~/.workshop/cost-ledger/cost_ledger_calibration.json" in flat
 
     def test_date_defaults_to_the_injected_today(self, out: Path) -> None:
         from datetime import date
@@ -597,15 +650,17 @@ class TestProcedureDocument:
     def test_has_the_pieces_a_cold_reader_needs(self) -> None:
         for needle in (
             "claude --version", "Reply with the single word: ok", "--session-id",
-            "claude plugin disable", "claude plugin enable", "alternating", "full, bare, full, bare",
+            "alternating", "full, bare, full, bare",
             "at least 5", "fixed_weight_calibrate.py",
             "Numbers only", "factor, low, high, runs per arm, Claude Code version, date",
         ):
             assert needle in PROCEDURE, needle
 
-    def test_warns_that_disabling_the_plugin_reaches_every_session_and_names_the_script(self) -> None:
-        assert "every Claude Code session started anywhere on the machine" in PROCEDURE
-        assert "Close your other Claude Code sessions" in PROCEDURE
+    def test_bare_arm_uses_the_settings_override_and_names_the_script(self) -> None:
+        assert '--settings \'{"enabledPlugins":{"<plugin>":false}}\'' in PROCEDURE
+        assert "that run only" in PROCEDURE and "changes nothing" in PROCEDURE
+        assert "claude plugin disable" not in PROCEDURE and "claude plugin enable" not in PROCEDURE
+        assert "every Claude Code session started anywhere" not in PROCEDURE
         assert "plugins/workbench/machinery/engine/fixed_weight_calibrate.py" in PROCEDURE
         assert ".claude/scripts/" not in PROCEDURE
         assert 'python3 "<engine>/fixed_weight_calibrate.py"' in PROCEDURE
@@ -616,12 +671,18 @@ class TestProcedureDocument:
         assert "one Claude Code version" in PROCEDURE
         assert "subagent files included" in PROCEDURE and "known to differ" in PROCEDURE
 
-    def test_unverified_commands_are_marked(self) -> None:
-        assert PROCEDURE.count("UNVERIFIED") >= 3
+    def test_nothing_is_marked_unverified_and_the_run_is_dated(self) -> None:
+        assert "UNVERIFIED" not in PROCEDURE and "unverified" not in PROCEDURE.lower()
+        assert "2026-11-15" in PROCEDURE and "2.1.316" in PROCEDURE
+        assert "no workbench entries" in PROCEDURE
 
-    def test_uses_the_plugin_subcommands_listed_in_local_help(self) -> None:
-        for sub in ("claude plugin disable", "claude plugin enable", "claude plugin list"):
-            assert sub in PROCEDURE
+    def test_names_the_default_location_that_survives_updates(self) -> None:
+        assert "~/.workshop/cost-ledger/cost_ledger_calibration.json" in PROCEDURE
+        assert "survives plugin updates" in PROCEDURE
+        assert "budget_burn" not in PROCEDURE
+
+    def test_uses_the_plugin_list_subcommand(self) -> None:
+        assert "claude plugin list" in PROCEDURE
 
     def test_linked_from_command_and_schema_documents(self) -> None:
         assert "cost-ledger-calibration.md" in (REFERENCES / "command.md").read_text(encoding="utf-8")
