@@ -155,6 +155,13 @@
       "replace": "\"test_command\": [\n    \"ragmark @ https://github.com/cdcoonce/ragmark/releases/download/v0.3.0/ragmark-0.3.0-py3-none-any.whl\",\n"
     },
     {
+      "label": "vault_mcp.py PEP 723 header drops the ragmark mcp extra",
+      "file": "../plugins/workbench/machinery/engine/vault_mcp.py",
+      "oracle": "real",
+      "find": "\"ragmark[mcp] @ ",
+      "replace": "\"ragmark @ "
+    },
+    {
       "label": "[control] uv.lock wheel hash is wrong by one digit",
       "file": "../plugins/workbench/machinery/uv.lock",
       "oracle": "real",
