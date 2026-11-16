@@ -44,8 +44,8 @@
       "label": "1 B2 dedup disabled: every line its own call",
       "file": "../engine/transcript_reader.py",
       "oracle": "real",
-      "find": "key = self._key(rec)\n        call = _call_from_record",
-      "replace": "key = self._key(rec) + (len(self._calls),)\n        call = _call_from_record"
+      "find": "key = self._key(rec)\n        trig, after = self._user_state.get(info.path, (\"none\", False))",
+      "replace": "key = self._key(rec) + (len(self._calls),)\n        trig, after = self._user_state.get(info.path, (\"none\", False))"
     },
     {
       "label": "2 B3 keep first line instead of largest",
@@ -65,8 +65,8 @@
       "label": "4 B2 dedup state per file",
       "file": "../engine/transcript_reader.py",
       "oracle": "real",
-      "find": "key = self._key(rec)\n        call = _call_from_record",
-      "replace": "key = self._key(rec) + (str(info.path),)\n        call = _call_from_record"
+      "find": "key = self._key(rec)\n        trig, after = self._user_state.get(info.path, (\"none\", False))",
+      "replace": "key = self._key(rec) + (str(info.path),)\n        trig, after = self._user_state.get(info.path, (\"none\", False))"
     },
     {
       "label": "5 B1 subagent discovery removed",

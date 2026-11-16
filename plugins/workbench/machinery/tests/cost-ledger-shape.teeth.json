@@ -1,0 +1,265 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_cost_ledger_shape.py",
+    "test_transcript_reader.py",
+    "test_context_spend.py",
+    "test_budget_burn.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_cost_ledger_shape.py",
+    "test_transcript_reader.py",
+    "test_context_spend.py",
+    "test_budget_burn.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 A2 a tool-result record overwrites the trigger",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "self._user_state[info.path] = (trig, True)",
+      "replace": "self._user_state[info.path] = (classify_trigger(rec), True)"
+    },
+    {
+      "label": "2 A2 trigger state shared across files (subagent inherits parent)",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "trig, _ = self._user_state.get(info.path, (\"none\", False))\n            if is_tool_result_record(rec):\n                self._user_state[info.path] = (trig, True)\n            else:\n                self._user_state[info.path] = (classify_trigger(rec), False)\n            return None\n        key = self._key(rec)\n        trig, after = self._user_state.get(info.path, (\"none\", False))",
+      "replace": "trig, _ = self._user_state.get(None, (\"none\", False))\n            if is_tool_result_record(rec):\n                self._user_state[None] = (trig, True)\n            else:\n                self._user_state[None] = (classify_trigger(rec), False)\n            return None\n        key = self._key(rec)\n        trig, after = self._user_state.get(None, (\"none\", False))"
+    },
+    {
+      "label": "3 A2 no prior user record defaults to programmatic",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "trig, after = self._user_state.get(info.path, (\"none\", False))",
+      "replace": "trig, after = self._user_state.get(info.path, (\"programmatic\", False))"
+    },
+    {
+      "label": "4 A2 after_tool_result never reset by a non-tool-result user record",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "self._user_state[info.path] = (classify_trigger(rec), False)",
+      "replace": "self._user_state[info.path] = (classify_trigger(rec), self._user_state.get(info.path, ('none', False))[1])"
+    },
+    {
+      "label": "5 A2 after_tool_result defaults true with no user record",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "trig, after = self._user_state.get(info.path, (\"none\", False))",
+      "replace": "trig, after = self._user_state.get(info.path, (\"none\", True))"
+    },
+    {
+      "label": "6 A1 classifier checks human origin before task-notification",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "    if text.startswith(\"<task-notification>\") or kind == \"task-notification\":",
+      "replace": "    if kind == \"human\":\n        return \"human-typed\"\n    if text.startswith(\"<task-notification>\") or kind == \"task-notification\":"
+    },
+    {
+      "label": "7 A1 classifier drops the hook branch",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "if text.startswith(\"Stop hook feedback\") or \"hook\" in text[:40].lower():",
+      "replace": "if False:"
+    },
+    {
+      "label": "8 B1 every call bucketed under programmatic",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "slot_t = trig[call.trigger if call.trigger in trig else \"none\"]",
+      "replace": "slot_t = trig[\"programmatic\"]"
+    },
+    {
+      "label": "9 B1 subagent calls skipped in the trigger rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "slot_t = trig[call.trigger if call.trigger in trig else \"none\"]",
+      "replace": "slot_t = dict.fromkeys((\"calls\", \"usd\", \"main_usd\", \"subagent_usd\", \"atr_calls\", \"atr_usd\"), 0) if call.is_subagent else trig[call.trigger if call.trigger in trig else \"none\"]"
+    },
+    {
+      "label": "10 B1 subagent dollars added to main_usd",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "slot_t[\"subagent_usd\" if call.is_subagent else \"main_usd\"] += priced.total_usd",
+      "replace": "slot_t[\"main_usd\"] += priced.total_usd"
+    },
+    {
+      "label": "11 B1 after_tool_result_usd counts all the row's dollars",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        if call.after_tool_result:\n            slot_t[\"atr_calls\"] += 1\n            slot_t[\"atr_usd\"] += priced.total_usd",
+      "replace": "        slot_t[\"atr_usd\"] += priced.total_usd\n        if call.after_tool_result:\n            slot_t[\"atr_calls\"] += 1"
+    },
+    {
+      "label": "12 B1 JSON emits only nonzero trigger rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "for t, v in trig.items()\n",
+      "replace": "for t, v in trig.items() if v[\"calls\"]\n"
+    },
+    {
+      "label": "13 B1 share_of_total is 0.0 instead of null on a zero total",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"share_of_total\": _r(v[\"usd\"] / total.usd) if total.usd else None,",
+      "replace": "\"share_of_total\": _r(v[\"usd\"] / total.usd) if total.usd else 0.0,"
+    },
+    {
+      "label": "14 B3 text ordered by label instead of dollars",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "key=lambda r: (-r[\"usd\"], r[\"trigger\"])",
+      "replace": "key=lambda r: r[\"trigger\"]"
+    },
+    {
+      "label": "15 B3 sum line omitted",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    lines.append(\n        f\"    Sum of rows {_usd(sum(r['usd'] for r in rows)).strip()}; \"\n        f\"window total {_usd(ledger['totals']['usd']).strip()}\"\n    )\n",
+      "replace": "    pass\n"
+    },
+    {
+      "label": "16 B4 export leaves triggers out",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        \"triggers\": copy.deepcopy(ledger[\"triggers\"]),\n",
+      "replace": ""
+    },
+    {
+      "label": "17 C1 context size omits cache write",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return call.input_tokens + call.cache_read_tokens + call.cache_write_tokens",
+      "replace": "return call.input_tokens + call.cache_read_tokens"
+    },
+    {
+      "label": "18 C2 context_first takes the minimum, not the first",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"context_first\": contexts[0] if contexts else None,",
+      "replace": "\"context_first\": min(contexts) if contexts else None,"
+    },
+    {
+      "label": "19 C2 context_median uses the mean",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"context_median\": statistics.median(contexts) if contexts else None,",
+      "replace": "\"context_median\": statistics.mean(contexts) if contexts else None,"
+    },
+    {
+      "label": "20 C2 context_max takes the last call",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"context_max\": max(contexts) if contexts else None,",
+      "replace": "\"context_max\": contexts[-1] if contexts else None,"
+    },
+    {
+      "label": "21 C2 context figures include subagent calls",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        if not call.is_subagent:\n            main_contexts.setdefault(skey, []).append(size)",
+      "replace": "        if True:\n            main_contexts.setdefault(skey, []).append(size)"
+    },
+    {
+      "label": "22 C2 above-200k is not strict (>=)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if size > LONG_CONTEXT_TOKENS:",
+      "replace": "if size >= LONG_CONTEXT_TOKENS:"
+    },
+    {
+      "label": "23 C2 above-200k dollars exclude subagent calls",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if size > LONG_CONTEXT_TOKENS:",
+      "replace": "if size > LONG_CONTEXT_TOKENS and not call.is_subagent:"
+    },
+    {
+      "label": "24 C2 share denominator is the window total",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "_r(above / acc.usd) if acc.usd else None",
+      "replace": "_r(above / total.usd) if total.usd else None"
+    },
+    {
+      "label": "25 C2 context fields are 0 on zero main calls",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"context_first\": contexts[0] if contexts else None,\n            \"context_median\": statistics.median(contexts) if contexts else None,\n            \"context_max\": max(contexts) if contexts else None,",
+      "replace": "\"context_first\": contexts[0] if contexts else 0,\n            \"context_median\": statistics.median(contexts) if contexts else 0,\n            \"context_max\": max(contexts) if contexts else 0,"
+    },
+    {
+      "label": "26 C3 shape section sorted by context_max, not the top-ten order",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    for s in top:\n        shape = s.get(\"shape\")",
+      "replace": "    for s in sorted(top, key=lambda s: -((s.get(\"shape\") or {}).get(\"context_max\") or 0)):\n        shape = s.get(\"shape\")"
+    },
+    {
+      "label": "27 C3 above-200k line drops the printed denominator",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "f\"above {threshold // 1000}k: ${shape['usd_above_long_context']:,.2f} of \"\n            f\"${s['usd']:,.2f} ({_share_text(shape['share_above_long_context'])})\"",
+      "replace": "f\"above {threshold // 1000}k: ${shape['usd_above_long_context']:,.2f} \"\n            f\"({_share_text(shape['share_above_long_context'])})\""
+    },
+    {
+      "label": "28 C4 session shape rows copied into the export",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        \"session_count\": len(ledger[\"sessions\"]),",
+      "replace": "        \"shape\": [s[\"shape\"] for s in ledger[\"sessions\"]],\n        \"session_count\": len(ledger[\"sessions\"]),"
+    },
+    {
+      "label": "29 SCHEMA_VERSION left at 6",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 7",
+      "replace": "SCHEMA_VERSION = 6"
+    },
+    {
+      "label": "30 A3 context_spend treats every call's trigger as none",
+      "file": "../engine/context_spend.py",
+      "oracle": "real",
+      "find": "meta[kept.key] = (side, kept.trigger)",
+      "replace": "meta[kept.key] = (side, \"none\")"
+    },
+    {
+      "label": "31 [control] C2 median of sorted values (equivalent)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"context_median\": statistics.median(contexts) if contexts else None,",
+      "replace": "\"context_median\": statistics.median(sorted(contexts)) if contexts else None,",
+      "expect": "survived",
+      "why": "statistics.median sorts its input itself, so sorting first changes nothing for any list; no test can tell them apart. Scope: only the spelling of the median call."
+    }
+  ]
+}

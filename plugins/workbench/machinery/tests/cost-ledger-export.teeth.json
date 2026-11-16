@@ -214,7 +214,7 @@
       "label": "25 schema_version left at 2",
       "file": "../engine/cost_ledger.py",
       "oracle": "real",
-      "find": "SCHEMA_VERSION = 6",
+      "find": "SCHEMA_VERSION = 7",
       "replace": "SCHEMA_VERSION = 2"
     },
     {
