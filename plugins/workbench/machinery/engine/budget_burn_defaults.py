@@ -1,11 +1,17 @@
-"""Shipped default project aliases, price table, and monthly budget.
+"""Shipped default project aliases and monthly budget.
 
 Managed tier: upgrade owns this file. It is the fallback only — the values a
-vault actually bills against live in the scaffold-rendered
-``budget_burn_config.py`` (``scaffold/budget_burn_config.py.tmpl``), which init
-writes once and upgrade never touches. budget_burn prefers that config and
+vault actually bills against live in the owner's ``budget_burn_config.py``
+(optional; an owner copies this file out and drops the ``_defaults`` suffix).
+budget_burn prefers that config and
 falls back here for any name it does not define, so a vault vendored before the
 config existed still reports its burn.
+
+Prices are not here: the per-model default table is ``pricing_defaults.py``.
+A vault overrides it by defining ``MODEL_PRICES`` in its own
+``budget_burn_config.py`` (a dict of table key to price row, merged per key over
+the defaults; row shape in ``pricing_defaults``). The old tier-keyed ``RATES``
+no longer affects any dollar figure and is reported if still defined.
 """
 
 from __future__ import annotations
@@ -21,15 +27,6 @@ PROJECT_ALIASES: dict[str, str] = {
     "-Users-cdcoonce-Developer-GitHub-claude-workflow": (
         "-Users-cdcoonce-Developer-GitHub-the-workshop"
     ),
-}
-
-# Per-1M-token USD rates (input, output). Cache read = 0.1x input; cache write
-# (5-min TTL) = 1.25x input. Source: claude-api pricing 2026-06-16.
-RATES: dict[str, tuple[float, float]] = {
-    "fable": (10.0, 50.0),
-    "opus": (5.0, 25.0),
-    "sonnet": (3.0, 15.0),
-    "haiku": (1.0, 5.0),
 }
 
 MONTHLY_BUDGET = 350.0

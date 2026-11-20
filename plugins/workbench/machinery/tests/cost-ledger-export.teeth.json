@@ -1,0 +1,244 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_cost_ledger_export.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_transcript_reader.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_cost_ledger_export.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_transcript_reader.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 meter flag at exactly 10 percent",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "round(gap_percent, 6) >= 10,"
+    },
+    {
+      "label": "2 meter flag only when ledger is above meter",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "gap_percent = abs(difference) /",
+      "replace": "gap_percent = difference /"
+    },
+    {
+      "label": "3 meter threshold 20 percent",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "round(gap_percent, 6) > 20,"
+    },
+    {
+      "label": "4 gap percent relative to the ledger total",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "abs(difference) / meter_usd * 100",
+      "replace": "abs(difference) / ledger_usd * 100"
+    },
+    {
+      "label": "5 METER GAP line printed after the meter block",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    lines = []\n    if meter[\"gap_flag\"]:\n        lines.append(\n            f\"METER GAP: ledger and meter differ by {meter['gap_percent']:.1f}%, more than 10%\"\n        )\n    lines += [\n        \"Meter check (figure read by hand from the usage view)\",\n        f\"  Ledger total: ${meter['ledger_usd']:,.2f}\",\n        f\"  Meter:        ${meter['meter_usd']:,.2f}\",\n        f\"  Difference:   {_signed_usd(meter['difference_usd'])} (ledger minus meter)\",\n        f\"  Gap:          {meter['gap_percent']:.1f}%\",\n    ]\n",
+      "replace": "    lines = [\n        \"Meter check (figure read by hand from the usage view)\",\n        f\"  Ledger total: ${meter['ledger_usd']:,.2f}\",\n        f\"  Meter:        ${meter['meter_usd']:,.2f}\",\n        f\"  Difference:   {_signed_usd(meter['difference_usd'])} (ledger minus meter)\",\n        f\"  Gap:          {meter['gap_percent']:.1f}%\",\n    ]\n    if meter[\"gap_flag\"]:\n        lines.append(\n            f\"METER GAP: ledger and meter differ by {meter['gap_percent']:.1f}%, more than 10%\"\n        )\n"
+    },
+    {
+      "label": "6 meter block appended at the end of the report",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    sys.stdout.write(report(ledger))\n",
+      "replace": "    body = report({**ledger, \"meter\": None})\n    tail = \"\\n\".join(_meter_lines(ledger[\"meter\"])) + \"\\n\" if ledger[\"meter\"] else \"\"\n    sys.stdout.write(body + tail)\n"
+    },
+    {
+      "label": "7 meter N of 0 or below accepted",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if not math.isfinite(value) or value <= 0:",
+      "replace": "if not math.isfinite(value):"
+    },
+    {
+      "label": "8 meter object with zeros when the flag is absent",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"meter\": None,\n        \"recorded_cost\": _recorded_cost(",
+      "replace": "\"meter\": {\"meter_usd\": 0.0, \"ledger_usd\": 0.0, \"difference_usd\": 0.0, \"gap_percent\": 0.0, \"gap_flag\": False},\n        \"recorded_cost\": _recorded_cost("
+    },
+    {
+      "label": "9 session id list added to the export",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"session_count\": len(ledger[\"sessions\"]),",
+      "replace": "\"session_count\": len(ledger[\"sessions\"]),\n        \"session_ids\": [s[\"session_id\"] for s in ledger[\"sessions\"]],"
+    },
+    {
+      "label": "10 by-project map added to the export",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"aggregates_version\": AGGREGATES_VERSION,",
+      "replace": "\"aggregates_version\": AGGREGATES_VERSION,\n        \"by_project\": {s[\"project\"]: s[\"usd\"] for s in ledger[\"sessions\"]},"
+    },
+    {
+      "label": "11 subagent table keyed by agent id",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "slot = by_type.setdefault(agent[\"agent_type\"], {\"calls\": 0, \"usd\": 0.0})",
+      "replace": "slot = by_type.setdefault(agent[\"agent_id\"], {\"calls\": 0, \"usd\": 0.0})"
+    },
+    {
+      "label": "12 export totals from main-agent rows only",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "            \"calls\": t[\"calls\"],\n            \"unpriced_calls\": t[\"unpriced_calls\"],\n            \"usd\": t[\"usd\"],",
+      "replace": "            \"calls\": sum(a[\"calls\"] for s in ledger[\"sessions\"] for a in s[\"agents\"] if a[\"agent_id\"] == \"main\"),\n            \"unpriced_calls\": t[\"unpriced_calls\"],\n            \"usd\": t[\"main_usd\"],"
+    },
+    {
+      "label": "13 session_count counts agent rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"session_count\": len(ledger[\"sessions\"]),",
+      "replace": "\"session_count\": sum(len(s[\"agents\"]) for s in ledger[\"sessions\"]),"
+    },
+    {
+      "label": "14 median is the mean",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "        pos = (len(ordered) - 1) * q\n",
+      "replace": "        pos = (len(ordered) - 1) * q\n        if name == \"median\":\n            out[name] = _r(sum(ordered) / len(ordered))\n            continue\n"
+    },
+    {
+      "label": "15 quantiles on unsorted values",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "ordered = sorted(values)",
+      "replace": "ordered = list(values)"
+    },
+    {
+      "label": "16 zeros for an empty window",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return {name: None for name, _ in names}",
+      "replace": "return {name: 0.0 for name, _ in names}"
+    },
+    {
+      "label": "17 agent type table includes main rows",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if agent[\"agent_id\"] != \"main\":",
+      "replace": "if True:"
+    },
+    {
+      "label": "18 export meter always null",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "\"meter\": None if ledger[\"meter\"] is None else dict(ledger[\"meter\"]),",
+      "replace": "\"meter\": None,"
+    },
+    {
+      "label": "19 comparable ignores calls outside the window",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": " or skey in outside:",
+      "replace": ":"
+    },
+    {
+      "label": "20 flagged sessions enter the comparable sums",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "if state.has_unknown_model_cost:",
+      "replace": "if False:"
+    },
+    {
+      "label": "21 first cost-state record of the file used",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "if old is None or total > old.total_cost_usd:",
+      "replace": "if old is None:"
+    },
+    {
+      "label": "22 main-agent dollars compared",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "            ledger += row[\"usd\"]",
+      "replace": "            ledger += sum(a[\"usd\"] for a in row[\"agents\"] if a[\"agent_id\"] == \"main\")"
+    },
+    {
+      "label": "23 session with an unpriced call comparable",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": " or row[\"unpriced_calls\"]",
+      "replace": ""
+    },
+    {
+      "label": "24 non-numeric totalCostUSD coerced to 0 and kept",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "    if isinstance(value, bool) or not isinstance(value, (int, float)):\n        return None\n    if not math.isfinite(value) or value < 0:\n        return None\n",
+      "replace": "    if isinstance(value, bool) or not isinstance(value, (int, float)):\n        return 0.0\n    if not math.isfinite(value) or value < 0:\n        return 0.0\n"
+    },
+    {
+      "label": "25 schema_version left at 2",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 7",
+      "replace": "SCHEMA_VERSION = 2"
+    },
+    {
+      "label": "27 meter flag from the unrounded gap percent",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "round(gap_percent, 6) > 10,",
+      "replace": "gap_percent > 10,"
+    },
+    {
+      "label": "28 tied cost-state records: take the first record's flag",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "elif total == old.total_cost_usd and unknown and not old.has_unknown_model_cost:",
+      "replace": "elif False:"
+    },
+    {
+      "label": "26 [control] comparable sessions summed in reverse",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    for row in rows:\n        skey = (row[\"project\"], row[\"session_id\"])",
+      "replace": "    for row in reversed(rows):\n        skey = (row[\"project\"], row[\"session_id\"])",
+      "expect": "survived",
+      "why": "Float addition order moves only the last ulp; the export fixture figures (1.875, 3.75, 1.875 against 2.0, 4.0, 2.0) are exactly representable, so the sums are order-free. Not inert for arbitrary figures."
+    }
+  ]
+}

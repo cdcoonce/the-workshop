@@ -1,0 +1,28 @@
+{
+  "_about": "Hand-derived from the slice 5 spec (S1-S7) and the claude-opus-4-8 price table before the code was written. Window 2026-11-10 to 2026-11-12. One unit is 62500 tokens, so every dollar figure is exact in binary floating point: per unit input 0.3125, output 1.5625. Fixture 'projects': call c10 is out of window and c11 undated (both in no row); c9 is on an unpriced model; c8 uses a skill literally named unattributed; c5 has an empty skill, c6 a non-string one, c7 only a plugin; d2 is a subagent call with a skill, d3 one without. Fixture 'many_skills': 17 skills in one session, none unattributed; skill-15, skill-16 and skill-17 tie at 2 units.",
+  "projects": {
+    "skills": {
+      "Commit ": {"calls": 1, "unpriced_calls": 0, "usd": 0.3125, "input": 62500, "output": 0, "sessions": 1},
+      "commit": {"calls": 6, "unpriced_calls": 1, "usd": 7.1875, "input": 250000, "output": 312500, "sessions": 3,
+                 "usd_breakdown": {"input": 0.9375, "output": 6.25, "cache_read": 0.0, "write_5m": 0.0, "write_1h": 0.0}},
+      "unattributed": {"calls": 1, "unpriced_calls": 0, "usd": 0.3125, "input": 62500, "output": 0, "sessions": 1},
+      "workbench:commit": {"calls": 1, "unpriced_calls": 0, "usd": 0.625, "input": 125000, "output": 0, "sessions": 1}
+    },
+    "unattributed": {"calls": 4, "unpriced_calls": 0, "usd": 4.375, "input": 250000, "output": 125000, "sessions": 2,
+                     "usd_breakdown": {"input": 1.25, "output": 3.125, "cache_read": 0.0, "write_5m": 0.0, "write_1h": 0.0}},
+    "totals": {"calls": 13, "unpriced_calls": 1, "usd": 12.8125, "input": 750000, "output": 437500,
+               "usd_breakdown": {"input": 3.4375, "output": 9.375, "cache_read": 0.0, "write_5m": 0.0, "write_1h": 0.0}}
+  },
+  "many_skills": {
+    "skills_usd": {
+      "skill-01": 5.3125, "skill-02": 5.0, "skill-03": 4.6875, "skill-04": 4.375, "skill-05": 4.0625,
+      "skill-06": 3.75, "skill-07": 3.4375, "skill-08": 3.125, "skill-09": 2.8125, "skill-10": 2.5,
+      "skill-11": 2.1875, "skill-12": 1.875, "skill-13": 1.5625, "skill-14": 1.25,
+      "skill-15": 0.625, "skill-16": 0.625, "skill-17": 0.625
+    },
+    "total_usd": 47.8125,
+    "shown": ["skill-01", "skill-02", "skill-03", "skill-04", "skill-05", "skill-06", "skill-07", "skill-08",
+              "skill-09", "skill-10", "skill-11", "skill-12", "skill-13", "skill-14", "skill-15"],
+    "rest": {"count": 2, "usd": 1.25}
+  }
+}

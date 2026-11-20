@@ -1,0 +1,2 @@
+{"type": "assistant", "uuid": "zq-uuid-11", "requestId": "zq-req-11", "message": {"id": "zq-msg-11", "model": "claude-opus-4-8", "content": [{"type": "text", "text": "placeholder"}], "usage": {"input_tokens": 62500, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0}}}, "timestamp": "2026-11-12T01:00:00Z"}
+{"type": "cost-state", "totalCostUSD": 1.0, "hasUnknownModelCost": false}
