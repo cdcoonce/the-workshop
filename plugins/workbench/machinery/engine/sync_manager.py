@@ -64,6 +64,9 @@ _RETRY_DELAY_SECONDS = 1.0
 # because an earlier failure left unmerged index entries.
 _STASH_CONFLICT_MARKER = "autostash resulted in conflicts"
 _UNMERGED_MARKER = "unmerged files"
+# Printed whenever the pull stashed local edits. The conflict wording above is
+# not stable across git versions, so a stash alone makes us read the index.
+_AUTOSTASH_MARKER = "created autostash"
 
 
 def _run_git(args: list[str], cwd: Path, timeout: int = 25) -> subprocess.CompletedProcess[str]:
@@ -318,10 +321,16 @@ def _stuck_index_result(cwd: Path, output: str) -> SyncResult | None:
     edits. Never resolves.
     """
     lowered = output.lower()
+    refused = _UNMERGED_MARKER in lowered
+    stashed = _AUTOSTASH_MARKER in lowered
     stash_conflict = _STASH_CONFLICT_MARKER in lowered
-    if not (stash_conflict or _UNMERGED_MARKER in lowered) or _rebase_in_progress(cwd):
+    if not (stash_conflict or refused or stashed) or _rebase_in_progress(cwd):
         return None
     paths = _unmerged_paths(cwd)
+    if stashed and not (stash_conflict or refused):
+        if not paths:
+            return None  # the stash re-applied cleanly
+        stash_conflict = True  # no wording from this git version, but the index says so
     where = f" in {', '.join(paths)}" if paths else ""
     if stash_conflict:
         what = (

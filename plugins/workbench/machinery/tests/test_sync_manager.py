@@ -861,15 +861,19 @@ def test_push_from_worktree_session_branch_lands_on_main_without_a_stray_branch(
 
 
 def _stuck_stash_conflict(tmp_path):
-    """B untracks a file that A has dirty: pull rebases fine, the stash pop conflicts."""
+    """A has a dirty edit to a line B changed upstream: the rebase is clean, the stash pop conflicts.
+
+    A same-line content conflict, not a modify/delete: git's autostash wording and
+    even whether a modify/delete conflicts at all differ across git versions.
+    """
     a, b = _setup(tmp_path)
     (a / "state.json").write_text("v1\n")
     _git(a, "add", ".")
     _git(a, "commit", "-m", "track state")
     _git(a, "push", "origin", "main")
     _git(b, "pull", "origin", "main")
-    _git(b, "rm", "-q", "state.json")
-    _git(b, "commit", "-m", "untrack state")
+    (b / "state.json").write_text("v2 upstream\n")
+    _git(b, "commit", "-qam", "change state")
     _git(b, "push", "origin", "main")
     (a / "state.json").write_text("v2 dirty\n")
     return a
