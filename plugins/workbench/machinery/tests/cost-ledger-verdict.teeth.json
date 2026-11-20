@@ -1,0 +1,211 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_cost_ledger_verdict.py",
+    "test_fixed_weight.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_cost_ledger_verdict.py",
+    "test_fixed_weight.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 CUTTABLE at exactly the bar (mutant: low > bar)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "elif low >= VERDICT_BAR:",
+      "replace": "elif low > VERDICT_BAR:"
+    },
+    {
+      "label": "2 CANNOT FIT is strict (mutant: high <= bar)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "elif high < VERDICT_BAR:",
+      "replace": "elif high <= VERDICT_BAR:"
+    },
+    {
+      "label": "3 a straddle is UNDECIDED (mutant: falls through to CANNOT FIT)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "word = \"UNDECIDED\"",
+      "replace": "word = \"CANNOT FIT\""
+    },
+    {
+      "label": "4 CUTTABLE is judged on low (mutant: judged on share)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "elif low >= VERDICT_BAR:",
+      "replace": "elif share >= VERDICT_BAR:"
+    },
+    {
+      "label": "5 CANNOT FIT is judged on high (mutant: judged on share)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "elif high < VERDICT_BAR:",
+      "replace": "elif share < VERDICT_BAR:"
+    },
+    {
+      "label": "6 low is the min of three points (mutant: comparison.low taken as low)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "low, high = min(points), max(points)",
+      "replace": "low, high = points[0], max(points)"
+    },
+    {
+      "label": "7 uncalibrated low == high == share (mutant: low and high reported null without a comparison)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "\"low\": low,\n        \"high\": high,",
+      "replace": "\"low\": low if comparison else None,\n        \"high\": high if comparison else None,"
+    },
+    {
+      "label": "8 null share is NO DATA (mutant: null share treated as 0.0)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "share = estimate[\"groups\"][SETUP][\"share_of_total\"]",
+      "replace": "share = estimate[\"groups\"][SETUP][\"share_of_total\"] or 0.0"
+    },
+    {
+      "label": "9 provisional when uncalibrated (mutant: never provisional)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "\"provisional\": not calibrated,",
+      "replace": "\"provisional\": False,"
+    },
+    {
+      "label": "10 a calibrated estimate is not provisional (mutant: always provisional)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "\"provisional\": not calibrated,",
+      "replace": "\"provisional\": True,"
+    },
+    {
+      "label": "11 components largest first (mutant: ascending by usd)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "components.sort(key=lambda c: (-c[\"usd\"], c[\"name\"]))",
+      "replace": "components.sort(key=lambda c: (c[\"usd\"], c[\"name\"]))"
+    },
+    {
+      "label": "12 a usd tie is broken by name (mutant: input order kept)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "components.sort(key=lambda c: (-c[\"usd\"], c[\"name\"]))",
+      "replace": "components.sort(key=lambda c: -c[\"usd\"])"
+    },
+    {
+      "label": "13 components only when CUTTABLE (mutant: listed for every verdict)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "    if word == \"CUTTABLE\":\n        setup_usd",
+      "replace": "    if True:\n        setup_usd"
+    },
+    {
+      "label": "14 claude_code components never listed (mutant: every group listed)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "rows = [c for c in estimate[\"components\"] if c[\"group\"] == SETUP]",
+      "replace": "rows = list(estimate[\"components\"])"
+    },
+    {
+      "label": "15 UNDECIDED prints runs per arm (mutant: text omitted)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "text += f\": calibration spread too wide (runs per arm recorded: {runs})\"",
+      "replace": "text += \": calibration spread too wide\""
+    },
+    {
+      "label": "16 the bar is 0.20 (mutant: 0.25)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "VERDICT_BAR = 0.20",
+      "replace": "VERDICT_BAR = 0.25"
+    },
+    {
+      "label": "17 heading prints the date (mutant: date omitted)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": ", set {v['bar_set']})\"]",
+      "replace": ")\"]"
+    },
+    {
+      "label": "18a uncalibrated estimate carries the verdict (mutant: key not attached on that path)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "result[\"comparison\"] = None\n        result[\"verdict\"] = verdict(result)",
+      "replace": "result[\"comparison\"] = None"
+    },
+    {
+      "label": "18b calibrated estimate carries the verdict (mutant: key not attached on that path)",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "\"high\": _point(at(calibration.high, True)) if bounded else None,\n    }\n    result[\"verdict\"] = verdict(result)",
+      "replace": "\"high\": _point(at(calibration.high, True)) if bounded else None,\n    }"
+    },
+    {
+      "label": "19 PROVISIONAL prefix printed (mutant: prefix never printed)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "text = (\"PROVISIONAL \" if v[\"provisional\"] else \"\") + word",
+      "replace": "text = word"
+    },
+    {
+      "label": "20 shares print two decimals (mutant: one decimal)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "return f\"{x * 100:.2f}%\"",
+      "replace": "return f\"{x * 100:.1f}%\""
+    },
+    {
+      "label": "21 SCHEMA_VERSION is 6 (mutant: 5)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "SCHEMA_VERSION = 7",
+      "replace": "SCHEMA_VERSION = 5"
+    },
+    {
+      "label": "22 [control] rule order",
+      "file": "../engine/fixed_weight.py",
+      "oracle": "real",
+      "find": "elif low >= VERDICT_BAR:",
+      "replace": "elif not (low < VERDICT_BAR):",
+      "expect": "survived",
+      "why": "not (low < bar) and low >= bar are the same comparison for non-null floats (low is never null here: the NO DATA branch comes first); no test can tell them apart. Scope: only the spelling of the CUTTABLE comparison."
+    }
+  ]
+}

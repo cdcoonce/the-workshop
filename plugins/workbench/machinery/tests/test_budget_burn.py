@@ -1,7 +1,7 @@
 """Tests for budget_burn — the cost math behind the API spend meter (issue #57).
 
 Covers the tier/price lookup, per-record cost arithmetic (exact numbers
-computed by hand from RATES), scan's dedup-by-requestId behavior (a duplicated
+computed by hand from the per-model price table), scan's dedup-by-requestId behavior (a duplicated
 transcript record for one API call must be counted once), and the _pace helper
 (normal/over-pace pacing, non-leap February day count, and day-1 projection).
 
@@ -30,7 +30,8 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import budget_burn
 import budget_burn_defaults
-from budget_burn import RATES, _pace, _record_cost, _tier, scan
+import pricing
+from budget_burn import _pace, _tier, scan
 
 
 # ---------------------------------------------------------------------------
@@ -59,74 +60,6 @@ class TestTier:
 
 
 # ---------------------------------------------------------------------------
-# _record_cost — exact arithmetic from RATES
-# ---------------------------------------------------------------------------
-class TestRecordCost:
-    def test_opus_input_output(self) -> None:
-        # opus rates = (5.0, 25.0). 1M input + 1M output:
-        # (1e6*5 + 1e6*25) / 1e6 = 30.0
-        usage = {"input_tokens": 1_000_000, "output_tokens": 1_000_000}
-        assert _record_cost(usage, "opus") == 30.0
-
-    def test_cache_read_is_tenth_of_input(self) -> None:
-        # cache_read costs rate_in * 0.1. opus rate_in=5.0 → 0.5/1M.
-        # 1M cache_read: 1e6 * 0.5 / 1e6 = 0.5
-        usage = {"cache_read_input_tokens": 1_000_000}
-        assert _record_cost(usage, "opus") == 0.5
-
-    def test_cache_write_is_1_25x_input(self) -> None:
-        # cache_write costs rate_in * 1.25. opus rate_in=5.0 → 6.25/1M.
-        # 1M cache_write: 1e6 * 6.25 / 1e6 = 6.25
-        usage = {"cache_creation_input_tokens": 1_000_000}
-        assert _record_cost(usage, "opus") == 6.25
-
-    def test_all_four_components_haiku(self) -> None:
-        # haiku rates = (1.0, 5.0). 1M of each component:
-        # input:       1e6 * 1.0   = 1_000_000
-        # output:      1e6 * 5.0   = 5_000_000
-        # cache_read:  1e6 * 0.1   =   100_000
-        # cache_write: 1e6 * 1.25  = 1_250_000
-        # sum = 7_350_000 / 1e6 = 7.35
-        usage = {
-            "input_tokens": 1_000_000,
-            "output_tokens": 1_000_000,
-            "cache_read_input_tokens": 1_000_000,
-            "cache_creation_input_tokens": 1_000_000,
-        }
-        assert _record_cost(usage, "haiku") == pytest.approx(7.35)
-
-    def test_sonnet_mixed_realistic(self) -> None:
-        # sonnet rates = (3.0, 15.0).
-        # input 200_000 * 3.0       =   600_000
-        # output 50_000 * 15.0      =   750_000
-        # cache_read 800_000 * 0.3  =   240_000
-        # sum = 1_590_000 / 1e6 = 1.59
-        usage = {
-            "input_tokens": 200_000,
-            "output_tokens": 50_000,
-            "cache_read_input_tokens": 800_000,
-        }
-        assert _record_cost(usage, "sonnet") == pytest.approx(1.59)
-
-    def test_empty_usage_is_zero(self) -> None:
-        assert _record_cost({}, "opus") == 0.0
-
-    def test_none_token_values_treated_as_zero(self) -> None:
-        # Real transcripts carry explicit null fields; the `or 0` guard handles it.
-        usage = {"input_tokens": None, "output_tokens": None}
-        assert _record_cost(usage, "opus") == 0.0
-
-    def test_rates_constant_unchanged(self) -> None:
-        # Guards the published rates the arithmetic above depends on.
-        assert RATES == {
-            "fable": (10.0, 50.0),
-            "opus": (5.0, 25.0),
-            "sonnet": (3.0, 15.0),
-            "haiku": (1.0, 5.0),
-        }
-
-
-# ---------------------------------------------------------------------------
 # scan — dedup by requestId across transcript records
 # ---------------------------------------------------------------------------
 def _write_jsonl(path: Path, records: list[dict]) -> None:
@@ -138,7 +71,7 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
 def _usage_record(
     request_id: str,
     *,
-    model: str = "claude-opus-4",
+    model: str = "claude-opus-4-8",
     input_tokens: int = 1_000_000,
     timestamp: str = "2026-06-15T12:00:00Z",
 ) -> dict:
@@ -194,7 +127,7 @@ class TestScanDedup:
             "timestamp": "2026-06-15T12:00:00Z",
             "message": {
                 "id": "msg-abc",
-                "model": "claude-opus-4",
+                "model": "claude-opus-4-8",
                 "usage": {"input_tokens": 1_000_000},
             },
         }
@@ -215,7 +148,7 @@ class TestScanDedup:
         result = scan(tmp_path, "2026-06")
         assert result["total"] == 5.0  # only the June record
 
-    def test_unknown_model_skipped(self, tmp_path: Path) -> None:
+    def test_unknown_model_is_unpriced_and_listed(self, tmp_path: Path) -> None:
         project = tmp_path / "proj-a"
         project.mkdir()
         _write_jsonl(
@@ -225,6 +158,72 @@ class TestScanDedup:
         result = scan(tmp_path, "2026-06")
         assert result["total"] == 0.0
         assert result["by_tier"] == {}
+        assert result["unpriced"] == [
+            {
+                "model": "gpt-4o",
+                "reason": result["unpriced"][0]["reason"],
+                "calls": 1,
+                "tokens": {
+                    "input": 1_000_000,
+                    "output": 0,
+                    "cache_read": 0,
+                    "write_5m": 0,
+                    "write_1h": 0,
+                },
+            }
+        ]
+
+    def test_tier_name_without_a_table_key_is_unpriced_not_priced_by_tier(
+        self, tmp_path: Path
+    ) -> None:
+        # "opus" is a tier, but claude-opus-5-6 is no table key: it must not be
+        # priced at the opus tier (or at claude-opus-5) and must not vanish.
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(
+            project / "s.jsonl",
+            [
+                _usage_record("req-1", model="claude-opus-5-6"),
+                _usage_record("req-2", model="claude-3-5-haiku-20241022"),
+            ],
+        )
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 0.0
+        assert result["by_tier"] == {}
+        assert result["by_day"] == {}
+        assert result["by_project"] == {}
+        assert [(u["model"], u["calls"]) for u in result["unpriced"]] == [
+            ("claude-3-5-haiku-20241022", 1),
+            ("claude-opus-5-6", 1),
+        ]
+
+    def test_priced_scan_has_an_empty_unpriced_list(self, tmp_path: Path) -> None:
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
+        assert scan(tmp_path, "2026-06")["unpriced"] == []
+
+    def test_zero_usage_synthetic_record_is_neither_priced_nor_unpriced(
+        self, tmp_path: Path
+    ) -> None:
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(
+            project / "s.jsonl",
+            [
+                _usage_record("req-1", model="<synthetic>", input_tokens=0),
+                _usage_record("req-2"),
+            ],
+        )
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 5.0
+        assert result["unpriced"] == []
+        assert result["by_tier"] == {"opus": 5.0}
+
+    def test_scan_keeps_its_documented_keys(self, tmp_path: Path) -> None:
+        assert set(scan(tmp_path, "2026-06")) == {
+            "month", "total", "by_tier", "by_project", "by_day", "unpriced",
+        }
 
     def test_by_tier_breakdown(self, tmp_path: Path) -> None:
         project = tmp_path / "proj-a"
@@ -232,8 +231,8 @@ class TestScanDedup:
         _write_jsonl(
             project / "s.jsonl",
             [
-                _usage_record("req-1", model="claude-opus-4"),  # $5.00
-                _usage_record("req-2", model="claude-3-5-haiku"),  # $1.00
+                _usage_record("req-1", model="claude-opus-4-8"),  # $5.00
+                _usage_record("req-2", model="claude-haiku-4-5"),  # $1.00
             ],
         )
         result = scan(tmp_path, "2026-06")
@@ -262,7 +261,7 @@ class TestScanRounding:
             "requestId": "req-frac",
             "timestamp": "2026-06-15T12:00:00Z",
             "message": {
-                "model": "claude-opus-4",
+                "model": "claude-opus-4-8",
                 "usage": {"cache_read_input_tokens": 333_333},
             },
         }
@@ -428,19 +427,13 @@ class TestShippedDefaults:
     def test_absent_config_uses_shipped_defaults(self) -> None:
         """A vault vendored before the scaffold config exists still bills."""
         assert "budget_burn_config" not in sys.modules
-        assert budget_burn.RATES == budget_burn_defaults.RATES
+        assert budget_burn.MODEL_PRICES == pricing.merge_table(None)
         assert budget_burn.MONTHLY_BUDGET == budget_burn_defaults.MONTHLY_BUDGET
         assert budget_burn._PROJECT_ALIASES == budget_burn_defaults.PROJECT_ALIASES
 
     def test_defaults_reproduce_the_previously_hardcoded_values(self) -> None:
         # "Default ships today's values": the literals budget_burn carried
         # before they moved out of the engine.
-        assert budget_burn_defaults.RATES == {
-            "fable": (10.0, 50.0),
-            "opus": (5.0, 25.0),
-            "sonnet": (3.0, 15.0),
-            "haiku": (1.0, 5.0),
-        }
         assert budget_burn_defaults.MONTHLY_BUDGET == 350.0
         assert budget_burn_defaults.PROJECT_ALIASES == {
             "-Users-cdcoonce-Developer-GitHub-my-brain": (
@@ -473,28 +466,127 @@ class TestScaffoldedConfig:
         result = module.scan(tmp_path, "2026-06")
         assert result["by_project"] == {"current-proj": 5.0}
 
-    def test_configured_price_entry_changes_cost(self, scaffolded_config) -> None:
-        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
-        assert module._record_cost({"input_tokens": 1_000_000}, "opus") == 100.0
+    def test_configured_model_price_changes_cost(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        module = scaffolded_config(
+            MODEL_PRICES={
+                "claude-opus-4-8": {
+                    "input": 100.0, "output": 200.0, "write_5m": 1.0,
+                    "write_1h": 2.0, "cache_read": 3.0,
+                }
+            }
+        )
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
+        assert module.scan(tmp_path, "2026-06")["total"] == 100.0
 
-    def test_partial_rates_override_merges_over_defaults(self, scaffolded_config) -> None:
-        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
-        assert module.RATES["opus"] == (100.0, 200.0)
-        assert module.RATES["sonnet"] == budget_burn_defaults.RATES["sonnet"]
-        assert set(module.RATES) == set(budget_burn_defaults.RATES)
+    def test_partial_model_prices_merges_over_defaults(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        module = scaffolded_config(
+            MODEL_PRICES={
+                "claude-opus-4-8": {
+                    "input": 100.0, "output": 200.0, "write_5m": 1.0,
+                    "write_1h": 2.0, "cache_read": 3.0,
+                }
+            }
+        )
+        assert module.MODEL_PRICES["claude-opus-4-8"]["input"] == 100.0
+        assert module.MODEL_PRICES["claude-sonnet-4-5"] == pricing.DEFAULT_MODEL_PRICES["claude-sonnet-4-5"]
+        assert set(module.MODEL_PRICES) == set(pricing.DEFAULT_MODEL_PRICES)
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(
+            project / "s.jsonl", [_usage_record("req-1", model="claude-sonnet-4-5")]
+        )
+        assert module.scan(tmp_path, "2026-06")["total"] == 3.0
 
-    def test_scan_survives_tier_missing_from_partial_override(
+    def test_model_prices_can_add_a_new_model(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        module = scaffolded_config(
+            MODEL_PRICES={
+                "claude-brandnew-1": {
+                    "input": 7.0, "output": 1.0, "write_5m": 1.0,
+                    "write_1h": 1.0, "cache_read": 1.0,
+                }
+            }
+        )
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(
+            project / "s.jsonl", [_usage_record("req-1", model="claude-brandnew-1")]
+        )
+        result = module.scan(tmp_path, "2026-06")
+        assert result["total"] == 7.0
+        assert result["unpriced"] == []
+
+    def test_legacy_rates_no_longer_affect_any_dollar_figure(
         self, tmp_path: Path, scaffolded_config
     ) -> None:
         module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
         project = tmp_path / "proj-a"
         project.mkdir()
-        _write_jsonl(
-            project / "s.jsonl",
-            [_usage_record("req-1", model="claude-3-5-sonnet-20241022")],
+        _write_jsonl(project / "s.jsonl", [_usage_record("req-1")])
+        assert module.scan(tmp_path, "2026-06")["total"] == 5.0
+        assert module.MODEL_PRICES == pricing.merge_table(None)
+
+    def test_legacy_rates_notice_goes_to_stderr_and_json_stays_valid(
+        self,
+        tmp_path: Path,
+        scaffolded_config,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        module = scaffolded_config(RATES={"opus": (100.0, 200.0)})
+        monkeypatch.setattr(
+            sys, "argv", ["budget_burn.py", "--json", "--projects-root", str(tmp_path)]
         )
-        result = module.scan(tmp_path, "2026-06")
-        assert result["total"] == 3.0
+        assert module.main() == 0
+        captured = capsys.readouterr()
+        json.loads(captured.out)  # stdout is still valid JSON
+        lines = [ln for ln in captured.err.splitlines() if ln.strip()]
+        assert len(lines) == 1
+        assert str(tmp_path / "budget_burn_config.py") in lines[0]
+        assert "RATES" in lines[0]
+        assert "MODEL_PRICES" in lines[0]
+
+    def test_no_legacy_rates_means_a_silent_stderr(
+        self,
+        tmp_path: Path,
+        scaffolded_config,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        module = scaffolded_config(MONTHLY_BUDGET=42.0)
+        monkeypatch.setattr(
+            sys, "argv", ["budget_burn.py", "--json", "--projects-root", str(tmp_path)]
+        )
+        assert module.main() == 0
+        assert capsys.readouterr().err == ""
+
+    def test_model_prices_wrong_type_raises_naming_the_config(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        with pytest.raises(RuntimeError) as exc_info:
+            scaffolded_config(MODEL_PRICES=[("claude-opus-4-8", 5)])
+        assert type(exc_info.value).__name__ == "BudgetBurnConfigError"
+        message = str(exc_info.value)
+        assert str(tmp_path / "budget_burn_config.py") in message
+        assert "MODEL_PRICES" in message
+
+    def test_model_prices_malformed_row_raises_naming_the_config(
+        self, tmp_path: Path, scaffolded_config
+    ) -> None:
+        with pytest.raises(RuntimeError) as exc_info:
+            scaffolded_config(MODEL_PRICES={"claude-opus-4-8": {"input": 5}})
+        assert type(exc_info.value).__name__ == "BudgetBurnConfigError"
+        message = str(exc_info.value)
+        assert str(tmp_path / "budget_burn_config.py") in message
+        assert "MODEL_PRICES" in message
+        assert "claude-opus-4-8" in message
 
     def test_zero_budget_human_report_does_not_divide_by_zero(
         self,
@@ -553,7 +645,7 @@ class TestScaffoldedConfig:
     ) -> None:
         """An owner who only cares about the budget keeps the shipped prices."""
         module = scaffolded_config(MONTHLY_BUDGET=42.0)
-        assert module.RATES == budget_burn_defaults.RATES
+        assert module.MODEL_PRICES == pricing.merge_table(None)
         assert module._PROJECT_ALIASES == budget_burn_defaults.PROJECT_ALIASES
 
     def test_unusable_value_raises_an_error_naming_the_config(
@@ -562,11 +654,11 @@ class TestScaffoldedConfig:
         # BudgetBurnConfigError (a RuntimeError) is rebound by the reload, so
         # match the base class and the name rather than the stale class object.
         with pytest.raises(RuntimeError) as exc_info:
-            scaffolded_config(RATES="5 dollars per million")
+            scaffolded_config(MONTHLY_BUDGET="a lot")
         assert type(exc_info.value).__name__ == "BudgetBurnConfigError"
         message = str(exc_info.value)
         assert str(tmp_path / "budget_burn_config.py") in message
-        assert "RATES" in message
+        assert "MONTHLY_BUDGET" in message
 
     def test_project_without_a_configured_alias_keeps_its_own_key(
         self, tmp_path: Path, scaffolded_config
@@ -596,3 +688,136 @@ class TestBudgetOverride:
         out = capsys.readouterr().out
         assert "/ $300" in out
         assert "% of cap" in out
+
+
+# ---------------------------------------------------------------------------
+# pricing through the per-model table (issue #1330, P9)
+# ---------------------------------------------------------------------------
+class TestScanPricedPerModel:
+    # Calls all use claude-opus-4-8, whose input, output and cache-read prices
+    # equal the old opus tier (5 / 25 / 0.50). No subagent files, so the delta
+    # below is only the cache-write correction, not the subagent delta from the
+    # shared-reader slice.
+    #
+    # Per call: 1M input, 1M output, 1M cache read, and 2M cache-write tokens
+    # split 1M at the 5-minute TTL and 1M at the 1-hour TTL.
+    #   old: (1M*5 + 1M*25 + 1M*0.5 + 2M*6.25) / 1M      = 43.00
+    #        (all writes billed as 5-minute: 1.25x input)
+    #   new: 5 + 25 + 0.5 + 6.25 (5m) + 10.00 (1h)         = 46.75
+    #   delta: 1M 1h tokens * (10 - 6.25) / 1M             =  3.75
+    OLD_TOTAL = 43.0
+    NEW_TOTAL = 46.75
+    DELTA = 3.75
+
+    @staticmethod
+    def _record(request_id: str) -> dict:
+        return {
+            "requestId": request_id,
+            "timestamp": "2026-06-15T12:00:00Z",
+            "message": {
+                "model": "claude-opus-4-8",
+                "usage": {
+                    "input_tokens": 1_000_000,
+                    "output_tokens": 1_000_000,
+                    "cache_read_input_tokens": 1_000_000,
+                    "cache_creation_input_tokens": 2_000_000,
+                    "cache_creation": {
+                        "ephemeral_5m_input_tokens": 1_000_000,
+                        "ephemeral_1h_input_tokens": 1_000_000,
+                    },
+                },
+            },
+        }
+
+    def test_total_is_the_new_figure_and_differs_by_the_one_hour_correction(
+        self, tmp_path: Path
+    ) -> None:
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [self._record("req-1")])
+        result = scan(tmp_path, "2026-06")
+        one_hour_tokens = 1_000_000
+        assert result["total"] == self.NEW_TOTAL == 46.75
+        assert self.OLD_TOTAL == 43.0
+        assert result["total"] - self.OLD_TOTAL == self.DELTA
+        assert self.DELTA == one_hour_tokens * (10 - 6.25) / 1_000_000
+        assert result["by_tier"] == {"opus": 46.75}
+        assert result["by_project"] == {"proj-a": 46.75}
+        assert result["by_day"] == {"2026-06-15": 46.75}
+
+    def test_fast_speed_call_is_priced_with_the_multiplier(self, tmp_path: Path) -> None:
+        rec = self._record("req-1")
+        rec["message"]["usage"]["speed"] = "fast"
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        _write_jsonl(project / "s.jsonl", [rec])
+        assert scan(tmp_path, "2026-06")["total"] == 2 * 46.75
+
+
+# ---------------------------------------------------------------------------
+# scan through the shared transcript reader (issue #1329, B9)
+# ---------------------------------------------------------------------------
+class TestScanViaSharedReader:
+    def test_subagent_calls_are_in_every_breakdown(self, tmp_path: Path) -> None:
+        # B9(a). Before: only <project>/*.jsonl was read, so the subagent call
+        # was invisible and the month total was $5.00. Now it is counted under
+        # the top-level project key (never "subagents").
+        main = tmp_path / "proj-a"
+        main.mkdir()
+        _write_jsonl(main / "sess.jsonl", [_usage_record("req-1")])  # opus 1M in = $5
+        sub = main / "sess" / "subagents"
+        sub.mkdir(parents=True)
+        _write_jsonl(
+            sub / "agent-x1.jsonl",
+            [_usage_record("req-2", model="claude-haiku-4-5")],  # haiku 1M in = $1
+        )
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 6.0
+        assert result["by_tier"] == {"haiku": 1.0, "opus": 5.0}
+        assert result["by_day"] == {"2026-06-15": 6.0}
+        assert result["by_project"] == {"proj-a": 6.0}
+
+    def test_subagent_project_alias_still_applied(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(budget_burn, "_PROJECT_ALIASES", {"old-": "new-"})
+        sub = tmp_path / "old-thing" / "sess" / "subagents"
+        sub.mkdir(parents=True)
+        _write_jsonl(sub / "agent-x1.jsonl", [_usage_record("req-1")])
+        assert scan(tmp_path, "2026-06")["by_project"] == {"new-thing": 5.0}
+
+    def test_dedup_keeps_the_largest_output_line(self, tmp_path: Path) -> None:
+        # B9(b). One call, two lines: the first has no output yet, the last
+        # carries the full output. First-line dedup counted $5.00 (1M input,
+        # 0 output); keep-largest takes the last line: 5 + 25 = $30.00.
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        first = {
+            "requestId": "req-1",
+            "timestamp": "2026-06-15T12:00:00Z",
+            "message": {
+                "id": "msg-1",
+                "model": "claude-opus-4-8",
+                "usage": {"input_tokens": 1_000_000, "output_tokens": 0},
+            },
+        }
+        last = json.loads(json.dumps(first))
+        last["message"]["usage"]["output_tokens"] = 1_000_000
+        _write_jsonl(project / "s.jsonl", [first, last])
+        assert scan(tmp_path, "2026-06")["total"] == 30.0
+
+    def test_record_without_timestamp_uses_file_month(self, tmp_path: Path) -> None:
+        import os
+        from datetime import datetime, timezone
+
+        project = tmp_path / "proj-a"
+        project.mkdir()
+        rec = _usage_record("req-1")
+        rec.pop("timestamp")
+        path = project / "s.jsonl"
+        _write_jsonl(path, [rec])
+        epoch = datetime(2026, 6, 20, tzinfo=timezone.utc).timestamp()
+        os.utime(path, (epoch, epoch))
+        result = scan(tmp_path, "2026-06")
+        assert result["total"] == 5.0
+        assert result["by_day"] == {}  # no timestamp, no day bucket

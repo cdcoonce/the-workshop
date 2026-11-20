@@ -4,18 +4,23 @@
 The monthly budget is *total* API spend, so this sums token usage across
 every project transcript under ``~/.claude/projects/*/``, not just this vault.
 Cost is computed deterministically from the per-message ``usage`` blocks
-(input / output / cache-read / cache-write) times the published per-model
-rates, so it needs no cost API and works headless on both machines.
+(input / output / cache-read / 5-minute and 1-hour cache-write) times the
+published per-model prices, through ``pricing`` (the only place tokens become
+dollars), so it needs no cost API and works headless on both machines. A call
+whose model is not in the price table is listed under ``unpriced`` and adds no
+dollars.
 
 Surfaces the feedback loop the Conductor + Workers operating model was missing
 (see brain/Key Decisions.md 2026-06-16): a per-model breakdown shows whether
 judgment is staying on Opus while bulk work runs on the cheap tier.
 
-Project aliases, the price table, and the monthly budget are instance config
-(scaffold-owned ``budget_burn_config.py``, see ``_from_config``) — they change
-with prices, budgets, and renamed project dirs, and shouldn't require an engine
-release. ``budget_burn_defaults.py`` ships today's values as the managed-tier
-fallback, so a vault vendored before the config existed still reports its burn.
+Project aliases, per-model price overrides (``MODEL_PRICES``), and the monthly
+budget are instance config (scaffold-owned ``budget_burn_config.py``, see
+``_from_config``) — they change with prices, budgets, and renamed project dirs,
+and shouldn't require an engine release. ``budget_burn_defaults.py`` and
+``pricing_defaults.py`` ship today's values as the managed-tier fallback, so a
+vault vendored before the config existed still reports its burn. The old
+tier-keyed ``RATES`` no longer affects any dollar figure.
 
 Usage:
     python3 budget_burn.py            # current month, human report
@@ -27,12 +32,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 from budget_burn_defaults import MONTHLY_BUDGET as DEFAULT_MONTHLY_BUDGET
 from budget_burn_defaults import PROJECT_ALIASES as DEFAULT_PROJECT_ALIASES
-from budget_burn_defaults import RATES as DEFAULT_RATES
+import pricing
+import transcript_reader
 import vault_utils
 
 try:  # Scaffold-owned config; absent in a vault vendored before it existed.
@@ -48,7 +55,7 @@ class BudgetBurnConfigError(RuntimeError):
 # What each configurable name has to be for the scan arithmetic to hold.
 _CONFIG_TYPES: dict[str, type | tuple[type, ...]] = {
     "PROJECT_ALIASES": dict,
-    "RATES": dict,
+    "MODEL_PRICES": dict,
     "MONTHLY_BUDGET": (int, float),
 }
 
@@ -86,12 +93,22 @@ def _from_config(name: str, default: object) -> object:
 _PROJECT_ALIASES: dict[str, str] = _from_config(
     "PROJECT_ALIASES", DEFAULT_PROJECT_ALIASES
 )
-# A partial override merges per tier over the shipped table, so a vault that only
-# re-prices one tier does not lose the others (and scan() cannot KeyError on them).
-RATES: dict[str, tuple[float, float]] = {
-    **DEFAULT_RATES,
-    **_from_config("RATES", DEFAULT_RATES),
-}
+# MODEL_PRICES merges per key over the shipped table (an overridden key replaces
+# its row, other rows remain, a new key adds one), so a vault that only re-prices
+# one model does not lose the rest. A malformed row is a config error too.
+def _model_prices() -> dict[str, dict]:
+    overrides = _from_config("MODEL_PRICES", None)
+    try:
+        return pricing.merge_table(overrides)
+    except pricing.PriceTableError as exc:
+        config_path = getattr(_config, "__file__", None) or "budget_burn_config.py"
+        raise BudgetBurnConfigError(
+            f"budget_burn: MODEL_PRICES in {config_path} is malformed: {exc} — "
+            "fix it there, or delete the name to fall back to the shipped default."
+        ) from exc
+
+
+MODEL_PRICES: dict[str, dict] = _model_prices()
 MONTHLY_BUDGET: float = _from_config("MONTHLY_BUDGET", DEFAULT_MONTHLY_BUDGET)
 
 
@@ -111,77 +128,49 @@ def _tier(model: str) -> str | None:
     return None  # synthetic/unknown — don't guess a rate
 
 
-def _record_cost(usage: dict, tier: str) -> float:
-    """USD for one usage block at the given tier's rates."""
-    rate_in, rate_out = RATES[tier]
-    inp = usage.get("input_tokens", 0) or 0
-    out = usage.get("output_tokens", 0) or 0
-    cache_read = usage.get("cache_read_input_tokens", 0) or 0
-    cache_write = usage.get("cache_creation_input_tokens", 0) or 0
-    return (
-        inp * rate_in
-        + out * rate_out
-        + cache_read * (rate_in * 0.1)
-        + cache_write * (rate_in * 1.25)
-    ) / 1_000_000
-
-
-def _month_of(record: dict, fallback: str) -> str:
-    """YYYY-MM for a record, from its ISO timestamp, else the file's month."""
-    ts = record.get("timestamp")
+def _month_of(call: transcript_reader.Call) -> str:
+    """YYYY-MM for a call, from its ISO timestamp, else its file's month."""
+    ts = call.timestamp
     if isinstance(ts, str) and len(ts) >= 7:
         return ts[:7]
-    return fallback
+    return datetime.fromtimestamp(call.file_mtime, tz=timezone.utc).strftime("%Y-%m")
 
 
 def scan(projects_root: Path, target_month: str) -> dict:
-    """Sum cost for ``target_month`` (YYYY-MM) across all project transcripts."""
+    """Sum cost for ``target_month`` (YYYY-MM) across all project transcripts.
+
+    Calls come only from ``transcript_reader``: main and subagent transcripts,
+    each API call counted once for the whole scan (``(message.id, requestId)``,
+    usage from the line with the largest output), keyed to the top-level project.
+    """
+    pricer = pricing.Pricer(MODEL_PRICES)
     by_tier: dict[str, float] = {}
     by_project: dict[str, float] = {}
     by_day: dict[str, float] = {}
     total = 0.0
-    # Claude Code writes the SAME message.usage on multiple transcript lines per
-    # response (one per content block / streaming chunk). Summing every record
-    # over-counts ~2.7x — dedup by requestId so each real API call counts once.
-    seen: set[str] = set()
 
-    for transcript in projects_root.glob("*/*.jsonl"):
-        project = transcript.parent.name
+    for call in transcript_reader.read(projects_root).calls:
+        if _month_of(call) != target_month:
+            continue
+        priced = pricer.price(call)
+        if not priced.priced:
+            continue
+        tier = _tier(call.model)
+        if tier is None and priced.total_usd == 0:
+            continue  # zero-usage record (e.g. <synthetic>): nothing to bucket
+        tier = tier or "other"
+        project = call.project
         for legacy, current in _PROJECT_ALIASES.items():
             if project.startswith(legacy):
                 project = current + project[len(legacy) :]
                 break
-        file_month = datetime.fromtimestamp(
-            transcript.stat().st_mtime, tz=timezone.utc
-        ).strftime("%Y-%m")
-        for line in transcript.read_text(errors="ignore").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            msg = rec.get("message") or {}
-            usage = msg.get("usage") or rec.get("usage")
-            model = msg.get("model") or rec.get("model")
-            tier = _tier(model)
-            if not usage or not tier:
-                continue
-            if _month_of(rec, file_month) != target_month:
-                continue
-            rid = rec.get("requestId") or msg.get("id")
-            if rid is not None:
-                if rid in seen:
-                    continue  # same API call, duplicate transcript record
-                seen.add(rid)
-            cost = _record_cost(usage, tier)
-            total += cost
-            by_tier[tier] = by_tier.get(tier, 0.0) + cost
-            by_project[project] = by_project.get(project, 0.0) + cost
-            day = (rec.get("timestamp") or "")[:10]
-            if day:
-                by_day[day] = by_day.get(day, 0.0) + cost
+        cost = priced.total_usd
+        total += cost
+        by_tier[tier] = by_tier.get(tier, 0.0) + cost
+        by_project[project] = by_project.get(project, 0.0) + cost
+        day = (call.timestamp or "")[:10]
+        if day:
+            by_day[day] = by_day.get(day, 0.0) + cost
 
     return {
         "month": target_month,
@@ -192,6 +181,7 @@ def scan(projects_root: Path, target_month: str) -> dict:
             for k, v in sorted(by_project.items(), key=lambda kv: -kv[1])[:10]
         },
         "by_day": {k: round(v, 2) for k, v in sorted(by_day.items())},
+        "unpriced": pricer.unpriced(),
     }
 
 
@@ -235,6 +225,15 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    dead = pricing.deprecated_config_names(_config)
+    if dead:
+        config_path = getattr(_config, "__file__", None) or "budget_burn_config.py"
+        print(
+            f"budget_burn: {', '.join(dead)} in {config_path} no longer affects any "
+            "dollar figure; price per model with MODEL_PRICES there instead.",
+            file=sys.stderr,
+        )
+
     today = date.today()
     month = args.month or today.strftime("%Y-%m")
     if args.context is not None:
@@ -277,6 +276,11 @@ def main() -> int:
         print("  (flat subscription fee buys this — no per-token cap)")
     for line in _tier_lines(result):
         print(line)
+    for row in result["unpriced"]:
+        tokens = sum(row["tokens"].values())
+        print(
+            f"  Unpriced: {row['model']} x{row['calls']} ({tokens:,} tokens) — {row['reason']}"
+        )
     return 0
 
 

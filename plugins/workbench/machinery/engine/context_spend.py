@@ -37,7 +37,10 @@ are the instrument's own rules, so an old baseline stays comparable):
   ``--model-rule billable`` is budget_burn's rule (only fable/opus/sonnet/haiku).
 * ``--pricing relative`` (default) uses unit weights (input 1, output 5, cache
   write 1.25, cache read 0.1) times a tier factor (opus/fable/unknown 5,
-  sonnet 1, haiku 0.27); ``--pricing usd`` reuses budget_burn's price table.
+  sonnet 1, haiku 0.27); ``--pricing usd`` prices every call through ``pricing``
+  (per-model table, 5-minute and 1-hour cache-write split, fast mode, the vault's
+  ``MODEL_PRICES`` override). A call whose model is not in the table is reported
+  under ``unpriced`` and costs 0; it is still counted in the token analyses.
 
 Usage:
     python3 context_spend.py --since 2026-10-13 --until 2026-11-12
@@ -55,18 +58,15 @@ import sys
 from pathlib import Path
 
 import budget_burn
+import pricing as price_engine
+import transcript_reader
 
 # Token categories, in the order costs are indexed everywhere below.
 CATS = ("in", "out", "cw", "cr")
 # Relative weights: input 1, output 5, cache write 1.25, cache read 0.1.
 REL_WEIGHTS = (1.0, 5.0, 1.25, 0.1)
-TRIGGERS = (
-    "human-typed",
-    "task-notification",
-    "meta/system-injected",
-    "programmatic",
-    "hook",
-)
+TRIGGERS = transcript_reader.TRIGGERS
+classify_trigger = transcript_reader.classify_trigger
 CONTEXT_THRESHOLDS = (200_000, 500_000)
 REREAD_WINDOW_CALLS = 20
 REWRITE_MIN_CONTEXT = 100_000
@@ -87,18 +87,27 @@ def _rel_tier(model: str) -> float:
 
 
 def rates_for(model: str, pricing: str) -> tuple[float, float, float, float]:
-    """Per-token (in, out, cache-write, cache-read) rates for ``model``."""
-    if pricing == "usd":
-        tier = budget_burn._tier(model) or "opus"
-        rate_in, rate_out = budget_burn.RATES[tier]
-        return (
-            rate_in / 1e6,
-            rate_out / 1e6,
-            rate_in * 1.25 / 1e6,
-            rate_in * 0.1 / 1e6,
-        )
+    """Per-token relative (in, out, cache-write, cache-read) rates for ``model``.
+
+    Dollar pricing is per call (``_usd_rates``), not per model.
+    """
     t = _rel_tier(model)
     return tuple(t * w / 1e6 for w in REL_WEIGHTS)  # type: ignore[return-value]
+
+
+def _usd_rates(priced: price_engine.PricedCall, w5: int, w1: int) -> tuple[float, float, float, float]:
+    """Per-token (in, out, cache-write, cache-read) USD rates of a priced call.
+
+    The cache-write rate is the blend of the 5-minute and 1-hour prices the call
+    actually paid, or the 5-minute price when it wrote nothing; the ceiling
+    simulation uses it for hypothetical resume writes.
+    """
+    if not priced.priced or priced.rates is None:
+        return (0.0, 0.0, 0.0, 0.0)
+    r = priced.rates
+    written = w5 + w1
+    cw = (priced.write_5m_usd + priced.write_1h_usd) / written if written else r["write_5m"] / 1e6
+    return (r["input"] / 1e6, r["output"] / 1e6, cw, r["cache_read"] / 1e6)
 
 
 def _cost(rates: tuple[float, ...], i: int, o: int, cw: int, cr: int) -> float:
@@ -135,31 +144,6 @@ def _share(part: float, whole: float) -> float:
 # ---------------------------------------------------------------------------
 # transcript parsing
 # ---------------------------------------------------------------------------
-def classify_trigger(entry: dict) -> str:
-    """Turn trigger of a (non tool-result) ``user`` transcript entry."""
-    msg = entry.get("message") or {}
-    content = msg.get("content")
-    if isinstance(content, str):
-        text = content
-    elif isinstance(content, list):
-        text = " ".join(
-            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
-        )
-    else:
-        text = ""
-    origin = entry.get("origin") or {}
-    kind = origin.get("kind") if isinstance(origin, dict) else None
-    if text.startswith("<task-notification>") or kind == "task-notification":
-        return "task-notification"
-    if text.startswith("Stop hook feedback") or "hook" in text[:40].lower():
-        return "hook"
-    if kind == "human":
-        return "human-typed"
-    if entry.get("isMeta"):
-        return "meta/system-injected"
-    return "programmatic"
-
-
 def _epoch(ts: object) -> float | None:
     if not isinstance(ts, str) or not ts:
         return None
@@ -190,14 +174,6 @@ def _in_window(ts: object, since: str | None, until: str | None) -> bool:
     return (since is None or day >= since) and (until is None or day <= until)
 
 
-def _file_may_hold_window(path: Path, since: str | None) -> bool:
-    """A file last written before ``since`` cannot hold newer messages."""
-    if since is None:
-        return True
-    mtime = datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.timezone.utc)
-    return mtime.strftime("%Y-%m-%d") >= since
-
-
 class _Scan:
     """Everything one pass over the transcripts collects."""
 
@@ -214,99 +190,80 @@ class _Scan:
 
 def _scan(root: Path, since: str | None, until: str | None, dedupe: str) -> _Scan:
     out = _Scan()
-    for path in sorted(root.glob("**/*.jsonl")):
-        if not _file_may_hold_window(path, since):
-            continue
-        out.files += 1
-        parts = path.relative_to(root).parts
-        sub = "subagents" in parts
-        sid = parts[1] if sub and len(parts) > 1 else path.stem
-        trig = "none"
-        with path.open(errors="replace") as fh:
-            for raw in fh:
-                try:
-                    d = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(d, dict):
-                    continue
-                kind = d.get("type")
-                side = sub or bool(d.get("isSidechain"))
-                if kind == "user":
-                    msg = d.get("message") or {}
-                    c = msg.get("content")
-                    if isinstance(c, list) and any(
-                        isinstance(b, dict) and b.get("type") == "tool_result" for b in c
-                    ):
-                        if not side:
-                            for b in c:
-                                if not isinstance(b, dict) or b.get("type") != "tool_result":
-                                    continue
-                                tid = b.get("tool_use_id")
-                                if tid and tid not in out._seen_results:
-                                    out._seen_results.add(tid)
-                                    out.result_bytes[tid] = _result_bytes(b.get("content"))
-                        continue
-                    trig = classify_trigger(d)
-                elif kind == "system":
-                    if (
-                        d.get("subtype") == "compact_boundary"
-                        and not side
-                        and _in_window(d.get("timestamp"), since, until)
-                    ):
-                        meta = d.get("compactMetadata") or {}
-                        out.boundaries[sid].append(
-                            {
-                                "ts": _epoch(d.get("timestamp")) or 0.0,
-                                "trigger": meta.get("trigger"),
-                                "pre": meta.get("preTokens"),
-                                "post": meta.get("postTokens"),
-                            }
-                        )
-                elif kind == "assistant":
-                    out.assistant_lines += 1
-                    msg = d.get("message") or {}
-                    content = msg.get("content")
-                    if isinstance(content, list) and not side:
-                        for b in content:
-                            if (
-                                isinstance(b, dict)
-                                and b.get("type") == "tool_use"
-                                and b.get("name") == "Read"
-                                and isinstance(b.get("input"), dict)
-                                and b["input"].get("file_path")
-                                and b.get("id") not in out._seen_reads
-                            ):
-                                out._seen_reads.add(b["id"])
-                                out.reads[sid].append(
-                                    (_epoch(d.get("timestamp")) or 0.0, b["input"]["file_path"], b["id"])
-                                )
-                    usage = msg.get("usage")
-                    if not usage or not _in_window(d.get("timestamp"), since, until):
-                        continue
-                    rid, mid = d.get("requestId"), msg.get("id")
-                    if dedupe == "request":
-                        key: tuple = (rid or mid,)
-                    else:
-                        key = (mid, rid)
-                    if key in ((None,), (None, None)):
-                        key = (d.get("uuid"),)
-                    rec = {
-                        "model": msg.get("model"),
-                        "i": usage.get("input_tokens", 0) or 0,
-                        "o": usage.get("output_tokens", 0) or 0,
-                        "cw": usage.get("cache_creation_input_tokens", 0) or 0,
-                        "cr": usage.get("cache_read_input_tokens", 0) or 0,
-                        "side": side,
-                        "sid": sid,
-                        "trig": trig,
+    collector = transcript_reader.CallCollector(dedupe)
+    coverage = transcript_reader.Coverage()
+    meta: dict[tuple, tuple[bool, str]] = {}  # call key -> (side, trigger) at the kept line
+    for info, d in transcript_reader.iter_records(root, since=since, coverage=coverage):
+        sub = info.is_subagent
+        sid = info.session_id
+        kind = d.get("type")
+        side = sub or bool(d.get("isSidechain"))
+        if kind == "user":
+            collector.add(info, d)  # updates the file's trigger state
+            if transcript_reader.is_tool_result_record(d):
+                c = (d.get("message") or {}).get("content")
+                if not side:
+                    for b in c:
+                        if not isinstance(b, dict) or b.get("type") != "tool_result":
+                            continue
+                        tid = b.get("tool_use_id")
+                        if tid and tid not in out._seen_results:
+                            out._seen_results.add(tid)
+                            out.result_bytes[tid] = _result_bytes(b.get("content"))
+                continue
+        elif kind == "system":
+            if (
+                d.get("subtype") == "compact_boundary"
+                and not side
+                and _in_window(d.get("timestamp"), since, until)
+            ):
+                cmeta = d.get("compactMetadata") or {}
+                out.boundaries[sid].append(
+                    {
                         "ts": _epoch(d.get("timestamp")) or 0.0,
+                        "trigger": cmeta.get("trigger"),
+                        "pre": cmeta.get("preTokens"),
+                        "post": cmeta.get("postTokens"),
                     }
-                    old = out.calls.get(key)
-                    if old is None:
-                        out.calls[key] = rec
-                    elif dedupe == "message-request" and rec["o"] >= old["o"]:
-                        out.calls[key] = rec
+                )
+        elif kind == "assistant":
+            out.assistant_lines += 1
+            msg = d.get("message") or {}
+            content = msg.get("content")
+            if isinstance(content, list) and not side:
+                for b in content:
+                    if (
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_use"
+                        and b.get("name") == "Read"
+                        and isinstance(b.get("input"), dict)
+                        and b["input"].get("file_path")
+                        and b.get("id") not in out._seen_reads
+                    ):
+                        out._seen_reads.add(b["id"])
+                        out.reads[sid].append(
+                            (_epoch(d.get("timestamp")) or 0.0, b["input"]["file_path"], b["id"])
+                        )
+            if not _in_window(d.get("timestamp"), since, until):
+                continue
+            kept = collector.add(info, d)
+            if kept is not None:
+                meta[kept.key] = (side, kept.trigger)
+    out.files = coverage.files_read
+    for call in collector.calls:
+        side, trig = meta[call.key]
+        out.calls[call.key] = {
+            "model": call.model,
+            "i": call.input_tokens,
+            "o": call.output_tokens,
+            "cw": call.cache_write_tokens,
+            "cr": call.cache_read_tokens,
+            "side": side,
+            "sid": call.session_id,
+            "trig": trig,
+            "ts": _epoch(call.timestamp) or 0.0,
+            "call": call,
+        }
     return out
 
 
@@ -354,6 +311,7 @@ def analyze(
     resume_sizes = resume_sizes if resume_sizes is not None else [30_000, 80_000]
     scan = _scan(root, since, until, dedupe)
 
+    pricer = price_engine.Pricer(budget_burn.MODEL_PRICES)
     calls: list[dict] = []
     dropped = 0
     for rec in scan.calls.values():
@@ -364,9 +322,25 @@ def analyze(
         if model_rule == "billable" and budget_burn._tier(model) is None:
             dropped += 1
             continue
-        rec["rates"] = rates_for(model, pricing)
+        tokens = {"in": rec["i"], "out": rec["o"], "cw": rec["cw"], "cr": rec["cr"]}
+        if pricing == "usd":
+            call = rec["call"]
+            priced = pricer.price(call)
+            rec["rates"] = _usd_rates(
+                priced, call.cache_write_5m_tokens, call.cache_write_1h_tokens
+            )
+            rec["cat"] = {
+                "in": priced.input_usd,
+                "out": priced.output_usd,
+                "cw": priced.write_5m_usd + priced.write_1h_usd,
+                "cr": priced.cache_read_usd,
+            }
+            rec["cost"] = priced.total_usd
+        else:
+            rec["rates"] = rates_for(model, pricing)
+            rec["cat"] = {k: tokens[k] * rate for k, rate in zip(CATS, rec["rates"])}
+            rec["cost"] = _cost(rec["rates"], rec["i"], rec["o"], rec["cw"], rec["cr"])
         rec["ctx"] = rec["i"] + rec["cw"] + rec["cr"]
-        rec["cost"] = _cost(rec["rates"], rec["i"], rec["o"], rec["cw"], rec["cr"])
         calls.append(rec)
     total = sum(r["cost"] for r in calls)
 
@@ -385,6 +359,8 @@ def analyze(
         "dropped_no_model": dropped,
         "total_cost": total,
     }
+    if pricing == "usd":
+        result["unpriced"] = pricer.unpriced()
 
     # 1. by model / category
     by_model: dict[str, dict] = {}
@@ -396,11 +372,11 @@ def analyze(
         )
         m["calls"] += 1
         m["cost"] += r["cost"]
-        for k, rate in zip(CATS, r["rates"]):
+        for k in CATS:
             tokens = r[{"in": "i", "out": "o", "cw": "cw", "cr": "cr"}[k]]
             m[k] += tokens
             cat_tokens[k] += tokens
-            cat_cost[k] += tokens * rate
+            cat_cost[k] += r["cat"][k]
     for m in by_model.values():
         m["share"] = _share(m["cost"], total)
     result["by_model"] = dict(sorted(by_model.items(), key=lambda kv: -kv[1]["cost"]))
@@ -589,6 +565,12 @@ def render_text(r: dict) -> str:
         "",
         "1. Cost by model",
     ]
+    for u in r.get("unpriced", []):
+        tokens = sum(u["tokens"].values())
+        L.insert(
+            -1,
+            f"  unpriced: {u['model']} x{u['calls']} ({tokens:,} tokens, cost counted as 0) — {u['reason']}",
+        )
     for m, v in r["by_model"].items():
         L.append(
             f"  {m:28s} calls={v['calls']:7d} in={v['in'] / 1e6:8.2f}M out={v['out'] / 1e6:7.2f}M "

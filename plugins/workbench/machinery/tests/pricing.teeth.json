@@ -1,0 +1,204 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_pricing.py",
+    "test_budget_burn.py",
+    "test_context_spend.py",
+    "test_transcript_reader.py",
+    "test_pulse.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_pricing.py",
+    "test_budget_burn.py",
+    "test_context_spend.py",
+    "test_transcript_reader.py",
+    "test_pulse.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 1-hour write priced at its own rate",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "usd = {name: counts[name] * rates[name] / _PER * factor for name in _COMPONENTS}",
+      "replace": "usd = {name: counts[name] * rates[\"write_5m\" if name == \"write_1h\" else name] / _PER * factor for name in _COMPONENTS}"
+    },
+    {
+      "label": "2 5-minute write priced at the 5-minute rate",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "usd = {name: counts[name] * rates[name] / _PER * factor for name in _COMPONENTS}",
+      "replace": "usd = {name: counts[name] * rates[\"input\" if name == \"write_5m\" else name] / _PER * factor for name in _COMPONENTS}"
+    },
+    {
+      "label": "3 cache read uses the model's own read price",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "usd = {name: counts[name] * rates[name] / _PER * factor for name in _COMPONENTS}",
+      "replace": "usd = {name: counts[name] * (rates[\"input\"] * 0.1 if name == \"cache_read\" else rates[name]) / _PER * factor for name in _COMPONENTS}"
+    },
+    {
+      "label": "4 opus-5-5 has its own row, not the opus-5 row",
+      "file": "../engine/pricing_defaults.py",
+      "oracle": "real",
+      "find": "\"claude-opus-5-5\": _row(4, 20, 5, 8, 0.2, fast=2),",
+      "replace": "\"claude-opus-5-5\": _row(5, 25, 6.25, 10, 0.5, fast=2),"
+    },
+    {
+      "label": "5 unlisted version not priced by a shorter key",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": " and _SUFFIX.fullmatch(ident[len(key) :])",
+      "replace": ""
+    },
+    {
+      "label": "6 dated id resolves to its model row",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "r\"(?:-\\d{8}(?:\\[[^\\]]*\\])?|@\\d+|\\[[^\\]]*\\])?\"",
+      "replace": "r\"(?:@\\d+|\\[[^\\]]*\\])?\""
+    },
+    {
+      "label": "7 haiku 5.5 long-prompt rates above 100,000",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "if prompt > threshold:",
+      "replace": "if False:"
+    },
+    {
+      "label": "8 prompt length counts cache reads and writes",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "prompt = counts[\"input\"] + counts[\"cache_read\"] + _total_write(call, counts)",
+      "replace": "prompt = counts[\"input\"]"
+    },
+    {
+      "label": "9 threshold strictly over 100,000",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "if prompt > threshold:",
+      "replace": "if prompt >= threshold:"
+    },
+    {
+      "label": "10 fast mode multiplies every component",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "if getattr(call, \"speed\", None) == \"fast\":",
+      "replace": "if False:"
+    },
+    {
+      "label": "11 fast call on a row with no fast price is unpriced",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "factor = row.get(\"fast_multiplier\")\n        if factor is None:\n            return _unpriced(key, f\"fast mode has no price for {key}\")",
+      "replace": "factor = row.get(\"fast_multiplier\") or 1"
+    },
+    {
+      "label": "12 unknown model yields no dollars and is listed",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "key = _resolve(model, table)",
+      "replace": "key = _resolve(model, table) or \"claude-sonnet-4-5\""
+    },
+    {
+      "label": "13 all-zero call is not listed as unpriced",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "if not any(counts.values()):",
+      "replace": "if key is not None and not any(counts.values()):"
+    },
+    {
+      "label": "14 per-machine MODEL_PRICES override changes the result",
+      "file": "../engine/budget_burn.py",
+      "oracle": "real",
+      "find": "overrides = _from_config(\"MODEL_PRICES\", None)",
+      "replace": "overrides = None"
+    },
+    {
+      "label": "15 override merges per model over defaults",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "table[key] = dict(row)",
+      "replace": "table = {k: dict(r) for k, r in overrides.items()}"
+    },
+    {
+      "label": "16 legacy RATES in config is reported",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "return [n for n in DEPRECATED_CONFIG_NAMES if getattr(config, n, None) is not None]",
+      "replace": "return []"
+    },
+    {
+      "label": "17 budget_burn prices 1-hour writes at the 1-hour rate",
+      "file": "../engine/budget_burn.py",
+      "oracle": "real",
+      "find": "priced = pricer.price(call)",
+      "replace": "priced = pricer.price(__import__(\"dataclasses\").replace(call, cache_write_5m_tokens=call.cache_write_5m_tokens + call.cache_write_1h_tokens, cache_write_1h_tokens=0))"
+    },
+    {
+      "label": "18 reader carries message.usage.speed",
+      "file": "../engine/transcript_reader.py",
+      "oracle": "real",
+      "find": "speed=_text(usage.get(\"speed\")),",
+      "replace": "speed=_text(rec.get(\"speed\")),"
+    },
+    {
+      "label": "20 P4 prompt length uses 5m + 1h only, not the total write",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "prompt = counts[\"input\"] + counts[\"cache_read\"] + _total_write(call, counts)",
+      "replace": "prompt = counts[\"input\"] + counts[\"cache_read\"] + counts[\"write_5m\"] + counts[\"write_1h\"]"
+    },
+    {
+      "label": "21 write shortfall (total over 5m + 1h) is not priced",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "shortfall = _total_write(call, counts) - counts[\"write_5m\"] - counts[\"write_1h\"]\n    counts = {**counts, \"write_5m\": counts[\"write_5m\"] + shortfall}",
+      "replace": "shortfall = 0\n    counts = {**counts, \"write_5m\": counts[\"write_5m\"] + shortfall}"
+    },
+    {
+      "label": "22 invalid token count coerced to 0 as before",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "    if invalid:\n        return _unpriced",
+      "replace": "    if False:\n        return _unpriced"
+    },
+    {
+      "label": "19 [control] components summed in a different order",
+      "file": "../engine/pricing.py",
+      "oracle": "real",
+      "find": "total = sum(usd.values())",
+      "replace": "total = sum(reversed(list(usd.values())))",
+      "expect": "survived",
+      "why": "Float addition order only moves the last ulp; every test total uses exactly representable dollar amounts (binary-fraction rates and whole-million token counts), so both orders give identical sums on every path the suite reaches. Not inert for arbitrary token counts, where the last digit could differ."
+    }
+  ]
+}

@@ -22,6 +22,8 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 import budget_burn
 import context_spend as cs
 
+M = 1_000_000
+
 SONNET = "claude-sonnet-5-5"
 OPUS = "claude-opus-5-5"
 HAIKU = "claude-haiku-5-5"
@@ -42,6 +44,9 @@ def asst(
     cr=0,
     side=False,
     tools=(),
+    w5=None,
+    w1=None,
+    speed=None,
 ):
     content = [
         {"type": "tool_use", "id": tid, "name": name, "input": inp}
@@ -64,6 +69,14 @@ def asst(
             },
         },
     }
+    if w5 is not None or w1 is not None:
+        usage = line["message"]["usage"]
+        usage["cache_creation"] = {
+            "ephemeral_5m_input_tokens": w5 or 0,
+            "ephemeral_1h_input_tokens": w1 or 0,
+        }
+    if speed is not None:
+        line["message"]["usage"]["speed"] = speed
     if side:
         line["isSidechain"] = True
     return line
@@ -207,23 +220,61 @@ class TestPricing:
         write(root / "p" / "s.jsonl", [asst("a", "a", T(1), model="claude-fable-5-2", i=1_000_000)])
         assert run(root)["total_cost"] == pytest.approx(5.0)
 
-    def test_dollar_pricing_reuses_budget_burn(self, root):
+    def test_dollar_pricing_prices_each_call_per_model_with_the_write_split(self, root):
+        # claude-opus-5-5: in 4, out 20, write 5m 5, write 1h 8, read 0.20.
         write(
             root / "p" / "s.jsonl",
-            [asst("a", "a", T(1), model=OPUS, i=1000, o=2000, cw=3000, cr=4000)],
+            [asst("a", "a", T(1), model=OPUS, i=M, o=M, cr=M, cw=2 * M, w5=M, w1=M)],
         )
         r = run(root, pricing="usd")
-        expected = budget_burn._record_cost(
-            {
-                "input_tokens": 1000,
-                "output_tokens": 2000,
-                "cache_creation_input_tokens": 3000,
-                "cache_read_input_tokens": 4000,
-            },
-            "opus",
-        )
         assert r["unit"] == "usd"
-        assert r["total_cost"] == pytest.approx(expected)
+        assert abs(r["total_cost"] - (4 + 20 + 0.2 + 5 + 8)) <= 1e-12
+        cat = r["by_category"]["cost"]
+        assert abs(cat["in"] - 4) <= 1e-12
+        assert abs(cat["out"] - 20) <= 1e-12
+        assert abs(cat["cr"] - 0.2) <= 1e-12
+        assert abs(cat["cw"] - 13) <= 1e-12
+        assert r["unpriced"] == []
+
+    def test_dollar_pricing_without_a_split_bills_writes_at_the_five_minute_rate(self, root):
+        write(root / "p" / "s.jsonl", [asst("a", "a", T(1), model=OPUS, cw=M)])
+        assert abs(run(root, pricing="usd")["total_cost"] - 5) <= 1e-12
+
+    def test_dollar_pricing_applies_fast_speed(self, root):
+        write(root / "p" / "s.jsonl", [asst("a", "a", T(1), model=OPUS, i=M, speed="fast")])
+        assert abs(run(root, pricing="usd")["total_cost"] - 8) <= 1e-12
+
+    def test_dollar_pricing_reports_unpriced_calls_instead_of_guessing(self, root):
+        write(
+            root / "p" / "s.jsonl",
+            [
+                asst("a", "a", T(1), model=OPUS, i=M),
+                asst("b", "b", T(1), model="mystery-9", i=10, o=20),
+                asst("c", "c", T(1), model="claude-opus-5-6", i=5),
+                asst("d", "d", T(1), model="claude-opus-4-5", i=7, speed="fast"),
+            ],
+        )
+        r = run(root, pricing="usd")
+        assert abs(r["total_cost"] - 4) <= 1e-12
+        assert r["calls"] == 4  # token analyses still see every call
+        models = {u["model"]: u for u in r["unpriced"]}
+        assert set(models) == {"mystery-9", "claude-opus-5-6", "claude-opus-4-5"}
+        assert models["mystery-9"]["calls"] == 1
+        assert models["mystery-9"]["tokens"]["output"] == 20
+        assert r["by_model"]["mystery-9"]["cost"] == 0.0
+
+    def test_relative_output_has_no_unpriced_key(self, root):
+        write(root / "p" / "s.jsonl", [asst("a", "a", T(1), model="mystery-9", i=10)])
+        assert "unpriced" not in run(root)
+
+    def test_dollar_text_report_lists_unpriced_models(self, root):
+        write(root / "p" / "s.jsonl", [asst("a", "a", T(1), model="mystery-9", i=10)])
+        text = cs.render_text(run(root, pricing="usd"))
+        assert "mystery-9" in text
+        assert "unpriced" in text.lower()
+
+    def test_no_tier_price_table_is_consulted(self):
+        assert not hasattr(budget_burn, "RATES")
 
 
 # ---------------------------------------------------------------------------
