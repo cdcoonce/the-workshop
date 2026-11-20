@@ -1,0 +1,195 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_cli_json.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_cli_json.py"
+  ],
+  "mutants": [
+    {
+      "label": "results emitted in reverse input order (test_multiple_paths_yield_results_in_input_order)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "results = [analyze_file(path) for path in args.paths]",
+      "replace": "results = [analyze_file(path) for path in reversed(args.paths)]"
+    },
+    {
+      "label": "line dropped from JSON issues (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"line\": self.location.line_start,",
+      "replace": "\"line\": None,"
+    },
+    {
+      "label": "severity emitted as enum name not value (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"severity\": self.severity.value,\n            \"category\": self.category.value,\n            \"line\"",
+      "replace": "\"severity\": self.severity.name,\n            \"category\": self.category.value,\n            \"line\""
+    },
+    {
+      "label": "category emitted as enum name not value (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"category\": self.category.value,\n            \"line\"",
+      "replace": "\"category\": self.category.name,\n            \"line\""
+    },
+    {
+      "label": "rule_id dropped from JSON issues (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"message\": self.message,\n            \"rule_id\": self.rule_id,\n            \"source\": self.source,\n        }\n\n\n@dataclass",
+      "replace": "\"message\": self.message,\n            \"rule_id\": None,\n            \"source\": self.source,\n        }\n\n\n@dataclass"
+    },
+    {
+      "label": "message blanked in JSON issues (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"line\": self.location.line_start,\n            \"message\": self.message,",
+      "replace": "\"line\": self.location.line_start,\n            \"message\": \"\","
+    },
+    {
+      "label": "file field null (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"file\": str(self.source_path) if self.source_path is not None else None,",
+      "replace": "\"file\": None,"
+    },
+    {
+      "label": "file_type hardcoded to python (test_json_reports_known_issue_with_line markdown)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"file_type\": self.file_type.value,",
+      "replace": "\"file_type\": \"python\","
+    },
+    {
+      "label": "issues list always empty (test_json_reports_known_issue_with_line)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"issues\": [issue.to_json_dict() for issue in self.issues],",
+      "replace": "\"issues\": [],"
+    },
+    {
+      "label": "clean file emits null issues instead of [] (test_clean_file_has_no_issues_and_exits_zero)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "\"issues\": [issue.to_json_dict() for issue in self.issues],",
+      "replace": "\"issues\": [issue.to_json_dict() for issue in self.issues] or None,"
+    },
+    {
+      "label": "exit 1 when findings exist (test_exit_zero_even_with_findings)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "                )\n    return 0",
+      "replace": "                )\n    return 1 if any(r.issues for r in results) else 0"
+    },
+    {
+      "label": "missing path exits 0 (test_missing_path_exits_2_with_stderr_and_empty_stdout)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "            print(f\"error: file not found: {path}\", file=sys.stderr)\n        return 2",
+      "replace": "            print(f\"error: file not found: {path}\", file=sys.stderr)\n        return 0"
+    },
+    {
+      "label": "partial stdout printed before the missing-path failure (test_missing_path_exits_2_with_stderr_and_empty_stdout)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "    missing = [path for path in args.paths if not path.is_file()]",
+      "replace": "    print(\"[\")\n    missing = [path for path in args.paths if not path.is_file()]"
+    },
+    {
+      "label": "missing-path message goes to stdout (test_missing_path_exits_2_with_stderr_and_empty_stdout)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "print(f\"error: file not found: {path}\", file=sys.stderr)",
+      "replace": "print(f\"error: file not found: {path}\")"
+    },
+    {
+      "label": "only the first path is existence-checked (markdown test_missing_path_exits_2_with_stderr_and_empty_stdout)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "for path in args.paths if not path.is_file()]",
+      "replace": "for path in args.paths[:1] if not path.is_file()]"
+    },
+    {
+      "label": "JSON emitted regardless of --json (test_plain_text_mode_prints_a_line_per_issue)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "    if args.json:",
+      "replace": "    if True:"
+    },
+    {
+      "label": "plain mode prints nothing (test_plain_text_mode_prints_a_line_per_issue)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "            for issue in result.issues:\n                print(",
+      "replace": "            for issue in []:\n                print("
+    },
+    {
+      "label": "plain mode line number hardcoded 0 (markdown test_plain_text_mode_prints_a_line_per_issue)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "{result.source_path}:{issue.location.line_start}:",
+      "replace": "{result.source_path}:0:"
+    },
+    {
+      "label": "missing ruff exits 0 (test_cli_exits_3_with_stderr_and_empty_stdout_when_ruff_absent)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "            return 3",
+      "replace": "            return 0"
+    },
+    {
+      "label": "ruff preflight never reports unavailable (test_cli_exits_3_with_stderr_and_empty_stdout_when_ruff_absent)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "None if check_ruff_available() else \"ruff not available\"",
+      "replace": "None"
+    },
+    {
+      "label": "only OSError caught on read, decode errors crash (test_non_utf8_file_exits_2_without_traceback)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "except (OSError, UnicodeDecodeError) as exc:",
+      "replace": "except OSError as exc:"
+    },
+    {
+      "label": "cannot-read message not printed (test_non_utf8_file_exits_2_without_traceback)",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "print(f\"error: cannot read {path}: {exc}\", file=sys.stderr)",
+      "replace": "pass"
+    },
+    {
+      "label": "[control] swap the two independent add_argument calls",
+      "file": "../models.py",
+      "oracle": "real",
+      "find": "    parser.add_argument(\"paths\", nargs=\"+\", type=Path, help=\"files to analyze\")\n    parser.add_argument(\"--json\", action=\"store_true\", help=\"emit JSON on stdout\")",
+      "replace": "    parser.add_argument(\"--json\", action=\"store_true\", help=\"emit JSON on stdout\")\n    parser.add_argument(\"paths\", nargs=\"+\", type=Path, help=\"files to analyze\")",
+      "expect": "survived",
+      "why": "argparse parses optionals and positionals independently of declaration order; only the order of lines in --help output changes, which no test reads. Holds for the argv shapes the suite uses (paths then --json); it would matter if positionals were declared with differing nargs."
+    }
+  ]
+}

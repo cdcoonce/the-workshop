@@ -1,63 +1,62 @@
 ---
 name: daa-code-review
 description: >
-  AI-powered code quality review for Python, Markdown, and Mermaid. Use when
-  the user asks for a "code review" or "quality check", or pastes code for
-  analysis. Not vulnerabilities — see security-review.
+  Diff, branch, or MR/PR review for Python, SQL/dbt, YAML, Markdown, Mermaid.
+  Use when asked for a "code review" or "quality check", or code is pasted.
+  Not vulnerabilities; see security-review.
 ---
 
-# DAA Code Review Skill
+# DAA Code Review
 
-Analyze Python code, Markdown documentation, and Mermaid diagrams for quality issues. Combines external linters (ruff) with Claude's analysis to provide comprehensive code review with suggested fixes.
+Diff-first quality review for the DAA stack. Deterministic tools run first, then judgment. Findings land only on changed hunks.
 
-Go beyond running linters: also check for SOLID/DRY/YAGNI conformance, obvious security issues spotted in passing, and descriptive variable naming. See [python-checks.md#naming](references/python-checks.md#naming) for a worked example.
+## Target resolution
 
-**Role boundary:** this skill is the _quality_ review. For a dedicated vulnerability audit (injection, auth, crypto, OWASP categories), defer to the `security-review` skill — flag anything suspicious you notice here, then recommend running `/security-review` rather than deepening the security analysis inline.
+Default: current branch vs its integration target, diffed from the merge-base; report only on changed hunks. `--mr <n>` (glab) and `--pr <n>` (gh) review that diff. Explicit paths and pasted snippets are reviewed whole. Empty diff: say there is nothing to review and stop. Commands and target rules: [targets-and-output.md](references/targets-and-output.md).
 
-## Quick Start
+## Modes
 
-```python
-from python_analyzer import analyze_python, analyze_python_file
-from markdown_analyzer import analyze_markdown, analyze_markdown_file
-from report_generator import generate_console_report, generate_markdown_report
-from models import ReviewReport
+- **Full (default for user calls):** this skill's standards pass, then the fan-out in [umbrella.md](references/umbrella.md) (`/code-review` for correctness bugs, `security-review` for vulnerabilities), merged and deduped.
+- **`--quality-only` (dev-cycle and agents):** standards pass only. No fan-out, no `/code-review`, no `security-review`. Force it when running inside a subagent or when invoked from `security-review`.
 
-result = analyze_python_file(Path("src/module.py"))  # or analyze_python(code_string)
-result = analyze_markdown_file(Path("README.md"))  # or analyze_markdown(content)
-report = ReviewReport(results=[result], title="Code Review")
-generate_console_report(report)  # Console output
-markdown = generate_markdown_report(report)  # Markdown string
-```
+## Standards pass
 
-For Mermaid diagrams, combine Claude's understanding with a web search for current syntax — see [mermaid-checks.md](references/mermaid-checks.md).
+Run the deterministic check, then judge. Beyond tool output, check SOLID/DRY/YAGNI conformance and descriptive variable naming (worked example in [python-checks.md#naming](references/python-checks.md#naming)).
 
-## Workflow
+| File type | Deterministic                               | Reference                                           |
+| --------- | ------------------------------------------- | --------------------------------------------------- |
+| Python    | `ruff`, `scripts/python_analyzer.py --json` | [python-checks.md](references/python-checks.md)     |
+| SQL/dbt   | `uvx sqlfluff lint --format json`           | [sql-dbt-checks.md](references/sql-dbt-checks.md)   |
+| YAML      | `yaml.safe_load` parse                      | [yaml-checks.md](references/yaml-checks.md)         |
+| Markdown  | `scripts/markdown_analyzer.py --json`       | [markdown-checks.md](references/markdown-checks.md) |
+| Mermaid   | `mmdc` parse when on PATH, else unverified  | [mermaid-checks.md](references/mermaid-checks.md)   |
+| Dagster   | none; defer to `dagster-expert`             | asset, sensor, schedule patterns                    |
 
-1. **Receive code** - From file path or pasted snippet
-2. **Detect file type** - Python (.py), Markdown (.md), or Mermaid (.mmd, code blocks)
-3. **Run analysis** - External linters first, then Claude's analysis
-4. **Generate report** - Both console and markdown formats; see [fix-workflow.md](references/fix-workflow.md) for output format details
-5. **Save report** - Write markdown report to `docs/code_reviews/{YYYY-MM-DD}_{file_name}.md` (create directory if needed)
-6. **Review fixes** - Present suggested fixes to user
-7. **Apply fixes** - With user approval; see [fix-workflow.md](references/fix-workflow.md) for approval modes and examples
-8. **Check README** - Before pushing, verify README.md reflects current changes (new features, modified APIs, updated dependencies, changed configuration). Structural doc work (a new how-to, a README past its landing bar, a doc in the wrong mode) is `repo-docs`'s job; hand it there rather than editing docs/ here
+Analyzers live in this skill's own `scripts/` dir. Resolve it as an absolute path from the `Base directory for this skill: /...` line the loader announces (`<skill_dir>`), never relative to the repo:
+`uv run --with ruff python <skill_dir>/scripts/python_analyzer.py <paths...> --json` (Markdown: `markdown_analyzer.py`, no `--with ruff`). Exit 0 = ran; 2 = path missing or unreadable; 3 = ruff unavailable. The repo's own ruff config wins; with none, defaults plus `B` and `S` run, and `assert` in test files is a nit (details: python-checks.md).
 
-## Analysis Capabilities
+## Severity contract
 
-| Language/Format | Categories                                                                              | Details                                             |
-| --------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Python (ruff)   | PEP8, unused code, type hints, docstrings, complexity, runtime errors, imports          | [python-checks.md](references/python-checks.md)     |
-| Markdown        | Heading structure, broken links, alt text, formatting, code blocks, encoding corruption | [markdown-checks.md](references/markdown-checks.md) |
-| Mermaid         | Diagram type declaration, node/edge syntax, structural correctness                      | [mermaid-checks.md](references/mermaid-checks.md)   |
+Every finding is **blocking**, **should-fix**, or **nit**. Analyzer ERROR = blocking, WARNING = should-fix, INFO = nit; a source with no level = should-fix. sqlfluff lint = nit because it reports style, while analyzer WARNINGs flag likely defects. **Clean means zero blocking findings and a complete run.** The verdict is **incomplete**, never clean, whenever a check failed or went unverified: analyzer exit 2 or 3, sqlfluff failure, `mmdc` absent, or a fan-out source unavailable.
 
-## Reference Documentation
+## Output
 
-- [python-checks.md](references/python-checks.md) - Python rule details and naming example
-- [markdown-checks.md](references/markdown-checks.md) - Markdown rule details
-- [mermaid-checks.md](references/mermaid-checks.md) - Mermaid validation guide
-- [fix-workflow.md](references/fix-workflow.md) - Output formats, fix approval workflow, and usage pattern examples
-- [authoring-conventions.md](references/authoring-conventions.md) - Conventions for modifying the analyzer scripts (script inventory, URI detection, frontmatter parsing)
+- Chat, grouped by severity, each finding with `file:line` and a source tag (`standards`, `ruff`, `sqlfluff`, `code-review`, `security-review`), then the verdict.
+- `--save`: write to `~/.workshop/daa-code-review/<repo>/<YYYY-MM-DD>-<branch>.md` (`/` in the branch name becomes `-`: `feat/x` is `feat-x`), creating the directory.
+- `--post`: one summary comment, shown verbatim, posted only on an explicit yes.
+- Never write review output (report, saved files, post bodies, temp files) inside the repo; applying approved fixes edits repo files.
+
+## Fixes
+
+After reporting, offer fixes and apply only what the user approves; approval modes are in [fix-workflow.md](references/fix-workflow.md). Re-run the checks after applying.
+
+## Boundaries
+
+- Vulnerability audits (injection, auth, crypto, OWASP) belong to `security-review`. Full mode calls it; `security-review` never calls this skill back.
+- `/code-review` owns correctness-bug hunting and `/simplify` owns apply-the-cleanup passes; this skill does not duplicate them.
+- If the diff changes public behaviour and README or docs look stale, hand off to `repo-docs` in one sentence; do not edit docs here.
+- Changing the analyzer scripts: see [authoring-conventions.md](references/authoring-conventions.md).
 
 ## Requirements
 
-Python 3.10+, ruff, and web access for Mermaid documentation lookup.
+Python 3.10+, ruff, `uvx` for SQL. `mmdc` is optional.

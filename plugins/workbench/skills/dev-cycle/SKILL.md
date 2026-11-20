@@ -62,9 +62,9 @@ Phases 1–3 delegate directly per the table above; record each artifact (issue 
 
 ### Phase 6: Code Review
 
-Invoke `daa-code-review` against all changed files on the feature branch. If blocking issues found → fix, re-run. Loop until clean. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
+Invoke `daa-code-review --quality-only` against the branch diff (feature branch vs the integration target). If blocking findings → fix, re-run. Loop until zero blocking findings. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
 
-**Specialist fan-out (additive on the `daa-code-review` pass above).** Check the branch's diff footprint against the table below. Every match dispatches the named specialist as an additional reviewer alongside `daa-code-review`; its findings gate Phase 6 the same way any `daa-code-review` finding does — blocking findings must be fixed and the pass re-run.
+**Specialist fan-out (additive on the `daa-code-review --quality-only` pass above, which does not fan out itself, so nothing is duplicated).** Check the branch's diff footprint against the table below. Every match dispatches the named specialist as an additional reviewer alongside `daa-code-review --quality-only`; its findings gate Phase 6 the same way any `daa-code-review` finding does — blocking findings must be fixed and the pass re-run.
 
 | Diff touches                       | Specialist              |
 | ---------------------------------- | ----------------------- |
