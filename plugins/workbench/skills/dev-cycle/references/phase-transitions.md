@@ -64,8 +64,8 @@ Every one of these is a rationalization for skipping mandatory work, not a legit
 ## Implement → Code Review
 
 - **Validate:** All implementation issues resolved, tests passing (`uv run pytest` or project test command)
-- **Handoff:** Invoke `daa-code-review` against all changed files on the feature branch
-- **Gate:** If blocking issues → fix, re-run review. Loop until clean.
+- **Handoff:** Invoke `daa-code-review --quality-only` against the branch diff (feature branch vs the integration target)
+- **Gate:** If blocking issues → fix, re-run review. Loop until zero blocking findings.
 - **Failure:** If code review finds architectural issues requiring plan rework, trigger backwards transition to `plan` (see Backwards Transitions below)
 
 ## Code Review → PR

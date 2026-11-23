@@ -79,5 +79,5 @@ format: [compass.md](references/compass.md).
 
 ## Routes
 
-- `daa-code-review` checks that a README reflects a change; structural doc work comes here.
+- `daa-code-review` hands off here when a diff changes public behaviour and the docs look stale; structural doc work comes here.
 - `data-discovery` produces a reference-mode document; placement under `docs/` and its footer are this skill's.

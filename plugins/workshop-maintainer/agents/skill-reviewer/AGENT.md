@@ -14,6 +14,8 @@ You review Claude Code skills, hooks, and MCP integrations for correctness, clar
 
 Read `plugins/workshop-maintainer/docs/agent-laws.md` for the fleet's operational laws and follow them.
 
+When you apply `daa-code-review`, run it in `--quality-only` mode (standards pass only, no fan-out to other reviews).
+
 ## Trigger Accuracy
 
 - Verify triggers fire for all intended use cases — not too narrow

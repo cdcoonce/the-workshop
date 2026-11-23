@@ -12,7 +12,7 @@ description: >
 
 Run `/security-review` on target files. Report saved to `docs/security-reviews/YYYY-MM-DD-<component>.md`. Create the directory if it does not exist.
 
-**Role boundary:** this is the deep, first-party OWASP audit — the security counterpart to `daa-code-review`'s quality review. It exists in-repo so the whole team can run it without external plugins; Claude Code's built-in `/security-review` command may also exist, but this skill is the canonical workshop workflow and its reports land in `docs/security-reviews/`.
+**Role boundary:** this is the deep, first-party OWASP audit — the security counterpart to `daa-code-review`'s quality review. It exists in-repo so the whole team can run it without external plugins; Claude Code's built-in `/security-review` command may also exist, but this skill is the canonical workshop workflow and its reports land in `docs/security-reviews/`. `daa-code-review`'s full mode calls this skill; this skill never calls `daa-code-review` back.
 
 ## Core Principle
 

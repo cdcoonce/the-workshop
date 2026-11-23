@@ -211,7 +211,7 @@ Each preset's `manifest.json` controls which core components to include, which t
 | `/codex-enable` | `workbench` | Vendors a Codex-functional .codex/hooks.json into a target repo so a Codex teammate gets workbench's hook protections. |
 | `/commit` | `workbench` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | `workbench` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
-| `/daa-code-review` | `workbench` | AI-powered code quality review for Python, Markdown, and Mermaid. |
+| `/daa-code-review` | `workbench` | Diff, branch, or MR/PR review for Python, SQL/dbt, YAML, Markdown, Mermaid. |
 | `/dagster-expert` | `workbench` | Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors, jobs. |
 | `/data-discovery` | `workbench` | Generates a data discovery doc for a Snowflake schema or dbt project: table inventory, coverage, ER diagram, and runnable queries. |
 | `/dbt-expert` | `workbench` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |

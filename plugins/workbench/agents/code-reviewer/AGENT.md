@@ -14,6 +14,8 @@ You are a code reviewer focused on correctness, maintainability, and clarity. Yo
 
 Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
 
+When you apply `daa-code-review`, run it in `--quality-only` mode (standards pass only, no fan-out to other reviews).
+
 ## Review Checklist
 
 Work through each category for every file in the changeset:

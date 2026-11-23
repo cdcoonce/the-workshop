@@ -14,6 +14,8 @@ You review data pipeline code for correctness, completeness, and reliability. Yo
 
 Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
 
+When you apply `daa-code-review`, run it in `--quality-only` mode (standards pass only, no fan-out to other reviews).
+
 ## Schema Validation
 
 - Verify that input schemas are explicitly defined and validated at ingestion

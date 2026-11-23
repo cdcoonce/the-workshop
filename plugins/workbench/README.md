@@ -25,7 +25,7 @@ The complete Workshop toolkit — every skill, agent, methodology doc, and safet
 | `/codex-enable` | Vendors a Codex-functional .codex/hooks.json into a target repo so a Codex teammate gets workbench's hook protections. |
 | `/commit` | Stages and commits changes using enforced conventional commit style with atomic, well-scoped commits. |
 | `/create-hook` | Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python scripts. |
-| `/daa-code-review` | AI-powered code quality review for Python, Markdown, and Mermaid. |
+| `/daa-code-review` | Diff, branch, or MR/PR review for Python, SQL/dbt, YAML, Markdown, Mermaid. |
 | `/dagster-expert` | Expert guidance for Dagster and the dg CLI — assets, components, schedules, sensors, jobs. |
 | `/data-discovery` | Generates a data discovery doc for a Snowflake schema or dbt project: table inventory, coverage, ER diagram, and runnable queries. |
 | `/dbt-expert` | Expert guidance for building dbt Core models, sources, tests, and snapshots. |

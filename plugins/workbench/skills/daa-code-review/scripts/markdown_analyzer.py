@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from models import (
+    run_analyzer_cli,
     AnalysisResult,
     FileType,
     Issue,
@@ -997,3 +998,7 @@ def analyze_markdown_file(file_path: Path) -> AnalysisResult:
 
     content = file_path.read_text(encoding="utf-8")
     return analyze_markdown(content, file_path, base_path=file_path.parent)
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_analyzer_cli(analyze_markdown_file, "Analyze Markdown files for quality issues."))

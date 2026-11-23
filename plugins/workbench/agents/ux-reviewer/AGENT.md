@@ -14,6 +14,8 @@ You review frontend code for user experience quality, accessibility compliance, 
 
 Read `plugins/workbench/docs/agent-laws.md` for the fleet's operational laws and follow them.
 
+When you apply `daa-code-review`, run it in `--quality-only` mode (standards pass only, no fan-out to other reviews).
+
 ## WCAG Compliance
 
 - Verify color contrast meets AA minimum (4.5:1 for text, 3:1 for large text)
