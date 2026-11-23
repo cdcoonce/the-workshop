@@ -1,0 +1,129 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "test_fixed_weight_calibrate.py",
+    "test_fixed_weight.py",
+    "test_transcript_reader.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "--with",
+    "hypothesis",
+    "--with",
+    "numpy",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "test_fixed_weight_calibrate.py",
+    "test_fixed_weight.py",
+    "test_transcript_reader.py",
+    "test_cost_ledger.py",
+    "test_cost_ledger_skills.py",
+    "test_cost_ledger_export.py"
+  ],
+  "mutants": [
+    {
+      "label": "1 default is under the home directory (mutant: a wrong directory under the home, not under cost-ledger)",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE",
+      "replace": "    return Path.home() / \".workshop\" / \"vault-budget\" / _fw.CALIBRATION_FILE"
+    },
+    {
+      "label": "2 home is read at call time",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "def default_calibration_path() -> Path:\n    \"\"\"The one default calibration file, outside any plugin install so a plugin update keeps it.\n\n    ``Path.home()`` is read at call time, so a test redirects it with ``HOME``.\n    \"\"\"\n    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE",
+      "replace": "_IMPORT_HOME = Path.home()\n\n\ndef default_calibration_path() -> Path:\n    \"\"\"The one default calibration file, outside any plugin install so a plugin update keeps it.\n\n    ``Path.home()`` is read at call time, so a test redirects it with ``HOME``.\n    \"\"\"\n    return _IMPORT_HOME / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE"
+    },
+    {
+      "label": "3 a file beside the budget_burn config is ignored",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE",
+      "replace": "    _cfg = Path(getattr(getattr(budget_burn, \"_config\", None), \"__file__\", None) or budget_burn.__file__).parent / _fw.CALIBRATION_FILE\n    if _cfg.exists():\n        return _cfg\n    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE"
+    },
+    {
+      "label": "4 calibrate default --out shares the one function (mutant: a wrong directory under the home, not under cost-ledger)",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "else cost_ledger.default_calibration_path()",
+      "replace": "else Path.home() / \".workshop\" / \"vault-budget\" / cost_ledger._fw.CALIBRATION_FILE"
+    },
+    {
+      "label": "5 missing default means uncalibrated",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "required=explicit",
+      "replace": "required=True"
+    },
+    {
+      "label": "6 --calibration wins over the default",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "path = Path(args.calibration) if explicit else default_calibration_path()",
+      "replace": "path = default_calibration_path() if default_calibration_path().exists() or not explicit else Path(args.calibration)"
+    },
+    {
+      "label": "7 default --out creates parent directories",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "            if make_parents:\n                out.parent.mkdir(parents=True, exist_ok=True)",
+      "replace": "            if False:\n                out.parent.mkdir(parents=True, exist_ok=True)"
+    },
+    {
+      "label": "8 explicit --out needs an existing parent",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "            if make_parents:\n                out.parent.mkdir(parents=True, exist_ok=True)",
+      "replace": "            if True:\n                out.parent.mkdir(parents=True, exist_ok=True)"
+    },
+    {
+      "label": "9 a refusal creates no directory",
+      "file": "../engine/fixed_weight_calibrate.py",
+      "oracle": "real",
+      "find": "out = Path(args.out) if not make_parents else cost_ledger.default_calibration_path()",
+      "replace": "out = Path(args.out) if not make_parents else cost_ledger.default_calibration_path()\n        if make_parents:\n            out.parent.mkdir(parents=True, exist_ok=True)"
+    },
+    {
+      "label": "10 help shows the literal tilde",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "DEFAULT_CALIBRATION_HELP = f\"~/.workshop/cost-ledger/{_fw.CALIBRATION_FILE}\"",
+      "replace": "DEFAULT_CALIBRATION_HELP = f\"{Path.home()}/.workshop/cost-ledger/{_fw.CALIBRATION_FILE}\""
+    },
+    {
+      "label": "11 [control] path built with joinpath",
+      "file": "../engine/cost_ledger.py",
+      "oracle": "real",
+      "find": "    return Path.home() / \".workshop\" / \"cost-ledger\" / _fw.CALIBRATION_FILE",
+      "replace": "    return Path.home().joinpath(\".workshop\", \"cost-ledger\", _fw.CALIBRATION_FILE)",
+      "expect": "survived",
+      "why": "Path.home() / a / b / c and Path.home().joinpath(a, b, c) build the same path object; no test can tell them apart. Scope: only the construction style of the one expression."
+    }
+  ]
+}

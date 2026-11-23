@@ -1,0 +1,45 @@
+{
+  "_note": "Derived by hand from the fixed-weight spec and the price table before the code. Model claude-opus-4-8: input 5, output 25, 5-minute write 6.25, 1-hour write 10, cache read 0.5 USD per million. 3.7 characters per token. Window 2026-11-10 to 2026-11-12.",
+  "_files": {
+    "main fa1": "T = 1920 tokens: skill_listing 200, instructions 100, hook_context 60, agent_listing 40, mcp_instructions 20, mcp_tool_schemas 160, mcp_tool_listing 60, system_prompt 1000, builtin_tool_schemas 200, builtin_tool_listing 60, other 20. In-window calls: write 5m (2000 >= T), read, write 1h (3000 >= T), read (1000 < T), read; one unpriced call; one call on 11-20 outside the window.",
+    "subagent fa1s1": "T = 800 tokens: instructions 200, system_prompt 500, builtin_tool_schemas 100. Calls: write 5m (1000 >= T), read.",
+    "beta fb1": "no snapshot; T = 100 tokens: skill_listing 80, other 20. Calls: a first call that only reads (charged a read), then a call whose own dollars (0.00004) are below its fixed charge (0.00005): capped at ratio 0.8."
+  },
+  "window": {"since": "2026-11-10", "until": "2026-11-12"},
+  "totals_usd": 0.073215,
+  "main_usd": 0.064215,
+  "subagent_usd": 0.009,
+  "fixed_weight": {
+    "calibrated": false,
+    "calibration_factor": 1.0,
+    "chars_per_token": 3.7,
+    "files_estimated": 3,
+    "files_without_snapshot": 1,
+    "write_calls": 3,
+    "read_calls": 6,
+    "capped_calls": 1,
+    "unpriced_calls": 1,
+    "total_usd": 0.03957,
+    "share_of_total": 0.540463,
+    "subagent_usd": 0.0054,
+    "subagent_share": 0.136467,
+    "groups": {
+      "setup": {"usd": 0.012782, "share_of_total": 0.174582},
+      "claude_code": {"usd": 0.026788, "share_of_total": 0.365881}
+    },
+    "mcp": {"usd": 0.00426, "share_of_total": 0.058185},
+    "components": [
+      {"component": "skill_listing", "group": "setup", "files": 2, "tokens_per_file": {"min": 80, "median": 140, "max": 200}, "usd": 0.003622, "write_usd": 0.00325, "read_usd": 0.000372},
+      {"component": "instructions", "group": "setup", "files": 2, "tokens_per_file": {"min": 100, "median": 150, "max": 200}, "usd": 0.003125, "write_usd": 0.002875, "read_usd": 0.00025},
+      {"component": "hook_context", "group": "setup", "files": 1, "tokens_per_file": {"min": 60, "median": 60, "max": 60}, "usd": 0.001065, "write_usd": 0.000975, "read_usd": 0.00009},
+      {"component": "agent_listing", "group": "setup", "files": 1, "tokens_per_file": {"min": 40, "median": 40, "max": 40}, "usd": 0.00071, "write_usd": 0.00065, "read_usd": 0.00006},
+      {"component": "mcp_instructions", "group": "setup", "files": 1, "tokens_per_file": {"min": 20, "median": 20, "max": 20}, "usd": 0.000355, "write_usd": 0.000325, "read_usd": 0.00003},
+      {"component": "mcp_tool_schemas", "group": "setup", "files": 1, "tokens_per_file": {"min": 160, "median": 160, "max": 160}, "usd": 0.00284, "write_usd": 0.0026, "read_usd": 0.00024},
+      {"component": "mcp_tool_listing", "group": "setup", "files": 1, "tokens_per_file": {"min": 60, "median": 60, "max": 60}, "usd": 0.001065, "write_usd": 0.000975, "read_usd": 0.00009},
+      {"component": "system_prompt", "group": "claude_code", "files": 2, "tokens_per_file": {"min": 500, "median": 750, "max": 1000}, "usd": 0.021125, "write_usd": 0.019375, "read_usd": 0.00175},
+      {"component": "builtin_tool_schemas", "group": "claude_code", "files": 2, "tokens_per_file": {"min": 100, "median": 150, "max": 200}, "usd": 0.004225, "write_usd": 0.003875, "read_usd": 0.00035},
+      {"component": "builtin_tool_listing", "group": "claude_code", "files": 1, "tokens_per_file": {"min": 60, "median": 60, "max": 60}, "usd": 0.001065, "write_usd": 0.000975, "read_usd": 0.00009},
+      {"component": "other", "group": "claude_code", "files": 2, "tokens_per_file": {"min": 20, "median": 20, "max": 20}, "usd": 0.000373, "write_usd": 0.000325, "read_usd": 0.000048}
+    ]
+  }
+}

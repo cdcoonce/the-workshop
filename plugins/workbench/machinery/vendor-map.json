@@ -48,6 +48,21 @@
     },
     {
       "kind": "file",
+      "source": "engine/cost_ledger.py",
+      "target": ".claude/scripts/cost_ledger.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/fixed_weight.py",
+      "target": ".claude/scripts/fixed_weight.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/fixed_weight_calibrate.py",
+      "target": ".claude/scripts/fixed_weight_calibrate.py"
+    },
+    {
+      "kind": "file",
       "source": "engine/frontmatter_engine.py",
       "target": ".claude/scripts/frontmatter_engine.py"
     },
@@ -100,6 +115,16 @@
       "kind": "file",
       "source": "engine/pre-compact.py",
       "target": ".claude/scripts/pre-compact.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/pricing.py",
+      "target": ".claude/scripts/pricing.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/pricing_defaults.py",
+      "target": ".claude/scripts/pricing_defaults.py"
     },
     {
       "kind": "file",
@@ -165,6 +190,11 @@
       "kind": "file",
       "source": "engine/transcript_backup.py",
       "target": ".claude/scripts/transcript_backup.py"
+    },
+    {
+      "kind": "file",
+      "source": "engine/transcript_reader.py",
+      "target": ".claude/scripts/transcript_reader.py"
     },
     {
       "kind": "file",

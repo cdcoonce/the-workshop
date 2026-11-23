@@ -1,0 +1,49 @@
+{
+  "_about": "Hand-derived from the slice 6 spec (M1-M4, X1-X4, E1-E6) before the code. Window 2026-11-10 to 2026-11-12 inclusive. Every call uses claude-opus-4-8 (5 per million input, 25 per million output) with 62500 tokens of one kind, so one input call is 0.3125 and one output call is 1.5625 dollars, exact in binary floating point. Call tokens: 10 input calls (one on the unpriced model) and 6 output calls. sess-zx3 has an input call on 11-09 (outside the window), sess-zx4 has a subagent input call on 11-13 (outside), sess-zx9 has only an 11-08 call so it has no row. sess-zy4 carries cost-state records whose totalCostUSD is a string, a bool, negative, null and NaN: all ignored. sess-zx2's subagent file carries a cost-state of 99.0, ignored.",
+  "totals": {
+    "calls": 16,
+    "unpriced_calls": 1,
+    "usd": 12.1875,
+    "main_usd": 9.0625,
+    "subagent_usd": 3.125,
+    "tokens": {"input": 625000, "output": 375000, "cache_read": 0, "write_5m": 0, "write_1h": 0},
+    "usd_breakdown": {"input": 2.8125, "output": 9.375, "cache_read": 0.0, "write_5m": 0.0, "write_1h": 0.0}
+  },
+  "session_count": 9,
+  "session_usd": {
+    "-zq-ember/sess-zx1": 1.875,
+    "-zq-ember/sess-zx2": 3.75,
+    "-zq-ember/sess-zx3": 1.5625,
+    "-zq-ember/sess-zx4": 0.3125,
+    "-zq-ember/sess-zx5": 0.3125,
+    "-zq-tundra/sess-zy1": 1.875,
+    "-zq-tundra/sess-zy2": 0.3125,
+    "-zq-tundra/sess-zy3": 1.875,
+    "-zq-tundra/sess-zy4": 0.3125
+  },
+  "session_usd_distribution": {"min": 0.3125, "p25": 0.3125, "median": 1.5625, "p75": 1.875, "max": 3.75},
+  "recorded_cost": {
+    "_about": "comparable: zx1 (ledger 1.875, recorded 2.0), zx2 (3.75, 4.0; the record covers the subagent), zy3 (1.875, largest of 1.0/2.0/1.5 is 2.0 and its flag is false). Not comparable: zx3 (a call outside the window), zx4 (a subagent call outside), zx5 and zy4 (no usable record), zy2 (an unpriced call). Flagged: zy1 (record 3.0, hasUnknownModelCost true, ledger 1.875). zx9 has no row so is not in the window.",
+    "sessions_in_window": 9,
+    "sessions_comparable": 3,
+    "ledger_usd": 7.5,
+    "recorded_usd": 8.0,
+    "difference_usd": -0.5,
+    "gap_percent": 6.25,
+    "flagged_unknown_sessions": 1,
+    "flagged_ledger_usd": 1.875,
+    "flagged_recorded_usd": 3.0
+  },
+  "by_model": {
+    "claude-opus-4-8": {"calls": 15, "usd": 12.1875},
+    "claude-zq-unpriced-model": {"calls": 1, "usd": 0.0}
+  },
+  "subagent_by_agent_type": {"zq-agent-reviewer": {"calls": 2, "usd": 3.125}},
+  "skills": [
+    {"skill": "zq-skill-a", "calls": 1, "usd": 1.5625, "sessions": 1},
+    {"skill": "zq-skill-b", "calls": 2, "usd": 3.125, "sessions": 1}
+  ],
+  "unattributed": {"calls": 13, "usd": 7.5, "sessions": 9},
+  "coverage": {"files_found": 12, "files_read": 12, "files_skipped": 0, "malformed_lines": 0, "undated_calls": 0},
+  "unpriced": [{"model": "claude-zq-unpriced-model", "calls": 1, "tokens": {"input": 62500, "output": 0, "cache_read": 0, "write_5m": 0, "write_1h": 0}}]
+}
