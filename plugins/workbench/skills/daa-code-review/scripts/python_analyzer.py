@@ -85,17 +85,22 @@ RUFF_CATEGORY_MAP: dict[str, IssueCategory] = {
 
 # Mapping from ruff rule prefixes to severity levels
 RUFF_SEVERITY_MAP: dict[str, Severity] = {
-    "E": Severity.WARNING,  # pycodestyle errors are typically style issues
-    "W": Severity.INFO,  # pycodestyle warnings
-    "F": Severity.WARNING,  # Pyflakes
-    "C90": Severity.INFO,  # complexity
-    "I": Severity.INFO,  # isort
-    "N": Severity.INFO,  # naming
-    "D": Severity.INFO,  # docstrings
-    "ANN": Severity.INFO,  # annotations
-    "B": Severity.WARNING,  # bugbear - potential bugs
-    "S": Severity.WARNING,  # bandit: routine calls; real vulns belong to security-review
+    "E": Severity.MINOR,  # pycodestyle errors are typically style issues
+    "W": Severity.NIT,  # pycodestyle warnings
+    "F": Severity.MINOR,  # Pyflakes
+    "C90": Severity.NIT,  # complexity
+    "I": Severity.NIT,  # isort
+    "N": Severity.NIT,  # naming
+    "D": Severity.NIT,  # docstrings
+    "ANN": Severity.NIT,  # annotations
+    "B": Severity.MINOR,  # bugbear - potential bugs
+    "S": Severity.MINOR,  # bandit: routine calls; real vulns belong to security-review
 }
+
+# Hardcoded-credential rules: MAJOR, and their message is replaced so the
+# offending literal never reaches a report.
+CREDENTIAL_RULES = {"S105", "S106", "S107"}
+CREDENTIAL_MESSAGE = "possible hardcoded credential; value redacted"
 
 # Rules that indicate errors (runtime issues)
 ERROR_RULES = {
@@ -106,7 +111,7 @@ ERROR_RULES = {
     "B018",  # useless expression
 }
 
-# Rules downgraded to INFO inside test files (pytest relies on bare assert).
+# Rules downgraded to NIT inside test files (pytest relies on bare assert).
 TEST_FILE_INFO_RULES = {"S101"}
 
 _TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
@@ -219,19 +224,22 @@ def get_severity_for_rule(
         The ruff rule identifier (e.g., 'F841', 'E501').
     file_path : Optional[Path]
         File the rule fired in; test files downgrade ``TEST_FILE_INFO_RULES``
-        to INFO.
+        to NIT.
 
     Returns
     -------
     Severity
         The corresponding severity level.
     """
+    if rule_id in CREDENTIAL_RULES:
+        return Severity.MAJOR
+
     if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):
-        return Severity.INFO
+        return Severity.NIT
 
     # Check if it's a known error rule
     if rule_id in ERROR_RULES:
-        return Severity.ERROR
+        return Severity.BLOCKER
 
     # Try progressively shorter prefixes (including digits for rules like C90),
     # mirroring get_category_for_rule: check the full prefix BEFORE stripping
@@ -245,8 +253,8 @@ def get_severity_for_rule(
         if letter_prefix and letter_prefix in RUFF_SEVERITY_MAP:
             return RUFF_SEVERITY_MAP[letter_prefix]
 
-    # Default to WARNING for unknown rules
-    return Severity.WARNING
+    # Default to MINOR for unknown rules
+    return Severity.MINOR
 
 
 @functools.lru_cache(maxsize=1)
@@ -469,10 +477,15 @@ def parse_ruff_diagnostic(
     if source_lines and 0 < line_start <= len(source_lines):
         context = source_lines[line_start - 1].rstrip()
 
+    # Credential findings carry no literal: fixed message, no context, no fix.
+    if rule_id in CREDENTIAL_RULES:
+        message = CREDENTIAL_MESSAGE
+        context = None
+
     # Check for available fix
     suggested_fix = None
     fix_data = diagnostic.get("fix")
-    if fix_data:
+    if fix_data and rule_id not in CREDENTIAL_RULES:
         edits = fix_data.get("edits", [])
         if edits:
             # Construct the fix description
@@ -545,7 +558,7 @@ def analyze_python(
         for fmt_issue in format_issues:
             issues.append(
                 Issue(
-                    severity=Severity.INFO,
+                    severity=Severity.NIT,
                     category=IssueCategory.PEP8,
                     message=fmt_issue["message"],
                     location=Location(file_path=file_path, line_start=1),

@@ -1,0 +1,204 @@
+{
+  "runner": "pytest",
+  "test_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "--with",
+    "pyyaml",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_branch_checks.py"
+  ],
+  "collect_command": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "ruff",
+    "--with",
+    "pyyaml",
+    "python",
+    "-m",
+    "pytest",
+    "--collect-only",
+    "-q",
+    "tests/test_branch_checks.py"
+  ],
+  "mutants": [
+    {
+      "label": "bandit message keeps the literal-bearing issue_text for credential tests (test_secret_never_appears_anywhere_in_the_report)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "REDACTED_CREDENTIAL if r[\"test_id\"] in SECRET_TESTS else r[\"issue_text\"]",
+      "replace": "r[\"issue_text\"]"
+    },
+    {
+      "label": "B107 dropped from the credential tests (test_all_credential_tests_are_redacted_and_at_least_major)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "SECRET_TESTS = frozenset({\"B105\", \"B106\", \"B107\"})",
+      "replace": "SECRET_TESTS = frozenset({\"B105\", \"B106\"})"
+    },
+    {
+      "label": "credential floor of major removed (test_all_credential_tests_are_redacted_and_at_least_major)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "    if test_id in SECRET_TESTS and level in {Severity.MINOR, Severity.NIT}:",
+      "replace": "    if False and level in {Severity.MINOR, Severity.NIT}:"
+    },
+    {
+      "label": "HIGH severity with LOW confidence becomes a blocker (test_severity_mapping)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "level = Severity.BLOCKER if conf in {\"MEDIUM\", \"HIGH\"} else Severity.MAJOR",
+      "replace": "level = Severity.BLOCKER"
+    },
+    {
+      "label": "every finding claims to be on a changed line (test_finding_off_the_changed_lines_is_flagged)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "\"on_changed_line\": line in self.changed.get(rel, set()),",
+      "replace": "\"on_changed_line\": True,"
+    },
+    {
+      "label": "diffed against the target tip instead of the merge-base (test_target_moving_after_the_branch_point_is_not_counted)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "span = merge_base.stdout.strip()",
+      "replace": "span = target"
+    },
+    {
+      "label": "format differences on any line count as touched (test_difference_only_on_unchanged_lines_passes_as_pre_existing)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "touched = lines & ctx.changed.get(rel, set())",
+      "replace": "touched = lines"
+    },
+    {
+      "label": "a replaced line also touches its neighbours (test_context_lines_do_not_count_as_touched)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "            if not replacing:",
+      "replace": "            if True:"
+    },
+    {
+      "label": "ruff format reports one finding per hit instead of one per run (test_touching_a_changed_line_gives_one_minor_finding_for_the_whole_run)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "    return done(tool, scope, [finding])",
+      "replace": "    return done(tool, scope, [ctx.finding(p, min(ls), \"FORMAT\", Severity.MINOR, \"x\") for p, ls in hits])"
+    },
+    {
+      "label": "an unexpected tool exception escapes the check (test_unexpected_exception_is_error_and_other_checks_still_run)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "    except Exception as exc:  # noqa: BLE001 - isolation is the point",
+      "replace": "    except ZeroDivisionError as exc:  # noqa: BLE001 - isolation is the point"
+    },
+    {
+      "label": "a tool failure is reported as a pass (test_tool_crash_is_error_not_pass)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "        return CheckResult(name, \"\", \"error\", str(exc))",
+      "replace": "        return CheckResult(name, \"\", \"pass\", str(exc))"
+    },
+    {
+      "label": "PRS no longer counts as unlinted (test_parse_failure_is_error_naming_the_file_not_a_finding)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "SQLFLUFF_UNLINTED_CODES = frozenset({\"TMP\", \"PRS\"})",
+      "replace": "SQLFLUFF_UNLINTED_CODES = frozenset({\"TMP\"})"
+    },
+    {
+      "label": "unlinted SQL files only warn instead of erroring (test_parse_failure_is_error_naming_the_file_not_a_finding)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "        return CheckResult(tool, scope, \"error\", reason, findings)",
+      "replace": "        return done(tool, scope, findings, reason)"
+    },
+    {
+      "label": "a pydoclint type-hint code is no longer dropped (test_dropped_codes_are_filtered_and_kept_codes_are_minor)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "\"DOC107\", \"DOC108\", \"DOC605\"})",
+      "replace": "\"DOC107\", \"DOC108\"})"
+    },
+    {
+      "label": "pytest and mypy run without the flag (test_project_tools_need_the_flag)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "        if run_project_tools:\n            results.append",
+      "replace": "        if True:\n            results.append"
+    },
+    {
+      "label": "bootstrap match uses the full path (test_lists_only_touched_bootstrap_files)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "if Path(p).name in BOOTSTRAP_FILES",
+      "replace": "if p in BOOTSTRAP_FILES"
+    },
+    {
+      "label": "pytest keeps the failure text after the test id (test_pytest_keeps_ids_and_summary_only)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": ".split(\" - \")[0].strip()",
+      "replace": ".split(\" - \")[-1].strip()"
+    },
+    {
+      "label": "yaml error line is zero-based (test_parse_error_is_a_blocker_at_the_error_line)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "line = mark.line + 1 if mark is not None else 1",
+      "replace": "line = mark.line if mark is not None else 1"
+    },
+    {
+      "label": "yaml parse error is only a minor finding (test_parse_error_is_a_blocker_at_the_error_line)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "\"yaml-parse\", Severity.BLOCKER",
+      "replace": "\"yaml-parse\", Severity.MINOR"
+    },
+    {
+      "label": "nonzero pytest exit with no failing ids passes (test_pytest_nonzero_without_failing_ids_is_error_not_pass)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "    if proc.returncode != 0 and not findings:\n        return CheckResult(tool, \"whole suite\", \"error\"",
+      "replace": "    if False:\n        return CheckResult(tool, \"whole suite\", \"error\""
+    },
+    {
+      "label": "custom YAML tags are parse errors again (test_custom_tags_are_not_parse_errors)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "yaml.load_all(text, Loader=TagTolerantLoader)",
+      "replace": "yaml.load_all(text, Loader=yaml.SafeLoader)"
+    },
+    {
+      "label": "only committed work is diffed (test_uncommitted_edits_are_reviewed)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "span = merge_base.stdout.strip()",
+      "replace": "span = merge_base.stdout.strip() + \"...HEAD\""
+    },
+    {
+      "label": "untracked files are dropped (test_untracked_files_count_every_line_and_ignored_files_are_skipped)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "        changed[name] = set(range(1, len(text.splitlines()) + 1))",
+      "replace": "        pass"
+    },
+    {
+      "label": "ignored files are reviewed (test_untracked_files_count_every_line_and_ignored_files_are_skipped)",
+      "file": "../branch_checks.py",
+      "oracle": "real",
+      "find": "\"ls-files\", \"--others\", \"--exclude-standard\", \"-z\"",
+      "replace": "\"ls-files\", \"--others\", \"-z\""
+    }
+  ]
+}

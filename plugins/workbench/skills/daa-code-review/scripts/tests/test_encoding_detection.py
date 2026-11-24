@@ -22,7 +22,7 @@ class TestEncodingCorruptionDetection:
             if i.rule_id == "MD050" and "encoding" in i.message.lower()
         ]
         assert len(encoding_issues) >= 1
-        assert encoding_issues[0].severity == Severity.ERROR
+        assert encoding_issues[0].severity == Severity.MAJOR
 
     def test_detect_checkmark_corruption(self):
         """Test detection of corrupted checkmark (âœ" → ✓)."""

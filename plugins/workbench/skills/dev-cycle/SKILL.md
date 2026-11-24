@@ -62,9 +62,9 @@ Phases 1–3 delegate directly per the table above; record each artifact (issue 
 
 ### Phase 6: Code Review
 
-Invoke `daa-code-review --quality-only` against the branch diff (feature branch vs the integration target). If blocking findings → fix, re-run. Loop until zero blocking findings. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
+Invoke `daa-code-review --quality-only` against the branch diff (feature branch vs the integration target). If the verdict is Request changes (any Blocker or Major finding) or Incomplete → fix, re-run. Loop until zero Blocker and Major findings and a complete run. Architectural issues requiring plan rework → trigger backwards transition to Phase 2.
 
-**Specialist fan-out (additive on the `daa-code-review --quality-only` pass above, which does not fan out itself, so nothing is duplicated).** Check the branch's diff footprint against the table below. Every match dispatches the named specialist as an additional reviewer alongside `daa-code-review --quality-only`; its findings gate Phase 6 the same way any `daa-code-review` finding does — blocking findings must be fixed and the pass re-run.
+**Specialist fan-out (additive on the `daa-code-review --quality-only` pass above, which does not fan out itself, so nothing is duplicated).** Check the branch's diff footprint against the table below. Every match dispatches the named specialist as an additional reviewer alongside `daa-code-review --quality-only`; its findings gate Phase 6 the same way any `daa-code-review` finding does — Blocker and Major findings must be fixed and the pass re-run.
 
 | Diff touches                       | Specialist              |
 | ---------------------------------- | ----------------------- |
@@ -74,7 +74,7 @@ Invoke `daa-code-review --quality-only` against the branch diff (feature branch 
 
 Detection is by path/content heuristics: paths under a frontend directory, `*.sql` files or dbt models, or diffs touching auth or secret-handling modules.
 
-Worked dispatch (a diff modifying `src/api/auth/session.py`): use the Agent tool with `subagent_type=security-reviewer` and a prompt such as "Review the diff on this branch touching `src/api/auth/session.py` for security vulnerabilities, auth/session handling correctness, and adherence to `plugins/workbench/docs/agent-laws.md`. Report blocking findings the way `daa-code-review` does — they gate Phase 6 the same way."
+Worked dispatch (a diff modifying `src/api/auth/session.py`): use the Agent tool with `subagent_type=security-reviewer` and a prompt such as "Review the diff on this branch touching `src/api/auth/session.py` for security vulnerabilities, auth/session handling correctness, and adherence to `plugins/workbench/docs/agent-laws.md`. Report Blocker and Major findings the way `daa-code-review` does — they gate Phase 6 the same way."
 
 ### Phase 7: PR
 

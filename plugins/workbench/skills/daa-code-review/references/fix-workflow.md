@@ -41,14 +41,16 @@ Categories:
 - `markdown` - Markdown formatting
 - `mermaid` - Diagram syntax
 - `sql` / `yaml` - SQL/dbt and YAML findings
+- `docs` - Stale README, docs or docstrings (hand larger rewrites to `repo-docs`)
+- `security` - bandit and security-checklist findings; a secret is fixed by removing it and rotating, never by `# nosec`
 
 ### 3. By Severity
 
 Approve fixes by severity level.
 
 ```
-User: "Fix all blocking findings first"
-User: "Apply should-fix findings only"
+User: "Fix all Blockers first"
+User: "Apply the Major findings only"
 User: "Skip the nits"
 ```
 
@@ -98,9 +100,9 @@ After applying fixes:
 
 ```
 Claude: I found 15 issues in your code:
-        - 3 blocking (must fix)
-        - 8 should-fix
-        - 4 nit (consider fixing)
+        - 3 Blocker
+        - 8 Major
+        - 4 Nit
 
         12 of these are auto-fixable. How would you like to proceed?
 
@@ -110,15 +112,15 @@ Claude: I found 15 issues in your code:
         3. Review individually
         4. Show me the report first
 
-User: Let's fix the blocking ones first, then review the should-fix.
+User: Let's fix the Blockers first, then review the Major ones.
 
-Claude: Applying 3 blocking fixes...
+Claude: Applying 3 Blocker fixes...
         ✓ Fixed undefined variable in utils.py:42
         ✓ Fixed syntax error in parser.py:15
         ✓ Fixed security issue in auth.py:88
 
-        Now for the 8 should-fix findings. Would you like to:
-        1. Apply all 8 should-fix fixes
+        Now for the 8 Major findings. Would you like to:
+        1. Apply all 8 Major fixes
         2. Review by category (3 unused imports, 3 style, 2 type hints)
         3. Review individually
 ```

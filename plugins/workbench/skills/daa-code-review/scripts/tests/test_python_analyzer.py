@@ -130,18 +130,18 @@ class TestRuleMapping:
 
     def test_error_rules_severity(self):
         """Test that known error rules have ERROR severity."""
-        assert get_severity_for_rule("F821") == Severity.ERROR
-        assert get_severity_for_rule("E999") == Severity.ERROR
+        assert get_severity_for_rule("F821") == Severity.BLOCKER
+        assert get_severity_for_rule("E999") == Severity.BLOCKER
 
     def test_warning_rules_severity(self):
-        """Test that typical rules have WARNING severity."""
-        assert get_severity_for_rule("F401") == Severity.WARNING
-        assert get_severity_for_rule("E501") == Severity.WARNING
+        """Test that typical rules have MINOR severity."""
+        assert get_severity_for_rule("F401") == Severity.MINOR
+        assert get_severity_for_rule("E501") == Severity.MINOR
 
     def test_info_rules_severity(self):
-        """Test that style rules have INFO severity."""
-        assert get_severity_for_rule("W291") == Severity.INFO
-        assert get_severity_for_rule("D100") == Severity.INFO
+        """Test that style rules have NIT severity."""
+        assert get_severity_for_rule("W291") == Severity.NIT
+        assert get_severity_for_rule("D100") == Severity.NIT
 
     def test_complexity_severity(self):
         """C90x mccabe-complexity rules map to INFO via the 'C90' prefix (#130).
@@ -150,12 +150,12 @@ class TestRuleMapping:
         be tried first — previously this fell through to WARNING and the 'C90'
         map entry was dead code.
         """
-        assert get_severity_for_rule("C901") == Severity.INFO
+        assert get_severity_for_rule("C901") == Severity.NIT
 
     def test_unknown_rule_defaults(self):
         """Test that unknown rules get sensible defaults."""
         assert get_category_for_rule("UNKNOWN123") == IssueCategory.PEP8
-        assert get_severity_for_rule("UNKNOWN123") == Severity.WARNING
+        assert get_severity_for_rule("UNKNOWN123") == Severity.MINOR
 
 
 class TestRuffIntegration:
@@ -329,7 +329,7 @@ if __name__ == "__main__":
 '''
         result = analyze_python(code)
         # Well-written code should have fewer issues
-        assert result.error_count == 0
+        assert result.blocker_count == 0
 
 
 class TestAnalyzePythonFile:
@@ -385,7 +385,7 @@ class TestIssueProperties:
         result = analyze_python(code)
 
         # Should have at least one error
-        errors = result.get_issues_by_severity(Severity.ERROR)
+        errors = result.get_issues_by_severity(Severity.BLOCKER)
         assert len(errors) > 0
 
 
