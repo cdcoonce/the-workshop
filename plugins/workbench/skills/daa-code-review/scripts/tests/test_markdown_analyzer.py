@@ -26,7 +26,7 @@ class TestMarkdownAnalyzerHeadings:
 
         md041_issues = [i for i in result.issues if i.rule_id == "MD041"]
         assert len(md041_issues) == 1
-        assert md041_issues[0].severity == Severity.WARNING
+        assert md041_issues[0].severity == Severity.MINOR
 
     def test_document_with_proper_h1(self):
         """Test that proper h1 doesn't trigger warning."""
@@ -68,7 +68,7 @@ class TestMarkdownAnalyzerHeadings:
 
         md024_issues = [i for i in result.issues if i.rule_id == "MD024"]
         assert len(md024_issues) == 1
-        assert md024_issues[0].severity == Severity.INFO
+        assert md024_issues[0].severity == Severity.NIT
 
     def test_duplicate_headings_across_levels(self):
         """Test that duplicate heading text is flagged regardless of level."""
@@ -77,7 +77,7 @@ class TestMarkdownAnalyzerHeadings:
 
         md024_issues = [i for i in result.issues if i.rule_id == "MD024"]
         assert len(md024_issues) == 1
-        assert md024_issues[0].severity == Severity.INFO
+        assert md024_issues[0].severity == Severity.NIT
 
 
 class TestMarkdownAnalyzerHeadingsInCodeBlocks:
@@ -270,7 +270,7 @@ class TestMarkdownAnalyzerLinks:
 
         md042_issues = [i for i in result.issues if i.rule_id == "MD042"]
         assert len(md042_issues) == 1
-        assert md042_issues[0].severity == Severity.ERROR
+        assert md042_issues[0].severity == Severity.MAJOR
 
     def test_valid_link(self):
         """Test that valid links pass."""
@@ -438,7 +438,7 @@ class TestMarkdownAnalyzerImages:
 
         md045_issues = [i for i in result.issues if i.rule_id == "MD045"]
         assert len(md045_issues) == 1
-        assert md045_issues[0].severity == Severity.WARNING
+        assert md045_issues[0].severity == Severity.MINOR
 
     def test_image_with_alt_text(self):
         """Test that images with alt text pass."""
@@ -622,7 +622,7 @@ class TestMarkdownAnalyzerFormatting:
 
         md009_issues = [i for i in result.issues if i.rule_id == "MD009"]
         assert len(md009_issues) >= 1
-        assert md009_issues[0].severity == Severity.INFO
+        assert md009_issues[0].severity == Severity.NIT
 
     def test_trailing_two_spaces_is_intentional_line_break(self):
         """Test that exactly two trailing spaces are not flagged."""
@@ -825,4 +825,4 @@ Final content.
 """
         result = analyze_markdown(content)
         # Well-formed content should have few or no errors
-        assert result.error_count == 0
+        assert result.blocker_count == 0

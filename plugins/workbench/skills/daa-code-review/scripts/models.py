@@ -19,17 +19,20 @@ class Severity(Enum):
 
     Attributes
     ----------
-    ERROR : str
-        Must fix - syntax errors, potential runtime exceptions.
-    WARNING : str
-        Should fix - unused variables, missing type hints.
-    INFO : str
-        Consider fixing - complexity suggestions, style improvements.
+    BLOCKER : str
+        Must fix before merge - syntax errors, runtime exceptions, failing tests.
+    MAJOR : str
+        Should fix before merge - hardcoded credentials, broken links.
+    MINOR : str
+        Worth fixing - unused variables, formatting, routine lint.
+    NIT : str
+        Optional polish - complexity hints, style preferences.
     """
 
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
+    BLOCKER = "blocker"
+    MAJOR = "major"
+    MINOR = "minor"
+    NIT = "nit"
 
 
 class IssueCategory(Enum):
@@ -259,37 +262,48 @@ class AnalysisResult:
     tools_used: list[str] = field(default_factory=list)
 
     @property
-    def error_count(self) -> int:
-        """Count of ERROR severity issues.
+    def blocker_count(self) -> int:
+        """Count of BLOCKER severity issues.
 
         Returns
         -------
         int
-            Number of error-level issues.
+            Number of blocker-level issues.
         """
-        return sum(1 for issue in self.issues if issue.severity == Severity.ERROR)
+        return sum(1 for issue in self.issues if issue.severity == Severity.BLOCKER)
 
     @property
-    def warning_count(self) -> int:
-        """Count of WARNING severity issues.
+    def major_count(self) -> int:
+        """Count of MAJOR severity issues.
 
         Returns
         -------
         int
-            Number of warning-level issues.
+            Number of major-level issues.
         """
-        return sum(1 for issue in self.issues if issue.severity == Severity.WARNING)
+        return sum(1 for issue in self.issues if issue.severity == Severity.MAJOR)
 
     @property
-    def info_count(self) -> int:
-        """Count of INFO severity issues.
+    def minor_count(self) -> int:
+        """Count of MINOR severity issues.
 
         Returns
         -------
         int
-            Number of info-level issues.
+            Number of minor-level issues.
         """
-        return sum(1 for issue in self.issues if issue.severity == Severity.INFO)
+        return sum(1 for issue in self.issues if issue.severity == Severity.MINOR)
+
+    @property
+    def nit_count(self) -> int:
+        """Count of NIT severity issues.
+
+        Returns
+        -------
+        int
+            Number of nit-level issues.
+        """
+        return sum(1 for issue in self.issues if issue.severity == Severity.NIT)
 
     @property
     def total_issues(self) -> int:

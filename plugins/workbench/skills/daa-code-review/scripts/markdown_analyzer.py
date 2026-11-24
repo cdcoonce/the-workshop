@@ -352,7 +352,7 @@ class MarkdownAnalyzer:
             line_num = self._find_line_number(content, first_heading.start())
             issues.append(
                 Issue(
-                    severity=Severity.WARNING,
+                    severity=Severity.MINOR,
                     category=IssueCategory.MARKDOWN,
                     message="Document should start with a level 1 heading (h1)",
                     location=Location(file_path=file_path, line_start=line_num),
@@ -375,7 +375,7 @@ class MarkdownAnalyzer:
                 line_num = self._find_line_number(content, h1.start())
                 issues.append(
                     Issue(
-                        severity=Severity.WARNING,
+                        severity=Severity.MINOR,
                         category=IssueCategory.MARKDOWN,
                         message="Multiple level 1 headings found; document should have only one",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -422,7 +422,7 @@ class MarkdownAnalyzer:
                 line_num = self._find_line_number(content, heading.start())
                 issues.append(
                     Issue(
-                        severity=Severity.WARNING,
+                        severity=Severity.MINOR,
                         category=IssueCategory.MARKDOWN,
                         message=f"Heading level skipped from h{prev_level} to h{level}",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -474,7 +474,7 @@ class MarkdownAnalyzer:
                 line_num = self._find_line_number(content, heading.start())
                 issues.append(
                     Issue(
-                        severity=Severity.INFO,
+                        severity=Severity.NIT,
                         category=IssueCategory.MARKDOWN,
                         message=f"Duplicate heading '{heading.group(2)}' (first at line {seen_headings[heading_text]})",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -537,7 +537,7 @@ class MarkdownAnalyzer:
             if not link_text.strip():
                 issues.append(
                     Issue(
-                        severity=Severity.WARNING,
+                        severity=Severity.MINOR,
                         category=IssueCategory.MARKDOWN,
                         message="Link has empty text",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -551,7 +551,7 @@ class MarkdownAnalyzer:
             if not link_url.strip():
                 issues.append(
                     Issue(
-                        severity=Severity.ERROR,
+                        severity=Severity.MAJOR,
                         category=IssueCategory.MARKDOWN,
                         message="Link has empty URL",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -576,7 +576,7 @@ class MarkdownAnalyzer:
                     if not target_path.exists():
                         issues.append(
                             Issue(
-                                severity=Severity.ERROR,
+                                severity=Severity.MAJOR,
                                 category=IssueCategory.MARKDOWN,
                                 message=f"Broken link: file '{file_url}' not found",
                                 location=Location(
@@ -628,7 +628,7 @@ class MarkdownAnalyzer:
             if not alt_text.strip():
                 issues.append(
                     Issue(
-                        severity=Severity.WARNING,
+                        severity=Severity.MINOR,
                         category=IssueCategory.MARKDOWN,
                         message="Image missing alt text (accessibility issue)",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -648,7 +648,7 @@ class MarkdownAnalyzer:
                 if not target_path.exists():
                     issues.append(
                         Issue(
-                            severity=Severity.ERROR,
+                            severity=Severity.MAJOR,
                             category=IssueCategory.MARKDOWN,
                             message=f"Broken image: file '{image_url}' not found",
                             location=Location(file_path=file_path, line_start=line_num),
@@ -699,7 +699,7 @@ class MarkdownAnalyzer:
                 line_num = self._find_line_number(masked_content, match.start())
                 issues.append(
                     Issue(
-                        severity=Severity.ERROR,
+                        severity=Severity.MAJOR,
                         category=IssueCategory.MARKDOWN,
                         message=f"Undefined reference link: '{ref_id}'",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -749,7 +749,7 @@ class MarkdownAnalyzer:
             if match.group(0) != "  ":
                 issues.append(
                     Issue(
-                        severity=Severity.INFO,
+                        severity=Severity.NIT,
                         category=IssueCategory.MARKDOWN,
                         message="Trailing whitespace",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -771,7 +771,7 @@ class MarkdownAnalyzer:
             line_num = self._find_line_number(content, match.start())
             issues.append(
                 Issue(
-                    severity=Severity.INFO,
+                    severity=Severity.NIT,
                     category=IssueCategory.MARKDOWN,
                     message="Multiple consecutive blank lines",
                     location=Location(file_path=file_path, line_start=line_num),
@@ -795,7 +795,7 @@ class MarkdownAnalyzer:
                 if i + 1 < len(lines) and lines[i + 1].strip():
                     issues.append(
                         Issue(
-                            severity=Severity.INFO,
+                            severity=Severity.NIT,
                             category=IssueCategory.MARKDOWN,
                             message="Missing blank line after heading",
                             location=Location(file_path=file_path, line_start=i + 1),
@@ -836,7 +836,7 @@ class MarkdownAnalyzer:
             if not language:
                 issues.append(
                     Issue(
-                        severity=Severity.INFO,
+                        severity=Severity.NIT,
                         category=IssueCategory.MARKDOWN,
                         message="Code block missing language identifier",
                         location=Location(file_path=file_path, line_start=line_num),
@@ -925,7 +925,7 @@ class MarkdownAnalyzer:
 
             issues.append(
                 Issue(
-                    severity=Severity.ERROR,
+                    severity=Severity.MAJOR,
                     category=IssueCategory.MARKDOWN,
                     message=f"Encoding corruption detected: corrupted {char_desc}",
                     location=Location(file_path=file_path, line_start=line_num),

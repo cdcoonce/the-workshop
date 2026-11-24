@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         rel = scripts_dir.relative_to(repo_root)
         print(f"== {rel}/tests ==")
         result = subprocess.run(
-            ["uv", "run", "--with", "pytest", "--with", "ruff", "python", "-m", "pytest", "-q", "tests"],
+            ["uv", "run", "--with", "pytest", "--with", "ruff", "--with", "pyyaml", "python", "-m", "pytest", "-q", "tests"],
             cwd=scripts_dir,
             check=False,
         )

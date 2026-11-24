@@ -50,35 +50,35 @@
       "replace": "[] if find_ruff_config(file_path) else []"
     },
     {
-      "label": "S101 test-file downgrade disabled (test_assert_in_test_file_is_info)",
+      "label": "S101 test-file downgrade disabled (test_assert_in_test_file_is_nit)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):",
       "replace": "if False:"
     },
     {
-      "label": "S101 downgraded in every file (test_assert_outside_test_files_is_warning)",
+      "label": "S101 downgraded in every file (test_assert_outside_test_files_is_minor)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "if rule_id in TEST_FILE_INFO_RULES and is_test_file(file_path):",
       "replace": "if rule_id in TEST_FILE_INFO_RULES:"
     },
     {
-      "label": "files under tests/ no longer count as test files (test_assert_in_test_file_is_info)",
+      "label": "files under tests/ no longer count as test files (test_assert_in_test_file_is_nit)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "return \"tests\" in file_path.parts[:-1]",
       "replace": "return False"
     },
     {
-      "label": "tests/ directory match widened to the filename too (test_assert_outside_test_files_is_warning)",
+      "label": "tests/ directory match widened to the filename too (test_assert_outside_test_files_is_minor)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "return \"tests\" in file_path.parts[:-1]",
       "replace": "return any(\"test\" in part for part in file_path.parts)"
     },
     {
-      "label": "conftest.py dropped from the basename patterns (test_assert_in_test_file_is_info)",
+      "label": "conftest.py dropped from the basename patterns (test_assert_in_test_file_is_nit)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "_TEST_FILE_PATTERNS = (\"test_*.py\", \"*_test.py\", \"conftest.py\")",
@@ -99,32 +99,53 @@
       "replace": "if True:"
     },
     {
-      "label": "S101 downgrade ignores the path-less call (test_severity_without_a_path_is_warning)",
+      "label": "S101 downgrade ignores the path-less call (test_severity_without_a_path_is_minor)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "    if file_path is None:\n        return False\n",
       "replace": "    if file_path is None:\n        return True\n"
     },
     {
-      "label": "S prefix maps back to ERROR (test_bandit_rules_are_warning_not_blocking)",
+      "label": "S prefix maps back to BLOCKER (test_routine_bandit_rules_are_minor_not_blocking)",
       "file": "../python_analyzer.py",
       "oracle": "real",
-      "find": "\"S\": Severity.WARNING,",
-      "replace": "\"S\": Severity.ERROR,"
+      "find": "\"S\": Severity.MINOR,",
+      "replace": "\"S\": Severity.BLOCKER,"
     },
     {
-      "label": "S101 back in ERROR_RULES (test_assert_outside_test_files_is_warning)",
+      "label": "S101 back in the blocker rule set (test_assert_outside_test_files_is_minor)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "\"B018\",  # useless expression",
       "replace": "\"B018\", \"S101\",  # useless expression"
     },
     {
-      "label": "F821 dropped from ERROR_RULES (test_runtime_defects_stay_error)",
+      "label": "F821 dropped from the blocker rule set (test_runtime_defects_stay_blocker)",
       "file": "../python_analyzer.py",
       "oracle": "real",
       "find": "\"F821\",  # undefined name",
       "replace": "\"F821X\",  # undefined name"
+    },
+    {
+      "label": "credential rules lose MAJOR (test_hardcoded_credential_rules_are_major)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "    if rule_id in CREDENTIAL_RULES:\n        return Severity.MAJOR\n",
+      "replace": "    if rule_id in CREDENTIAL_RULES:\n        return Severity.MINOR\n"
+    },
+    {
+      "label": "credential message keeps the ruff text with the literal (test_credential_diagnostic_never_carries_the_literal)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "        message = CREDENTIAL_MESSAGE\n",
+      "replace": "        message = message\n"
+    },
+    {
+      "label": "credential context (the source line) is kept (test_credential_diagnostic_never_carries_the_literal)",
+      "file": "../python_analyzer.py",
+      "oracle": "real",
+      "find": "        message = CREDENTIAL_MESSAGE\n        context = None\n",
+      "replace": "        message = CREDENTIAL_MESSAGE\n"
     }
   ]
 }

@@ -6,12 +6,12 @@ This document details the Markdown documentation quality checks performed by the
 
 | Check               | Description                            | Severity |
 | ------------------- | -------------------------------------- | -------- |
-| Heading Structure   | Proper h1→h2→h3 sequence               | WARNING  |
-| Broken Links        | File links that don't exist            | ERROR    |
-| Missing Alt Text    | Images without accessibility text      | WARNING  |
-| Formatting          | Trailing whitespace, blank lines       | INFO     |
-| Code Blocks         | Missing language identifier            | INFO     |
-| Encoding Corruption | UTF-8 chars appearing as Ã—, âœ", etc. | ERROR    |
+| Heading Structure   | Proper h1→h2→h3 sequence               | Minor    |
+| Broken Links        | File links that don't exist            | Major    |
+| Missing Alt Text    | Images without accessibility text      | Minor    |
+| Formatting          | Trailing whitespace, blank lines       | Nit      |
+| Code Blocks         | Missing language identifier            | Nit      |
+| Encoding Corruption | UTF-8 chars appearing as Ã—, âœ", etc. | Major    |
 
 ## Heading Structure
 
@@ -25,7 +25,7 @@ Headings should only increment by one level at a time.
 ### Skipped h2 <!-- Issue: skipped from h1 to h3 -->
 ```
 
-**Severity:** WARNING  
+**Severity:** Minor  
 **Auto-fixable:** Yes
 
 ### MD025 - Single Top-Level Heading
@@ -38,7 +38,7 @@ Documents should have only one h1 heading.
 # Second Title <!-- Issue: duplicate h1 -->
 ```
 
-**Severity:** WARNING  
+**Severity:** Minor  
 **Auto-fixable:** Yes (change to h2)
 
 ### MD041 - First Line Heading
@@ -49,14 +49,14 @@ The first non-blank line should be a top-level heading.
 ## Not an h1 <!-- Issue: should start with h1 -->
 ```
 
-**Severity:** WARNING  
+**Severity:** Minor  
 **Auto-fixable:** Yes
 
 ### MD024 - Duplicate Headings
 
 Multiple headings with the same content should be avoided for clarity.
 
-**Severity:** INFO  
+**Severity:** Nit  
 **Auto-fixable:** No
 
 ## Links
@@ -69,7 +69,7 @@ Links should have non-empty URLs.
 [Click here](<>) <!-- Issue: empty URL -->
 ```
 
-**Severity:** ERROR  
+**Severity:** Major  
 **Auto-fixable:** No
 
 ### MD054 - Empty Link Text
@@ -80,7 +80,7 @@ Links should have descriptive text.
 [](https://example.com) <!-- Issue: empty text -->
 ```
 
-**Severity:** WARNING  
+**Severity:** Minor  
 **Auto-fixable:** No
 
 ### MD055 - Broken Links
@@ -91,7 +91,7 @@ Relative links should point to existing files.
 [Docs](nonexistent.md) <!-- Issue: file not found -->
 ```
 
-**Severity:** ERROR  
+**Severity:** Major  
 **Auto-fixable:** No
 
 ### MD056 - Broken Images
@@ -102,7 +102,7 @@ Image paths should point to existing files.
 ![Logo](missing-logo.png) <!-- Issue: file not found -->
 ```
 
-**Severity:** ERROR  
+**Severity:** Major  
 **Auto-fixable:** No
 
 ## Formatting
@@ -111,7 +111,7 @@ Image paths should point to existing files.
 
 Lines should not have trailing whitespace (except for intentional line breaks).
 
-**Severity:** INFO  
+**Severity:** Nit  
 **Auto-fixable:** Yes
 
 ### MD012 - Multiple Blank Lines
@@ -126,7 +126,7 @@ Some text
 More text
 ```
 
-**Severity:** INFO  
+**Severity:** Nit  
 **Auto-fixable:** Yes
 
 ### MD022 - Blank Lines Around Headings
@@ -139,7 +139,7 @@ Headings should be surrounded by blank lines.
 No blank line after heading <!-- Issue -->
 ```
 
-**Severity:** INFO  
+**Severity:** Nit  
 **Auto-fixable:** No
 
 ## Code Blocks
@@ -154,7 +154,7 @@ print("hello")  <!-- Issue: no language specified -->
 ```
 ````
 
-**Severity:** INFO  
+**Severity:** Nit  
 **Auto-fixable:** No
 
 ## Accessibility
@@ -168,7 +168,7 @@ Images should include descriptive alt text for screen readers and accessibility 
 ![](image.png) <!-- Bad: missing alt text -->
 ```
 
-**Severity:** WARNING  
+**Severity:** Minor  
 **Auto-fixable:** No
 
 ## Best Practices
@@ -196,7 +196,7 @@ UTF-8 encoding corruption occurs when text is saved or transmitted with incorrec
 | â€“          | –       | En dash             |
 | â€¢          | •       | Bullet point        |
 | âœ“          | ✓       | Checkmark           |
-| â†          | ←       | Left arrow          |
+| â†           | ←       | Left arrow          |
 | â†’          | →       | Right arrow         |
 | Â©           | ©       | Copyright           |
 | Â®           | ®       | Registered          |
@@ -219,7 +219,7 @@ Revenue = Generation Ã— Price
 Revenue = Generation × Price
 ```
 
-**Severity:** ERROR  
+**Severity:** Major  
 **Auto-fixable:** Yes
 
 ### How It Happens
@@ -242,7 +242,7 @@ This typically occurs when:
 
 Mermaid diagrams embedded in code blocks should have valid syntax.
 
-**Severity:** ERROR
+**Severity:** Major
 **Auto-fixable:** No
 
 ### MD061 - Parentheses in Mermaid Node Labels
@@ -278,7 +278,7 @@ flowchart TD
 
 ```
 
-**Severity:** ERROR
+**Severity:** Major
 **Auto-fixable:** Yes (replace parentheses with dashes)
 
 ### Common Mermaid Parse Errors

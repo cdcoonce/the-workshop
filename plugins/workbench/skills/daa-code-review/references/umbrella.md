@@ -13,21 +13,20 @@ Steps 2 and 3 are independent; run them concurrently when the harness allows.
 ## Merge and dedupe
 
 - Collect all findings into one list. Two findings are duplicates when they share file:line and the same underlying issue; keep one, with the highest severity, and list every source that raised it (for example `code-review, standards`).
-- Tag each finding with its source: `standards`, `ruff`, `sqlfluff`, `code-review`, `security-review`.
+- Tag each finding with its source: `standards`, the `branch_checks.py` tool name (`ruff`, `bandit`, `pydoclint`, `sqlfluff`, `pytest`, `mypy`), `code-review`, `security-review`.
 
 ## Severity mapping
 
-| Source          | Their level               | Contract level              |
-| --------------- | ------------------------- | --------------------------- |
-| analyzers/ruff  | ERROR / WARNING / INFO    | blocking / should-fix / nit |
-| sqlfluff        | parse error / lint        | blocking / nit              |
-| code-review     | confirmed bug / uncertain | blocking / should-fix       |
-| security-review | high / medium / low       | blocking / should-fix / nit |
+| Source             | Their level               | Contract level                                             |
+| ------------------ | ------------------------- | ---------------------------------------------------------- |
+| `branch_checks.py` | blocker/major/minor/nit   | as emitted; secret hits triaged per engineering-design.md  |
+| code-review        | confirmed bug / uncertain | Blocker for wrong results or data loss, else Major / Major |
+| security-review    | high / medium / low       | Blocker / Major / Minor                                    |
 
-A source that gives no level maps to should-fix. Judgment findings from the standards pass are should-fix by default; blocking only for a defect that breaks behaviour. "Clean" has one definition, in SKILL.md (zero blocking findings and a complete run); do not restate it here.
+A source that gives no level maps to Minor until judged. Judgment findings from the standards pass take the level the severity contract in SKILL.md gives their kind. The verdict rule has one definition, in SKILL.md; do not restate it here.
 
 ## Guards
 
 - `--quality-only` runs no fan-out. dev-cycle and the agents that load this skill use it.
 - Recursion guard: inside a subagent, or when invoked from `security-review`, force `--quality-only`. The call direction is daa-code-review to security-review only.
-- If a fan-out source fails or is unavailable, say so in the output; the verdict is incomplete, not clean.
+- If a fan-out source fails or is unavailable, say so in the output; the verdict is Incomplete, never an approval.

@@ -57,7 +57,7 @@ Every one of these is a rationalization for skipping mandatory work, not a legit
 - **Pass/fail source:** Derive pass/fail from the dispatch's required `STATUS:` line (see the status contract in `plugins/workbench/docs/subagent-development.md`), not from free-prose reading. `DONE` and `DONE_WITH_CONCERNS` → pass; `NEEDS_CONTEXT` → answer and re-dispatch before recording anything; `BLOCKED` → work the escalation ladder before recording a result.
 - **State updates:** After each subagent completes:
   - Log dispatch and result: `"Subagent completed for issue #N: {STATUS}"`
-  - Log code review result: `"Code review after issue #N: clean/blocking"`
+  - Log code review result: `"Code review after issue #N: approve/request-changes"`
   - Update Issues table status
 - **Failure:** Context window exhaustion mid-dispatch is recoverable — Issues table shows which issues are complete. Resume dispatches remaining issues.
 
@@ -65,12 +65,12 @@ Every one of these is a rationalization for skipping mandatory work, not a legit
 
 - **Validate:** All implementation issues resolved, tests passing (`uv run pytest` or project test command)
 - **Handoff:** Invoke `daa-code-review --quality-only` against the branch diff (feature branch vs the integration target)
-- **Gate:** If blocking issues → fix, re-run review. Loop until zero blocking findings.
+- **Gate:** If the verdict is Request changes (any Blocker or Major finding) or Incomplete → fix, re-run review. Loop until zero Blocker and Major findings and a complete run.
 - **Failure:** If code review finds architectural issues requiring plan rework, trigger backwards transition to `plan` (see Backwards Transitions below)
 
 ## Code Review → PR
 
-- **Validate:** Code review passed with no blocking issues
+- **Validate:** Code review passed with no Blocker or Major findings
 - **Handoff:** Invoke `commit` for a conventional commit, then hand off to `finish-branch`. `finish-branch` owns the merge/PR/keep/discard decision, presents its own four-option menu, and runs its own test-gate around any rebase or merge it performs — the orchestrator does not check for conflicts or invoke `github-cli` directly.
 - **Post-rebase/merge re-test (required):** Whenever `finish-branch` performs a rebase or merge (its "merge locally" and "push + open PR" options), the full project test suite must be green on the resulting tree before this phase counts as complete. This is not optional bookkeeping: `plugins/workbench/hooks/scripts/verify-tests-before-stop.py` only fingerprints uncommitted working-tree changes (`git status --porcelain` plus file contents), so a rebase that already landed as a clean commit leaves no uncommitted diff for the stop hook to hash — it will not detect that the tree changed and cannot catch a stale or unverified rebase on its own. The orchestrator must confirm the re-test ran and passed rather than relying on the stop hook to catch a skipped one.
 - **Record (push + open PR):** `finish-branch` invokes `github-cli` to open the PR. Reference the PRD issue and all implementation issues as `Refs #N` in the PR description (closing keywords are inert on `dev`-targeted PRs), then close them with `gh issue close <N> --comment "Closed by #<PR>"` after the merge lands (see `github-cli`). Record the PR URL in the artifacts table, set feature `status: completed`.

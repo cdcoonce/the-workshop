@@ -70,7 +70,7 @@ class TestPythonAnalyzerCli:
         assert len(f401) == 1
         issue = f401[0]
         assert issue["line"] == 1
-        assert issue["severity"] in {"error", "warning", "info"}
+        assert issue["severity"] in {"blocker", "major", "minor", "nit"}
         assert issue["category"] == "unused_code"
         assert issue["message"]
 

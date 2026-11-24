@@ -4,8 +4,17 @@ This document details Mermaid diagram validation performed by the daa-code-revie
 
 ## Verification
 
-1. If `mmdc` is on PATH, parse each changed diagram: write the block to a temp file outside the repo and run `mmdc -i <file> -o <tmp>.svg`. A non-zero exit is a blocking finding with the parser message.
-2. If `mmdc` is not on PATH, do not install it and do not look anything up. Apply the checks below by reading, and report each diagram as **unverified** (not clean).
+1. If `mmdc` is on PATH, parse each changed diagram: write the block to a temp file outside the repo and run `mmdc -i <file> -o <tmp>.svg`. A non-zero exit is a Major finding with the parser message.
+2. If `mmdc` is not on PATH, do not install it and do not look anything up. Apply the checks below by reading, and report each diagram as **unverified** (the verdict is Incomplete).
+
+## GitLab rendering
+
+GitLab renders fenced `mermaid` blocks with its own pinned Mermaid version, which can lag upstream. `mmdc` passing does not prove GitLab renders it.
+
+- The fence language is exactly `mermaid`, and the first line declares a diagram type GitLab supports. For a newer or uncommon diagram type or feature, check [GitLab's Markdown documentation](https://docs.gitlab.com/user/markdown/#mermaid) instead of assuming.
+- No lowercase `end` as a flowchart node, which breaks the diagram (write `End` or `END`); node ids are unique; every `subgraph` is closed.
+- Readable at README width: prefer top-down layouts for long chains and split a dense diagram instead of shrinking it. Hard-coded light fills come with matching text colors, since GitLab has a dark theme.
+- Whether the diagram still matches the code is judged in [docs-freshness.md](docs-freshness.md#diagrams).
 
 ## Supported Diagram Types
 
@@ -25,7 +34,7 @@ Validate these diagram types:
 
 ## Common Validation Checks
 
-### Syntax Errors (Severity: ERROR)
+### Syntax Errors (Severity: Major)
 
 1. **Missing diagram type declaration**
 
@@ -109,7 +118,7 @@ Validate these diagram types:
    A[(Database<br/>Name)]  <!-- Correct -->
    ```
 
-### Structural Issues (Severity: WARNING)
+### Structural Issues (Severity: Minor)
 
 1. **Undefined nodes referenced**
 
@@ -123,7 +132,7 @@ Validate these diagram types:
 
 3. **Circular references without proper handling**
 
-### Style Issues (Severity: INFO)
+### Style Issues (Severity: Nit)
 
 1. **Inconsistent naming conventions**
 2. **Missing node labels**

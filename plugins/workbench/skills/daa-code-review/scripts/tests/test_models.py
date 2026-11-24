@@ -23,17 +23,19 @@ class TestSeverity:
 
     def test_severity_values(self):
         """Test that severity enum has correct values."""
-        assert Severity.ERROR.value == "error"
-        assert Severity.WARNING.value == "warning"
-        assert Severity.INFO.value == "info"
+        assert Severity.BLOCKER.value == "blocker"
+        assert Severity.MAJOR.value == "major"
+        assert Severity.MINOR.value == "minor"
+        assert Severity.NIT.value == "nit"
 
     def test_severity_members(self):
         """Test that all expected severity levels exist."""
         members = list(Severity)
-        assert len(members) == 3
-        assert Severity.ERROR in members
-        assert Severity.WARNING in members
-        assert Severity.INFO in members
+        assert len(members) == 4
+        assert Severity.BLOCKER in members
+        assert Severity.MAJOR in members
+        assert Severity.MINOR in members
+        assert Severity.NIT in members
 
 
 class TestIssueCategory:
@@ -156,7 +158,7 @@ class TestIssue:
             A sample issue instance.
         """
         return Issue(
-            severity=Severity.WARNING,
+            severity=Severity.MINOR,
             category=IssueCategory.UNUSED_CODE,
             message="Unused variable 'x'",
             location=Location(file_path=Path("test.py"), line_start=10),
@@ -172,7 +174,7 @@ class TestIssue:
 
     def test_issue_creation(self, sample_issue: Issue):
         """Test creating an issue with all fields."""
-        assert sample_issue.severity == Severity.WARNING
+        assert sample_issue.severity == Severity.MINOR
         assert sample_issue.category == IssueCategory.UNUSED_CODE
         assert sample_issue.message == "Unused variable 'x'"
         assert sample_issue.rule_id == "F841"
@@ -183,7 +185,7 @@ class TestIssue:
     def test_issue_to_dict(self, sample_issue: Issue):
         """Test converting issue to dictionary."""
         result = sample_issue.to_dict()
-        assert result["severity"] == "warning"
+        assert result["severity"] == "minor"
         assert result["category"] == "unused_code"
         assert result["message"] == "Unused variable 'x'"
         assert result["rule_id"] == "F841"
@@ -194,7 +196,7 @@ class TestIssue:
     def test_issue_to_dict_without_fix(self):
         """Test converting issue without fix to dictionary."""
         issue = Issue(
-            severity=Severity.ERROR,
+            severity=Severity.BLOCKER,
             category=IssueCategory.RUNTIME_ERROR,
             message="Division by zero",
             location=Location(file_path=Path("test.py"), line_start=5),
@@ -219,7 +221,7 @@ class TestAnalysisResult:
         """
         issues = [
             Issue(
-                severity=Severity.ERROR,
+                severity=Severity.BLOCKER,
                 category=IssueCategory.RUNTIME_ERROR,
                 message="Error 1",
                 location=Location(file_path=Path("test.py"), line_start=1),
@@ -227,7 +229,7 @@ class TestAnalysisResult:
                 source="ruff",
             ),
             Issue(
-                severity=Severity.WARNING,
+                severity=Severity.MINOR,
                 category=IssueCategory.UNUSED_CODE,
                 message="Warning 1",
                 location=Location(file_path=Path("test.py"), line_start=2),
@@ -240,7 +242,7 @@ class TestAnalysisResult:
                 ),
             ),
             Issue(
-                severity=Severity.WARNING,
+                severity=Severity.MINOR,
                 category=IssueCategory.PEP8,
                 message="Warning 2",
                 location=Location(file_path=Path("test.py"), line_start=3),
@@ -248,7 +250,15 @@ class TestAnalysisResult:
                 source="ruff",
             ),
             Issue(
-                severity=Severity.INFO,
+                severity=Severity.MAJOR,
+                category=IssueCategory.RUNTIME_ERROR,
+                message="Major 1",
+                location=Location(file_path=Path("test.py"), line_start=5),
+                rule_id="E002",
+                source="ruff",
+            ),
+            Issue(
+                severity=Severity.NIT,
                 category=IssueCategory.COMPLEXITY,
                 message="Info 1",
                 location=Location(file_path=Path("test.py"), line_start=4),
@@ -266,10 +276,11 @@ class TestAnalysisResult:
 
     def test_analysis_result_counts(self, sample_result: AnalysisResult):
         """Test issue count properties."""
-        assert sample_result.error_count == 1
-        assert sample_result.warning_count == 2
-        assert sample_result.info_count == 1
-        assert sample_result.total_issues == 4
+        assert sample_result.blocker_count == 1
+        assert sample_result.major_count == 1
+        assert sample_result.minor_count == 2
+        assert sample_result.nit_count == 1
+        assert sample_result.total_issues == 5
 
     def test_get_issues_by_category(self, sample_result: AnalysisResult):
         """Test filtering issues by category."""
@@ -279,7 +290,7 @@ class TestAnalysisResult:
 
     def test_get_issues_by_severity(self, sample_result: AnalysisResult):
         """Test filtering issues by severity."""
-        warnings = sample_result.get_issues_by_severity(Severity.WARNING)
+        warnings = sample_result.get_issues_by_severity(Severity.MINOR)
         assert len(warnings) == 2
 
     def test_get_fixable_issues(self, sample_result: AnalysisResult):
@@ -295,4 +306,4 @@ class TestAnalysisResult:
             source_path=Path("clean.py"),
         )
         assert result.total_issues == 0
-        assert result.error_count == 0
+        assert result.blocker_count == 0

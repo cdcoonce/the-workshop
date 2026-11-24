@@ -169,7 +169,7 @@ Create and register Claude Code hooks (PreToolUse, PostToolUse) as Python script
 
 *`workbench` plugin*
 
-Diff, branch, or MR/PR review for Python, SQL/dbt, YAML, Markdown, Mermaid. Use when asked for a "code review" or "quality check", or code is pasted. Not vulnerabilities; see security-review.
+Diff, branch, or MR/PR review for Python, SQL/dbt, YAML, Markdown, Mermaid. Use when asked for a "code review", "quality check" or pre-MR check, or code is pasted. Security audits: see security-review.
 
 ### `/dagster-expert`
 

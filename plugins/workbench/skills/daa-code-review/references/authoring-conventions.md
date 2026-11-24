@@ -12,8 +12,11 @@ convention is the fix that stops the recurrence.
 | `models.py`            | Data structures (Issue, Severity, AnalysisResult), CLI runner |
 | `python_analyzer.py`   | Python analysis with ruff                                     |
 | `markdown_analyzer.py` | Markdown quality checks                                       |
+| `branch_checks.py`     | Diff-aware runner: every check on changed files, one JSON     |
 
 Both analyzers expose `python scripts/<analyzer>.py <paths...> --json`, printing a JSON list of per-file results (`file`, `file_type`, `tools_used`, `issues`). Exit codes: 0 = ran, 2 = missing or unreadable path, 3 = ruff unavailable (Python analyzer). Callers must treat 2 and 3 as failures, never as a clean result.
+
+`branch_checks.py --target <ref>` is what the skill calls. It runs both analyzers plus ruff format, docstring layout, pydoclint, bandit, SQLFluff and a YAML parse on the changed files, and with `--run-project-tools` pytest and mypy. Every external tool goes through one injectable subprocess function, so its tests feed canned tool output; keep it that way. A check that could not run reports `not_run` or `error`, never `pass`, and no finding may carry a secret value.
 
 ## URI / scheme detection
 

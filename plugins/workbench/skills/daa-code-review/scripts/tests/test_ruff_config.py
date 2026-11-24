@@ -1,5 +1,6 @@
 """Tests that python_analyzer honours the repo's ruff config and fits severities."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -76,40 +77,40 @@ class TestAssertSeverityInTests:
             "pkg/tests/sub/util.py",
         ],
     )
-    def test_assert_in_test_file_is_info(self, tmp_path: Path, relpath: str):
+    def test_assert_in_test_file_is_nit(self, tmp_path: Path, relpath: str):
         src = tmp_path / relpath
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text("assert 1 == 1\n", encoding="utf-8")
         found = issues_for(src, "S101")
         assert found
-        assert {i.severity for i in found} == {Severity.INFO}
+        assert {i.severity for i in found} == {Severity.NIT}
 
     @pytest.mark.parametrize("relpath", ["src/mod.py", "testing/mod.py", "contest.py"])
-    def test_assert_outside_test_files_is_warning(self, tmp_path: Path, relpath: str):
+    def test_assert_outside_test_files_is_minor(self, tmp_path: Path, relpath: str):
         src = tmp_path / relpath
         src.parent.mkdir(parents=True, exist_ok=True)
         src.write_text("assert 1 == 1\n", encoding="utf-8")
         found = issues_for(src, "S101")
         assert found
-        assert {i.severity for i in found} == {Severity.WARNING}
+        assert {i.severity for i in found} == {Severity.MINOR}
 
-    def test_other_error_rules_are_not_downgraded_in_test_files(self):
-        assert get_severity_for_rule("F821", Path("tests/test_x.py")) == Severity.ERROR
+    def test_other_blocker_rules_are_not_downgraded_in_test_files(self):
+        assert get_severity_for_rule("F821", Path("tests/test_x.py")) == Severity.BLOCKER
 
-    def test_severity_without_a_path_is_warning(self):
-        assert get_severity_for_rule("S101") == Severity.WARNING
+    def test_severity_without_a_path_is_minor(self):
+        assert get_severity_for_rule("S101") == Severity.MINOR
 
 
 class TestBanditSeverity:
-    @pytest.mark.parametrize("rule", ["S603", "S607", "S101", "S105"])
-    def test_bandit_rules_are_warning_not_blocking(self, rule: str):
-        assert get_severity_for_rule(rule) == Severity.WARNING
+    @pytest.mark.parametrize("rule", ["S603", "S607", "S101"])
+    def test_routine_bandit_rules_are_minor_not_blocking(self, rule: str):
+        assert get_severity_for_rule(rule) == Severity.MINOR
 
     @pytest.mark.parametrize("rule", ["F821", "F822", "F823", "E999"])
-    def test_runtime_defects_stay_error(self, rule: str):
-        assert get_severity_for_rule(rule) == Severity.ERROR
+    def test_runtime_defects_stay_blocker(self, rule: str):
+        assert get_severity_for_rule(rule) == Severity.BLOCKER
 
-    def test_subprocess_call_is_warning_end_to_end(self, tmp_path: Path):
+    def test_subprocess_call_is_minor_end_to_end(self, tmp_path: Path):
         src = tmp_path / "mod.py"
         src.write_text(
             "import subprocess\n\nsubprocess.run(['ls'], check=False)\n",
@@ -117,4 +118,26 @@ class TestBanditSeverity:
         )
         found = issues_for(src, "S607")
         assert found
-        assert {i.severity for i in found} == {Severity.WARNING}
+        assert {i.severity for i in found} == {Severity.MINOR}
+
+
+SECRET = "s3cr3t-hunter2-value"
+
+
+class TestCredentialRules:
+    @pytest.mark.parametrize("rule", ["S105", "S106", "S107"])
+    def test_hardcoded_credential_rules_are_major(self, rule: str):
+        assert get_severity_for_rule(rule) == Severity.MAJOR
+
+    def test_other_bandit_rules_stay_minor(self):
+        assert get_severity_for_rule("S104") == Severity.MINOR
+
+    def test_credential_diagnostic_never_carries_the_literal(self, tmp_path: Path):
+        src = tmp_path / "mod.py"
+        src.write_text(f'password = "{SECRET}"\n', encoding="utf-8")
+        found = issues_for(src, "S105")
+        assert found
+        issue = found[0]
+        assert issue.severity == Severity.MAJOR
+        assert "redacted" in issue.message
+        assert SECRET not in json.dumps(issue.to_dict())
